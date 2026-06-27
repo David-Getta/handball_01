@@ -39,7 +39,8 @@ videó
   │     (játékos+labda) + ReID                                    (m-ben)
   │                                                                │
   ├─[F] Képen kívüli becslés ◄────────────────────────────────────┤
-  │     - roster constraint (7 fő/csapat)                          │
+  │     - dinamikus létszám-állapot (5/6/7 fő, nem fix!)           │
+  │     - kiállítás / 7. mezőnyjátékos kezelése                    │
   │     - szerep-/formációmodell + mozgáspredikció                 │
   │     - bizonytalanság-jelölés                                   │
   │                                                                ▼
@@ -74,8 +75,17 @@ videó
   képezzük.
 
 ### [F] Képen kívüli becslés (a "teljes csapat" döntés magja)
-- **Roster constraint**: csapatonként 7 fő pályán → mindig tudjuk, hányan
-  hiányoznak a képből.
+- **Dinamikus létszám-állapot** (NEM fix 7 fő): az aktuális pályán lévő létszámot
+  csapatonként követjük, mert ez változik:
+  - **Kiállítás (2 perc)**: a csapat ideiglenesen kevesebb (6, dupla kiállításnál
+    5 fő). Megkülönböztetni a "képen kívül van" esettől nehéz pásztázó kameránál,
+    ezért MVP-ben **kézi/külső jelölés** oldja fel (pl. "A csapat kiállítás
+    5:00–7:00"); auto-felismerés a 2. fázisban (eseményfelismerés).
+  - **7. mezőnyjátékos a kapus helyett**: nincs kapus, helyette 7 mezőnyjátékos
+    (üres kapu). Jelzés: a **kapus mezszíne** eltűnik a pályáról (a kapus eltérő
+    színt visel, ezt a csapatba sorolás úgyis külön kezeli) + 7 mezőnyjátékos.
+  - A létszám csak ezen evidenciák ismeretében ad korlátot a becsléshez — nem
+    feltételezünk fix 7-et.
 - **Szerep-/formációmodell**: a hiányzó játékost a szerepe szokásos pozíciója +
   utolsó látott hely + mozgásirány alapján becsüljük.
 - **Bizonytalanság**: a becsült pozíció megbízhatósága az idővel csökken; a

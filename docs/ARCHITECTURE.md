@@ -30,8 +30,9 @@ következőnek, hogy a komponensek külön fejleszthetők és cserélhetők legy
     `MVP_PLAN.md`.
 - **Képen kívüli játékosok becslése**: pásztázó kameránál a túloldali játékosok
   időnként kicsúsznak a képből. A látható játékosokat *mérjük*, a hiányzókat
-  *becsüljük* (roster constraint 7 fő/csapat + szerep-/formációmodell +
-  mozgáspredikció), explicit bizonytalanság-jelöléssel.
+  *becsüljük* (dinamikus létszám-állapot — NEM fix 7 fő, mert kiállítás és a
+  kapus helyett felhozott 7. mezőnyjátékos változtatja — + szerep-/formációmodell
+  + mozgáspredikció), explicit bizonytalanság-jelöléssel.
 - **Kimenet**: minden játékos (id, csapat, x, y a pályán) minden frame-en +
   labdapozíció. Ez a rendszer "gerince" — a `Tracking` adatmodell.
 
