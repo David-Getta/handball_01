@@ -66,6 +66,9 @@ videó
 - ByteTrack/BoT-SORT a stabil ID-khez.
 - **ReID**: megjelenés-embedding, hogy a képbe visszatérő játékos visszakapja az
   ID-ját (a részleges láthatóság miatt kulcsfontosságú).
+- **Mezszám-OCR** (a szabálykönyv szerint háton min. 20 cm, 1–99): ahol olvasható
+  a szám, az a legerősebb ReID-jel — a megjelenés-embedding mellett ezt is
+  használjuk a visszatérő játékos azonosításához.
 
 ### [D] Csapatba sorolás
 - Mezszín-klaszterezés (k-means a bbox színhisztogramján), kapus külön kezelve.
@@ -85,7 +88,7 @@ videó
       játékos véglegesen kiáll, de a csapat 2 percig hiányos).
     - Modellben: **kiállítás-intervallumok listája** csapatonként (kezdet +
       időtartam 2/4 perc), akár átfedéssel. A pillanatnyi létszám = alaplétszám
-      − épp aktív kiállítások.
+      − épp aktív kiállítások (alsó korlát: a meccset min. 5 fővel kell játszani).
     - Megkülönböztetni a "képen kívül van" esettől nehéz pásztázó kameránál,
       ezért MVP-ben **kézi/külső jelölés** oldja fel (felviszed a kiállítás
       kezdetét és hosszát); auto-felismerés a 2. fázisban (eseményfelismerés).
