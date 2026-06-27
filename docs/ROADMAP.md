@@ -12,12 +12,16 @@ megbízható alaprétegre épülnek.
 - **Eredmény**: tiszta projekt, amire építeni lehet. ✅ ez a commit.
 
 ## 1. fázis — MVP: Követés videóból  ⭐ következő lépés
-**Cél**: egyetlen meccsvideóból megbízható 2D követési adatot (`Tracking`)
+**Részletes, döntésekkel rögzített terv: [`MVP_PLAN.md`](MVP_PLAN.md).**
+
+**Cél**: egyetlen (pásztázó-kamerás) meccsvideóból 2D követési adatot (`Tracking`)
 előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - Játékos- + labdadetektálás (előtanított YOLO-val indul).
-- Követés / ID-tartás (ByteTrack).
-- Csapatba sorolás mezszín alapján.
-- Pálya-homográfia (először kézi keypoint-kalibrációval).
+- Követés / ID-tartás (ByteTrack) + **ReID** (visszatérő játékos azonosítása).
+- Csapatba sorolás mezszín alapján — **mindkét csapat + labda**.
+- Pálya-homográfia: kézi referencia-kalibráció + auto propagáció a pásztázáshoz.
+- **Teljes csapatkövetés becsléssel**: a látható játékosokat mérjük, a képen
+  kívülieket becsüljük (roster + szerepmodell), bizonytalanság-jelöléssel.
 - 2D felülnézeti vizualizáció + alap statisztikák (futott táv, sebesség, hőtérkép).
 - **Eredmény**: "betöltök egy videót, kapok egy felülnézeti taktikai animációt
   és alap statisztikákat." Ez már önmagában eladható elemzőeszköz.

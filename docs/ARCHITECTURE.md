@@ -23,6 +23,15 @@ következőnek, hogy a komponensek külön fejleszthetők és cserélhetők legy
 - **Pálya-kalibráció (homográfia)**: a képi koordinátákat a valós pálya
   felülnézeti (top-down) koordinátáira képezzük. Kézi keypoint-kalibráció
   először, később automatikus vonalfelismerés.
+  - **Pásztázó kamera esete** (a projekt aktuális felvétele): a kamera helyben
+    marad és csak forog, ezért a képkockák tiszta homográfiával köthetők egy
+    referencia-nézethez. Egyszer kalibrálunk kézzel, majd a frame→referencia
+    homográfiát automatikusan propagáljuk. Részleges láthatóság: lásd lent és
+    `MVP_PLAN.md`.
+- **Képen kívüli játékosok becslése**: pásztázó kameránál a túloldali játékosok
+  időnként kicsúsznak a képből. A látható játékosokat *mérjük*, a hiányzókat
+  *becsüljük* (roster constraint 7 fő/csapat + szerep-/formációmodell +
+  mozgáspredikció), explicit bizonytalanság-jelöléssel.
 - **Kimenet**: minden játékos (id, csapat, x, y a pályán) minden frame-en +
   labdapozíció. Ez a rendszer "gerince" — a `Tracking` adatmodell.
 
@@ -67,7 +76,10 @@ Match
  └── frames: [ Frame ]
        Frame
         ├── t (időbélyeg / frame index)
-        ├── players: [ {track_id, team, x, y}  ]   # x,y = pálya-koordináta (m)
+        ├── players: [ {track_id, team, x, y, source, confidence} ]
+        │     # x,y = pálya-koordináta (m)
+        │     # source = measured | estimated  (látható vagy becsült)
+        │     # confidence ∈ [0,1]  (becsült játékosnál idővel csökken)
         └── ball: {x, y} | null
 ```
 Az MVP célja, hogy ezt a `Tracking` objektumot megbízhatóan előállítsa egy
