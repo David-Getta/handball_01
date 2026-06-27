@@ -77,10 +77,18 @@ videó
 ### [F] Képen kívüli becslés (a "teljes csapat" döntés magja)
 - **Dinamikus létszám-állapot** (NEM fix 7 fő): az aktuális pályán lévő létszámot
   csapatonként követjük, mert ez változik:
-  - **Kiállítás (2 perc)**: a csapat ideiglenesen kevesebb (6, dupla kiállításnál
-    5 fő). Megkülönböztetni a "képen kívül van" esettől nehéz pásztázó kameránál,
-    ezért MVP-ben **kézi/külső jelölés** oldja fel (pl. "A csapat kiállítás
-    5:00–7:00"); auto-felismerés a 2. fázisban (eseményfelismerés).
+  - **Kiállítás**: a csapat ideiglenesen kevesebb. Általános eset, NEM egy
+    ki-be kapcsoló:
+    - **több játékos** is lehet egyszerre kiállítva (a létszám több fővel is
+      csökkenhet egyidejűleg),
+    - a büntetés **2 vagy 4 perc** (a 4 perc két 2 perc; piros lap esetén a
+      játékos véglegesen kiáll, de a csapat 2 percig hiányos).
+    - Modellben: **kiállítás-intervallumok listája** csapatonként (kezdet +
+      időtartam 2/4 perc), akár átfedéssel. A pillanatnyi létszám = alaplétszám
+      − épp aktív kiállítások.
+    - Megkülönböztetni a "képen kívül van" esettől nehéz pásztázó kameránál,
+      ezért MVP-ben **kézi/külső jelölés** oldja fel (felviszed a kiállítás
+      kezdetét és hosszát); auto-felismerés a 2. fázisban (eseményfelismerés).
   - **7. mezőnyjátékos a kapus helyett**: nincs kapus, helyette 7 mezőnyjátékos
     (üres kapu). Jelzés: a **kapus mezszíne** eltűnik a pályáról (a kapus eltérő
     színt visel, ezt a csapatba sorolás úgyis külön kezeli) + 7 mezőnyjátékos.
