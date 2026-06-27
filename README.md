@@ -8,6 +8,8 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
 - [`docs/VISION.md`](docs/VISION.md) — mit építünk és miért (a teljes vízió).
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — a pipeline rétegei és a stack.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — fázisokra bontott útiterv.
+- [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — az 1. fázis (MVP) részletes terve.
+- [`docs/RULES.md`](docs/RULES.md) — a követéshez releváns szabály-kivonat.
 
 ## Hol tartunk
 **0. fázis (alapok)** kész — repó-struktúra és tervek.
