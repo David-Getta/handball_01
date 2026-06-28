@@ -54,9 +54,13 @@ videó
 - **Kézi lépés** (egyszeri): kis UI, ahol a referencia-képen rákattintunk a
   pálya ismert pontjaira (vonalmetszések, kapuk, középvonal). Ebből homográfia a
   valós pálya (40×20 m) koordinátáira.
+  - **Állapot: a homográfia-matematika KÉSZ és tesztelt** (tiszta Python, lásd
+    `backend/handball/pipeline/_homography.py` és `calibration.py`). A pálya
+    ismert pontjai: `standard_court_landmarks()`. Hátravan: a kattintós UI a
+    Flutter-kliensben.
 - **Auto propagáció**: minden frame homográfiája a referencia-nézethez
   jellemzőpont-illesztéssel (ORB/SIFT) vagy pályavonal-illesztéssel. Pásztázásnál
-  ez folyamatos.
+  ez folyamatos. *(Ez a videós rész még TODO — OpenCV kell hozzá.)*
 
 ### [B] Detektálás
 - Előtanított YOLO (Ultralytics) játékos- és labdaosztályra. Finomhangolás
