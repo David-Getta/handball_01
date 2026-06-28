@@ -101,10 +101,14 @@ videó
     színt visel, ezt a csapatba sorolás úgyis külön kezeli) + 7 mezőnyjátékos.
   - A létszám csak ezen evidenciák ismeretében ad korlátot a becsléshez — nem
     feltételezünk fix 7-et.
-- **Szerep-/formációmodell**: a hiányzó játékost a szerepe szokásos pozíciója +
-  utolsó látott hely + mozgásirány alapján becsüljük.
-- **Bizonytalanság**: a becsült pozíció megbízhatósága az idővel csökken; a
-  vizualizációban halványítva, hibakörrel jelenik meg. Mért ≠ becsült.
+- **Mozgásmodell**: a hiányzó játékost az utolsó látott helye + becsült sebessége
+  alapján extrapoláljuk, a pálya határaira vágva.
+- **Bizonytalanság**: a becsült pozíció megbízhatósága az idővel (felezési idővel)
+  csökken; a vizualizációban halványítva, hibakörrel jelenik meg. Mért ≠ becsült.
+- **Állapot: a mozgásmodell-alapú becslés KÉSZ és tesztelt** (egyenes vonalú
+  extrapoláció + sebesség-elhalás + confidence-csökkenés + határvágás; lásd
+  `backend/handball/pipeline/estimation.py`). Hátravan: a szerep-/formációmodell
+  (a tipikus pozíció szerinti finomítás) — későbbi bővítés.
 
 ### [G] Tracking objektum
 - A központi adatmodell (`ARCHITECTURE.md`), most kiegészítve mezőkkel:
