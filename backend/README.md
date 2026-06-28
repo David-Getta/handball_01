@@ -43,9 +43,9 @@ cd backend
 # Demó: szintetikus Tracking JSON + statisztika a kimenetre
 python -m scripts.run_pipeline
 
-# Tesztek (pytest nélkül is futnak; a backend/ legyen a kereső-útvonalon)
-PYTHONPATH=. python tests/test_tracking_model.py
-# vagy ha van pytest:  PYTHONPATH=. python -m pytest
+# Tesztek (pytest nélkül is futnak, bárhonnan indítva)
+python tests/test_tracking_model.py
+# vagy ha van pytest:  python -m pytest
 ```
 
 ## API-szerver indítása (FastAPI kell hozzá)

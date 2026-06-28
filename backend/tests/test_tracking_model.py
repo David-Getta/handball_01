@@ -12,6 +12,13 @@ Futtatás:
 
 from __future__ import annotations
 
+# Hogy a teszt közvetlenül (python tests/test_tracking_model.py) is fusson, a
+# backend/ mappát a kereső-útvonalra tesszük — így a `handball` csomag importálható
+# akkor is, ha nem a backend/ a munkakönyvtár.
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from handball.models.tracking import (
     Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
 )
