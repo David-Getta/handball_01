@@ -85,19 +85,15 @@ a kulcs, hogy a **nehéz feldolgozás nem a kliensen fut**:
 - **Backend / ML**: Python + PyTorch + Ultralytics (YOLO) + OpenCV.
 - **API**: FastAPI (REST + WebSocket az élő adathoz).
 - **Tárolás**: Postgres (struktúrált események/metrikák) + objektumtár a videókhoz.
-- **Cross-platform kliens app** (Win/Mac/iPad/Android tablet) — egy közös
-  kódbázis. Két reális opció:
-  - **Flutter** *(ajánlott)*: egy Dart kódbázis, natívra fordul mind a 4
-    platformra; legjobb érintő/tablet UX és egyedi 2D rajzolás a taktikai
-    nézethez.
-  - **Web-first (React + Tauri/PWA)**: böngészőből fut mindenhol, nincs
-    telepítés; a későbbi 3D (Three.js) böngészőben natív; desktopra Tauri-val.
-  - *(Megjegyzés: .NET MAUI is járható, ha C#/.NET az otthonos környezet.)*
+- **Cross-platform kliens app** (Win/Mac/iPad/Android tablet): **Flutter**
+  *(eldöntve)* — egy Dart kódbázis, natívra fordul mind a 4 platformra; legjobb
+  érintő/tablet UX és erős egyedi 2D rajzolás (`CustomPainter`/canvas) a taktikai
+  nézethez. A backenddel REST + WebSocket kapcsolaton át kommunikál.
 - **3D/VR**: Three.js (web 3D) / Unity (VR) — külön kliens-modul, későbbi fázis.
 
-> **Nyitott döntés**: a kliens-stack (Flutter vs web-first) véglegesítése. Az MVP
-> backendje és `Tracking` modellje ettől függetlenül építhető — a kliens csak
-> fogyasztja a backend kimenetét.
+> A kliens csak a backend kimenetét (`Tracking` + statisztikák) fogyasztja, ezért
+> az MVP backendje és `Tracking` modellje a Flutter-klienstől függetlenül
+> építhető és tesztelhető.
 
 ## Adatmodell (a réteget összekötő szerződés)
 A `Tracking` a központi objektum, amire minden épül:
