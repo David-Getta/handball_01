@@ -11,9 +11,16 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
 - [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — az 1. fázis (MVP) részletes terve.
 - [`docs/RULES.md`](docs/RULES.md) — a követéshez releváns szabály-kivonat.
 
+## Kód
+- [`backend/`](backend/) — szerveroldali Python csomag: a központi `Tracking`
+  adatmodell (JSON, a kliens-szerződés), a `[A]–[H]` pipeline-váz és a FastAPI.
+  Lásd [`backend/README.md`](backend/README.md).
+
 ## Hol tartunk
 **0. fázis (alapok)** kész — repó-struktúra és tervek.
-**Következő: 1. fázis (MVP)** — 2D követés videóból + felülnézeti taktikai nézet.
+**1. fázis (MVP)** folyamatban — a backend **váza** kész (Tracking modell + JSON +
+pipeline-csontváz + tesztek); a valódi modellek (YOLO, követés) behelyettesítése
+következik. A kliens **Flutter** lesz (Win/Mac/iPad/Android).
 
 ## Elv
 Alulról építkezünk. A megbízható 2D követés a rendszer gerince; minden további
