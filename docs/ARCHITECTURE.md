@@ -60,14 +60,44 @@ A követési adatból taktikai fogalmakat építünk:
 - **VR**: Unity/Unreal kliens, a csapat "bejár" a pályára.
 - **Élő dashboard**: valós idejű követés + javaslatok.
 
+### Kliens–szerver szétválasztás (cross-platform cél)
+A cél egy app, ami könnyen fut **Windows / Mac / iPad / Android tableten**. Ehhez
+a kulcs, hogy a **nehéz feldolgozás nem a kliensen fut**:
+
+```
+┌──────────────────────────┐        ┌──────────────────────────────┐
+│  Kliens app (vékony)      │ HTTP/  │  Backend (nehéz feldolgozás) │
+│  Win / Mac / iPad /       │ ◄────► │  Python + YOLO + követés     │
+│  Android tablet           │  WS    │  GPU-s gép / szerver         │
+│  - taktikai nézet, lejátszó│       │  - videó-feldolgozás         │
+│  - statisztikák           │        │  - Tracking előállítása      │
+└──────────────────────────┘        └──────────────────────────────┘
+```
+
+- A **YOLO/követés/becslés** GPU-igényes → szerveren (vagy GPU-s desktopon) fut,
+  nem tableten. A kliens csak a kész `Tracking`-et és a statisztikákat jeleníti
+  meg → vékony lehet, és így könnyen hordozható minden platformra.
+- A backend (Python/FastAPI) eleve platformfüggetlen.
+- A **VR (Unity)** a 6–7. fázisban külön kliens-modul; az app-stack-választástól
+  független.
+
 ## Javasolt technológiai stack
-- **Nyelv**: Python (ML pipeline), később TypeScript (web frontend).
-- **ML**: PyTorch + Ultralytics (YOLO) + OpenCV.
-- **Backend/API**: FastAPI.
+- **Backend / ML**: Python + PyTorch + Ultralytics (YOLO) + OpenCV.
+- **API**: FastAPI (REST + WebSocket az élő adathoz).
 - **Tárolás**: Postgres (struktúrált események/metrikák) + objektumtár a videókhoz.
-- **Frontend 2D**: React + canvas/WebGL (vagy egyszerű matplotlib/streamlit a
-  prototípushoz).
-- **3D/VR**: Three.js (web) / Unity (VR).
+- **Cross-platform kliens app** (Win/Mac/iPad/Android tablet) — egy közös
+  kódbázis. Két reális opció:
+  - **Flutter** *(ajánlott)*: egy Dart kódbázis, natívra fordul mind a 4
+    platformra; legjobb érintő/tablet UX és egyedi 2D rajzolás a taktikai
+    nézethez.
+  - **Web-first (React + Tauri/PWA)**: böngészőből fut mindenhol, nincs
+    telepítés; a későbbi 3D (Three.js) böngészőben natív; desktopra Tauri-val.
+  - *(Megjegyzés: .NET MAUI is járható, ha C#/.NET az otthonos környezet.)*
+- **3D/VR**: Three.js (web 3D) / Unity (VR) — külön kliens-modul, későbbi fázis.
+
+> **Nyitott döntés**: a kliens-stack (Flutter vs web-first) véglegesítése. Az MVP
+> backendje és `Tracking` modellje ettől függetlenül építhető — a kliens csak
+> fogyasztja a backend kimenetét.
 
 ## Adatmodell (a réteget összekötő szerződés)
 A `Tracking` a központi objektum, amire minden épül:
