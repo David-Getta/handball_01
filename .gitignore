@@ -25,7 +25,16 @@ htmlcov/
 data/
 weights/
 
+# Flutter / Dart (kliens)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+**/generated_plugin_registrant.*
+client/build/
+
 # IDE / OS
 .vscode/
 .idea/
+*.iml
 .DS_Store

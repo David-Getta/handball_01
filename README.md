@@ -16,8 +16,11 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
 
 ## Kód
 - [`backend/`](backend/) — szerveroldali Python csomag: a központi `Tracking`
-  adatmodell (JSON, a kliens-szerződés), a `[A]–[H]` pipeline-váz és a FastAPI.
-  Lásd [`backend/README.md`](backend/README.md).
+  adatmodell (JSON, a kliens-szerződés), a `[A]–[H]` pipeline-váz, a meccs-
+  szimulátor és a FastAPI. Lásd [`backend/README.md`](backend/README.md).
+- [`client/`](client/) — Flutter kliens (desktop-first): a felülnézeti taktikai
+  nézet, ami a backend Tracking JSON-ját rajzolja ki (backend nélkül beágyazott
+  demóval is fut). Lásd [`client/README.md`](client/README.md).
 
 ## Hol tartunk
 **0. fázis (alapok)** kész — repó-struktúra és tervek.

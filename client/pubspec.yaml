@@ -1,0 +1,24 @@
+# A Flutter-kliens projekt-leírója.
+#
+# Cél: DESKTOP-FIRST (Windows/Mac/Linux) app, ami egy lokális (localhost) backendtől
+# lekéri a Tracking JSON-t, és kirajzolja a felülnézeti taktikai pályát. Ugyanez a
+# kódbázis fordul tabletre (iPad/Android) is. Lásd client/README.md.
+
+name: handball_client
+description: Kézilabda elemző kliens — felülnézeti taktikai nézet (desktop-first).
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0          # a lokális backend REST API-jának hívásához
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
