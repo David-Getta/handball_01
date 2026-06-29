@@ -56,3 +56,16 @@ class TeamClassifier:
         TODO: a kapus-színklaszterhez való tartozás vizsgálata.
         """
         return False
+
+    def is_referee(self, track: Track) -> bool:
+        """Igaz, ha a detektált személy BÍRÓ (nem játékos), és ki kell szűrni.
+
+        A valódi felvételen a bírók sárga mezben, a pályán mozognak (lásd
+        docs/FOOTAGE_NOTES.md) — őket NEM szabad játékosnak venni. Mivel a sárga
+        szín jól elkülönül a két csapattól (fehér/fekete) és a kapustól (zöld),
+        szín alapján kiszűrhetők.
+
+        TODO: a bíró-színklaszterhez (sárga) tartozás vizsgálata.
+        Most placeholder: False (a váz nem szűr, amíg nincs valódi szín-logika).
+        """
+        return False

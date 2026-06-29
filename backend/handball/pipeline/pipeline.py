@@ -103,6 +103,9 @@ class HandballPipeline:
             # [D] csapatba sorolás + [E] pálya-koordináta
             measured = []
             for tr in tracks:
+                # Bírókat (sárga, nem-játékos) kiszűrjük — lásd FOOTAGE_NOTES.md.
+                if self.team_classifier.is_referee(tr):
+                    continue
                 team = self.team_classifier.classify(tr)
                 pos = player_to_court(tr, team, calib)
                 # Szűrés 2. — PÁLYA-RÉGIÓ (méter-térben): a játéktéren kívülre

@@ -84,6 +84,10 @@ videó
 
 ### [D] Csapatba sorolás
 - Mezszín-klaszterezés (k-means a bbox színhisztogramján), kapus külön kezelve.
+- **Bíró-kiszűrés** (a valódi felvétel alapján, lásd `FOOTAGE_NOTES.md`): a bírók
+  sárgában, a pályán mozognak → nem játékosok, szín alapján kiszűrjük. Az interfész
+  kész (`TeamClassifier.is_referee`, a pipeline átugorja őket).
+- A valódi felvételen: A=fehér, B=fekete, kapus=zöld, bíró=sárga — jól szétválik.
 
 ### [E] Pálya-koordináta
 - A homográfiával minden detektált játékos láb-pontját pálya-koordinátára (m)
