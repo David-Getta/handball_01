@@ -26,6 +26,7 @@ from .teams import TeamClassifier
 from .court_coords import player_to_court, ball_to_court
 from .estimation import OffScreenEstimator
 from .stats import compute_player_stats
+from .roi import CourtRegion, ExclusionZones
 
 
 class HandballPipeline:
@@ -46,7 +47,9 @@ class HandballPipeline:
 
     def run(self, video_path: str, meta: MatchMeta,
             roster: RosterTimeline | None = None,
-            reference_calib: CourtCalibration | None = None) -> Match:
+            reference_calib: CourtCalibration | None = None,
+            court_region: CourtRegion | None = None,
+            exclusions: ExclusionZones | None = None) -> Match:
         """Lefuttatja a teljes pipeline-t és visszaadja a kész Match-et.
 
         Paraméterek:
@@ -56,6 +59,12 @@ class HandballPipeline:
                            üres idővonalat használunk (mindig teljes létszám).
         - reference_calib: a kézi referencia-kalibráció. Ha None, üres kalibráció
                            (a koordináták egyelőre pixelben maradnak).
+        - court_region:    a JÁTÉKTÉR (méterben). Az ezen kívülre vetülő
+                           detektálásokat eldobjuk (lelátó, kispad, nézők). Ha None,
+                           az alapértelmezett 40x20 m + tűréssáv.
+        - exclusions:      KIZÁRÁSI ZÓNÁK (kép-pixelben), pl. a pálya fölé belógó
+                           kosárpalánk. Az ezekbe eső detektálásokat figyelmen kívül
+                           hagyjuk. Ha None, nincs kizárt zóna.
 
         Megjegyzés: ebben a vázban a videó-frame-ek beolvasása és a modellek még
         placeholderek, ezért a kimenet jelenleg ÜRES frame-listával tér vissza.
@@ -64,6 +73,8 @@ class HandballPipeline:
         """
         roster = roster or RosterTimeline()
         reference_calib = reference_calib or CourtCalibration()
+        court_region = court_region or CourtRegion()
+        exclusions = exclusions or ExclusionZones()
         estimator = OffScreenEstimator(roster)
 
         match = Match(meta=meta, frames=[])
@@ -79,6 +90,13 @@ class HandballPipeline:
             player_dets = [d for d in detections if d.cls == DetectionClass.PLAYER]
             ball_dets = [d for d in detections if d.cls == DetectionClass.BALL]
 
+            # Szűrés 1. — KIZÁRÁSI ZÓNÁK (kép-térben): a fix belógó dolgokba (pl.
+            # kosárpalánk) eső detektálásokat eldobjuk, mintha ott sem lennének.
+            player_dets = [d for d in player_dets
+                           if not exclusions.contains(*d.foot_point())]
+            ball_dets = [d for d in ball_dets
+                         if not exclusions.contains(*d.foot_point())]
+
             # [C] követés + ReID + mezszám-OCR → stabil id-k
             tracks = self.tracker.update(player_dets, frame_img)
 
@@ -86,7 +104,11 @@ class HandballPipeline:
             measured = []
             for tr in tracks:
                 team = self.team_classifier.classify(tr)
-                measured.append(player_to_court(tr, team, calib))
+                pos = player_to_court(tr, team, calib)
+                # Szűrés 2. — PÁLYA-RÉGIÓ (méter-térben): a játéktéren kívülre
+                # vetülő játékosokat (lelátó, kispad, nézők) eldobjuk.
+                if court_region.contains(pos.x, pos.y):
+                    measured.append(pos)
 
             # [F] képen kívüli játékosok becslése (kiegészíti a mértet)
             estimator.update_seen(t, measured)

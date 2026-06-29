@@ -65,6 +65,14 @@ videó
 ### [B] Detektálás
 - Előtanított YOLO (Ultralytics) játékos- és labdaosztályra. Finomhangolás
   kézilabda-adattal később.
+- **Belógó / pályán kívüli dolgok kiszűrése** (KÉSZ és tesztelt, lásd
+  `backend/handball/pipeline/roi.py`): amit nem szabad játékosnak venni —
+  - **kép-térben**: fix *kizárási zónák* a belógó tárgyakra (pl. a pálya fölé
+    lógó kosárpalánk, lógó kamera, reklámtábla); az ezekbe eső detektálást
+    eldobjuk;
+  - **méter-térben**: a *játéktér-régió* (40×20 m + tűréssáv); ami ezen kívülre
+    vetül (lelátó, kispad, nézők), azt eldobjuk.
+  A program ezeket úgy kezeli, mintha ott sem lennének.
 
 ### [C] Követés + ReID
 - ByteTrack/BoT-SORT a stabil ID-khez.
