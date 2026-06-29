@@ -1,22 +1,27 @@
-/// Meccs-képernyő — betölti a Tracking-et, és lejátssza a felülnézeti nézeten.
+/// Meccs-képernyő — betölti a Tracking-et, lejátssza, és megjeleníti a
+/// hőtérképet + a statisztika-panelt.
 ///
-/// Adatforrás: ha a lokális backend elérhető, onnan kéri a meccset; különben a
-/// beágyazott demó-adatra esik vissza (így backend nélkül is működik).
-/// Vezérlés: lejátszás/szünet és egy idővonal-csúszka a frame-ek között.
+/// Adatforrás: lokális backend, ha elérhető; különben a beágyazott demó.
+/// Nézetek: JÁTÉKOSOK (mozgó pontok) vagy HŐTÉRKÉP (csapat látogatottsága).
+/// Jobb oldalt (desktop-first) a statisztika-panel (táv/sebesség).
 library;
 
 import "dart:async";
 import "package:flutter/material.dart";
 
+import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
 import "court_painter.dart";
+import "heatmap_painter.dart";
+import "stats_panel.dart";
+
+/// Mit mutatunk a pályán: a játékosokat vagy a hőtérképet.
+enum ViewMode { players, heatmap }
 
 class MatchScreen extends StatefulWidget {
-  /// A betöltendő meccs azonosítója a backendből (ha elérhető).
   final String matchId;
-
   const MatchScreen({super.key, this.matchId = "sim-0"});
 
   @override
@@ -24,13 +29,21 @@ class MatchScreen extends StatefulWidget {
 }
 
 class _MatchScreenState extends State<MatchScreen> {
+  static const _homeColor = Color(0xFF1E66F5);
+  static const _awayColor = Color(0xFFE5484D);
+
   final ApiClient _api = ApiClient();
 
   Match? _match;
+  Map<int, PlayerStat> _stats = {};
   int _frameIndex = 0;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
   Timer? _timer;
+
+  ViewMode _viewMode = ViewMode.players;
+  Team _heatmapTeam = Team.home;
+  Heatmap? _heatmap; // a kiválasztott csapat hőtérképe (igény szerint számolva)
 
   @override
   void initState() {
@@ -44,7 +57,6 @@ class _MatchScreenState extends State<MatchScreen> {
     super.dispose();
   }
 
-  /// Betöltés: előbb a lokális backend, ha nem megy, a beágyazott demó.
   Future<void> _load() async {
     Match match;
     String label;
@@ -62,8 +74,19 @@ class _MatchScreenState extends State<MatchScreen> {
     }
     setState(() {
       _match = match;
+      _stats = computePlayerStats(match); // statisztika a panelhez
       _sourceLabel = label;
       _frameIndex = 0;
+      _heatmap = computeTeamHeatmap(match, _heatmapTeam);
+    });
+  }
+
+  void _setHeatmapTeam(Team team) {
+    final match = _match;
+    if (match == null) return;
+    setState(() {
+      _heatmapTeam = team;
+      _heatmap = computeTeamHeatmap(match, team);
     });
   }
 
@@ -99,34 +122,56 @@ class _MatchScreenState extends State<MatchScreen> {
       ),
       body: match == null
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : Row(
               children: [
-                _legend(match),
+                // Bal oldal: vezérlők + pálya + lejátszó.
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: CustomPaint(
-                      painter: CourtPainter(frame: match.frames[_frameIndex]),
-                      size: Size.infinite,
-                    ),
+                  child: Column(
+                    children: [
+                      _topBar(match),
+                      Expanded(child: _courtArea(match)),
+                      _controls(match),
+                    ],
                   ),
                 ),
-                _controls(match),
+                // Jobb oldal (desktop-first): statisztika-panel.
+                StatsPanel(
+                  stats: _stats,
+                  homeName: match.meta.homeTeam,
+                  awayName: match.meta.awayTeam,
+                  homeColor: _homeColor,
+                  awayColor: _awayColor,
+                ),
               ],
             ),
     );
   }
 
-  Widget _legend(Match match) {
+  Widget _topBar(Match match) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          _dot(const Color(0xFF1E66F5)),
-          Text("  ${match.meta.homeTeam}    "),
-          _dot(const Color(0xFFE5484D)),
-          Text("  ${match.meta.awayTeam}    "),
-          const Text("○ becsült (halvány)   "),
+          // Nézetváltó: játékosok / hőtérkép.
+          SegmentedButton<ViewMode>(
+            segments: const [
+              ButtonSegment(value: ViewMode.players, label: Text("Játékosok"), icon: Icon(Icons.groups)),
+              ButtonSegment(value: ViewMode.heatmap, label: Text("Hőtérkép"), icon: Icon(Icons.local_fire_department)),
+            ],
+            selected: {_viewMode},
+            onSelectionChanged: (s) => setState(() => _viewMode = s.first),
+          ),
+          const SizedBox(width: 16),
+          // Hőtérkép-csapatválasztó (csak hőtérkép nézetben).
+          if (_viewMode == ViewMode.heatmap)
+            DropdownButton<Team>(
+              value: _heatmapTeam,
+              items: [
+                DropdownMenuItem(value: Team.home, child: Text(match.meta.homeTeam)),
+                DropdownMenuItem(value: Team.away, child: Text(match.meta.awayTeam)),
+              ],
+              onChanged: (t) => t == null ? null : _setHeatmapTeam(t),
+            ),
           const Spacer(),
           Text("forrás: $_sourceLabel", style: const TextStyle(fontSize: 12, color: Colors.grey)),
         ],
@@ -134,7 +179,35 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
-  Widget _dot(Color c) => Container(width: 14, height: 14, decoration: BoxDecoration(color: c, shape: BoxShape.circle));
+  Widget _courtArea(Match match) {
+    final frame = match.frames[_frameIndex];
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Stack(
+        children: [
+          // Alapréteg: a pálya + (játékos nézetben) a játékosok.
+          Positioned.fill(
+            child: CustomPaint(
+              painter: CourtPainter(
+                frame: _viewMode == ViewMode.players ? frame : null,
+                colors: const DisplayColors(home: _homeColor, away: _awayColor),
+              ),
+            ),
+          ),
+          // Hőtérkép-réteg (csak hőtérkép nézetben).
+          if (_viewMode == ViewMode.heatmap && _heatmap != null)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: HeatmapPainter(
+                  heatmap: _heatmap!,
+                  color: _heatmapTeam == Team.home ? _homeColor : _awayColor,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _controls(Match match) {
     return Padding(
@@ -154,7 +227,6 @@ class _MatchScreenState extends State<MatchScreen> {
               onChanged: (v) => setState(() => _frameIndex = v.round()),
             ),
           ),
-          // Frame-index és idő (másodperc) kijelzése.
           Text("${_frameIndex + 1}/${match.frames.length}  "
               "(${(_frameIndex / (match.meta.fps > 0 ? match.meta.fps : 25.0)).toStringAsFixed(1)} s)"),
         ],
