@@ -28,13 +28,17 @@ from .detection import Detection
 class Track:
     """Egy követett objektum egy frame-en — a Detection kiegészítve stabil id-val.
 
-    - track_id:      a végig megőrzött azonosító.
-    - detection:     a hozzá tartozó nyers detektálás (kép-koordináta).
-    - jersey_number: a mezszám-OCR eredménye, ha sikerült kiolvasni (None, ha nem).
+    - track_id:       a végig megőrzött azonosító.
+    - detection:      a hozzá tartozó nyers detektálás (kép-koordináta).
+    - jersey_number:  a mezszám-OCR eredménye, ha sikerült kiolvasni (None, ha nem).
+    - dominant_color: a játékos domináns mezszíne (RGB) a bbox-ból kinyerve, a
+                      meccs-profil szerinti csapat-/kapus-/bíró-besoroláshoz
+                      (lásd teams.py, appearance.py). None, amíg nincs kinyerve.
     """
     track_id: int
     detection: Detection
     jersey_number: Optional[int] = None
+    dominant_color: Optional[tuple[int, int, int]] = None
 
 
 class Tracker:

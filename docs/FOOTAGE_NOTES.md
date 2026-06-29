@@ -36,6 +36,10 @@
   vonalnál álló valódi játékost ne. (A jelenlegi 2 m jó kiindulás, finomítandó.)
 
 ## Szereplők és színek
+> **FONTOS**: az alábbi színek CSAK ERRE A MECCSRE igazak — a csapatok, kapusok,
+> bírók és a pálya színe meccsenként más. A rendszer ezért NEM drótoz be színeket;
+> meccsenként `AppearanceProfile`-t tanul/állít be (lásd appearance.py). Az
+> alábbiak példák, amik ennek a felvételnek a profilját adnák.
 - **Csapatszínek**: A csapat **fehér**, B csapat **fekete** (fehér számokkal). →
   tiszta eset a mezszín-klaszterezéshez [D].
 - **Kapusok zöldben** — jól elkülönülnek (egyezik a szabálykönyvi mezszín-

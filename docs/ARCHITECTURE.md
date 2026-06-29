@@ -20,6 +20,11 @@ következőnek, hogy a komponensek külön fejleszthetők és cserélhetők legy
 - **Játékos- és labdadetektálás**: YOLO (Ultralytics) vagy RT-DETR.
 - **Követés / ID-tartás**: ByteTrack / BoT-SORT — minden játékos stabil ID-t kap.
 - **Csapatba sorolás**: mezszín-klaszterezés (k-means a játékos-bbox színhisztogramján).
+  - **A színek MECCSENKÉNT változnak** (csapatok, kapusok, bírók, pálya) — sehol
+    nincs bedrótozott szín. Minden meccshez egy `AppearanceProfile` (lásd
+    `pipeline/appearance.py`), amit a meccs elejéből tanulunk vagy a felhasználó
+    állít be. A besorolás a profil referenciaszíneihez a legközelebbit rendeli
+    (szín-agnosztikus, tesztelt). A bírók is így, profil alapján szűrhetők ki.
 - **Pálya-kalibráció (homográfia)**: a képi koordinátákat a valós pálya
   felülnézeti (top-down) koordinátáira képezzük. Kézi keypoint-kalibráció
   először, később automatikus vonalfelismerés.
@@ -80,6 +85,14 @@ a kulcs, hogy a **nehéz feldolgozás nem a kliensen fut**:
 - A backend (Python/FastAPI) eleve platformfüggetlen.
 - A **VR (Unity)** a 6–7. fázisban külön kliens-modul; az app-stack-választástól
   független.
+
+### Desktop-first és LOKÁLIS mód (első tesztelés)
+A rendszert **először asztali gépen / laptopon** teszteljük, ezért:
+- A Flutter-kliens **desktop-first**: Windows/Mac/Linux appként is elsőrangú
+  (nem csak tablet). A tablet (iPad/Android) ugyanabból a kódbázisból jön.
+- **Lokális mód**: a backend és a kliens FUTHAT UGYANAZON a laptopon — nem kell
+  külön szerver az első teszthez. A kliens a `localhost`-on éri el a backendet
+  (REST/WebSocket). Erősebb GPU-s gép vagy felhő csak később, élesben kell.
 
 ## Javasolt technológiai stack
 - **Backend / ML**: Python + PyTorch + Ultralytics (YOLO) + OpenCV.
