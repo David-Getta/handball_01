@@ -19,8 +19,9 @@ Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + obj
 
 from __future__ import annotations
 
-from ..models.tracking import Match, MatchMeta
+from ..models.tracking import Match, MatchMeta, Team
 from ..pipeline.pipeline import summarize
+from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 
 
 def create_app():
@@ -59,6 +60,29 @@ def create_app():
         stats = summarize(match)
         # A dataclass-okat egyszerű szótárrá alakítjuk a JSON-válaszhoz.
         return {str(tid): vars(s) for tid, s in stats.items()}
+
+    @app.get("/matches/{match_id}/heatmap")
+    def get_heatmap(match_id: str, team: str = "home",
+                    bins_x: int = 20, bins_y: int = 10):
+        """A megadott csapat hőtérképe (rács-cellánkénti látogatottság)."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            t = Team(team)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
+        hm = compute_team_heatmap(match, t, bins_x=bins_x, bins_y=bins_y)
+        return {"bins_x": hm.bins_x, "bins_y": hm.bins_y, "total": hm.total, "grid": hm.grid}
+
+    @app.get("/matches/{match_id}/team-stats")
+    def get_team_stats(match_id: str):
+        """Mindkét csapat összegzése (súlypont, kiterjedés)."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {team.value: vars(compute_team_summary(match, team))
+                for team in (Team.HOME, Team.AWAY)}
 
     # Segéd a feltöltéshez/teszteléshez (később a pipeline tölti fel az eredményt).
     def _put_match(match: Match) -> None:

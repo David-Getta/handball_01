@@ -129,6 +129,9 @@ videó
 ### [H] Statisztikák
 - Futott táv, pillanatnyi/átlag sebesség, hőtérkép — játékosonként és csapatonként.
 - A becsült szakaszok a statisztikákban megjelölve (hogy ne hamisítsák az adatot).
+- **Állapot: KÉSZ és tesztelt** — táv/sebesség (`stats.py`), valamint hőtérkép
+  (játékos + csapat) és csapat-összegzés (súlypont, kiterjedés) (`analytics.py`).
+  Az API-n elérhető: `/stats`, `/heatmap`, `/team-stats`.
 
 ### [I] 2D vizualizáció
 - Felülnézeti pálya, mozgó pontok (mért = tele, becsült = halvány), labda,

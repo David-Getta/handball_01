@@ -73,7 +73,11 @@ python tests/test_tracking_model.py
 ```bash
 pip install -e .          # fastapi + uvicorn
 uvicorn "handball.api.app:create_app" --factory --reload
-# GET /health, GET /matches/{id}, GET /matches/{id}/stats
+# GET /health
+# GET /matches/{id}                 -> Tracking JSON (a kliens ezt rajzolja)
+# GET /matches/{id}/stats           -> játékosonkénti táv/sebesség
+# GET /matches/{id}/heatmap?team=home  -> csapat-hőtérkép (rács)
+# GET /matches/{id}/team-stats      -> súlypont + kiterjedés csapatonként
 ```
 
 A valódi videó-feldolgozáshoz az ML-extra: `pip install -e ".[ml]"`
