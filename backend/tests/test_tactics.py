@@ -20,6 +20,7 @@ from handball.models.tracking import (
 from handball.pipeline.tactics import (
     TacticsConfig, possession_team, classify_phase, Phase,
     phase_percentages, detect_formation,
+    count_possession_segments, compute_tempo, team_style_profile,
 )
 
 
@@ -132,6 +133,54 @@ def test_formation_excludes_goalkeeper():
     res = detect_formation(frame, Team.AWAY)
     assert res.defenders == 6   # a kapust nem számoltuk
     assert res.label == "6-0"
+
+
+def _meta(fps=25.0):
+    return MatchMeta(match_id="t", home_team="A", away_team="B", fps=fps)
+
+
+def test_count_possession_segments():
+    """Birtoklás A,A,B,B,A → 3 külön szakasz (csapatváltáskor új)."""
+    seq = [Team.HOME, Team.HOME, Team.AWAY, Team.AWAY, Team.HOME]
+    frames = []
+    for i, team in enumerate(seq):
+        # a labdát a birtokló csapat játékosa mellé tesszük
+        x = 30.0 if team == Team.HOME else 8.0
+        frames.append(Frame(t=i, players=[_pl(1, team, x, 10.0)],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    assert count_possession_segments(Match(_meta(), frames)) == 3
+
+
+def test_avg_ball_speed():
+    """A labda 1 m/frame, 25 fps → 25 m/s átlagsebesség."""
+    frames = [
+        Frame(t=i, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+              ball=Ball(x=float(i), y=0.0, confidence=1.0))
+        for i in range(3)  # x = 0,1,2 → 2 m elmozdulás 2 lépésben
+    ]
+    tempo = compute_tempo(Match(_meta(fps=25.0), frames))
+    assert abs(tempo.avg_ball_speed_ms - 25.0) < 1e-9
+
+
+def test_avg_attack_duration():
+    """Három egymást követő hazai-támadás frame → 3/fps mp átlagos hossz."""
+    frames = [
+        Frame(t=i, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+              ball=Ball(x=30.0, y=10.0, confidence=1.0))
+        for i in range(3)
+    ]
+    tempo = compute_tempo(Match(_meta(fps=25.0), frames))
+    assert abs(tempo.avg_attack_duration_s - 3.0 / 25.0) < 1e-9
+
+
+def test_team_style_profile_structure():
+    """A stílusprofil tartalmazza a fázis-, forma- és tempó-részt."""
+    frames = [Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                    ball=Ball(x=30.0, y=10.0, confidence=1.0))]
+    prof = team_style_profile(Match(_meta(), frames))
+    assert "phase_percentages" in prof
+    assert "defense_formations" in prof
+    assert "tempo" in prof and "possessions" in prof["tempo"]
 
 
 if __name__ == "__main__":

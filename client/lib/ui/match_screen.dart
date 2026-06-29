@@ -10,6 +10,7 @@ import "dart:async";
 import "package:flutter/material.dart";
 
 import "../analytics/court_analytics.dart";
+import "../analytics/tactics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
@@ -130,6 +131,7 @@ class _MatchScreenState extends State<MatchScreen> {
                     children: [
                       _topBar(match),
                       Expanded(child: _courtArea(match)),
+                      _tacticalCaption(match),
                       _controls(match),
                     ],
                   ),
@@ -206,6 +208,28 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  /// Élő taktikai felirat az aktuális frame-ről: fázis + (támadáskor) a védő
+  /// csapat formája. A számítás a kliensoldali tactics.dart-tal (a backend tükre).
+  Widget _tacticalCaption(Match match) {
+    const cfg = TacticsConfig();
+    final frame = match.frames[_frameIndex];
+    final phase = classifyPhase(frame, cfg);
+
+    String text = "Fázis: ${phaseLabelHu(phase)}";
+    if (phase == Phase.homeAttack) {
+      text += " · ${match.meta.awayTeam} véd: ${detectFormation(frame, Team.away, cfg)}";
+    } else if (phase == Phase.awayAttack) {
+      text += " · ${match.meta.homeTeam} véd: ${detectFormation(frame, Team.home, cfg)}";
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: const Color(0xFF1E66F5).withOpacity(0.08),
+      child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
     );
   }
 

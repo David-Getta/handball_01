@@ -9,6 +9,8 @@ Funkciók:
 - **Hőtérkép-nézet**: a választott csapat látogatottsága a pályán (kapcsolható,
   csapatválasztóval).
 - **Statisztika-panel** (jobb oldalt): játékosonkénti futott táv és átlagsebesség.
+- **Élő taktikai felirat** (a pálya alatt): az aktuális fázis (hazai/vendég
+  támadás, átmenet) és támadáskor a védő csapat formája (6-0 / 5-1 / 3-2-1).
 - A hőtérkép és a statisztika a kliensen is kiszámolódik (a backend tükre), így
   **backend nélkül, demó-adattal is** működik.
 

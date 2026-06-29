@@ -30,7 +30,8 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - Fázis-szegmentálás (támadás/védekezés/átmenet). ✅ kész és tesztelt (`tactics.py`).
 - Védekezési forma felismerése (6-0, 5-1, 3-2-1…). ✅ kész és tesztelt.
 - Labdabirtoklás (a labdához legközelebbi csapat). ✅ kész és tesztelt.
-- Tempó-metrikák, csapat-stílusprofil. ⏳ következő.
+- Tempó-metrikák, csapat-stílusprofil. ✅ kész és tesztelt (birtoklások száma,
+  átlagos támadás-hossz, átmenet-arány, labda-tempó; `team_style_profile`).
 - Eseményfelismerés (gól, lövés, passz, labdaeladás). ⏳ (a labda+pozíciókból).
 - **Eredmény**: csapatstílus-jelentés ("így védekeznek, ilyen tempóban"). Az
   alapok (fázis, forma, birtoklás) megvannak; az API-n: `/tactics`.

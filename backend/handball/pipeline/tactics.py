@@ -125,6 +125,120 @@ def phase_percentages(match: Match, config: Optional[TacticsConfig] = None) -> d
 # ---- Védekezési forma ------------------------------------------------------
 
 @dataclass
+class TempoMetrics:
+    """Tempó-metrikák a meccs egészére — mennyire gyors/szervezett a játék.
+
+    - possessions:           birtoklás-szakaszok száma (hány külön labdabirtoklás).
+    - avg_attack_duration_s: az átlagos szervezett támadás hossza (másodperc).
+    - transition_pct:        az átmenet (szabad labda / felépítés) aránya (%).
+    - avg_ball_speed_ms:     a labda átlagsebessége (m/s) — tempó-indikátor.
+    """
+    possessions: int
+    avg_attack_duration_s: float
+    transition_pct: float
+    avg_ball_speed_ms: float
+
+
+def count_possession_segments(match: Match, config: Optional[TacticsConfig] = None) -> int:
+    """Hány külön labdabirtoklás volt (csapatváltáskor új szakasz).
+
+    A szabad labda (None) nem szakítja meg: ha ugyanaz a csapat szerzi vissza, az
+    nem új birtoklás. Új szakaszt csak az számít, ha MÁSIK csapaté lesz a labda.
+    """
+    config = config or TacticsConfig()
+    prev: Optional[Team] = None
+    count = 0
+    for f in match.frames:
+        poss = possession_team(f, config)
+        if poss is not None and poss != prev:
+            count += 1
+            prev = poss
+    return count
+
+
+def _avg_attack_duration_s(match: Match, config: TacticsConfig) -> float:
+    """A szervezett támadás-szakaszok átlagos hossza másodpercben.
+
+    Az egymást követő, AZONOS támadó-fázisú frame-ek egy szakaszt alkotnak.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    runs: list[int] = []
+    current = 0
+    current_phase: Optional[Phase] = None
+    attack_phases = {Phase.HOME_ATTACK, Phase.AWAY_ATTACK}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph in attack_phases:
+            if ph == current_phase:
+                current += 1
+            else:
+                if current > 0:
+                    runs.append(current)
+                current = 1
+                current_phase = ph
+        else:
+            if current > 0:
+                runs.append(current)
+            current = 0
+            current_phase = None
+    if current > 0:
+        runs.append(current)
+    if not runs:
+        return 0.0
+    return (sum(runs) / len(runs)) / fps
+
+
+def _avg_ball_speed_ms(match: Match) -> float:
+    """A labda átlagos sebessége (m/s) az egymást követő, labdás frame-ekből."""
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dist = 0.0
+    steps = 0
+    prev = None
+    for f in match.frames:
+        b = f.ball
+        if b is not None and prev is not None:
+            dist += math.hypot(b.x - prev[0], b.y - prev[1])
+            steps += 1
+        prev = (b.x, b.y) if b is not None else None
+    if steps == 0:
+        return 0.0
+    return dist / (steps / fps)
+
+
+def compute_tempo(match: Match, config: Optional[TacticsConfig] = None) -> TempoMetrics:
+    """A meccs tempó-metrikái egyben."""
+    config = config or TacticsConfig()
+    pct = phase_percentages(match, config)
+    return TempoMetrics(
+        possessions=count_possession_segments(match, config),
+        avg_attack_duration_s=_avg_attack_duration_s(match, config),
+        transition_pct=pct.get(Phase.TRANSITION.value, 0.0),
+        avg_ball_speed_ms=_avg_ball_speed_ms(match),
+    )
+
+
+def team_style_profile(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Csapat-stílusprofil: a taktikai jellemzők egy összegzésben.
+
+    Egy helyen adja a fázis-megoszlást, a csapatonkénti leggyakoribb védekezési
+    formát és a tempó-metrikákat — ez a "így játszik ez a csapat" összkép alapja
+    (a vízió "csapatstílus tanulása" része).
+    """
+    config = config or TacticsConfig()
+    tempo = compute_tempo(match, config)
+    return {
+        "phase_percentages": phase_percentages(match, config),
+        "defense_formations": most_common_formations(match, config),
+        "tempo": {
+            "possessions": tempo.possessions,
+            "avg_attack_duration_s": tempo.avg_attack_duration_s,
+            "transition_pct": tempo.transition_pct,
+            "avg_ball_speed_ms": tempo.avg_ball_speed_ms,
+        },
+    }
+
+
+@dataclass
 class FormationResult:
     """A védekező csapat formája + a mélységi sávok létszáma.
 

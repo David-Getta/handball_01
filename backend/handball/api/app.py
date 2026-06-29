@@ -22,7 +22,7 @@ from __future__ import annotations
 from ..models.tracking import Match, MatchMeta, Team
 from ..pipeline.pipeline import summarize
 from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
-from ..pipeline.tactics import phase_percentages, most_common_formations
+from ..pipeline.tactics import team_style_profile
 
 
 def create_app():
@@ -87,15 +87,12 @@ def create_app():
 
     @app.get("/matches/{match_id}/tactics")
     def get_tactics(match_id: str):
-        """Taktikai összkép: fázis-megoszlás (%) + csapatonkénti leggyakoribb
-        védekezési forma."""
+        """Taktikai összkép (csapat-stílusprofil): fázis-megoszlás, csapatonkénti
+        leggyakoribb védekezési forma, és tempó-metrikák."""
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {
-            "phase_percentages": phase_percentages(match),
-            "defense_formations": most_common_formations(match),
-        }
+        return team_style_profile(match)
 
     # Segéd a feltöltéshez/teszteléshez (később a pipeline tölti fel az eredményt).
     def _put_match(match: Match) -> None:
