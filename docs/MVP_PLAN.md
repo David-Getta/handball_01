@@ -137,8 +137,19 @@ Egy pásztázó-kamerás meccsvideóból:
 3. a képen kívüli játékosok becsült pozíciója megjelenik bizonytalanság-jelöléssel,
 4. alap statisztikák (táv, sebesség, hőtérkép) generálódnak.
 
+## Videó nélküli fejlesztés (meccs-szimulátor)
+Mivel meccsvideót nem mindig lehet feltölteni/feldolgozni, a `handball.sim`
+modul valósághű szintetikus Tracking-et állít elő (két 7 fős csapat, 6-0
+védekezés, mozgó labda). A pásztázó-kamerás változat a látómezőből kieső
+játékosokat a VALÓDI [F] becslővel becsli. Így a downstream (becslés, statisztika,
+Flutter-kliens) videó nélkül is fejleszthető és tesztelhető. Futtatás:
+`python -m scripts.simulate_match`.
+
 ## Nyitott kérdések a megvalósítás előtt
-- **Nyelv/stack véglegesítése**: Python + Ultralytics + OpenCV (javasolt).
-- **Tesztvideó**: kell egy konkrét pásztázó-kamerás meccsfelvétel a fejlesztéshez.
+- **Nyelv/stack véglegesítése**: Python + Ultralytics + OpenCV (javasolt). ✅ a mag kész.
+- **Tesztvideó**: a valódi [B][C][D] (YOLO, követés, csapatszín) bekötéséhez kell
+  egy pásztázó-kamerás felvétel. Feltöltés helyett lehetséges út: felhőtár (pl.
+  Google Drive) megosztás, ahonnan a feldolgozó környezet letölti. Addig a
+  szimulátor pótolja a hiányt a fejlesztéshez.
 - **Kalibráló UI formája**: különálló kis eszköz vs. notebook-cella (MVP-hez
   notebook/egyszerű script is elég).

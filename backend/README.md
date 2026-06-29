@@ -23,9 +23,29 @@ backend/
 │   │   ├── estimation.py    # [F] képen kívüli játékosok becslése
 │   │   ├── stats.py         # [H] táv/sebesség (valódi számítás)
 │   │   └── pipeline.py      # a lépéseket összefogó vezérlés
-│   └── api/app.py        # FastAPI: a kliens innen kéri a Tracking JSON-t
-├── scripts/run_pipeline.py  # futtatható demó: szintetikus Tracking JSON
-└── tests/test_tracking_model.py  # a modell JSON round-trip + statisztika tesztjei
+│   ├── api/app.py        # FastAPI: a kliens innen kéri a Tracking JSON-t
+│   └── sim/              # meccs-szimulátor: valósághű Tracking VIDEÓ NÉLKÜL
+│       └── match_simulator.py
+├── scripts/
+│   ├── run_pipeline.py   # futtatható demó: kicsi szintetikus Tracking JSON
+│   └── simulate_match.py # teljes szintetikus meccs (földi igazság + pásztázó kamera)
+└── tests/                # 26 teszt (modell, kalibráció, becslés, ROI, szimuláció)
+```
+
+## Videó nélküli fejlesztés (meccs-szimulátor)
+
+Mivel meccsvideót nem mindig lehet feltölteni/feldolgozni, a `handball.sim`
+valósághű szintetikus Tracking-et generál: két 7 fős csapat, 6-0 védekezés, mozgó
+labda, passzok. A pásztázó-kamerás változat a látómezőből kieső játékosokat a
+VALÓDI becslővel ([F]) becsli — pont úgy, ahogy egy igazi felvételen tenné.
+
+```bash
+# Összefoglaló (mért vs. becsült arány, statisztika)
+python -m scripts.simulate_match
+# Pásztázó-kamerás Tracking JSON fájlba (ezt eszi a Flutter-kliens)
+python -m scripts.simulate_match match.json --fov 16
+# A teljes "földi igazság" (mind a 14 játékos, kamera-korlát nélkül)
+python -m scripts.simulate_match truth.json --ground-truth
 ```
 
 ## Hol tart most
