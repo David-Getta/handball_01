@@ -27,11 +27,13 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   és alap statisztikákat." Ez már önmagában eladható elemzőeszköz.
 
 ## 2. fázis — Taktikai értelmezés
-- Fázis-szegmentálás (támadás/védekezés/átmenet).
-- Védekezési forma felismerése (6-0, 5-1, 3-2-1…).
-- Tempó-metrikák, csapat-stílusprofil.
-- Eseményfelismerés (gól, lövés, passz, labdaeladás).
-- **Eredmény**: csapatstílus-jelentés videóból ("így védekeznek, ilyen tempóban").
+- Fázis-szegmentálás (támadás/védekezés/átmenet). ✅ kész és tesztelt (`tactics.py`).
+- Védekezési forma felismerése (6-0, 5-1, 3-2-1…). ✅ kész és tesztelt.
+- Labdabirtoklás (a labdához legközelebbi csapat). ✅ kész és tesztelt.
+- Tempó-metrikák, csapat-stílusprofil. ⏳ következő.
+- Eseményfelismerés (gól, lövés, passz, labdaeladás). ⏳ (a labda+pozíciókból).
+- **Eredmény**: csapatstílus-jelentés ("így védekeznek, ilyen tempóban"). Az
+  alapok (fázis, forma, birtoklás) megvannak; az API-n: `/tactics`.
 
 ## 3. fázis — Figurák (set play-ek) felismerése
 - Trajektória-szekvenciák klaszterezése → visszatérő figurák azonosítása.

@@ -1,0 +1,148 @@
+"""
+Tesztek a taktikai rétegre (tactics.py): birtoklás, fázis, védekezési forma.
+
+Kézzel összerakott frame-ekkel, videó nélkül. A pálya 40x20 m; a HAZAI a +x (x=40)
+kapu felé támad, saját kapuja x=0. (Alapértelmezett TacticsConfig.)
+
+Futtatás:
+    python tests/test_tactics.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from handball.models.tracking import (
+    Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
+)
+from handball.pipeline.tactics import (
+    TacticsConfig, possession_team, classify_phase, Phase,
+    phase_percentages, detect_formation,
+)
+
+
+def _pl(track_id, team, x, y):
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0)
+
+
+def test_possession_nearest_within_radius():
+    """A labdát a hozzá legközelebbi (sugáron belüli) játékos csapata birtokolja."""
+    cfg = TacticsConfig()
+    frame = Frame(t=0, players=[
+        _pl(1, Team.HOME, 30.0, 10.0),   # 1 m-re a labdától
+        _pl(11, Team.AWAY, 25.0, 10.0),  # távolabb
+    ], ball=Ball(x=31.0, y=10.0, confidence=1.0))
+    assert possession_team(frame, cfg) == Team.HOME
+
+
+def test_possession_none_when_ball_far():
+    """Ha a legközelebbi játékos is messze van, nincs birtokos (szabad labda)."""
+    cfg = TacticsConfig(possession_radius_m=3.0)
+    frame = Frame(t=0, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+                  ball=Ball(x=30.0, y=10.0, confidence=1.0))
+    assert possession_team(frame, cfg) is None
+
+
+def test_phase_home_attack():
+    """Hazai birtoklás a hazai támadó térfelén (x>20) → HAZAI_TÁMADÁS."""
+    cfg = TacticsConfig()
+    frame = Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                  ball=Ball(x=30.0, y=10.0, confidence=1.0))
+    assert classify_phase(frame, cfg) == Phase.HOME_ATTACK
+
+
+def test_phase_transition_in_own_half():
+    """Hazai birtoklás a SAJÁT térfelén (x<20) → ÁTMENET (felépítés)."""
+    cfg = TacticsConfig()
+    frame = Frame(t=0, players=[_pl(1, Team.HOME, 10.0, 10.0)],
+                  ball=Ball(x=10.0, y=10.0, confidence=1.0))
+    assert classify_phase(frame, cfg) == Phase.TRANSITION
+
+
+def test_phase_away_attack():
+    """Vendég birtoklás a vendég támadó térfelén (x<20) → VENDÉG_TÁMADÁS."""
+    cfg = TacticsConfig()
+    frame = Frame(t=0, players=[_pl(11, Team.AWAY, 8.0, 10.0)],
+                  ball=Ball(x=8.0, y=10.0, confidence=1.0))
+    assert classify_phase(frame, cfg) == Phase.AWAY_ATTACK
+
+
+def test_phase_unknown_without_ball():
+    """Labda nélkül a fázis UNKNOWN."""
+    cfg = TacticsConfig()
+    frame = Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)], ball=None)
+    assert classify_phase(frame, cfg) == Phase.UNKNOWN
+
+
+def test_phase_percentages_sum_100():
+    """A fázis-megoszlás összege 100% (van labdás frame)."""
+    cfg = TacticsConfig()
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 30.0, 10.0)], ball=Ball(x=30, y=10, confidence=1)),
+        Frame(t=1, players=[_pl(11, Team.AWAY, 8.0, 10.0)], ball=Ball(x=8, y=10, confidence=1)),
+    ]
+    pct = phase_percentages(Match(MatchMeta(match_id="t", home_team="A", away_team="B", fps=25), frames))
+    assert abs(sum(pct.values()) - 100.0) < 1e-9
+    assert pct[Phase.HOME_ATTACK.value] == 50.0
+    assert pct[Phase.AWAY_ATTACK.value] == 50.0
+
+
+def _defense(positions):
+    """Védekező (AWAY) frame: a megadott (x,y) helyeken álló védőkből.
+    AWAY saját kapuja x=40, tehát a kaputól mért mélység = 40 - x."""
+    players = [_pl(11 + i, Team.AWAY, x, y) for i, (x, y) in enumerate(positions)]
+    return Frame(t=0, players=players, ball=None)
+
+
+def test_formation_6_0():
+    """Hat védő a 6 m-es vonalon (x≈34, mélység≈6) → 6-0."""
+    frame = _defense([(34.0, y) for y in (3, 6, 9, 11, 14, 17)])
+    res = detect_formation(frame, Team.AWAY)
+    assert res.label == "6-0"
+    assert res.back == 6 and res.mid == 0 and res.high == 0
+
+
+def test_formation_5_1():
+    """Öt hátul + egy előretolt (x≈30.5, mélység≈9.5) → 5-1."""
+    frame = _defense([(34.0, 3), (34.0, 6), (34.0, 9), (34.0, 11), (34.0, 14), (30.5, 10)])
+    res = detect_formation(frame, Team.AWAY)
+    assert res.label == "5-1"
+    assert res.back == 5 and (res.mid + res.high) == 1
+
+
+def test_formation_3_2_1():
+    """Három lépcső: 3 hátul, 2 közép, 1 előretolt → 3-2-1."""
+    frame = _defense([
+        (34.0, 6), (34.0, 10), (34.0, 14),   # hátsó (mélység 6)
+        (30.5, 8), (30.5, 12),               # közép (mélység 9.5)
+        (27.0, 10),                          # előretolt (mélység 13)
+    ])
+    res = detect_formation(frame, Team.AWAY)
+    assert res.label == "3-2-1"
+    assert (res.back, res.mid, res.high) == (3, 2, 1)
+
+
+def test_formation_excludes_goalkeeper():
+    """A kaput nagyon közelről őrző játékost kapusnak vesszük (kihagyjuk)."""
+    # 6 mezőnyvédő a 6 m-en + 1 kapus a kapunál (x≈39.5, mélység 0.5).
+    frame = _defense([(34.0, y) for y in (3, 6, 9, 11, 14, 17)] + [(39.5, 10)])
+    res = detect_formation(frame, Team.AWAY)
+    assert res.defenders == 6   # a kapust nem számoltuk
+    assert res.label == "6-0"
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as e:
+                failures += 1
+                print(f"FAIL {name}: {e}")
+    print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
+    raise SystemExit(1 if failures else 0)
