@@ -36,15 +36,17 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
   for (int t = 0; t < frames; t++) {
     final sec = t / fps;
     final players = <PlayerPosition>[];
+    final homePos = <List<double>>[]; // a hazai aktuális pozíciói (a labda-útvonalhoz)
 
     for (int i = 0; i < home.length; i++) {
-      final bx = home[i][0] + 0.8 * math.sin(0.7 * sec + i);
-      final by = home[i][1] + 1.2 * math.sin(0.5 * sec + i * 1.3);
+      final bx = (home[i][0] + 0.8 * math.sin(0.7 * sec + i)).clamp(0.0, courtLength).toDouble();
+      final by = (home[i][1] + 1.2 * math.sin(0.5 * sec + i * 1.3)).clamp(0.0, courtWidth).toDouble();
+      homePos.add([bx, by]);
       players.add(PlayerPosition(
         trackId: i + 1,
         team: Team.home,
-        x: bx.clamp(0.0, courtLength).toDouble(),
-        y: by.clamp(0.0, courtWidth).toDouble(),
+        x: bx,
+        y: by,
         source: PositionSource.measured,
         confidence: 1.0,
         jerseyNumber: i + 1,
@@ -66,16 +68,15 @@ Match buildDemoMatch({int frames = 200, double fps = 25.0}) {
       ));
     }
 
-    // Labda: a hazai irányító (index 2) körül, kis mozgással.
-    final bx = home[2][0] + 0.8 * math.sin(0.7 * sec + 2) + 1.0;
-    final by = home[2][1] + 1.2 * math.sin(0.5 * sec + 2.6);
+    // Labda: körbejár a hazai játékosok közt (passz-útvonal), hogy legyenek
+    // felismerhető passzok a döntéselemzéshez. ~1 mp-enként vált birtokost.
+    const route = [2, 1, 0, 3, 4, 5]; // irányító → szélső/átlövő/beálló
+    final holderIdx = route[(t ~/ 25) % route.length];
+    final hp = homePos[holderIdx];
     frameList.add(Frame(
       t: t,
       players: players,
-      ball: Ball(
-          x: bx.clamp(0.0, courtLength).toDouble(),
-          y: by.clamp(0.0, courtWidth).toDouble(),
-          confidence: 1.0),
+      ball: Ball(x: hp[0], y: hp[1], confidence: 1.0),
     ));
   }
 

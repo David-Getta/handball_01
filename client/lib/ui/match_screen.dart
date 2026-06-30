@@ -16,6 +16,7 @@ import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
 import "court_painter.dart";
+import "decisions_panel.dart";
 import "heatmap_painter.dart";
 import "stats_panel.dart";
 import "summary_panel.dart";
@@ -144,13 +145,17 @@ class _MatchScreenState extends State<MatchScreen> {
                 SizedBox(
                   width: 300,
                   child: DefaultTabController(
-                    length: 2,
+                    length: 3,
                     child: Column(
                       children: [
-                        const TabBar(tabs: [
-                          Tab(text: "Statisztika"),
-                          Tab(text: "Összegzés"),
-                        ]),
+                        const TabBar(
+                          isScrollable: true,
+                          tabs: [
+                            Tab(text: "Statisztika"),
+                            Tab(text: "Összegzés"),
+                            Tab(text: "Döntések"),
+                          ],
+                        ),
                         Expanded(
                           child: TabBarView(
                             children: [
@@ -168,6 +173,7 @@ class _MatchScreenState extends State<MatchScreen> {
                                       homeName: match.meta.homeTeam,
                                       awayName: match.meta.awayTeam,
                                     ),
+                              DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                             ],
                           ),
                         ),

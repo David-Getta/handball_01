@@ -14,6 +14,8 @@ Funkciók:
 - **Meccs-összegző** (jobb oldali "Összegzés" tab): csapatstílus egy nézetben —
   fázis-megoszlás, csapatonkénti védekezési forma, tempó (birtoklások, támadás-
   hossz, átmenet-arány, labda-tempó) és a visszatérő figurák száma.
+- **Játékos-döntések** ("Döntések" tab): egy kiválasztott játékos passzeloszlása
+  ("10/7-szer ide passzol") és a döntés-minőség (optimális arány, átlagos veszteség).
 - A hőtérkép és a statisztika a kliensen is kiszámolódik (a backend tükre), így
   **backend nélkül, demó-adattal is** működik.
 
