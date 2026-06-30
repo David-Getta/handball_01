@@ -24,6 +24,7 @@ from ..pipeline.pipeline import summarize
 from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 from ..pipeline.tactics import team_style_profile
 from ..pipeline.setplays import discover_setplays
+from ..pipeline.decisions import analyze_player_decisions
 
 
 def create_app():
@@ -108,6 +109,21 @@ def create_app():
             "num_figures": r.num_figures,
             "figure_sizes": r.figure_sizes,
             "labels": r.labels,
+        }
+
+    @app.get("/matches/{match_id}/players/{player_id}/decisions")
+    def get_player_decisions(match_id: str, player_id: int):
+        """Egy játékos passz-döntései: kihez passzol és mennyire optimálisan."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        r = analyze_player_decisions(match, player_id)
+        return {
+            "player_id": r.player_id,
+            "passes": r.passes,
+            "pass_distribution": r.pass_distribution,
+            "optimal_rate": r.optimal_rate,
+            "avg_value_gap": r.avg_value_gap,
         }
 
     # Segéd a feltöltéshez/teszteléshez (később a pipeline tölti fel az eredményt).

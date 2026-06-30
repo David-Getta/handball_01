@@ -45,10 +45,12 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   alap-felismerés megvan; a pontosság a valódi adattal és finomabb leíróval nő.
 
 ## 4. fázis — Játékos-döntéselemzés
-- Kézilabda várható-érték modell (EPV/xG).
-- Döntéseloszlás játékosonként + szituációnként ("10/7-szer ide passzol").
-- Optimális opció vs. tényleges döntés összevetése.
-- **Eredmény**: egyéni játékosjelentés a döntéshozatal minőségéről.
+- Kézilabda várható-érték modell (EPV/xG). ✅ egyszerű heurisztika kész
+  (`decisions.py`: `shot_value`, `pass_completion`); később tanult modellre cserélhető.
+- Döntéseloszlás játékosonként ("10/7-szer ide passzol"). ✅ `pass_distribution`.
+- Optimális opció vs. tényleges döntés összevetése. ✅ `optimal_rate`, `avg_value_gap`.
+- **Eredmény**: egyéni játékosjelentés a döntéshozatalról. Az alap kész és tesztelt
+  (API: `/players/{id}/decisions`); a pontosság valódi adattal és tanult EPV-vel nő.
 
 ## 5. fázis — Szimuláció
 - Tanult ellenfélmodell egy adott csapat stílusából.
