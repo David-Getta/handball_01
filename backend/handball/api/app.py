@@ -25,6 +25,7 @@ from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 from ..pipeline.tactics import team_style_profile
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
+from ..pipeline.event_detection import detect_events, event_counts
 
 
 def create_app():
@@ -109,6 +110,22 @@ def create_app():
             "num_figures": r.num_figures,
             "figure_sizes": r.figure_sizes,
             "labels": r.labels,
+        }
+
+    @app.get("/matches/{match_id}/events")
+    def get_events(match_id: str):
+        """Felismert események (passz, lövés, gól, labdaeladás) + összegzés."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        events = detect_events(match)
+        return {
+            "counts": event_counts(match),
+            "events": [
+                {"t": e.t, "type": e.type.value, "team": e.team.value,
+                 "player_id": e.player_id, "detail": e.detail}
+                for e in events
+            ],
         }
 
     @app.get("/matches/{match_id}/players/{player_id}/decisions")

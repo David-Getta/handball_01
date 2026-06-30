@@ -32,7 +32,8 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 - Labdabirtoklás (a labdához legközelebbi csapat). ✅ kész és tesztelt.
 - Tempó-metrikák, csapat-stílusprofil. ✅ kész és tesztelt (birtoklások száma,
   átlagos támadás-hossz, átmenet-arány, labda-tempó; `team_style_profile`).
-- Eseményfelismerés (gól, lövés, passz, labdaeladás). ⏳ (a labda+pozíciókból).
+- Eseményfelismerés (gól, lövés, passz, labdaeladás). ✅ heurisztikus felismerés
+  kész és tesztelt (`event_detection.py`, API: `/events`); valódi adattal finomítható.
 - **Eredmény**: csapatstílus-jelentés ("így védekeznek, ilyen tempóban"). Az
   alapok (fázis, forma, birtoklás) megvannak; az API-n: `/tactics`.
 
