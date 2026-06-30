@@ -1,12 +1,12 @@
-/// A Flutter-kliens belépési pontja (desktop-first).
+/// A Flutter-kliens belépési pontja (desktop-first, prémium sötét téma).
 ///
 /// Ugyanaz a kódbázis fut Windows/Mac/Linux desktopon és tableten (iPad/Android).
 /// Indítás (asztali, lokális teszt): `flutter run -d windows` (vagy macos/linux).
-/// Lásd client/README.md.
 library;
 
 import "package:flutter/material.dart";
 
+import "theme/app_theme.dart";
 import "ui/match_screen.dart";
 
 void main() {
@@ -19,12 +19,9 @@ class HandballApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Kézilabda elemző",
+      title: "Handball Analytics",
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E66F5)),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.dark,
       home: const MatchScreen(),
     );
   }

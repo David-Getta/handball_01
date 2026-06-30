@@ -1,14 +1,11 @@
-/// Döntések-panel — egy kiválasztott játékos passz-döntései.
-///
-/// Mutatja: kihez passzol (eloszlás, "10/7-szer ide"), és mennyire optimálisan
-/// (az értékmodell szerinti legjobb opcióhoz képest). A számítást a kliensoldali
-/// decisions.dart végzi (a backend tükre), így backend nélkül is működik.
+/// Döntések-panel — egy kiválasztott játékos passz-döntései (sötét téma).
 library;
 
 import "package:flutter/material.dart";
 
 import "../analytics/decisions.dart";
 import "../models/tracking.dart";
+import "../theme/app_theme.dart";
 
 class DecisionsPanel extends StatefulWidget {
   final Match match;
@@ -20,7 +17,7 @@ class DecisionsPanel extends StatefulWidget {
 
 class _DecisionsPanelState extends State<DecisionsPanel> {
   int? _playerId;
-  late Map<int, int?> _jerseyById; // track_id -> mezszám (megjelenítéshez)
+  late Map<int, int?> _jerseyById;
   late List<int> _passers;
 
   @override
@@ -31,7 +28,6 @@ class _DecisionsPanelState extends State<DecisionsPanel> {
     _playerId = _passers.isNotEmpty ? _passers.first : null;
   }
 
-  /// track_id -> mezszám térkép a meccs frame-jeiből (a megjelenítéshez).
   Map<int, int?> _buildJerseyMap(Match match) {
     final map = <int, int?>{};
     for (final f in match.frames) {
@@ -50,75 +46,95 @@ class _DecisionsPanelState extends State<DecisionsPanel> {
   @override
   Widget build(BuildContext context) {
     if (_passers.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text("Nincs felismert passz ezen az adaton."),
-      );
+      return Center(child: Text("Nincs felismert passz.", style: AppText.label));
     }
 
     final report = analyzePlayerDecisions(widget.match, _playerId!);
-    // A passzeloszlás csökkenő sorrendben (a leggyakoribb cél elöl).
     final dist = report.passDistribution.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return ListView(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        const Text("Játékos-döntések", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
+        Text("JÁTÉKOS", style: AppText.sectionLabel),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: DropdownButton<int>(
+            value: _playerId,
+            isExpanded: true,
+            underline: const SizedBox(),
+            dropdownColor: AppColors.surfaceAlt,
+            items: [for (final id in _passers) DropdownMenuItem(value: id, child: Text(_label(id)))],
+            onChanged: (v) => setState(() => _playerId = v),
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.lg),
         Row(
           children: [
-            const Text("Játékos: "),
-            DropdownButton<int>(
-              value: _playerId,
-              items: [for (final id in _passers) DropdownMenuItem(value: id, child: Text(_label(id)))],
-              onChanged: (v) => setState(() => _playerId = v),
-            ),
+            _metric("Passzok", "${report.passes}"),
+            _metric("Optimális", "${(report.optimalRate * 100).toStringAsFixed(0)}%",
+                accent: true),
           ],
         ),
-        const SizedBox(height: 12),
-        _kv("Passzok száma", "${report.passes}"),
-        _kv("Optimális döntés", "${(report.optimalRate * 100).toStringAsFixed(0)} %"),
-        _kv("Átlagos veszteség", report.avgValueGap.toStringAsFixed(3)),
-        const SizedBox(height: 16),
-        const Text("Kihez passzol", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E66F5))),
-        const SizedBox(height: 6),
-        if (dist.isEmpty) const Text("—"),
+
+        const SizedBox(height: AppSpacing.lg),
+        Text("KIHEZ PASSZOL", style: AppText.sectionLabel),
+        const SizedBox(height: AppSpacing.sm),
+        if (dist.isEmpty) Text("—", style: AppText.label),
         for (final e in dist) _distRow(_label(e.key), e.value, report.passes),
       ],
     );
   }
 
-  Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [Text(k), Text(v, style: const TextStyle(fontWeight: FontWeight.w600))],
+  Widget _metric(String label, String value, {bool accent = false}) => Expanded(
+        child: Container(
+          margin: const EdgeInsets.only(right: AppSpacing.sm),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value, style: AppText.valueBig.copyWith(color: accent ? AppColors.accent : AppColors.textPrimary)),
+              const SizedBox(height: 2),
+              Text(label, style: AppText.label.copyWith(fontSize: 11)),
+            ],
+          ),
         ),
       );
 
-  /// Egy passz-cél sora: "ide → N (X%)" + arányos sáv.
   Widget _distRow(String target, int count, int total) {
     final frac = total > 0 ? count / total : 0.0;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("→ $target"),
-              Text("$count/$total (${(frac * 100).toStringAsFixed(0)}%)"),
+              Text("→ $target", style: AppText.label.copyWith(color: AppColors.textPrimary)),
+              Text("$count/$total · ${(frac * 100).toStringAsFixed(0)}%", style: AppText.value),
             ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 5),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: frac.clamp(0.0, 1.0),
-              minHeight: 7,
-              backgroundColor: const Color(0xFFE0E0E0),
+              minHeight: 6,
+              backgroundColor: AppColors.surfaceAlt,
+              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
             ),
           ),
         ],

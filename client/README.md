@@ -1,5 +1,9 @@
 # Kliens — felülnézeti taktikai nézet (Flutter, desktop-first)
 
+> **Dizájn**: prémium, letisztult, sötét felület (egységes dizájnrendszer:
+> `lib/theme/app_theme.dart`) — kártyás elrendezés, visszafogott kontraszt, teal
+> akcentus. A cél egy igényes, "exkluzív" termékélmény.
+
 A kézilabda-elemző **kliens appja**. Lekéri a backendtől a Tracking JSON-t, és
 kirajzolja a felülnézeti pályát: mozgó játékosok (mért = tele pont, **becsült =
 halvány + szaggatott gyűrű**), labda, mezszámok, idővonal-lejátszás.

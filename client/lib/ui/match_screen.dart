@@ -1,9 +1,9 @@
-/// Meccs-képernyő — betölti a Tracking-et, lejátssza, és megjeleníti a
-/// hőtérképet + a statisztika-panelt.
+/// Meccs-képernyő — prémium, letisztult elrendezés.
 ///
-/// Adatforrás: lokális backend, ha elérhető; különben a beágyazott demó.
-/// Nézetek: JÁTÉKOSOK (mozgó pontok) vagy HŐTÉRKÉP (csapat látogatottsága).
-/// Jobb oldalt (desktop-first) a statisztika-panel (táv/sebesség).
+/// Bal oldal: fejléc + eszköztár (Játékosok/Hőtérkép) + felülnézeti pálya kártyán
+/// + élő taktikai felirat + lejátszó. Jobb oldal: tabos elemző panel
+/// (Statisztika / Összegzés / Döntések). Adatforrás: lokális backend, ha elérhető;
+/// különben a beágyazott demó.
 library;
 
 import "dart:async";
@@ -15,13 +15,13 @@ import "../analytics/tactics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
+import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "decisions_panel.dart";
 import "heatmap_painter.dart";
 import "stats_panel.dart";
 import "summary_panel.dart";
 
-/// Mit mutatunk a pályán: a játékosokat vagy a hőtérképet.
 enum ViewMode { players, heatmap }
 
 class MatchScreen extends StatefulWidget {
@@ -33,9 +33,6 @@ class MatchScreen extends StatefulWidget {
 }
 
 class _MatchScreenState extends State<MatchScreen> {
-  static const _homeColor = Color(0xFF1E66F5);
-  static const _awayColor = Color(0xFFE5484D);
-
   final ApiClient _api = ApiClient();
 
   Match? _match;
@@ -48,7 +45,7 @@ class _MatchScreenState extends State<MatchScreen> {
 
   ViewMode _viewMode = ViewMode.players;
   Team _heatmapTeam = Team.home;
-  Heatmap? _heatmap; // a kiválasztott csapat hőtérképe (igény szerint számolva)
+  Heatmap? _heatmap;
 
   @override
   void initState() {
@@ -68,19 +65,19 @@ class _MatchScreenState extends State<MatchScreen> {
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
-        label = "backend (localhost): ${match.meta.matchId}";
+        label = "backend · ${match.meta.matchId}";
       } catch (e) {
         match = buildDemoMatch();
-        label = "demó (backend hiba: $e)";
+        label = "demó";
       }
     } else {
       match = buildDemoMatch();
-      label = "demó (nincs backend)";
+      label = "demó";
     }
     setState(() {
       _match = match;
-      _stats = computePlayerStats(match);     // statisztika a panelhez
-      _summary = computeMatchSummary(match);  // meccs-összegzés a panelhez
+      _stats = computePlayerStats(match);
+      _summary = computeMatchSummary(match);
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -120,177 +117,267 @@ class _MatchScreenState extends State<MatchScreen> {
   Widget build(BuildContext context) {
     final match = _match;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Kézilabda — felülnézeti nézet"),
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh), tooltip: "Újratöltés"),
-        ],
-      ),
       body: match == null
           ? const Center(child: CircularProgressIndicator())
-          : Row(
-              children: [
-                // Bal oldal: vezérlők + pálya + lejátszó.
-                Expanded(
-                  child: Column(
-                    children: [
-                      _topBar(match),
-                      Expanded(child: _courtArea(match)),
-                      _tacticalCaption(match),
-                      _controls(match),
-                    ],
-                  ),
-                ),
-                // Jobb oldal (desktop-first): tabos panel — Statisztika / Összegzés.
-                SizedBox(
-                  width: 300,
-                  child: DefaultTabController(
-                    length: 3,
-                    child: Column(
-                      children: [
-                        const TabBar(
-                          isScrollable: true,
-                          tabs: [
-                            Tab(text: "Statisztika"),
-                            Tab(text: "Összegzés"),
-                            Tab(text: "Döntések"),
-                          ],
-                        ),
-                        Expanded(
-                          child: TabBarView(
-                            children: [
-                              StatsPanel(
-                                stats: _stats,
-                                homeName: match.meta.homeTeam,
-                                awayName: match.meta.awayTeam,
-                                homeColor: _homeColor,
-                                awayColor: _awayColor,
-                              ),
-                              _summary == null
-                                  ? const SizedBox()
-                                  : SummaryPanel(
-                                      summary: _summary!,
-                                      homeName: match.meta.homeTeam,
-                                      awayName: match.meta.awayTeam,
-                                    ),
-                              DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
-                            ],
-                          ),
-                        ),
-                      ],
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _header(match),
+                    const SizedBox(height: AppSpacing.lg),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: _leftColumn(match)),
+                          const SizedBox(width: AppSpacing.lg),
+                          SizedBox(width: 320, child: _rightPanel(match)),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
     );
   }
 
-  Widget _topBar(Match match) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          // Nézetváltó: játékosok / hőtérkép.
-          SegmentedButton<ViewMode>(
-            segments: const [
-              ButtonSegment(value: ViewMode.players, label: Text("Játékosok"), icon: Icon(Icons.groups)),
-              ButtonSegment(value: ViewMode.heatmap, label: Text("Hőtérkép"), icon: Icon(Icons.local_fire_department)),
-            ],
-            selected: {_viewMode},
-            onSelectionChanged: (s) => setState(() => _viewMode = s.first),
+  // --- Fejléc (branding + meccs + forrás) -----------------------------------
+
+  Widget _header(Match match) {
+    return Row(
+      children: [
+        Container(
+          width: 10, height: 10,
+          decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        const Text("HANDBALL", style: AppText.brand),
+        const SizedBox(width: 6),
+        Text("ANALYTICS", style: AppText.brand.copyWith(color: AppColors.accent)),
+        const SizedBox(width: AppSpacing.xl),
+        Text("${match.meta.homeTeam}  ", style: AppText.value.copyWith(color: AppColors.home)),
+        const Text("vs", style: AppText.label),
+        Text("  ${match.meta.awayTeam}", style: AppText.value.copyWith(color: AppColors.away)),
+        const Spacer(),
+        _chip(_sourceLabel),
+        const SizedBox(width: AppSpacing.sm),
+        IconButton(
+          onPressed: _load,
+          icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
+          tooltip: "Újratöltés",
+        ),
+      ],
+    );
+  }
+
+  Widget _chip(String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(text, style: AppText.label.copyWith(fontSize: 11)),
+      );
+
+  // --- Bal oszlop (eszköztár + pálya + felirat + vezérlők) -------------------
+
+  Widget _leftColumn(Match match) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _toolbar(match),
+        const SizedBox(height: AppSpacing.md),
+        Expanded(
+          child: Container(
+            decoration: AppTheme.card(color: AppColors.surface),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: _courtArea(match),
           ),
-          const SizedBox(width: 16),
-          // Hőtérkép-csapatválasztó (csak hőtérkép nézetben).
-          if (_viewMode == ViewMode.heatmap)
-            DropdownButton<Team>(
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _tacticalCaption(match),
+        const SizedBox(height: AppSpacing.sm),
+        _controls(match),
+      ],
+    );
+  }
+
+  Widget _toolbar(Match match) {
+    return Row(
+      children: [
+        SegmentedButton<ViewMode>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: ViewMode.players, label: Text("Játékosok"), icon: Icon(Icons.groups, size: 18)),
+            ButtonSegment(value: ViewMode.heatmap, label: Text("Hőtérkép"), icon: Icon(Icons.whatshot, size: 18)),
+          ],
+          selected: {_viewMode},
+          onSelectionChanged: (s) => setState(() => _viewMode = s.first),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        if (_viewMode == ViewMode.heatmap)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButton<Team>(
               value: _heatmapTeam,
+              underline: const SizedBox(),
+              dropdownColor: AppColors.surfaceAlt,
               items: [
                 DropdownMenuItem(value: Team.home, child: Text(match.meta.homeTeam)),
                 DropdownMenuItem(value: Team.away, child: Text(match.meta.awayTeam)),
               ],
               onChanged: (t) => t == null ? null : _setHeatmapTeam(t),
             ),
-          const Spacer(),
-          Text("forrás: $_sourceLabel", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        ],
-      ),
+          ),
+        const Spacer(),
+        _legend(),
+      ],
     );
+  }
+
+  Widget _legend() {
+    Widget dot(Color c) => Container(width: 9, height: 9, decoration: BoxDecoration(color: c, shape: BoxShape.circle));
+    return Row(children: [
+      dot(AppColors.home), const SizedBox(width: 4), Text(_match!.meta.homeTeam, style: AppText.label.copyWith(fontSize: 11)),
+      const SizedBox(width: 12),
+      dot(AppColors.away), const SizedBox(width: 4), Text(_match!.meta.awayTeam, style: AppText.label.copyWith(fontSize: 11)),
+      const SizedBox(width: 12),
+      Container(width: 9, height: 9, decoration: BoxDecoration(border: Border.all(color: AppColors.textFaint), shape: BoxShape.circle)),
+      const SizedBox(width: 4), Text("becsült", style: AppText.label.copyWith(fontSize: 11)),
+    ]);
   }
 
   Widget _courtArea(Match match) {
     final frame = match.frames[_frameIndex];
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Stack(
-        children: [
-          // Alapréteg: a pálya + (játékos nézetben) a játékosok.
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: CustomPaint(
+            painter: CourtPainter(frame: _viewMode == ViewMode.players ? frame : null),
+          ),
+        ),
+        if (_viewMode == ViewMode.heatmap && _heatmap != null)
           Positioned.fill(
             child: CustomPaint(
-              painter: CourtPainter(
-                frame: _viewMode == ViewMode.players ? frame : null,
-                colors: const DisplayColors(home: _homeColor, away: _awayColor),
+              painter: HeatmapPainter(
+                heatmap: _heatmap!,
+                color: _heatmapTeam == Team.home ? AppColors.home : AppColors.away,
               ),
             ),
           ),
-          // Hőtérkép-réteg (csak hőtérkép nézetben).
-          if (_viewMode == ViewMode.heatmap && _heatmap != null)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: HeatmapPainter(
-                  heatmap: _heatmap!,
-                  color: _heatmapTeam == Team.home ? _homeColor : _awayColor,
-                ),
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 
-  /// Élő taktikai felirat az aktuális frame-ről: fázis + (támadáskor) a védő
-  /// csapat formája. A számítás a kliensoldali tactics.dart-tal (a backend tükre).
   Widget _tacticalCaption(Match match) {
     const cfg = TacticsConfig();
     final frame = match.frames[_frameIndex];
     final phase = classifyPhase(frame, cfg);
 
-    String text = "Fázis: ${phaseLabelHu(phase)}";
+    String text = phaseLabelHu(phase);
+    String? formation;
     if (phase == Phase.homeAttack) {
-      text += " · ${match.meta.awayTeam} véd: ${detectFormation(frame, Team.away, cfg)}";
+      formation = "${match.meta.awayTeam} · ${detectFormation(frame, Team.away, cfg)}";
     } else if (phase == Phase.awayAttack) {
-      text += " · ${match.meta.homeTeam} véd: ${detectFormation(frame, Team.home, cfg)}";
+      formation = "${match.meta.homeTeam} · ${detectFormation(frame, Team.home, cfg)}";
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: const Color(0xFF1E66F5).withOpacity(0.08),
-      child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.accentSoft,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.sports_handball, size: 16, color: AppColors.accent),
+            const SizedBox(width: 6),
+            Text(text, style: AppText.value.copyWith(color: AppColors.accent)),
+          ]),
+        ),
+        if (formation != null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Text("véd: $formation", style: AppText.label),
+        ],
+      ],
     );
   }
 
   Widget _controls(Match match) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          IconButton(
-            iconSize: 32,
-            onPressed: _togglePlay,
-            icon: Icon(_playing ? Icons.pause_circle : Icons.play_circle),
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    return Row(
+      children: [
+        IconButton(
+          iconSize: 38,
+          color: AppColors.accent,
+          onPressed: _togglePlay,
+          icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_fill),
+        ),
+        Expanded(
+          child: Slider(
+            value: _frameIndex.toDouble(),
+            min: 0,
+            max: (match.frames.length - 1).toDouble(),
+            onChanged: (v) => setState(() => _frameIndex = v.round()),
           ),
-          Expanded(
-            child: Slider(
-              value: _frameIndex.toDouble(),
-              min: 0,
-              max: (match.frames.length - 1).toDouble(),
-              onChanged: (v) => setState(() => _frameIndex = v.round()),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Text("${(_frameIndex / fps).toStringAsFixed(1)} s",
+            style: AppText.value),
+        Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s",
+            style: AppText.label),
+      ],
+    );
+  }
+
+  // --- Jobb oldali tabos panel ----------------------------------------------
+
+  Widget _rightPanel(Match match) {
+    return Container(
+      decoration: AppTheme.card(color: AppColors.surface),
+      clipBehavior: Clip.antiAlias,
+      child: DefaultTabController(
+        length: 3,
+        child: Column(
+          children: [
+            const TabBar(
+              labelColor: AppColors.textPrimary,
+              unselectedLabelColor: AppColors.textFaint,
+              indicatorColor: AppColors.accent,
+              labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              tabs: [Tab(text: "Statisztika"), Tab(text: "Összegzés"), Tab(text: "Döntések")],
             ),
-          ),
-          Text("${_frameIndex + 1}/${match.frames.length}  "
-              "(${(_frameIndex / (match.meta.fps > 0 ? match.meta.fps : 25.0)).toStringAsFixed(1)} s)"),
-        ],
+            Expanded(
+              child: TabBarView(
+                children: [
+                  StatsPanel(
+                    stats: _stats,
+                    homeName: match.meta.homeTeam,
+                    awayName: match.meta.awayTeam,
+                  ),
+                  _summary == null
+                      ? const SizedBox()
+                      : SummaryPanel(
+                          summary: _summary!,
+                          homeName: match.meta.homeTeam,
+                          awayName: match.meta.awayTeam,
+                        ),
+                  DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
