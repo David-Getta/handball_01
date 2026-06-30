@@ -20,6 +20,9 @@ Funkciók:
   hossz, átmenet-arány, labda-tempó) és a visszatérő figurák száma.
 - **Játékos-döntések** ("Döntések" tab): egy kiválasztott játékos passzeloszlása
   ("10/7-szer ide passzol") és a döntés-minőség (optimális arány, átlagos veszteség).
+- **Figura-tervező** (fejléc gomb): az edző a felülnézeti pályán húzza a támadókat
+  (Kezdő/Vég kulcs-pozíció), beállítja a tanult védelmet, és lejátszatja a figurát
+  ellene — a rendszer pontozza a teremtett lövőhelyzetet (5. fázis).
 - A hőtérkép és a statisztika a kliensen is kiszámolódik (a backend tükre), így
   **backend nélkül, demó-adattal is** működik.
 

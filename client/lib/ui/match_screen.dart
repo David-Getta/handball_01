@@ -18,6 +18,7 @@ import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "decisions_panel.dart";
+import "designer_screen.dart";
 import "heatmap_painter.dart";
 import "stats_panel.dart";
 import "summary_panel.dart";
@@ -163,6 +164,18 @@ class _MatchScreenState extends State<MatchScreen> {
         Text("  ${match.meta.awayTeam}", style: AppText.value.copyWith(color: AppColors.away)),
         const Spacer(),
         _chip(_sourceLabel),
+        const SizedBox(width: AppSpacing.sm),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => DesignerScreen(match: match)),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.accent,
+            side: const BorderSide(color: AppColors.accent),
+          ),
+          icon: const Icon(Icons.architecture, size: 18),
+          label: const Text("Figura-tervező"),
+        ),
         const SizedBox(width: AppSpacing.sm),
         IconButton(
           onPressed: _load,

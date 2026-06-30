@@ -12,6 +12,29 @@ const double courtWidth = 20.0; // y tengely (rövid)
 const double goalWidth = 3.0; // kapu szélessége → kapufák y=8.5 és y=11.5
 const double goalAreaRadius = 6.0; // 6 m-es kapuelőtér sugár
 
+/// Méter↔képernyő transzformáció — a felülnézeti pálya egységes leképezése.
+///
+/// Ugyanazt a skálát/eltolást adja, amit a rajzolók használnak, hogy a kirajzolás
+/// és az érintés-találat (a figura-tervezőben) pontosan egyezzen.
+class CourtTransform {
+  final double scale;
+  final double originX;
+  final double originY;
+  const CourtTransform(this.scale, this.originX, this.originY);
+
+  factory CourtTransform.fit(Size size, {double margin = 28}) {
+    final usableW = size.width - 2 * margin;
+    final usableH = size.height - 2 * margin;
+    final scale = math.min(usableW / courtLength, usableH / courtWidth);
+    final ox = (size.width - courtLength * scale) / 2;
+    final oy = (size.height - courtWidth * scale) / 2;
+    return CourtTransform(scale, ox, oy);
+  }
+
+  Offset toScreen(double mx, double my) => Offset(originX + mx * scale, originY + my * scale);
+  Offset toCourt(double px, double py) => Offset((px - originX) / scale, (py - originY) / scale);
+}
+
 /// A kapuelőtér (6 m-es zóna) határoló pontjai MÉTERBEN, az adott oldalra.
 ///
 /// [leftSide] true esetén a bal kapu (x=0), false esetén a jobb (x=40).
