@@ -23,6 +23,7 @@ from ..models.tracking import Match, MatchMeta, Team
 from ..pipeline.pipeline import summarize
 from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 from ..pipeline.tactics import team_style_profile
+from ..pipeline.setplays import discover_setplays
 
 
 def create_app():
@@ -93,6 +94,21 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         return team_style_profile(match)
+
+    @app.get("/matches/{match_id}/setplays")
+    def get_setplays(match_id: str, threshold: float = 0.15):
+        """Figura-felismerés: hány visszatérő figurát játszottak és milyen
+        gyakorisággal (a támadások mozgás-mintázatainak klaszterezéséből)."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        r = discover_setplays(match, threshold=threshold)
+        return {
+            "attacks": r.attacks,
+            "num_figures": r.num_figures,
+            "figure_sizes": r.figure_sizes,
+            "labels": r.labels,
+        }
 
     # Segéd a feltöltéshez/teszteléshez (később a pipeline tölti fel az eredményt).
     def _put_match(match: Match) -> None:

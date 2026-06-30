@@ -38,8 +38,11 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
 
 ## 3. fázis — Figurák (set play-ek) felismerése
 - Trajektória-szekvenciák klaszterezése → visszatérő figurák azonosítása.
-- Figura-könyvtár csapatonként.
-- **Eredmény**: "ez a csapat ezt a 8 figurát játssza, ilyen gyakorisággal".
+  ✅ alap kész és tesztelt: támadás-szegmentálás → mozgás-ujjlenyomat →
+  klaszterezés (`setplays.py`, API: `/setplays`).
+- Figura-könyvtár csapatonként. ⏳ (finomabb trajektória-modell későbbi bővítés).
+- **Eredmény**: "ez a csapat ezt a N figurát játssza, ilyen gyakorisággal" — az
+  alap-felismerés megvan; a pontosság a valódi adattal és finomabb leíróval nő.
 
 ## 4. fázis — Játékos-döntéselemzés
 - Kézilabda várható-érték modell (EPV/xG).

@@ -78,7 +78,8 @@ uvicorn "handball.api.app:create_app" --factory --reload
 # GET /matches/{id}/stats           -> játékosonkénti táv/sebesség
 # GET /matches/{id}/heatmap?team=home  -> csapat-hőtérkép (rács)
 # GET /matches/{id}/team-stats      -> súlypont + kiterjedés csapatonként
-# GET /matches/{id}/tactics         -> fázis-megoszlás + védekezési formák
+# GET /matches/{id}/tactics         -> stílusprofil (fázis, forma, tempó)
+# GET /matches/{id}/setplays        -> visszatérő figurák száma + gyakorisága
 ```
 
 A valódi videó-feldolgozáshoz az ML-extra: `pip install -e ".[ml]"`
