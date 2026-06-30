@@ -54,9 +54,12 @@ előállítani, és felülnézeti taktikai térképen megjeleníteni.
   (API: `/players/{id}/decisions`); a pontosság valódi adattal és tanult EPV-vel nő.
 
 ## 5. fázis — Szimuláció
-- Tanult ellenfélmodell egy adott csapat stílusából.
-- Edző által tervezett figura lejátszása az ellenfél ellen.
-- **Eredmény**: "próbáld ki a figurádat X csapat védekezése ellen".
+- Tanult ellenfélmodell egy adott csapat stílusából. ✅ alap kész és tesztelt
+  (`DefenseModel.learn`: védőszám + vonalmélység + oldalkövetés).
+- Edző által tervezett figura lejátszása az ellenfél ellen. ✅ `simulate_setplay`
+  + `evaluate_setplay` (a teremtett lövőhelyzet pontozása); API: `/simulate-setplay`.
+- **Eredmény**: "próbáld ki a figurádat X csapat védekezése ellen" — az alap megvan;
+  a védekezési modell később finomabb (tanult) változatra cserélhető.
 
 ## 6. fázis — 3D & LiDAR
 - LiDAR ingest, 3D rekonstrukció, pontfelhő-alapú követés.

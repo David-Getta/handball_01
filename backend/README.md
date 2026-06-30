@@ -82,6 +82,7 @@ uvicorn "handball.api.app:create_app" --factory --reload
 # GET /matches/{id}/setplays        -> visszatérő figurák száma + gyakorisága
 # GET /matches/{id}/events          -> passz/lövés/gól/labdaeladás + összegzés
 # GET /matches/{id}/players/{pid}/decisions -> kihez passzol + mennyire optimális
+# POST /matches/{id}/simulate-setplay -> figura a meccsből TANULT védelem ellen
 ```
 
 A valódi videó-feldolgozáshoz az ML-extra: `pip install -e ".[ml]"`

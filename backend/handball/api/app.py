@@ -26,6 +26,7 @@ from ..pipeline.tactics import team_style_profile
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
 from ..pipeline.event_detection import detect_events, event_counts
+from ..pipeline.play_simulation import DefenseModel, SetPlay, simulate_setplay, evaluate_setplay
 
 
 def create_app():
@@ -141,6 +142,36 @@ def create_app():
             "pass_distribution": r.pass_distribution,
             "optimal_rate": r.optimal_rate,
             "avg_value_gap": r.avg_value_gap,
+        }
+
+    @app.post("/matches/{match_id}/simulate-setplay")
+    def simulate(match_id: str, body: dict, defending: str = "away"):
+        """Az edző figuráját lejátssza a meccsből TANULT védelem ellen.
+
+        A meccsből megtanuljuk a `defending` csapat védekezési stílusát, majd a
+        kérés törzsében kapott figurát (attackers + ball_carrier) lejátsszuk ellene.
+        Visszaadja a szimulált Tracking-et, a kiértékelést és a tanult modellt.
+        """
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            team = Team(defending)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="defending must be 'home' or 'away'")
+
+        model = DefenseModel.learn(match, team)
+        try:
+            attackers = [[(float(p[0]), float(p[1])) for p in path] for path in body["attackers"]]
+            setplay = SetPlay(attackers=attackers, ball_carrier=list(body["ball_carrier"]))
+        except (KeyError, TypeError, IndexError, ValueError):
+            raise HTTPException(status_code=400, detail="invalid setplay body")
+
+        sim = simulate_setplay(setplay, model)
+        return {
+            "defense_model": vars(model),
+            "evaluation": evaluate_setplay(sim),
+            "tracking": sim.to_dict(),
         }
 
     # Segéd a feltöltéshez/teszteléshez (később a pipeline tölti fel az eredményt).
