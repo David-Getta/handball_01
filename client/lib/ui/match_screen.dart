@@ -10,6 +10,7 @@ import "dart:async";
 import "package:flutter/material.dart";
 
 import "../analytics/court_analytics.dart";
+import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
 import "../models/tracking.dart";
 import "../services/api_client.dart";
@@ -17,6 +18,7 @@ import "../sim/demo_data.dart";
 import "court_painter.dart";
 import "heatmap_painter.dart";
 import "stats_panel.dart";
+import "summary_panel.dart";
 
 /// Mit mutatunk a pályán: a játékosokat vagy a hőtérképet.
 enum ViewMode { players, heatmap }
@@ -37,6 +39,7 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Match? _match;
   Map<int, PlayerStat> _stats = {};
+  MatchSummary? _summary;
   int _frameIndex = 0;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
@@ -75,7 +78,8 @@ class _MatchScreenState extends State<MatchScreen> {
     }
     setState(() {
       _match = match;
-      _stats = computePlayerStats(match); // statisztika a panelhez
+      _stats = computePlayerStats(match);     // statisztika a panelhez
+      _summary = computeMatchSummary(match);  // meccs-összegzés a panelhez
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -136,13 +140,40 @@ class _MatchScreenState extends State<MatchScreen> {
                     ],
                   ),
                 ),
-                // Jobb oldal (desktop-first): statisztika-panel.
-                StatsPanel(
-                  stats: _stats,
-                  homeName: match.meta.homeTeam,
-                  awayName: match.meta.awayTeam,
-                  homeColor: _homeColor,
-                  awayColor: _awayColor,
+                // Jobb oldal (desktop-first): tabos panel — Statisztika / Összegzés.
+                SizedBox(
+                  width: 300,
+                  child: DefaultTabController(
+                    length: 2,
+                    child: Column(
+                      children: [
+                        const TabBar(tabs: [
+                          Tab(text: "Statisztika"),
+                          Tab(text: "Összegzés"),
+                        ]),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              StatsPanel(
+                                stats: _stats,
+                                homeName: match.meta.homeTeam,
+                                awayName: match.meta.awayTeam,
+                                homeColor: _homeColor,
+                                awayColor: _awayColor,
+                              ),
+                              _summary == null
+                                  ? const SizedBox()
+                                  : SummaryPanel(
+                                      summary: _summary!,
+                                      homeName: match.meta.homeTeam,
+                                      awayName: match.meta.awayTeam,
+                                    ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

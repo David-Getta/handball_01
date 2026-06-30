@@ -11,6 +11,9 @@ Funkciók:
 - **Statisztika-panel** (jobb oldalt): játékosonkénti futott táv és átlagsebesség.
 - **Élő taktikai felirat** (a pálya alatt): az aktuális fázis (hazai/vendég
   támadás, átmenet) és támadáskor a védő csapat formája (6-0 / 5-1 / 3-2-1).
+- **Meccs-összegző** (jobb oldali "Összegzés" tab): csapatstílus egy nézetben —
+  fázis-megoszlás, csapatonkénti védekezési forma, tempó (birtoklások, támadás-
+  hossz, átmenet-arány, labda-tempó) és a visszatérő figurák száma.
 - A hőtérkép és a statisztika a kliensen is kiszámolódik (a backend tükre), így
   **backend nélkül, demó-adattal is** működik.
 
@@ -27,13 +30,17 @@ client/
     ├── models/tracking.dart     # a backend Tracking JSON Dart-tükre
     ├── services/api_client.dart # lokális backend (localhost:8000) hívása
     ├── sim/demo_data.dart       # beágyazott demó → backend NÉLKÜL is mozog
-    ├── analytics/court_analytics.dart  # hőtérkép + játékos-statisztika (a backend tükre)
+    ├── analytics/
+    │   ├── court_analytics.dart  # hőtérkép + játékos-statisztika (a backend tükre)
+    │   ├── tactics.dart          # fázis/birtoklás/forma (az aktuális frame-re)
+    │   └── match_summary.dart    # meccs-összegzés (fázis%, forma, tempó, figurák)
     └── ui/
         ├── court_geometry.dart  # pályaméretek + 6 m-es kapuelőtér alakja
         ├── court_painter.dart   # a felülnézeti rajzoló (CustomPainter)
         ├── heatmap_painter.dart # hőtérkép-réteg a pálya fölött
-        ├── stats_panel.dart     # oldalsó statisztika-panel (táv/sebesség)
-        └── match_screen.dart    # betöltés + nézetváltó + lejátszó
+        ├── stats_panel.dart     # statisztika-panel (táv/sebesség)
+        ├── summary_panel.dart   # meccs-összegző panel (csapatstílus)
+        └── match_screen.dart    # betöltés + nézetváltó + tabos panel + lejátszó
 ```
 
 ## Futtatás (asztali gép / laptop)

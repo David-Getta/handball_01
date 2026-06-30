@@ -34,7 +34,7 @@ class StatsPanel extends StatelessWidget {
       ..sort((a, b) => (a.jerseyNumber ?? a.trackId).compareTo(b.jerseyNumber ?? b.trackId));
 
     return Container(
-      width: 280,
+      width: double.infinity,
       color: const Color(0xFFF2F2F7),
       child: ListView(
         padding: const EdgeInsets.all(12),
