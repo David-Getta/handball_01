@@ -7,7 +7,7 @@ library;
 import "package:flutter/material.dart";
 
 import "theme/app_theme.dart";
-import "ui/match_screen.dart";
+import "ui/dashboard_screen.dart";
 
 void main() {
   runApp(const HandballApp());
@@ -19,10 +19,10 @@ class HandballApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Handball Analytics",
+      title: "Sport Machine",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const MatchScreen(),
+      home: const DashboardScreen(),
     );
   }
 }

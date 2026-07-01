@@ -1,41 +1,41 @@
-/// Dizájnrendszer — egy PRÉMIUM, letisztult, sötét megjelenés.
+/// Dizájnrendszer — a "Sport Machine" design alapján (pontos tokenek).
 ///
-/// Egy helyen definiálja a színeket, tipográfiát és térközöket, hogy az egész app
-/// egységes, igényes (nem "olcsó") élményt adjon. Sötét alap, visszafogott
-/// kontraszt, egy elegáns akcentus (teal) + diszkrét arany kiemelés.
+/// Sötét, prémium felület: mély háttér, finom kártyák, teal akcentus + diszkrét
+/// arany. A színek a hivatalos design-exportból származnak.
 library;
 
 import "package:flutter/material.dart";
 
-/// Az alkalmazás színpalettája.
 class AppColors {
-  // Háttér és felületek (mély, közel fekete, enyhe kék árnyalattal).
-  static const bg = Color(0xFF0B0E13);
-  static const surface = Color(0xFF151A22);
-  static const surfaceAlt = Color(0xFF1B212B);
-  static const border = Color(0xFF2A323E);
+  // Háttér és felületek.
+  static const bg = Color(0xFF0A0E13);          // app háttér
+  static const bgSidebar = Color(0xFF0C1017);   // oldalsáv (sötétebb)
+  static const surface = Color(0xFF10151D);      // kártyák
+  static const surfaceAlt = Color(0xFF1E2530);   // belső csempék / kiemelés
+  static const border = Color(0xFF212A36);       // finom keret
+  static const borderStrong = Color(0xFF2A3444);
 
   // Szöveg.
-  static const textPrimary = Color(0xFFE8ECF2);
-  static const textSecondary = Color(0xFF8B95A7);
-  static const textFaint = Color(0xFF5A6475);
+  static const textPrimary = Color(0xFFEAEEF5);
+  static const textSecondary = Color(0xFF93A0B4);
+  static const textFaint = Color(0xFF6E7B8F);
 
   // Akcentusok.
-  static const accent = Color(0xFF2DD4BF);     // teal — elsődleges
-  static const accentSoft = Color(0x332DD4BF);  // teal halvány (kitöltéshez)
-  static const gold = Color(0xFFE5B567);        // diszkrét prémium kiemelés
+  static const accent = Color(0xFF2FD9C4);      // teal — elsődleges
+  static const accentSoft = Color(0x262FD9C4);  // teal halvány kitöltés
+  static const gold = Color(0xFFD8B36B);        // diszkrét prémium kiemelés
+  static const onAccent = Color(0xFF06121F);    // szöveg akcentuson
 
-  // Csapatszínek (megjelenítés, nem a valódi mez).
+  // Csapatszínek / labda (megjelenítés).
   static const home = Color(0xFF4C9AFF);
   static const away = Color(0xFFFF6B6B);
   static const ball = Color(0xFFFFC857);
 
   // Pálya.
-  static const courtFill = Color(0xFF10151C);
-  static const courtLine = Color(0xFF3A4350);
+  static const courtFill = Color(0xFF10151D);
+  static const courtLine = Color(0xFF37414F);
 }
 
-/// Egységes térközök (8 alapú skála).
 class AppSpacing {
   static const xs = 4.0;
   static const sm = 8.0;
@@ -45,14 +45,16 @@ class AppSpacing {
   static const xxl = 32.0;
 }
 
-/// Gyakori szövegstílusok (a prémium érzethez: ritkított, finom hierarchia).
 class AppText {
   static const TextStyle title =
-      TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary, letterSpacing: 0.2);
+      TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: 0.2);
 
-  /// Szekciócímke: kicsi, NAGYBETŰS, ritkított — diszkrét, igényes tagolás.
+  static const TextStyle subtitle =
+      TextStyle(fontSize: 13, color: AppColors.textSecondary, letterSpacing: 0.3);
+
+  /// Szekciócímke: kicsi, NAGYBETŰS, erősen ritkított (a design jellegzetessége).
   static const TextStyle sectionLabel = TextStyle(
-      fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 1.4);
+      fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textFaint, letterSpacing: 2.0);
 
   static const TextStyle label =
       TextStyle(fontSize: 13, color: AppColors.textSecondary);
@@ -60,21 +62,27 @@ class AppText {
   static const TextStyle value =
       TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary);
 
+  static const TextStyle statBig = TextStyle(
+      fontSize: 40, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: 0.5);
+
   static const TextStyle valueBig = TextStyle(
       fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary, letterSpacing: 0.3);
 
   static const TextStyle brand = TextStyle(
-      fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: 2.0);
+      fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary, letterSpacing: 1.5);
+
+  /// Breadcrumb-stílus a felső sávhoz (nagyon ritkított, halvány).
+  static const TextStyle crumb = TextStyle(
+      fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textFaint, letterSpacing: 2.5);
 }
 
 class AppTheme {
-  /// A sötét, prémium téma.
   static ThemeData get dark {
     final scheme = const ColorScheme.dark(
       surface: AppColors.surface,
       primary: AppColors.accent,
       secondary: AppColors.gold,
-      onPrimary: Color(0xFF06231F),
+      onPrimary: AppColors.onAccent,
       onSurface: AppColors.textPrimary,
     );
     return ThemeData(
@@ -98,10 +106,10 @@ class AppTheme {
     );
   }
 
-  /// Egységes "kártya" dekoráció (lekerekített, finom kerettel).
-  static BoxDecoration card({Color? color}) => BoxDecoration(
+  /// Egységes kártya-dekoráció (lekerekített, finom kerettel).
+  static BoxDecoration card({Color? color, Color? borderColor}) => BoxDecoration(
         color: color ?? AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 1),
+        border: Border.all(color: borderColor ?? AppColors.border, width: 1),
       );
 }

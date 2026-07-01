@@ -89,6 +89,21 @@ class CourtPainter extends CustomPainter {
     final f = frame;
     if (f == null) return;
 
+    // A labdás játékos (a labdához legközelebbi) — őt arany gyűrűvel emeljük ki.
+    int? carrierId;
+    final ball = f.ball;
+    if (ball != null && f.players.isNotEmpty) {
+      double bestD = double.infinity;
+      for (final pl in f.players) {
+        final dx = pl.x - ball.x, dy = pl.y - ball.y;
+        final d = dx * dx + dy * dy;
+        if (d < bestD) {
+          bestD = d;
+          carrierId = pl.trackId;
+        }
+      }
+    }
+
     for (final pl in f.players) {
       final base = pl.team == Team.home ? colors.home : colors.away;
       final center = p(pl.x, pl.y);
@@ -98,15 +113,16 @@ class CourtPainter extends CustomPainter {
         canvas.drawCircle(center, radius, Paint()..color = base.withOpacity(0.22));
         _drawDashedRing(canvas, center, radius + 2, base.withOpacity(0.55));
       } else {
-        // Finom külső "halo" + tele token + vékony világos perem.
+        // Finom külső "halo" + tele token + perem (labdásnál arany, egyébként világos).
         canvas.drawCircle(center, radius + 3, Paint()..color = base.withOpacity(0.16));
         canvas.drawCircle(center, radius, Paint()..color = base);
+        final isCarrier = pl.trackId == carrierId;
         canvas.drawCircle(
-            center, radius,
+            center, radius + (isCarrier ? 2 : 0),
             Paint()
-              ..color = Colors.white.withOpacity(0.85)
+              ..color = isCarrier ? AppColors.gold : Colors.white.withOpacity(0.85)
               ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.2);
+              ..strokeWidth = isCarrier ? 2.4 : 1.2);
       }
 
       if (pl.jerseyNumber != null) {

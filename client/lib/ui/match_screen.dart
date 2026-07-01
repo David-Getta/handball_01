@@ -1,9 +1,7 @@
-/// Meccs-képernyő — prémium, letisztult elrendezés.
+/// Meccs-elemző — felülnézeti taktikai nézet (a shell összecsukott railjével).
 ///
-/// Bal oldal: fejléc + eszköztár (Játékosok/Hőtérkép) + felülnézeti pálya kártyán
-/// + élő taktikai felirat + lejátszó. Jobb oldal: tabos elemző panel
-/// (Statisztika / Összegzés / Döntések). Adatforrás: lokális backend, ha elérhető;
-/// különben a beágyazott demó.
+/// Bal oldalon eszköztár + pálya kártyán + élő taktikai felirat + lejátszó, jobbra
+/// tabos elemző panel. Adatforrás: lokális backend, ha elérhető; különben demó.
 library;
 
 import "dart:async";
@@ -20,6 +18,7 @@ import "court_painter.dart";
 import "decisions_panel.dart";
 import "designer_screen.dart";
 import "heatmap_painter.dart";
+import "shell/app_shell.dart";
 import "stats_panel.dart";
 import "summary_panel.dart";
 
@@ -117,54 +116,44 @@ class _MatchScreenState extends State<MatchScreen> {
   @override
   Widget build(BuildContext context) {
     final match = _match;
-    return Scaffold(
-      body: match == null
+    return AppShell(
+      active: NavId.matches,
+      crumbTag: "1c",
+      crumbPath: "MECCS-ELEMZŐ · FELÜLNÉZETI TAKTIKAI NÉZET",
+      collapsed: true,
+      child: match == null
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _header(match),
-                    const SizedBox(height: AppSpacing.lg),
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(child: _leftColumn(match)),
-                          const SizedBox(width: AppSpacing.lg),
-                          SizedBox(width: 320, child: _rightPanel(match)),
-                        ],
-                      ),
-                    ),
-                  ],
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _matchTitle(match),
+                const SizedBox(height: AppSpacing.lg),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _leftColumn(match)),
+                      const SizedBox(width: AppSpacing.lg),
+                      SizedBox(width: 320, child: _rightPanel(match)),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
     );
   }
 
-  // --- Fejléc (branding + meccs + forrás) -----------------------------------
-
-  Widget _header(Match match) {
+  Widget _matchTitle(Match match) {
     return Row(
       children: [
-        Container(
-          width: 10, height: 10,
-          decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        const Text("HANDBALL", style: AppText.brand),
-        const SizedBox(width: 6),
-        Text("ANALYTICS", style: AppText.brand.copyWith(color: AppColors.accent)),
-        const SizedBox(width: AppSpacing.xl),
-        Text("${match.meta.homeTeam}  ", style: AppText.value.copyWith(color: AppColors.home)),
-        const Text("vs", style: AppText.label),
-        Text("  ${match.meta.awayTeam}", style: AppText.value.copyWith(color: AppColors.away)),
-        const Spacer(),
+        Text(match.meta.homeTeam, style: AppText.title.copyWith(fontSize: 24, color: AppColors.home)),
+        const SizedBox(width: 12),
+        Text("vs", style: AppText.label),
+        const SizedBox(width: 12),
+        Text(match.meta.awayTeam, style: AppText.title.copyWith(fontSize: 24, color: AppColors.away)),
+        const SizedBox(width: AppSpacing.lg),
         _chip(_sourceLabel),
-        const SizedBox(width: AppSpacing.sm),
+        const Spacer(),
         OutlinedButton.icon(
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => DesignerScreen(match: match)),
@@ -177,11 +166,7 @@ class _MatchScreenState extends State<MatchScreen> {
           label: const Text("Figura-tervező"),
         ),
         const SizedBox(width: AppSpacing.sm),
-        IconButton(
-          onPressed: _load,
-          icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
-          tooltip: "Újratöltés",
-        ),
+        IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppColors.textSecondary)),
       ],
     );
   }
@@ -196,8 +181,6 @@ class _MatchScreenState extends State<MatchScreen> {
         child: Text(text, style: AppText.label.copyWith(fontSize: 11)),
       );
 
-  // --- Bal oszlop (eszköztár + pálya + felirat + vezérlők) -------------------
-
   Widget _leftColumn(Match match) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -206,9 +189,18 @@ class _MatchScreenState extends State<MatchScreen> {
         const SizedBox(height: AppSpacing.md),
         Expanded(
           child: Container(
-            decoration: AppTheme.card(color: AppColors.surface),
+            decoration: AppTheme.card(),
             padding: const EdgeInsets.all(AppSpacing.md),
-            child: _courtArea(match),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                  child: Text("40 × 20 M · FELÜLNÉZET", style: AppText.sectionLabel.copyWith(fontSize: 10)),
+                ),
+                Expanded(child: _courtArea(match)),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -263,9 +255,6 @@ class _MatchScreenState extends State<MatchScreen> {
       dot(AppColors.home), const SizedBox(width: 4), Text(_match!.meta.homeTeam, style: AppText.label.copyWith(fontSize: 11)),
       const SizedBox(width: 12),
       dot(AppColors.away), const SizedBox(width: 4), Text(_match!.meta.awayTeam, style: AppText.label.copyWith(fontSize: 11)),
-      const SizedBox(width: 12),
-      Container(width: 9, height: 9, decoration: BoxDecoration(border: Border.all(color: AppColors.textFaint), shape: BoxShape.circle)),
-      const SizedBox(width: 4), Text("becsült", style: AppText.label.copyWith(fontSize: 11)),
     ]);
   }
 
@@ -308,10 +297,7 @@ class _MatchScreenState extends State<MatchScreen> {
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: AppColors.accentSoft,
-            borderRadius: BorderRadius.circular(20),
-          ),
+          decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(20)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.sports_handball, size: 16, color: AppColors.accent),
             const SizedBox(width: 6),
@@ -345,19 +331,15 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
-        Text("${(_frameIndex / fps).toStringAsFixed(1)} s",
-            style: AppText.value),
-        Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s",
-            style: AppText.label),
+        Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
+        Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
       ],
     );
   }
 
-  // --- Jobb oldali tabos panel ----------------------------------------------
-
   Widget _rightPanel(Match match) {
     return Container(
-      decoration: AppTheme.card(color: AppColors.surface),
+      decoration: AppTheme.card(),
       clipBehavior: Clip.antiAlias,
       child: DefaultTabController(
         length: 3,
@@ -373,18 +355,10 @@ class _MatchScreenState extends State<MatchScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  StatsPanel(
-                    stats: _stats,
-                    homeName: match.meta.homeTeam,
-                    awayName: match.meta.awayTeam,
-                  ),
+                  StatsPanel(stats: _stats, homeName: match.meta.homeTeam, awayName: match.meta.awayTeam),
                   _summary == null
                       ? const SizedBox()
-                      : SummaryPanel(
-                          summary: _summary!,
-                          homeName: match.meta.homeTeam,
-                          awayName: match.meta.awayTeam,
-                        ),
+                      : SummaryPanel(summary: _summary!, homeName: match.meta.homeTeam, awayName: match.meta.awayTeam),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                 ],
               ),

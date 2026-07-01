@@ -1,8 +1,21 @@
-# Kliens — felülnézeti taktikai nézet (Flutter, desktop-first)
+# Kliens — Sport Machine (Flutter, desktop-first)
 
-> **Dizájn**: prémium, letisztult, sötét felület (egységes dizájnrendszer:
-> `lib/theme/app_theme.dart`) — kártyás elrendezés, visszafogott kontraszt, teal
-> akcentus. A cél egy igényes, "exkluzív" termékélmény.
+> **Dizájn**: a "Sport Machine" design szerint — sötét, prémium app-shell felső
+> breadcrumb sávval és bal oldali navigációval (`lib/ui/shell/app_shell.dart`),
+> egységes dizájnrendszerrel (`lib/theme/app_theme.dart`: teal akcentus #2FD9C4,
+> arany #D8B36B, hazai #4C9AFF, vendég #FF6B6B).
+
+## Képernyők
+- **Áttekintés** (`dashboard_screen.dart`) — kezdőképernyő: statisztika-kártyák +
+  legutóbbi meccsek (mini pálya-bélyegkép, tag-ek). Meccsre kattintva → elemző.
+- **Meccs-elemző** (`match_screen.dart`) — felülnézeti nézet + hőtérkép, élő
+  taktikai felirat, tabos elemzés (statisztika/összegzés/döntések). A labdás
+  játékost arany gyűrű emeli ki.
+- **Feltöltés** (`upload_screen.dart`) — dropzone + a valós `[A]–[H]` pipeline
+  állapota (kör-progress, lépések).
+- **Figura-tervező** (`designer_screen.dart`) — húzható támadók, tanult védelem,
+  lejátszás + kiértékelés.
+- **Élő követés** — helyőrző (hamarosan).
 
 A kézilabda-elemző **kliens appja**. Lekéri a backendtől a Tracking JSON-t, és
 kirajzolja a felülnézeti pályát: mozgó játékosok (mért = tele pont, **becsült =
