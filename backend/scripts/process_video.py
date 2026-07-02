@@ -59,10 +59,12 @@ def _is_referee(frame_bgr, x1, y1, x2, y2):
     return yellow > 0.35
 
 
-def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf):
+def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf, court_poly=None):
     import numpy as np
+    import cv2
     from ultralytics import YOLO
     model = YOLO(weights)
+    poly = np.array(court_poly, np.int32) if court_poly else None
     raw, all_colors = [], []
     ball_class = 32
     results = model.track(source=video_path, stream=True, persist=True,
@@ -79,6 +81,9 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf):
                 x1, y1, x2, y2 = [int(v) for v in b.xyxy[0].tolist()]
                 fx = (x1 + x2) / 2.0
                 if cls == 0:
+                    # Játéktéren kívül (kispad/edző/néző) → kihagyjuk.
+                    if poly is not None and cv2.pointPolygonTest(poly, (float(fx), float(y2)), False) < 0:
+                        continue
                     if b.id is None or _is_referee(img, x1, y1, x2, y2):
                         continue  # nincs id vagy bíró → kihagyjuk
                     tid = int(b.id[0])
@@ -149,7 +154,8 @@ def _process_hog(video_path, stride, max_frames):
     return raw, all_colors
 
 
-def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280, conf=0.20):
+def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
+            conf=0.20, court_poly=None):
     import cv2
     import numpy as np
 
@@ -161,7 +167,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     print(f"videó: {W}x{H} @ {fps:.1f} fps | mód: {'YOLO' if weights else 'HOG'}")
 
     if weights:
-        raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf)
+        raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf, court_poly)
     else:
         raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
@@ -202,10 +208,15 @@ def main(argv):
         return 1
     def opt(name, default, cast):
         return cast(argv[argv.index(name) + 1]) if name in argv else default
+    court_poly = None
+    if "--court" in argv:
+        import json
+        court_poly = json.load(open(argv[argv.index("--court") + 1]))  # [[x,y],...] pixel poligon
     process(argv[1], argv[2],
             weights=opt("--weights", None, str),
             stride=opt("--stride", 3, int), max_frames=opt("--max", 400, int),
-            imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float))
+            imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float),
+            court_poly=court_poly)
     return 0
 
 
