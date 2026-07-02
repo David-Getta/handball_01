@@ -1,19 +1,20 @@
 """
-Valódi videó-feldolgozás — meccsvideóból Tracking JSON.
+Valódi videó-feldolgozás — meccsvideóból Tracking JSON (YOLO + ByteTrack).
 
-Két detektáló mód:
-  - HOG (alap): az OpenCV BEÉPÍTETT ember-detektora — nincs letöltés, azonnal megy,
-    de gyengébb (kis, gyors játékosokat nehezen lát). Első, valós próbához.
-  - YOLO (--weights yolov8n.pt): pontosabb, de a súlyfájl kell hozzá (az egyes
-    súly-letöltő hostok szervezeti policyból blokkoltak, ezért a .pt-t kézzel kell
-    megadni; ultralytics + torch szükséges).
+Detektáló módok:
+  - YOLO (--weights yolov8n.pt): pontos; ByteTrack-kel stabil id-k. Nagy felbontású
+    inferencia (imgsz) + alacsonyabb küszöb a kis/széli játékosok elkapásához.
+    Bíró-szűrő (sárga mez) kiveszi a játékvezetőket.
+  - HOG (alap): OpenCV beépített, letöltés nélkül; gyenge kis/gyors játékosokra.
 
-Követés: egyszerű legközelebbi-középpont társítás (stabil-ish id-k). Csapatszín:
-2-means a törzs-színeken. Kalibráció EGYELŐRE nincs — kép→pálya egyszerű aránnyal
-(x=px/W*40, y=py/H*20); a pontos pálya-koordináta a homográfiával jön ([A]).
+FIGYELEM: kalibráció (homográfia) EGYELŐRE nincs — kép→pálya egyszerű aránnyal.
+Emiatt a pályán KÍVÜLI személyek (kispad, edző, néző) is bekerülhetnek; ezt a
+kalibráció + pálya-régió szűrő oldja meg ([A], CourtRegion). A perspektíva is
+torzít kalibráció nélkül.
 
 Használat:
-    python -m scripts.process_video BE.mp4 KI.json [--stride N] [--max N] [--weights yolov8n.pt]
+    python -m scripts.process_video BE.mp4 KI.json [--weights yolov8n.pt]
+        [--stride N] [--max N] [--imgsz 1280] [--conf 0.20]
 """
 
 from __future__ import annotations
@@ -26,14 +27,18 @@ from handball.models.tracking import (
 )
 from handball.pipeline.calibration import COURT_LENGTH_M, COURT_WIDTH_M
 
-PROC_WIDTH = 960  # feldolgozási szélesség (gyorsításhoz lekicsinyítünk)
+PROC_WIDTH = 960  # HOG feldolgozási szélesség
+
+
+def _torso_bounds(x1, y1, x2, y2):
+    h = y2 - y1
+    return (max(0, y1 + int(0.20 * h)), max(0, y1 + int(0.55 * h)),
+            x1 + int(0.25 * (x2 - x1)), x1 + int(0.75 * (x2 - x1)))
 
 
 def _torso_color(frame_bgr, x1, y1, x2, y2):
     import numpy as np
-    h = y2 - y1
-    ty1 = max(0, y1 + int(0.20 * h)); ty2 = max(0, y1 + int(0.55 * h))
-    tx1 = x1 + int(0.25 * (x2 - x1)); tx2 = x1 + int(0.75 * (x2 - x1))
+    ty1, ty2, tx1, tx2 = _torso_bounds(x1, y1, x2, y2)
     crop = frame_bgr[ty1:ty2, tx1:tx2]
     if crop.size == 0:
         return (128.0, 128.0, 128.0)
@@ -41,17 +46,57 @@ def _torso_color(frame_bgr, x1, y1, x2, y2):
     return (float(m[2]), float(m[1]), float(m[0]))  # RGB
 
 
+def _is_referee(frame_bgr, x1, y1, x2, y2):
+    """Sárga mez → játékvezető (kiszűrendő)."""
+    import cv2
+    import numpy as np
+    ty1, ty2, tx1, tx2 = _torso_bounds(x1, y1, x2, y2)
+    crop = frame_bgr[ty1:ty2, tx1:tx2]
+    if crop.size == 0:
+        return False
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    yellow = ((hsv[:, 0] >= 20) & (hsv[:, 0] <= 40) & (hsv[:, 1] > 90) & (hsv[:, 2] > 90)).mean()
+    return yellow > 0.35
+
+
+def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf):
+    import numpy as np
+    from ultralytics import YOLO
+    model = YOLO(weights)
+    raw, all_colors = [], []
+    ball_class = 32
+    results = model.track(source=video_path, stream=True, persist=True,
+                          classes=[0, ball_class], imgsz=imgsz, conf=conf,
+                          vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
+    for fi, r in enumerate(results):
+        if fi >= max_frames:
+            break
+        img = r.orig_img
+        persons, ball_xy = [], None
+        if r.boxes is not None:
+            for b in r.boxes:
+                cls = int(b.cls[0])
+                x1, y1, x2, y2 = [int(v) for v in b.xyxy[0].tolist()]
+                fx = (x1 + x2) / 2.0
+                if cls == 0:
+                    if b.id is None or _is_referee(img, x1, y1, x2, y2):
+                        continue  # nincs id vagy bíró → kihagyjuk
+                    tid = int(b.id[0])
+                    color = _torso_color(img, x1, y1, x2, y2)
+                    all_colors.append(color)
+                    persons.append((tid, fx, y2, color))
+                elif cls == ball_class and ball_xy is None:
+                    ball_xy = (fx, y2)
+        raw.append((persons, ball_xy))
+    return raw, all_colors
+
+
 class _SimpleTracker:
-    """Legközelebbi-középpont követő: stabil-ish id-k a detektált dobozokra."""
     def __init__(self, max_dist=80.0, max_gap=15):
-        self.tracks = {}  # id -> [cx, cy, missed]
-        self.next_id = 1
-        self.max_dist = max_dist
-        self.max_gap = max_gap
+        self.tracks = {}; self.next_id = 1; self.max_dist = max_dist; self.max_gap = max_gap
 
     def update(self, centers):
-        assigned = {}
-        used = set()
+        assigned, used = {}, set()
         for (cx, cy) in centers:
             best, bd = None, self.max_dist
             for tid, st in self.tracks.items():
@@ -62,10 +107,7 @@ class _SimpleTracker:
                     bd, best = d, tid
             if best is None:
                 best = self.next_id; self.next_id += 1
-            self.tracks[best] = [cx, cy, 0]
-            used.add(best)
-            assigned[(cx, cy)] = best
-        # elévülő trackek
+            self.tracks[best] = [cx, cy, 0]; used.add(best); assigned[(cx, cy)] = best
         for tid in list(self.tracks):
             if tid not in used:
                 self.tracks[tid][2] += 1
@@ -74,17 +116,40 @@ class _SimpleTracker:
         return assigned
 
 
-def _detect_hog(hog, frame):
-    rects, weights = hog.detectMultiScale(frame, winStride=(8, 8), padding=(8, 8), scale=1.05)
-    out = []
-    for (x, y, w, h), score in zip(rects, weights):
-        if score < 0.4:
-            continue
-        out.append((int(x), int(y), int(x + w), int(y + h)))
-    return out
+def _process_hog(video_path, stride, max_frames):
+    import cv2
+    cap = cv2.VideoCapture(video_path)
+    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
+    scale = PROC_WIDTH / W if W > PROC_WIDTH else 1.0
+    hog = cv2.HOGDescriptor(); hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+    tracker = _SimpleTracker()
+    raw, all_colors = [], []
+    fi = out_i = 0
+    while out_i < max_frames:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        if fi % stride != 0:
+            fi += 1; continue
+        fi += 1
+        small = cv2.resize(frame, None, fx=scale, fy=scale) if scale != 1.0 else frame
+        rects, weights = hog.detectMultiScale(small, winStride=(8, 8), padding=(8, 8), scale=1.05)
+        boxes = [(int(x), int(y), int(x + w), int(y + h)) for (x, y, w, h), s in zip(rects, weights) if s >= 0.4]
+        centers = [((x1 + x2) / 2.0, (y1 + y2) / 2.0) for (x1, y1, x2, y2) in boxes]
+        ids = tracker.update(centers)
+        persons = []
+        for (x1, y1, x2, y2) in boxes:
+            cx = (x1 + x2) / 2.0
+            color = _torso_color(small, x1, y1, x2, y2)
+            all_colors.append(color)
+            persons.append((ids[(cx, (y1 + y2) / 2.0)], cx / scale, y2 / scale, color))
+        raw.append((persons, None))
+        out_i += 1
+    cap.release()
+    return raw, all_colors
 
 
-def process(video_path, out_path, stride=3, max_frames=400, weights=None):
+def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280, conf=0.20):
     import cv2
     import numpy as np
 
@@ -92,61 +157,15 @@ def process(video_path, out_path, stride=3, max_frames=400, weights=None):
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print(f"videó: {W}x{H} @ {fps:.1f} fps, {total} frame")
-
-    scale = PROC_WIDTH / W if W > PROC_WIDTH else 1.0
-    pw, ph = int(W * scale), int(H * scale)
-
-    use_yolo = weights is not None
-    if use_yolo:
-        from ultralytics import YOLO
-        model = YOLO(weights)
-    else:
-        hog = cv2.HOGDescriptor()
-        hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-
-    tracker = _SimpleTracker()
-    raw = []
-    all_colors = []
-    fi = out_i = 0
-    while out_i < max_frames:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        if fi % stride != 0:
-            fi += 1
-            continue
-        fi += 1
-        small = cv2.resize(frame, (pw, ph)) if scale != 1.0 else frame
-
-        boxes = []  # (x1,y1,x2,y2) a KICSINYÍTETT képen
-        if use_yolo:
-            r = model.predict(small, classes=[0, 32], verbose=False)[0]
-            if r.boxes is not None:
-                for b in r.boxes:
-                    if int(b.cls[0]) == 0:
-                        boxes.append(tuple(int(v) for v in b.xyxy[0].tolist()))
-        else:
-            boxes = _detect_hog(hog, small)
-
-        centers = [((x1 + x2) / 2.0, (y1 + y2) / 2.0) for (x1, y1, x2, y2) in boxes]
-        ids = tracker.update(centers)
-        persons = []
-        for (x1, y1, x2, y2) in boxes:
-            cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
-            tid = ids[(cx, cy)]
-            color = _torso_color(small, x1, y1, x2, y2)
-            all_colors.append(color)
-            fx = (x1 + x2) / 2.0 / scale   # vissza az eredeti felbontásra
-            fy = y2 / scale
-            persons.append((tid, fx, fy, color))
-        raw.append(persons)
-        out_i += 1
     cap.release()
+    print(f"videó: {W}x{H} @ {fps:.1f} fps | mód: {'YOLO' if weights else 'HOG'}")
+
+    if weights:
+        raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf)
+    else:
+        raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
 
-    # Csapatszín 2-means.
     centers2 = None
     if len(all_colors) >= 2:
         data = np.array(all_colors, dtype=np.float32)
@@ -163,13 +182,14 @@ def process(video_path, out_path, stride=3, max_frames=400, weights=None):
     meta = MatchMeta(match_id="video-1", home_team="Csapat A", away_team="Csapat B",
                      fps=fps / stride, frame_width=W, frame_height=H)
     frames = []
-    for t, persons in enumerate(raw):
+    for t, (persons, ball_xy) in enumerate(raw):
         players = [PlayerPosition(
             track_id=tid, team=team_of(color),
             x=fx / W * COURT_LENGTH_M, y=fy / H * COURT_WIDTH_M,
             source=PositionSource.MEASURED, confidence=1.0,
         ) for (tid, fx, fy, color) in persons]
-        frames.append(Frame(t=t, players=players, ball=None))
+        ball = Ball(x=ball_xy[0] / W * COURT_LENGTH_M, y=ball_xy[1] / H * COURT_WIDTH_M, confidence=1.0) if ball_xy else None
+        frames.append(Frame(t=t, players=players, ball=ball))
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(Match(meta=meta, frames=frames).to_json(indent=2))
@@ -178,12 +198,14 @@ def process(video_path, out_path, stride=3, max_frames=400, weights=None):
 
 def main(argv):
     if len(argv) < 3:
-        print("Használat: python -m scripts.process_video BE.mp4 KI.json [--stride N] [--max N] [--weights yolov8n.pt]")
+        print("Használat: python -m scripts.process_video BE.mp4 KI.json [--weights W] [--stride N] [--max N] [--imgsz N] [--conf F]")
         return 1
-    stride = int(argv[argv.index("--stride") + 1]) if "--stride" in argv else 3
-    mx = int(argv[argv.index("--max") + 1]) if "--max" in argv else 400
-    w = argv[argv.index("--weights") + 1] if "--weights" in argv else None
-    process(argv[1], argv[2], stride=stride, max_frames=mx, weights=w)
+    def opt(name, default, cast):
+        return cast(argv[argv.index(name) + 1]) if name in argv else default
+    process(argv[1], argv[2],
+            weights=opt("--weights", None, str),
+            stride=opt("--stride", 3, int), max_frames=opt("--max", 400, int),
+            imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float))
     return 0
 
 
