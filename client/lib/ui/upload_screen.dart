@@ -8,6 +8,7 @@ library;
 import "package:flutter/material.dart";
 
 import "../theme/app_theme.dart";
+import "calibration_screen.dart";
 import "shell/app_shell.dart";
 
 class UploadScreen extends StatelessWidget {
@@ -27,6 +28,21 @@ class UploadScreen extends StatelessWidget {
           Text("Pásztázó-kamerás meccsvideó → Tracking adatmodell", style: AppText.subtitle),
           const SizedBox(height: AppSpacing.xl),
           _dropzone(),
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CalibrationScreen()),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.accent,
+                side: const BorderSide(color: AppColors.accent),
+              ),
+              icon: const Icon(Icons.grid_on, size: 18),
+              label: const Text("Pálya-kalibráció (4 sarok)"),
+            ),
+          ),
           const SizedBox(height: AppSpacing.xl),
           Text("Feldolgozás alatt", style: AppText.value.copyWith(fontSize: 17)),
           const SizedBox(height: AppSpacing.md),
