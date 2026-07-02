@@ -87,3 +87,22 @@ uvicorn "handball.api.app:create_app" --factory --reload
 
 A valódi videó-feldolgozáshoz az ML-extra: `pip install -e ".[ml]"`
 (ultralytics, opencv, numpy).
+
+## Valódi videó → Tracking (scripts/process_video.py)
+
+Egy meccsvideóból a mi Tracking JSON-unkat állítja elő. Két detektáló mód:
+
+```bash
+# HOG (OpenCV beépített, letöltés nélkül) — gyors, de gyenge kis/gyors játékosokra:
+python -m scripts.process_video BE.mp4 KI.json --stride 3
+
+# YOLO (pontos) — a súlyfájl kell hozzá:
+python -m scripts.process_video BE.mp4 KI.json --weights yolov8n.pt
+```
+
+**Fontos (súly-letöltés)**: a YOLO-súlyok automatikus letöltő-hostjai (github,
+huggingface, download.pytorch.org) egyes környezetekben szervezeti egress-policyból
+**blokkoltak (403)** — ilyenkor a `yolov8n.pt`-t kézzel kell megadni (`--weights`).
+A HOG mód ehhez nem kell, de a pontossága korlátozott (wide, kis felbontású
+játékosoknál gyenge). Kalibráció (homográfia) egyelőre nincs bekötve a scriptbe —
+a kép→pálya leképezés egyszerű arány; a pontos koordináta a `_homography.py`-vel jön.
