@@ -59,7 +59,15 @@ def _is_referee(frame_bgr, x1, y1, x2, y2):
     return yellow > 0.35
 
 
-def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf, court_poly=None):
+def _is_dark(img, thresh=40.0):
+    """Sötét bevezető/átúszó képkocka? (átlagfényesség a küszöb alatt.)
+    A meccsvideók elején gyakran van fade-in — ezeken nincs mit detektálni,
+    ezért kihagyjuk, hogy a --max ne fogyjon el üres képkockákra."""
+    return float(img.mean()) < thresh
+
+
+def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
+                  court_poly=None, start=0, skip_dark=True):
     import numpy as np
     import cv2
     from ultralytics import YOLO
@@ -69,13 +77,22 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf, court_po
     # EGY menet nagy felbontáson (1920) + alacsony küszöb (0.05), hogy a kis labdát
     # is elkapja; a JÁTÉKOSOKAT utólag szűrjük a megadott (magasabb) küszöbre, hogy
     # ne jöjjenek téves emberek. Így egy inferencia/frame (kétszer gyorsabb).
+    # A `start` a bevezető (sötét) rész átugrására: csak innen dolgozunk fel.
     results = model.track(source=video_path, stream=True, persist=True,
                           classes=[0, 32], imgsz=1920, conf=0.05,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
+    kept = 0
+    skipped_dark = 0
     for fi, r in enumerate(results):
-        if fi >= max_frames:
+        if fi * stride < start:  # a bevezető rész átugrása (kép-index alapján)
+            continue
+        if kept >= max_frames:
             break
         img = r.orig_img
+        if skip_dark and _is_dark(img):  # sötét fade-in képkocka — kihagyjuk
+            skipped_dark += 1
+            continue
+        kept += 1
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -98,6 +115,8 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf, court_po
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
         ball_xy = (best_ball[1], best_ball[2]) if best_ball else None
         raw.append((persons, ball_xy))
+    if skipped_dark:
+        print(f"sötét bevezető képkocka kihagyva: {skipped_dark}")
     return raw, all_colors
 
 
@@ -160,7 +179,7 @@ def _process_hog(video_path, stride, max_frames):
 
 
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
-            conf=0.20, court_poly=None, calib_corners=None):
+            conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True):
     import cv2
     import numpy as np
 
@@ -172,7 +191,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     print(f"videó: {W}x{H} @ {fps:.1f} fps | mód: {'YOLO' if weights else 'HOG'}")
 
     if weights:
-        raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf, court_poly)
+        raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
+                                        court_poly, start=start, skip_dark=skip_dark)
     else:
         raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
@@ -236,7 +256,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
 
 def main(argv):
     if len(argv) < 3:
-        print("Használat: python -m scripts.process_video BE.mp4 KI.json [--weights W] [--stride N] [--max N] [--imgsz N] [--conf F]")
+        print("Használat: python -m scripts.process_video BE.mp4 KI.json [--weights W] "
+              "[--stride N] [--max N] [--imgsz N] [--conf F] [--start N] [--no-skip-dark]")
         return 1
     def opt(name, default, cast):
         return cast(argv[argv.index(name) + 1]) if name in argv else default
@@ -248,7 +269,8 @@ def main(argv):
             weights=opt("--weights", None, str),
             stride=opt("--stride", 3, int), max_frames=opt("--max", 400, int),
             imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float),
-            court_poly=court_poly, calib_corners=calib)
+            court_poly=court_poly, calib_corners=calib,
+            start=opt("--start", 0, int), skip_dark="--no-skip-dark" not in argv)
     return 0
 
 

@@ -58,3 +58,14 @@
 3. **ROI** finomhangolás: az előtéri kosárállvány kizárási zónája + a kispad
    tűréssáv hangolása.
 4. **Sárga 6 m-es zóna** mint orientációs/kalibrációs támpont (későbbi automatika).
+
+## Bevezető (fade-in) képkockák — futási megfigyelés
+- A felvétel **eleje sötét** (Filmora-átúszás, csak a vízjel látszik). A 0–14.
+  képkockán a YOLO **0 személyt** észlel — ez NEM hiba, a bevezető sötét része.
+- **Hatás**: `process_video.py` mostantól **automatikusan kihagyja** a sötét
+  képkockákat (`_is_dark`, átlagfényesség < 40), és van `--start N` kapcsoló a
+  bevezető átugrására. Így a `--max` nem fogy el üres képkockákra, és a
+  birtoklás-elemzéshez összefüggő, tartalmas képkockákat kapunk.
+- **Teszt-recept** (tartalmas rész, összefüggő képkockák a birtokláshoz):
+  `python -m scripts.process_video BE.mp4 KI.json --weights yolov8n.pt
+   --stride 1 --max 20 --start 180 --calib calib.json`
