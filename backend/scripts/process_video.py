@@ -67,7 +67,7 @@ def _is_dark(img, thresh=40.0):
 
 
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                  court_poly=None, start=0, skip_dark=True):
+                  court_poly=None, start=0, skip_dark=True, on_frame=None):
     import numpy as np
     import cv2
     from ultralytics import YOLO
@@ -93,6 +93,8 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
             skipped_dark += 1
             continue
         kept += 1
+        if on_frame is not None:  # élő haladás-jelzés a hívónak (job-státusz)
+            on_frame(kept, max_frames)
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -179,9 +181,20 @@ def _process_hog(video_path, stride, max_frames):
 
 
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
-            conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True):
+            conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
+            progress_cb=None, match_id="video-1"):
+    """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
+
+    Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
+    a feldolgozás állapotát jelzi a hívónak (a szerver ezt továbbítja a kliensnek):
+    progress_cb(stage, progress, message) — stage a [A..H] lépéskód, progress 0..1.
+    """
     import cv2
     import numpy as np
+
+    def report(stage, prog, msg):
+        if progress_cb is not None:
+            progress_cb(stage, prog, msg)
 
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
@@ -190,13 +203,23 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     cap.release()
     print(f"videó: {W}x{H} @ {fps:.1f} fps | mód: {'YOLO' if weights else 'HOG'}")
 
+    # [A] kalibráció (ha van 4 sarok). A haladás nagy részét a detektálás adja.
+    report("A", 0.02, "kalibráció" if calib_corners else "kalibráció nélkül")
+
+    # [B]/[C] detektálás + követés — a képkockánkénti haladást ide képezzük le.
+    def on_frame(kept, total):
+        report("B", 0.05 + 0.70 * (kept / max(1, total)), f"detektálás {kept}/{total}")
+
     if weights:
         raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                                        court_poly, start=start, skip_dark=skip_dark)
+                                        court_poly, start=start, skip_dark=skip_dark, on_frame=on_frame)
     else:
         raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
+    report("C", 0.78, "követés kész")
 
+    # [D] csapatszín-klaszterezés (kapus/bíró külön kezelése a szín-profilban).
+    report("D", 0.82, "csapatszín / kapus / bíró")
     centers2 = None
     if len(all_colors) >= 2:
         data = np.array(all_colors, dtype=np.float32)
@@ -228,7 +251,9 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             return to_court(px, py)
         return (px / W * COURT_LENGTH_M, py / H * COURT_WIDTH_M)  # kalibráció nélkül: arányos
 
-    meta = MatchMeta(match_id="video-1", home_team="Csapat A", away_team="Csapat B",
+    # [E] pálya-koordináta (homográfia/arányos) + [F] pályán kívüliek szűrése.
+    report("E", 0.90, "pálya-koordináta")
+    meta = MatchMeta(match_id=match_id, home_team="Csapat A", away_team="Csapat B",
                      fps=fps / stride, frame_width=W, frame_height=H)
     frames = []
     dropped = 0
@@ -249,9 +274,18 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     if region is not None:
         print(f"kalibrációval: pályán kívüli detektálás eldobva: {dropped}")
 
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(Match(meta=meta, frames=frames).to_json(indent=2))
-    print(f"Tracking JSON kiírva: {out_path} ({len(frames)} frame)")
+    # [F] képen kívüli becslés — jelenleg a becslés az elemző rétegben történik.
+    report("F", 0.95, "képen kívüli becslés")
+    match = Match(meta=meta, frames=frames)
+
+    if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(match.to_json(indent=2))
+        print(f"Tracking JSON kiírva: {out_path} ({len(frames)} frame)")
+
+    # [H] statisztika/hőtérkép igény szerint (külön végpontok) — az adat kész.
+    report("H", 1.0, f"kész ({len(frames)} frame)")
+    return match
 
 
 def main(argv):

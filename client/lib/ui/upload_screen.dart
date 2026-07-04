@@ -5,11 +5,25 @@
 /// A tényleges feltöltés/feldolgozás a backendhez köthető; ez a felület.
 library;
 
+import "dart:async";
+
 import "package:flutter/material.dart";
 
+import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "calibration_screen.dart";
 import "shell/app_shell.dart";
+
+/// A pipeline-lépések sorrendje (a backend ezeket a kódokat adja a job stage-ében).
+const List<List<String>> _pipelineSteps = [
+  ["A", "Kalibráció"],
+  ["B", "Detektálás (YOLO)"],
+  ["C", "Követés + ReID"],
+  ["D", "Csapatszín / kapus / bíró"],
+  ["E", "Pálya-koordináta"],
+  ["F", "Képen kívüli becslés"],
+  ["H", "Statisztika + hőtérkép"],
+];
 
 class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
@@ -22,11 +36,80 @@ class _UploadScreenState extends State<UploadScreen> {
   // A backend-oldali videó elérési útja (lokális mód). A kalibráló képernyő ebből
   // tölti be a valódi referencia-képkockát a /reference-frame végponton keresztül.
   final _pathCtrl = TextEditingController();
+  final _api = ApiClient();
+
+  // Aktuális feldolgozási munka állapota (a backendtől, GET /jobs/{id}).
+  String? _jobId;
+  String _status = "idle"; // idle | running | done | error
+  String _stage = "A";
+  double _progress = 0.0;
+  String _message = "";
+  String? _error;
+  Timer? _poll;
 
   @override
   void dispose() {
+    _poll?.cancel();
     _pathCtrl.dispose();
     super.dispose();
+  }
+
+  /// Elindítja a feldolgozást a megadott videó-úton, majd időzítővel lekérdezi
+  /// a haladást (GET /jobs/{id}) és frissíti a kártyát.
+  Future<void> _startProcessing() async {
+    final path = _pathCtrl.text.trim();
+    if (path.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Adj meg egy backend-oldali videó-utat.")),
+      );
+      return;
+    }
+    setState(() {
+      _status = "running";
+      _stage = "A";
+      _progress = 0.0;
+      _message = "indítás";
+      _error = null;
+    });
+    try {
+      final r = await _api.startProcessing(path, weights: "yolov8n.pt");
+      _jobId = r["job_id"] as String;
+      _poll?.cancel();
+      _poll = Timer.periodic(const Duration(milliseconds: 800), (_) => _pollJob());
+    } catch (e) {
+      setState(() {
+        _status = "error";
+        _error = "$e";
+        _message = "nem sikerült elindítani";
+      });
+    }
+  }
+
+  /// Egy lekérdezés a job állapotára; leállítja az időzítőt, ha vége.
+  Future<void> _pollJob() async {
+    final id = _jobId;
+    if (id == null) return;
+    try {
+      final j = await _api.fetchJob(id);
+      if (!mounted) return;
+      setState(() {
+        _status = (j["status"] as String?) ?? "running";
+        _stage = (j["stage"] as String?) ?? _stage;
+        _progress = (j["progress"] as num?)?.toDouble() ?? _progress;
+        _message = (j["message"] as String?) ?? "";
+        _error = j["error"] as String?;
+      });
+      if (_status == "done" || _status == "error") {
+        _poll?.cancel();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _status = "error";
+        _error = "$e";
+      });
+      _poll?.cancel();
+    }
   }
 
   @override
@@ -86,8 +169,19 @@ class _UploadScreenState extends State<UploadScreen> {
               label: const Text("Pálya-kalibráció (4 sarok)"),
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+              onPressed: _status == "running" ? null : _startProcessing,
+              icon: const Icon(Icons.play_arrow, size: 18),
+              label: Text(_status == "running" ? "Feldolgozás folyamatban…" : "Feldolgozás indítása"),
+            ),
+          ),
           const SizedBox(height: AppSpacing.xl),
-          Text("Feldolgozás alatt", style: AppText.value.copyWith(fontSize: 17)),
+          Text("Feldolgozás állapota", style: AppText.value.copyWith(fontSize: 17)),
           const SizedBox(height: AppSpacing.md),
           _processingCard(),
         ],
@@ -119,6 +213,11 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   Widget _processingCard() {
+    // A jelenlegi stage indexe a lépéslistában (a done/active/pending eldöntéséhez).
+    final curIdx = _pipelineSteps.indexWhere((s) => s[0] == _stage);
+    final path = _pathCtrl.text.trim();
+    final fileName = path.isEmpty ? "nincs kiválasztott videó" : path.split("/").last;
+
     return Container(
       decoration: AppTheme.card(),
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -127,38 +226,72 @@ class _UploadScreenState extends State<UploadScreen> {
         children: [
           Row(
             children: [
-              const _RingProgress(value: 0.62),
+              _RingProgress(value: _progress),
               const SizedBox(width: AppSpacing.xl),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.movie_outlined, size: 18, color: AppColors.textSecondary),
-                    const SizedBox(width: 8),
-                    Text("VESZ-SZE_2026-06-30.mp4", style: AppText.value.copyWith(fontSize: 15)),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text("4.2 GB · 40:12 hossz · 1080p · 25 fps", style: AppText.label.copyWith(fontSize: 12)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.movie_outlined, size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(fileName, style: AppText.value.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
+                    ]),
+                    const SizedBox(height: 6),
+                    Text(_statusLine(), style: AppText.label.copyWith(
+                        fontSize: 12,
+                        color: _status == "error" ? AppColors.away : AppColors.textSecondary)),
+                  ],
+                ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
-          _step("Kalibráció", "A", done: true),
-          _step("Detektálás (YOLO)", "B", done: true),
-          _step("Követés + ReID", "C", active: true),
-          _step("Csapatszín / kapus / bíró", "D"),
-          _step("Pálya-koordináta", "E"),
-          _step("Képen kívüli becslés", "F"),
-          _step("Statisztika + hőtérkép", "H"),
+          for (int i = 0; i < _pipelineSteps.length; i++)
+            _step(
+              _pipelineSteps[i][1], _pipelineSteps[i][0],
+              // "done" ha korábbi lépés, vagy a job kész; "active" ha az aktuális
+              // és fut; hibánál az aktuális lépés hibás.
+              done: _status == "done" || (curIdx >= 0 && i < curIdx),
+              active: _status == "running" && i == curIdx,
+              error: _status == "error" && i == curIdx,
+            ),
         ],
       ),
     );
   }
 
-  Widget _step(String name, String tag, {bool done = false, bool active = false}) {
-    final Color c = done ? AppColors.accent : active ? AppColors.gold : AppColors.textFaint;
-    final IconData icon = done ? Icons.check_circle : active ? Icons.autorenew : Icons.circle_outlined;
+  /// A kártya alcíme: állapottól függő, olvasható szöveg.
+  String _statusLine() {
+    switch (_status) {
+      case "idle":
+        return "Nincs feldolgozás — add meg a videó-utat és indítsd el.";
+      case "running":
+        return "Feldolgozás… ${(_progress * 100).round()}% · $_message";
+      case "done":
+        return "Kész · $_message";
+      case "error":
+        return "Hiba · ${_error ?? _message}";
+      default:
+        return _message;
+    }
+  }
+
+  Widget _step(String name, String tag, {bool done = false, bool active = false, bool error = false}) {
+    final Color c = error
+        ? AppColors.away
+        : done
+            ? AppColors.accent
+            : active
+                ? AppColors.gold
+                : AppColors.textFaint;
+    final IconData icon = error
+        ? Icons.error_outline
+        : done
+            ? Icons.check_circle
+            : active
+                ? Icons.autorenew
+                : Icons.circle_outlined;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -166,11 +299,13 @@ class _UploadScreenState extends State<UploadScreen> {
           Icon(icon, size: 18, color: c),
           const SizedBox(width: AppSpacing.md),
           Text(name, style: AppText.value.copyWith(
-              color: (done || active) ? AppColors.textPrimary : AppColors.textFaint, fontWeight: FontWeight.w500)),
+              color: (done || active || error) ? AppColors.textPrimary : AppColors.textFaint,
+              fontWeight: FontWeight.w500)),
           const SizedBox(width: 6),
           Text("[$tag]", style: AppText.label.copyWith(fontSize: 11, color: AppColors.textFaint)),
           const Spacer(),
           if (active) Text("folyamatban…", style: AppText.label.copyWith(fontSize: 11, color: AppColors.gold)),
+          if (error) Text("hiba", style: AppText.label.copyWith(fontSize: 11, color: AppColors.away)),
         ],
       ),
     );

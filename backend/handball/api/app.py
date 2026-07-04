@@ -10,9 +10,11 @@ csomag a FastAPI telepítése nélkül is importálható és tesztelhető legyen
 szervert a `create_app()`-ből indítjuk (lásd scripts/serve.py vagy uvicorn).
 
 Végpontok (MVP):
-- GET /health                      → életjel.
-- GET /matches/{match_id}          → a Match (Tracking) JSON-ja.
-- GET /matches/{match_id}/stats    → játékosonkénti statisztika.
+- GET  /health                     → életjel.
+- POST /matches/process            → videó-feldolgozás indítása (háttérszál) → job_id.
+- GET  /jobs/{job_id}              → a feldolgozás állapota (stage/progress/message).
+- GET  /matches/{match_id}          → a Match (Tracking) JSON-ja.
+- GET  /matches/{match_id}/stats    → játékosonkénti statisztika.
 
 Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + objektumtár.
 """
@@ -62,6 +64,78 @@ def create_app():
             raise HTTPException(status_code=404, detail="frame not read")
         ok, buf = cv2.imencode(".png", frame)
         return Response(content=buf.tobytes(), media_type="image/png")
+
+    # Feldolgozási munkák (job) állapota — a kliens ezt kérdezi le a haladáshoz.
+    # Memóriabeli, mint a _store; a szerver újraindításáig él.
+    _jobs: dict[str, dict] = {}
+
+    @app.post("/matches/process")
+    def start_processing(body: dict):
+        """Elindítja egy videó feldolgozását HÁTTÉRSZÁLON, és job_id-t ad vissza.
+
+        A törzs (JSON) mezői: path (kötelező, backend-oldali videó út), opcionálisan
+        weights, stride, max, imgsz, conf, start, calib ([[x,y],...] 4 sarok), match_id.
+        A haladást a GET /jobs/{job_id} adja vissza (stage, progress, message).
+        """
+        import threading
+        import uuid
+
+        path = body.get("path")
+        if not path:
+            raise HTTPException(status_code=400, detail="path required")
+
+        job_id = uuid.uuid4().hex[:12]
+        match_id = body.get("match_id") or f"video-{job_id}"
+        job = {"job_id": job_id, "match_id": match_id, "status": "running",
+               "stage": "A", "progress": 0.0, "message": "indítás", "error": None}
+        _jobs[job_id] = job
+
+        def run():
+            # A nehéz feldolgozó a scripts.process_video-ban van; a backend/ mappát
+            # biztosítjuk a sys.path-en, hogy a szerver bárhonnan indítva megtalálja.
+            import sys
+            from pathlib import Path
+            backend_dir = str(Path(__file__).resolve().parents[2])
+            if backend_dir not in sys.path:
+                sys.path.insert(0, backend_dir)
+            from scripts.process_video import process
+
+            def cb(stage, prog, msg):
+                job["stage"] = stage
+                job["progress"] = round(float(prog), 3)
+                job["message"] = msg
+
+            try:
+                match = process(
+                    path, None,
+                    weights=body.get("weights"),
+                    stride=int(body.get("stride", 3)),
+                    max_frames=int(body.get("max", 400)),
+                    imgsz=int(body.get("imgsz", 1280)),
+                    conf=float(body.get("conf", 0.20)),
+                    calib_corners=body.get("calib"),
+                    start=int(body.get("start", 0)),
+                    progress_cb=cb, match_id=match_id,
+                )
+                app.state.put_match(match)
+                job["status"] = "done"
+                job["progress"] = 1.0
+                job["message"] = f"kész ({len(match.frames)} frame)"
+            except Exception as e:  # a hibát a kliensnek is megmutatjuk
+                job["status"] = "error"
+                job["error"] = str(e)
+                job["message"] = f"hiba: {e}"
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"job_id": job_id, "match_id": match_id}
+
+    @app.get("/jobs/{job_id}")
+    def job_status(job_id: str):
+        """Egy feldolgozási munka állapota (stage/progress/message/status/error)."""
+        job = _jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job
 
     @app.get("/matches/{match_id}")
     def get_match(match_id: str):

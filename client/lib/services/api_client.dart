@@ -39,6 +39,48 @@ class ApiClient {
     return Match.fromJson(json);
   }
 
+  /// Elindítja egy videó feldolgozását a backenden (POST /matches/process).
+  /// A `path` a backend-oldali videó út; `calib` a 4 sarok képpont-koordinátája.
+  /// Visszaadja: {"job_id": ..., "match_id": ...}. A haladást a fetchJob() adja.
+  Future<Map<String, dynamic>> startProcessing(
+    String path, {
+    String? weights,
+    int stride = 3,
+    int max = 400,
+    int start = 0,
+    List<List<int>>? calib,
+    String? matchId,
+  }) async {
+    final body = <String, dynamic>{
+      "path": path,
+      "stride": stride,
+      "max": max,
+      "start": start,
+      if (weights != null) "weights": weights,
+      if (calib != null) "calib": calib,
+      if (matchId != null) "match_id": matchId,
+    };
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/process"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(body),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült elindítani a feldolgozást: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Lekéri egy feldolgozási munka állapotát (GET /jobs/{id}):
+  /// {status, stage, progress, message, match_id, error}.
+  Future<Map<String, dynamic>> fetchJob(String jobId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/jobs/$jobId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a munka állapotát: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A kalibráló képernyő referencia-képkockájának URL-je (GET /reference-frame).
   /// A backend a `videoPath` videó `t`-edik képkockáját adja vissza PNG-ként.
   Uri referenceFrameUri(String videoPath, {int t = 100}) =>
