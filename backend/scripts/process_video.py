@@ -66,34 +66,37 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf, court_po
     model = YOLO(weights)
     poly = np.array(court_poly, np.int32) if court_poly else None
     raw, all_colors = [], []
-    # Játékosok: követés a megadott felbontáson/küszöbön.
+    # EGY menet nagy felbontáson (1920) + alacsony küszöb (0.05), hogy a kis labdát
+    # is elkapja; a JÁTÉKOSOKAT utólag szűrjük a megadott (magasabb) küszöbre, hogy
+    # ne jöjjenek téves emberek. Így egy inferencia/frame (kétszer gyorsabb).
     results = model.track(source=video_path, stream=True, persist=True,
-                          classes=[0], imgsz=imgsz, conf=conf,
+                          classes=[0, 32], imgsz=1920, conf=0.05,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
     for fi, r in enumerate(results):
         if fi >= max_frames:
             break
         img = r.orig_img
-        persons = []
+        persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
+                cls = int(b.cls[0])
+                bc = float(b.conf[0])
                 x1, y1, x2, y2 = [int(v) for v in b.xyxy[0].tolist()]
                 fx = (x1 + x2) / 2.0
-                if poly is not None and cv2.pointPolygonTest(poly, (float(fx), float(y2)), False) < 0:
-                    continue  # játéktéren kívül (kispad/edző/néző)
-                if b.id is None or _is_referee(img, x1, y1, x2, y2):
-                    continue  # nincs id vagy bíró
-                color = _torso_color(img, x1, y1, x2, y2)
-                all_colors.append(color)
-                persons.append((int(b.id[0]), fx, y2, color))
-
-        # Labda: KÜLÖN, NAGY felbontáson + alacsony küszöbön (a kis kézilabdához).
-        ball_xy = None
-        rb = model.predict(img, classes=[32], imgsz=1920, conf=0.05, verbose=False)[0]
-        if rb.boxes is not None and len(rb.boxes):
-            bb = max(rb.boxes, key=lambda b: float(b.conf[0]))
-            bx1, by1, bx2, by2 = [int(v) for v in bb.xyxy[0].tolist()]
-            ball_xy = ((bx1 + bx2) / 2.0, (by1 + by2) / 2.0)  # labda középpontja
+                if cls == 0:
+                    if bc < conf:  # játékos-küszöb (a low-conf téves emberek kiszűrése)
+                        continue
+                    if poly is not None and cv2.pointPolygonTest(poly, (float(fx), float(y2)), False) < 0:
+                        continue
+                    if b.id is None or _is_referee(img, x1, y1, x2, y2):
+                        continue
+                    color = _torso_color(img, x1, y1, x2, y2)
+                    all_colors.append(color)
+                    persons.append((int(b.id[0]), fx, y2, color))
+                elif cls == 32:  # labda — a legmegbízhatóbbat tartjuk
+                    if best_ball is None or bc > best_ball[0]:
+                        best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
+        ball_xy = (best_ball[1], best_ball[2]) if best_ball else None
         raw.append((persons, ball_xy))
     return raw, all_colors
 
