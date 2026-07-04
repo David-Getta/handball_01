@@ -6,6 +6,7 @@
 library;
 
 import "dart:convert";
+import "dart:typed_data";
 import "package:http/http.dart" as http;
 
 import "../models/tracking.dart";
@@ -36,5 +37,21 @@ class ApiClient {
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return Match.fromJson(json);
+  }
+
+  /// A kalibráló képernyő referencia-képkockájának URL-je (GET /reference-frame).
+  /// A backend a `videoPath` videó `t`-edik képkockáját adja vissza PNG-ként.
+  Uri referenceFrameUri(String videoPath, {int t = 100}) =>
+      Uri.parse("$baseUrl/reference-frame")
+          .replace(queryParameters: {"path": videoPath, "t": "$t"});
+
+  /// Letölti a referencia-képkockát (PNG bájtok). A kalibráló képernyő ezt
+  /// rajzolja a húzható sarkok alá; hiba esetén a hívó a helyőrzőre esik vissza.
+  Future<Uint8List> fetchReferenceFrame(String videoPath, {int t = 100}) async {
+    final resp = await http.get(referenceFrameUri(videoPath, t: t));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a képkockát: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
   }
 }

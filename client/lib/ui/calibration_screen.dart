@@ -3,20 +3,42 @@
 ///
 /// A 4 sarok = teljes homográfia (kép ↔ valós pálya). Ebből lesz a pontos
 /// felülnézet és a pályán kívüliek (kispad/edző) szűrése. A referencia-képkockát
-/// éles használatban a backend adja a feltöltött videóból; itt egy helyőrző mutatja
-/// a UX-et. A számítás a homography.dart-tal (a backend tükre).
+/// a backend adja a feltöltött videóból (/reference-frame); ha nincs backend vagy
+/// videó, egy helyőrző mutatja a UX-et. A számítás a homography.dart-tal (a backend
+/// tükre). Mentéskor a normalizált sarkokat a valódi képpont-koordinátára váltjuk
+/// (a képkocka eredeti W×H-jából), és kiírjuk a backend --calib formátumában.
 library;
 
 import "dart:math" as math;
+import "dart:typed_data";
+import "dart:ui" as ui;
+
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 
 import "../analytics/homography.dart";
+import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "shell/app_shell.dart";
 
 class CalibrationScreen extends StatefulWidget {
-  const CalibrationScreen({super.key});
+  /// A feltöltött videó backend-oldali elérési útja (ebből tölti be a képkockát).
+  /// Ha null, helyőrző jelenik meg a valódi kép helyett.
+  final String? videoPath;
+
+  /// A backend alap-URL-je (lokális módban localhost:8000).
+  final String baseUrl;
+
+  /// Melyik képkockát töltse be referenciának (a bevezető után, tartalmas rész).
+  final int frameIndex;
+
+  const CalibrationScreen({
+    super.key,
+    this.videoPath,
+    this.baseUrl = "http://localhost:8000",
+    this.frameIndex = 180,
+  });
 
   @override
   State<CalibrationScreen> createState() => _CalibrationScreenState();
@@ -30,6 +52,43 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   ];
   int? _drag;
   bool _saved = false;
+
+  // A betöltött referencia-képkocka és eredeti mérete (a képpont-export miatt).
+  Uint8List? _frameBytes;
+  Size? _frameSize;
+  bool _loading = false;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReferenceFrame();
+  }
+
+  /// Betölti a referencia-képkockát a backendtől; hiba esetén helyőrzőre esünk vissza.
+  Future<void> _loadReferenceFrame() async {
+    if (widget.videoPath == null) return; // nincs videó → marad a helyőrző
+    setState(() => _loading = true);
+    try {
+      final api = ApiClient(baseUrl: widget.baseUrl);
+      final bytes = await api.fetchReferenceFrame(widget.videoPath!, t: widget.frameIndex);
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final img = frame.image;
+      if (!mounted) return;
+      setState(() {
+        _frameBytes = bytes;
+        _frameSize = Size(img.width.toDouble(), img.height.toDouble());
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = "$e";
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,9 +148,37 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
               });
             },
             onPanEnd: (_) => _drag = null,
-            child: CustomPaint(painter: _CalibPainter(pts), size: size),
+            // A valódi képkocka a sarkok ALATT (BoxFit.fill: a 0..1 arány közvetlenül
+            // az eredeti képkocka arányára képződik le → tiszta képpont-export).
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (_frameBytes != null)
+                  Image.memory(_frameBytes!, fit: BoxFit.fill, gaplessPlayback: true)
+                else
+                  _placeholder(),
+                CustomPaint(painter: _CalibPainter(pts, drawBackground: _frameBytes == null), size: size),
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+
+  /// Helyőrző, ha nincs valódi képkocka (nincs videó vagy backend).
+  Widget _placeholder() {
+    return Container(
+      color: const Color(0xFF0C1119),
+      alignment: Alignment.topLeft,
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        _loading
+            ? "referencia képkocka betöltése…"
+            : _loadError != null
+                ? "nincs képkocka (backend/videó nélkül) — helyőrző"
+                : "referencia képkocka (helyőrző)",
+        style: AppText.label.copyWith(color: AppColors.textFaint),
       ),
     );
   }
@@ -111,20 +198,42 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           _cornerRow("Közeli-bal", 3),
           const Spacer(),
           Text(
-            "Éles használatban ide a feltöltött videó egy képkockája kerül; a 4 "
-            "sarokból a rendszer kiszámolja a homográfiát, és a pályán kívüli "
-            "személyeket (kispad, edző) automatikusan kiszűri.",
+            _frameSize != null
+                ? "Kép: ${_frameSize!.width.toInt()}×${_frameSize!.height.toInt()} px. "
+                    "Mentéskor a sarkokat a valódi képpontokra váltjuk és a "
+                    "vágólapra másoljuk (--calib formátum)."
+                : "Éles használatban ide a feltöltött videó egy képkockája kerül; a 4 "
+                    "sarokból a rendszer kiszámolja a homográfiát, és a pályán kívüli "
+                    "személyeket (kispad, edző) automatikusan kiszűri.",
             style: AppText.label.copyWith(fontSize: 11),
           ),
           const SizedBox(height: AppSpacing.md),
           FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
-            onPressed: () => setState(() => _saved = true),
+            onPressed: _save,
             icon: const Icon(Icons.check),
             label: Text(_saved ? "Kalibráció mentve" : "Kalibráció mentése"),
           ),
         ],
       ),
+    );
+  }
+
+  /// A normalizált sarkokat képpont-koordinátára váltja (ha ismert a képméret),
+  /// és a backend --calib formátumában a vágólapra másolja.
+  Future<void> _save() async {
+    final w = _frameSize?.width ?? 1920.0;
+    final h = _frameSize?.height ?? 1080.0;
+    final pixelCorners = [
+      for (final cn in _corners) [(cn.dx * w).round(), (cn.dy * h).round()],
+    ];
+    // Egyszerű JSON kézzel (a --calib fájl [[x,y],...] alakot vár).
+    final json = "[${pixelCorners.map((p) => "[${p[0]},${p[1]}]").join(",")}]";
+    await Clipboard.setData(ClipboardData(text: json));
+    if (!mounted) return;
+    setState(() => _saved = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("calib másolva a vágólapra: $json")),
     );
   }
 
@@ -142,19 +251,17 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       );
 }
 
-/// Kirajzolja a referencia-helyőrzőt + a húzható sarkokat + a pálya-modellt.
+/// Kirajzolja a húzható sarkokat + a pálya-modellt (a képkocka fölé).
 class _CalibPainter extends CustomPainter {
   final List<Offset> corners; // 4 kép-pont (pixel)
-  _CalibPainter(this.corners);
+  final bool drawBackground; // helyőrző háttér (ha nincs valódi képkocka)
+  _CalibPainter(this.corners, {this.drawBackground = true});
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF0C1119));
-    final hint = TextPainter(
-      text: TextSpan(text: "referencia képkocka", style: AppText.label.copyWith(color: AppColors.textFaint)),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    hint.paint(canvas, const Offset(16, 12));
+    if (drawBackground) {
+      canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF0C1119));
+    }
 
     // Homográfia: pálya-sarkok (méter) -> a húzott kép-pontok.
     final courtCorners = [
@@ -200,5 +307,6 @@ class _CalibPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _CalibPainter old) => old.corners != corners;
+  bool shouldRepaint(covariant _CalibPainter old) =>
+      old.corners != corners || old.drawBackground != drawBackground;
 }

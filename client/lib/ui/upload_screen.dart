@@ -11,8 +11,23 @@ import "../theme/app_theme.dart";
 import "calibration_screen.dart";
 import "shell/app_shell.dart";
 
-class UploadScreen extends StatelessWidget {
+class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
+
+  @override
+  State<UploadScreen> createState() => _UploadScreenState();
+}
+
+class _UploadScreenState extends State<UploadScreen> {
+  // A backend-oldali videó elérési útja (lokális mód). A kalibráló képernyő ebből
+  // tölti be a valódi referencia-képkockát a /reference-frame végponton keresztül.
+  final _pathCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _pathCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +44,40 @@ class UploadScreen extends StatelessWidget {
           const SizedBox(height: AppSpacing.xl),
           _dropzone(),
           const SizedBox(height: AppSpacing.md),
+          // Lokális mód: a backend-oldali videó útja, hogy a kalibráció a valódi
+          // képkockát töltse be (fájlválasztó nélkül is működjön a desktop-teszt).
+          TextField(
+            controller: _pathCtrl,
+            style: AppText.value.copyWith(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: "Backend-oldali videó útja (pl. /home/.../match.mp4)",
+              hintStyle: AppText.label.copyWith(fontSize: 12),
+              prefixIcon: const Icon(Icons.folder_open, size: 18, color: AppColors.textSecondary),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.borderStrong),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.accent),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CalibrationScreen()),
-              ),
+              onPressed: () {
+                final path = _pathCtrl.text.trim();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CalibrationScreen(
+                      videoPath: path.isEmpty ? null : path,
+                    ),
+                  ),
+                );
+              },
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.accent,
                 side: const BorderSide(color: AppColors.accent),
