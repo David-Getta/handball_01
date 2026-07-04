@@ -155,7 +155,7 @@ def _process_hog(video_path, stride, max_frames):
 
 
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
-            conf=0.20, court_poly=None):
+            conf=0.20, court_poly=None, calib_corners=None):
     import cv2
     import numpy as np
 
@@ -185,17 +185,44 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         d1 = float(np.linalg.norm(np.array(color) - centers2[1]))
         return Team.HOME if d0 <= d1 else Team.AWAY
 
+    # KALIBRÁCIÓ: ha van 4 sarok (kép-pixel), homográfiával pontos pálya-koordinátára
+    # váltunk, és a pályán KÍVÜL esőket (kispad/edző) eldobjuk (CourtRegion).
+    to_court = None
+    region = None
+    if calib_corners:
+        from handball.pipeline._homography import homography_from_points, apply_homography
+        from handball.pipeline.roi import CourtRegion
+        court_pts = [(0.0, 0.0), (COURT_LENGTH_M, 0.0), (COURT_LENGTH_M, COURT_WIDTH_M), (0.0, COURT_WIDTH_M)]
+        Himg2court = homography_from_points([tuple(p) for p in calib_corners], court_pts)
+        region = CourtRegion(margin_m=2.0)
+        def to_court(px, py):
+            return apply_homography(Himg2court, px, py)
+
+    def map_xy(px, py):
+        if to_court is not None:
+            return to_court(px, py)
+        return (px / W * COURT_LENGTH_M, py / H * COURT_WIDTH_M)  # kalibráció nélkül: arányos
+
     meta = MatchMeta(match_id="video-1", home_team="Csapat A", away_team="Csapat B",
                      fps=fps / stride, frame_width=W, frame_height=H)
     frames = []
+    dropped = 0
     for t, (persons, ball_xy) in enumerate(raw):
-        players = [PlayerPosition(
-            track_id=tid, team=team_of(color),
-            x=fx / W * COURT_LENGTH_M, y=fy / H * COURT_WIDTH_M,
-            source=PositionSource.MEASURED, confidence=1.0,
-        ) for (tid, fx, fy, color) in persons]
-        ball = Ball(x=ball_xy[0] / W * COURT_LENGTH_M, y=ball_xy[1] / H * COURT_WIDTH_M, confidence=1.0) if ball_xy else None
+        players = []
+        for (tid, fx, fy, color) in persons:
+            cx, cy = map_xy(fx, fy)
+            if region is not None and not region.contains(cx, cy):
+                dropped += 1
+                continue  # pályán kívül (kispad/edző/néző)
+            players.append(PlayerPosition(track_id=tid, team=team_of(color),
+                                          x=cx, y=cy, source=PositionSource.MEASURED, confidence=1.0))
+        ball = None
+        if ball_xy:
+            bx, by = map_xy(ball_xy[0], ball_xy[1])
+            ball = Ball(x=bx, y=by, confidence=1.0)
         frames.append(Frame(t=t, players=players, ball=ball))
+    if region is not None:
+        print(f"kalibrációval: pályán kívüli detektálás eldobva: {dropped}")
 
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(Match(meta=meta, frames=frames).to_json(indent=2))
@@ -208,15 +235,15 @@ def main(argv):
         return 1
     def opt(name, default, cast):
         return cast(argv[argv.index(name) + 1]) if name in argv else default
-    court_poly = None
-    if "--court" in argv:
-        import json
-        court_poly = json.load(open(argv[argv.index("--court") + 1]))  # [[x,y],...] pixel poligon
+    import json
+    court_poly = json.load(open(argv[argv.index("--court") + 1])) if "--court" in argv else None
+    # --calib: 4 kép-sarok [[x,y],...] a pálya (0,0),(40,0),(40,20),(0,20) sarkaihoz.
+    calib = json.load(open(argv[argv.index("--calib") + 1])) if "--calib" in argv else None
     process(argv[1], argv[2],
             weights=opt("--weights", None, str),
             stride=opt("--stride", 3, int), max_frames=opt("--max", 400, int),
             imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float),
-            court_poly=court_poly)
+            court_poly=court_poly, calib_corners=calib)
     return 0
 
 

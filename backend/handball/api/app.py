@@ -48,6 +48,21 @@ def create_app():
         """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető."""
         return {"status": "ok"}
 
+    @app.get("/reference-frame")
+    def reference_frame(path: str, t: int = 100):
+        """Egy képkockát ad vissza (PNG) a megadott videóból — a kalibráló
+        képernyő ezt tölti be, hogy a felhasználó a valódi képre húzza a sarkokat."""
+        import cv2
+        from fastapi import Response
+        cap = cv2.VideoCapture(path)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, t)
+        ok, frame = cap.read()
+        cap.release()
+        if not ok:
+            raise HTTPException(status_code=404, detail="frame not read")
+        ok, buf = cv2.imencode(".png", frame)
+        return Response(content=buf.tobytes(), media_type="image/png")
+
     @app.get("/matches/{match_id}")
     def get_match(match_id: str):
         """Visszaadja a kért meccs Tracking JSON-ját (ezt rajzolja ki a kliens)."""
