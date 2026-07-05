@@ -16,6 +16,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "calibration_screen.dart";
+import "match_screen.dart";
 import "shell/app_shell.dart";
 
 /// A pipeline-lépések sorrendje (a backend ezeket a kódokat adja a job stage-ében).
@@ -44,6 +45,8 @@ class _UploadScreenState extends State<UploadScreen> {
 
   // Aktuális feldolgozási munka állapota (a backendtől, GET /jobs/{id}).
   String? _jobId;
+  String? _matchId; // a kész Tracking azonosítója (ezzel nyílik a meccs-nézet)
+  bool _navigated = false; // egyszeri automatikus átugrás a done pillanatában
   String _status = "idle"; // idle | running | done | error
   String _stage = "A";
   double _progress = 0.0;
@@ -127,10 +130,12 @@ class _UploadScreenState extends State<UploadScreen> {
       _progress = 0.0;
       _message = "indítás";
       _error = null;
+      _navigated = false;
     });
     try {
       final r = await _api.startProcessing(path, weights: "yolov8n.pt");
       _jobId = r["job_id"] as String;
+      _matchId = r["match_id"] as String?;
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(milliseconds: 800), (_) => _pollJob());
     } catch (e) {
@@ -159,6 +164,11 @@ class _UploadScreenState extends State<UploadScreen> {
       if (_status == "done" || _status == "error") {
         _poll?.cancel();
       }
+      // A done pillanatában EGYSZER automatikusan megnyitjuk az eredményt.
+      if (_status == "done" && !_navigated) {
+        _navigated = true;
+        _openResult();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -167,6 +177,15 @@ class _UploadScreenState extends State<UploadScreen> {
       });
       _poll?.cancel();
     }
+  }
+
+  /// Megnyitja a kész meccs felülnézeti elemző nézetét a friss match_id-vel.
+  void _openResult() {
+    final id = _matchId;
+    if (id == null || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MatchScreen(matchId: id)),
+    );
   }
 
   @override
@@ -241,6 +260,21 @@ class _UploadScreenState extends State<UploadScreen> {
           Text("Feldolgozás állapota", style: AppText.value.copyWith(fontSize: 17)),
           const SizedBox(height: AppSpacing.md),
           _processingCard(),
+          // Kész eredmény: kézi megnyitás (az automatikus átugrás mellett — ha
+          // visszaléptél a meccs-nézetről, innen újra megnyithatod).
+          if (_status == "done" && _matchId != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+                onPressed: _openResult,
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text("Eredmény megnyitása"),
+              ),
+            ),
+          ],
         ],
       ),
     );
