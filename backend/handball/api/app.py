@@ -38,7 +38,7 @@ def create_app():
     többi része függőség nélkül is működjön. A szerver indításához:
         uvicorn "handball.api.app:create_app" --factory
     """
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Request
 
     app = FastAPI(title="Handball Analysis API", version="0.1.0")
 
@@ -49,6 +49,34 @@ def create_app():
     def health():
         """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető."""
         return {"status": "ok"}
+
+    async def upload_video(request, filename: str = "match.mp4"):
+        """Meccsvideó feltöltése (nyers bájt-folyam a törzsben, `filename` query).
+
+        Szándékosan NEM multipart (nem kell a python-multipart függőség): a törzset
+        DARABONKÉNT (stream) írjuk lemezre, így egy több GB-os videó sem tölti be
+        egészében a memóriába. A mentett fájl backend-oldali útját adjuk vissza,
+        amit aztán a /matches/process és a /reference-frame használ.
+        """
+        import re
+        from pathlib import Path
+        uploads = Path(__file__).resolve().parents[2] / "uploads"
+        uploads.mkdir(exist_ok=True)
+        # A fájlnevet fertőtlenítjük (path traversal ellen): csak biztonságos karakterek.
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", filename).lstrip(".") or "match.mp4"
+        dest = uploads / safe
+        size = 0
+        with open(dest, "wb") as f:
+            async for chunk in request.stream():
+                f.write(chunk)
+                size += len(chunk)
+        return {"path": str(dest), "filename": safe, "size": size}
+
+    # A `request` paraméter típusát KÉZZEL állítjuk be (a modul `from __future__
+    # import annotations` miatt a sztring-annotáció nem oldódna fel), majd
+    # regisztráljuk az útvonalat — így a FastAPI a nyers Request-et injektálja.
+    upload_video.__annotations__["request"] = Request
+    app.post("/upload")(upload_video)
 
     @app.get("/reference-frame")
     def reference_frame(path: str, t: int = 100):

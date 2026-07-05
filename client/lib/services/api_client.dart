@@ -6,6 +6,7 @@
 library;
 
 import "dart:convert";
+import "dart:io";
 import "dart:typed_data";
 import "package:http/http.dart" as http;
 
@@ -37,6 +38,53 @@ class ApiClient {
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return Match.fromJson(json);
+  }
+
+  /// Feltölti a videót a backendre a LEMEZRŐL STREAM-elve (POST /upload) — a
+  /// fájlt darabonként küldi, így egy több GB-os videó sem tölti be a memóriába.
+  /// Visszaadja a backend-oldali mentett utat: {"path", "filename", "size"}.
+  /// `onProgress`: 0..1 feltöltési arány (a felület folyamatjelzőjéhez).
+  Future<Map<String, dynamic>> uploadVideoFromPath(
+    String localPath,
+    String filename, {
+    void Function(double)? onProgress,
+  }) async {
+    final file = File(localPath);
+    final total = await file.length();
+    final uri = Uri.parse("$baseUrl/upload").replace(queryParameters: {"filename": filename});
+    final req = http.StreamedRequest("POST", uri);
+    req.headers["Content-Type"] = "application/octet-stream";
+    req.contentLength = total;
+    int sent = 0;
+    file.openRead().listen(
+      (chunk) {
+        req.sink.add(chunk);
+        sent += chunk.length;
+        if (total > 0) onProgress?.call(sent / total);
+      },
+      onDone: () => req.sink.close(),
+      onError: (Object e) => req.sink.addError(e),
+      cancelOnError: true,
+    );
+    final resp = await http.Response.fromStream(await req.send());
+    if (resp.statusCode != 200) {
+      throw Exception("Feltöltés sikertelen: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Feltöltés MEMÓRIÁBAN lévő bájtokból (pl. weben, ahol nincs fájl-út).
+  Future<Map<String, dynamic>> uploadVideoBytes(Uint8List bytes, String filename) async {
+    final uri = Uri.parse("$baseUrl/upload").replace(queryParameters: {"filename": filename});
+    final resp = await http.post(
+      uri,
+      headers: {"Content-Type": "application/octet-stream"},
+      body: bytes,
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Feltöltés sikertelen: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
   /// Elindítja egy videó feldolgozását a backenden (POST /matches/process).

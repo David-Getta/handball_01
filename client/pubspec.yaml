@@ -16,6 +16,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0          # a lokális backend REST API-jának hívásához
+  file_picker: ^8.0.0   # meccsvideó kiválasztása (desktop/tablet natív fájlválasztó)
 
 dev_dependencies:
   flutter_lints: ^4.0.0
