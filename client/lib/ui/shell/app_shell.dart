@@ -11,6 +11,7 @@ import "../../sim/demo_data.dart";
 import "../../theme/app_theme.dart";
 import "../dashboard_screen.dart";
 import "../designer_screen.dart";
+import "../live_screen.dart";
 import "../match_screen.dart";
 import "../upload_screen.dart";
 
@@ -26,7 +27,7 @@ void navTo(BuildContext context, NavId id) {
     case NavId.matches:
       page = const MatchScreen();
     case NavId.live:
-      page = const _LiveScreen();
+      page = const LiveScreen();
     case NavId.upload:
       page = const UploadScreen();
     case NavId.designer:
@@ -208,27 +209,4 @@ class _RedDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.away, shape: BoxShape.circle));
-}
-
-/// Egyszerű "Élő követés" helyőrző képernyő (a shell-lel).
-class _LiveScreen extends StatelessWidget {
-  const _LiveScreen();
-  @override
-  Widget build(BuildContext context) {
-    return AppShell(
-      active: NavId.live,
-      crumbTag: "1d",
-      crumbPath: "ÉLŐ KÖVETÉS · VALÓS IDEJŰ ELEMZÉS",
-      collapsed: true,
-      child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.sensors, size: 40, color: AppColors.textFaint),
-          const SizedBox(height: AppSpacing.md),
-          Text("Élő meccskövetés", style: AppText.title.copyWith(fontSize: 20)),
-          const SizedBox(height: 6),
-          Text("Valós idejű követés és javaslatok — hamarosan.", style: AppText.label),
-        ]),
-      ),
-    );
-  }
 }

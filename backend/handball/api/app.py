@@ -15,6 +15,7 @@ Végpontok (MVP):
 - GET  /jobs/{job_id}              → a feldolgozás állapota (stage/progress/message).
 - GET  /matches/{match_id}          → a Match (Tracking) JSON-ja.
 - GET  /matches/{match_id}/stats    → játékosonkénti statisztika.
+- GET  /matches/{match_id}/coaching → élő edzői javaslatok (idővonal vagy egy frame).
 
 Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + objektumtár.
 """
@@ -24,7 +25,8 @@ from __future__ import annotations
 from ..models.tracking import Match, MatchMeta, Team
 from ..pipeline.pipeline import summarize
 from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
-from ..pipeline.tactics import team_style_profile
+from ..pipeline.tactics import team_style_profile, TacticsConfig
+from ..pipeline.coaching import suggest_for_frame, coaching_timeline
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
 from ..pipeline.event_detection import detect_events, event_counts
@@ -214,6 +216,23 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         return team_style_profile(match)
+
+    @app.get("/matches/{match_id}/coaching")
+    def get_coaching(match_id: str, t: int = -1):
+        """Élő edzői javaslatok. `t` nélkül a teljes meccs frame-enkénti idővonala
+        (a kliens ebbe indexel lejátszáskor); `t`-vel egyetlen frame javaslatai."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        cfg = TacticsConfig()
+        if t < 0:
+            return {"per_frame": coaching_timeline(match, cfg)}
+        if t >= len(match.frames):
+            raise HTTPException(status_code=400, detail="t out of range")
+        fps = match.meta.fps if match.meta.fps > 0 else 25.0
+        prev = match.frames[t - 1] if t > 0 else None
+        sugg = suggest_for_frame(match.frames[t], cfg, prev_frame=prev, fps=fps)
+        return {"t": t, "suggestions": [vars(s) for s in sugg]}
 
     @app.get("/matches/{match_id}/setplays")
     def get_setplays(match_id: str, threshold: float = 0.15):
