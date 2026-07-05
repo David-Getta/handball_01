@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Tesztek / eszközök
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ML / adat (nagy fájlok, nem a repóba valók)
+*.pt
+*.onnx
+*.mp4
+*.mov
+*.avi
+data/
+weights/
+
+# Flutter / Dart (kliens)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+**/generated_plugin_registrant.*
+client/build/
+
+# IDE / OS
+.vscode/
+.idea/
+*.iml
+.DS_Store

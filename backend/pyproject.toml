@@ -1,0 +1,37 @@
+# A backend csomag definíciója és függőségei.
+#
+# A KÖZPONTI rész (handball.models, .pipeline vezérlés, .api séma) TISZTA stdlib,
+# ezért függőség nélkül is importálható és tesztelhető. A nehéz ML-csomagok
+# OPCIONÁLIS extraként szerepelnek ([project.optional-dependencies]), hogy a
+# fejlesztés/tesztelés ne igényeljen GPU-t vagy nagy telepítést.
+
+[project]
+name = "handball-backend"
+version = "0.1.0"
+description = "Kézilabda meccselemző backend (videó -> Tracking -> statisztika)."
+requires-python = ">=3.10"
+# Alap futtatáshoz csak az API-réteg kell.
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
+[project.optional-dependencies]
+# A valódi videó-feldolgozáshoz (a pipeline modellek beépítésekor):
+ml = [
+    "ultralytics>=8.1",   # YOLO detektálás
+    "opencv-python>=4.9",  # videó-beolvasás, homográfia, képfeldolgozás
+    "numpy>=1.26",
+]
+# Fejlesztéshez/teszteléshez:
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["handball*"]

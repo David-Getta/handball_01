@@ -1,0 +1,147 @@
+"""
+Tesztek a [F] képen kívüli becslőre (OffScreenEstimator).
+
+Szintetikus pályák, nincs videó/külső csomag. Azt ellenőrizzük, hogy:
+- a becslő a sebességgel helyesen extrapolál,
+- a megbízhatóság az idővel csökken,
+- a pozíciót a pálya határaira vágja,
+- pontosan annyit becsül, amennyi hiányzik (a legutóbb látottakat preferálva).
+
+Futtatás:
+    python tests/test_estimation.py
+"""
+
+from __future__ import annotations
+
+# A backend/ mappát a kereső-útvonalra tesszük, hogy a teszt bárhonnan fusson.
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from handball.models.tracking import PlayerPosition, PositionSource, Team
+from handball.models.events import RosterTimeline, Suspension
+from handball.pipeline.estimation import (
+    OffScreenEstimator, CONFIDENCE_HALFLIFE_FRAMES, VELOCITY_FADE_FRAMES,
+)
+
+
+def _home(track_id, x, y, conf=1.0):
+    return PlayerPosition(track_id=track_id, team=Team.HOME, x=x, y=y, confidence=conf)
+
+
+def _only_home(estimated):
+    """Csak a HOME csapat becsült játékosai (az AWAY-t a default roster miatt
+    hagyjuk figyelmen kívül — ott nincs jelölt, így úgysem keletkezik becslés)."""
+    return [p for p in estimated if p.team == Team.HOME]
+
+
+def test_extrapolates_along_velocity():
+    """Egyenes vonalú mozgásból a következő frame-re előrevetít.
+
+    A játékos (10,8)->(11,8): sebesség (1,0)/frame. t=2-n képen kívül → x≈12.
+    """
+    est = OffScreenEstimator(RosterTimeline())
+    est.update_seen(0, [_home(1, 10.0, 8.0)])
+    est.update_seen(1, [_home(1, 11.0, 8.0)])
+
+    out = _only_home(est.estimate_missing(2, measured=[]))
+    assert len(out) == 1
+    p = out[0]
+    assert p.track_id == 1
+    assert p.source == PositionSource.ESTIMATED
+    assert abs(p.x - 12.0) < 1e-9
+    assert abs(p.y - 8.0) < 1e-9
+
+
+def test_confidence_decays_over_time():
+    """A becslés megbízhatósága a felezési idő szerint csökken.
+
+    Az utolsó mért confidence 1.0; pontosan CONFIDENCE_HALFLIFE_FRAMES eltelt idő
+    után ~0.5-re csökken.
+    """
+    est = OffScreenEstimator(RosterTimeline())
+    est.update_seen(0, [_home(1, 10.0, 8.0, conf=1.0)])
+
+    half_t = int(CONFIDENCE_HALFLIFE_FRAMES)  # ennyi frame múlva feleződik
+    out = _only_home(est.estimate_missing(half_t, measured=[]))
+    assert len(out) == 1
+    assert abs(out[0].confidence - 0.5) < 0.02
+
+
+def test_position_clamped_to_court():
+    """A pálya széle felé mozgó játékos becslése a 40 m-es határon megáll."""
+    est = OffScreenEstimator(RosterTimeline())
+    est.update_seen(0, [_home(1, 38.0, 10.0)])
+    est.update_seen(1, [_home(1, 39.0, 10.0)])  # sebesség (1,0)/frame, a határ felé
+
+    # Sok idő múlva: nyersen 39 + 1*eff messze túllógna, de a pályán belül marad.
+    out = _only_home(est.estimate_missing(100, measured=[]))
+    assert len(out) == 1
+    assert out[0].x <= 40.0 + 1e-9
+    assert abs(out[0].x - 40.0) < 1e-9  # a határra vágva
+
+
+def test_velocity_fade_caps_displacement():
+    """A sebesség hatása legfeljebb VELOCITY_FADE_FRAMES-ig tart (utána megáll).
+
+    Lassú, a pályán belül maradó mozgásnál az elmozdulás vel * FADE-nél nem nagyobb.
+    """
+    est = OffScreenEstimator(RosterTimeline())
+    est.update_seen(0, [_home(1, 5.0, 10.0)])
+    est.update_seen(1, [_home(1, 5.1, 10.0)])  # sebesség (0.1,0)/frame
+
+    far_t = int(VELOCITY_FADE_FRAMES) + 100  # jóval a fade után
+    out = _only_home(est.estimate_missing(far_t, measured=[]))
+    # Utolsó pozíció x=5.1; max elmozdulás 0.1 * FADE.
+    expected_max_x = 5.1 + 0.1 * VELOCITY_FADE_FRAMES
+    assert out[0].x <= expected_max_x + 1e-9
+
+
+def test_estimates_only_missing_count_and_prefers_recent():
+    """Pontosan a hiányzó számú játékost becsli, a legutóbb látottat preferálva.
+
+    6 hazai látszik (id 1..6), 3 korábbi hazai (id 7,8,9) képen kívül. Teljes
+    létszám 7 → 1 hiányzik → 1 becslés, a legutóbb látott jelöltre (id 9).
+    """
+    est = OffScreenEstimator(RosterTimeline())
+    # Korábbi, most már képen kívüli játékosok, eltérő utolsó látási idővel:
+    est.update_seen(0, [_home(7, 1.0, 1.0), _home(8, 2.0, 2.0)])
+    est.update_seen(1, [_home(9, 3.0, 3.0)])  # a 9-est láttuk a legutóbb
+
+    measured = [_home(i, 10.0 + i, 10.0) for i in range(1, 7)]  # id 1..6 most látszik
+    est.update_seen(5, measured)  # ahogy a pipeline is teszi: előbb update, majd estimate
+
+    out = _only_home(est.estimate_missing(5, measured))
+    assert len(out) == 1                 # 7 kell, 6 látszik → 1 becsült
+    assert out[0].track_id == 9          # a legutóbb látott jelölt
+
+
+def test_no_estimate_when_all_present():
+    """Ha minden játékos látszik (vagy ki van állítva), nincs becslés.
+
+    2 kiállítás → a hazai létszám 5; ha 5 hazai látszik, nincs mit becsülni.
+    """
+    roster = RosterTimeline(suspensions=[
+        Suspension(team=Team.HOME, start_t=0, duration_t=100),
+        Suspension(team=Team.HOME, start_t=0, duration_t=100),
+    ])
+    est = OffScreenEstimator(roster)
+    measured = [_home(i, 10.0 + i, 10.0) for i in range(1, 6)]  # 5 hazai látszik
+    est.update_seen(10, measured)
+
+    out = _only_home(est.estimate_missing(10, measured))
+    assert len(out) == 0
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as e:
+                failures += 1
+                print(f"FAIL {name}: {e}")
+    print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
+    raise SystemExit(1 if failures else 0)
