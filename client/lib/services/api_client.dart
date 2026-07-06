@@ -30,6 +30,26 @@ class ApiClient {
     }
   }
 
+  /// A tárolt meccsek listája (könyvtár/áttekintő nézethez). Minden elem összegző
+  /// szótár: match_id, home_team, away_team, num_frames, fps, duration_s.
+  Future<List<Map<String, dynamic>>> listMatches() async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches"))
+        .timeout(const Duration(seconds: 4));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a meccslistát: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["matches"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Töröl egy meccset a backendről (memória + lemez).
+  Future<void> deleteMatch(String matchId) async {
+    final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült törölni: HTTP ${resp.statusCode}");
+    }
+  }
+
   /// Lekéri egy meccs Tracking-jét és Match objektummá alakítja.
   Future<Match> fetchMatch(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId"));

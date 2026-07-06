@@ -13,7 +13,9 @@ Végpontok (MVP):
 - GET  /health                     → életjel.
 - POST /matches/process            → videó-feldolgozás indítása (háttérszál) → job_id.
 - GET  /jobs/{job_id}              → a feldolgozás állapota (stage/progress/message).
+- GET  /matches                     → a tárolt meccsek listája (könyvtár nézet).
 - GET  /matches/{match_id}          → a Match (Tracking) JSON-ja.
+- DELETE /matches/{match_id}        → meccs törlése (memória + lemez).
 - GET  /matches/{match_id}/stats    → játékosonkénti statisztika.
 - GET  /matches/{match_id}/coaching → élő edzői javaslatok (idővonal vagy egy frame).
 
@@ -40,12 +42,33 @@ def create_app():
     többi része függőség nélkül is működjön. A szerver indításához:
         uvicorn "handball.api.app:create_app" --factory
     """
+    import json
+    from pathlib import Path
+
     from fastapi import FastAPI, HTTPException, Request
 
     app = FastAPI(title="Handball Analysis API", version="0.1.0")
 
-    # Ideiglenes, memóriabeli tár (match_id -> Match). Később adatbázis.
+    # Meccs-tár: memóriában (match_id -> Match), lemezre TÜKRÖZVE, hogy a szerver
+    # újraindítása ne veszítse el a feldolgozott meccseket (data/matches/{id}.json).
+    # Ez az MVP-perzisztencia; később adatbázis + objektumtár.
     _store: dict[str, Match] = {}
+    _data_dir = Path(__file__).resolve().parents[2] / "data" / "matches"
+    _data_dir.mkdir(parents=True, exist_ok=True)
+
+    def _match_path(match_id: str) -> Path:
+        # Fájlnév-fertőtlenítés (path traversal ellen): csak biztonságos karakterek.
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.json"
+
+    # Indításkor betöltjük a korábban lementett meccseket a memóriába.
+    for _f in sorted(_data_dir.glob("*.json")):
+        try:
+            _m = Match.from_json(_f.read_text(encoding="utf-8"))
+            _store[_m.meta.match_id] = _m
+        except Exception:
+            pass  # sérült fájlt átugrunk, ne akadályozza az indulást
 
     @app.get("/health")
     def health():
@@ -167,6 +190,27 @@ def create_app():
             raise HTTPException(status_code=404, detail="job not found")
         return job
 
+    @app.get("/matches")
+    def list_matches():
+        """A tárolt meccsek listája (a kliens áttekintő/könyvtár nézetéhez).
+
+        Csak összefoglaló adatok (nem a teljes Tracking): azonosító, csapatnevek,
+        képkocka-szám, fps és becsült hossz. Idő szerint (fps-alapú hossz) rendezve.
+        """
+        out = []
+        for m in _store.values():
+            fps = m.meta.fps if m.meta.fps > 0 else 25.0
+            out.append({
+                "match_id": m.meta.match_id,
+                "home_team": m.meta.home_team,
+                "away_team": m.meta.away_team,
+                "num_frames": len(m.frames),
+                "fps": m.meta.fps,
+                "duration_s": len(m.frames) / fps,
+            })
+        out.sort(key=lambda d: d["match_id"])
+        return {"matches": out}
+
     @app.get("/matches/{match_id}")
     def get_match(match_id: str):
         """Visszaadja a kért meccs Tracking JSON-ját (ezt rajzolja ki a kliens)."""
@@ -174,6 +218,18 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         return match.to_dict()
+
+    @app.delete("/matches/{match_id}")
+    def delete_match(match_id: str):
+        """Törli a meccset a memóriából és a lemezről (könyvtár-karbantartás)."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        del _store[match_id]
+        try:
+            _match_path(match_id).unlink(missing_ok=True)
+        except Exception:
+            pass
+        return {"deleted": match_id}
 
     @app.get("/matches/{match_id}/stats")
     def get_stats(match_id: str):
@@ -310,9 +366,14 @@ def create_app():
             "tracking": sim.to_dict(),
         }
 
-    # Segéd a feltöltéshez/teszteléshez (később a pipeline tölti fel az eredményt).
+    # Segéd a feltöltéshez/teszteléshez: memóriába tesz ÉS lemezre tükröz.
     def _put_match(match: Match) -> None:
         _store[match.meta.match_id] = match
+        try:
+            _match_path(match.meta.match_id).write_text(
+                match.to_json(indent=2), encoding="utf-8")
+        except Exception:
+            pass  # a memóriabeli tár akkor is működik, ha a lemezre írás elakad
 
     app.state.put_match = _put_match  # elérhetővé tesszük indítás után
     return app
