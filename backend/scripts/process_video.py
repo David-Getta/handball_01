@@ -66,12 +66,41 @@ def _is_dark(img, thresh=40.0):
     return float(img.mean()) < thresh
 
 
+def _resolve_weights(weights):
+    """A súlyfájl (yolov8n.pt) tényleges elérési útja — hogy a BECSOMAGOLT
+    (telepítés nélküli) kiadásban is megtalálja, ne kelljen letölteni.
+
+    Sorrend: (1) ha a megadott út létezik, azt; (2) HANDBALL_WEIGHTS_DIR/<név>;
+    (3) a PyInstaller csomag weights/<név> mappája (sys._MEIPASS); (4) az exe
+    melletti weights/ mappa. Ha egyik sincs, marad az eredeti (ultralytics letölti).
+    """
+    import os
+    import sys
+    if not weights:
+        return weights
+    if os.path.exists(weights):
+        return weights
+    name = os.path.basename(weights)
+    candidates = []
+    env_dir = os.environ.get("HANDBALL_WEIGHTS_DIR")
+    if env_dir:
+        candidates.append(os.path.join(env_dir, name))
+    meipass = getattr(sys, "_MEIPASS", None)  # PyInstaller kicsomagolt mappa
+    if meipass:
+        candidates.append(os.path.join(meipass, "weights", name))
+    candidates.append(os.path.join(os.path.dirname(sys.executable), "weights", name))
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return weights
+
+
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None):
     import numpy as np
     import cv2
     from ultralytics import YOLO
-    model = YOLO(weights)
+    model = YOLO(_resolve_weights(weights))
     poly = np.array(court_poly, np.int32) if court_poly else None
     raw, all_colors = [], []
     # EGY menet nagy felbontáson (1920) + alacsony küszöb (0.05), hogy a kis labdát

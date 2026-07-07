@@ -7,7 +7,7 @@ library;
 import "package:flutter/material.dart";
 
 import "theme/app_theme.dart";
-import "ui/dashboard_screen.dart";
+import "ui/bootstrap_screen.dart";
 
 void main() {
   runApp(const HandballApp());
@@ -22,7 +22,8 @@ class HandballApp extends StatelessWidget {
       title: "Sport Machine",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const DashboardScreen(),
+      // Az indító képernyő elindítja a motort (backend), majd belép a dashboardra.
+      home: const BootstrapScreen(),
     );
   }
 }

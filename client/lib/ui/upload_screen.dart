@@ -1,17 +1,22 @@
 /// Feltöltés — meccsvideó → Tracking, a feldolgozási pipeline állapotával.
 ///
-/// A "Sport Machine" design feltöltő képernyője: dropzone + folyamatban lévő
-/// feldolgozás (kör-progress + a valós [A]–[H] pipeline-lépések állapota).
-/// A tényleges feltöltés/feldolgozás a backendhez köthető; ez a felület.
+/// A "Sport Machine" design feltöltő képernyője: a dropzone-ra kattintva natív
+/// fájlválasztóval kiválasztott videót a backendre TÖLTI (POST /upload, streamelve),
+/// majd a "Feldolgozás indítása" a valós pipeline-t indítja (POST /matches/process),
+/// és a kör-progress + az [A]–[H] lépések a valódi job-állapotból (GET /jobs/{id})
+/// frissülnek.
 library;
 
 import "dart:async";
 
+import "package:file_picker/file_picker.dart";
+import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "calibration_screen.dart";
+import "match_screen.dart";
 import "shell/app_shell.dart";
 
 /// A pipeline-lépések sorrendje (a backend ezeket a kódokat adja a job stage-ében).
@@ -40,6 +45,8 @@ class _UploadScreenState extends State<UploadScreen> {
 
   // Aktuális feldolgozási munka állapota (a backendtől, GET /jobs/{id}).
   String? _jobId;
+  String? _matchId; // a kész Tracking azonosítója (ezzel nyílik a meccs-nézet)
+  bool _navigated = false; // egyszeri automatikus átugrás a done pillanatában
   String _status = "idle"; // idle | running | done | error
   String _stage = "A";
   double _progress = 0.0;
@@ -47,11 +54,64 @@ class _UploadScreenState extends State<UploadScreen> {
   String? _error;
   Timer? _poll;
 
+  // Feltöltés állapota (a dropzone folyamatjelzőjéhez).
+  bool _uploading = false;
+  double _uploadProgress = 0.0;
+  String? _uploadedName;
+
   @override
   void dispose() {
     _poll?.cancel();
     _pathCtrl.dispose();
     super.dispose();
+  }
+
+  /// Natív fájlválasztó → videó feltöltése a backendre → a visszakapott
+  /// backend-oldali utat beírja a mezőbe (ezt használja a kalibráció + feldolgozás).
+  Future<void> _pickAndUpload() async {
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ["mp4", "mov", "avi", "mkv"],
+      withData: kIsWeb, // weben bájtok kellenek; desktopon elég az elérési út
+    );
+    if (res == null || res.files.isEmpty) return; // a felhasználó megszakította
+    final f = res.files.first;
+    setState(() {
+      _uploading = true;
+      _uploadProgress = 0.0;
+      _uploadedName = f.name;
+    });
+    try {
+      Map<String, dynamic> saved;
+      if (!kIsWeb && f.path != null) {
+        saved = await _api.uploadVideoFromPath(f.path!, f.name,
+            onProgress: (p) { if (mounted) setState(() => _uploadProgress = p); });
+      } else if (f.bytes != null) {
+        saved = await _api.uploadVideoBytes(f.bytes!, f.name);
+      } else {
+        throw Exception("a kiválasztott fájl nem olvasható");
+      }
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _uploadProgress = 1.0;
+        _pathCtrl.text = saved["path"] as String; // a backend-oldali út
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Feltöltve: ${saved["filename"]} (${_mb(saved["size"])})")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Feltöltési hiba: $e")),
+      );
+    }
+  }
+
+  String _mb(Object? bytes) {
+    final b = (bytes is num) ? bytes.toDouble() : 0.0;
+    return "${(b / (1024 * 1024)).toStringAsFixed(1)} MB";
   }
 
   /// Elindítja a feldolgozást a megadott videó-úton, majd időzítővel lekérdezi
@@ -70,10 +130,12 @@ class _UploadScreenState extends State<UploadScreen> {
       _progress = 0.0;
       _message = "indítás";
       _error = null;
+      _navigated = false;
     });
     try {
       final r = await _api.startProcessing(path, weights: "yolov8n.pt");
       _jobId = r["job_id"] as String;
+      _matchId = r["match_id"] as String?;
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(milliseconds: 800), (_) => _pollJob());
     } catch (e) {
@@ -102,6 +164,11 @@ class _UploadScreenState extends State<UploadScreen> {
       if (_status == "done" || _status == "error") {
         _poll?.cancel();
       }
+      // A done pillanatában EGYSZER automatikusan megnyitjuk az eredményt.
+      if (_status == "done" && !_navigated) {
+        _navigated = true;
+        _openResult();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -110,6 +177,15 @@ class _UploadScreenState extends State<UploadScreen> {
       });
       _poll?.cancel();
     }
+  }
+
+  /// Megnyitja a kész meccs felülnézeti elemző nézetét a friss match_id-vel.
+  void _openResult() {
+    final id = _matchId;
+    if (id == null || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MatchScreen(matchId: id)),
+    );
   }
 
   @override
@@ -184,30 +260,74 @@ class _UploadScreenState extends State<UploadScreen> {
           Text("Feldolgozás állapota", style: AppText.value.copyWith(fontSize: 17)),
           const SizedBox(height: AppSpacing.md),
           _processingCard(),
+          // Kész eredmény: kézi megnyitás (az automatikus átugrás mellett — ha
+          // visszaléptél a meccs-nézetről, innen újra megnyithatod).
+          if (_status == "done" && _matchId != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+                onPressed: _openResult,
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: const Text("Eredmény megnyitása"),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _dropzone() {
-    return DottedBorderBox(
-      child: Row(
-        children: [
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.file_upload_outlined, color: AppColors.accent, size: 26),
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Húzd ide a meccsvideót, vagy tallózz", style: AppText.value.copyWith(fontSize: 16)),
-              const SizedBox(height: 4),
-              Text("MP4 / MOV · max 8 GB · 720p–4K · legfeljebb 75 perc", style: AppText.label.copyWith(fontSize: 12)),
-            ],
-          ),
-        ],
+    return InkWell(
+      onTap: _uploading ? null : _pickAndUpload,
+      borderRadius: BorderRadius.circular(14),
+      child: DottedBorderBox(
+        child: Row(
+          children: [
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(color: AppColors.surfaceAlt, borderRadius: BorderRadius.circular(14)),
+              child: _uploading
+                  ? const Padding(
+                      padding: EdgeInsets.all(15),
+                      child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent))
+                  : const Icon(Icons.file_upload_outlined, color: AppColors.accent, size: 26),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _uploading
+                        ? "Feltöltés… ${(_uploadProgress * 100).round()}%  ${_uploadedName ?? ""}"
+                        : "Kattints a meccsvideó kiválasztásához",
+                    style: AppText.value.copyWith(fontSize: 16),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text("MP4 / MOV / MKV · max 8 GB · 720p–4K · legfeljebb 75 perc",
+                      style: AppText.label.copyWith(fontSize: 12)),
+                  if (_uploading) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: _uploadProgress == 0 ? null : _uploadProgress,
+                        minHeight: 4,
+                        backgroundColor: AppColors.surfaceAlt,
+                        valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
