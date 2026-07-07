@@ -1,0 +1,113 @@
+"""
+Tesztek az ellenfél-felderítésre (scouting.py) — kézzel összerakott meccsekkel.
+
+A pálya 40x20 m; a HAZAI a +x (x=40) kapu felé támad, saját kapuja x=0.
+
+Futtatás:
+    python tests/test_scouting.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from handball.models.tracking import (
+    Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
+)
+from handball.pipeline.scouting import scout_team, combine_reports, ScoutingReport
+
+
+def _pl(track_id, team, x, y):
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0)
+
+
+def _meta(fps=25.0):
+    return MatchMeta(match_id="s", home_team="Veszprém", away_team="Szeged", fps=fps,
+                     frame_width=1920, frame_height=1080)
+
+
+def _attack_60(n=30):
+    """HAZAI szervezett támadás a +x térfélen, AWAY 6-0 fallal a x=40 kapunál."""
+    frames = []
+    for t in range(n):
+        players = [_pl(1, Team.HOME, 28.0, 10.0), _pl(2, Team.HOME, 30.0, 5.0),
+                   _pl(3, Team.HOME, 30.0, 15.0)]
+        for j, y in enumerate([2, 6, 8, 12, 14, 18]):
+            players.append(_pl(20 + j, Team.AWAY, 35.0, float(y)))
+        frames.append(Frame(t=t, players=players, ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_defense_distribution_detects_60():
+    """A védekező (AWAY) csapat felderítve: leggyakoribb forma 6-0."""
+    rep = scout_team(_attack_60(), Team.AWAY)
+    assert rep.defense_main == "6-0"
+    assert rep.defense_distribution.get("6-0", 0) > 0
+
+
+def test_attack_share_for_attacking_team():
+    """A támadó (HOME) csapatnál magas a szervezett-támadás arány."""
+    rep = scout_team(_attack_60(), Team.HOME)
+    assert rep.attack_share_pct > 50.0
+
+
+def test_keys_to_game_mention_60():
+    """A 6-0 fal ellen konkrét edzői kulcsot ad."""
+    rep = scout_team(_attack_60(), Team.AWAY)
+    assert any("6-0" in k for k in rep.keys_to_game)
+
+
+def test_shot_and_goal_counting():
+    """Lövés/gól számolás és hatékonyság a felderített csapatra."""
+    # HAZAI gyorsan a x=40 kapu felé lő (gól), majd a labda a kapuvonalra ér.
+    frames = []
+    xs = [30, 33, 36, 39, 40.0]  # gyorsan a kapu felé
+    for t, x in enumerate(xs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x - 1, 10.0)],
+                            ball=Ball(x=float(x), y=10.0, confidence=1.0)))
+    m = Match(_meta(), frames)
+    rep = scout_team(m, Team.HOME)
+    assert rep.shots >= 1
+    assert 0.0 <= rep.shot_efficiency_pct <= 100.0
+
+
+def test_key_players_ranked_by_possession():
+    """A legtöbbet birtokló játékos kerül előre a kulcsjátékosok közé."""
+    rep = scout_team(_attack_60(), Team.HOME)
+    assert len(rep.key_players) >= 1
+    # az 1-es (a labdás) birtoklás-ideje a legnagyobb
+    assert rep.key_players[0]["track_id"] == 1
+    assert rep.key_players[0]["possession_frames"] > 0
+
+
+def test_combine_reports_aggregates():
+    """Több meccs egyesítése: matches nő, forma marad, számok összeadódnak."""
+    r1 = scout_team(_attack_60(), Team.AWAY)
+    r2 = scout_team(_attack_60(), Team.AWAY)
+    comb = combine_reports([r1, r2])
+    assert comb.matches == 2
+    assert comb.defense_main == "6-0"
+    assert comb.num_figures == r1.num_figures + r2.num_figures
+
+
+def test_combine_single_returns_same():
+    """Egyetlen jelentés egyesítése önmagát adja."""
+    r1 = scout_team(_attack_60(), Team.AWAY)
+    assert combine_reports([r1]) is r1
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as e:
+                failures += 1
+                print(f"FAIL {name}: {e}")
+    print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
+    raise SystemExit(1 if failures else 0)

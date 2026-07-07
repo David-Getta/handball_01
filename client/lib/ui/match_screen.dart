@@ -17,6 +17,7 @@ import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "decisions_panel.dart";
 import "designer_screen.dart";
+import "scouting_screen.dart";
 import "heatmap_painter.dart";
 import "shell/app_shell.dart";
 import "stats_panel.dart";
@@ -174,6 +175,23 @@ class _MatchScreenState extends State<MatchScreen> {
         const SizedBox(width: AppSpacing.lg),
         _chip(_sourceLabel),
         const Spacer(),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ScoutingScreen(
+                matchId: match.meta.matchId,
+                homeName: match.meta.homeTeam,
+                awayName: match.meta.awayTeam,
+                team: "away",
+              ),
+            ),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+          icon: const Icon(Icons.assignment_outlined, size: 18),
+          label: const Text("Felderítés"),
+        ),
+        const SizedBox(width: AppSpacing.sm),
         OutlinedButton.icon(
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => DesignerScreen(match: match)),

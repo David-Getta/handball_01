@@ -18,6 +18,8 @@ Végpontok (MVP):
 - DELETE /matches/{match_id}        → meccs törlése (memória + lemez).
 - GET  /matches/{match_id}/stats    → játékosonkénti statisztika.
 - GET  /matches/{match_id}/coaching → élő edzői javaslatok (idővonal vagy egy frame).
+- GET  /matches/{match_id}/scouting → ellenfél-felderítő jelentés egy csapatról.
+- POST /scouting                     → több meccsből egyesített felderítés.
 
 Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + objektumtár.
 """
@@ -29,6 +31,7 @@ from ..pipeline.pipeline import summarize
 from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 from ..pipeline.tactics import team_style_profile, TacticsConfig
 from ..pipeline.coaching import suggest_for_frame, coaching_timeline
+from ..pipeline.scouting import scout_team, combine_reports, report_to_dict
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
 from ..pipeline.event_detection import detect_events, event_counts
@@ -272,6 +275,44 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         return team_style_profile(match)
+
+    @app.get("/matches/{match_id}/scouting")
+    def get_scouting(match_id: str, team: str = "away"):
+        """Ellenfél-felderítő jelentés a megadott csapatról EGY meccsből.
+
+        `team`: melyik csapatot derítjük fel ('home'/'away'). A jelentés edzői
+        nyelven adja a védekezést, tempót, befejezést, kulcsjátékosokat és a
+        "hogyan játssz ellenük" kulcsokat."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            t = Team(team)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
+        return report_to_dict(scout_team(match, t, TacticsConfig()))
+
+    @app.post("/scouting")
+    def combined_scouting(body: dict):
+        """TÖBB meccsből egyesített felderítő jelentés egy csapatról.
+
+        Törzs: {"items": [{"match_id": "...", "team": "home"|"away"}, ...]}.
+        Több meccs adja a valós, zajmentes profilt (a számokat átlagolja/összegzi).
+        """
+        items = body.get("items")
+        if not items or not isinstance(items, list):
+            raise HTTPException(status_code=400, detail="items required")
+        reports = []
+        for it in items:
+            m = _store.get(it.get("match_id"))
+            if m is None:
+                raise HTTPException(status_code=404, detail=f"match not found: {it.get('match_id')}")
+            try:
+                t = Team(it.get("team", "away"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
+            reports.append(scout_team(m, t, TacticsConfig()))
+        return report_to_dict(combine_reports(reports))
 
     @app.get("/matches/{match_id}/coaching")
     def get_coaching(match_id: str, t: int = -1):

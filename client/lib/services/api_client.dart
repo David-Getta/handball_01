@@ -30,6 +30,17 @@ class ApiClient {
     }
   }
 
+  /// Ellenfél-felderítő jelentés egy csapatról EGY meccsből (GET .../scouting).
+  Future<Map<String, dynamic>> fetchScouting(String matchId, String team) async {
+    final uri = Uri.parse("$baseUrl/matches/$matchId/scouting")
+        .replace(queryParameters: {"team": team});
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a felderítés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A tárolt meccsek listája (könyvtár/áttekintő nézethez). Minden elem összegző
   /// szótár: match_id, home_team, away_team, num_frames, fps, duration_s.
   Future<List<Map<String, dynamic>>> listMatches() async {
