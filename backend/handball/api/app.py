@@ -172,6 +172,7 @@ def create_app():
                     calib_corners=body.get("calib"),
                     start=int(body.get("start", 0)),
                     progress_cb=cb, match_id=match_id,
+                    estimate=bool(body.get("estimate", True)),
                 )
                 app.state.put_match(match)
                 job["status"] = "done"

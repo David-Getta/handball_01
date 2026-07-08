@@ -7,14 +7,19 @@ Detektáló módok:
     Bíró-szűrő (sárga mez) kiveszi a játékvezetőket.
   - HOG (alap): OpenCV beépített, letöltés nélkül; gyenge kis/gyors játékosokra.
 
-FIGYELEM: kalibráció (homográfia) EGYELŐRE nincs — kép→pálya egyszerű aránnyal.
-Emiatt a pályán KÍVÜLI személyek (kispad, edző, néző) is bekerülhetnek; ezt a
-kalibráció + pálya-régió szűrő oldja meg ([A], CourtRegion). A perspektíva is
-torzít kalibráció nélkül.
+Kalibrációval (--calib, 4 pálya-sarok):
+- homográfia: kép → valós méter-koordináták, a pályán kívüliek (kispad, edző)
+  szűrése (CourtRegion),
+- pásztázás-követés: a kamera mozgásának kompenzálása (a kalibráció a pásztázás
+  közben is érvényes marad) — a sarkokat a --start képkockához kell felvenni,
+- képen kívüli becslés: a képből kilógó játékosok pótlása mozgásmodellel
+  (source=ESTIMATED, halványítva a kliensben); kikapcsolás: --no-estimate.
+Kalibráció nélkül egyszerű arányos kép→pálya leképezés (pontatlan, csak teszthez).
 
 Használat:
     python -m scripts.process_video BE.mp4 KI.json [--weights yolov8n.pt]
-        [--stride N] [--max N] [--imgsz 1280] [--conf 0.20]
+        [--stride N] [--max N] [--imgsz 1280] [--conf 0.20] [--start N]
+        [--calib calib.json] [--no-skip-dark] [--no-estimate]
 """
 
 from __future__ import annotations
@@ -226,7 +231,7 @@ def _process_hog(video_path, stride, max_frames):
 
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
             conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
-            progress_cb=None, match_id="video-1"):
+            progress_cb=None, match_id="video-1", estimate=True):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -325,9 +330,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     if region is not None:
         print(f"kalibrációval: pályán kívüli detektálás eldobva: {dropped}")
 
-    # [F] képen kívüli becslés — jelenleg a becslés az elemző rétegben történik.
+    # [F] képen kívüli becslés — a pásztázó kamera képéből kilógó játékosokat
+    # mozgásmodellel pótoljuk (source=ESTIMATED, csökkenő confidence), hogy a
+    # felülnézeten a TELJES csapat látszódjon. Csak kalibrációval értelmes
+    # (ott valós méter-koordináták vannak).
     report("F", 0.95, "képen kívüli becslés")
     match = Match(meta=meta, frames=frames)
+    if estimate and calib_corners:
+        from handball.pipeline.estimation import augment_match_with_estimates
+        added = augment_match_with_estimates(match)
+        print(f"képen kívüli becslés: {added} becsült pozíció pótolva")
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:
@@ -355,7 +367,8 @@ def main(argv):
             stride=opt("--stride", 3, int), max_frames=opt("--max", 400, int),
             imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float),
             court_poly=court_poly, calib_corners=calib,
-            start=opt("--start", 0, int), skip_dark="--no-skip-dark" not in argv)
+            start=opt("--start", 0, int), skip_dark="--no-skip-dark" not in argv,
+            estimate="--no-estimate" not in argv)
     return 0
 
 
