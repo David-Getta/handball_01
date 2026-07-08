@@ -15,6 +15,7 @@ Végpontok (MVP):
 - GET  /jobs/{job_id}              → a feldolgozás állapota (stage/progress/message).
 - GET  /matches                     → a tárolt meccsek listája (könyvtár nézet).
 - GET  /matches/{match_id}          → a Match (Tracking) JSON-ja.
+- PATCH /matches/{match_id}         → metaadat-frissítés (csapatnevek átírása).
 - DELETE /matches/{match_id}        → meccs törlése (memória + lemez).
 - GET  /matches/{match_id}/stats    → játékosonkénti statisztika.
 - GET  /matches/{match_id}/coaching → élő edzői javaslatok (idővonal vagy egy frame).
@@ -173,6 +174,8 @@ def create_app():
                     start=int(body.get("start", 0)),
                     progress_cb=cb, match_id=match_id,
                     estimate=bool(body.get("estimate", True)),
+                    home_team=body.get("home_team") or "Csapat A",
+                    away_team=body.get("away_team") or "Csapat B",
                 )
                 app.state.put_match(match)
                 job["status"] = "done"
@@ -222,6 +225,27 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         return match.to_dict()
+
+    @app.patch("/matches/{match_id}")
+    def update_match(match_id: str, body: dict):
+        """A meccs metaadatainak frissítése (jelenleg: csapatnevek átírása).
+
+        Törzs: {"home_team": "...", "away_team": "..."} — bármelyik elhagyható.
+        A módosítás a lemezre is kiíródik, így újraindítás után is megmarad."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        home = body.get("home_team")
+        away = body.get("away_team")
+        if home is None and away is None:
+            raise HTTPException(status_code=400, detail="home_team or away_team required")
+        if home is not None:
+            match.meta.home_team = str(home).strip() or match.meta.home_team
+        if away is not None:
+            match.meta.away_team = str(away).strip() or match.meta.away_team
+        _put_match(match)  # memóriába + lemezre (perzisztencia)
+        return {"match_id": match_id,
+                "home_team": match.meta.home_team, "away_team": match.meta.away_team}
 
     @app.delete("/matches/{match_id}")
     def delete_match(match_id: str):

@@ -52,6 +52,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Csapatnevek átírása — a könyvtár és a felderítő jelentés is az újat mutatja.
+  Future<void> _rename(Map<String, dynamic> m) async {
+    final homeCtrl = TextEditingController(text: (m["home_team"] as String?) ?? "");
+    final awayCtrl = TextEditingController(text: (m["away_team"] as String?) ?? "");
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Csapatnevek"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: homeCtrl,
+              decoration: const InputDecoration(
+                labelText: "Hazai csapat",
+                prefixIcon: Icon(Icons.groups, size: 18, color: AppColors.home),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: awayCtrl,
+              decoration: const InputDecoration(
+                labelText: "Vendég csapat",
+                prefixIcon: Icon(Icons.groups, size: 18, color: AppColors.away),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.updateMatchNames(m["match_id"] as String,
+          homeTeam: homeCtrl.text.trim(), awayTeam: awayCtrl.text.trim());
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Átnevezési hiba: $e")));
+    }
+  }
+
   Future<void> _delete(String matchId) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -227,6 +278,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Text(meta, style: AppText.label.copyWith(fontSize: 12)),
                 ],
               ),
+            ),
+            IconButton(
+              onPressed: () => _rename(m),
+              icon: const Icon(Icons.edit_outlined, color: AppColors.textFaint),
+              tooltip: "Csapatnevek átírása",
             ),
             IconButton(
               onPressed: () => _delete(id),

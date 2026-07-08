@@ -53,6 +53,24 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Átírja a meccs csapatneveit (PATCH /matches/{id}) — a könyvtár és a
+  /// felderítő jelentés is az új neveket mutatja; lemezre is mentődik.
+  Future<void> updateMatchNames(String matchId,
+      {String? homeTeam, String? awayTeam}) async {
+    final body = <String, dynamic>{
+      if (homeTeam != null) "home_team": homeTeam,
+      if (awayTeam != null) "away_team": awayTeam,
+    };
+    final resp = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(body),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült átnevezni: HTTP ${resp.statusCode}");
+    }
+  }
+
   /// Töröl egy meccset a backendről (memória + lemez).
   Future<void> deleteMatch(String matchId) async {
     final resp = await http.delete(Uri.parse("$baseUrl/matches/$matchId"));
@@ -129,6 +147,8 @@ class ApiClient {
     int start = 0,
     List<List<int>>? calib,
     String? matchId,
+    String? homeTeam,
+    String? awayTeam,
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -138,6 +158,8 @@ class ApiClient {
       if (weights != null) "weights": weights,
       if (calib != null) "calib": calib,
       if (matchId != null) "match_id": matchId,
+      if (homeTeam != null && homeTeam.isNotEmpty) "home_team": homeTeam,
+      if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,
     };
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/process"),

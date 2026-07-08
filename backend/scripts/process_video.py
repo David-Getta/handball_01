@@ -231,7 +231,8 @@ def _process_hog(video_path, stride, max_frames):
 
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
             conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
-            progress_cb=None, match_id="video-1", estimate=True):
+            progress_cb=None, match_id="video-1", estimate=True,
+            home_team="Csapat A", away_team="Csapat B"):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -309,7 +310,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
 
     # [E] pálya-koordináta (homográfia/arányos) + [F] pályán kívüliek szűrése.
     report("E", 0.90, "pálya-koordináta")
-    meta = MatchMeta(match_id=match_id, home_team="Csapat A", away_team="Csapat B",
+    meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
                      fps=fps / stride, frame_width=W, frame_height=H)
     frames = []
     dropped = 0
