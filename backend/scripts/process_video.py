@@ -96,12 +96,18 @@ def _resolve_weights(weights):
 
 
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                  court_poly=None, start=0, skip_dark=True, on_frame=None):
+                  court_poly=None, start=0, skip_dark=True, on_frame=None, pan=False):
     import numpy as np
     import cv2
     from ultralytics import YOLO
     model = YOLO(_resolve_weights(weights))
     poly = np.array(court_poly, np.int32) if court_poly else None
+    # Pásztázás-követés: a kamera mozgását becsüljük, hogy a kalibráció a
+    # pásztázás közben is érvényes maradjon (aktuális → alap képkocka mátrix).
+    pan_tracker = None
+    if pan:
+        from handball.pipeline.pan_tracking import PanTracker
+        pan_tracker = PanTracker()
     raw, all_colors = [], []
     # EGY menet nagy felbontáson (1920) + alacsony küszöb (0.05), hogy a kis labdát
     # is elkapja; a JÁTÉKOSOKAT utólag szűrjük a megadott (magasabb) küszöbre, hogy
@@ -124,6 +130,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         kept += 1
         if on_frame is not None:  # élő haladás-jelzés a hívónak (job-státusz)
             on_frame(kept, max_frames)
+        # Kameramozgás frissítése (az ALAP = az első feldolgozott képkocka; a
+        # kalibrációt ehhez a képkockához kell felvenni — lásd --start).
+        panH = None
+        if pan_tracker is not None:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            panH = pan_tracker.update(gray)
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -145,9 +157,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     if best_ball is None or bc > best_ball[0]:
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
         ball_xy = (best_ball[1], best_ball[2]) if best_ball else None
-        raw.append((persons, ball_xy))
+        raw.append((persons, ball_xy, panH))
     if skipped_dark:
         print(f"sötét bevezető képkocka kihagyva: {skipped_dark}")
+    if pan_tracker is not None:
+        tx, ty = pan_tracker.translation
+        print(f"pásztázás-követés: össz-elmozdulás a végére: ({tx:.0f}, {ty:.0f}) px")
     return raw, all_colors
 
 
@@ -203,7 +218,7 @@ def _process_hog(video_path, stride, max_frames):
             color = _torso_color(small, x1, y1, x2, y2)
             all_colors.append(color)
             persons.append((ids[(cx, (y1 + y2) / 2.0)], cx / scale, y2 / scale, color))
-        raw.append((persons, None))
+        raw.append((persons, None, None))  # HOG-nál nincs labda és pásztázás-mátrix
         out_i += 1
     cap.release()
     return raw, all_colors
@@ -240,8 +255,10 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         report("B", 0.05 + 0.70 * (kept / max(1, total)), f"detektálás {kept}/{total}")
 
     if weights:
+        # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
         raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                                        court_poly, start=start, skip_dark=skip_dark, on_frame=on_frame)
+                                        court_poly, start=start, skip_dark=skip_dark,
+                                        on_frame=on_frame, pan=bool(calib_corners))
     else:
         raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
@@ -275,8 +292,13 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         def to_court(px, py):
             return apply_homography(Himg2court, px, py)
 
-    def map_xy(px, py):
+    def map_xy(px, py, panH=None):
         if to_court is not None:
+            if panH is not None:
+                # Előbb vissza az ALAP képkocka koordinátáiba (a kamera mozgásának
+                # kompenzálása), és csak utána a pálya-homográfia.
+                from handball.pipeline.pan_tracking import apply_h
+                px, py = apply_h(panH, px, py)
             return to_court(px, py)
         return (px / W * COURT_LENGTH_M, py / H * COURT_WIDTH_M)  # kalibráció nélkül: arányos
 
@@ -286,10 +308,10 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                      fps=fps / stride, frame_width=W, frame_height=H)
     frames = []
     dropped = 0
-    for t, (persons, ball_xy) in enumerate(raw):
+    for t, (persons, ball_xy, panH) in enumerate(raw):
         players = []
         for (tid, fx, fy, color) in persons:
-            cx, cy = map_xy(fx, fy)
+            cx, cy = map_xy(fx, fy, panH)
             if region is not None and not region.contains(cx, cy):
                 dropped += 1
                 continue  # pályán kívül (kispad/edző/néző)
@@ -297,7 +319,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                                           x=cx, y=cy, source=PositionSource.MEASURED, confidence=1.0))
         ball = None
         if ball_xy:
-            bx, by = map_xy(ball_xy[0], ball_xy[1])
+            bx, by = map_xy(ball_xy[0], ball_xy[1], panH)
             ball = Ball(x=bx, y=by, confidence=1.0)
         frames.append(Frame(t=t, players=players, ball=ball))
     if region is not None:

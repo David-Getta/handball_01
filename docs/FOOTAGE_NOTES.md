@@ -69,3 +69,14 @@
 - **Teszt-recept** (tartalmas rész, összefüggő képkockák a birtokláshoz):
   `python -m scripts.process_video BE.mp4 KI.json --weights yolov8n.pt
    --stride 1 --max 20 --start 180 --calib calib.json`
+
+## Pásztázás-követés (pan tracking) — használat
+- Kalibrációval (`--calib`) a feldolgozó mostantól **kompenzálja a kamera
+  pásztázását**: képkockánként megbecsüli a kamera mozgását (Shi–Tomasi +
+  Lucas–Kanade + RANSAC), és a detektált pontokat előbb visszaforgatja az
+  alap-képkockába, csak utána vetíti a pályára.
+- **FONTOS**: a 4 sarkot ahhoz a képkockához kell felvenni, AMELYIKTŐL a
+  feldolgozás indul (`--start N`) — a kalibráló képernyő alapból a 180-as
+  képkockát tölti be, a teszt-recept is `--start 180`-nal fut. Így a kettő
+  ugyanarra a képre vonatkozik.
+- A futás végén a napló kiírja az össz-elmozdulást px-ben (diagnosztika).
