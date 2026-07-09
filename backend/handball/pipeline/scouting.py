@@ -73,6 +73,9 @@ class ScoutingReport:
     goals: int = 0
     turnovers: int = 0
     shot_efficiency_pct: float = 0.0
+    # Lövési zónák: zóna -> {"shots": n, "goals": n} — HONNAN lőnek és honnan
+    # eredményesek (balszél / beálló / átlövés bal-közép-jobb / jobbszél).
+    shot_zones: dict = field(default_factory=dict)
     # Kulcsjátékosok + edzői kulcsok
     key_players: list = field(default_factory=list)
     strengths: list = field(default_factory=list)
@@ -130,6 +133,52 @@ def _defense_distribution(match: Match, team: Team, config: TacticsConfig) -> di
     if not total:
         return {}
     return {k: round(100.0 * v / total, 1) for k, v in sorted(tally.items(), key=lambda kv: -kv[1])}
+
+
+def _shot_zone(bx: float, by: float, attacked_goal_x: float) -> str:
+    """A lövés helyének kézilabdás zóna-címkéje a TÁMADÓ szemszögéből.
+
+    A bal/jobb oldalt a támadás irányához igazítjuk (a +x kapura támadva a
+    balszél az alacsony y; a -x kapura fordítva). Zónák:
+    - balszél / jobbszél: a kapuhoz közel, a szélső sávban,
+    - beálló (6 m): közel, középen,
+    - átlövés bal/közép/jobb: távolabbról (~9 m-től).
+    """
+    dist = abs(bx - attacked_goal_x)
+    # Bal/jobb a támadó szemszögéből: +x kapu felé az alacsony y a BAL oldal.
+    left = by < COURT_WIDTH_M * 0.30
+    right = by > COURT_WIDTH_M * 0.70
+    if attacked_goal_x < COURT_LENGTH_M / 2.0:
+        left, right = right, left  # a -x kapura támadva tükrözve
+    if dist <= 9.0 and (left or right):
+        return "balszél" if left else "jobbszél"
+    if dist <= 7.5:
+        return "beálló (6 m)"
+    if left:
+        return "átlövés bal"
+    if right:
+        return "átlövés jobb"
+    return "átlövés közép"
+
+
+def _shot_zones(match: Match, team: Team, config: TacticsConfig) -> dict:
+    """Zóna -> {"shots": n, "goals": n} a csapat lövéseiből (eseményekből)."""
+    frames_by_t = {f.t: f for f in match.frames}
+    zones: dict[str, dict] = {}
+    goal_x = config.attacks_toward_x(team)
+    for e in detect_events(match, config):
+        if e.team != team or e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        frame = frames_by_t.get(e.t)
+        if frame is None or frame.ball is None:
+            continue
+        z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)
+        rec = zones.setdefault(z, {"shots": 0, "goals": 0})
+        rec["shots"] += 1
+        if e.type == EventType.GOAL:
+            rec["goals"] += 1
+    # A leggyakoribb zóna elöl (a jelentésben így olvasható).
+    return dict(sorted(zones.items(), key=lambda kv: -kv[1]["shots"]))
 
 
 def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) -> list[KeyPlayer]:
@@ -194,6 +243,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     if rep.turnovers >= 3 and rep.turnovers >= rep.shots:
         weaknesses.append("Sok labdaeladás — agresszív, aktív védekezés kifizetődő ellenük.")
 
+    # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
+    # konkrét védekezési kulcsot adunk rá.
+    total_shots = sum(z["shots"] for z in rep.shot_zones.values())
+    if total_shots >= 3:
+        zone, rec = next(iter(rep.shot_zones.items()))
+        share = 100.0 * rec["shots"] / total_shots
+        if share >= 40.0:
+            keys.append(f"Lövéseik zöme ({share:.0f}%) innen jön: {zone} — ott zárj szorosabban.")
+        for zone, rec in rep.shot_zones.items():
+            if rec["shots"] >= 3 and rec["goals"] / rec["shots"] >= 0.6:
+                strengths.append(f"Nagyon eredményesek innen: {zone} "
+                                 f"({rec['goals']}/{rec['shots']} gól).")
+                break
+
     if not keys:
         keys.append("Kevés a minta — több meccsük felderítése pontosít.")
     return strengths, weaknesses, keys
@@ -242,6 +305,7 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         goals=goals,
         turnovers=turnovers,
         shot_efficiency_pct=round(eff, 1),
+        shot_zones=_shot_zones(match, team, config),
         key_players=[asdict(k) for k in _key_players(match, team, config)],
     )
     s, w, k = _coach_keys(rep)
@@ -271,6 +335,15 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             merged_dist[k] = merged_dist.get(k, 0.0) + v / n
     merged_dist = {k: round(v, 1) for k, v in sorted(merged_dist.items(), key=lambda kv: -kv[1])}
 
+    # Lövési zónák egyesítése: zónánként összegzett lövés/gól.
+    merged_zones: dict[str, dict] = {}
+    for r in reports:
+        for z, rec in r.shot_zones.items():
+            m = merged_zones.setdefault(z, {"shots": 0, "goals": 0})
+            m["shots"] += rec["shots"]
+            m["goals"] += rec["goals"]
+    merged_zones = dict(sorted(merged_zones.items(), key=lambda kv: -kv[1]["shots"]))
+
     shots = sum(r.shots for r in reports)
     goals = sum(r.goals for r in reports)
     rep = ScoutingReport(
@@ -291,6 +364,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         goals=goals,
         turnovers=sum(r.turnovers for r in reports),
         shot_efficiency_pct=round(100.0 * goals / shots, 1) if shots else 0.0,
+        shot_zones=merged_zones,
         key_players=[],  # játékos-azonosítók meccsenként eltérők; összevonás nem triviális
     )
     s, w, k = _coach_keys(rep)

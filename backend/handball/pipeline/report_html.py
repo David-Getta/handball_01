@@ -43,6 +43,23 @@ def _defense_bars(dist: dict) -> str:
     return "".join(out)
 
 
+def _shot_zone_bars(zones: dict) -> str:
+    """Lövési zónák sávokkal: zóna, lövésszám-arány, "gól/lövés" felirat."""
+    if not zones:
+        return '<p class="empty">Nincs elég lövés-minta.</p>'
+    total = sum(int(rec.get("shots", 0)) for rec in zones.values()) or 1
+    out = []
+    for zone, rec in zones.items():
+        shots = int(rec.get("shots", 0))
+        goals = int(rec.get("goals", 0))
+        p = max(0.0, min(100.0, 100.0 * shots / total))
+        out.append(
+            f'<div class="bar-row"><span class="bar-label">{escape(str(zone))}</span>'
+            f'<span class="bar"><span class="bar-fill gold" style="width:{p:.0f}%"></span></span>'
+            f'<span class="bar-pct">{goals}/{shots}</span></div>')
+    return "".join(out)
+
+
 def _players(key_players: list) -> str:
     if not key_players:
         return '<p class="empty">Több meccs felderítése pontosítja a játékos-profilt.</p>'
@@ -104,6 +121,7 @@ def scouting_report_html(rep: ScoutingReport) -> str:
   .bar-label {{ width: 120px; font-weight: 600; }}
   .bar {{ flex: 1; height: 9px; background: #edf1f6; border-radius: 5px; overflow: hidden; }}
   .bar-fill {{ display: block; height: 100%; background: #12988a; border-radius: 5px; }}
+  .bar-fill.gold {{ background: #9d7526; }}
   .bar-pct {{ width: 42px; text-align: right; color: #4A5768; font-size: 12px; }}
   table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
   th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #e4e9f0; }}
@@ -144,6 +162,9 @@ def scouting_report_html(rep: ScoutingReport) -> str:
 
   <h2>Mutatók</h2>
   <div class="metrics">{metrics}</div>
+
+  <h2>Honnan lőnek (gól/lövés)</h2>
+  {_shot_zone_bars(rep.shot_zones)}
 
   <h2>Védekezésük (amikor ők védenek)</h2>
   {_defense_bars(rep.defense_distribution)}

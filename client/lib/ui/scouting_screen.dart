@@ -201,6 +201,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         const SizedBox(height: AppSpacing.lg),
         _metricsCard(r),
         const SizedBox(height: AppSpacing.lg),
+        _shotZonesCard(r),
+        const SizedBox(height: AppSpacing.lg),
         _defenseCard(r),
         const SizedBox(height: AppSpacing.lg),
         _keyPlayersCard(r),
@@ -313,6 +315,59 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           Text(label, style: AppText.label.copyWith(fontSize: 11)),
         ],
       ),
+    );
+  }
+
+  /// Lövési zónák: honnan lőnek és honnan eredményesek (gól/lövés zónánként).
+  Widget _shotZonesCard(Map<String, dynamic> r) {
+    final zones = (r["shot_zones"] as Map?)?.cast<String, dynamic>() ?? {};
+    // Összes lövés a sáv-arányokhoz.
+    int total = 0;
+    for (final v in zones.values) {
+      total += ((v as Map)["shots"] as num?)?.toInt() ?? 0;
+    }
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("HONNAN LŐNEK (gól/lövés)", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.md),
+          if (zones.isEmpty)
+            Text("Nincs elég lövés-minta.", style: AppText.label)
+          else
+            for (final e in zones.entries)
+              _zoneBar(e.key, (e.value as Map).cast<String, dynamic>(), total),
+        ],
+      ),
+    );
+  }
+
+  Widget _zoneBar(String zone, Map<String, dynamic> rec, int total) {
+    final shots = (rec["shots"] as num?)?.toInt() ?? 0;
+    final goals = (rec["goals"] as num?)?.toInt() ?? 0;
+    final frac = total > 0 ? shots / total : 0.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        SizedBox(width: 110, child: Text(zone, style: AppText.value.copyWith(fontSize: 13))),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: frac.clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: AppColors.surfaceAlt,
+              valueColor: const AlwaysStoppedAnimation(AppColors.gold),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        SizedBox(width: 44, child: Text("$goals/$shots",
+            textAlign: TextAlign.right, style: AppText.label.copyWith(fontSize: 12))),
+      ]),
     );
   }
 

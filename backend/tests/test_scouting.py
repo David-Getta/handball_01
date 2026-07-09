@@ -16,7 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from handball.models.tracking import (
     Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
 )
-from handball.pipeline.scouting import scout_team, combine_reports, ScoutingReport
+from handball.pipeline.scouting import (
+    scout_team, combine_reports, ScoutingReport, _shot_zone,
+)
 
 
 def _pl(track_id, team, x, y):
@@ -91,6 +93,45 @@ def test_combine_reports_aggregates():
     assert comb.matches == 2
     assert comb.defense_main == "6-0"
     assert comb.num_figures == r1.num_figures + r2.num_figures
+
+
+def test_shot_zone_labels():
+    """A zóna-címkék helyesek, a bal/jobb a támadás irányához igazodik."""
+    assert _shot_zone(34.0, 2.0, 40.0) == "balszél"
+    assert _shot_zone(34.0, 18.0, 40.0) == "jobbszél"
+    assert _shot_zone(34.0, 10.0, 40.0) == "beálló (6 m)"
+    assert _shot_zone(30.0, 10.0, 40.0) == "átlövés közép"
+    assert _shot_zone(30.0, 3.0, 40.0) == "átlövés bal"
+    # a -x kapura támadva a bal/jobb tükröződik
+    assert _shot_zone(6.0, 2.0, 0.0) == "jobbszél"
+    assert _shot_zone(10.0, 17.0, 0.0) == "átlövés bal"
+
+
+def test_shot_zones_in_report():
+    """A jelentésben megjelennek a lövési zónák (a szintetikus gól zónájával)."""
+    frames = []
+    xs = [30, 33, 36, 39, 40.0]  # gyors lövés a +x kapura, középről
+    for t, x in enumerate(xs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x - 1, 10.0)],
+                            ball=Ball(x=float(x), y=10.0, confidence=1.0)))
+    rep = scout_team(Match(_meta(), frames), Team.HOME)
+    assert rep.shot_zones, "legalább egy zóna kell"
+    zone = next(iter(rep.shot_zones))
+    assert zone in ("átlövés közép", "beálló (6 m)")
+    assert rep.shot_zones[zone]["shots"] >= 1
+
+
+def test_combine_merges_shot_zones():
+    """Az összevonás zónánként összegzi a lövéseket/gólokat."""
+    frames = []
+    xs = [30, 33, 36, 39, 40.0]
+    for t, x in enumerate(xs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x - 1, 10.0)],
+                            ball=Ball(x=float(x), y=10.0, confidence=1.0)))
+    r1 = scout_team(Match(_meta(), frames), Team.HOME)
+    comb = combine_reports([r1, r1])
+    zone = next(iter(r1.shot_zones))
+    assert comb.shot_zones[zone]["shots"] == 2 * r1.shot_zones[zone]["shots"]
 
 
 def test_combine_single_returns_same():
