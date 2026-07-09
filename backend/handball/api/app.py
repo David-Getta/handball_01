@@ -336,13 +336,8 @@ def create_app():
         html = scouting_report_html(scout_team(match, t, TacticsConfig()))
         return Response(content=html, media_type="text/html; charset=utf-8")
 
-    @app.post("/scouting")
-    def combined_scouting(body: dict):
-        """TÖBB meccsből egyesített felderítő jelentés egy csapatról.
-
-        Törzs: {"items": [{"match_id": "...", "team": "home"|"away"}, ...]}.
-        Több meccs adja a valós, zajmentes profilt (a számokat átlagolja/összegzi).
-        """
+    def _combined_report(body: dict):
+        """Közös segéd: a törzs items-eiből egyesített ScoutingReport-ot épít."""
         items = body.get("items")
         if not items or not isinstance(items, list):
             raise HTTPException(status_code=400, detail="items required")
@@ -356,7 +351,23 @@ def create_app():
             except ValueError:
                 raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
             reports.append(scout_team(m, t, TacticsConfig()))
-        return report_to_dict(combine_reports(reports))
+        return combine_reports(reports)
+
+    @app.post("/scouting")
+    def combined_scouting(body: dict):
+        """TÖBB meccsből egyesített felderítő jelentés egy csapatról.
+
+        Törzs: {"items": [{"match_id": "...", "team": "home"|"away"}, ...]}.
+        Több meccs adja a valós, zajmentes profilt (a számokat átlagolja/összegzi).
+        """
+        return report_to_dict(_combined_report(body))
+
+    @app.post("/scouting/export")
+    def combined_scouting_export(body: dict):
+        """Az egyesített felderítés NYOMTATHATÓ HTML-je (mint az egy-meccses export)."""
+        from fastapi import Response
+        html = scouting_report_html(_combined_report(body))
+        return Response(content=html, media_type="text/html; charset=utf-8")
 
     @app.get("/matches/{match_id}/coaching")
     def get_coaching(match_id: str, t: int = -1):

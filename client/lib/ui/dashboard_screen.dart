@@ -10,6 +10,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "match_screen.dart";
+import "scouting_screen.dart";
 import "shell/app_shell.dart";
 
 class DashboardScreen extends StatefulWidget {
@@ -50,6 +51,101 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Egyesített felderítés: az edző kiválasztja az ellenfél 2-3 meccsét, és
+  /// meccsenként megjelöli, melyik oldalon játszott az ellenfél → egy zajmentes,
+  /// több meccsen alapuló jelentés készül.
+  Future<void> _combinedScouting() async {
+    // Kiválasztás-állapot: match_id -> null (nincs kiválasztva) | "home" | "away".
+    final choice = <String, String?>{for (final m in _matches) m["match_id"] as String: null};
+    final items = await showDialog<List<Map<String, String>>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          final selected = choice.values.where((v) => v != null).length;
+          return AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: const Text("Egyesített felderítés"),
+            content: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Jelöld ki a meccseket, és meccsenként azt az oldalt, amelyiken a "
+                    "FELDERÍTETT csapat játszott.",
+                    style: AppText.label.copyWith(fontSize: 12),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(children: [
+                        for (final m in _matches)
+                          _pickRow(m, choice, setDlg),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Mégse")),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+                onPressed: selected == 0
+                    ? null
+                    : () => Navigator.pop(ctx, [
+                          for (final e in choice.entries)
+                            if (e.value != null)
+                              {"match_id": e.key, "team": e.value!},
+                        ]),
+                child: Text("Felderítés ($selected meccs)"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (items == null || items.isEmpty || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ScoutingScreen(items: items)),
+    );
+  }
+
+  /// Egy meccs sora a kiválasztóban: pipa + a felderített oldal kiválasztása.
+  Widget _pickRow(Map<String, dynamic> m, Map<String, String?> choice,
+      void Function(void Function()) setDlg) {
+    final id = m["match_id"] as String;
+    final home = (m["home_team"] as String?) ?? "Hazai";
+    final away = (m["away_team"] as String?) ?? "Vendég";
+    final val = choice[id];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [
+        Checkbox(
+          value: val != null,
+          activeColor: AppColors.gold,
+          // Pipáláskor alapból a vendég oldalt derítjük fel (tipikus eset).
+          onChanged: (v) => setDlg(() => choice[id] = (v ?? false) ? "away" : null),
+        ),
+        Expanded(child: Text("$home vs $away", style: AppText.value.copyWith(fontSize: 13),
+            overflow: TextOverflow.ellipsis)),
+        if (val != null)
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [
+              ButtonSegment(value: "home", label: Text(home, overflow: TextOverflow.ellipsis)),
+              ButtonSegment(value: "away", label: Text(away, overflow: TextOverflow.ellipsis)),
+            ],
+            selected: {val},
+            onSelectionChanged: (s) => setDlg(() => choice[id] = s.first),
+          ),
+      ]),
+    );
   }
 
   /// Csapatnevek átírása — a könyvtár és a felderítő jelentés is az újat mutatja.
@@ -174,7 +270,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.xl),
-            Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
+            Row(children: [
+              Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
+              const Spacer(),
+              // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
+              OutlinedButton.icon(
+                onPressed: _matches.length < 2 ? null : _combinedScouting,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.gold,
+                  side: BorderSide(
+                      color: _matches.length < 2
+                          ? AppColors.border
+                          : AppColors.gold),
+                ),
+                icon: const Icon(Icons.assignment_outlined, size: 18),
+                label: const Text("Egyesített felderítés"),
+              ),
+            ]),
             const SizedBox(height: AppSpacing.md),
             if (_loading)
               const Padding(

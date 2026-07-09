@@ -41,6 +41,36 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// TÖBB meccsből egyesített felderítés (POST /scouting). Az items elemei:
+  /// {"match_id": ..., "team": "home"|"away"} — meccsenként megadva, melyik
+  /// oldalon játszott a felderített csapat.
+  Future<Map<String, dynamic>> fetchCombinedScouting(
+      List<Map<String, String>> items) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"items": items}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az egyesített felderítés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Az egyesített felderítés nyomtatható HTML-je (POST /scouting/export).
+  Future<Uint8List> fetchCombinedScoutingExport(
+      List<Map<String, String>> items) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"items": items}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// A felderítő jelentés nyomtatható HTML-je bájtokban (GET .../scouting/export).
   /// A kliens fájlba menti; a böngészőből Ctrl+P → PDF.
   Future<Uint8List> fetchScoutingExport(String matchId, String team) async {

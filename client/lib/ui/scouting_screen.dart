@@ -21,12 +21,18 @@ class ScoutingScreen extends StatefulWidget {
   final String awayName;
   final String team; // kezdetben melyik csapatot derítjük fel
 
+  /// EGYESÍTETT mód: ha meg van adva, több meccsből készül a jelentés
+  /// (elemei: {"match_id": ..., "team": ...}); ilyenkor a matchId/team nem számít,
+  /// és a hazai/vendég váltó rejtve van (a team meccsenként rögzített).
+  final List<Map<String, String>>? items;
+
   const ScoutingScreen({
     super.key,
-    required this.matchId,
+    this.matchId = "",
     this.homeName = "Hazai",
     this.awayName = "Vendég",
     this.team = "away",
+    this.items,
   });
 
   @override
@@ -52,7 +58,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       _error = null;
     });
     try {
-      final r = await _api.fetchScouting(widget.matchId, _team);
+      // Egyesített mód: több meccs egy jelentésben; különben egy meccs.
+      final r = widget.items != null
+          ? await _api.fetchCombinedScouting(widget.items!)
+          : await _api.fetchScouting(widget.matchId, _team);
       if (!mounted) return;
       setState(() {
         _report = r;
@@ -72,7 +81,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   Future<void> _export() async {
     if (kIsWeb) return; // desktop-first; weben a böngésző maga tudja nyomtatni
     try {
-      final bytes = await _api.fetchScoutingExport(widget.matchId, _team);
+      final bytes = widget.items != null
+          ? await _api.fetchCombinedScoutingExport(widget.items!)
+          : await _api.fetchScoutingExport(widget.matchId, _team);
       final name = (_report?["team_name"] as String? ?? "ellenfel")
           .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
       final path = await FilePicker.platform.saveFile(
@@ -124,7 +135,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(r != null ? "${r["team_name"]} — felderítés" : "Felderítés", style: AppText.title),
-            Text("Ellenfél-jelentés · edzői kulcsok", style: AppText.subtitle),
+            Text(
+              widget.items != null
+                  ? "Egyesített jelentés · ${widget.items!.length} meccs"
+                  : "Ellenfél-jelentés · edzői kulcsok",
+              style: AppText.subtitle,
+            ),
           ],
         ),
         const Spacer(),
@@ -139,19 +155,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           label: const Text("Mentés / nyomtatás"),
         ),
         const SizedBox(width: AppSpacing.md),
-        // Melyik csapatot derítsük fel.
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: [
-            ButtonSegment(value: "home", label: Text(widget.homeName)),
-            ButtonSegment(value: "away", label: Text(widget.awayName)),
-          ],
-          selected: {_team},
-          onSelectionChanged: (s) {
-            setState(() => _team = s.first);
-            _load();
-          },
-        ),
+        // Melyik csapatot derítsük fel (egyesített módban meccsenként rögzített).
+        if (widget.items == null)
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(value: "home", label: Text(widget.homeName)),
+              ButtonSegment(value: "away", label: Text(widget.awayName)),
+            ],
+            selected: {_team},
+            onSelectionChanged: (s) {
+              setState(() => _team = s.first);
+              _load();
+            },
+          ),
       ],
     );
   }
