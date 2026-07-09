@@ -276,25 +276,36 @@ class _LiveScreenState extends State<LiveScreen> {
 
   Widget _suggestionRow(Suggestion s) {
     final color = _prioColor(s.priority);
+    // FONTOS: BoxDecoration-ben a borderRadius NEM kombinálható egy-oldalú
+    // Borderrel (futásidejű hiba) — a bal színcsíkot külön elemként rajzoljuk.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(10),
-        border: Border(left: BorderSide(color: color, width: 3)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            margin: const EdgeInsets.only(top: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(color: color.withOpacity(0.16), borderRadius: BorderRadius.circular(6)),
-            child: Text(s.category.toUpperCase(),
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.5)),
+          Container(width: 3, color: color), // prioritás-színcsík
+          const SizedBox(width: 9),
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(color: color.withOpacity(0.16), borderRadius: BorderRadius.circular(6)),
+              child: Text(s.category.toUpperCase(),
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.5)),
+            ),
           ),
           const SizedBox(width: 10),
-          Expanded(child: Text(s.text, style: AppText.value.copyWith(fontSize: 13))),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(s.text, style: AppText.value.copyWith(fontSize: 13)),
+            ),
+          ),
+          const SizedBox(width: 12),
         ],
       ),
     );

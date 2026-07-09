@@ -30,6 +30,17 @@ class ApiClient {
     }
   }
 
+  /// A meccs felismert eseményei (passz/lövés/gól/labdaeladás) időrendben —
+  /// az Események-panel ebből épül, kattintásra a lejátszó az eseményre ugrik.
+  Future<List<Map<String, dynamic>>> fetchEvents(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/events"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni az eseményeket: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["events"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Ellenfél-felderítő jelentés egy csapatról EGY meccsből (GET .../scouting).
   Future<Map<String, dynamic>> fetchScouting(String matchId, String team) async {
     final uri = Uri.parse("$baseUrl/matches/$matchId/scouting")

@@ -39,6 +39,9 @@ class _MatchScreenState extends State<MatchScreen> {
   Match? _match;
   Map<int, PlayerStat> _stats = {};
   MatchSummary? _summary;
+  // Felismert események a backendből (passz/lövés/gól/labdaeladás) — kattintásra
+  // a lejátszó az esemény képkockájára ugrik. Demó módban üres.
+  List<Map<String, dynamic>> _events = [];
   int _frameIndex = 0;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
@@ -63,10 +66,16 @@ class _MatchScreenState extends State<MatchScreen> {
   Future<void> _load() async {
     Match match;
     String label;
+    List<Map<String, dynamic>> events = [];
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
         label = "backend · ${match.meta.matchId}";
+        try {
+          events = await _api.fetchEvents(widget.matchId);
+        } catch (_) {
+          events = []; // esemény nélkül is működik a nézet
+        }
       } catch (e) {
         match = buildDemoMatch();
         label = "demó";
@@ -79,6 +88,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _match = match;
       _stats = computePlayerStats(match);
       _summary = computeMatchSummary(match);
+      _events = events;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -143,6 +153,70 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  /// Események-panel: a felismert passzok/lövések/gólok/labdaeladások listája.
+  /// Egy elemre kattintva a lejátszó az esemény képkockájára ugrik.
+  Widget _eventsPanel(Match match) {
+    if (_events.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Text(
+            _sourceLabel == "demó"
+                ? "Az események a backend feldolgozásból jönnek — demó módban nem elérhetők."
+                : "Nincs felismert esemény (ehhez labda-detektálás kell a felvételen).",
+            style: AppText.label,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    return ListView.separated(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      itemCount: _events.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 6),
+      itemBuilder: (_, i) => _eventRow(_events[i], fps, match),
+    );
+  }
+
+  Widget _eventRow(Map<String, dynamic> e, double fps, Match match) {
+    final type = (e["type"] as String?) ?? "";
+    final t = (e["t"] as num?)?.toInt() ?? 0;
+    final team = (e["team"] as String?) == "home" ? match.meta.homeTeam : match.meta.awayTeam;
+    final (label, icon, color) = switch (type) {
+      "goal" => ("GÓL", Icons.sports_score, AppColors.gold),
+      "shot" => ("Lövés", Icons.sports_handball, AppColors.accent),
+      "turnover" => ("Labdaeladás", Icons.swap_horiz, AppColors.away),
+      _ => ("Passz", Icons.arrow_forward, AppColors.textSecondary),
+    };
+    final selected = _frameIndex == t;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      // Ugrás az esemény képkockájára (a lejátszót is megállítjuk).
+      onTap: () => setState(() {
+        _timer?.cancel();
+        _playing = false;
+        _frameIndex = t.clamp(0, match.frames.length - 1);
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.accentSoft : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(label, style: AppText.value.copyWith(fontSize: 12.5, color: color)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(team, style: AppText.label.copyWith(fontSize: 11.5),
+              overflow: TextOverflow.ellipsis)),
+          Text("${(t / fps).toStringAsFixed(1)} s", style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
+      ),
     );
   }
 
@@ -380,15 +454,20 @@ class _MatchScreenState extends State<MatchScreen> {
       decoration: AppTheme.card(),
       clipBehavior: Clip.antiAlias,
       child: DefaultTabController(
-        length: 3,
+        length: 4,
         child: Column(
           children: [
             const TabBar(
               labelColor: AppColors.textPrimary,
               unselectedLabelColor: AppColors.textFaint,
               indicatorColor: AppColors.accent,
-              labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              tabs: [Tab(text: "Statisztika"), Tab(text: "Összegzés"), Tab(text: "Döntések")],
+              labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              tabs: [
+                Tab(text: "Statisztika"),
+                Tab(text: "Összegzés"),
+                Tab(text: "Döntések"),
+                Tab(text: "Események"),
+              ],
             ),
             Expanded(
               child: TabBarView(
@@ -398,6 +477,7 @@ class _MatchScreenState extends State<MatchScreen> {
                       ? const SizedBox()
                       : SummaryPanel(summary: _summary!, homeName: match.meta.homeTeam, awayName: match.meta.awayTeam),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
+                  _eventsPanel(match),
                 ],
               ),
             ),
