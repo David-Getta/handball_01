@@ -5,6 +5,10 @@
 /// tempó, befejezés, kulcsjátékosok. A backend /scouting végpontból tölt.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
+import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -63,6 +67,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     }
   }
 
+  /// A nyomtatható jelentés mentése fájlba (natív "Mentés másként" ablakkal).
+  /// A mentett HTML böngészőben nyitható, onnan Ctrl+P → PDF.
+  Future<void> _export() async {
+    if (kIsWeb) return; // desktop-first; weben a böngésző maga tudja nyomtatni
+    try {
+      final bytes = await _api.fetchScoutingExport(widget.matchId, _team);
+      final name = (_report?["team_name"] as String? ?? "ellenfel")
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Felderítő jelentés mentése",
+        fileName: "felderites_$name.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Jelentés mentve: $path — böngészőből Ctrl+P → PDF")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Export hiba: $e")));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
@@ -98,6 +128,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           ],
         ),
         const Spacer(),
+        // Nyomtatható jelentés mentése (HTML → böngészőből PDF).
+        OutlinedButton.icon(
+          onPressed: _report == null ? null : _export,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.gold,
+            side: const BorderSide(color: AppColors.gold),
+          ),
+          icon: const Icon(Icons.print_outlined, size: 18),
+          label: const Text("Mentés / nyomtatás"),
+        ),
+        const SizedBox(width: AppSpacing.md),
         // Melyik csapatot derítsük fel.
         SegmentedButton<String>(
           showSelectedIcon: false,

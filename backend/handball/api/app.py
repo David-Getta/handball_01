@@ -20,6 +20,7 @@ Végpontok (MVP):
 - GET  /matches/{match_id}/stats    → játékosonkénti statisztika.
 - GET  /matches/{match_id}/coaching → élő edzői javaslatok (idővonal vagy egy frame).
 - GET  /matches/{match_id}/scouting → ellenfél-felderítő jelentés egy csapatról.
+- GET  /matches/{match_id}/scouting/export → nyomtatható HTML-jelentés.
 - POST /scouting                     → több meccsből egyesített felderítés.
 
 Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + objektumtár.
@@ -33,6 +34,7 @@ from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 from ..pipeline.tactics import team_style_profile, TacticsConfig
 from ..pipeline.coaching import suggest_for_frame, coaching_timeline
 from ..pipeline.scouting import scout_team, combine_reports, report_to_dict
+from ..pipeline.report_html import scouting_report_html
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
 from ..pipeline.event_detection import detect_events, event_counts
@@ -316,6 +318,23 @@ def create_app():
         except ValueError:
             raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
         return report_to_dict(scout_team(match, t, TacticsConfig()))
+
+    @app.get("/matches/{match_id}/scouting/export")
+    def export_scouting(match_id: str, team: str = "away"):
+        """A felderítő jelentés NYOMTATHATÓ, önálló HTML-je (böngészőből PDF).
+
+        Az edző ezt menti/nyomtatja a stábnak. Minden stílus beágyazva, offline
+        is megnyitható."""
+        from fastapi import Response
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            t = Team(team)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
+        html = scouting_report_html(scout_team(match, t, TacticsConfig()))
+        return Response(content=html, media_type="text/html; charset=utf-8")
 
     @app.post("/scouting")
     def combined_scouting(body: dict):

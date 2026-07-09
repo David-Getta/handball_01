@@ -41,6 +41,18 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// A felderítő jelentés nyomtatható HTML-je bájtokban (GET .../scouting/export).
+  /// A kliens fájlba menti; a böngészőből Ctrl+P → PDF.
+  Future<Uint8List> fetchScoutingExport(String matchId, String team) async {
+    final uri = Uri.parse("$baseUrl/matches/$matchId/scouting/export")
+        .replace(queryParameters: {"team": team});
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// A tárolt meccsek listája (könyvtár/áttekintő nézethez). Minden elem összegző
   /// szótár: match_id, home_team, away_team, num_frames, fps, duration_s.
   Future<List<Map<String, dynamic>>> listMatches() async {
