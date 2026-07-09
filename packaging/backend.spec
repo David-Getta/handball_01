@@ -39,7 +39,9 @@ for pkg in ["ultralytics", "torch", "torchvision", "cv2", "uvicorn",
 
 # uvicorn dinamikus importjai (protokollok/loopok) — biztos, ami biztos.
 hiddenimports += collect_submodules("uvicorn")
-hiddenimports += ["handball", "scripts"]
+# A feldolgozót az API futásidőben importálja (from scripts.process_video import
+# process), ezért kifejezetten fel kell venni, különben kimarad a csomagból.
+hiddenimports += ["handball", "scripts", "scripts.process_video", "scripts.serve"]
 
 # A YOLO súlyfájl becsomagolása (a build-szkript teszi ide).
 _weights = os.path.join(SPECPATH, "weights", "yolov8n.pt")
@@ -68,7 +70,9 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="handball_backend",
-    console=True,          # háttérben fut; a kimenetét az app naplózza
+    # Ablak NÉLKÜL fut (nincs felvillanó fekete konzol a felhasználónál);
+    # a napló az exe melletti engine.log-ba megy (lásd scripts/serve.py).
+    console=False,
     disable_windowed_traceback=False,
 )
 coll = COLLECT(

@@ -16,18 +16,10 @@ python3 -m pip install -e "backend[ml]" uvicorn pyinstaller
 echo "==> YOLO súlyfájl előkészítése (packaging/weights/yolov8n.pt)…"
 mkdir -p "$HERE/weights"
 if [ ! -f "$HERE/weights/yolov8n.pt" ]; then
-  # Az ultralytics letölti az első példányosításkor; onnan másoljuk a csomagba.
-  python3 - <<'PY'
-from ultralytics import YOLO
-import shutil, os
-YOLO("yolov8n.pt")  # letöltés a gyorsítótárba
-for root, _, files in os.walk(os.path.expanduser("~")):
-    if "yolov8n.pt" in files:
-        shutil.copy(os.path.join(root, "yolov8n.pt"), os.path.join(os.path.dirname(__file__) if False else "packaging/weights", "yolov8n.pt"))
-        print("Súlyfájl bemásolva a csomagba.")
-        break
-PY
+  # Az ultralytics az AKTUÁLIS mappába tölti le a kért súlyfájlt — oda lépünk.
+  (cd "$HERE/weights" && python3 -c "from ultralytics import YOLO; YOLO('yolov8n.pt')")
 fi
+[ -f "$HERE/weights/yolov8n.pt" ] || { echo "HIBA: a súlyfájl letöltése nem sikerült"; exit 1; }
 
 echo "==> PyInstaller…"
 pyinstaller packaging/backend.spec --noconfirm --distpath dist --workpath build/pyi

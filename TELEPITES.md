@@ -7,7 +7,7 @@ alatt működjön a program a gépeden.
 
 ## Windows
 
-1. **Töltsd le** a `SportMachine-Setup.exe` fájlt (a kapott linkről).
+1. **Töltsd le** a `SportMachine-Setup.exe` fájlt a repo **Releases** oldaláról (vagy a kapott linkről).
 2. **Kattints rá duplán.** Ha a Windows figyelmeztetést ad ("Ismeretlen kiadó"),
    kattints a **Több információ → Futtatás mindenképp** gombra. (Ez normális egy
    új programnál.)

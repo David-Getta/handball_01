@@ -15,11 +15,12 @@ python -m pip install -e "backend[ml]" uvicorn pyinstaller
 Write-Host "==> YOLO sulyfajl elokeszitese (packaging\weights\yolov8n.pt)..."
 New-Item -ItemType Directory -Force -Path "$Here\weights" | Out-Null
 if (-not (Test-Path "$Here\weights\yolov8n.pt")) {
+  # Az ultralytics az AKTUALIS mappaba tolti le a kert sulyfajlt - oda lepunk.
+  Push-Location "$Here\weights"
   python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
-  # a letoltott sulyt megkeressuk a felhasznaloi mappaban es bemasoljuk
-  $found = Get-ChildItem -Path $env:USERPROFILE -Recurse -Filter "yolov8n.pt" -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($found) { Copy-Item $found.FullName "$Here\weights\yolov8n.pt" -Force; Write-Host "Sulyfajl bemasolva." }
+  Pop-Location
 }
+if (-not (Test-Path "$Here\weights\yolov8n.pt")) { throw "A sulyfajl letoltese nem sikerult" }
 
 Write-Host "==> PyInstaller..."
 pyinstaller packaging\backend.spec --noconfirm --distpath dist --workpath build\pyi

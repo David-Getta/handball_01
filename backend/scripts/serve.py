@@ -17,7 +17,21 @@ import os
 import sys
 
 
+def _ensure_streams() -> None:
+    """Ablak nélküli (windowed) csomagolt futásnál nincs stdout/stderr — ilyenkor
+    a kimenetet az exe melletti engine.log fájlba irányítjuk, hogy a print/log
+    ne dőljön el, és hiba esetén legyen mit megnézni."""
+    if sys.stdout is None or sys.stderr is None:
+        log_path = os.path.join(os.path.dirname(sys.executable), "engine.log")
+        f = open(log_path, "a", buffering=1, encoding="utf-8", errors="replace")
+        if sys.stdout is None:
+            sys.stdout = f
+        if sys.stderr is None:
+            sys.stderr = f
+
+
 def main() -> int:
+    _ensure_streams()
     import uvicorn
     from handball.api.app import create_app
 
