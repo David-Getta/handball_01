@@ -278,8 +278,140 @@ class _MatchScreenState extends State<MatchScreen> {
           label: const Text("Figura-tervező"),
         ),
         const SizedBox(width: AppSpacing.sm),
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _editSuspensions,
+          icon: const Icon(Icons.timer_outlined, color: AppColors.textSecondary),
+          tooltip: "Kiállítások (2/4 perc)",
+        ),
         IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppColors.textSecondary)),
       ],
+    );
+  }
+
+  /// Kiállítások felvitele: az edző megadja, melyik csapatnál, mikortól és
+  /// mennyi ideig volt emberhátrány — a backend ebből újraszámolja a képen
+  /// kívüli becslést (emberhátrányban nem pótol fantom-játékost).
+  Future<void> _editSuspensions() async {
+    final match = _match;
+    if (match == null) return;
+    // Betöltjük a meglévő rostert (szerkeszthető munkapéldány).
+    List<Map<String, dynamic>> entries = [];
+    try {
+      final r = await _api.fetchRoster(widget.matchId);
+      entries = ((r["suspensions"] as List?) ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (_) {}
+    if (!mounted) return;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Kiállítások"),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Add meg, melyik csapatnál mikortól (másodperc a feldolgozott "
+                  "szakasz elejétől) és mennyi ideig volt emberhátrány.",
+                  style: AppText.label.copyWith(fontSize: 12),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(children: [
+                      for (int i = 0; i < entries.length; i++)
+                        _suspensionRow(match, entries, i, setDlg),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: () => setDlg(() => entries.add({
+                        "team": "away", "start_s": 0.0, "duration_s": 120.0,
+                      })),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text("Kiállítás hozzáadása"),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Mentés"),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    try {
+      final r = await _api.saveRoster(widget.matchId, entries);
+      await _load(); // a frissített (újrabecsült) Tracking betöltése
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Mentve: ${r["suspensions"]} kiállítás · "
+              "${r["estimated_added"]} becsült pozíció újraszámolva")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mentési hiba: $e")));
+    }
+  }
+
+  /// Egy kiállítás sora: csapat + kezdet (mp) + hossz (2/4 perc) + törlés.
+  Widget _suspensionRow(Match match, List<Map<String, dynamic>> entries, int i,
+      void Function(void Function()) setDlg) {
+    final e = entries[i];
+    final startCtrl = TextEditingController(
+        text: ((e["start_s"] as num?)?.toDouble() ?? 0).toStringAsFixed(0));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        DropdownButton<String>(
+          value: (e["team"] as String?) == "home" ? "home" : "away",
+          dropdownColor: AppColors.surfaceAlt,
+          underline: const SizedBox(),
+          items: [
+            DropdownMenuItem(value: "home", child: Text(match.meta.homeTeam)),
+            DropdownMenuItem(value: "away", child: Text(match.meta.awayTeam)),
+          ],
+          onChanged: (v) => setDlg(() => e["team"] = v ?? "away"),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        SizedBox(
+          width: 90,
+          child: TextField(
+            controller: startCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(isDense: true, labelText: "kezdet (mp)"),
+            onChanged: (v) => e["start_s"] = double.tryParse(v) ?? 0.0,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        SegmentedButton<double>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [
+            ButtonSegment(value: 120.0, label: Text("2 perc")),
+            ButtonSegment(value: 240.0, label: Text("4 perc")),
+          ],
+          selected: {((e["duration_s"] as num?)?.toDouble() ?? 120.0) >= 240.0 ? 240.0 : 120.0},
+          onSelectionChanged: (s) => setDlg(() => e["duration_s"] = s.first),
+        ),
+        IconButton(
+          onPressed: () => setDlg(() => entries.removeAt(i)),
+          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.textFaint),
+        ),
+      ]),
     );
   }
 

@@ -249,6 +249,73 @@ def create_app():
         return {"match_id": match_id,
                 "home_team": match.meta.home_team, "away_team": match.meta.away_team}
 
+    def _roster_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.roster.json"
+
+    @app.get("/matches/{match_id}/roster")
+    def get_roster(match_id: str):
+        """A meccshez felvitt kiállítások/kapus-állapot (a szerkesztő ezt tölti be)."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _roster_path(match_id)
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        return {"suspensions": [], "gk_absent_home": False, "gk_absent_away": False}
+
+    @app.post("/matches/{match_id}/roster")
+    def set_roster(match_id: str, body: dict):
+        """Kiállítások felvitele → a képen kívüli becslés ÚJRASZÁMÍTÁSA.
+
+        Törzs: {"suspensions": [{"team": "home"|"away", "start_s": mp,
+        "duration_s": mp}, ...], "gk_absent_home"?, "gk_absent_away"?}.
+        Az időket másodpercben kapjuk (edző-barát), és a meccs fps-ével váltjuk
+        képkockára. A mért pozíciók változatlanok; csak a becsültek számolódnak
+        újra az új létszám-idővonal szerint. A roster lemezre is mentődik.
+        """
+        from ..models.events import RosterTimeline, Suspension
+        from ..pipeline.estimation import reapply_estimates
+
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        fps = match.meta.fps if match.meta.fps > 0 else 25.0
+
+        suspensions = []
+        for s in body.get("suspensions", []):
+            try:
+                team = Team(s["team"])
+                start_s = float(s["start_s"])
+                duration_s = float(s["duration_s"])
+            except (KeyError, TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="invalid suspension entry")
+            if start_s < 0 or duration_s <= 0:
+                raise HTTPException(status_code=400, detail="invalid suspension times")
+            suspensions.append(Suspension(
+                team=team,
+                start_t=round(start_s * fps),
+                duration_t=round(duration_s * fps),
+            ))
+
+        roster = RosterTimeline(
+            suspensions=suspensions,
+            gk_absent_home=bool(body.get("gk_absent_home", False)),
+            gk_absent_away=bool(body.get("gk_absent_away", False)),
+        )
+        added = reapply_estimates(match, roster)
+        _put_match(match)  # a frissített frame-ek lemezre is
+        try:
+            _roster_path(match_id).write_text(
+                json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        return {"match_id": match_id, "suspensions": len(suspensions),
+                "estimated_added": added}
+
     @app.delete("/matches/{match_id}")
     def delete_match(match_id: str):
         """Törli a meccset a memóriából és a lemezről (könyvtár-karbantartás)."""
@@ -257,6 +324,7 @@ def create_app():
         del _store[match_id]
         try:
             _match_path(match_id).unlink(missing_ok=True)
+            _roster_path(match_id).unlink(missing_ok=True)
         except Exception:
             pass
         return {"deleted": match_id}

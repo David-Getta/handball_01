@@ -180,3 +180,17 @@ def augment_match_with_estimates(match: Match,
         frame.players.extend(estimated)
         added += len(estimated)
     return added
+
+
+def reapply_estimates(match: Match, roster: RosterTimeline | None = None) -> int:
+    """ÚJRA-alkalmazza a becslést egy már kiegészített Match-re, új roster szerint.
+
+    Ezt akkor hívjuk, amikor az edző UTÓLAG viszi fel a kiállításokat: a korábbi
+    BECSÜLT pozíciókat eldobjuk (a mértek maradnak), és az új létszám-idővonallal
+    számoljuk újra — így emberhátrányban nem kerül fantom-játékos a pályára.
+    Visszaadja az új becsült pozíciók számát.
+    """
+    for frame in match.frames:
+        frame.players = [p for p in frame.players
+                         if p.source == PositionSource.MEASURED]
+    return augment_match_with_estimates(match, roster)

@@ -30,6 +30,30 @@ class ApiClient {
     }
   }
 
+  /// A meccshez felvitt kiállítások (roster) lekérése.
+  Future<Map<String, dynamic>> fetchRoster(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/roster"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a kiállításokat: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Kiállítások mentése → a backend újraszámolja a képen kívüli becslést.
+  /// suspensions elemei: {"team": "home"|"away", "start_s": mp, "duration_s": mp}.
+  Future<Map<String, dynamic>> saveRoster(
+      String matchId, List<Map<String, dynamic>> suspensions) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/roster"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"suspensions": suspensions}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült menteni a kiállításokat: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A meccs felismert eseményei (passz/lövés/gól/labdaeladás) időrendben —
   /// az Események-panel ebből épül, kattintásra a lejátszó az eseményre ugrik.
   Future<List<Map<String, dynamic>>> fetchEvents(String matchId) async {
