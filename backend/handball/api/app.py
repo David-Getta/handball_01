@@ -178,6 +178,7 @@ def create_app():
                     progress_cb=cb, match_id=match_id,
                     estimate=bool(body.get("estimate", True)),
                     ball_smooth=bool(body.get("ball_smooth", True)),
+                    track_smooth=bool(body.get("track_smooth", True)),
                     home_team=body.get("home_team") or "Csapat A",
                     away_team=body.get("away_team") or "Csapat B",
                 )

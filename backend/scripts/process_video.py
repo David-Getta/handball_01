@@ -19,7 +19,7 @@ Kalibráció nélkül egyszerű arányos kép→pálya leképezés (pontatlan, c
 Használat:
     python -m scripts.process_video BE.mp4 KI.json [--weights yolov8n.pt]
         [--stride N] [--max N] [--imgsz 1280] [--conf 0.20] [--start N]
-        [--calib calib.json] [--no-skip-dark] [--no-estimate] [--no-ball-smooth]
+        [--calib calib.json] [--no-skip-dark] [--no-estimate] [--no-ball-smooth] [--no-track-smooth]
 """
 
 from __future__ import annotations
@@ -232,7 +232,8 @@ def _process_hog(video_path, stride, max_frames):
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
             conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
             progress_cb=None, match_id="video-1", estimate=True,
-            home_team="Csapat A", away_team="Csapat B", ball_smooth=True):
+            home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
+            track_smooth=True):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -338,6 +339,15 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     report("F", 0.95, "képen kívüli becslés")
     match = Match(meta=meta, frames=frames)
 
+    # Játékos-pálya simítás: a detektálási remegés (jitter) csökkentése — a
+    # táv/sebesség statisztika ne a dobozok ugrálását mérje. Csak a mért
+    # pozíciókat érinti, az éles irányváltást a kis ablak megőrzi.
+    if track_smooth:
+        from handball.pipeline.track_filter import smooth_player_tracks
+        ts = smooth_player_tracks(match)
+        if ts:
+            print(f"játékos-simítás: {ts} pozíció simítva")
+
     # Labda-utómunka: a téves (kiugró) észlelések eldobása + a rövid hézagok
     # pótlása — a birtoklás/passz/lövés-felismerés folytonos labda-pályát igényel.
     if ball_smooth:
@@ -380,7 +390,8 @@ def main(argv):
             court_poly=court_poly, calib_corners=calib,
             start=opt("--start", 0, int), skip_dark="--no-skip-dark" not in argv,
             estimate="--no-estimate" not in argv,
-            ball_smooth="--no-ball-smooth" not in argv)
+            ball_smooth="--no-ball-smooth" not in argv,
+            track_smooth="--no-track-smooth" not in argv)
     return 0
 
 
