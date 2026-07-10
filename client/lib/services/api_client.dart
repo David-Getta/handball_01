@@ -159,6 +159,20 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Fejlődés-követés: két időszak (meccs-csoport) összevetése (POST /scouting/trend).
+  Future<Map<String, dynamic>> fetchTrend(
+      List<Map<String, String>> older, List<Map<String, String>> newer) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/trend"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"older": {"items": older}, "newer": {"items": newer}}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a fejlődés-elemzés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Az egyesített felderítés nyomtatható HTML-je (POST /scouting/export).
   Future<Uint8List> fetchCombinedScoutingExport(
       List<Map<String, String>> items) async {

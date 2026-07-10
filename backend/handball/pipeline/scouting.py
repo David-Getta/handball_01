@@ -375,3 +375,60 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
 def report_to_dict(rep: ScoutingReport) -> dict:
     """A jelentés JSON-barát szótárrá alakítása (az API-hoz)."""
     return asdict(rep)
+
+
+# ---- Fejlődés-követés (trend) ------------------------------------------------
+
+# A trendben követett mutatók: (mező, magyar címke, egység, jobb-e ha nő; None =
+# semleges irány, per_match: a darabszámot meccsenkénti átlagra normáljuk).
+_TREND_METRICS = [
+    ("attack_share_pct", "Szervezett támadás", "%", True, False),
+    ("fast_break_pct", "Gyors indítás", "%", True, False),
+    ("avg_attack_duration_s", "Átl. támadáshossz", " s", None, False),
+    ("shot_efficiency_pct", "Gólarány", "%", True, False),
+    ("shots", "Lövés / meccs", "", True, True),
+    ("goals", "Gól / meccs", "", True, True),
+    ("turnovers", "Labdaeladás / meccs", "", False, True),
+]
+
+
+def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
+    """Két időszak jelentésének összevetése — fejlődés-követés edzői nyelven.
+
+    A darabszám-mutatókat meccsenkénti átlagra normáljuk (különben a több meccs
+    "több lövésnek" látszana). Minden mutatóhoz: régi/új érték, változás, és
+    hogy ez javulás-e ("better": True/False/None). A "summary" magyar mondatok
+    a jelentős (>=10%-os) változásokról.
+    """
+    metrics = []
+    summary = []
+    for field_name, label, unit, up_is_better, per_match in _TREND_METRICS:
+        a = float(getattr(older, field_name))
+        b = float(getattr(newer, field_name))
+        if per_match:
+            a = a / max(1, older.matches)
+            b = b / max(1, newer.matches)
+        delta = b - a
+        better = None
+        if up_is_better is not None and abs(delta) > 1e-9:
+            better = (delta > 0) == up_is_better
+        metrics.append({
+            "metric": field_name, "label": label, "unit": unit,
+            "older": round(a, 2), "newer": round(b, 2),
+            "delta": round(delta, 2), "better": better,
+        })
+        # Jelentős változás → magyar mondat (a semleges irányút nem minősítjük).
+        base = max(abs(a), 1e-9)
+        if better is not None and abs(delta) / base >= 0.10:
+            word = "Javult" if better else "Romlott"
+            summary.append(f"{word}: {label.lower()} {a:.1f}{unit} → {b:.1f}{unit}.")
+
+    if not summary:
+        summary.append("Nincs jelentős változás a két időszak között.")
+    return {
+        "team_name": newer.team_name,
+        "older_matches": older.matches,
+        "newer_matches": newer.matches,
+        "metrics": metrics,
+        "summary": summary,
+    }

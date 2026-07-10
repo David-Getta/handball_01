@@ -12,6 +12,7 @@ import "../theme/app_theme.dart";
 import "match_screen.dart";
 import "scouting_screen.dart";
 import "shell/app_shell.dart";
+import "trend_screen.dart";
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -53,31 +54,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Egyesített felderítés: az edző kiválasztja az ellenfél 2-3 meccsét, és
-  /// meccsenként megjelöli, melyik oldalon játszott az ellenfél → egy zajmentes,
-  /// több meccsen alapuló jelentés készül.
-  Future<void> _combinedScouting() async {
-    // Kiválasztás-állapot: match_id -> null (nincs kiválasztva) | "home" | "away".
+  /// Közös meccs-kiválasztó: pipa + meccsenként a FIGYELT csapat oldala.
+  /// Visszaadja az items listát ({"match_id","team"}) vagy null-t (mégse).
+  Future<List<Map<String, String>>?> _pickMatches(
+      String title, String hint, String confirmLabel) async {
     final choice = <String, String?>{for (final m in _matches) m["match_id"] as String: null};
-    final items = await showDialog<List<Map<String, String>>>(
+    return showDialog<List<Map<String, String>>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) {
           final selected = choice.values.where((v) => v != null).length;
           return AlertDialog(
             backgroundColor: AppColors.surface,
-            title: const Text("Egyesített felderítés"),
+            title: Text(title),
             content: SizedBox(
               width: 480,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    "Jelöld ki a meccseket, és meccsenként azt az oldalt, amelyiken a "
-                    "FELDERÍTETT csapat játszott.",
-                    style: AppText.label.copyWith(fontSize: 12),
-                  ),
+                  Text(hint, style: AppText.label.copyWith(fontSize: 12)),
                   const SizedBox(height: AppSpacing.md),
                   Flexible(
                     child: SingleChildScrollView(
@@ -102,16 +98,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             if (e.value != null)
                               {"match_id": e.key, "team": e.value!},
                         ]),
-                child: Text("Felderítés ($selected meccs)"),
+                child: Text("$confirmLabel ($selected meccs)"),
               ),
             ],
           );
         },
       ),
     );
+  }
+
+  /// Egyesített felderítés: az edző kiválasztja az ellenfél 2-3 meccsét, és
+  /// meccsenként megjelöli, melyik oldalon játszott az ellenfél → egy zajmentes,
+  /// több meccsen alapuló jelentés készül.
+  Future<void> _combinedScouting() async {
+    final items = await _pickMatches(
+      "Egyesített felderítés",
+      "Jelöld ki a meccseket, és meccsenként azt az oldalt, amelyiken a "
+          "FELDERÍTETT csapat játszott.",
+      "Felderítés",
+    );
     if (items == null || items.isEmpty || !mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => ScoutingScreen(items: items)),
+    );
+  }
+
+  /// Fejlődés-követés: két időszak (korábbi/újabb meccsek) összevetése —
+  /// működik a saját csapatra ("fejlődünk-e?") és az ellenfélre ("változtak-e?").
+  Future<void> _trendFlow() async {
+    final older = await _pickMatches(
+      "Fejlődés — 1/2: KORÁBBI időszak",
+      "Jelöld ki a KORÁBBI meccseket, és meccsenként a FIGYELT csapat oldalát.",
+      "Tovább",
+    );
+    if (older == null || older.isEmpty || !mounted) return;
+    final newer = await _pickMatches(
+      "Fejlődés — 2/2: ÚJABB időszak",
+      "Most jelöld ki az ÚJABB meccseket ugyanarról a csapatról.",
+      "Összevetés",
+    );
+    if (newer == null || newer.isEmpty || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => TrendScreen(older: older, newer: newer)),
     );
   }
 
@@ -274,6 +302,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
               const Spacer(),
               // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
+              OutlinedButton.icon(
+                onPressed: _matches.length < 2 ? null : _trendFlow,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accent,
+                  side: BorderSide(
+                      color: _matches.length < 2 ? AppColors.border : AppColors.accent),
+                ),
+                icon: const Icon(Icons.trending_up, size: 18),
+                label: const Text("Fejlődés"),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(
                 onPressed: _matches.length < 2 ? null : _combinedScouting,
                 style: OutlinedButton.styleFrom(

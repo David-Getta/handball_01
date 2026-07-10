@@ -22,6 +22,7 @@ Végpontok (MVP):
 - GET  /matches/{match_id}/scouting → ellenfél-felderítő jelentés egy csapatról.
 - GET  /matches/{match_id}/scouting/export → nyomtatható HTML-jelentés.
 - POST /scouting                     → több meccsből egyesített felderítés.
+- POST /scouting/trend               → fejlődés-követés (két időszak összevetése).
 - GET/POST/DELETE /playbook          → figura-könyvtár (mentett figurák).
 - POST /matches/demo                 → demó meccs videó nélkül (első kipróbálás).
 
@@ -35,7 +36,9 @@ from ..pipeline.pipeline import summarize
 from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 from ..pipeline.tactics import team_style_profile, TacticsConfig
 from ..pipeline.coaching import suggest_for_frame, coaching_timeline
-from ..pipeline.scouting import scout_team, combine_reports, report_to_dict
+from ..pipeline.scouting import (
+    scout_team, combine_reports, report_to_dict, trend_report,
+)
 from ..pipeline.report_html import scouting_report_html
 from ..pipeline.setplays import discover_setplays
 from ..pipeline.decisions import analyze_player_decisions
@@ -443,6 +446,21 @@ def create_app():
         Több meccs adja a valós, zajmentes profilt (a számokat átlagolja/összegzi).
         """
         return report_to_dict(_combined_report(body))
+
+    @app.post("/scouting/trend")
+    def scouting_trend(body: dict):
+        """Fejlődés-követés: két időszak összevetése egy csapatról.
+
+        Törzs: {"older": {"items": [...]}, "newer": {"items": [...]}} — az items
+        formátuma azonos a /scouting-éval. Visszaadja mutatónként a régi/új
+        értéket, a változást és a javult/romlott minősítést + magyar összegzést."""
+        older_body = body.get("older")
+        newer_body = body.get("newer")
+        if not older_body or not newer_body:
+            raise HTTPException(status_code=400, detail="older and newer required")
+        older = _combined_report(older_body)
+        newer = _combined_report(newer_body)
+        return trend_report(older, newer)
 
     @app.post("/scouting/export")
     def combined_scouting_export(body: dict):
