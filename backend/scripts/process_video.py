@@ -19,7 +19,7 @@ Kalibráció nélkül egyszerű arányos kép→pálya leképezés (pontatlan, c
 Használat:
     python -m scripts.process_video BE.mp4 KI.json [--weights yolov8n.pt]
         [--stride N] [--max N] [--imgsz 1280] [--conf 0.20] [--start N]
-        [--calib calib.json] [--no-skip-dark] [--no-estimate]
+        [--calib calib.json] [--no-skip-dark] [--no-estimate] [--no-ball-smooth]
 """
 
 from __future__ import annotations
@@ -232,7 +232,7 @@ def _process_hog(video_path, stride, max_frames):
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
             conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
             progress_cb=None, match_id="video-1", estimate=True,
-            home_team="Csapat A", away_team="Csapat B"):
+            home_team="Csapat A", away_team="Csapat B", ball_smooth=True):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -337,6 +337,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # (ott valós méter-koordináták vannak).
     report("F", 0.95, "képen kívüli becslés")
     match = Match(meta=meta, frames=frames)
+
+    # Labda-utómunka: a téves (kiugró) észlelések eldobása + a rövid hézagok
+    # pótlása — a birtoklás/passz/lövés-felismerés folytonos labda-pályát igényel.
+    if ball_smooth:
+        from handball.pipeline.ball_filter import smooth_ball
+        bs = smooth_ball(match)
+        if bs["removed"] or bs["filled"]:
+            print(f"labda-utómunka: {bs['removed']} kiugró eldobva, "
+                  f"{bs['filled']} hézag-kocka pótolva")
+
     if estimate and calib_corners:
         from handball.pipeline.estimation import augment_match_with_estimates
         added = augment_match_with_estimates(match)
@@ -369,7 +379,8 @@ def main(argv):
             imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float),
             court_poly=court_poly, calib_corners=calib,
             start=opt("--start", 0, int), skip_dark="--no-skip-dark" not in argv,
-            estimate="--no-estimate" not in argv)
+            estimate="--no-estimate" not in argv,
+            ball_smooth="--no-ball-smooth" not in argv)
     return 0
 
 
