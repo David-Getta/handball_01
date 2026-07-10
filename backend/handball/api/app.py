@@ -22,6 +22,7 @@ Végpontok (MVP):
 - GET  /matches/{match_id}/scouting → ellenfél-felderítő jelentés egy csapatról.
 - GET  /matches/{match_id}/scouting/export → nyomtatható HTML-jelentés.
 - POST /scouting                     → több meccsből egyesített felderítés.
+- GET/POST/DELETE /playbook          → figura-könyvtár (mentett figurák).
 
 Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + objektumtár.
 """
@@ -529,6 +530,77 @@ def create_app():
             "evaluation": evaluate_setplay(sim),
             "tracking": sim.to_dict(),
         }
+
+    # ---- Figura-könyvtár (playbook) ----------------------------------------
+    # Az edző megrajzolt figurái név szerint mentve, lemezen (data/playbook/).
+    # Formátum: {"id", "name", "attackers": [ [[x0,y0],[x1,y1]], ... ]} — játékosonként
+    # a kulcs-pozíciók (kezdő+vég, méterben). Egyszerű fájl-tár, adatbázis később.
+    _playbook_dir = Path(__file__).resolve().parents[2] / "data" / "playbook"
+    _playbook_dir.mkdir(parents=True, exist_ok=True)
+
+    def _play_path(play_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", play_id) or "play"
+        return _playbook_dir / f"{safe}.json"
+
+    @app.get("/playbook")
+    def list_plays():
+        """A mentett figurák listája (id + név + játékos-szám)."""
+        out = []
+        for f in sorted(_playbook_dir.glob("*.json")):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                out.append({"id": d.get("id"), "name": d.get("name", "névtelen"),
+                            "players": len(d.get("attackers", []))})
+            except Exception:
+                continue  # sérült fájlt kihagyunk
+        return {"plays": out}
+
+    @app.get("/playbook/{play_id}")
+    def get_play(play_id: str):
+        """Egy mentett figura teljes tartalma (a tervező ezt tölti vissza)."""
+        p = _play_path(play_id)
+        if not p.exists():
+            raise HTTPException(status_code=404, detail="play not found")
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            raise HTTPException(status_code=500, detail="corrupt play file")
+
+    @app.post("/playbook")
+    def save_play(body: dict):
+        """Figura mentése. Törzs: {"name": ..., "attackers": [[[x,y],[x,y]],...]}.
+
+        Validáció: 1..7 játékos, játékosonként legalább 2 kulcs-pozíció, minden
+        koordináta szám. Visszaadja a generált azonosítót."""
+        import uuid
+        name = str(body.get("name") or "").strip()
+        attackers = body.get("attackers")
+        if not name:
+            raise HTTPException(status_code=400, detail="name required")
+        if not isinstance(attackers, list) or not (1 <= len(attackers) <= 7):
+            raise HTTPException(status_code=400, detail="attackers must be 1..7 players")
+        try:
+            attackers = [[[float(p[0]), float(p[1])] for p in path] for path in attackers]
+        except (TypeError, IndexError, ValueError):
+            raise HTTPException(status_code=400, detail="invalid coordinates")
+        if any(len(path) < 2 for path in attackers):
+            raise HTTPException(status_code=400, detail="each player needs >=2 keyframes")
+
+        play_id = uuid.uuid4().hex[:10]
+        data = {"id": play_id, "name": name, "attackers": attackers}
+        _play_path(play_id).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"id": play_id, "name": name}
+
+    @app.delete("/playbook/{play_id}")
+    def delete_play(play_id: str):
+        """Figura törlése a könyvtárból."""
+        p = _play_path(play_id)
+        if not p.exists():
+            raise HTTPException(status_code=404, detail="play not found")
+        p.unlink()
+        return {"deleted": play_id}
 
     # Segéd a feltöltéshez/teszteléshez: memóriába tesz ÉS lemezre tükröz.
     def _put_match(match: Match) -> None:

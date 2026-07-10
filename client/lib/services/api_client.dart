@@ -30,6 +30,47 @@ class ApiClient {
     }
   }
 
+  /// A figura-könyvtár listája (id + név + játékos-szám).
+  Future<List<Map<String, dynamic>>> listPlays() async {
+    final resp = await http.get(Uri.parse("$baseUrl/playbook"))
+        .timeout(const Duration(seconds: 4));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a figurákat: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["plays"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Egy mentett figura betöltése (attackers: játékosonként [[x,y],[x,y]]).
+  Future<Map<String, dynamic>> fetchPlay(String playId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/playbook/$playId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült betölteni a figurát: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Figura mentése a könyvtárba; visszaadja az azonosítót.
+  Future<String> savePlay(String name, List<List<List<double>>> attackers) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/playbook"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"name": name, "attackers": attackers}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült menteni a figurát: HTTP ${resp.statusCode}");
+    }
+    return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["id"] as String;
+  }
+
+  /// Figura törlése a könyvtárból.
+  Future<void> deletePlay(String playId) async {
+    final resp = await http.delete(Uri.parse("$baseUrl/playbook/$playId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült törölni a figurát: HTTP ${resp.statusCode}");
+    }
+  }
+
   /// A meccshez felvitt kiállítások (roster) lekérése.
   Future<Map<String, dynamic>> fetchRoster(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/roster"));
