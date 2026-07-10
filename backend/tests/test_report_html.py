@@ -76,6 +76,23 @@ def test_defense_bar_widths_clamped():
     assert "width:0%" in html
 
 
+def test_playbook_section_rendering():
+    """A figura-egyezés szakasz megjelenik, escape-elve; enélkül nincs szakasz."""
+    pm = {"total_attacks": 5, "matched": {"<Beúszós> kereszt": 3}, "unmatched": 2}
+    html = scouting_report_html(_rep(), playbook_match=pm)
+    assert "Ismert figuráik" in html
+    assert "&lt;Beúszós&gt; kereszt" in html and "<Beúszós>" not in html
+    assert "3×" in html and "5 támadásból 2 ismeretlen" in html
+    # nélküle a szakasz sem jelenik meg
+    assert "Ismert figuráik" not in scouting_report_html(_rep())
+
+
+def test_playbook_section_empty_states():
+    """Üres egyezésnél tájékoztató szöveg (nem üres blokk)."""
+    html = scouting_report_html(_rep(), playbook_match={"total_attacks": 4, "matched": {}, "unmatched": 4})
+    assert "sem egyezik mentett figurával" in html
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

@@ -402,7 +402,17 @@ def create_app():
             t = Team(team)
         except ValueError:
             raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
-        html = scouting_report_html(scout_team(match, t, TacticsConfig()))
+        # Figura-egyezés a mentett könyvtárral — ha van figura, a jelentésbe kerül.
+        from ..pipeline.setplays import match_attacks_to_playbook
+        plays = []
+        for f in sorted(_playbook_dir.glob("*.json")):
+            try:
+                plays.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                continue
+        pm = match_attacks_to_playbook(match, plays, TacticsConfig(), team=t) if plays else None
+        html = scouting_report_html(scout_team(match, t, TacticsConfig()),
+                                    playbook_match=pm)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     def _combined_report(body: dict):

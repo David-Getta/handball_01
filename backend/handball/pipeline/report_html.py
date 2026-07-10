@@ -60,6 +60,25 @@ def _shot_zone_bars(zones: dict) -> str:
     return "".join(out)
 
 
+def _playbook_rows(pm: dict) -> str:
+    """Figura-egyezés sorai: melyik MENTETT figurát hányszor játszották."""
+    matched = pm.get("matched") or {}
+    total = int(pm.get("total_attacks", 0))
+    unmatched = int(pm.get("unmatched", 0))
+    if total == 0:
+        return '<p class="empty">Nincs felismert támadás-szakasz.</p>'
+    if not matched:
+        return (f'<p class="empty">Egyik támadásuk sem egyezik mentett figurával '
+                f'({total} támadás).</p>')
+    rows = "".join(
+        f'<div class="bar-row"><span class="bar-label" style="width:220px">'
+        f'{escape(str(name))}</span><span class="bar-pct" style="width:auto">'
+        f'{int(n)}×</span></div>'
+        for name, n in matched.items())
+    return rows + (f'<p class="note">{total} támadásból {unmatched} ismeretlen '
+                   f'mintájú.</p>')
+
+
 def _players(key_players: list) -> str:
     if not key_players:
         return '<p class="empty">Több meccs felderítése pontosítja a játékos-profilt.</p>'
@@ -75,8 +94,12 @@ def _players(key_players: list) -> str:
             f'<tbody>{"".join(rows)}</tbody></table>')
 
 
-def scouting_report_html(rep: ScoutingReport) -> str:
-    """A jelentés teljes, önálló HTML-je (nyomtatható; böngészőből PDF)."""
+def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None) -> str:
+    """A jelentés teljes, önálló HTML-je (nyomtatható; böngészőből PDF).
+
+    `playbook_match` (opcionális): a mentett figurákkal való egyezés
+    ({total_attacks, matched, unmatched}) — külön szakaszként kerül be.
+    """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
 
@@ -112,6 +135,7 @@ def scouting_report_html(rep: ScoutingReport) -> str:
   ul {{ margin: 0; padding-left: 20px; }}
   li {{ margin: 4px 0; font-size: 13.5px; }}
   li.empty, p.empty {{ color: #8492A6; list-style: none; margin-left: -20px; font-size: 12.5px; }}
+  p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
   .cols {{ display: flex; gap: 22px; }}
   .col {{ flex: 1; }}
   .metrics {{ display: flex; flex-wrap: wrap; gap: 14px 26px; }}
@@ -165,6 +189,9 @@ def scouting_report_html(rep: ScoutingReport) -> str:
 
   <h2>Honnan lőnek (gól/lövés)</h2>
   {_shot_zone_bars(rep.shot_zones)}
+
+  {("<h2>Ismert figuráik (a könyvtárunkból)</h2>" + _playbook_rows(playbook_match))
+   if playbook_match else ""}
 
   <h2>Védekezésük (amikor ők védenek)</h2>
   {_defense_bars(rep.defense_distribution)}
