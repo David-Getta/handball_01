@@ -43,6 +43,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   final ApiClient _api = ApiClient();
   late String _team = widget.team;
   Map<String, dynamic>? _report;
+  // Figura-egyezés a mentett könyvtárral (csak egy-meccses módban töltjük).
+  Map<String, dynamic>? _playbookMatch;
   String? _error;
   bool _loading = true;
 
@@ -62,9 +64,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       final r = widget.items != null
           ? await _api.fetchCombinedScouting(widget.items!)
           : await _api.fetchScouting(widget.matchId, _team);
+      // Figura-egyezés: melyik MENTETT figurát játsszák (csak egy meccsnél).
+      Map<String, dynamic>? pm;
+      if (widget.items == null) {
+        try {
+          pm = await _api.fetchPlaybookMatch(widget.matchId, _team);
+        } catch (_) {
+          pm = null; // enélkül is teljes a jelentés
+        }
+      }
       if (!mounted) return;
       setState(() {
         _report = r;
+        _playbookMatch = pm;
         _loading = false;
       });
     } catch (e) {
@@ -203,6 +215,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         const SizedBox(height: AppSpacing.lg),
         _shotZonesCard(r),
         const SizedBox(height: AppSpacing.lg),
+        if (_playbookMatch != null) ...[
+          _playbookCard(_playbookMatch!),
+          const SizedBox(height: AppSpacing.lg),
+        ],
         _defenseCard(r),
         const SizedBox(height: AppSpacing.lg),
         _keyPlayersCard(r),
@@ -368,6 +384,50 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         SizedBox(width: 44, child: Text("$goals/$shots",
             textAlign: TextAlign.right, style: AppText.label.copyWith(fontSize: 12))),
       ]),
+    );
+  }
+
+  /// Figura-egyezés: az ellenfél támadásai közül melyik egyezik egy MENTETT
+  /// figurával a könyvtárunkból ("a Beúszós keresztet játszották 4x").
+  Widget _playbookCard(Map<String, dynamic> pm) {
+    final matched = (pm["matched"] as Map?)?.cast<String, dynamic>() ?? {};
+    final total = (pm["total_attacks"] as num?)?.toInt() ?? 0;
+    final unmatched = (pm["unmatched"] as num?)?.toInt() ?? 0;
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.menu_book_outlined, size: 16, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Text("ISMERT FIGURÁIK (a könyvtárunkból)", style: AppText.sectionLabel),
+          ]),
+          const SizedBox(height: AppSpacing.md),
+          if (total == 0)
+            Text("Nincs felismert támadás-szakasz ebben a meccsben.", style: AppText.label)
+          else if (matched.isEmpty)
+            Text("Egyik támadásuk sem egyezik mentett figurával "
+                "($total támadás). Ments figurákat a Figura-tervezőben.",
+                style: AppText.label)
+          else ...[
+            for (final e in matched.entries)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(children: [
+                  const Icon(Icons.check_circle_outline, size: 15, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(e.key, style: AppText.value.copyWith(fontSize: 13))),
+                  Text("${e.value}×", style: AppText.value.copyWith(color: AppColors.accent)),
+                ]),
+              ),
+            const SizedBox(height: 6),
+            Text("$total támadásból $unmatched ismeretlen mintájú.",
+                style: AppText.label.copyWith(fontSize: 11)),
+          ],
+        ],
+      ),
     );
   }
 

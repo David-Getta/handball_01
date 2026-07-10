@@ -30,6 +30,18 @@ class ApiClient {
     }
   }
 
+  /// A meccs támadásainak hozzárendelése a mentett figurákhoz
+  /// (GET /matches/{id}/playbook-match): {total_attacks, matched, unmatched}.
+  Future<Map<String, dynamic>> fetchPlaybookMatch(String matchId, String team) async {
+    final uri = Uri.parse("$baseUrl/matches/$matchId/playbook-match")
+        .replace(queryParameters: {"team": team});
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a figura-egyeztetés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A figura-könyvtár listája (id + név + játékos-szám).
   Future<List<Map<String, dynamic>>> listPlays() async {
     final resp = await http.get(Uri.parse("$baseUrl/playbook"))

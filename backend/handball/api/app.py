@@ -602,6 +602,32 @@ def create_app():
         p.unlink()
         return {"deleted": play_id}
 
+    @app.get("/matches/{match_id}/playbook-match")
+    def playbook_match(match_id: str, team: str = "", threshold: float = 0.2):
+        """A meccs támadásainak hozzárendelése a MENTETT figurákhoz.
+
+        "Melyik ismert figurát játsszák és hányszor" — a felderítés kiegészítése.
+        `team` (opcionális): csak az adott csapat támadásai; `threshold`: az
+        egyezés szigorúsága (kisebb = szigorúbb)."""
+        from ..pipeline.setplays import match_attacks_to_playbook
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        t = None
+        if team:
+            try:
+                t = Team(team)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="team must be 'home' or 'away'")
+        plays = []
+        for f in sorted(_playbook_dir.glob("*.json")):
+            try:
+                plays.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                continue
+        return match_attacks_to_playbook(match, plays, TacticsConfig(),
+                                         team=t, threshold=threshold)
+
     # Segéd a feltöltéshez/teszteléshez: memóriába tesz ÉS lemezre tükröz.
     def _put_match(match: Match) -> None:
         _store[match.meta.match_id] = match

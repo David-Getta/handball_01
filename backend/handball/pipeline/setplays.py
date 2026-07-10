@@ -105,6 +105,105 @@ def _distance(a: list[float], b: list[float]) -> float:
     return math.sqrt(sum((ai - bi) ** 2 for ai, bi in zip(a, b)))
 
 
+# ---- Figura-felismerés a mentett könyvtár (playbook) ellen -------------------
+
+def interpolate_play(attackers: list, steps: int = 20) -> list:
+    """Egy mentett figura kulcs-pozícióiból folyamatos mozgáspálya.
+
+    A figura játékosonként kulcs-pozíciók listája ([[x,y], ...]); ezeket
+    szakaszonként lineárisan interpoláljuk `steps` lépésre — így ugyanolyan
+    "mozgás" lesz belőle, mint egy valódi támadásból.
+    """
+    paths = []
+    for path in attackers:
+        pts = []
+        if len(path) == 1:
+            pts = [(float(path[0][0]), float(path[0][1]))] * steps
+        else:
+            for s in range(steps):
+                t = s / (steps - 1)
+                seg = t * (len(path) - 1)
+                i = min(int(seg), len(path) - 2)
+                local = seg - i
+                x = path[i][0] + (path[i + 1][0] - path[i][0]) * local
+                y = path[i][1] + (path[i + 1][1] - path[i][1]) * local
+                pts.append((float(x), float(y)))
+        paths.append(pts)
+    return paths
+
+
+def play_signature(attackers: list, bins_x: int = 6, bins_y: int = 3,
+                   steps: int = 20, mirror_x: bool = False) -> list[float]:
+    """Egy mentett figura ujjlenyomata — ÖSSZEVETHETŐ az attack_signature-rel.
+
+    Ugyanaz a rács-hisztogram készül az interpolált mozgáspályából, mint a valódi
+    támadásokból. `mirror_x`-szel a pálya hossztengelyére tükrözve — a figurát
+    a tervezőben a +x kapura rajzoljuk, de az ellenfél a -x kapura is támadhat.
+    """
+    grid = [0.0] * (bins_x * bins_y)
+    total = 0.0
+    for path in interpolate_play(attackers, steps):
+        for (x, y) in path:
+            if mirror_x:
+                x = COURT_LENGTH_M - x
+            ix = min(bins_x - 1, max(0, int(x / COURT_LENGTH_M * bins_x)))
+            iy = min(bins_y - 1, max(0, int(y / COURT_WIDTH_M * bins_y)))
+            grid[iy * bins_x + ix] += 1.0
+            total += 1.0
+    if total > 0:
+        grid = [v / total for v in grid]
+    return grid
+
+
+def match_attacks_to_playbook(match: Match, plays: list[dict],
+                              config: TacticsConfig | None = None,
+                              team: Team | None = None,
+                              threshold: float = 0.2,
+                              min_length: int = 5) -> dict:
+    """A meccs támadásait a MENTETT figurákhoz (playbook) rendeli.
+
+    `plays` elemei: {"name": ..., "attackers": [[[x,y],...], ...]}. Minden
+    felismert támadás-szakaszhoz megkeressük a legközelebbi figurát (normál ÉS
+    tükrözött aláírással — a támadási irány ne számítson); ha a távolság a
+    küszöb alatt van, a figurához soroljuk, különben "ismeretlen".
+
+    Visszaad: {"total_attacks", "matched": {figura-név: darab}, "unmatched"}.
+    Ez a "melyik ismert figurát játsszák és hányszor" — a felderítés kiegészítése.
+    """
+    config = config or TacticsConfig()
+    seqs = segment_attacks(match, config, min_length=min_length)
+    if team is not None:
+        seqs = [s for s in seqs if s.team == team]
+
+    play_sigs = []
+    for p in plays:
+        attackers = p.get("attackers") or []
+        if not attackers:
+            continue
+        play_sigs.append((str(p.get("name", "névtelen")),
+                          play_signature(attackers),
+                          play_signature(attackers, mirror_x=True)))
+
+    matched: dict[str, int] = {}
+    unmatched = 0
+    for s in seqs:
+        sig = attack_signature(s)
+        best_name = None
+        best_d = float("inf")
+        for name, ps, psm in play_sigs:
+            d = min(_distance(sig, ps), _distance(sig, psm))
+            if d < best_d:
+                best_d = d
+                best_name = name
+        if best_name is not None and best_d <= threshold:
+            matched[best_name] = matched.get(best_name, 0) + 1
+        else:
+            unmatched += 1
+    return {"total_attacks": len(seqs),
+            "matched": dict(sorted(matched.items(), key=lambda kv: -kv[1])),
+            "unmatched": unmatched}
+
+
 def cluster_signatures(signatures: list[list[float]], threshold: float = 0.15) -> list[int]:
     """Mohó (greedy) klaszterezés: a hasonló ujjlenyomatok egy klaszterbe.
 
