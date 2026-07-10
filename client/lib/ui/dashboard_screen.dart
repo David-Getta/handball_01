@@ -312,15 +312,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _demoButton() => OutlinedButton.icon(
-        onPressed: () => Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MatchScreen()),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.accent, side: const BorderSide(color: AppColors.accent)),
-        icon: const Icon(Icons.play_arrow, size: 18),
-        label: const Text("Demó megnyitása"),
+  /// Demó meccs létrehozása a szerveren — az első kipróbáláshoz: a könyvtárba
+  /// kerül egy szimulált meccs, amin minden funkció (elemzés, felderítés,
+  /// export) azonnal kipróbálható.
+  Future<void> _createDemo() async {
+    try {
+      final id = await _api.createDemoMatch();
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Demó meccs létrehozva: $id")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Demó-hiba: $e")));
+    }
+  }
+
+  Widget _demoButton() {
+    // Backend elérhető: szerver-oldali demó a könyvtárba (minden funkcióval).
+    // Backend nélkül: a kliensbe épített helyi demó megnyitása.
+    if (!_offline) {
+      return FilledButton.icon(
+        onPressed: _createDemo,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+        icon: const Icon(Icons.auto_awesome, size: 18),
+        label: const Text("Demó meccs létrehozása"),
       );
+    }
+    return OutlinedButton.icon(
+      onPressed: () => Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MatchScreen()),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.accent, side: const BorderSide(color: AppColors.accent)),
+      icon: const Icon(Icons.play_arrow, size: 18),
+      label: const Text("Demó megnyitása"),
+    );
+  }
 
   Widget _notice(IconData icon, String title, String body, {Widget? action}) {
     return Container(

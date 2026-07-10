@@ -23,6 +23,7 @@ Végpontok (MVP):
 - GET  /matches/{match_id}/scouting/export → nyomtatható HTML-jelentés.
 - POST /scouting                     → több meccsből egyesített felderítés.
 - GET/POST/DELETE /playbook          → figura-könyvtár (mentett figurák).
+- POST /matches/demo                 → demó meccs videó nélkül (első kipróbálás).
 
 Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + objektumtár.
 """
@@ -542,6 +543,31 @@ def create_app():
             "evaluation": evaluate_setplay(sim),
             "tracking": sim.to_dict(),
         }
+
+    @app.post("/matches/demo")
+    def create_demo_match(body: dict | None = None):
+        """DEMÓ meccs létrehozása videó nélkül — az első kipróbáláshoz.
+
+        A beépített szimulátorral készít egy valósághű, pásztázó-kamerás meccset
+        (mért + becsült pozíciók, labda), és beteszi a könyvtárba — így a
+        felhasználó a teljes appot (elemzés, felderítés, export) azonnal
+        kipróbálhatja, mielőtt videót töltene fel."""
+        import uuid
+        from ..sim import simulate_ground_truth, simulate_with_panning_camera
+
+        body = body or {}
+        seconds = float(body.get("seconds", 30.0))
+        seconds = max(5.0, min(120.0, seconds))  # ésszerű keretek közt
+        seed = int(body.get("seed", 0))
+
+        ground = simulate_ground_truth(duration_s=seconds, fps=25.0, seed=seed)
+        match = simulate_with_panning_camera(ground)
+        match.meta.match_id = f"demo-{uuid.uuid4().hex[:8]}"
+        match.meta.home_team = "Demó Hazai"
+        match.meta.away_team = "Demó Vendég"
+        _put_match(match)
+        return {"match_id": match.meta.match_id,
+                "num_frames": len(match.frames)}
 
     # ---- Figura-könyvtár (playbook) ----------------------------------------
     # Az edző megrajzolt figurái név szerint mentve, lemezen (data/playbook/).

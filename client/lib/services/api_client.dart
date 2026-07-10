@@ -30,6 +30,20 @@ class ApiClient {
     }
   }
 
+  /// Demó meccs létrehozása a szerveren (videó nélkül) — az első kipróbáláshoz.
+  /// Visszaadja az új match_id-t.
+  Future<String> createDemoMatch({double seconds = 30}) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/demo"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"seconds": seconds}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a demó létrehozása: HTTP ${resp.statusCode}");
+    }
+    return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["match_id"] as String;
+  }
+
   /// A meccs támadásainak hozzárendelése a mentett figurákhoz
   /// (GET /matches/{id}/playbook-match): {total_attacks, matched, unmatched}.
   Future<Map<String, dynamic>> fetchPlaybookMatch(String matchId, String team) async {
