@@ -6,6 +6,7 @@ library;
 
 import "dart:async";
 import "dart:io";
+import "dart:math" as math;
 
 import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
@@ -62,6 +63,9 @@ class _MatchScreenState extends State<MatchScreen> {
   // Eseményre kattintva a videó a jelenet idejére ugrik.
   final GlobalKey<VideoPanelState> _videoKey = GlobalKey<VideoPanelState>();
   bool _showVideo = false;
+
+  // Kijelölt játékos a pályán (kattintással) — nyomvonal + egyéni adatok.
+  int? _selectedTrack;
 
   @override
   void initState() {
@@ -701,23 +705,108 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Widget _courtArea(Match match) {
     final frame = match.frames[_frameIndex];
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: CustomPaint(
-            painter: CourtPainter(frame: _viewMode == ViewMode.players ? frame : null),
-          ),
-        ),
-        if (_viewMode == ViewMode.heatmap && _heatmap != null)
-          Positioned.fill(
-            child: CustomPaint(
-              painter: HeatmapPainter(
-                heatmap: _heatmap!,
-                color: _heatmapTeam == Team.home ? AppColors.home : AppColors.away,
+    return LayoutBuilder(builder: (context, c) {
+      final size = Size(c.maxWidth, c.maxHeight);
+      return GestureDetector(
+        // Kattintás egy játékosra → kijelölés + nyomvonal + egyéni adatok.
+        onTapUp: (d) => _handleCourtTap(d.localPosition, size, frame),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: CourtPainter(
+                  frame: _viewMode == ViewMode.players ? frame : null,
+                  selectedId: _selectedTrack,
+                  trail: _trailFor(match),
+                ),
               ),
             ),
-          ),
-      ],
+            if (_viewMode == ViewMode.heatmap && _heatmap != null)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: HeatmapPainter(
+                    heatmap: _heatmap!,
+                    color: _heatmapTeam == Team.home ? AppColors.home : AppColors.away,
+                  ),
+                ),
+              ),
+            // A kijelölt játékos adat-kártyája (bal-felső sarok).
+            if (_selectedTrack != null && _viewMode == ViewMode.players)
+              Positioned(left: 10, top: 10, child: _playerChip(match)),
+          ],
+        ),
+      );
+    });
+  }
+
+  /// Kattintás-visszafejtés: a képpontból méter, majd a legközelebbi játékos
+  /// (1,5 m-en belül). Ugyanarra kattintva a kijelölés megszűnik.
+  void _handleCourtTap(Offset pos, Size size, Frame frame) {
+    if (_viewMode != ViewMode.players) return;
+    final (scale, origin) = CourtPainter.transformFor(size);
+    if (scale <= 0) return;
+    final mx = (pos.dx - origin.dx) / scale;
+    final my = (pos.dy - origin.dy) / scale;
+    int? best;
+    double bestD = 1.5; // méter — ennél közelebbi találat kell
+    for (final pl in frame.players) {
+      final d = math.sqrt((pl.x - mx) * (pl.x - mx) + (pl.y - my) * (pl.y - my));
+      if (d < bestD) {
+        bestD = d;
+        best = pl.trackId;
+      }
+    }
+    setState(() => _selectedTrack = best == _selectedTrack ? null : best);
+  }
+
+  /// A kijelölt játékos nyomvonala (± 4 mp) az aktuális képkocka körül.
+  List<Offset>? _trailFor(Match match) {
+    final id = _selectedTrack;
+    if (id == null) return null;
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final w = (fps * 4).round();
+    final from = (_frameIndex - w).clamp(0, match.frames.length - 1);
+    final to = (_frameIndex + w).clamp(0, match.frames.length - 1);
+    final pts = <Offset>[];
+    for (int i = from; i <= to; i++) {
+      for (final pl in match.frames[i].players) {
+        if (pl.trackId == id) {
+          pts.add(Offset(pl.x, pl.y));
+          break;
+        }
+      }
+    }
+    return pts.length >= 2 ? pts : null;
+  }
+
+  /// A kijelölt játékos adat-kártyája: csapat, táv, átlagsebesség.
+  Widget _playerChip(Match match) {
+    final id = _selectedTrack!;
+    final st = _stats[id];
+    final teamName = st == null
+        ? ""
+        : (st.team == Team.home ? match.meta.homeTeam : match.meta.awayTeam);
+    final label = st == null
+        ? "Játékos #$id"
+        : "Játékos #$id · $teamName · ${st.distanceM.toStringAsFixed(0)} m · "
+            "átl. ${st.avgSpeedMs.toStringAsFixed(1)} m/s";
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.gold),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.person_pin_circle, size: 16, color: AppColors.gold),
+        const SizedBox(width: 6),
+        Text(label, style: AppText.value.copyWith(fontSize: 12)),
+        const SizedBox(width: 6),
+        InkWell(
+          onTap: () => setState(() => _selectedTrack = null),
+          child: const Icon(Icons.close, size: 14, color: AppColors.textFaint),
+        ),
+      ]),
     );
   }
 
