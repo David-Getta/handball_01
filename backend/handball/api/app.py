@@ -33,6 +33,7 @@ Az adattárolás itt egyelőre memóriában/placeholder; később Postgres + obj
 from __future__ import annotations
 
 from ..models.tracking import Match, MatchMeta, Team
+from ..storage import data_root
 from ..pipeline.pipeline import summarize
 from ..pipeline.analytics import compute_team_heatmap, compute_team_summary
 from ..pipeline.tactics import team_style_profile, TacticsConfig
@@ -65,7 +66,9 @@ def create_app():
     # újraindítása ne veszítse el a feldolgozott meccseket (data/matches/{id}.json).
     # Ez az MVP-perzisztencia; később adatbázis + objektumtár.
     _store: dict[str, Match] = {}
-    _data_dir = Path(__file__).resolve().parents[2] / "data" / "matches"
+    # Írható adat-gyökér: telepítve felhasználói mappa, fejlesztésben a backend/
+    # (lásd handball/storage.py) — a telepített app a saját mappájába nem írhat.
+    _data_dir = data_root() / "data" / "matches"
     _data_dir.mkdir(parents=True, exist_ok=True)
 
     def _match_path(match_id: str) -> Path:
@@ -97,8 +100,8 @@ def create_app():
         """
         import re
         from pathlib import Path
-        uploads = Path(__file__).resolve().parents[2] / "uploads"
-        uploads.mkdir(exist_ok=True)
+        uploads = data_root() / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
         # A fájlnevet fertőtlenítjük (path traversal ellen): csak biztonságos karakterek.
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", filename).lstrip(".") or "match.mp4"
         dest = uploads / safe
@@ -602,7 +605,7 @@ def create_app():
     # Az edző megrajzolt figurái név szerint mentve, lemezen (data/playbook/).
     # Formátum: {"id", "name", "attackers": [ [[x0,y0],[x1,y1]], ... ]} — játékosonként
     # a kulcs-pozíciók (kezdő+vég, méterben). Egyszerű fájl-tár, adatbázis később.
-    _playbook_dir = Path(__file__).resolve().parents[2] / "data" / "playbook"
+    _playbook_dir = data_root() / "data" / "playbook"
     _playbook_dir.mkdir(parents=True, exist_ok=True)
 
     def _play_path(play_id: str) -> Path:

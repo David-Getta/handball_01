@@ -115,3 +115,87 @@ jobs:
 
             Letöltés után dupla kattintás a `SportMachine-Setup.exe`-re, majd
             Tovább → Telepítés. Részletes (laikus) útmutató: TELEPITES.md.
+
+  # A teljes macOS-alkalmazás legyártása (app + beágyazott motor, zip-ben).
+  macos-app:
+    needs: tests
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Motor (Python backend) becsomagolása ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Backend + ML függőségek + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "backend[ml]" uvicorn pyinstaller
+      - name: YOLO súlyfájl letöltése a csomagba
+        run: |
+          mkdir -p packaging/weights
+          (cd packaging/weights && python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')")
+          test -f packaging/weights/yolov8n.pt
+      - name: Motor becsomagolása (PyInstaller)
+        run: pyinstaller packaging/backend.spec --noconfirm --distpath dist --workpath build/pyi
+      - name: Motor füstteszt (elindul és válaszol a /health-en)
+        run: |
+          ./dist/handball_backend/handball_backend & echo $! > engine.pid
+          ok=0
+          for i in $(seq 1 30); do
+            sleep 2
+            if curl -sf http://127.0.0.1:8000/health; then ok=1; break; fi
+          done
+          kill "$(cat engine.pid)" 2>/dev/null || true
+          [ "$ok" = "1" ]
+
+      # ---- Flutter desktop app ----
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: macOS platform-váz generálása
+        working-directory: client
+        run: |
+          flutter config --enable-macos-desktop
+          flutter create . --platforms=macos --project-name handball_client
+      - name: Sandbox kikapcsolása (App Store-on kívüli terjesztés)
+        # A Flutter alapból bekapcsolja az App Sandboxot — az viszont tiltaná a
+        # beágyazott motor indítását és a localhost-szervert. A pontokat tartalmazó
+        # kulcs miatt PlistBuddy kell (a plutil a pontot útvonal-elválasztónak veszi).
+        working-directory: client
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/Release.entitlements
+          /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/DebugProfile.entitlements
+      - name: Flutter build (macOS release)
+        working-directory: client
+        run: |
+          flutter pub get
+          flutter build macos --release
+      - name: Motor beágyazása az app-ba + ad-hoc aláírás + zip
+        # A motor a Resources/engine mappába kerül — pontosan oda, ahol a
+        # backend_launcher keresi. A beágyazás után a csomagot újra alá kell írni
+        # (ad-hoc; Apple Developer aláírás/notarizálás később).
+        run: |
+          APP="client/build/macos/Build/Products/Release/handball_client.app"
+          test -d "$APP"
+          mkdir -p "$APP/Contents/Resources/engine"
+          cp -R dist/handball_backend/. "$APP/Contents/Resources/engine/"
+          codesign --force --deep -s - "$APP"
+          ditto -c -k --keepParent "$APP" SportMachine-macOS.zip
+          ls -lh SportMachine-macOS.zip
+
+      # ---- Kimenetek ----
+      - name: App feltöltése build-artifactként
+        uses: actions/upload-artifact@v4
+        with:
+          name: SportMachine-macOS
+          path: SportMachine-macOS.zip
+          retention-days: 14
+
+      - name: Kiadás a Releases oldalra (csak v* címkénél)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SportMachine-macOS.zip

@@ -1,9 +1,9 @@
 # handball_01 — Kézilabda elemző AI
 
-## Letöltés (Windows) — mint egy Steam-játék
+## Letöltés (Windows / Mac) — mint egy Steam-játék
 
 1. Nyisd meg a repo **Releases** oldalát (GitHub → jobb oldalt "Releases").
-2. Töltsd le a legfrissebb **`SportMachine-Setup.exe`**-t.
+2. Töltsd le a legfrissebbet: Windowsra a **`SportMachine-Setup.exe`**-t, Macre a **`SportMachine-macOS.zip`**-et.
 3. Dupla kattintás → Tovább → Telepítés → indul. Ennyi.
 
 Nem kell hozzá Python, Flutter vagy bármilyen fejlesztői eszköz — a telepítő a

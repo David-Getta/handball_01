@@ -22,7 +22,12 @@ def _ensure_streams() -> None:
     a kimenetet az exe melletti engine.log fájlba irányítjuk, hogy a print/log
     ne dőljön el, és hiba esetén legyen mit megnézni."""
     if sys.stdout is None or sys.stderr is None:
-        log_path = os.path.join(os.path.dirname(sys.executable), "engine.log")
+        # A napló a FELHASZNÁLÓI adatmappába megy — a telepített app a saját
+        # mappájába (Applications / Program Files) nem írhat.
+        from handball.storage import data_root
+        root = data_root()
+        root.mkdir(parents=True, exist_ok=True)
+        log_path = str(root / "engine.log")
         f = open(log_path, "a", buffering=1, encoding="utf-8", errors="replace")
         if sys.stdout is None:
             sys.stdout = f
