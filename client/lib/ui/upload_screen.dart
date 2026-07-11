@@ -63,6 +63,12 @@ class _UploadScreenState extends State<UploadScreen> {
   double _uploadProgress = 0.0;
   String? _uploadedName;
 
+  // Egyszerre TÖBB felvétel is feltölthető (pl. 1. és 2. félidő): az első a
+  // fő videó (ez kalibrálható itt), a többi backend-oldali útja itt gyűlik —
+  // a "Feldolgozás indítása" MINDET sorba állítja a szerveren, mindegyiket a
+  // saját elmentett kalibrációjával (ha van).
+  final List<String> _batchPaths = [];
+
   // Feldolgozási beállítások: minőségi profil + rövid próba mód.
   // A profilok (stride, imgsz): gyors = ritkább mintavétel kisebb képen;
   // pontos = sűrűbb mintavétel nagy felbontáson (lassabb, de jobb labda-követés).
@@ -99,34 +105,55 @@ class _UploadScreenState extends State<UploadScreen> {
       type: FileType.custom,
       allowedExtensions: const ["mp4", "mov", "avi", "mkv"],
       withData: kIsWeb, // weben bájtok kellenek; desktopon elég az elérési út
+      allowMultiple: true, // több felvétel (pl. 1. és 2. félidő) egyszerre
     );
     if (res == null || res.files.isEmpty) return; // a felhasználó megszakította
-    final f = res.files.first;
+    final files = res.files;
     setState(() {
       _uploading = true;
       _uploadProgress = 0.0;
-      _uploadedName = f.name;
+      _uploadedName = files.first.name;
     });
+    var okCount = 0;
     try {
-      Map<String, dynamic> saved;
-      if (!kIsWeb && f.path != null) {
-        saved = await _api.uploadVideoFromPath(f.path!, f.name,
-            onProgress: (p) { if (mounted) setState(() => _uploadProgress = p); });
-      } else if (f.bytes != null) {
-        saved = await _api.uploadVideoBytes(f.bytes!, f.name);
-      } else {
-        throw Exception("a kiválasztott fájl nem olvasható");
+      // A fájlok EGYMÁS UTÁN töltődnek fel; az első lesz a fő videó (az
+      // kalibrálható itt), a többi a köteg-listába kerül.
+      for (var i = 0; i < files.length; i++) {
+        final f = files[i];
+        if (!mounted) return;
+        setState(() {
+          _uploadProgress = 0.0;
+          _uploadedName =
+              files.length > 1 ? "${f.name} (${i + 1}/${files.length})" : f.name;
+        });
+        Map<String, dynamic> saved;
+        if (!kIsWeb && f.path != null) {
+          saved = await _api.uploadVideoFromPath(f.path!, f.name,
+              onProgress: (p) { if (mounted) setState(() => _uploadProgress = p); });
+        } else if (f.bytes != null) {
+          saved = await _api.uploadVideoBytes(f.bytes!, f.name);
+        } else {
+          throw Exception("a kiválasztott fájl nem olvasható");
+        }
+        okCount++;
+        if (!mounted) return;
+        final savedPath = saved["path"] as String;
+        if (i == 0) {
+          setState(() => _pathCtrl.text = savedPath); // a backend-oldali út
+          _loadSavedCalibration(savedPath);
+        } else {
+          setState(() => _batchPaths.add(savedPath));
+        }
       }
       if (!mounted) return;
       setState(() {
         _uploading = false;
         _uploadProgress = 1.0;
-        _pathCtrl.text = saved["path"] as String; // a backend-oldali út
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Feltöltve: ${saved["filename"]} (${_mb(saved["size"])})")),
-      );
-      _loadSavedCalibration(saved["path"] as String);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(okCount == 1
+              ? "Feltöltve: ${files.first.name}"
+              : "$okCount videó feltöltve — a feldolgozás mindet sorba állítja.")));
     } catch (e) {
       if (!mounted) return;
       setState(() => _uploading = false);
@@ -231,6 +258,49 @@ class _UploadScreenState extends State<UploadScreen> {
       _matchId = r["match_id"] as String?;
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(milliseconds: 800), (_) => _pollJob());
+      // A köteg többi videója is sorba kerül — mindegyik a SAJÁT elmentett
+      // kalibrációjával (ha van), ugyanazzal a minőség/hossz beállítással.
+      if (_batchPaths.isNotEmpty) {
+        final batch = List<String>.from(_batchPaths);
+        setState(() => _batchPaths.clear());
+        var queued = 0;
+        for (final p in batch) {
+          try {
+            List<Map<String, dynamic>>? calibs;
+            var startFrame = 0;
+            try {
+              final saved = await _api.fetchCalibration(p);
+              if (saved.isNotEmpty) {
+                calibs = saved;
+                startFrame = saved
+                    .map((c) => (c["frame"] as num?)?.toInt() ?? 0)
+                    .reduce((a, b) => a < b ? a : b);
+              }
+            } catch (_) {} // nincs mentett kalibráció — enélkül megy
+            await _api.startProcessing(
+              p,
+              weights: "yolov8n.pt",
+              stride: stride,
+              imgsz: imgsz,
+              max: max,
+              homeTeam: _homeCtrl.text.trim(),
+              awayTeam: _awayCtrl.text.trim(),
+              calibs: calibs,
+              start: startFrame,
+            );
+            queued++;
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text("Nem sikerült sorba állítani: ${p.split("/").last} — $e")));
+          }
+        }
+        if (queued > 0 && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text("További $queued videó sorba állítva — egymás után "
+                  "dolgozza fel őket a motor (állapot: Kezdőlap).")));
+        }
+      }
     } catch (e) {
       setState(() {
         _status = "error";
@@ -331,6 +401,28 @@ class _UploadScreenState extends State<UploadScreen> {
               ),
             ),
           ),
+          // A kötegben várakozó további felvételek (a fő videón felül) —
+          // a feldolgozás indításakor mind sorba kerül; az X-szel kivehető.
+          if (_batchPaths.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final p in _batchPaths)
+                  Chip(
+                    label: Text(p.split("/").last,
+                        style: AppText.label.copyWith(fontSize: 12)),
+                    avatar: const Icon(Icons.movie_outlined,
+                        size: 16, color: AppColors.textSecondary),
+                    backgroundColor: AppColors.surfaceAlt,
+                    side: const BorderSide(color: AppColors.border),
+                    deleteIcon: const Icon(Icons.close, size: 16),
+                    onDeleted: () => setState(() => _batchPaths.remove(p)),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           // Csapatnevek: a könyvtár és a felderítő jelentés ezeket mutatja.
           Row(children: [
@@ -427,9 +519,11 @@ class _UploadScreenState extends State<UploadScreen> {
               icon: const Icon(Icons.play_arrow, size: 18),
               // Futó feldolgozás mellett is indítható újabb: a szerver
               // SORBA teszi, és egymás után dolgozza fel őket.
-              label: Text(_status == "running" || _status == "queued"
-                  ? "Új videó sorba állítása"
-                  : "Feldolgozás indítása"),
+              label: Text(_batchPaths.isNotEmpty
+                  ? "Feldolgozás indítása (${_batchPaths.length + 1} videó)"
+                  : _status == "running" || _status == "queued"
+                      ? "Új videó sorba állítása"
+                      : "Feldolgozás indítása"),
             ),
             if (_status == "running") ...[
               const SizedBox(width: AppSpacing.md),
@@ -514,12 +608,13 @@ class _UploadScreenState extends State<UploadScreen> {
                   Text(
                     _uploading
                         ? "Feltöltés… ${(_uploadProgress * 100).round()}%  ${_uploadedName ?? ""}"
-                        : "Kattints a meccsvideó kiválasztásához",
+                        : "Kattints a meccsvideó(k) kiválasztásához",
                     style: AppText.value.copyWith(fontSize: 16),
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Text("MP4 / MOV / MKV · max 8 GB · 720p–4K · legfeljebb 75 perc",
+                  Text("MP4 / MOV / MKV · egyszerre több felvétel is választható "
+                      "(pl. 1. és 2. félidő) · 720p–4K",
                       style: AppText.label.copyWith(fontSize: 12)),
                   if (_uploading) ...[
                     const SizedBox(height: 8),

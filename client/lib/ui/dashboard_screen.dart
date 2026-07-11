@@ -454,6 +454,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Félidők összefűzése: a két (külön feldolgozott) félidőből EGY teljes
+  /// meccs készül — a statisztikák, események és a felderítés így a teljes
+  /// mérkőzésre számolódnak. A sorrend számít: 1. félidő → 2. félidő.
+  Future<void> _mergeFlow() async {
+    String? firstId;
+    String? secondId;
+    final nameCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          DropdownButtonFormField<String> picker(
+              String label, String? value, void Function(String?) onChanged,
+              {String? exclude}) {
+            return DropdownButtonFormField<String>(
+              initialValue: value,
+              decoration: InputDecoration(labelText: label),
+              dropdownColor: AppColors.surfaceAlt,
+              items: [
+                for (final m in _matches)
+                  if (m["match_id"] != exclude)
+                    DropdownMenuItem(
+                      value: m["match_id"] as String,
+                      child: Text(
+                        "${m["home_team"] ?? "Hazai"} vs ${m["away_team"] ?? "Vendég"}"
+                        " · ${m["match_id"]}",
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.value.copyWith(fontSize: 13),
+                      ),
+                    ),
+              ],
+              onChanged: (v) => setDlg(() => onChanged(v)),
+            );
+          }
+
+          return AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: const Text("Félidők összefűzése"),
+            content: SizedBox(
+              width: 460,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Válaszd ki időrendben a két felvételt — egy teljes meccs "
+                    "készül belőlük. Az eredeti félidők megmaradnak.",
+                    style: AppText.label.copyWith(fontSize: 12),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  picker("1. félidő", firstId, (v) => firstId = v,
+                      exclude: secondId),
+                  const SizedBox(height: AppSpacing.md),
+                  picker("2. félidő", secondId, (v) => secondId = v,
+                      exclude: firstId),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                        labelText: "Új meccs neve (opcionális)",
+                        hintText: "pl. Bajnoki-03-15"),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("Mégse")),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: AppColors.onAccent),
+                onPressed: (firstId == null || secondId == null)
+                    ? null
+                    : () => Navigator.pop(ctx, true),
+                child: const Text("Összefűzés"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (ok != true || firstId == null || secondId == null) return;
+    try {
+      final newId = await _api.mergeMatches([firstId!, secondId!],
+          matchId: nameCtrl.text.trim());
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Teljes meccs létrehozva: $newId")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Nem sikerült az összefűzés: $e")));
+    }
+  }
+
   /// Egy meccs sora a kiválasztóban: pipa + a felderített oldal kiválasztása.
   Widget _pickRow(Map<String, dynamic> m, Map<String, String?> choice,
       void Function(void Function()) setDlg) {
@@ -665,6 +763,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 icon: const Icon(Icons.trending_up, size: 18),
                 label: const Text("Fejlődés"),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              // Két feldolgozott félidő összefűzése egyetlen teljes meccsé.
+              OutlinedButton.icon(
+                onPressed: _matches.length < 2 ? null : _mergeFlow,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: BorderSide(
+                      color: _matches.length < 2
+                          ? AppColors.border
+                          : AppColors.borderStrong),
+                ),
+                icon: const Icon(Icons.merge_type, size: 18),
+                label: const Text("Félidők összefűzése"),
               ),
               const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(

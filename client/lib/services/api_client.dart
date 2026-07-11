@@ -176,6 +176,28 @@ class ApiClient {
     }
   }
 
+  /// Több feldolgozott felvétel (pl. 1.+2. félidő) összefűzése egy meccsé
+  /// (POST /matches/merge). Az [ids] sorrendje számít: időrendben add meg!
+  /// Visszaadja az új meccs azonosítóját.
+  Future<String> mergeMatches(List<String> ids,
+      {String? matchId, String? homeTeam, String? awayTeam}) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/merge"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "ids": ids,
+        if (matchId != null && matchId.isNotEmpty) "match_id": matchId,
+        if (homeTeam != null) "home_team": homeTeam,
+        if (awayTeam != null) "away_team": awayTeam,
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az összefűzés: HTTP ${resp.statusCode}");
+    }
+    final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return data["match_id"] as String;
+  }
+
   /// A feldolgozás minőség-jelentése (GET /matches/{id}/quality).
   Future<Map<String, dynamic>> fetchQuality(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));
