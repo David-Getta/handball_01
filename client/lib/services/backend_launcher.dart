@@ -39,12 +39,39 @@ class BackendLauncher {
   /// motort a fájlcsere előtt (különben a futó motor fogná a fájlokat).
   static BackendLauncher? instance;
 
-  BackendLauncher({this.baseUrl = "http://localhost:8000", this.port = 8000}) {
+  BackendLauncher({this.baseUrl = "http://127.0.0.1:8000", this.port = 8000}) {
     instance = this;
   }
 
   Process? _process;
-  final _api = ApiClient(baseUrl: "http://localhost:8000");
+  final _api = ApiClient(baseUrl: "http://127.0.0.1:8000");
+
+  /// A motor kimenetének naplófájlja a felhasználói adatmappában — ha a motor
+  /// nem indul, ebből látszik, miért (engine-app.log).
+  static File _logFile() {
+    final home = Platform.environment["HOME"] ?? "";
+    final String dir;
+    if (Platform.isWindows) {
+      final base = Platform.environment["LOCALAPPDATA"] ?? "$home\\AppData\\Local";
+      dir = "$base\\SportMachine";
+    } else if (Platform.isMacOS) {
+      dir = "$home/Library/Application Support/SportMachine";
+    } else {
+      dir = "$home/.local/share/sportmachine";
+    }
+    return File("$dir${Platform.pathSeparator}engine-app.log");
+  }
+
+  IOSink? _log;
+
+  /// Naplósor a fájlba ÉS a kezdőképernyőre (ha van hallgató). A naplózás
+  /// hibája sosem akadályozhatja az indítást.
+  void _logLine(String s, void Function(String)? onLog) {
+    onLog?.call(s);
+    try {
+      _log?.writeln("${DateTime.now().toIso8601String()}  $s");
+    } catch (_) {}
+  }
 
   /// Elindítja (ha kell) a backendet, és visszaadja a végállapotot.
   /// `onLog`: a motor kimenete/állapot-üzenetek a kezdőképernyőnek.
@@ -61,17 +88,25 @@ class BackendLauncher {
           "Webes módban a motort külön kell futtatni.");
     }
 
+    // Napló nyitása (csonkolva — mindig a legutóbbi indítás látszik benne).
+    try {
+      final f = _logFile();
+      await f.parent.create(recursive: true);
+      _log = f.openWrite();
+    } catch (_) {}
+
     // 2) Megkeressük a beépített motort az app mellett.
     final exe = _findEngineExecutable();
     if (exe == null) {
-      onLog?.call("Nem találom a beépített motort — demó mód elérhető.");
+      _logLine("Nem találom a beépített motort — demó mód elérhető.", onLog);
       return const BackendStatus(BackendPhase.noEngine,
           "Nincs beépített motor. A demó így is működik; a valós elemzéshez a "
           "teljes (motorral csomagolt) kiadás kell.");
     }
 
     // 3) Elindítjuk és megvárjuk, míg válaszol.
-    onLog?.call("Motor indítása: ${exe.path}");
+    _logLine("Motor indítása: ${exe.path}", onLog);
+    var exited = false; // idő előtti leállás jelzése a várakozónak
     try {
       _process = await Process.start(
         exe.path,
@@ -79,27 +114,39 @@ class BackendLauncher {
         workingDirectory: exe.parent.path,
         environment: {"HANDBALL_HOST": "127.0.0.1", "HANDBALL_PORT": "$port"},
       );
-      _process!.stdout.listen((d) => onLog?.call(String.fromCharCodes(d).trimRight()));
-      _process!.stderr.listen((d) => onLog?.call(String.fromCharCodes(d).trimRight()));
+      _process!.stdout.listen((d) => _logLine(String.fromCharCodes(d).trimRight(), onLog));
+      _process!.stderr.listen((d) => _logLine(String.fromCharCodes(d).trimRight(), onLog));
+      _process!.exitCode.then((c) {
+        exited = true;
+        _logLine("A motor-folyamat leállt, kilépési kód: $c", onLog);
+      });
     } catch (e) {
+      _logLine("A motort nem sikerült elindítani: $e", onLog);
       return BackendStatus(BackendPhase.failed, "A motort nem sikerült elindítani: $e");
     }
 
-    // A motor indulása (különösen az első alkalommal) eltarthat pár másodpercig.
-    final ok = await _waitForHealth(const Duration(seconds: 40));
+    // A motor indulása (különösen az első alkalommal) eltarthat akár egy
+    // percig is (a rendszer első futáskor átvizsgálja a nagy programfájlt).
+    final ok = await _waitForHealth(const Duration(seconds: 90), isExited: () => exited);
     if (ok) {
+      _logLine("A motor elindult és válaszol.", onLog);
       return const BackendStatus(BackendPhase.ready, "A motor elindult.");
     }
+    final why = exited
+        ? "A motor idő előtt leállt — részletek: ${_logFile().path}"
+        : "A motor nem válaszolt időben — részletek: ${_logFile().path}";
+    _logLine(why, onLog);
     stop();
-    return const BackendStatus(BackendPhase.failed,
-        "A motor elindult, de nem válaszolt időben.");
+    return BackendStatus(BackendPhase.failed, why);
   }
 
-  /// Megvárja, míg a /health elérhető (rövid lekérdezésekkel), vagy lejár az idő.
-  Future<bool> _waitForHealth(Duration timeout) async {
+  /// Megvárja, míg a /health elérhető (rövid lekérdezésekkel), vagy lejár az
+  /// idő. `isExited`: ha a motor-folyamat közben leállt, nincs mire várni.
+  Future<bool> _waitForHealth(Duration timeout, {bool Function()? isExited}) async {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
       if (await _api.isHealthy()) return true;
+      if (isExited != null && isExited()) return false;
       await Future<void>.delayed(const Duration(milliseconds: 600));
     }
     return false;
@@ -137,5 +184,9 @@ class BackendLauncher {
   void stop() {
     _process?.kill();
     _process = null;
+    try {
+      _log?.close();
+    } catch (_) {}
+    _log = null;
   }
 }
