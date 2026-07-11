@@ -290,17 +290,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   Widget _metricsCard(Map<String, dynamic> r) {
-    String num(dynamic v, [String unit = ""]) =>
+    // FONTOS: a segédfüggvény neve NEM lehet "num" — az kitakarná a beépített
+    // num típust (fordítási hiba volt az első CI-buildben).
+    String fmt(dynamic v, [String unit = ""]) =>
         v == null ? "—" : "${(v is num) ? (v % 1 == 0 ? v.toInt() : v) : v}$unit";
     final tiles = <List<String>>[
-      ["Szervezett támadás", num(r["attack_share_pct"], "%")],
-      ["Gyors indítás", num(r["fast_break_pct"], "%")],
-      ["Labda átlagsebesség", num(r["avg_ball_speed_ms"], " m/s")],
-      ["Átl. támadáshossz", num(r["avg_attack_duration_s"], " s")],
-      ["Lövés / gól", "${num(r["shots"])} / ${num(r["goals"])}"],
-      ["Gólarány", num(r["shot_efficiency_pct"], "%")],
-      ["Labdaeladás", num(r["turnovers"])],
-      ["Figurák", num(r["num_figures"])],
+      ["Szervezett támadás", fmt(r["attack_share_pct"], "%")],
+      ["Gyors indítás", fmt(r["fast_break_pct"], "%")],
+      ["Labda átlagsebesség", fmt(r["avg_ball_speed_ms"], " m/s")],
+      ["Átl. támadáshossz", fmt(r["avg_attack_duration_s"], " s")],
+      ["Lövés / gól", "${fmt(r["shots"])} / ${fmt(r["goals"])}"],
+      ["Gólarány", fmt(r["shot_efficiency_pct"], "%")],
+      ["Labdaeladás", fmt(r["turnovers"])],
+      ["Figurák", fmt(r["num_figures"])],
     ];
     return Container(
       decoration: AppTheme.card(),

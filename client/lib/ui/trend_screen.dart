@@ -173,7 +173,8 @@ class _TrendScreenState extends State<TrendScreen> {
             ? Icons.trending_up
             : Icons.trending_down;
     final unit = (m["unit"] as String?) ?? "";
-    String num(dynamic v) {
+    // A segédfüggvény neve nem lehet "num" (kitakarná a beépített típust).
+    String fmt(dynamic v) {
       final d = (v as num?)?.toDouble() ?? 0.0;
       return d % 1 == 0 ? d.toInt().toString() : d.toStringAsFixed(1);
     }
@@ -183,12 +184,12 @@ class _TrendScreenState extends State<TrendScreen> {
         Icon(icon, size: 18, color: color),
         const SizedBox(width: AppSpacing.md),
         Expanded(child: Text("${m["label"]}", style: AppText.value.copyWith(fontSize: 13.5))),
-        Text("${num(m["older"])}$unit", style: AppText.label.copyWith(fontSize: 13)),
+        Text("${fmt(m["older"])}$unit", style: AppText.label.copyWith(fontSize: 13)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Icon(Icons.arrow_forward, size: 13, color: AppColors.textFaint),
         ),
-        Text("${num(m["newer"])}$unit",
+        Text("${fmt(m["newer"])}$unit",
             style: AppText.value.copyWith(fontSize: 13.5, color: color)),
       ]),
     );
