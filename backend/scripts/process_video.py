@@ -71,19 +71,34 @@ def _is_dark(img, thresh=40.0):
     return float(img.mean()) < thresh
 
 
+def _weights_ok(path):
+    """Gyors épség-ellenőrzés: a .pt fájl valójában zip, 'PK'-val kezdődik.
+
+    Sérült/csonka fájlnál (tipikus tünet: "Error -3 ... incorrect header
+    check" betöltéskor) inkább továbblépünk a következő jelöltre vagy a
+    letöltésre, mint hogy érthetetlen zlib-hibával elszálljon a feldolgozás.
+    """
+    try:
+        with open(path, "rb") as f:
+            return f.read(2) == b"PK"
+    except OSError:
+        return False
+
+
 def _resolve_weights(weights):
     """A súlyfájl (yolov8n.pt) tényleges elérési útja — hogy a BECSOMAGOLT
     (telepítés nélküli) kiadásban is megtalálja, ne kelljen letölteni.
 
-    Sorrend: (1) ha a megadott út létezik, azt; (2) HANDBALL_WEIGHTS_DIR/<név>;
-    (3) a PyInstaller csomag weights/<név> mappája (sys._MEIPASS); (4) az exe
-    melletti weights/ mappa. Ha egyik sincs, marad az eredeti (ultralytics letölti).
+    Sorrend: (1) ha a megadott út létezik ÉS ép, azt; (2) HANDBALL_WEIGHTS_DIR/
+    <név>; (3) a PyInstaller csomag weights/<név> mappája (sys._MEIPASS);
+    (4) az exe melletti weights/ mappa. Sérült jelöltet kihagyunk; ha egyik
+    sincs, marad az eredeti név (az ultralytics letölti).
     """
     import os
     import sys
     if not weights:
         return weights
-    if os.path.exists(weights):
+    if os.path.exists(weights) and _weights_ok(weights):
         return weights
     name = os.path.basename(weights)
     candidates = []
@@ -96,7 +111,27 @@ def _resolve_weights(weights):
     candidates.append(os.path.join(os.path.dirname(sys.executable), "weights", name))
     for c in candidates:
         if os.path.exists(c):
-            return c
+            if _weights_ok(c):
+                return c
+            print(f"FIGYELEM: sérült súlyfájl kihagyva: {c}")
+    # Nincs ép helyi fájl → a puszta név marad, az ultralytics letölti egy
+    # ÍRHATÓ helyre (a felhasználói adatmappába), nem az app csomagjába.
+    try:
+        from handball.storage import data_root
+        dl_dir = data_root() / "weights"
+        dl_dir.mkdir(parents=True, exist_ok=True)
+        target = dl_dir / name
+        if target.exists() and _weights_ok(str(target)):
+            return str(target)
+        import urllib.request
+        url = ("https://github.com/ultralytics/assets/releases/latest/"
+               f"download/{name}")
+        print(f"súlyfájl letöltése: {url} → {target}")
+        urllib.request.urlretrieve(url, str(target))
+        if _weights_ok(str(target)):
+            return str(target)
+    except Exception as e:
+        print(f"FIGYELEM: a súlyfájl letöltése nem sikerült: {e}")
     return weights
 
 
@@ -156,7 +191,15 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     import numpy as np
     import cv2
     from ultralytics import YOLO
-    model = YOLO(_resolve_weights(weights))
+    resolved = _resolve_weights(weights)
+    try:
+        model = YOLO(resolved)
+    except Exception as e:
+        # Érthető hibaüzenet a felhasználónak (a nyers zlib/torch hiba helyett).
+        raise RuntimeError(
+            f"A detektáló modell nem tölthető be ({resolved}): {e} — "
+            "a súlyfájl sérült lehet; internetkapcsolattal a rendszer "
+            "magától letölti a jót, próbáld újra.") from e
     device = _pick_device()
     labels = {"cuda": "CUDA (NVIDIA GPU)", "mps": "MPS (Apple Silicon GPU)",
               "cpu": "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"}
