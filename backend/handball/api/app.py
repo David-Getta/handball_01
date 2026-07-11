@@ -488,6 +488,44 @@ def create_app():
         # A dataclass-okat egyszerű szótárrá alakítjuk a JSON-válaszhoz.
         return {str(tid): vars(s) for tid, s in stats.items()}
 
+    @app.get("/matches/{match_id}/stats/export")
+    def export_stats_csv(match_id: str):
+        """Játékos-statisztika CSV-ben, Excel-barát formában (pontosvessző
+        elválasztó, UTF-8 BOM, tizedesvessző) — az edző táblázatban dolgozhat
+        tovább az adatokkal."""
+        from fastapi import Response
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        stats = summarize(match)
+        # Csapat + mezszám a frame-ekből (első előfordulás alapján).
+        team_of: dict = {}
+        jersey_of: dict = {}
+        for fr in match.frames:
+            for p in fr.players:
+                team_of.setdefault(p.track_id, p.team.value)
+                if p.jersey_number is not None:
+                    jersey_of.setdefault(p.track_id, p.jersey_number)
+
+        def num(x):
+            return f"{x:.1f}".replace(".", ",")  # tizedesvessző (magyar Excel)
+
+        lines = ["Játékos;Csapat;Mezszám;Táv (m);Átl. sebesség (m/s);"
+                 "Mért kocka;Becsült kocka"]
+        for tid, s in sorted(stats.items()):
+            team = (match.meta.home_team if team_of.get(tid) == "home"
+                    else match.meta.away_team)
+            lines.append(";".join([
+                f"#{tid}", team, str(jersey_of.get(tid, "")),
+                num(s.distance_m), num(s.avg_speed_ms),
+                str(s.measured_frames), str(s.estimated_frames),
+            ]))
+        csv = "\ufeff" + "\r\n".join(lines) + "\r\n"  # BOM: Excel-kompatibilitás
+        return Response(
+            content=csv, media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition":
+                     f'attachment; filename="statisztika_{match_id}.csv"'})
+
     @app.get("/matches/{match_id}/heatmap")
     def get_heatmap(match_id: str, team: str = "home",
                     bins_x: int = 20, bins_y: int = 10):
