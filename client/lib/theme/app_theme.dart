@@ -103,6 +103,15 @@ class AppTheme {
         color: AppColors.accent,
         linearTrackColor: AppColors.border,
       ),
+      // macOS-stílusú lapváltás MINDEN platformon: gyors áttűnés + alig
+      // észrevehető nagyítás — az Apple-felületek "levegős" érzete.
+      pageTransitionsTheme: const PageTransitionsTheme(builders: {
+        TargetPlatform.macOS: MacPageTransitionsBuilder(),
+        TargetPlatform.windows: MacPageTransitionsBuilder(),
+        TargetPlatform.linux: MacPageTransitionsBuilder(),
+        TargetPlatform.iOS: MacPageTransitionsBuilder(),
+        TargetPlatform.android: MacPageTransitionsBuilder(),
+      }),
     );
   }
 
@@ -112,4 +121,35 @@ class AppTheme {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderColor ?? AppColors.border, width: 1),
       );
+}
+
+/// macOS-stílusú lapváltás: a bejövő képernyő finoman úszik be (áttűnés +
+/// 0,985 → 1,0 skálázás, easeOutCubic), a kimenő pedig enyhén elhalványul —
+/// nincs oldalra csúszkálás, mint a Material alapértelmezésében.
+class MacPageTransitionsBuilder extends PageTransitionsBuilder {
+  const MacPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+    // A háttérben maradó (kimenő) képernyő finom elhalványítása.
+    final fadeOut = Tween<double>(begin: 1.0, end: 0.94).animate(
+        CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeIn));
+    return FadeTransition(
+      opacity: fadeOut,
+      child: FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.985, end: 1.0).animate(curved),
+          child: child,
+        ),
+      ),
+    );
+  }
 }
