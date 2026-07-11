@@ -74,6 +74,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  /// Beépített súgó: a teljes edzői munkamenet lépésről lépésre — hogy egy
+  /// új felhasználó (pl. a pilot-csapat edzője) segítség nélkül boldoguljon.
+  Future<void> _showHelp() async {
+    Widget step(String n, String title, String body) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 22, height: 22, alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                  color: AppColors.accent, shape: BoxShape.circle),
+              child: Text(n, style: const TextStyle(
+                  color: AppColors.onAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: AppText.value.copyWith(fontSize: 13.5)),
+                const SizedBox(height: 2),
+                Text(body, style: AppText.label.copyWith(fontSize: 12)),
+              ]),
+            ),
+          ]),
+        );
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Első lépések"),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                step("1", "Videó feltöltése",
+                    "Feltöltés fül → kattints a mezőre, válaszd ki a meccsvideót "
+                    "(MP4/MOV/MKV). Add meg a két csapat nevét."),
+                step("2", "Pálya-kalibráció",
+                    "Léptess olyan képkockára, ahol a pálya jól látszik. Ha csak "
+                    "egy térfél látszik: Bal/Jobb fél → a 4 pontot a térfél "
+                    "sarkaira (a felezővonal két vége is sarok). Ha kilóg a "
+                    "pálya a képből: kicsinyítsd a képet. Mindkét fél után: "
+                    "Összenézet → finomhangolás → Kész. A kalibráció a videóhoz "
+                    "mentődik, nem kell újra bejelölni."),
+                step("3", "Feldolgozás",
+                    "Először Próba (~2 perc) — ellenőrizd a színeket és a "
+                    "pozíciókat. Ha jó: Félidő vagy Teljes videó. Több videót is "
+                    "sorba állíthatsz; a haladás itt, a kezdőlapon látszik. Az "
+                    "appot ne zárd be feldolgozás közben."),
+                step("4", "Elemzés",
+                    "A kész meccs a könyvtárban. Meccs-nézet: lejátszás, "
+                    "statisztika, események (kattintásra a VIDEÓ a jelenetre "
+                    "ugrik), játékos-kiemelés a pályára kattintva. Ha a csapatok "
+                    "fordítva: ⇄ gomb. Jelentés: 📄 (nyomtatható) és 📊 (Excel)."),
+                step("5", "Felderítés és fejlődés",
+                    "Meccs-nézet → Felderítés: ellenfél-jelentés kulcsokkal. "
+                    "Kezdőlap → Egyesített felderítés (több meccsből) és "
+                    "Fejlődés (két időszak összevetése)."),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  "Az app magától frissül (arany sáv). Minden adat a saját "
+                  "gépeden marad.",
+                  style: AppText.label.copyWith(fontSize: 11.5, color: AppColors.gold),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Értem"),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Háttérben megnézi, van-e új kiadás — hibánál csendben marad (induláskor
   /// nem zavarjuk a felhasználót hálózati hibaüzenettel).
   Future<void> _checkUpdatesSilently() async {
@@ -512,6 +593,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: AppText.subtitle),
                     ],
                   ),
+                ),
+                IconButton(
+                  onPressed: _showHelp,
+                  icon: const Icon(Icons.help_outline, color: AppColors.textSecondary),
+                  tooltip: "Első lépések / súgó",
                 ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.system_update_alt,

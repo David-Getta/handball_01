@@ -351,9 +351,41 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.description_outlined, color: AppColors.textSecondary),
           tooltip: "Meccsjelentés mentése (nyomtatható)",
         ),
+        // Játékos-statisztika mentése CSV-ben (Excelben nyitható).
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _exportStatsCsv,
+          icon: const Icon(Icons.table_chart_outlined, color: AppColors.textSecondary),
+          tooltip: "Statisztika mentése (Excel/CSV)",
+        ),
         IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppColors.textSecondary)),
       ],
     );
+  }
+
+  /// Játékos-statisztika mentése CSV-ben (Excelben közvetlenül nyitható).
+  Future<void> _exportStatsCsv() async {
+    final match = _match;
+    if (match == null) return;
+    try {
+      final bytes = await _api.fetchStatsCsv(widget.matchId);
+      final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Statisztika mentése (CSV)",
+        fileName: "statisztika_$name.csv",
+        type: FileType.custom,
+        allowedExtensions: const ["csv"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Statisztika mentve: $path — Excelben nyitható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Export-hiba: $e")));
+    }
   }
 
   /// Meccsjelentés mentése: nyomtatható HTML (böngészőből Ctrl+P/⌘P → PDF).

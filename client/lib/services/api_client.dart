@@ -124,6 +124,16 @@ class ApiClient {
     }
   }
 
+  /// Játékos-statisztika CSV-ben (GET .../stats/export) — Excel-barát.
+  Future<Uint8List> fetchStatsCsv(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/stats/export"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a statisztika-export: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// A meccs nyomtatható edzői jelentése HTML-ként (GET .../report/export).
   Future<Uint8List> fetchMatchReportExport(String matchId) async {
     final resp =
