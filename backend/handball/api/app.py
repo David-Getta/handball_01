@@ -539,7 +539,13 @@ def create_app():
             quality = compute_quality_report(match)
         except Exception:
             quality = None  # a jelentés minőség-szakasz nélkül is teljes
-        html = match_report_html(match, tactics, events, quality)
+        try:
+            heatmaps = {t.value: compute_team_heatmap(match, t)
+                        for t in (Team.HOME, Team.AWAY)}
+        except Exception:
+            heatmaps = None  # hőtérkép nélkül is teljes a jelentés
+        html = match_report_html(match, tactics, events, quality,
+                                 heatmaps=heatmaps)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     @app.get("/matches/{match_id}/scouting")
