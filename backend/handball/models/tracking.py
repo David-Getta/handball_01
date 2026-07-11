@@ -139,6 +139,17 @@ class Match:
     meta: MatchMeta
     frames: list[Frame] = field(default_factory=list)
 
+    def swap_teams(self) -> None:
+        """Felcseréli a két csapatot: minden játékos team-mezőjét átbillenti.
+
+        Akkor kell, ha a csapatszín-klaszterezés fordítva találta el, melyik
+        szín a hazai — az edző egy gombbal javíthatja, újrafeldolgozás nélkül.
+        A csapatNEVEK maradnak (azokat a felhasználó adta meg helyesen).
+        """
+        for fr in self.frames:
+            for p in fr.players:
+                p.team = Team.AWAY if p.team == Team.HOME else Team.HOME
+
     # ---- Szerializáció: Python objektum -> JSON szöveg -------------------------
 
     def to_dict(self) -> dict:

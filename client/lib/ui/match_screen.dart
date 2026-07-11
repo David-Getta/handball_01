@@ -332,9 +332,57 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.timer_outlined, color: AppColors.textSecondary),
           tooltip: "Kiállítások (2/4 perc)",
         ),
+        // Gyors javítás: ha a színfelismerés fordítva találta el a csapatokat.
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _swapTeams,
+          icon: const Icon(Icons.swap_horiz, color: AppColors.textSecondary),
+          tooltip: "Csapatok felcserélése (ha a színek fordítva vannak)",
+        ),
         IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppColors.textSecondary)),
       ],
     );
+  }
+
+  /// Csapatok felcserélése — ha a színfelismerés fordítva osztotta ki, melyik
+  /// szín a hazai. Megerősítés után a backend átbillenti minden játékos
+  /// csapat-mezőjét, és a nézet újratölt (statisztika is frissül).
+  Future<void> _swapTeams() async {
+    final match = _match;
+    if (match == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Csapatok felcserélése"),
+        content: Text(
+          "Ha a pályán a(z) ${match.meta.homeTeam} játékosai a(z) "
+          "${match.meta.awayTeam} színével jelennek meg (és fordítva), ez a "
+          "művelet kijavítja. A csapatnevek maradnak, csak a hozzárendelés fordul.",
+          style: AppText.label,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Csere"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _api.swapTeams(widget.matchId);
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Csapatok felcserélve.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Csere-hiba: $e")));
+    }
   }
 
   /// Kiállítások felvitele: az edző megadja, melyik csapatnál, mikortól és
