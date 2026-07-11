@@ -310,7 +310,8 @@ class ApiClient {
     String path, {
     String? weights,
     int stride = 3,
-    int max = 400,
+    int max = 0, // 0 = a TELJES videó (éles meccsnél ez kell)
+    int imgsz = 1280,
     int start = 0,
     List<List<int>>? calib,
     String? matchId,
@@ -321,6 +322,7 @@ class ApiClient {
       "path": path,
       "stride": stride,
       "max": max,
+      "imgsz": imgsz,
       "start": start,
       if (weights != null) "weights": weights,
       if (calib != null) "calib": calib,
@@ -345,6 +347,16 @@ class ApiClient {
     final resp = await http.get(Uri.parse("$baseUrl/jobs/$jobId"));
     if (resp.statusCode != 200) {
       throw Exception("Nem sikerült lekérni a munka állapotát: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Megszakít egy futó feldolgozást (POST /jobs/{id}/cancel). A leállás nem
+  /// azonnali: a feldolgozó a következő képkockánál veszi észre (másodpercek).
+  Future<Map<String, dynamic>> cancelJob(String jobId) async {
+    final resp = await http.post(Uri.parse("$baseUrl/jobs/$jobId/cancel"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült megszakítani: HTTP ${resp.statusCode}");
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }

@@ -6,16 +6,33 @@
 #   - minden futásnál feltölti a telepítőt build-artifactként,
 #   - "v*" címke (tag) pusholásakor kiteszi a Releases oldalra is.
 #
-# Indítás kézzel: GitHub → Actions → "release" → Run workflow.
-# Kiadás linkkel: git tag v0.1.0 && git push origin v0.1.0
-#   → a kész SportMachine-Setup.exe a repo Releases oldalán lesz letölthető.
+# Kiadás KÉTFÉLE módon indítható:
+#  1. Actions → "release" → Run workflow → a "version" mezőbe pl. 0.1.2 →
+#     teljes kiadás készül (címke + Releases-feltöltés is). Üres verzióval
+#     csak próba-build készül, kiadás nélkül.
+#  2. v* címke pusholásával (git tag v0.1.2 && git push origin v0.1.2).
 
 name: release
 
 on:
-  workflow_dispatch: {}   # kézi indítás az Actions fülről
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Kiadás verziószáma (pl. 0.1.2). Üresen: csak próba-build."
+        required: false
+        default: ""
   push:
     tags: ["v*"]          # verziócímkére automatikus kiadás
+
+# A Releases oldalra való feltöltéshez írási jog kell a repó tartalmához —
+# enélkül a kiadás-lépés "Resource not accessible by integration" hibát ad.
+permissions:
+  contents: write
+
+# A kiadandó címke egységesen: tag-indításnál a címke neve, kézi indításnál
+# a megadott versionből képzett "vX.Y.Z"; üres, ha nem kell kiadni.
+env:
+  RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (github.event.inputs.version != '' && format('v{0}', github.event.inputs.version) || '') }}
 
 jobs:
   # Gyors ellenőrzés: a backend tesztjei (olcsó ubuntu-gépen).
@@ -82,14 +99,14 @@ jobs:
       - name: Windows platform-váz generálása (a repo csak a lib/-et tartalmazza)
         working-directory: client
         run: flutter create . --platforms=windows --project-name handball_client
-      - name: Verziószám beírása a címkéből (automatikus frissítéshez)
+      - name: Verziószám beírása (automatikus frissítéshez)
         # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
         # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE_TAG != ''
         shell: pwsh
         working-directory: client
         run: |
-          $v = $env:GITHUB_REF_NAME.TrimStart('v')
+          $v = $env:RELEASE_TAG.TrimStart('v')
           Set-Content -Path lib\version.dart -Value "const String appVersion = `"$v`";"
           Get-Content lib\version.dart
       - name: Flutter build (Windows release)
@@ -115,10 +132,11 @@ jobs:
           path: dist/installer/SportMachine-Setup.exe
           retention-days: 14
 
-      - name: Kiadás a Releases oldalra (csak v* címkénél)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Kiadás a Releases oldalra
+        if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: dist/installer/SportMachine-Setup.exe
           body: |
             **Sport Machine — Windows telepítő**
@@ -178,13 +196,13 @@ jobs:
         run: |
           /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/Release.entitlements
           /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/DebugProfile.entitlements
-      - name: Verziószám beírása a címkéből (automatikus frissítéshez)
+      - name: Verziószám beírása (automatikus frissítéshez)
         # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
         # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE_TAG != ''
         working-directory: client
         run: |
-          printf 'const String appVersion = "%s";\n' "${GITHUB_REF_NAME#v}" > lib/version.dart
+          printf 'const String appVersion = "%s";\n' "${RELEASE_TAG#v}" > lib/version.dart
           cat lib/version.dart
       - name: Flutter build (macOS release)
         working-directory: client
@@ -212,8 +230,9 @@ jobs:
           path: SportMachine-macOS.zip
           retention-days: 14
 
-      - name: Kiadás a Releases oldalra (csak v* címkénél)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Kiadás a Releases oldalra
+        if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: SportMachine-macOS.zip
