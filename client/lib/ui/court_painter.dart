@@ -130,8 +130,7 @@ class CourtPainter extends CustomPainter {
       }
     }
 
-    // Labda — meleg szín, finom izzással.
-    final ball = f.ball;
+    // Labda — meleg szín, finom izzással. (A `ball` fentebb már deklarálva.)
     if (ball != null) {
       final c = p(ball.x, ball.y);
       canvas.drawCircle(c, 0.6 * scale, Paint()..color = AppColors.ball.withOpacity(0.25));

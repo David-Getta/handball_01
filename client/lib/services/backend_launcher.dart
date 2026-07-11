@@ -34,7 +34,14 @@ class BackendStatus {
 class BackendLauncher {
   final String baseUrl;
   final int port;
-  BackendLauncher({this.baseUrl = "http://localhost:8000", this.port = 8000});
+
+  /// Az utoljára létrehozott indító — a frissítő ezen keresztül állítja le a
+  /// motort a fájlcsere előtt (különben a futó motor fogná a fájlokat).
+  static BackendLauncher? instance;
+
+  BackendLauncher({this.baseUrl = "http://localhost:8000", this.port = 8000}) {
+    instance = this;
+  }
 
   Process? _process;
   final _api = ApiClient(baseUrl: "http://localhost:8000");

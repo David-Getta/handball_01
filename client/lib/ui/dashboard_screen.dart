@@ -8,7 +8,9 @@ library;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/update_service.dart";
 import "../theme/app_theme.dart";
+import "../version.dart";
 import "match_screen.dart";
 import "scouting_screen.dart";
 import "shell/app_shell.dart";
@@ -28,10 +30,204 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _offline = false; // a backend nem elérhető
   List<Map<String, dynamic>> _matches = [];
 
+  // Automatikus frissítés: az elérhető új verzió (ha van) és az elrejtés.
+  UpdateInfo? _update;
+  bool _updateDismissed = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _checkUpdatesSilently();
+  }
+
+  /// Háttérben megnézi, van-e új kiadás — hibánál csendben marad (induláskor
+  /// nem zavarjuk a felhasználót hálózati hibaüzenettel).
+  Future<void> _checkUpdatesSilently() async {
+    try {
+      final u = await UpdateService().check();
+      if (mounted && u != null) setState(() => _update = u);
+    } catch (_) {
+      // pl. nincs net, vagy privát a repó — a kézi ellenőrzés jelez érdemben
+    }
+  }
+
+  /// Kézi "Frissítés keresése" — snackbarban jelzi az eredményt/hibát is.
+  Future<void> _checkUpdatesManually() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final u = await UpdateService().check();
+      if (!mounted) return;
+      if (u == null) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text("A legújabb verziót használod ($appVersion).")));
+      } else {
+        setState(() {
+          _update = u;
+          _updateDismissed = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final s = "$e";
+      // 404: nincs kiadás VAGY privát a repó; 401/403: rossz/lejárt token.
+      final authIssue = s.contains("404") || s.contains("401") || s.contains("403");
+      messenger.showSnackBar(SnackBar(
+        content: Text(authIssue
+            ? "Nem érem el a kiadásokat — privát repónál add meg a "
+                "GitHub-kulcsot (token)."
+            : "Frissítés-ellenőrzési hiba: $e"),
+        action: authIssue
+            ? SnackBarAction(label: "Kulcs megadása", onPressed: _updateTokenDialog)
+            : null,
+        duration: const Duration(seconds: 8),
+      ));
+    }
+  }
+
+  /// GitHub hozzáférési kulcs (token) megadása privát repóhoz — egyszer kell.
+  /// Fine-grained token, csak ehhez a repóhoz, csak "Contents: Read-only".
+  Future<void> _updateTokenDialog() async {
+    final current = await UpdateService.loadToken();
+    if (!mounted) return;
+    final ctrl = TextEditingController(text: current ?? "");
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Frissítési kulcs (GitHub token)"),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Privát repónál az automatikus frissítéshez egy GitHub "
+                "hozzáférési kulcs kell. Létrehozás: github.com → Settings → "
+                "Developer settings → Fine-grained tokens → csak ehhez a "
+                "repóhoz, csak Contents: Read-only joggal. A kulcs csak ezen "
+                "a gépen tárolódik. Üresen hagyva törlődik.",
+                style: AppText.label.copyWith(fontSize: 12),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: ctrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "github_pat_…",
+                  prefixIcon: Icon(Icons.key, size: 18, color: AppColors.gold),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await UpdateService.saveToken(ctrl.text);
+    if (!mounted) return;
+    if (ctrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("A kulcs törölve.")));
+    } else {
+      // Mentés után rögtön ellenőrzünk — így azonnal kiderül, jó-e a kulcs.
+      await _checkUpdatesManually();
+    }
+  }
+
+  /// Letöltés + telepítés folyamat-ablakkal. Siker esetén az app újraindul.
+  Future<void> _installUpdate(UpdateInfo info) async {
+    final progress = ValueNotifier<double?>(0);
+    // Nem zárható folyamat-ablak — a csere közben nem szabad kattintgatni.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Frissítés ${info.version} verzióra…"),
+        content: ValueListenableBuilder<double?>(
+          valueListenable: progress,
+          builder: (_, v, __) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LinearProgressIndicator(value: v, color: AppColors.gold),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                v == null
+                    ? "Letöltés…"
+                    : v < 1
+                        ? "Letöltés: ${(v * 100).toStringAsFixed(0)}%"
+                        : "Telepítés — az app mindjárt újraindul…",
+                style: AppText.label,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    try {
+      await UpdateService().downloadAndInstall(info, onProgress: (v) {
+        progress.value = v;
+      });
+      // Ide normál esetben nem jutunk el: a telepítő kilépteti az appot.
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // folyamat-ablak be
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Frissítési hiba: $e")));
+    }
+  }
+
+  /// Arany figyelmeztető sáv a lista tetején: új verzió érhető el.
+  Widget _updateBanner(UpdateInfo info) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.gold),
+      ),
+      child: Row(children: [
+        const Icon(Icons.system_update_alt, color: AppColors.gold),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Új verzió érhető el: ${info.version}",
+                  style: AppText.value.copyWith(color: AppColors.gold)),
+              const SizedBox(height: 2),
+              Text("Egy kattintás — az app letölti, telepíti és újraindul.",
+                  style: AppText.label.copyWith(fontSize: 12)),
+            ],
+          ),
+        ),
+        TextButton(
+          onPressed: () => setState(() => _updateDismissed = true),
+          child: const Text("Később"),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: AppColors.onAccent),
+          onPressed: () => _installUpdate(info),
+          icon: const Icon(Icons.download, size: 18),
+          label: const Text("Frissítés most"),
+        ),
+      ]),
+    );
   }
 
   Future<void> _load() async {
@@ -266,6 +462,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onRefresh: _load,
         child: ListView(
           children: [
+            // Új verzió sáv — csak ha találtunk frissítést és nem rejtették el.
+            if (_update != null && !_updateDismissed) _updateBanner(_update!),
             Row(
               children: [
                 Expanded(
@@ -278,10 +476,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                 ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.system_update_alt,
+                      color: AppColors.textSecondary),
+                  tooltip: "Programfrissítés",
+                  color: AppColors.surface,
+                  onSelected: (v) {
+                    if (v == "check") _checkUpdatesManually();
+                    if (v == "token") _updateTokenDialog();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: "check",
+                      child: ListTile(
+                        leading: Icon(Icons.system_update_alt, size: 18),
+                        title: Text("Frissítés keresése"),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: "token",
+                      child: ListTile(
+                        leading: Icon(Icons.key, size: 18),
+                        title: Text("Frissítési kulcs (privát repóhoz)"),
+                        dense: true,
+                      ),
+                    ),
+                  ],
+                ),
                 IconButton(
                   onPressed: _load,
                   icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
-                  tooltip: "Frissítés",
+                  tooltip: "Lista frissítése",
                 ),
               ],
             ),

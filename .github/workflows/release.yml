@@ -82,6 +82,16 @@ jobs:
       - name: Windows platform-váz generálása (a repo csak a lib/-et tartalmazza)
         working-directory: client
         run: flutter create . --platforms=windows --project-name handball_client
+      - name: Verziószám beírása a címkéből (automatikus frissítéshez)
+        # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
+        # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        working-directory: client
+        run: |
+          $v = $env:GITHUB_REF_NAME.TrimStart('v')
+          Set-Content -Path lib\version.dart -Value "const String appVersion = `"$v`";"
+          Get-Content lib\version.dart
       - name: Flutter build (Windows release)
         working-directory: client
         run: |
@@ -168,6 +178,14 @@ jobs:
         run: |
           /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/Release.entitlements
           /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/DebugProfile.entitlements
+      - name: Verziószám beírása a címkéből (automatikus frissítéshez)
+        # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
+        # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: client
+        run: |
+          printf 'const String appVersion = "%s";\n' "${GITHUB_REF_NAME#v}" > lib/version.dart
+          cat lib/version.dart
       - name: Flutter build (macOS release)
         working-directory: client
         run: |

@@ -49,6 +49,40 @@ másodpercig — ez normális. Utána megnyílik a program.
 
 ---
 
+## Automatikus frissítés
+
+A programot **csak egyszer** kell telepíteni. Utána — a Claude alkalmazáshoz
+hasonlóan — **magától észreveszi**, ha új verzió jelent meg:
+
+1. Az **Áttekintés** képernyő tetején megjelenik egy arany sáv:
+   *„Új verzió érhető el"*.
+2. Kattints a **Frissítés most** gombra — a program letölti az új verziót,
+   kicseréli önmagát, és **újraindul**. Semmi mást nem kell tenned.
+3. Ha inkább később frissítenél, kattints a **Később** gombra. Kézzel is
+   kereshetsz frissítést a fejléc **⭳ Programfrissítés keresése** ikonjával.
+
+### Privát repónál: frissítési kulcs (egyszeri beállítás)
+
+Ha a repó **privát**, a program csak egy GitHub-kulccsal (token) látja a
+kiadásokat. Ezt **egyszer** kell megadni:
+
+1. Böngészőben: **github.com → jobb felül a profilképed → Settings →
+   Developer settings → Personal access tokens → Fine-grained tokens →
+   Generate new token**.
+2. Beállítások a tokenhez:
+   - **Repository access:** *Only select repositories* → válaszd ki a
+     `handball_01` repót.
+   - **Permissions → Repository permissions → Contents:** *Read-only*.
+   - Lejárat: állítsd hosszúra (pl. 1 év) — lejáratkor újat kell megadni.
+3. **Generate token** → másold ki a `github_pat_…` kezdetű kulcsot.
+4. A programban: fejléc **⭳ ikon → Frissítési kulcs (privát repóhoz)** →
+   illeszd be → **Mentés**. A program rögtön ellenőrzi, hogy működik-e.
+
+A kulcs **csak a te gépeden** tárolódik, és csak olvasásra jó ehhez az egy
+repóhoz. Ezután az automatikus frissítés privát repóval is ugyanúgy működik.
+
+---
+
 ## Gyakori kérdések
 
 **Nem indul el / „A motor nem indult el" üzenet.** Zárd be, és indítsd újra a
