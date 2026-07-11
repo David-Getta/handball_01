@@ -61,9 +61,25 @@ hasonlóan — **magától észreveszi**, ha új verzió jelent meg:
 3. Ha inkább később frissítenél, kattints a **Később** gombra. Kézzel is
    kereshetsz frissítést a fejléc **⭳ Programfrissítés keresése** ikonjával.
 
-> **Fontos:** a frissítés-ellenőrzés a GitHub Releases oldalt nézi. Ez csak
-> **publikus** repónál működik bejelentkezés nélkül — privát repónál a program
-> nem látja a kiadásokat, ilyenkor marad a kézi letöltés a Releases oldalról.
+### Privát repónál: frissítési kulcs (egyszeri beállítás)
+
+Ha a repó **privát**, a program csak egy GitHub-kulccsal (token) látja a
+kiadásokat. Ezt **egyszer** kell megadni:
+
+1. Böngészőben: **github.com → jobb felül a profilképed → Settings →
+   Developer settings → Personal access tokens → Fine-grained tokens →
+   Generate new token**.
+2. Beállítások a tokenhez:
+   - **Repository access:** *Only select repositories* → válaszd ki a
+     `handball_01` repót.
+   - **Permissions → Repository permissions → Contents:** *Read-only*.
+   - Lejárat: állítsd hosszúra (pl. 1 év) — lejáratkor újat kell megadni.
+3. **Generate token** → másold ki a `github_pat_…` kezdetű kulcsot.
+4. A programban: fejléc **⭳ ikon → Frissítési kulcs (privát repóhoz)** →
+   illeszd be → **Mentés**. A program rögtön ellenőrzi, hogy működik-e.
+
+A kulcs **csak a te gépeden** tárolódik, és csak olvasásra jó ehhez az egy
+repóhoz. Ezután az automatikus frissítés privát repóval is ugyanúgy működik.
 
 ---
 

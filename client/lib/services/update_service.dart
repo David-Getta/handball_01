@@ -9,9 +9,13 @@
 ///
 /// Fejlesztői futásnál ([appVersion] == "0.0.0-dev") az ellenőrzés kikapcsol.
 ///
-/// FONTOS korlát: privát GitHub-repónál a /releases/latest hitelesítés nélkül
-/// 404-et ad — ilyenkor a frissítés-ellenőrzés nem lát kiadást. Megoldás:
-/// a repót publikussá tenni, vagy külön publikus "releases" repót használni.
+/// PRIVÁT repó támogatása: hitelesítés nélkül a /releases/latest 404-et ad.
+/// Ezért az app egy egyszer megadott GitHub hozzáférési kulcsot (fine-grained
+/// personal access token, csak "Contents: Read-only" jog ehhez a repóhoz)
+/// tárol a felhasználó gépén, és azzal kérdezi le + tölti le a kiadásokat.
+/// A csomag letöltése ilyenkor az API asset-végpontján át megy, amely 302-vel
+/// egy aláírt tároló-URL-re irányít — oda az Authorization fejlécet TILOS
+/// továbbküldeni, ezért az átirányítást kézzel követjük.
 library;
 
 import "dart:convert";
@@ -27,8 +31,11 @@ class UpdateInfo {
   /// Az új verzió (pl. "0.1.2" — a "v" előtag nélkül).
   final String version;
 
-  /// A letöltendő csomag URL-je (browser_download_url).
+  /// A letöltendő csomag URL-je (browser_download_url — publikus repóhoz).
   final String url;
+
+  /// Az API asset-végpontja (privát repóhoz: tokennel innen töltünk).
+  final String apiUrl;
 
   /// A csomag fájlneve (pl. "SportMachine-macOS.zip").
   final String assetName;
@@ -36,6 +43,7 @@ class UpdateInfo {
   const UpdateInfo({
     required this.version,
     required this.url,
+    required this.apiUrl,
     required this.assetName,
   });
 }
@@ -44,6 +52,50 @@ class UpdateService {
   /// A GitHub repó, ahol a kiadások megjelennek.
   static const owner = "David-Getta";
   static const repo = "handball_01";
+
+  // ---- Hozzáférési kulcs (token) privát repóhoz ----
+  // Ugyanabban a felhasználói mappában tároljuk, ahová a motor is ír
+  // (SportMachine adatmappa) — telepített app is írhatja-olvashatja.
+
+  /// A token fájlja a felhasználó adatmappájában.
+  static File _tokenFile() {
+    final home = Platform.environment["HOME"] ?? "";
+    final String dir;
+    if (Platform.isWindows) {
+      final base = Platform.environment["LOCALAPPDATA"] ??
+          "$home\\AppData\\Local";
+      dir = "$base\\SportMachine";
+    } else if (Platform.isMacOS) {
+      dir = "$home/Library/Application Support/SportMachine";
+    } else {
+      dir = "$home/.local/share/sportmachine";
+    }
+    return File("$dir${Platform.pathSeparator}github_token.txt");
+  }
+
+  /// A mentett token, vagy null, ha nincs (üres fájl = nincs).
+  static Future<String?> loadToken() async {
+    try {
+      final f = _tokenFile();
+      if (!await f.exists()) return null;
+      final t = (await f.readAsString()).trim();
+      return t.isEmpty ? null : t;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Token mentése; üres/null érték törli a mentettet.
+  static Future<void> saveToken(String? token) async {
+    final f = _tokenFile();
+    final t = token?.trim() ?? "";
+    if (t.isEmpty) {
+      if (await f.exists()) await f.delete();
+      return;
+    }
+    await f.parent.create(recursive: true);
+    await f.writeAsString(t);
+  }
 
   /// "1.2.3" / "v1.2.3" → [1,2,3]; érthetetlen verziónál null.
   static List<int>? _parse(String v) {
@@ -78,9 +130,13 @@ class UpdateService {
     final asset = _assetName;
     if (asset == null) return null;
 
+    final token = await loadToken();
     final resp = await http.get(
       Uri.parse("https://api.github.com/repos/$owner/$repo/releases/latest"),
-      headers: {"Accept": "application/vnd.github+json"},
+      headers: {
+        "Accept": "application/vnd.github+json",
+        if (token != null) "Authorization": "Bearer $token",
+      },
     ).timeout(const Duration(seconds: 8));
     if (resp.statusCode != 200) {
       throw HttpException("GitHub Releases: HTTP ${resp.statusCode}");
@@ -97,6 +153,8 @@ class UpdateService {
         return UpdateInfo(
           version: latest.join("."),
           url: map["browser_download_url"] as String,
+          apiUrl: (map["url"] as String?) ??
+              "https://api.github.com/repos/$owner/$repo/releases/assets/${map["id"]}",
           assetName: asset,
         );
       }
@@ -113,10 +171,9 @@ class UpdateService {
     final tmp = await Directory.systemTemp.createTemp("sportmachine_upd");
     final target = File("${tmp.path}${Platform.pathSeparator}${info.assetName}");
 
-    // Letöltés folyamat-jelzéssel (a GitHub átirányít a tényleges tárolóra,
-    // a http csomag ezt magától követi).
-    final req = http.Request("GET", Uri.parse(info.url));
-    final resp = await http.Client().send(req);
+    // Letöltés folyamat-jelzéssel. Tokennel az API asset-végpontján át
+    // (privát repó), anélkül a publikus letöltő-linkről.
+    final resp = await _openDownload(info, await loadToken());
     if (resp.statusCode != 200) {
       throw HttpException("Letöltés sikertelen: HTTP ${resp.statusCode}");
     }
@@ -138,6 +195,37 @@ class UpdateService {
     } else if (Platform.isWindows) {
       await _installWindows(target);
     }
+  }
+
+  /// Megnyitja a csomag letöltő-folyamát.
+  ///
+  /// Token nélkül: a publikus browser_download_url (az átirányítást a http
+  /// csomag magától követi). Tokennel: az API asset-végpontja, amely 302-t ad
+  /// egy aláírt tároló-URL-re — ott az Authorization fejléc NEM mehet tovább
+  /// (a tároló elutasítaná), ezért az átirányítást kézzel követjük.
+  Future<http.StreamedResponse> _openDownload(
+      UpdateInfo info, String? token) async {
+    final client = http.Client();
+    if (token == null) {
+      return client.send(http.Request("GET", Uri.parse(info.url)));
+    }
+    final req = http.Request("GET", Uri.parse(info.apiUrl))
+      ..headers["Accept"] = "application/octet-stream"
+      ..headers["Authorization"] = "Bearer $token"
+      ..followRedirects = false;
+    final first = await client.send(req);
+    if (first.statusCode == 200) return first;
+    if (first.statusCode == 302 ||
+        first.statusCode == 303 ||
+        first.statusCode == 307) {
+      final loc = first.headers["location"];
+      if (loc == null) {
+        throw const HttpException("Átirányítás cél-URL nélkül.");
+      }
+      // Friss kérés hitelesítő fejléc nélkül az aláírt URL-re.
+      return client.send(http.Request("GET", Uri.parse(loc)));
+    }
+    throw HttpException("Letöltés sikertelen: HTTP ${first.statusCode}");
   }
 
   /// macOS: kicsomagolás → az .app csomag cseréje → újraindítás.

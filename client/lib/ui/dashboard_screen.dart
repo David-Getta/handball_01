@@ -70,11 +70,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       final s = "$e";
+      // 404: nincs kiadás VAGY privát a repó; 401/403: rossz/lejárt token.
+      final authIssue = s.contains("404") || s.contains("401") || s.contains("403");
       messenger.showSnackBar(SnackBar(
-          content: Text(s.contains("404")
-              ? "Nem található kiadás — privát GitHub-repónál a "
-                  "frissítés-ellenőrzés nem elérhető."
-              : "Frissítés-ellenőrzési hiba: $e")));
+        content: Text(authIssue
+            ? "Nem érem el a kiadásokat — privát repónál add meg a "
+                "GitHub-kulcsot (token)."
+            : "Frissítés-ellenőrzési hiba: $e"),
+        action: authIssue
+            ? SnackBarAction(label: "Kulcs megadása", onPressed: _updateTokenDialog)
+            : null,
+        duration: const Duration(seconds: 8),
+      ));
+    }
+  }
+
+  /// GitHub hozzáférési kulcs (token) megadása privát repóhoz — egyszer kell.
+  /// Fine-grained token, csak ehhez a repóhoz, csak "Contents: Read-only".
+  Future<void> _updateTokenDialog() async {
+    final current = await UpdateService.loadToken();
+    if (!mounted) return;
+    final ctrl = TextEditingController(text: current ?? "");
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Frissítési kulcs (GitHub token)"),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Privát repónál az automatikus frissítéshez egy GitHub "
+                "hozzáférési kulcs kell. Létrehozás: github.com → Settings → "
+                "Developer settings → Fine-grained tokens → csak ehhez a "
+                "repóhoz, csak Contents: Read-only joggal. A kulcs csak ezen "
+                "a gépen tárolódik. Üresen hagyva törlődik.",
+                style: AppText.label.copyWith(fontSize: 12),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: ctrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "github_pat_…",
+                  prefixIcon: Icon(Icons.key, size: 18, color: AppColors.gold),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await UpdateService.saveToken(ctrl.text);
+    if (!mounted) return;
+    if (ctrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("A kulcs törölve.")));
+    } else {
+      // Mentés után rögtön ellenőrzünk — így azonnal kiderül, jó-e a kulcs.
+      await _checkUpdatesManually();
     }
   }
 
@@ -409,11 +476,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: _checkUpdatesManually,
+                PopupMenuButton<String>(
                   icon: const Icon(Icons.system_update_alt,
                       color: AppColors.textSecondary),
-                  tooltip: "Programfrissítés keresése",
+                  tooltip: "Programfrissítés",
+                  color: AppColors.surface,
+                  onSelected: (v) {
+                    if (v == "check") _checkUpdatesManually();
+                    if (v == "token") _updateTokenDialog();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: "check",
+                      child: ListTile(
+                        leading: Icon(Icons.system_update_alt, size: 18),
+                        title: Text("Frissítés keresése"),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: "token",
+                      child: ListTile(
+                        leading: Icon(Icons.key, size: 18),
+                        title: Text("Frissítési kulcs (privát repóhoz)"),
+                        dense: true,
+                      ),
+                    ),
+                  ],
                 ),
                 IconButton(
                   onPressed: _load,
