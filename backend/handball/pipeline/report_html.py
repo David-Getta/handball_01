@@ -270,14 +270,18 @@ def _heatmap_svg(hm, color: str = "#12988a", width: int = 360) -> str:
 
 
 def match_report_html(match, tactics: dict, events: list, quality: dict | None,
-                      heatmaps: dict | None = None) -> str:
+                      heatmaps: dict | None = None,
+                      player_stats: dict | None = None,
+                      notes: list | None = None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
     a felismert események (detect_events), a minőség-önellenőrzés
-    (compute_quality_report, lehet None) és opcionálisan a csapat-hőtérképek
-    ({"home": Heatmap, "away": Heatmap}). Minden szakasz hiányzó adatnál is
-    értelmes szöveget ad — a jelentés sosem "törik el".
+    (compute_quality_report, lehet None), opcionálisan a csapat-hőtérképek
+    ({"home": Heatmap, "away": Heatmap}), a játékos-statisztikák
+    (compute_player_stats — terhelés-tábla) és az edzői jegyzetek.
+    Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
+    sosem "törik el".
     """
     meta = match.meta
     home, away = escape(meta.home_team), escape(meta.away_team)
@@ -339,6 +343,44 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         if cols:
             hm_html = ('<h2>Területi lefedettség (hőtérkép)</h2>'
                        '<div class="cols">' + "".join(cols) + "</div>")
+
+    # Játékos-terhelés (ha van): a legtöbbet dolgozó játékosok táblája.
+    load_html = ""
+    if player_stats:
+        team_of: dict = {}
+        jersey_of: dict = {}
+        for fr in match.frames:
+            for p in fr.players:
+                team_of.setdefault(p.track_id, getattr(p.team, "value", p.team))
+                if p.jersey_number is not None:
+                    jersey_of.setdefault(p.track_id, p.jersey_number)
+        ranked = sorted(player_stats.items(),
+                        key=lambda kv: kv[1].distance_m, reverse=True)[:10]
+        rows = []
+        for tid, s in ranked:
+            name = meta.home_team if team_of.get(tid) == "home" else meta.away_team
+            jersey = jersey_of.get(tid)
+            label = f"#{jersey}" if jersey is not None else f"id {tid}"
+            rows.append(
+                f"<tr><td>{escape(label)}</td><td>{escape(name)}</td>"
+                f'<td class="num">{s.distance_m:.0f} m</td>'
+                f'<td class="num">{s.top_speed_ms * 3.6:.1f}</td>'
+                f'<td class="num">{s.sprint_count}</td></tr>')
+        if rows:
+            load_html = ('<h2>Játékos-terhelés (top 10 táv szerint)</h2>'
+                         '<table><tr><th>Játékos</th><th>Csapat</th>'
+                         '<th class="num">Táv</th><th class="num">Max km/h</th>'
+                         '<th class="num">Sprint</th></tr>' + "".join(rows)
+                         + "</table>")
+
+    # Edzői jegyzetek (ha vannak): időbélyeggel, idő szerint rendezve.
+    notes_html = ""
+    if notes:
+        items = sorted(notes, key=lambda n: n.get("frame", 0))
+        lis = "".join(
+            f"<li><b>{_fmt_clock(n.get('frame', 0) / fps)}</b> — "
+            f"{escape(str(n.get('text', '')))}</li>" for n in items)
+        notes_html = "<h2>Edzői jegyzetek</h2><ul>" + lis + "</ul>"
 
     # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
     q_html = ""
@@ -423,6 +465,10 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
 
   <h2>Gól-idővonal</h2>
   {goals_html}
+
+  {load_html}
+
+  {notes_html}
 
   {hm_html}
 

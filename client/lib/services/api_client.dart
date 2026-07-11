@@ -242,6 +242,39 @@ class ApiClient {
     return (json["events"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Edzői jegyzetek a meccshez (GET /matches/{id}/notes) — idő szerint.
+  Future<List<Map<String, dynamic>>> fetchNotes(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/notes"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a jegyzeteket: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["notes"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Új edzői jegyzet az adott képkockához (POST /matches/{id}/notes).
+  Future<Map<String, dynamic>> addNote(
+      String matchId, int frame, String text) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/notes"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"frame": frame, "text": text}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült menteni a jegyzetet: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Jegyzet törlése (DELETE /matches/{id}/notes/{noteId}).
+  Future<void> deleteNote(String matchId, String noteId) async {
+    final resp = await http
+        .delete(Uri.parse("$baseUrl/matches/$matchId/notes/$noteId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült törölni a jegyzetet: HTTP ${resp.statusCode}");
+    }
+  }
+
   /// Ellenfél-felderítő jelentés egy csapatról EGY meccsből (GET .../scouting).
   Future<Map<String, dynamic>> fetchScouting(String matchId, String team) async {
     final uri = Uri.parse("$baseUrl/matches/$matchId/scouting")
