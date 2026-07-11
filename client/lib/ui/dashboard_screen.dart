@@ -472,7 +472,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Text("Áttekintés", style: AppText.title),
                       const SizedBox(height: 4),
-                      Text("Sport Machine · elemzett meccsek könyvtára", style: AppText.subtitle),
+                      // A verziószám látszik — így ellenőrizhető, hogy az
+                      // automatikus frissítés tényleg az újat futtatja.
+                      Text("Sport Machine · elemzett meccsek könyvtára · v$appVersion",
+                          style: AppText.subtitle),
                     ],
                   ),
                 ),
