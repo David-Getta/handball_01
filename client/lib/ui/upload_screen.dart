@@ -41,6 +41,10 @@ class _UploadScreenState extends State<UploadScreen> {
   // A backend-oldali videó elérési útja (lokális mód). A kalibráló képernyő ebből
   // tölti be a valódi referencia-képkockát a /reference-frame végponton keresztül.
   final _pathCtrl = TextEditingController();
+  // Csapatnevek — a feldolgozott meccs, a könyvtár és a felderítő jelentés is
+  // ezeket használja (utólag is átírhatók a könyvtárban).
+  final _homeCtrl = TextEditingController();
+  final _awayCtrl = TextEditingController();
   final _api = ApiClient();
 
   // Aktuális feldolgozási munka állapota (a backendtől, GET /jobs/{id}).
@@ -63,6 +67,8 @@ class _UploadScreenState extends State<UploadScreen> {
   void dispose() {
     _poll?.cancel();
     _pathCtrl.dispose();
+    _homeCtrl.dispose();
+    _awayCtrl.dispose();
     super.dispose();
   }
 
@@ -133,7 +139,12 @@ class _UploadScreenState extends State<UploadScreen> {
       _navigated = false;
     });
     try {
-      final r = await _api.startProcessing(path, weights: "yolov8n.pt");
+      final r = await _api.startProcessing(
+        path,
+        weights: "yolov8n.pt",
+        homeTeam: _homeCtrl.text.trim(),
+        awayTeam: _awayCtrl.text.trim(),
+      );
       _jobId = r["job_id"] as String;
       _matchId = r["match_id"] as String?;
       _poll?.cancel();
@@ -224,6 +235,13 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
+          // Csapatnevek: a könyvtár és a felderítő jelentés ezeket mutatja.
+          Row(children: [
+            Expanded(child: _teamField(_homeCtrl, "Hazai csapat (pl. Veszprém)", AppColors.home)),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: _teamField(_awayCtrl, "Vendég csapat (pl. Szeged)", AppColors.away)),
+          ]),
+          const SizedBox(height: AppSpacing.md),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
@@ -276,6 +294,28 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Csapatnév-mező (a csapat megjelenítési színével jelölve).
+  Widget _teamField(TextEditingController ctrl, String hint, Color color) {
+    return TextField(
+      controller: ctrl,
+      style: AppText.value.copyWith(fontSize: 13),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: hint,
+        hintStyle: AppText.label.copyWith(fontSize: 12),
+        prefixIcon: Icon(Icons.groups, size: 18, color: color),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.borderStrong),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: color),
+        ),
       ),
     );
   }

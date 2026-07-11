@@ -7,7 +7,7 @@ alatt működjön a program a gépeden.
 
 ## Windows
 
-1. **Töltsd le** a `SportMachine-Setup.exe` fájlt (a kapott linkről).
+1. **Töltsd le** a `SportMachine-Setup.exe` fájlt a repo **Releases** oldaláról (vagy a kapott linkről).
 2. **Kattints rá duplán.** Ha a Windows figyelmeztetést ad ("Ismeretlen kiadó"),
    kattints a **Több információ → Futtatás mindenképp** gombra. (Ez normális egy
    új programnál.)
@@ -22,12 +22,17 @@ másodpercig — ez normális. Utána megnyílik a program.
 
 ## Mac
 
-1. **Töltsd le** a `SportMachine.dmg` fájlt.
-2. **Kattints rá duplán**, majd **húzd** a Sport Machine ikont az `Applications`
-   (Programok) mappába.
-3. Nyisd meg a **Programok** mappát, és indítsd a **Sport Machine**-t.
-4. Ha a Mac azt írja, „nem nyitható meg, mert ismeretlen fejlesztőtől származik":
-   **jobb klikk az ikonon → Megnyitás → Megnyitás**. Ezt csak egyszer kell.
+1. **Töltsd le** a `SportMachine-macOS.zip` fájlt a repo **Releases** oldaláról.
+2. **Kattints rá duplán** — a Mac kicsomagolja, és megjelenik a
+   **handball_client** alkalmazás.
+3. **Húzd át** az alkalmazást a **Programok** (Applications) mappába, és onnan
+   indítsd.
+4. Első indításnál a Mac szólhat, hogy „ismeretlen fejlesztőtől származik":
+   **jobb klikk (vagy Ctrl+kattintás) az ikonon → Megnyitás → Megnyitás**.
+   Ezt csak egyszer kell. (Ha „sérült" üzenetet adna: nyiss egy Terminált, és
+   írd be: `xattr -cr /Applications/handball_client.app` — majd indítsd újra.)
+5. Első indításkor „Az elemző motor indítása…" képernyő jelenik meg pár
+   másodpercig — ez normális.
 
 ---
 

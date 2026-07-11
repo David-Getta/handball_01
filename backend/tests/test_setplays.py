@@ -19,7 +19,7 @@ from handball.models.tracking import (
 )
 from handball.pipeline.setplays import (
     segment_attacks, attack_signature, cluster_signatures, discover_setplays,
-    AttackSequence,
+    AttackSequence, interpolate_play, play_signature, match_attacks_to_playbook,
 )
 
 
@@ -111,6 +111,95 @@ def test_discover_setplays_end_to_end():
     assert report.num_figures == 2
     # a leggyakoribb figura 2 támadásból áll
     assert max(report.figure_sizes.values()) == 2
+
+
+def _meta():
+    return MatchMeta(match_id="pb", home_team="A", away_team="B", fps=25.0,
+                     frame_width=1920, frame_height=1080)
+
+
+def _play_frames(attackers, team=Team.HOME, steps=12, start=0):
+    """Egy figura interpolált mozgásából valódi támadás-frame-ek (labda az 1.-nél)."""
+    paths = interpolate_play(attackers, steps=steps)
+    frames = []
+    for s_i in range(steps):
+        players = [PlayerPosition(track_id=i + 1, team=team,
+                                  x=paths[i][s_i][0], y=paths[i][s_i][1],
+                                  source=PositionSource.MEASURED, confidence=1.0)
+                   for i in range(len(paths))]
+        bx, by = paths[0][s_i]
+        frames.append(Frame(t=start + s_i, players=players,
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+    return frames
+
+
+# Két, térben jól elkülönülő minta-figura (a +x kapura rajzolva).
+_PLAY_A = {"name": "Beúszós kereszt",
+           "attackers": [[[22.0, 10.0], [30.0, 10.0]],
+                         [[24.0, 5.0], [32.0, 7.0]],
+                         [[24.0, 15.0], [32.0, 13.0]]]}
+_PLAY_B = {"name": "Szélső befutás",
+           "attackers": [[[22.0, 2.0], [34.0, 2.0]],
+                         [[22.0, 18.0], [34.0, 18.0]],
+                         [[21.0, 10.0], [23.0, 10.0]]]}
+
+
+def test_interpolate_play_endpoints():
+    """Az interpoláció az első és utolsó kulcs-pozíciót pontosan visszaadja."""
+    paths = interpolate_play(_PLAY_A["attackers"], steps=10)
+    assert paths[0][0] == (22.0, 10.0)
+    assert paths[0][-1] == (30.0, 10.0)
+    assert all(len(p) == 10 for p in paths)
+
+
+def test_play_signature_normalized_and_mirrored():
+    """Az ujjlenyomat 1-re normált; a tükrözött a másik térfélre kerül."""
+    sig = play_signature(_PLAY_A["attackers"])
+    assert abs(sum(sig) - 1.0) < 1e-9
+    mir = play_signature(_PLAY_A["attackers"], mirror_x=True)
+    # a normál aláírás a jobb (x>20) térfélen, a tükrözött a balon "él"
+    bins_x = 6
+    right_mass = sum(v for i, v in enumerate(sig) if (i % bins_x) >= bins_x // 2)
+    left_mass_m = sum(v for i, v in enumerate(mir) if (i % bins_x) < bins_x // 2)
+    assert right_mass > 0.9 and left_mass_m > 0.9
+
+
+def test_match_recognizes_known_play():
+    """A figurát pontosan követő támadást a helyes néven ismeri fel."""
+    frames = _play_frames(_PLAY_A["attackers"], steps=12)
+    match = Match(_meta(), frames)
+    r = match_attacks_to_playbook(match, [_PLAY_A, _PLAY_B])
+    assert r["total_attacks"] == 1
+    assert r["matched"].get("Beúszós kereszt") == 1
+    assert r["unmatched"] == 0
+
+
+def test_match_mirrored_attack_recognized():
+    """A -x kapura támadó (tükrözött) mozgást is ugyanahhoz a figurához rendeli."""
+    mirrored = [[[40.0 - x, y] for (x, y) in path] for path in _PLAY_A["attackers"]]
+    frames = _play_frames(mirrored, team=Team.AWAY, steps=12)
+    match = Match(_meta(), frames)
+    r = match_attacks_to_playbook(match, [_PLAY_A], team=Team.AWAY)
+    assert r["matched"].get("Beúszós kereszt") == 1
+
+
+def test_unknown_attack_stays_unmatched():
+    """A könyvtár egyik figurájára sem hasonlító támadás "ismeretlen" marad."""
+    # minden játékos egy kupacban a beállónál — egyik mintára sem hasonlít
+    frames = [_home_attack_frame(t, [35.0, 35.5, 34.5], [10.0, 9.5, 10.5])
+              for t in range(8)]
+    match = Match(_meta(), frames)
+    r = match_attacks_to_playbook(match, [_PLAY_B], threshold=0.15)
+    assert r["total_attacks"] == 1
+    assert r["unmatched"] == 1
+    assert not r["matched"]
+
+
+def test_empty_playbook_all_unmatched():
+    """Üres könyvtárnál minden támadás ismeretlen (nem hibázik)."""
+    frames = _play_frames(_PLAY_A["attackers"], steps=8)
+    r = match_attacks_to_playbook(Match(_meta(), frames), [])
+    assert r["unmatched"] == r["total_attacks"] == 1
 
 
 if __name__ == "__main__":

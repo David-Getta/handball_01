@@ -6,6 +6,8 @@
 /// kiadás), akkor is tovább lehet lépni demó módban.
 library;
 
+import "dart:ui" show AppExitResponse;
+
 import "package:flutter/material.dart";
 
 import "../services/backend_launcher.dart";

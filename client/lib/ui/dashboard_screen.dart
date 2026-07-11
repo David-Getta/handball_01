@@ -10,7 +10,9 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "match_screen.dart";
+import "scouting_screen.dart";
 import "shell/app_shell.dart";
+import "trend_screen.dart";
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -49,6 +51,179 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _matches = [];
         _loading = false;
       });
+    }
+  }
+
+  /// Közös meccs-kiválasztó: pipa + meccsenként a FIGYELT csapat oldala.
+  /// Visszaadja az items listát ({"match_id","team"}) vagy null-t (mégse).
+  Future<List<Map<String, String>>?> _pickMatches(
+      String title, String hint, String confirmLabel) async {
+    final choice = <String, String?>{for (final m in _matches) m["match_id"] as String: null};
+    return showDialog<List<Map<String, String>>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          final selected = choice.values.where((v) => v != null).length;
+          return AlertDialog(
+            backgroundColor: AppColors.surface,
+            title: Text(title),
+            content: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(hint, style: AppText.label.copyWith(fontSize: 12)),
+                  const SizedBox(height: AppSpacing.md),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(children: [
+                        for (final m in _matches)
+                          _pickRow(m, choice, setDlg),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Mégse")),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+                onPressed: selected == 0
+                    ? null
+                    : () => Navigator.pop(ctx, [
+                          for (final e in choice.entries)
+                            if (e.value != null)
+                              {"match_id": e.key, "team": e.value!},
+                        ]),
+                child: Text("$confirmLabel ($selected meccs)"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Egyesített felderítés: az edző kiválasztja az ellenfél 2-3 meccsét, és
+  /// meccsenként megjelöli, melyik oldalon játszott az ellenfél → egy zajmentes,
+  /// több meccsen alapuló jelentés készül.
+  Future<void> _combinedScouting() async {
+    final items = await _pickMatches(
+      "Egyesített felderítés",
+      "Jelöld ki a meccseket, és meccsenként azt az oldalt, amelyiken a "
+          "FELDERÍTETT csapat játszott.",
+      "Felderítés",
+    );
+    if (items == null || items.isEmpty || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ScoutingScreen(items: items)),
+    );
+  }
+
+  /// Fejlődés-követés: két időszak (korábbi/újabb meccsek) összevetése —
+  /// működik a saját csapatra ("fejlődünk-e?") és az ellenfélre ("változtak-e?").
+  Future<void> _trendFlow() async {
+    final older = await _pickMatches(
+      "Fejlődés — 1/2: KORÁBBI időszak",
+      "Jelöld ki a KORÁBBI meccseket, és meccsenként a FIGYELT csapat oldalát.",
+      "Tovább",
+    );
+    if (older == null || older.isEmpty || !mounted) return;
+    final newer = await _pickMatches(
+      "Fejlődés — 2/2: ÚJABB időszak",
+      "Most jelöld ki az ÚJABB meccseket ugyanarról a csapatról.",
+      "Összevetés",
+    );
+    if (newer == null || newer.isEmpty || !mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => TrendScreen(older: older, newer: newer)),
+    );
+  }
+
+  /// Egy meccs sora a kiválasztóban: pipa + a felderített oldal kiválasztása.
+  Widget _pickRow(Map<String, dynamic> m, Map<String, String?> choice,
+      void Function(void Function()) setDlg) {
+    final id = m["match_id"] as String;
+    final home = (m["home_team"] as String?) ?? "Hazai";
+    final away = (m["away_team"] as String?) ?? "Vendég";
+    final val = choice[id];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [
+        Checkbox(
+          value: val != null,
+          activeColor: AppColors.gold,
+          // Pipáláskor alapból a vendég oldalt derítjük fel (tipikus eset).
+          onChanged: (v) => setDlg(() => choice[id] = (v ?? false) ? "away" : null),
+        ),
+        Expanded(child: Text("$home vs $away", style: AppText.value.copyWith(fontSize: 13),
+            overflow: TextOverflow.ellipsis)),
+        if (val != null)
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [
+              ButtonSegment(value: "home", label: Text(home, overflow: TextOverflow.ellipsis)),
+              ButtonSegment(value: "away", label: Text(away, overflow: TextOverflow.ellipsis)),
+            ],
+            selected: {val},
+            onSelectionChanged: (s) => setDlg(() => choice[id] = s.first),
+          ),
+      ]),
+    );
+  }
+
+  /// Csapatnevek átírása — a könyvtár és a felderítő jelentés is az újat mutatja.
+  Future<void> _rename(Map<String, dynamic> m) async {
+    final homeCtrl = TextEditingController(text: (m["home_team"] as String?) ?? "");
+    final awayCtrl = TextEditingController(text: (m["away_team"] as String?) ?? "");
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Csapatnevek"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: homeCtrl,
+              decoration: const InputDecoration(
+                labelText: "Hazai csapat",
+                prefixIcon: Icon(Icons.groups, size: 18, color: AppColors.home),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: awayCtrl,
+              decoration: const InputDecoration(
+                labelText: "Vendég csapat",
+                prefixIcon: Icon(Icons.groups, size: 18, color: AppColors.away),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.updateMatchNames(m["match_id"] as String,
+          homeTeam: homeCtrl.text.trim(), awayTeam: awayCtrl.text.trim());
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Átnevezési hiba: $e")));
     }
   }
 
@@ -123,7 +298,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.xl),
-            Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
+            Row(children: [
+              Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
+              const Spacer(),
+              // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
+              OutlinedButton.icon(
+                onPressed: _matches.length < 2 ? null : _trendFlow,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accent,
+                  side: BorderSide(
+                      color: _matches.length < 2 ? AppColors.border : AppColors.accent),
+                ),
+                icon: const Icon(Icons.trending_up, size: 18),
+                label: const Text("Fejlődés"),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _matches.length < 2 ? null : _combinedScouting,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.gold,
+                  side: BorderSide(
+                      color: _matches.length < 2
+                          ? AppColors.border
+                          : AppColors.gold),
+                ),
+                icon: const Icon(Icons.assignment_outlined, size: 18),
+                label: const Text("Egyesített felderítés"),
+              ),
+            ]),
             const SizedBox(height: AppSpacing.md),
             if (_loading)
               const Padding(
@@ -149,15 +351,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _demoButton() => OutlinedButton.icon(
-        onPressed: () => Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MatchScreen()),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.accent, side: const BorderSide(color: AppColors.accent)),
-        icon: const Icon(Icons.play_arrow, size: 18),
-        label: const Text("Demó megnyitása"),
+  /// Demó meccs létrehozása a szerveren — az első kipróbáláshoz: a könyvtárba
+  /// kerül egy szimulált meccs, amin minden funkció (elemzés, felderítés,
+  /// export) azonnal kipróbálható.
+  Future<void> _createDemo() async {
+    try {
+      final id = await _api.createDemoMatch();
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Demó meccs létrehozva: $id")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Demó-hiba: $e")));
+    }
+  }
+
+  Widget _demoButton() {
+    // Backend elérhető: szerver-oldali demó a könyvtárba (minden funkcióval).
+    // Backend nélkül: a kliensbe épített helyi demó megnyitása.
+    if (!_offline) {
+      return FilledButton.icon(
+        onPressed: _createDemo,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+        icon: const Icon(Icons.auto_awesome, size: 18),
+        label: const Text("Demó meccs létrehozása"),
       );
+    }
+    return OutlinedButton.icon(
+      onPressed: () => Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MatchScreen()),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.accent, side: const BorderSide(color: AppColors.accent)),
+      icon: const Icon(Icons.play_arrow, size: 18),
+      label: const Text("Demó megnyitása"),
+    );
+  }
 
   Widget _notice(IconData icon, String title, String body, {Widget? action}) {
     return Container(
@@ -227,6 +459,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Text(meta, style: AppText.label.copyWith(fontSize: 12)),
                 ],
               ),
+            ),
+            IconButton(
+              onPressed: () => _rename(m),
+              icon: const Icon(Icons.edit_outlined, color: AppColors.textFaint),
+              tooltip: "Csapatnevek átírása",
             ),
             IconButton(
               onPressed: () => _delete(id),

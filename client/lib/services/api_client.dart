@@ -30,6 +30,117 @@ class ApiClient {
     }
   }
 
+  /// Demó meccs létrehozása a szerveren (videó nélkül) — az első kipróbáláshoz.
+  /// Visszaadja az új match_id-t.
+  Future<String> createDemoMatch({double seconds = 30}) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/demo"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"seconds": seconds}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a demó létrehozása: HTTP ${resp.statusCode}");
+    }
+    return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["match_id"] as String;
+  }
+
+  /// A meccs támadásainak hozzárendelése a mentett figurákhoz
+  /// (GET /matches/{id}/playbook-match): {total_attacks, matched, unmatched}.
+  Future<Map<String, dynamic>> fetchPlaybookMatch(String matchId, String team) async {
+    final uri = Uri.parse("$baseUrl/matches/$matchId/playbook-match")
+        .replace(queryParameters: {"team": team});
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a figura-egyeztetés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A figura-könyvtár listája (id + név + játékos-szám).
+  Future<List<Map<String, dynamic>>> listPlays() async {
+    final resp = await http.get(Uri.parse("$baseUrl/playbook"))
+        .timeout(const Duration(seconds: 4));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a figurákat: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["plays"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Egy mentett figura betöltése (attackers: játékosonként [[x,y],[x,y]]).
+  Future<Map<String, dynamic>> fetchPlay(String playId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/playbook/$playId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült betölteni a figurát: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Figura mentése a könyvtárba; visszaadja az azonosítót.
+  Future<String> savePlay(String name, List<List<List<double>>> attackers) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/playbook"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"name": name, "attackers": attackers}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült menteni a figurát: HTTP ${resp.statusCode}");
+    }
+    return (jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>)["id"] as String;
+  }
+
+  /// Figura törlése a könyvtárból.
+  Future<void> deletePlay(String playId) async {
+    final resp = await http.delete(Uri.parse("$baseUrl/playbook/$playId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült törölni a figurát: HTTP ${resp.statusCode}");
+    }
+  }
+
+  /// A feldolgozás minőség-jelentése (GET /matches/{id}/quality).
+  Future<Map<String, dynamic>> fetchQuality(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a minőség-jelentés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A meccshez felvitt kiállítások (roster) lekérése.
+  Future<Map<String, dynamic>> fetchRoster(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/roster"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a kiállításokat: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Kiállítások mentése → a backend újraszámolja a képen kívüli becslést.
+  /// suspensions elemei: {"team": "home"|"away", "start_s": mp, "duration_s": mp}.
+  Future<Map<String, dynamic>> saveRoster(
+      String matchId, List<Map<String, dynamic>> suspensions) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/roster"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"suspensions": suspensions}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült menteni a kiállításokat: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A meccs felismert eseményei (passz/lövés/gól/labdaeladás) időrendben —
+  /// az Események-panel ebből épül, kattintásra a lejátszó az eseményre ugrik.
+  Future<List<Map<String, dynamic>>> fetchEvents(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/events"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni az eseményeket: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["events"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Ellenfél-felderítő jelentés egy csapatról EGY meccsből (GET .../scouting).
   Future<Map<String, dynamic>> fetchScouting(String matchId, String team) async {
     final uri = Uri.parse("$baseUrl/matches/$matchId/scouting")
@@ -39,6 +150,62 @@ class ApiClient {
       throw Exception("Nem sikerült a felderítés: HTTP ${resp.statusCode}");
     }
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// TÖBB meccsből egyesített felderítés (POST /scouting). Az items elemei:
+  /// {"match_id": ..., "team": "home"|"away"} — meccsenként megadva, melyik
+  /// oldalon játszott a felderített csapat.
+  Future<Map<String, dynamic>> fetchCombinedScouting(
+      List<Map<String, String>> items) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"items": items}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az egyesített felderítés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Fejlődés-követés: két időszak (meccs-csoport) összevetése (POST /scouting/trend).
+  Future<Map<String, dynamic>> fetchTrend(
+      List<Map<String, String>> older, List<Map<String, String>> newer) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/trend"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"older": {"items": older}, "newer": {"items": newer}}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a fejlődés-elemzés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// Az egyesített felderítés nyomtatható HTML-je (POST /scouting/export).
+  Future<Uint8List> fetchCombinedScoutingExport(
+      List<Map<String, String>> items) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"items": items}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
+  /// A felderítő jelentés nyomtatható HTML-je bájtokban (GET .../scouting/export).
+  /// A kliens fájlba menti; a böngészőből Ctrl+P → PDF.
+  Future<Uint8List> fetchScoutingExport(String matchId, String team) async {
+    final uri = Uri.parse("$baseUrl/matches/$matchId/scouting/export")
+        .replace(queryParameters: {"team": team});
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
   }
 
   /// A tárolt meccsek listája (könyvtár/áttekintő nézethez). Minden elem összegző
@@ -51,6 +218,24 @@ class ApiClient {
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     return (json["matches"] as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Átírja a meccs csapatneveit (PATCH /matches/{id}) — a könyvtár és a
+  /// felderítő jelentés is az új neveket mutatja; lemezre is mentődik.
+  Future<void> updateMatchNames(String matchId,
+      {String? homeTeam, String? awayTeam}) async {
+    final body = <String, dynamic>{
+      if (homeTeam != null) "home_team": homeTeam,
+      if (awayTeam != null) "away_team": awayTeam,
+    };
+    final resp = await http.patch(
+      Uri.parse("$baseUrl/matches/$matchId"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(body),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült átnevezni: HTTP ${resp.statusCode}");
+    }
   }
 
   /// Töröl egy meccset a backendről (memória + lemez).
@@ -129,6 +314,8 @@ class ApiClient {
     int start = 0,
     List<List<int>>? calib,
     String? matchId,
+    String? homeTeam,
+    String? awayTeam,
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -138,6 +325,8 @@ class ApiClient {
       if (weights != null) "weights": weights,
       if (calib != null) "calib": calib,
       if (matchId != null) "match_id": matchId,
+      if (homeTeam != null && homeTeam.isNotEmpty) "home_team": homeTeam,
+      if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,
     };
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/process"),

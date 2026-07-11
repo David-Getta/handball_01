@@ -38,26 +38,19 @@ iscc packaging\installer_windows.iss
 
 Eredmény: **`dist\installer\SportMachine-Setup.exe`** — ezt adjuk a felhasználónak.
 
-## macOS
+## macOS — AUTOMATIZÁLVA
 
-```bash
-# 1) Motor becsomagolása
-bash packaging/build_backend.sh
+A macOS-app a GitHub Actions-ben automatikusan épül (`release.yml` →
+`macos-app` job): motor (PyInstaller) → füstteszt → Flutter macOS build →
+sandbox kikapcsolása → a motor beágyazása a `Resources/engine`-be → ad-hoc
+aláírás → **`SportMachine-macOS.zip`** artifactként, `v*` címkénél a Releases
+oldalra.
 
-# 2) Flutter desktop build
-cd client && flutter build macos --release && cd ..
+Kézi build ugyanezekkel a lépésekkel a fenti workflow-ból követhető.
 
-# 3) A motrot az .app csomag Resources/engine mappájába másoljuk,
-#    majd .dmg-t készítünk (pl. create-dmg).
-APP="client/build/macos/Build/Products/Release/Sport Machine.app"
-mkdir -p "$APP/Contents/Resources/engine"
-cp -R dist/handball_backend/* "$APP/Contents/Resources/engine/"
-# create-dmg "$APP"   # vagy Disk Utility → új képfájl
-```
-
-> Aláírás/notarizálás nélkül a macOS "ismeretlen fejlesztő" figyelmeztetést ad;
-> éles terjesztéshez Apple Developer aláírás kell. (A backend_launcher a
-> `Resources/engine`-ben is keresi a motort.)
+> Ad-hoc aláírással a macOS első indításkor "ismeretlen fejlesztő"
+> figyelmeztetést ad (jobb klikk → Megnyitás). Bolti terjesztéshez Apple
+> Developer aláírás + notarizálás kell — későbbi lépés.
 
 ## Linux
 

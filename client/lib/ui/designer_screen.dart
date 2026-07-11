@@ -1,9 +1,10 @@
 /// Figura-tervező — az edző a felülnézeti pályán mozgatja a támadókat, és
 /// lejátszatja a figurát a TANULT védelem ellen, kiértékeléssel.
 ///
-/// Két kulcs-pozíció (Kezdő / Vég) közt húzhatók a támadók; lejátszáskor a kettő
-/// között interpolálunk, a védők a tanult modell szerint reagálnak. A szimuláció
-/// kliensoldalon fut (analytics/play_simulation.dart).
+/// HÁROM kulcs-pozíció (Kezdő / Közép / Vég) közt húzhatók a támadók — így az ív
+/// (beúszás, kereszt) is megrajzolható. Lejátszáskor a pontokon át interpolálunk,
+/// a védők a tanult modell szerint reagálnak. A szimuláció kliensoldalon fut
+/// (analytics/play_simulation.dart).
 library;
 
 import "dart:async";
@@ -11,6 +12,7 @@ import "package:flutter/material.dart";
 
 import "../analytics/play_simulation.dart";
 import "../models/tracking.dart";
+import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "court_painter.dart";
@@ -24,8 +26,21 @@ class DesignerScreen extends StatefulWidget {
 }
 
 class _DesignerScreenState extends State<DesignerScreen> {
-  // 5 támadó, két kulcs-pozícióval (0 = Kezdő, 1 = Vég).
+  // 5 támadó, HÁROM kulcs-pozícióval (0 = Kezdő, 1 = Közép, 2 = Vég) — így a
+  // figura íve (beúszás, kereszt) is megrajzolható, nem csak egyenes vonal.
   late List<List<Offset>> _attackers;
+
+  /// 3 kulcspozíció két végpontból (a közép a felezőpont — az edző elhúzza).
+  static List<Offset> _path3(Offset a, Offset b) =>
+      [a, Offset.lerp(a, b, 0.5)!, b];
+
+  /// Egy kulcspozíció-út mintavételezése t (0..1) helyen (szakaszonként lineáris).
+  static Offset _sample(List<Offset> path, double t) {
+    if (path.length == 1) return path.first;
+    final seg = (t * (path.length - 1)).clamp(0.0, (path.length - 1).toDouble());
+    final i = seg.floor().clamp(0, path.length - 2);
+    return Offset.lerp(path[i], path[i + 1], seg - i)!;
+  }
   int _editStep = 0;
   int? _dragIndex;
 
@@ -50,11 +65,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
 
     // Alap figura: irányító, két átlövő, szélső, beálló — az edző átrendezi.
     _attackers = [
-      [const Offset(22, 10), const Offset(22, 10)], // irányító (labdás)
-      [const Offset(24, 5), const Offset(28, 5)],   // bal átlövő
-      [const Offset(24, 15), const Offset(28, 15)], // jobb átlövő
-      [const Offset(28, 2), const Offset(31, 2)],   // szélső
-      [const Offset(30, 10), const Offset(34, 10)], // beálló (a kapu felé gördül)
+      _path3(const Offset(22, 10), const Offset(22, 10)), // irányító (labdás)
+      _path3(const Offset(24, 5), const Offset(28, 5)),   // bal átlövő
+      _path3(const Offset(24, 15), const Offset(28, 15)), // jobb átlövő
+      _path3(const Offset(28, 2), const Offset(31, 2)),   // szélső
+      _path3(const Offset(30, 10), const Offset(34, 10)), // beálló (a kapu felé)
     ];
   }
 
@@ -95,13 +110,13 @@ class _DesignerScreenState extends State<DesignerScreen> {
   }
 
   void _play() {
-    // A két kulcs-pozíció között interpolálunk _animSteps lépésre.
+    // A kulcs-pozíciókon át (kezdő→közép→vég) szakaszonként interpolálunk.
     final interp = <List<Offset>>[];
     for (final a in _attackers) {
       final path = <Offset>[];
       for (int s = 0; s < _animSteps; s++) {
         final t = s / (_animSteps - 1);
-        path.add(Offset.lerp(a[0], a[1], t)!);
+        path.add(_sample(a, t));
       }
       interp.add(path);
     }
@@ -133,6 +148,137 @@ class _DesignerScreenState extends State<DesignerScreen> {
       _playing = false;
       _sim = null;
     });
+  }
+
+  final ApiClient _api = ApiClient();
+
+  /// A megrajzolt figura mentése a könyvtárba (név megadásával).
+  Future<void> _savePlay() async {
+    final nameCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Figura mentése"),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: "Figura neve (pl. Beúszós kereszt)"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Adj nevet a figurának.")));
+      return;
+    }
+    try {
+      // A kulcs-pozíciók játékosonként (kezdő/közép/vég), méterben.
+      final attackers = [
+        for (final a in _attackers)
+          [for (final p in a) [p.dx, p.dy]],
+      ];
+      await _api.savePlay(name, attackers);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Figura mentve: $name")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mentési hiba: $e")));
+    }
+  }
+
+  /// Mentett figura betöltése a könyvtárból (lista + törlés lehetőség).
+  Future<void> _loadPlay() async {
+    List<Map<String, dynamic>> plays;
+    try {
+      plays = await _api.listPlays();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("A könyvtár nem érhető el: $e")));
+      return;
+    }
+    if (!mounted) return;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Figura betöltése"),
+          content: SizedBox(
+            width: 380,
+            child: plays.isEmpty
+                ? Text("Még nincs mentett figura — rajzolj egyet és mentsd el.",
+                    style: AppText.label)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final p in plays)
+                        ListTile(
+                          dense: true,
+                          title: Text("${p["name"]}",
+                              style: AppText.value.copyWith(fontSize: 14)),
+                          subtitle: Text("${p["players"]} játékos",
+                              style: AppText.label.copyWith(fontSize: 11)),
+                          onTap: () => Navigator.pop(ctx, p["id"] as String),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                size: 18, color: AppColors.textFaint),
+                            onPressed: () async {
+                              try {
+                                await _api.deletePlay(p["id"] as String);
+                                setDlg(() => plays.remove(p));
+                              } catch (_) {}
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Bezárás")),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    try {
+      final play = await _api.fetchPlay(picked);
+      final attackers = (play["attackers"] as List)
+          .map((a) => (a as List)
+              .map((p) => Offset(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble()))
+              .toList())
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        // A tervező 3 kulcs-pozícióval dolgozik: első / középső / utolsó pont.
+        _attackers = [
+          for (final a in attackers)
+            if (a.isNotEmpty)
+              a.length >= 3
+                  ? [a.first, a[a.length ~/ 2], a.last]
+                  : _path3(a.first, a.last),
+        ];
+        _editStep = 0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Betöltve: ${play["name"]}")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Betöltési hiba: $e")));
+    }
   }
 
   @override
@@ -215,11 +361,41 @@ class _DesignerScreenState extends State<DesignerScreen> {
             showSelectedIcon: false,
             segments: const [
               ButtonSegment(value: 0, label: Text("Kezdő")),
-              ButtonSegment(value: 1, label: Text("Vég")),
+              ButtonSegment(value: 1, label: Text("Közép")),
+              ButtonSegment(value: 2, label: Text("Vég")),
             ],
             selected: {_editStep},
             onSelectionChanged: _playing ? null : (s) => setState(() => _editStep = s.first),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          // Figura-könyvtár: a megrajzolt figura mentése / visszatöltése.
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _playing ? null : _savePlay,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.gold,
+                  side: const BorderSide(color: AppColors.gold),
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.save_outlined, size: 16),
+                label: const Text("Mentés", style: TextStyle(fontSize: 12)),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _playing ? null : _loadPlay,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.accent,
+                  side: const BorderSide(color: AppColors.accent),
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.folder_open, size: 16),
+                label: const Text("Betöltés", style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ]),
           const SizedBox(height: AppSpacing.xl),
           Text("TANULT VÉDELEM", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
@@ -299,6 +475,21 @@ class _DesignerPainter extends CustomPainter {
     for (final d in defs) {
       final c = tr.toScreen(d.dx, d.dy);
       canvas.drawCircle(c, 0.6 * tr.scale, Paint()..color = AppColors.away.withOpacity(0.45));
+    }
+
+    // Útvonal-előnézet: halvány vonal a kulcs-pozíciókon át (látszik az ív).
+    final routePaint = Paint()
+      ..color = AppColors.home.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    for (final a in attackers) {
+      if (a.length < 2) continue;
+      final rp = Path()..moveTo(tr.toScreen(a.first.dx, a.first.dy).dx, tr.toScreen(a.first.dx, a.first.dy).dy);
+      for (final kp in a.skip(1)) {
+        final sp = tr.toScreen(kp.dx, kp.dy);
+        rp.lineTo(sp.dx, sp.dy);
+      }
+      canvas.drawPath(rp, routePaint);
     }
 
     // Támadók (húzható tokenek).

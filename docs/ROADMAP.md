@@ -1,5 +1,30 @@
 # Útiterv (fázisok)
 
+> ## Állapot-összefoglaló (frissítve: 2026-07)
+>
+> **Kész és tesztelt (114 automata teszt zöld):**
+> - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
+>   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
+>   (kameramozgás-kompenzáció), **képen kívüli becslés** (roster/kiállítások
+>   szerint), sötét bevezető auto-kihagyás.
+> - Elemző rétegek: taktika (birtoklás/fázis/védőformák/tempó), események
+>   (passz/lövés/gól/labdaeladás), játékos-döntések, figura-felismerés,
+>   **élő edzői javaslatok**, védelem-tanulás + figura-szimuláció.
+> - **Ellenfél-felderítés**: egy- és több-meccses jelentés, lövési zónák,
+>   kulcsjátékosok, "hogyan játssz ellenük", nyomtatható HTML-export,
+>   **figura-egyezés a mentett playbookkal**.
+> - App (Flutter): dashboard/könyvtár, feltöltés+kalibráció+feldolgozás élő
+>   állapottal, meccs-elemző (statisztika/összegzés/döntések/események),
+>   élő követés, felderítés, figura-tervező **mentés/betöltéssel**,
+>   kiállítás-szerkesztő; a motor **automatikus indítása**.
+> - Kiadás: PyInstaller-csomagolás + Windows-telepítő + **GitHub Actions
+>   automata build** (Releases-re).
+>
+> **Következő validáció (a fejlesztő gépét igényli):** end-to-end teszt valódi
+> meccsvideón (labda+birtoklás élesben), `flutter analyze/run`, első telepítő
+> legyártása az Actions-ből. Részletek: TRL-értékelés a beszélgetésben; a
+> felvétel-specifikus tudnivalók: `FOOTAGE_NOTES.md`.
+
 Alulról építkezünk: minden fázis önmagában is használható eredményt ad, és a
 következő alapja. A "menő" funkciók (VR, élő javaslat) a végén vannak, mert a
 megbízható alaprétegre épülnek.

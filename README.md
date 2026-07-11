@@ -1,5 +1,20 @@
 # handball_01 — Kézilabda elemző AI
 
+## Letöltés (Windows / Mac) — mint egy Steam-játék
+
+1. Nyisd meg a repo **Releases** oldalát (GitHub → jobb oldalt "Releases").
+2. Töltsd le a legfrissebbet: Windowsra a **`SportMachine-Setup.exe`**-t, Macre a **`SportMachine-macOS.zip`**-et.
+3. Dupla kattintás → Tovább → Telepítés → indul. Ennyi.
+
+Nem kell hozzá Python, Flutter vagy bármilyen fejlesztői eszköz — a telepítő a
+teljes programot (felület + elemző motor + AI-modell) egyben tartalmazza.
+Laikus útmutató: [`TELEPITES.md`](TELEPITES.md).
+
+> A telepítőt a GitHub Actions automatikusan gyártja
+> ([.github/workflows/release.yml](.github/workflows/release.yml)):
+> kézzel az Actions fülről indítható, kiadás pedig egy `v*` címke
+> (`git tag v0.1.0 && git push origin v0.1.0`) pusholásával készül.
+
 Videó- (és később LiDAR-) alapú elemző platform kézilabdára: csapatstílus
 tanulása, egyéni játékos-döntéselemzés, figura-szimuláció ellenfél ellen, 3D/VR
 bejárható meccsek és élő meccskövetés javaslatokkal.

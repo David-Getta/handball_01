@@ -16,7 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from handball.models.tracking import (
     Match, MatchMeta, Frame, PlayerPosition, Ball, Team, PositionSource,
 )
-from handball.pipeline.scouting import scout_team, combine_reports, ScoutingReport
+from handball.pipeline.scouting import (
+    scout_team, combine_reports, ScoutingReport, _shot_zone, trend_report,
+)
 
 
 def _pl(track_id, team, x, y):
@@ -93,10 +95,94 @@ def test_combine_reports_aggregates():
     assert comb.num_figures == r1.num_figures + r2.num_figures
 
 
+def test_shot_zone_labels():
+    """A zóna-címkék helyesek, a bal/jobb a támadás irányához igazodik."""
+    assert _shot_zone(34.0, 2.0, 40.0) == "balszél"
+    assert _shot_zone(34.0, 18.0, 40.0) == "jobbszél"
+    assert _shot_zone(34.0, 10.0, 40.0) == "beálló (6 m)"
+    assert _shot_zone(30.0, 10.0, 40.0) == "átlövés közép"
+    assert _shot_zone(30.0, 3.0, 40.0) == "átlövés bal"
+    # a -x kapura támadva a bal/jobb tükröződik
+    assert _shot_zone(6.0, 2.0, 0.0) == "jobbszél"
+    assert _shot_zone(10.0, 17.0, 0.0) == "átlövés bal"
+
+
+def test_shot_zones_in_report():
+    """A jelentésben megjelennek a lövési zónák (a szintetikus gól zónájával)."""
+    frames = []
+    xs = [30, 33, 36, 39, 40.0]  # gyors lövés a +x kapura, középről
+    for t, x in enumerate(xs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x - 1, 10.0)],
+                            ball=Ball(x=float(x), y=10.0, confidence=1.0)))
+    rep = scout_team(Match(_meta(), frames), Team.HOME)
+    assert rep.shot_zones, "legalább egy zóna kell"
+    zone = next(iter(rep.shot_zones))
+    assert zone in ("átlövés közép", "beálló (6 m)")
+    assert rep.shot_zones[zone]["shots"] >= 1
+
+
+def test_combine_merges_shot_zones():
+    """Az összevonás zónánként összegzi a lövéseket/gólokat."""
+    frames = []
+    xs = [30, 33, 36, 39, 40.0]
+    for t, x in enumerate(xs):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x - 1, 10.0)],
+                            ball=Ball(x=float(x), y=10.0, confidence=1.0)))
+    r1 = scout_team(Match(_meta(), frames), Team.HOME)
+    comb = combine_reports([r1, r1])
+    zone = next(iter(r1.shot_zones))
+    assert comb.shot_zones[zone]["shots"] == 2 * r1.shot_zones[zone]["shots"]
+
+
 def test_combine_single_returns_same():
     """Egyetlen jelentés egyesítése önmagát adja."""
     r1 = scout_team(_attack_60(), Team.AWAY)
     assert combine_reports([r1]) is r1
+
+
+def _rep_for_trend(**kw):
+    base = dict(team="home", team_name="Mi", matches=2,
+                attack_share_pct=50.0, fast_break_pct=10.0,
+                avg_attack_duration_s=8.0, shot_efficiency_pct=40.0,
+                shots=20, goals=8, turnovers=8)
+    base.update(kw)
+    return ScoutingReport(**base)
+
+
+def test_trend_per_match_normalization():
+    """A darabszámok meccsenkénti átlagra normálódnak (2 meccs / 20 lövés = 10)."""
+    r = trend_report(_rep_for_trend(matches=2, shots=20),
+                     _rep_for_trend(matches=4, shots=48))
+    shots = next(m for m in r["metrics"] if m["metric"] == "shots")
+    assert shots["older"] == 10.0 and shots["newer"] == 12.0
+    assert shots["better"] is True
+
+
+def test_trend_better_and_worse_flags():
+    """A gólarány-növekedés javulás; a labdaeladás-növekedés romlás."""
+    r = trend_report(_rep_for_trend(shot_efficiency_pct=40.0, turnovers=8),
+                     _rep_for_trend(shot_efficiency_pct=55.0, turnovers=12))
+    eff = next(m for m in r["metrics"] if m["metric"] == "shot_efficiency_pct")
+    to = next(m for m in r["metrics"] if m["metric"] == "turnovers")
+    assert eff["better"] is True
+    assert to["better"] is False
+    assert any(s.startswith("Javult") for s in r["summary"])
+    assert any(s.startswith("Romlott") for s in r["summary"])
+
+
+def test_trend_neutral_metric_not_judged():
+    """A semleges irányú mutatót (támadáshossz) nem minősítjük."""
+    r = trend_report(_rep_for_trend(avg_attack_duration_s=6.0),
+                     _rep_for_trend(avg_attack_duration_s=12.0))
+    dur = next(m for m in r["metrics"] if m["metric"] == "avg_attack_duration_s")
+    assert dur["better"] is None
+    assert not any("támadáshossz" in s.lower() for s in r["summary"])
+
+
+def test_trend_no_change_summary():
+    """Változatlan időszakok: "nincs jelentős változás" összegzés."""
+    r = trend_report(_rep_for_trend(), _rep_for_trend())
+    assert r["summary"] == ["Nincs jelentős változás a két időszak között."]
 
 
 if __name__ == "__main__":

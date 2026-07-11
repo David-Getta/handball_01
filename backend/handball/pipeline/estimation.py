@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..models.tracking import PlayerPosition, PositionSource, Team
+from ..models.tracking import Match, PlayerPosition, PositionSource, Team
 from ..models.events import RosterTimeline
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 
@@ -157,3 +157,40 @@ class OffScreenEstimator:
             jersey_number=rec.jersey_number,
             role=rec.role,
         )
+
+
+def augment_match_with_estimates(match: Match,
+                                 roster: RosterTimeline | None = None) -> int:
+    """A kész Match frame-jeit kiegészíti a képen kívüli játékosok becslésével.
+
+    A valódi feldolgozó (scripts/process_video) UTÓLAG hívja: minden frame-en a
+    MÉRT játékosokból frissíti a "utoljára látott" nyilvántartást, majd a
+    hiányzókat (roster szerint kellene, de nem látszanak) becsléssel pótolja —
+    ezek source=ESTIMATED-del és csökkenő confidence-szel kerülnek a frame-be,
+    így a kliens halványítva rajzolja őket. Visszaadja, hány becsült pozíció
+    került be összesen (napló/diagnosztika).
+    """
+    roster = roster or RosterTimeline()
+    estimator = OffScreenEstimator(roster)
+    added = 0
+    for frame in match.frames:
+        measured = [p for p in frame.players if p.source == PositionSource.MEASURED]
+        estimator.update_seen(frame.t, measured)
+        estimated = estimator.estimate_missing(frame.t, measured)
+        frame.players.extend(estimated)
+        added += len(estimated)
+    return added
+
+
+def reapply_estimates(match: Match, roster: RosterTimeline | None = None) -> int:
+    """ÚJRA-alkalmazza a becslést egy már kiegészített Match-re, új roster szerint.
+
+    Ezt akkor hívjuk, amikor az edző UTÓLAG viszi fel a kiállításokat: a korábbi
+    BECSÜLT pozíciókat eldobjuk (a mértek maradnak), és az új létszám-idővonallal
+    számoljuk újra — így emberhátrányban nem kerül fantom-játékos a pályára.
+    Visszaadja az új becsült pozíciók számát.
+    """
+    for frame in match.frames:
+        frame.players = [p for p in frame.players
+                         if p.source == PositionSource.MEASURED]
+    return augment_match_with_estimates(match, roster)

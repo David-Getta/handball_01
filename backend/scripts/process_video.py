@@ -7,14 +7,19 @@ Detektáló módok:
     Bíró-szűrő (sárga mez) kiveszi a játékvezetőket.
   - HOG (alap): OpenCV beépített, letöltés nélkül; gyenge kis/gyors játékosokra.
 
-FIGYELEM: kalibráció (homográfia) EGYELŐRE nincs — kép→pálya egyszerű aránnyal.
-Emiatt a pályán KÍVÜLI személyek (kispad, edző, néző) is bekerülhetnek; ezt a
-kalibráció + pálya-régió szűrő oldja meg ([A], CourtRegion). A perspektíva is
-torzít kalibráció nélkül.
+Kalibrációval (--calib, 4 pálya-sarok):
+- homográfia: kép → valós méter-koordináták, a pályán kívüliek (kispad, edző)
+  szűrése (CourtRegion),
+- pásztázás-követés: a kamera mozgásának kompenzálása (a kalibráció a pásztázás
+  közben is érvényes marad) — a sarkokat a --start képkockához kell felvenni,
+- képen kívüli becslés: a képből kilógó játékosok pótlása mozgásmodellel
+  (source=ESTIMATED, halványítva a kliensben); kikapcsolás: --no-estimate.
+Kalibráció nélkül egyszerű arányos kép→pálya leképezés (pontatlan, csak teszthez).
 
 Használat:
     python -m scripts.process_video BE.mp4 KI.json [--weights yolov8n.pt]
-        [--stride N] [--max N] [--imgsz 1280] [--conf 0.20]
+        [--stride N] [--max N] [--imgsz 1280] [--conf 0.20] [--start N]
+        [--calib calib.json] [--no-skip-dark] [--no-estimate] [--no-ball-smooth] [--no-track-smooth]
 """
 
 from __future__ import annotations
@@ -95,20 +100,49 @@ def _resolve_weights(weights):
     return weights
 
 
+def _pick_device():
+    """A leggyorsabb elérhető inferencia-eszköz: CUDA (NVIDIA) → MPS (Apple
+    Silicon GPU-ja, M1..M5) → CPU. Az MPS a Macen többszörös gyorsulást ad."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        mps = getattr(getattr(torch, "backends", None), "mps", None)
+        if mps is not None and mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                  court_poly=None, start=0, skip_dark=True, on_frame=None):
+                  court_poly=None, start=0, skip_dark=True, on_frame=None, pan=False):
+    import os
+    # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
+    # hiba helyett. A torch importja ELŐTT kell beállítani.
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     import numpy as np
     import cv2
     from ultralytics import YOLO
     model = YOLO(_resolve_weights(weights))
+    device = _pick_device()
+    labels = {"cuda": "CUDA (NVIDIA GPU)", "mps": "MPS (Apple Silicon GPU)",
+              "cpu": "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"}
+    print(f"inferencia-eszköz: {labels[device]}")
     poly = np.array(court_poly, np.int32) if court_poly else None
+    # Pásztázás-követés: a kamera mozgását becsüljük, hogy a kalibráció a
+    # pásztázás közben is érvényes maradjon (aktuális → alap képkocka mátrix).
+    pan_tracker = None
+    if pan:
+        from handball.pipeline.pan_tracking import PanTracker
+        pan_tracker = PanTracker()
     raw, all_colors = [], []
     # EGY menet nagy felbontáson (1920) + alacsony küszöb (0.05), hogy a kis labdát
     # is elkapja; a JÁTÉKOSOKAT utólag szűrjük a megadott (magasabb) küszöbre, hogy
     # ne jöjjenek téves emberek. Így egy inferencia/frame (kétszer gyorsabb).
     # A `start` a bevezető (sötét) rész átugrására: csak innen dolgozunk fel.
     results = model.track(source=video_path, stream=True, persist=True,
-                          classes=[0, 32], imgsz=1920, conf=0.05,
+                          classes=[0, 32], imgsz=1920, conf=0.05, device=device,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
     kept = 0
     skipped_dark = 0
@@ -124,6 +158,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
         kept += 1
         if on_frame is not None:  # élő haladás-jelzés a hívónak (job-státusz)
             on_frame(kept, max_frames)
+        # Kameramozgás frissítése (az ALAP = az első feldolgozott képkocka; a
+        # kalibrációt ehhez a képkockához kell felvenni — lásd --start).
+        panH = None
+        if pan_tracker is not None:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            panH = pan_tracker.update(gray)
         persons, best_ball = [], None
         if r.boxes is not None:
             for b in r.boxes:
@@ -145,9 +185,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     if best_ball is None or bc > best_ball[0]:
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
         ball_xy = (best_ball[1], best_ball[2]) if best_ball else None
-        raw.append((persons, ball_xy))
+        raw.append((persons, ball_xy, panH))
     if skipped_dark:
         print(f"sötét bevezető képkocka kihagyva: {skipped_dark}")
+    if pan_tracker is not None:
+        tx, ty = pan_tracker.translation
+        print(f"pásztázás-követés: össz-elmozdulás a végére: ({tx:.0f}, {ty:.0f}) px")
     return raw, all_colors
 
 
@@ -203,7 +246,7 @@ def _process_hog(video_path, stride, max_frames):
             color = _torso_color(small, x1, y1, x2, y2)
             all_colors.append(color)
             persons.append((ids[(cx, (y1 + y2) / 2.0)], cx / scale, y2 / scale, color))
-        raw.append((persons, None))
+        raw.append((persons, None, None))  # HOG-nál nincs labda és pásztázás-mátrix
         out_i += 1
     cap.release()
     return raw, all_colors
@@ -211,7 +254,9 @@ def _process_hog(video_path, stride, max_frames):
 
 def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=1280,
             conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
-            progress_cb=None, match_id="video-1"):
+            progress_cb=None, match_id="video-1", estimate=True,
+            home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
+            track_smooth=True):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -235,13 +280,28 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # [A] kalibráció (ha van 4 sarok). A haladás nagy részét a detektálás adja.
     report("A", 0.02, "kalibráció" if calib_corners else "kalibráció nélkül")
 
-    # [B]/[C] detektálás + követés — a képkockánkénti haladást ide képezzük le.
+    # [B]/[C] detektálás + követés — a képkockánkénti haladást ide képezzük le,
+    # sebességgel és hátralévő idővel (teljes félidőnél ez órákban mérhető,
+    # a felhasználónak látnia kell, mire számítson).
+    import time as _time
+    _t0 = _time.time()
+
     def on_frame(kept, total):
-        report("B", 0.05 + 0.70 * (kept / max(1, total)), f"detektálás {kept}/{total}")
+        elapsed = _time.time() - _t0
+        rate = kept / elapsed if elapsed > 0 else 0.0
+        if rate > 0 and kept >= 3:  # az első pár kocka még torzít (modell-betöltés)
+            remain = (total - kept) / rate
+            eta = f" · {rate:.1f} kocka/mp · ~{int(remain // 60)}:{int(remain % 60):02d} hátra"
+        else:
+            eta = ""
+        report("B", 0.05 + 0.70 * (kept / max(1, total)),
+               f"detektálás {kept}/{total}{eta}")
 
     if weights:
+        # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
         raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                                        court_poly, start=start, skip_dark=skip_dark, on_frame=on_frame)
+                                        court_poly, start=start, skip_dark=skip_dark,
+                                        on_frame=on_frame, pan=bool(calib_corners))
     else:
         raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
@@ -275,21 +335,26 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         def to_court(px, py):
             return apply_homography(Himg2court, px, py)
 
-    def map_xy(px, py):
+    def map_xy(px, py, panH=None):
         if to_court is not None:
+            if panH is not None:
+                # Előbb vissza az ALAP képkocka koordinátáiba (a kamera mozgásának
+                # kompenzálása), és csak utána a pálya-homográfia.
+                from handball.pipeline.pan_tracking import apply_h
+                px, py = apply_h(panH, px, py)
             return to_court(px, py)
         return (px / W * COURT_LENGTH_M, py / H * COURT_WIDTH_M)  # kalibráció nélkül: arányos
 
     # [E] pálya-koordináta (homográfia/arányos) + [F] pályán kívüliek szűrése.
     report("E", 0.90, "pálya-koordináta")
-    meta = MatchMeta(match_id=match_id, home_team="Csapat A", away_team="Csapat B",
+    meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
                      fps=fps / stride, frame_width=W, frame_height=H)
     frames = []
     dropped = 0
-    for t, (persons, ball_xy) in enumerate(raw):
+    for t, (persons, ball_xy, panH) in enumerate(raw):
         players = []
         for (tid, fx, fy, color) in persons:
-            cx, cy = map_xy(fx, fy)
+            cx, cy = map_xy(fx, fy, panH)
             if region is not None and not region.contains(cx, cy):
                 dropped += 1
                 continue  # pályán kívül (kispad/edző/néző)
@@ -297,15 +362,49 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                                           x=cx, y=cy, source=PositionSource.MEASURED, confidence=1.0))
         ball = None
         if ball_xy:
-            bx, by = map_xy(ball_xy[0], ball_xy[1])
+            bx, by = map_xy(ball_xy[0], ball_xy[1], panH)
             ball = Ball(x=bx, y=by, confidence=1.0)
         frames.append(Frame(t=t, players=players, ball=ball))
     if region is not None:
         print(f"kalibrációval: pályán kívüli detektálás eldobva: {dropped}")
 
-    # [F] képen kívüli becslés — jelenleg a becslés az elemző rétegben történik.
+    # [F] képen kívüli becslés — a pásztázó kamera képéből kilógó játékosokat
+    # mozgásmodellel pótoljuk (source=ESTIMATED, csökkenő confidence), hogy a
+    # felülnézeten a TELJES csapat látszódjon. Csak kalibrációval értelmes
+    # (ott valós méter-koordináták vannak).
     report("F", 0.95, "képen kívüli becslés")
     match = Match(meta=meta, frames=frames)
+
+    # Játékos-pálya simítás: a detektálási remegés (jitter) csökkentése — a
+    # táv/sebesség statisztika ne a dobozok ugrálását mérje. Csak a mért
+    # pozíciókat érinti, az éles irányváltást a kis ablak megőrzi.
+    if track_smooth:
+        from handball.pipeline.track_filter import smooth_player_tracks
+        ts = smooth_player_tracks(match)
+        if ts:
+            print(f"játékos-simítás: {ts} pozíció simítva")
+
+    # Labda-utómunka: a téves (kiugró) észlelések eldobása + a rövid hézagok
+    # pótlása — a birtoklás/passz/lövés-felismerés folytonos labda-pályát igényel.
+    if ball_smooth:
+        from handball.pipeline.ball_filter import smooth_ball
+        bs = smooth_ball(match)
+        if bs["removed"] or bs["filled"]:
+            print(f"labda-utómunka: {bs['removed']} kiugró eldobva, "
+                  f"{bs['filled']} hézag-kocka pótolva")
+
+    if estimate and calib_corners:
+        from handball.pipeline.estimation import augment_match_with_estimates
+        added = augment_match_with_estimates(match)
+        print(f"képen kívüli becslés: {added} becsült pozíció pótolva")
+
+    # Minőség-önellenőrzés: a napló végén látszik, mennyire megbízható az eredmény.
+    from handball.pipeline.quality import compute_quality_report
+    q = compute_quality_report(match)
+    print(f"minőség: {q['score']}/100 | játékos/kocka: {q['avg_measured_players']} | "
+          f"labda-lefedettség: {q['ball_coverage_pct']}%")
+    for w in q["warnings"]:
+        print(f"  FIGYELEM: {w}")
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:
@@ -333,7 +432,10 @@ def main(argv):
             stride=opt("--stride", 3, int), max_frames=opt("--max", 400, int),
             imgsz=opt("--imgsz", 1280, int), conf=opt("--conf", 0.20, float),
             court_poly=court_poly, calib_corners=calib,
-            start=opt("--start", 0, int), skip_dark="--no-skip-dark" not in argv)
+            start=opt("--start", 0, int), skip_dark="--no-skip-dark" not in argv,
+            estimate="--no-estimate" not in argv,
+            ball_smooth="--no-ball-smooth" not in argv,
+            track_smooth="--no-track-smooth" not in argv)
     return 0
 
 

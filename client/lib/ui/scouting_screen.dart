@@ -5,6 +5,10 @@
 /// tempó, befejezés, kulcsjátékosok. A backend /scouting végpontból tölt.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
+import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -17,12 +21,18 @@ class ScoutingScreen extends StatefulWidget {
   final String awayName;
   final String team; // kezdetben melyik csapatot derítjük fel
 
+  /// EGYESÍTETT mód: ha meg van adva, több meccsből készül a jelentés
+  /// (elemei: {"match_id": ..., "team": ...}); ilyenkor a matchId/team nem számít,
+  /// és a hazai/vendég váltó rejtve van (a team meccsenként rögzített).
+  final List<Map<String, String>>? items;
+
   const ScoutingScreen({
     super.key,
-    required this.matchId,
+    this.matchId = "",
     this.homeName = "Hazai",
     this.awayName = "Vendég",
     this.team = "away",
+    this.items,
   });
 
   @override
@@ -33,6 +43,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   final ApiClient _api = ApiClient();
   late String _team = widget.team;
   Map<String, dynamic>? _report;
+  // Figura-egyezés a mentett könyvtárral (csak egy-meccses módban töltjük).
+  Map<String, dynamic>? _playbookMatch;
   String? _error;
   bool _loading = true;
 
@@ -48,10 +60,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       _error = null;
     });
     try {
-      final r = await _api.fetchScouting(widget.matchId, _team);
+      // Egyesített mód: több meccs egy jelentésben; különben egy meccs.
+      final r = widget.items != null
+          ? await _api.fetchCombinedScouting(widget.items!)
+          : await _api.fetchScouting(widget.matchId, _team);
+      // Figura-egyezés: melyik MENTETT figurát játsszák (csak egy meccsnél).
+      Map<String, dynamic>? pm;
+      if (widget.items == null) {
+        try {
+          pm = await _api.fetchPlaybookMatch(widget.matchId, _team);
+        } catch (_) {
+          pm = null; // enélkül is teljes a jelentés
+        }
+      }
       if (!mounted) return;
       setState(() {
         _report = r;
+        _playbookMatch = pm;
         _loading = false;
       });
     } catch (e) {
@@ -60,6 +85,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         _error = "$e";
         _loading = false;
       });
+    }
+  }
+
+  /// A nyomtatható jelentés mentése fájlba (natív "Mentés másként" ablakkal).
+  /// A mentett HTML böngészőben nyitható, onnan Ctrl+P → PDF.
+  Future<void> _export() async {
+    if (kIsWeb) return; // desktop-first; weben a böngésző maga tudja nyomtatni
+    try {
+      final bytes = widget.items != null
+          ? await _api.fetchCombinedScoutingExport(widget.items!)
+          : await _api.fetchScoutingExport(widget.matchId, _team);
+      final name = (_report?["team_name"] as String? ?? "ellenfel")
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Felderítő jelentés mentése",
+        fileName: "felderites_$name.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Jelentés mentve: $path — böngészőből Ctrl+P → PDF")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Export hiba: $e")));
     }
   }
 
@@ -94,23 +147,40 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(r != null ? "${r["team_name"]} — felderítés" : "Felderítés", style: AppText.title),
-            Text("Ellenfél-jelentés · edzői kulcsok", style: AppText.subtitle),
+            Text(
+              widget.items != null
+                  ? "Egyesített jelentés · ${widget.items!.length} meccs"
+                  : "Ellenfél-jelentés · edzői kulcsok",
+              style: AppText.subtitle,
+            ),
           ],
         ),
         const Spacer(),
-        // Melyik csapatot derítsük fel.
-        SegmentedButton<String>(
-          showSelectedIcon: false,
-          segments: [
-            ButtonSegment(value: "home", label: Text(widget.homeName)),
-            ButtonSegment(value: "away", label: Text(widget.awayName)),
-          ],
-          selected: {_team},
-          onSelectionChanged: (s) {
-            setState(() => _team = s.first);
-            _load();
-          },
+        // Nyomtatható jelentés mentése (HTML → böngészőből PDF).
+        OutlinedButton.icon(
+          onPressed: _report == null ? null : _export,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.gold,
+            side: const BorderSide(color: AppColors.gold),
+          ),
+          icon: const Icon(Icons.print_outlined, size: 18),
+          label: const Text("Mentés / nyomtatás"),
         ),
+        const SizedBox(width: AppSpacing.md),
+        // Melyik csapatot derítsük fel (egyesített módban meccsenként rögzített).
+        if (widget.items == null)
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(value: "home", label: Text(widget.homeName)),
+              ButtonSegment(value: "away", label: Text(widget.awayName)),
+            ],
+            selected: {_team},
+            onSelectionChanged: (s) {
+              setState(() => _team = s.first);
+              _load();
+            },
+          ),
       ],
     );
   }
@@ -143,6 +213,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         const SizedBox(height: AppSpacing.lg),
         _metricsCard(r),
         const SizedBox(height: AppSpacing.lg),
+        _shotZonesCard(r),
+        const SizedBox(height: AppSpacing.lg),
+        if (_playbookMatch != null) ...[
+          _playbookCard(_playbookMatch!),
+          const SizedBox(height: AppSpacing.lg),
+        ],
         _defenseCard(r),
         const SizedBox(height: AppSpacing.lg),
         _keyPlayersCard(r),
@@ -253,6 +329,103 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           Text(value, style: AppText.value.copyWith(fontSize: 20, color: AppColors.accent)),
           const SizedBox(height: 2),
           Text(label, style: AppText.label.copyWith(fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  /// Lövési zónák: honnan lőnek és honnan eredményesek (gól/lövés zónánként).
+  Widget _shotZonesCard(Map<String, dynamic> r) {
+    final zones = (r["shot_zones"] as Map?)?.cast<String, dynamic>() ?? {};
+    // Összes lövés a sáv-arányokhoz.
+    int total = 0;
+    for (final v in zones.values) {
+      total += ((v as Map)["shots"] as num?)?.toInt() ?? 0;
+    }
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("HONNAN LŐNEK (gól/lövés)", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.md),
+          if (zones.isEmpty)
+            Text("Nincs elég lövés-minta.", style: AppText.label)
+          else
+            for (final e in zones.entries)
+              _zoneBar(e.key, (e.value as Map).cast<String, dynamic>(), total),
+        ],
+      ),
+    );
+  }
+
+  Widget _zoneBar(String zone, Map<String, dynamic> rec, int total) {
+    final shots = (rec["shots"] as num?)?.toInt() ?? 0;
+    final goals = (rec["goals"] as num?)?.toInt() ?? 0;
+    final frac = total > 0 ? shots / total : 0.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        SizedBox(width: 110, child: Text(zone, style: AppText.value.copyWith(fontSize: 13))),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: frac.clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: AppColors.surfaceAlt,
+              valueColor: const AlwaysStoppedAnimation(AppColors.gold),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        SizedBox(width: 44, child: Text("$goals/$shots",
+            textAlign: TextAlign.right, style: AppText.label.copyWith(fontSize: 12))),
+      ]),
+    );
+  }
+
+  /// Figura-egyezés: az ellenfél támadásai közül melyik egyezik egy MENTETT
+  /// figurával a könyvtárunkból ("a Beúszós keresztet játszották 4x").
+  Widget _playbookCard(Map<String, dynamic> pm) {
+    final matched = (pm["matched"] as Map?)?.cast<String, dynamic>() ?? {};
+    final total = (pm["total_attacks"] as num?)?.toInt() ?? 0;
+    final unmatched = (pm["unmatched"] as num?)?.toInt() ?? 0;
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.menu_book_outlined, size: 16, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Text("ISMERT FIGURÁIK (a könyvtárunkból)", style: AppText.sectionLabel),
+          ]),
+          const SizedBox(height: AppSpacing.md),
+          if (total == 0)
+            Text("Nincs felismert támadás-szakasz ebben a meccsben.", style: AppText.label)
+          else if (matched.isEmpty)
+            Text("Egyik támadásuk sem egyezik mentett figurával "
+                "($total támadás). Ments figurákat a Figura-tervezőben.",
+                style: AppText.label)
+          else ...[
+            for (final e in matched.entries)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(children: [
+                  const Icon(Icons.check_circle_outline, size: 15, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(e.key, style: AppText.value.copyWith(fontSize: 13))),
+                  Text("${e.value}×", style: AppText.value.copyWith(color: AppColors.accent)),
+                ]),
+              ),
+            const SizedBox(height: 6),
+            Text("$total támadásból $unmatched ismeretlen mintájú.",
+                style: AppText.label.copyWith(fontSize: 11)),
+          ],
         ],
       ),
     );
