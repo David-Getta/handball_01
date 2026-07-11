@@ -17,6 +17,11 @@ on:
   push:
     tags: ["v*"]          # verziócímkére automatikus kiadás
 
+# A Releases oldalra való feltöltéshez írási jog kell a repó tartalmához —
+# enélkül a kiadás-lépés "Resource not accessible by integration" hibát ad.
+permissions:
+  contents: write
+
 jobs:
   # Gyors ellenőrzés: a backend tesztjei (olcsó ubuntu-gépen).
   tests:
