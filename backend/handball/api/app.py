@@ -353,6 +353,38 @@ def create_app():
         _put_match(match)  # memóriába + lemezre (perzisztencia)
         return {"match_id": match_id, "swapped": True}
 
+    @app.post("/matches/merge")
+    def merge_halves(body: dict):
+        """Több feldolgozott felvétel (pl. 1. és 2. félidő) összefűzése EGY meccsé.
+
+        Törzs: {"ids": [elso, masodik, ...]  — időrendben!,
+                "match_id": opcionális név, "home_team"/"away_team": opcionális}.
+        Az eredmény új meccsként kerül a könyvtárba; az eredeti részek megmaradnak.
+        """
+        import uuid
+
+        from ..pipeline.merge import merge_matches
+
+        ids = body.get("ids") or []
+        if not isinstance(ids, list) or len(ids) < 2:
+            raise HTTPException(status_code=400, detail="legalabb ket meccs-azonosito kell")
+        parts = []
+        for mid in ids:
+            m = _store.get(str(mid))
+            if m is None:
+                raise HTTPException(status_code=404, detail=f"match not found: {mid}")
+            parts.append(m)
+        new_id = str(body.get("match_id") or "").strip() or (
+            "teljes-" + "+".join(str(i) for i in ids))
+        if new_id in _store:
+            new_id = f"{new_id}-{uuid.uuid4().hex[:6]}"
+        merged = merge_matches(
+            parts, new_id,
+            home_team=body.get("home_team"), away_team=body.get("away_team"))
+        _put_match(merged)  # memóriába + lemezre (perzisztencia)
+        return {"match_id": new_id, "num_frames": len(merged.frames),
+                "parts": [p.meta.match_id for p in parts]}
+
     def _calibration_path(video_path: str) -> Path:
         """A videóhoz tartozó kalibráció-fájl (kulcs: a videó fájlneve)."""
         import re
