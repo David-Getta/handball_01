@@ -543,13 +543,20 @@ def create_app():
             return f"{x:.1f}".replace(".", ",")  # tizedesvessző (magyar Excel)
 
         lines = ["Játékos;Csapat;Mezszám;Táv (m);Átl. sebesség (m/s);"
+                 "Max sebesség (km/h);Sprintek;Sprint táv (m);"
+                 "Séta (mp);Kocogás (mp);Futás (mp);Sprint (mp);"
                  "Mért kocka;Becsült kocka"]
         for tid, s in sorted(stats.items()):
             team = (match.meta.home_team if team_of.get(tid) == "home"
                     else match.meta.away_team)
+            zones = s.zone_seconds or {}
             lines.append(";".join([
                 f"#{tid}", team, str(jersey_of.get(tid, "")),
                 num(s.distance_m), num(s.avg_speed_ms),
+                num(s.top_speed_ms * 3.6), str(s.sprint_count),
+                num(s.sprint_distance_m),
+                num(zones.get("seta", 0.0)), num(zones.get("kocogas", 0.0)),
+                num(zones.get("futas", 0.0)), num(zones.get("sprint", 0.0)),
                 str(s.measured_frames), str(s.estimated_frames),
             ]))
         csv = "\ufeff" + "\r\n".join(lines) + "\r\n"  # BOM: Excel-kompatibilitás

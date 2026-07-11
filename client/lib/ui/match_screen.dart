@@ -821,7 +821,8 @@ class _MatchScreenState extends State<MatchScreen> {
     final label = st == null
         ? "Játékos #$id"
         : "Játékos #$id · $teamName · ${st.distanceM.toStringAsFixed(0)} m · "
-            "átl. ${st.avgSpeedMs.toStringAsFixed(1)} m/s";
+            "max ${(st.topSpeedMs * 3.6).toStringAsFixed(1)} km/h · "
+            "${st.sprintCount} sprint";
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
