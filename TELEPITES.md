@@ -49,6 +49,24 @@ másodpercig — ez normális. Utána megnyílik a program.
 
 ---
 
+## Automatikus frissítés
+
+A programot **csak egyszer** kell telepíteni. Utána — a Claude alkalmazáshoz
+hasonlóan — **magától észreveszi**, ha új verzió jelent meg:
+
+1. Az **Áttekintés** képernyő tetején megjelenik egy arany sáv:
+   *„Új verzió érhető el"*.
+2. Kattints a **Frissítés most** gombra — a program letölti az új verziót,
+   kicseréli önmagát, és **újraindul**. Semmi mást nem kell tenned.
+3. Ha inkább később frissítenél, kattints a **Később** gombra. Kézzel is
+   kereshetsz frissítést a fejléc **⭳ Programfrissítés keresése** ikonjával.
+
+> **Fontos:** a frissítés-ellenőrzés a GitHub Releases oldalt nézi. Ez csak
+> **publikus** repónál működik bejelentkezés nélkül — privát repónál a program
+> nem látja a kiadásokat, ilyenkor marad a kézi letöltés a Releases oldalról.
+
+---
+
 ## Gyakori kérdések
 
 **Nem indul el / „A motor nem indult el" üzenet.** Zárd be, és indítsd újra a
