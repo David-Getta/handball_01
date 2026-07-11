@@ -290,6 +290,18 @@ def create_app():
         return {"match_id": match_id,
                 "home_team": match.meta.home_team, "away_team": match.meta.away_team}
 
+    @app.post("/matches/{match_id}/swap-teams")
+    def swap_teams(match_id: str):
+        """Felcseréli a két csapatot (minden játékos team-mezőjét) — ha a
+        csapatszín-klaszterezés fordítva találta el, melyik szín a hazai.
+        A csapatnevek maradnak; a statisztika/felderítés a friss adatból számol."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        match.swap_teams()
+        _put_match(match)  # memóriába + lemezre (perzisztencia)
+        return {"match_id": match_id, "swapped": True}
+
     def _roster_path(match_id: str) -> Path:
         import re
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"

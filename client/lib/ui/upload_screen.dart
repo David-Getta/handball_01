@@ -501,6 +501,16 @@ class _UploadScreenState extends State<UploadScreen> {
                     Text(_statusLine(), style: AppText.label.copyWith(
                         fontSize: 12,
                         color: _status == "error" ? AppColors.away : AppColors.textSecondary)),
+                    // A motor az apppal együtt áll le — hosszú feldolgozásnál
+                    // ez sok elveszett munka lenne, ezért kiírjuk.
+                    if (_status == "running") ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        "Ne zárd be az appot feldolgozás közben — a motor vele "
+                        "együtt leáll, és a munka elveszik.",
+                        style: AppText.label.copyWith(fontSize: 11, color: AppColors.gold),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -97,6 +97,15 @@ class ApiClient {
     }
   }
 
+  /// Felcseréli a két csapatot a meccsben (POST /matches/{id}/swap-teams) —
+  /// ha a csapatszín-felismerés fordítva találta el, melyik szín a hazai.
+  Future<void> swapTeams(String matchId) async {
+    final resp = await http.post(Uri.parse("$baseUrl/matches/$matchId/swap-teams"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a csapatok cseréje: HTTP ${resp.statusCode}");
+    }
+  }
+
   /// A feldolgozás minőség-jelentése (GET /matches/{id}/quality).
   Future<Map<String, dynamic>> fetchQuality(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));
