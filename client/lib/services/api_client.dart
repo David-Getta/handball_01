@@ -97,6 +97,15 @@ class ApiClient {
     }
   }
 
+  /// A feldolgozás minőség-jelentése (GET /matches/{id}/quality).
+  Future<Map<String, dynamic>> fetchQuality(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a minőség-jelentés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A meccshez felvitt kiállítások (roster) lekérése.
   Future<Map<String, dynamic>> fetchRoster(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/roster"));

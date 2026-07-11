@@ -17,6 +17,7 @@ Végpontok (MVP):
 - GET  /matches/{match_id}          → a Match (Tracking) JSON-ja.
 - PATCH /matches/{match_id}         → metaadat-frissítés (csapatnevek átírása).
 - DELETE /matches/{match_id}        → meccs törlése (memória + lemez).
+- GET  /matches/{match_id}/quality  → a feldolgozás minőség-önellenőrzése.
 - GET  /matches/{match_id}/stats    → játékosonkénti statisztika.
 - GET  /matches/{match_id}/coaching → élő edzői javaslatok (idővonal vagy egy frame).
 - GET  /matches/{match_id}/scouting → ellenfél-felderítő jelentés egy csapatról.
@@ -335,6 +336,16 @@ def create_app():
         except Exception:
             pass
         return {"deleted": match_id}
+
+    @app.get("/matches/{match_id}/quality")
+    def get_quality(match_id: str):
+        """A feldolgozás minőség-jelentése: mennyire megbízható az elemzés
+        (lefedettség, becsült-arány, labda-hézagok, figyelmeztetések teendővel)."""
+        from ..pipeline.quality import compute_quality_report
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return compute_quality_report(match)
 
     @app.get("/matches/{match_id}/stats")
     def get_stats(match_id: str):

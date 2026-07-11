@@ -362,6 +362,14 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         added = augment_match_with_estimates(match)
         print(f"képen kívüli becslés: {added} becsült pozíció pótolva")
 
+    # Minőség-önellenőrzés: a napló végén látszik, mennyire megbízható az eredmény.
+    from handball.pipeline.quality import compute_quality_report
+    q = compute_quality_report(match)
+    print(f"minőség: {q['score']}/100 | játékos/kocka: {q['avg_measured_players']} | "
+          f"labda-lefedettség: {q['ball_coverage_pct']}%")
+    for w in q["warnings"]:
+        print(f"  FIGYELEM: {w}")
+
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(match.to_json(indent=2))

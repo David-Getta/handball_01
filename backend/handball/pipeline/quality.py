@@ -1,0 +1,105 @@
+"""
+[Minőség-jelentés] — a feldolgozás ÖNELLENŐRZÉSE, pilothoz nélkülözhetetlen.
+
+TRL 7-8 (éles pilot) követelmény: a rendszer FEJLESZTŐ NÉLKÜL is meg tudja
+mondani, mennyire megbízható egy feldolgozás eredménye, és mit tegyen a
+felhasználó, ha gyenge. Ez a modul a kész Tracking-ből számol:
+
+- játékos-lefedettség: átlagos mért játékos/kocka, a "elég játékost látunk"
+  kockák aránya, a becsült pozíciók aránya,
+- labda-lefedettség: a labdás kockák aránya, a leghosszabb labda-hézag,
+- 0-100-as összpontszám + MAGYAR figyelmeztetések konkrét teendővel
+  ("Kevés labda-észlelés — ellenőrizd a kalibrációt / válassz tisztább szakaszt").
+
+Tiszta adatfeldolgozás, videó nélkül tesztelhető.
+"""
+
+from __future__ import annotations
+
+from ..models.tracking import Match, PositionSource
+
+# Elvárások (teljes létszámú kézilabda): 2x7 játékos van a pályán.
+EXPECTED_PLAYERS = 14
+# "Elég játékos látszik" küszöb egy kockára (pásztázó kamerán sosem látszik mind).
+GOOD_FRAME_MIN_PLAYERS = 8
+
+
+def compute_quality_report(match: Match) -> dict:
+    """A feldolgozás minőség-jelentése a kész Tracking-ből.
+
+    Visszaad egy szótárt: lefedettségi mutatók + score (0-100) + warnings
+    (magyar, teendővel). A kliens ezt mutatja a meccs mellett, hogy a
+    felhasználó tudja, mennyire bízhat az elemzésben.
+    """
+    n = len(match.frames)
+    if n == 0:
+        return {
+            "frames": 0, "score": 0,
+            "avg_measured_players": 0.0, "good_player_frames_pct": 0.0,
+            "estimated_ratio_pct": 0.0, "ball_coverage_pct": 0.0,
+            "longest_ball_gap_s": 0.0,
+            "warnings": ["Nincs feldolgozott képkocka — a videó/`--start` "
+                         "beállítást ellenőrizd."],
+        }
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+
+    measured_total = 0
+    estimated_total = 0
+    good_frames = 0
+    ball_frames = 0
+    longest_gap = 0
+    gap = 0
+    for f in match.frames:
+        meas = sum(1 for p in f.players if p.source == PositionSource.MEASURED)
+        est = len(f.players) - meas
+        measured_total += meas
+        estimated_total += est
+        if meas >= GOOD_FRAME_MIN_PLAYERS:
+            good_frames += 1
+        if f.ball is not None:
+            ball_frames += 1
+            gap = 0
+        else:
+            gap += 1
+            longest_gap = max(longest_gap, gap)
+
+    avg_measured = measured_total / n
+    good_pct = 100.0 * good_frames / n
+    total_pos = measured_total + estimated_total
+    est_ratio = 100.0 * estimated_total / total_pos if total_pos else 0.0
+    ball_pct = 100.0 * ball_frames / n
+
+    # Összpontszám: a játékos-lefedettség és a labda-lefedettség súlyozva.
+    # (A becsült arány a játékos-részt rontja: a becslés hasznos, de nem mérés.)
+    player_score = min(1.0, avg_measured / EXPECTED_PLAYERS) * (1.0 - est_ratio / 200.0)
+    ball_score = ball_pct / 100.0
+    score = round(100.0 * (0.6 * player_score + 0.4 * ball_score))
+
+    warnings = []
+    if avg_measured < GOOD_FRAME_MIN_PLAYERS:
+        warnings.append(
+            f"Kevés játékos látszik (átlag {avg_measured:.1f}/kocka) — ellenőrizd a "
+            "kalibrációt (4 sarok) és hogy a kamera a játékteret mutatja-e.")
+    if ball_pct < 30.0:
+        warnings.append(
+            f"Kevés labda-észlelés ({ball_pct:.0f}%) — a birtoklás/passz elemzés "
+            "megbízhatatlan lehet. Tisztább (közelebbi, élesebb) felvétel segít.")
+    if est_ratio > 40.0:
+        warnings.append(
+            f"Sok a becsült pozíció ({est_ratio:.0f}%) — a kamera sokat pásztáz; "
+            "a becsültek szaggatott gyűrűvel jelennek meg a pályán.")
+    if longest_gap / fps > 5.0:
+        warnings.append(
+            f"Hosszú labda-kiesés ({longest_gap / fps:.1f} mp) — az események egy "
+            "része kimaradhat ebben a szakaszban.")
+
+    return {
+        "frames": n,
+        "score": score,
+        "avg_measured_players": round(avg_measured, 1),
+        "good_player_frames_pct": round(good_pct, 1),
+        "estimated_ratio_pct": round(est_ratio, 1),
+        "ball_coverage_pct": round(ball_pct, 1),
+        "longest_ball_gap_s": round(longest_gap / fps, 1),
+        "warnings": warnings,
+    }

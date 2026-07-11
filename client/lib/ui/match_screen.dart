@@ -42,6 +42,9 @@ class _MatchScreenState extends State<MatchScreen> {
   // Felismert események a backendből (passz/lövés/gól/labdaeladás) — kattintásra
   // a lejátszó az esemény képkockájára ugrik. Demó módban üres.
   List<Map<String, dynamic>> _events = [];
+  // A feldolgozás minőség-önellenőrzése (score + figyelmeztetések) — a
+  // felhasználó lássa, mennyire megbízható az elemzés. Demó módban null.
+  Map<String, dynamic>? _quality;
   int _frameIndex = 0;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
@@ -67,6 +70,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Match match;
     String label;
     List<Map<String, dynamic>> events = [];
+    Map<String, dynamic>? quality;
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -75,6 +79,11 @@ class _MatchScreenState extends State<MatchScreen> {
           events = await _api.fetchEvents(widget.matchId);
         } catch (_) {
           events = []; // esemény nélkül is működik a nézet
+        }
+        try {
+          quality = await _api.fetchQuality(widget.matchId);
+        } catch (_) {
+          quality = null; // minőség-jelentés nélkül is teljes a nézet
         }
       } catch (e) {
         match = buildDemoMatch();
@@ -89,6 +98,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _stats = computePlayerStats(match);
       _summary = computeMatchSummary(match);
       _events = events;
+      _quality = quality;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -248,6 +258,10 @@ class _MatchScreenState extends State<MatchScreen> {
         Text(match.meta.awayTeam, style: AppText.title.copyWith(fontSize: 24, color: AppColors.away)),
         const SizedBox(width: AppSpacing.lg),
         _chip(_sourceLabel),
+        if (_quality != null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          _qualityChip(_quality!),
+        ],
         const Spacer(),
         FilledButton.icon(
           onPressed: () => Navigator.of(context).push(
@@ -412,6 +426,71 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.textFaint),
         ),
       ]),
+    );
+  }
+
+  /// Minőség-jelvény: pontszám színnel (jó/közepes/gyenge), kattintásra részletek.
+  Widget _qualityChip(Map<String, dynamic> q) {
+    final score = (q["score"] as num?)?.toInt() ?? 0;
+    final color = score >= 70
+        ? AppColors.accent
+        : score >= 40
+            ? AppColors.gold
+            : AppColors.away;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => _showQualityDetails(q),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.verified_outlined, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text("minőség $score/100",
+              style: AppText.label.copyWith(fontSize: 11, color: color)),
+        ]),
+      ),
+    );
+  }
+
+  void _showQualityDetails(Map<String, dynamic> q) {
+    final warnings = (q["warnings"] as List?) ?? const [];
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Feldolgozás minősége: ${q["score"]}/100"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Mért játékos/kocka: ${q["avg_measured_players"]}", style: AppText.label),
+            Text("Labda-lefedettség: ${q["ball_coverage_pct"]}%", style: AppText.label),
+            Text("Becsült pozíciók: ${q["estimated_ratio_pct"]}%", style: AppText.label),
+            Text("Leghosszabb labda-kiesés: ${q["longest_ball_gap_s"]} mp", style: AppText.label),
+            if (warnings.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              for (final w in warnings)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.warning_amber, size: 15, color: AppColors.gold),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text("$w",
+                        style: AppText.label.copyWith(color: AppColors.textPrimary, fontSize: 12))),
+                  ]),
+                ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Rendben")),
+        ],
+      ),
     );
   }
 
