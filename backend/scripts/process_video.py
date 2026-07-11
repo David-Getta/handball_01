@@ -115,6 +115,17 @@ def _pick_device():
     return "cpu"
 
 
+def _normalize_max_frames(max_frames):
+    """0/None/negatív képkocka-plafon → 'nincs plafon' (a teljes videó).
+
+    Belül egy gyakorlatban elérhetetlen felső korláttal dolgozunk, így a
+    feldolgozó ciklusoknak nem kell külön 'végtelen' ágat kezelniük.
+    """
+    if not max_frames or max_frames <= 0:
+        return 10 ** 9
+    return int(max_frames)
+
+
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None, pan=False):
     import os
@@ -224,7 +235,13 @@ def _process_hog(video_path, stride, max_frames):
     cap = cv2.VideoCapture(video_path)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
     scale = PROC_WIDTH / W if W > PROC_WIDTH else 1.0
-    hog = cv2.HOGDescriptor(); hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+    # Az OpenCV 5-ből kikerült a HOG személydetektor — nélküle a tartalék mód
+    # detektálás nélkül fut (üres kockák), de nem száll el. (Az éles út a YOLO.)
+    try:
+        hog = cv2.HOGDescriptor()
+        hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+    except AttributeError:
+        hog = None
     tracker = _SimpleTracker()
     raw, all_colors = [], []
     fi = out_i = 0
@@ -236,7 +253,10 @@ def _process_hog(video_path, stride, max_frames):
             fi += 1; continue
         fi += 1
         small = cv2.resize(frame, None, fx=scale, fy=scale) if scale != 1.0 else frame
-        rects, weights = hog.detectMultiScale(small, winStride=(8, 8), padding=(8, 8), scale=1.05)
+        if hog is not None:
+            rects, weights = hog.detectMultiScale(small, winStride=(8, 8), padding=(8, 8), scale=1.05)
+        else:
+            rects, weights = [], []
         boxes = [(int(x), int(y), int(x + w), int(y + h)) for (x, y, w, h), s in zip(rects, weights) if s >= 0.4]
         centers = [((x1 + x2) / 2.0, (y1 + y2) / 2.0) for (x1, y1, x2, y2) in boxes]
         ids = tracker.update(centers)
@@ -274,8 +294,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
+    n_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     cap.release()
     print(f"videó: {W}x{H} @ {fps:.1f} fps | mód: {'YOLO' if weights else 'HOG'}")
+
+    # max_frames = 0/None → a TELJES videó (éles meccsnél ez az alapeset).
+    # A haladás-kijelzéshez a videó hosszából becsüljük a feldolgozandó
+    # kockák számát (a sötét kockák kihagyása miatt ez felső becslés).
+    max_frames = _normalize_max_frames(max_frames)
+    est_total = max(1, max(0, n_total - start) // max(1, stride)) if n_total > 0 else 0
+    disp_total = min(max_frames, est_total) if est_total else max_frames
 
     # [A] kalibráció (ha van 4 sarok). A haladás nagy részét a detektálás adja.
     report("A", 0.02, "kalibráció" if calib_corners else "kalibráció nélkül")
@@ -287,15 +315,18 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     _t0 = _time.time()
 
     def on_frame(kept, total):
+        # A kijelzéshez a becsült teljes darabszámot használjuk (a `total` a
+        # belső plafon, ami teljes videónál csak egy óriási felső korlát).
+        show = min(total, disp_total) if disp_total else total
         elapsed = _time.time() - _t0
         rate = kept / elapsed if elapsed > 0 else 0.0
-        if rate > 0 and kept >= 3:  # az első pár kocka még torzít (modell-betöltés)
-            remain = (total - kept) / rate
+        if rate > 0 and kept >= 3 and show > kept:  # az első pár kocka még torzít
+            remain = (show - kept) / rate
             eta = f" · {rate:.1f} kocka/mp · ~{int(remain // 60)}:{int(remain % 60):02d} hátra"
         else:
             eta = ""
-        report("B", 0.05 + 0.70 * (kept / max(1, total)),
-               f"detektálás {kept}/{total}{eta}")
+        frac = min(1.0, kept / max(1, show))
+        report("B", 0.05 + 0.70 * frac, f"detektálás {kept}/{show}{eta}")
 
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).

@@ -142,8 +142,10 @@ def create_app():
         """Elindítja egy videó feldolgozását HÁTTÉRSZÁLON, és job_id-t ad vissza.
 
         A törzs (JSON) mezői: path (kötelező, backend-oldali videó út), opcionálisan
-        weights, stride, max, imgsz, conf, start, calib ([[x,y],...] 4 sarok), match_id.
-        A haladást a GET /jobs/{job_id} adja vissza (stage, progress, message).
+        weights, stride, max (0 = a TELJES videó — ez az alapérték), imgsz, conf,
+        start, calib ([[x,y],...] 4 sarok), match_id.
+        A haladást a GET /jobs/{job_id} adja vissza (stage, progress, message);
+        megszakítás: POST /jobs/{job_id}/cancel.
         """
         import threading
         import uuid
@@ -168,7 +170,16 @@ def create_app():
                 sys.path.insert(0, backend_dir)
             from scripts.process_video import process
 
+            # Megszakítás: a haladás-visszahívás minden hívásnál megnézi a
+            # job "cancel" jelzőjét — ha be van állítva, kivétellel kilépünk
+            # a feldolgozásból (a detektáló ciklus kockánként hívja, így a
+            # leállás másodperceken belül megtörténik).
+            class _Cancelled(Exception):
+                pass
+
             def cb(stage, prog, msg):
+                if job.get("cancel"):
+                    raise _Cancelled()
                 job["stage"] = stage
                 job["progress"] = round(float(prog), 3)
                 job["message"] = msg
@@ -178,7 +189,7 @@ def create_app():
                     path, None,
                     weights=body.get("weights"),
                     stride=int(body.get("stride", 3)),
-                    max_frames=int(body.get("max", 400)),
+                    max_frames=int(body.get("max", 0)),  # 0 = teljes videó
                     imgsz=int(body.get("imgsz", 1280)),
                     conf=float(body.get("conf", 0.20)),
                     calib_corners=body.get("calib"),
@@ -194,6 +205,9 @@ def create_app():
                 job["status"] = "done"
                 job["progress"] = 1.0
                 job["message"] = f"kész ({len(match.frames)} frame)"
+            except _Cancelled:
+                job["status"] = "cancelled"
+                job["message"] = "megszakítva"
             except Exception as e:  # a hibát a kliensnek is megmutatjuk
                 job["status"] = "error"
                 job["error"] = str(e)
@@ -208,6 +222,18 @@ def create_app():
         job = _jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
+        return job
+
+    @app.post("/jobs/{job_id}/cancel")
+    def cancel_job(job_id: str):
+        """Egy futó feldolgozás megszakítása. A leállítás nem azonnali: a
+        feldolgozó a következő képkockánál veszi észre a jelzőt (másodpercek)."""
+        job = _jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        if job["status"] == "running":
+            job["cancel"] = True
+            job["message"] = "megszakítás folyamatban…"
         return job
 
     @app.get("/matches")

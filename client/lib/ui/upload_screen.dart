@@ -63,6 +63,18 @@ class _UploadScreenState extends State<UploadScreen> {
   double _uploadProgress = 0.0;
   String? _uploadedName;
 
+  // Feldolgozási beállítások: minőségi profil + rövid próba mód.
+  // A profilok (stride, imgsz): gyors = ritkább mintavétel kisebb képen;
+  // pontos = sűrűbb mintavétel nagy felbontáson (lassabb, de jobb labda-követés).
+  String _quality = "balanced"; // fast | balanced | precise
+  bool _trialRun = false; // igaz → csak az eleje (~2 perc), gyors kipróbáláshoz
+
+  static const Map<String, (int, int, String)> _qualityPresets = {
+    "fast": (5, 960, "Gyors"),
+    "balanced": (3, 1280, "Kiegyensúlyozott"),
+    "precise": (2, 1920, "Pontos"),
+  };
+
   @override
   void dispose() {
     _poll?.cancel();
@@ -138,10 +150,17 @@ class _UploadScreenState extends State<UploadScreen> {
       _error = null;
       _navigated = false;
     });
+    // A kiválasztott profil paraméterei; próba módban csak a videó eleje
+    // (~2 percnyi feldolgozott kocka) készül el — gyors ellenőrzéshez.
+    final (stride, imgsz, _) = _qualityPresets[_quality]!;
+    final max = _trialRun ? (3000 / stride).round() : 0; // 0 = teljes videó
     try {
       final r = await _api.startProcessing(
         path,
         weights: "yolov8n.pt",
+        stride: stride,
+        imgsz: imgsz,
+        max: max,
         homeTeam: _homeCtrl.text.trim(),
         awayTeam: _awayCtrl.text.trim(),
       );
@@ -172,7 +191,7 @@ class _UploadScreenState extends State<UploadScreen> {
         _message = (j["message"] as String?) ?? "";
         _error = j["error"] as String?;
       });
-      if (_status == "done" || _status == "error") {
+      if (_status == "done" || _status == "error" || _status == "cancelled") {
         _poll?.cancel();
       }
       // A done pillanatában EGYSZER automatikusan megnyitjuk az eredményt.
@@ -187,6 +206,21 @@ class _UploadScreenState extends State<UploadScreen> {
         _error = "$e";
       });
       _poll?.cancel();
+    }
+  }
+
+  /// Futó feldolgozás megszakítása — a szerver a következő képkockánál áll le.
+  Future<void> _cancelProcessing() async {
+    final id = _jobId;
+    if (id == null) return;
+    try {
+      await _api.cancelJob(id);
+      if (!mounted) return;
+      setState(() => _message = "megszakítás folyamatban…");
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Megszakítási hiba: $e")));
     }
   }
 
@@ -264,16 +298,66 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
+          // Feldolgozási beállítások: minőség + próba mód. Alapból a TELJES
+          // videó készül el a kiegyensúlyozott profillal.
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: [
+                  for (final e in _qualityPresets.entries)
+                    ButtonSegment(value: e.key, label: Text(e.value.$3)),
+                ],
+                selected: {_quality},
+                onSelectionChanged: _status == "running"
+                    ? null
+                    : (s) => setState(() => _quality = s.first),
+              ),
+              FilterChip(
+                label: const Text("Rövid próba (~2 perc)"),
+                selected: _trialRun,
+                onSelected: _status == "running"
+                    ? null
+                    : (v) => setState(() => _trialRun = v),
+                selectedColor: AppColors.gold.withOpacity(0.2),
+                checkmarkColor: AppColors.gold,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _trialRun
+                ? "Csak a videó eleje készül el — gyors ellenőrzéshez (kalibráció, színek)."
+                : "A teljes videó feldolgozása — egy félidő a gép erejétől függően "
+                    "10–60 perc is lehet, a haladás és a hátralévő idő végig látszik.",
+            style: AppText.label.copyWith(fontSize: 11),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(children: [
+            FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
               onPressed: _status == "running" ? null : _startProcessing,
               icon: const Icon(Icons.play_arrow, size: 18),
               label: Text(_status == "running" ? "Feldolgozás folyamatban…" : "Feldolgozás indítása"),
             ),
-          ),
+            if (_status == "running") ...[
+              const SizedBox(width: AppSpacing.md),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.away,
+                  side: const BorderSide(color: AppColors.away),
+                ),
+                onPressed: _cancelProcessing,
+                icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                label: const Text("Megszakítás"),
+              ),
+            ],
+          ]),
           const SizedBox(height: AppSpacing.xl),
           Text("Feldolgozás állapota", style: AppText.value.copyWith(fontSize: 17)),
           const SizedBox(height: AppSpacing.md),
@@ -430,6 +514,8 @@ class _UploadScreenState extends State<UploadScreen> {
         return "Feldolgozás… ${(_progress * 100).round()}% · $_message";
       case "done":
         return "Kész · $_message";
+      case "cancelled":
+        return "Megszakítva — indíthatsz új feldolgozást.";
       case "error":
         return "Hiba · ${_error ?? _message}";
       default:
