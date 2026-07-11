@@ -406,9 +406,13 @@ class _UploadScreenState extends State<UploadScreen> {
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
-              onPressed: _status == "running" ? null : _startProcessing,
+              onPressed: _uploading ? null : _startProcessing,
               icon: const Icon(Icons.play_arrow, size: 18),
-              label: Text(_status == "running" ? "Feldolgozás folyamatban…" : "Feldolgozás indítása"),
+              // Futó feldolgozás mellett is indítható újabb: a szerver
+              // SORBA teszi, és egymás után dolgozza fel őket.
+              label: Text(_status == "running" || _status == "queued"
+                  ? "Új videó sorba állítása"
+                  : "Feldolgozás indítása"),
             ),
             if (_status == "running") ...[
               const SizedBox(width: AppSpacing.md),
@@ -585,6 +589,8 @@ class _UploadScreenState extends State<UploadScreen> {
     switch (_status) {
       case "idle":
         return "Nincs feldolgozás — add meg a videó-utat és indítsd el.";
+      case "queued":
+        return "Sorban áll — előtte másik feldolgozás fut.";
       case "running":
         return "Feldolgozás… ${(_progress * 100).round()}% · $_message";
       case "done":

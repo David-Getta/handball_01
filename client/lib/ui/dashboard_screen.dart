@@ -5,6 +5,8 @@
 /// match_id-vel. Backend nélkül/üres tárnál barátságos állapotot mutat.
 library;
 
+import "dart:async";
+
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -30,6 +32,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _offline = false; // a backend nem elérhető
   List<Map<String, dynamic>> _matches = [];
 
+  // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is látszanak,
+  // és amíg van aktív munka, pár másodpercenként frissülnek.
+  List<Map<String, dynamic>> _jobs = [];
+  Timer? _jobsTimer;
+
+  bool _isActiveJob(Map<String, dynamic> j) =>
+      j["status"] == "running" || j["status"] == "queued";
+
+  Future<void> _refreshJobs() async {
+    final jobs = await _api.fetchJobs();
+    if (!mounted) return;
+    final hadActive = _jobs.any(_isActiveJob);
+    final hasActive = jobs.any(_isActiveJob);
+    setState(() => _jobs = jobs);
+    if (hasActive) {
+      _jobsTimer ??= Timer.periodic(
+          const Duration(seconds: 2), (_) => _refreshJobs());
+    } else {
+      _jobsTimer?.cancel();
+      _jobsTimer = null;
+      // Ha épp most fejeződött be egy munka, a könyvtár is frissül.
+      if (hadActive) _load();
+    }
+  }
+
   // Automatikus frissítés: az elérhető új verzió (ha van) és az elrejtés.
   UpdateInfo? _update;
   bool _updateDismissed = false;
@@ -39,6 +66,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _load();
     _checkUpdatesSilently();
+  }
+
+  @override
+  void dispose() {
+    _jobsTimer?.cancel();
+    super.dispose();
   }
 
   /// Háttérben megnézi, van-e új kiadás — hibánál csendben marad (induláskor
@@ -240,6 +273,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _offline = false;
         _loading = false;
       });
+      _refreshJobs();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -526,6 +560,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     "${_matches.length} meccs feldolgozva")),
               ],
             ),
+            // Folyamatban lévő feldolgozások (sor): élő állapot + megszakítás.
+            if (_jobs.any(_isActiveJob)) ...[
+              const SizedBox(height: AppSpacing.xl),
+              _jobsCard(),
+            ],
             const SizedBox(height: AppSpacing.xl),
             Row(children: [
               Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
@@ -634,6 +673,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (action != null) ...[const SizedBox(height: AppSpacing.lg), action],
         ],
       ),
+    );
+  }
+
+  /// A feldolgozási sor kártyája: futó/sorban álló munkák élő haladással.
+  Widget _jobsCard() {
+    final active = _jobs.where(_isActiveJob).toList();
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("FOLYAMATBAN LÉVŐ FELDOLGOZÁSOK", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          for (final j in active) _jobRow(j),
+        ],
+      ),
+    );
+  }
+
+  Widget _jobRow(Map<String, dynamic> j) {
+    final running = j["status"] == "running";
+    final progress = (j["progress"] as num?)?.toDouble() ?? 0.0;
+    final video = (j["video"] as String?) ?? (j["match_id"] as String? ?? "");
+    final message = (j["message"] as String?) ?? "";
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(children: [
+        Icon(running ? Icons.autorenew : Icons.schedule,
+            size: 16, color: running ? AppColors.gold : AppColors.textFaint),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(video,
+                style: AppText.value.copyWith(fontSize: 12.5),
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 3),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: running ? (progress > 0 ? progress : null) : 0,
+                minHeight: 4,
+                backgroundColor: AppColors.surfaceAlt,
+                valueColor: const AlwaysStoppedAnimation(AppColors.gold),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(running ? message : "sorban áll — előtte másik feldolgozás fut",
+                style: AppText.label.copyWith(fontSize: 11),
+                overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+        IconButton(
+          onPressed: () async {
+            try {
+              await _api.cancelJob(j["job_id"] as String);
+              await _refreshJobs();
+            } catch (_) {}
+          },
+          icon: const Icon(Icons.close, size: 16, color: AppColors.textFaint),
+          tooltip: "Megszakítás",
+        ),
+      ]),
     );
   }
 

@@ -147,20 +147,58 @@ def create_app():
         A haladást a GET /jobs/{job_id} adja vissza (stage, progress, message);
         megszakítás: POST /jobs/{job_id}/cancel.
         """
-        import threading
+        import time
         import uuid
 
         path = body.get("path")
         if not path:
             raise HTTPException(status_code=400, detail="path required")
+        if not Path(path).exists():
+            raise HTTPException(status_code=400,
+                                detail=f"a videó nem található: {path}")
 
         job_id = uuid.uuid4().hex[:12]
         match_id = body.get("match_id") or f"video-{job_id}"
-        job = {"job_id": job_id, "match_id": match_id, "status": "running",
-               "stage": "A", "progress": 0.0, "message": "indítás", "error": None}
+        job = {"job_id": job_id, "match_id": match_id, "status": "queued",
+               "stage": "A", "progress": 0.0, "message": "sorban áll",
+               "error": None, "created": time.time(),
+               "video": Path(path).name}
         _jobs[job_id] = job
+        _job_params[job_id] = body
+        _job_queue.put(job_id)
+        _ensure_worker()
+        return {"job_id": job_id, "match_id": match_id}
 
-        def run():
+    # A feldolgozási SOR: a munkák egyesével futnak (egy nehéz ML-feldolgozás
+    # használja ki jól a gépet; kettő párhuzamosan csak lassítaná egymást).
+    # A felhasználó több videót is sorba állíthat (pl. két félidő), és a
+    # kezdőképernyő mutatja a sor állapotát (GET /jobs).
+    import queue as _queue_mod
+    import threading as _threading
+    _job_queue: "_queue_mod.Queue[str]" = _queue_mod.Queue()
+    _job_params: dict[str, dict] = {}
+    _worker_flag = {"started": False}
+
+    def _ensure_worker():
+        if _worker_flag["started"]:
+            return
+        _worker_flag["started"] = True
+        _threading.Thread(target=_job_worker, daemon=True).start()
+
+    def _job_worker():
+        while True:
+            job_id = _job_queue.get()
+            job = _jobs.get(job_id)
+            if job is None or job["status"] != "queued":
+                continue  # időközben megszakították
+            job["status"] = "running"
+            job["message"] = "indítás"
+            _run_job(job, _job_params.pop(job_id, {}))
+
+    def _run_job(job, body):
+        match_id = job["match_id"]
+        path = body.get("path")
+        if True:  # (behúzás-megőrző blokk a korábbi törzsnek)
             # A nehéz feldolgozó a scripts.process_video-ban van; a backend/ mappát
             # biztosítjuk a sys.path-en, hogy a szerver bárhonnan indítva megtalálja.
             import sys
@@ -220,8 +258,14 @@ def create_app():
                 job["error"] = str(e)
                 job["message"] = f"hiba: {e}"
 
-        threading.Thread(target=run, daemon=True).start()
-        return {"job_id": job_id, "match_id": match_id}
+    @app.get("/jobs")
+    def list_jobs():
+        """A feldolgozási munkák listája (legújabb elöl) — a kezdőképernyő
+        "folyamatban" kártyája ebből épül. A belső mezőket nem adjuk ki."""
+        jobs = sorted(_jobs.values(), key=lambda j: j.get("created", 0), reverse=True)
+        return {"jobs": [
+            {k: v for k, v in j.items() if k != "cancel"} for j in jobs[:20]
+        ]}
 
     @app.get("/jobs/{job_id}")
     def job_status(job_id: str):
@@ -238,7 +282,11 @@ def create_app():
         job = _jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
-        if job["status"] == "running":
+        if job["status"] == "queued":
+            # Sorban álló munka: azonnal megszakítható (el sem indult).
+            job["status"] = "cancelled"
+            job["message"] = "megszakítva (a sorból)"
+        elif job["status"] == "running":
             job["cancel"] = True
             job["message"] = "megszakítás folyamatban…"
         return job
