@@ -67,7 +67,10 @@ class _UploadScreenState extends State<UploadScreen> {
   // A profilok (stride, imgsz): gyors = ritkább mintavétel kisebb képen;
   // pontos = sűrűbb mintavétel nagy felbontáson (lassabb, de jobb labda-követés).
   String _quality = "balanced"; // fast | balanced | precise
-  bool _trialRun = false; // igaz → csak az eleje (~2 perc), gyors kipróbáláshoz
+  // Feldolgozott hossz: "trial" (~2 perc, gyors ellenőrzés) | "half" (~35
+  // perc — ha a videóban az egész meccs van, de csak egy félidő kell;
+  // a kezdőpontot a kalibrált képkocka adja) | "full" (a teljes videó).
+  String _length = "full";
 
   // A kalibráló képernyőről visszakapott eredmény: 1 kalibráció (teljes
   // pálya / egy térfél) VAGY 2 (külön bal és jobb térfél, akár külön
@@ -201,7 +204,13 @@ class _UploadScreenState extends State<UploadScreen> {
     // A kiválasztott profil paraméterei; próba módban csak a videó eleje
     // (~2 percnyi feldolgozott kocka) készül el — gyors ellenőrzéshez.
     final (stride, imgsz, _) = _qualityPresets[_quality]!;
-    final max = _trialRun ? (3000 / stride).round() : 0; // 0 = teljes videó
+    // A hossz-korlát FELDOLGOZOTT kockában értendő (25 fps-sel számolva):
+    // próba ~2 perc, félidő ~35 perc, 0 = a videó vége.
+    final max = switch (_length) {
+      "trial" => (3000 / stride).round(),
+      "half" => (52500 / stride).round(),
+      _ => 0,
+    };
     try {
       final r = await _api.startProcessing(
         path,
@@ -382,23 +391,31 @@ class _UploadScreenState extends State<UploadScreen> {
                     ? null
                     : (s) => setState(() => _quality = s.first),
               ),
-              FilterChip(
-                label: const Text("Rövid próba (~2 perc)"),
-                selected: _trialRun,
-                onSelected: _status == "running"
-                    ? null
-                    : (v) => setState(() => _trialRun = v),
-                selectedColor: AppColors.gold.withOpacity(0.2),
-                checkmarkColor: AppColors.gold,
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: const [
+                  ButtonSegment(value: "trial", label: Text("Próba (~2 p)")),
+                  ButtonSegment(value: "half", label: Text("Félidő (~35 p)")),
+                  ButtonSegment(value: "full", label: Text("Teljes videó")),
+                ],
+                selected: {_length},
+                onSelectionChanged: (s) => setState(() => _length = s.first),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            _trialRun
-                ? "Csak a videó eleje készül el — gyors ellenőrzéshez (kalibráció, színek)."
-                : "A teljes videó feldolgozása — egy félidő a gép erejétől függően "
+            switch (_length) {
+              "trial" =>
+                "Csak a videó eleje készül el — gyors ellenőrzéshez (kalibráció, színek).",
+              "half" =>
+                "~35 percnyi játék készül el a kalibrált képkockától — ha a videóban "
+                    "az egész meccs van, de csak ez a félidő kell.",
+              _ =>
+                "A teljes videó feldolgozása — egy félidő a gép erejétől függően "
                     "10–60 perc is lehet, a haladás és a hátralévő idő végig látszik.",
+            },
             style: AppText.label.copyWith(fontSize: 11),
           ),
           const SizedBox(height: AppSpacing.md),

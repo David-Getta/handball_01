@@ -236,12 +236,47 @@ def _phase_bars(phases: dict, home: str, away: str) -> str:
     return "".join(rows)
 
 
-def match_report_html(match, tactics: dict, events: list, quality: dict | None) -> str:
+def _heatmap_svg(hm, color: str = "#12988a", width: int = 360) -> str:
+    """Egy csapat-hőtérkép önálló SVG-je a jelentésbe (nincs külső függőség).
+
+    A pálya 2:1 arányú; a cellák átlátszósága a látogatottsággal arányos.
+    A `hm` a compute_team_heatmap eredménye (bins_x/bins_y/grid/total).
+    """
+    height = width // 2
+    peak = max((v for row in hm.grid for v in row), default=0.0)
+    cells = []
+    if peak > 0:
+        cw = width / hm.bins_x
+        ch = height / hm.bins_y
+        for iy, row in enumerate(hm.grid):
+            for ix, v in enumerate(row):
+                if v <= 0:
+                    continue
+                a = 0.08 + 0.72 * (v / peak)
+                cells.append(
+                    f'<rect x="{ix * cw:.1f}" y="{iy * ch:.1f}" '
+                    f'width="{cw:.1f}" height="{ch:.1f}" fill="{color}" '
+                    f'fill-opacity="{a:.2f}"/>')
+    mid = width / 2
+    return (
+        f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" '
+        f'xmlns="http://www.w3.org/2000/svg">'
+        f'<rect x="0" y="0" width="{width}" height="{height}" rx="8" '
+        f'fill="#f4f7fa" stroke="#c9d3de"/>'
+        + "".join(cells) +
+        f'<line x1="{mid}" y1="0" x2="{mid}" y2="{height}" stroke="#8492A6" '
+        f'stroke-width="1"/>'
+        f'</svg>')
+
+
+def match_report_html(match, tactics: dict, events: list, quality: dict | None,
+                      heatmaps: dict | None = None) -> str:
     """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
 
     Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
-    a felismert események (detect_events) és a minőség-önellenőrzés
-    (compute_quality_report, lehet None). Minden szakasz hiányzó adatnál is
+    a felismert események (detect_events), a minőség-önellenőrzés
+    (compute_quality_report, lehet None) és opcionálisan a csapat-hőtérképek
+    ({"home": Heatmap, "away": Heatmap}). Minden szakasz hiányzó adatnál is
     értelmes szöveget ad — a jelentés sosem "törik el".
     """
     meta = match.meta
@@ -287,6 +322,23 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None) 
             f"<li><b>{_fmt_clock(e.t / fps)}</b> — GÓL · {escape(name)}</li>")
     goals_html = ("<ul>" + "".join(goal_rows) + "</ul>") if goal_rows else \
         '<p class="empty">Nincs felismert gól az elemzett szakaszban.</p>'
+
+    # Csapat-hőtérképek (ha vannak): hol tartózkodtak a játékosok.
+    hm_html = ""
+    if heatmaps:
+        cols = []
+        for key, color, name in [("home", "#2f6fb2", meta.home_team),
+                                 ("away", "#b2453a", meta.away_team)]:
+            hm = heatmaps.get(key)
+            if hm is None:
+                continue
+            cols.append(f'<div class="col" style="text-align:center">'
+                        f'{_heatmap_svg(hm, color)}'
+                        f'<div class="ml" style="margin-top:4px">{escape(name)}</div>'
+                        f'</div>')
+        if cols:
+            hm_html = ('<h2>Területi lefedettség (hőtérkép)</h2>'
+                       '<div class="cols">' + "".join(cols) + "</div>")
 
     # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
     q_html = ""
@@ -371,6 +423,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None) 
 
   <h2>Gól-idővonal</h2>
   {goals_html}
+
+  {hm_html}
 
   {q_html}
 

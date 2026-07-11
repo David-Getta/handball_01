@@ -31,3 +31,13 @@ def test_report_escapes_team_names():
     m.meta.home_team = "<b>Injekt</b>"
     html = match_report_html(m, {}, [], None)
     assert "<b>Injekt</b>" not in html  # escape-elve kerül be
+
+
+def test_report_includes_heatmaps_when_given():
+    from handball.pipeline.analytics import compute_team_heatmap
+    from handball.models.tracking import Team
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=2)
+    hms = {t.value: compute_team_heatmap(m, t) for t in (Team.HOME, Team.AWAY)}
+    html = match_report_html(m, {}, [], None, heatmaps=hms)
+    assert "Területi lefedettség" in html
+    assert html.count("<svg") == 2  # mindkét csapat hőtérképe
