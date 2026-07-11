@@ -109,6 +109,13 @@ class MatchMeta:
                        a frame-indexből valós időt és sebességet (m/s) számolni.
     - frame_width/height: az eredeti videó felbontása (pixel) — diagnosztikához.
     - date:            a meccs dátuma (ISO szöveg), opcionális.
+    - video_path:      az EREDETI videófájl útja a feldolgozó gépen — a kliens
+                       ebből tudja lejátszani a jelenetet (lokális mód).
+    - start_frame:     a feldolgozás első kép-indexe az eredeti videóban.
+    - stride:          mintavétel (minden hányadik képkockát dolgoztuk fel).
+                       FIGYELEM: az `fps` a TRACKING képrátája (az eredeti
+                       videóé osztva a stride-dal). Az i. tracking-frame ideje
+                       a videóban: start_frame/(fps*stride) + i/fps másodperc.
     """
     match_id: str
     home_team: str
@@ -117,6 +124,9 @@ class MatchMeta:
     frame_width: int = 0
     frame_height: int = 0
     date: Optional[str] = None
+    video_path: Optional[str] = None
+    start_frame: int = 0
+    stride: int = 1
 
 
 @dataclass
@@ -152,7 +162,10 @@ class Match:
         Kézzel járjuk be a szerkezetet, hogy az Enumokat és a beágyazott
         dataclass-okat helyesen állítsuk vissza.
         """
-        meta = MatchMeta(**d["meta"])
+        # Csak az ismert mezőket vesszük át — így a régebbi/újabb JSON-ok is
+        # gond nélkül betölthetők (előre- és visszafelé kompatibilitás).
+        known = MatchMeta.__dataclass_fields__.keys()
+        meta = MatchMeta(**{k: v for k, v in d["meta"].items() if k in known})
         frames: list[Frame] = []
         for fr in d.get("frames", []):
             players = [

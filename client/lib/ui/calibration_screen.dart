@@ -22,6 +22,26 @@ import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "shell/app_shell.dart";
 
+/// A kalibráció eredménye — a feltöltő képernyő ezt kapja vissza, és adja
+/// tovább a feldolgozásnak (POST /matches/process).
+class CalibrationResult {
+  /// A 4 sarok képpont-koordinátában: [[x,y],...] (bal-fent, jobb-fent,
+  /// jobb-lent, bal-lent sorrendben).
+  final List<List<int>> corners;
+
+  /// Melyik területre illesztettük: "full" | "left" | "right".
+  final String region;
+
+  /// 180°-os forgatás (a kamera a túloldalról néz).
+  final bool rotate;
+
+  const CalibrationResult({
+    required this.corners,
+    required this.region,
+    required this.rotate,
+  });
+}
+
 class CalibrationScreen extends StatefulWidget {
   /// A feltöltött videó backend-oldali elérési útja (ebből tölti be a képkockát).
   /// Ha null, helyőrző jelenik meg a valódi kép helyett.
@@ -52,6 +72,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   ];
   int? _drag;
   bool _saved = false;
+
+  // Melyik területet jelöljük be: teljes pálya vagy csak az egyik térfél
+  // (pásztázó kameránál az induló képen sokszor csak egy térfél látszik).
+  String _region = "full"; // full | left | right
+  // 180°-os forgatás: ha a kamera a túloldali lelátóról néz.
+  bool _rotate = false;
 
   // A betöltött referencia-képkocka és eredeti mérete (a képpont-export miatt).
   Uint8List? _frameBytes;
@@ -157,7 +183,13 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                   Image.memory(_frameBytes!, fit: BoxFit.fill, gaplessPlayback: true)
                 else
                   _placeholder(),
-                CustomPaint(painter: _CalibPainter(pts, drawBackground: _frameBytes == null), size: size),
+                CustomPaint(
+                  painter: _CalibPainter(pts,
+                      region: _region,
+                      rotate: _rotate,
+                      drawBackground: _frameBytes == null),
+                  size: size,
+                ),
               ],
             ),
           );
@@ -190,6 +222,41 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text("TERÜLET", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          // Ha csak az egyik térfél látszik a képen, a 4 pontot a TÉRFÉL
+          // sarkaira kell húzni (a felezővonal két vége is "sarok").
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: const [
+              ButtonSegment(value: "full", label: Text("Teljes")),
+              ButtonSegment(value: "left", label: Text("Bal fél")),
+              ButtonSegment(value: "right", label: Text("Jobb fél")),
+            ],
+            selected: {_region},
+            onSelectionChanged: (s) => setState(() {
+              _region = s.first;
+              _saved = false;
+            }),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Forgatás: ha a pálya "fejjel lefelé" látszik (túloldali kamera).
+          Row(children: [
+            Expanded(
+              child: Text("Forgatás 180°",
+                  style: AppText.label.copyWith(color: AppColors.textPrimary)),
+            ),
+            Switch(
+              value: _rotate,
+              activeColor: AppColors.accent,
+              onChanged: (v) => setState(() {
+                _rotate = v;
+                _saved = false;
+              }),
+            ),
+          ]),
+          const SizedBox(height: AppSpacing.md),
           Text("SARKOK", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           _cornerRow("Távoli-bal", 0),
@@ -197,6 +264,16 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           _cornerRow("Közeli-jobb", 2),
           _cornerRow("Közeli-bal", 3),
           const Spacer(),
+          Text(
+            _region == "full"
+                ? "Tipp: ha csak az egyik térfél látszik a képen, válaszd a "
+                    "Bal/Jobb fél gombot — a pontokat a térfél sarkaira húzd "
+                    "(a felezővonal két vége is sarok)."
+                : "A 4 pontot a KIVÁLASZTOTT TÉRFÉL sarkaira húzd: 2 valódi "
+                    "pályasarok + a felezővonal két vége.",
+            style: AppText.label.copyWith(fontSize: 11, color: AppColors.gold),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             _frameSize != null
                 ? "Kép: ${_frameSize!.width.toInt()}×${_frameSize!.height.toInt()} px. "
@@ -219,8 +296,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     );
   }
 
-  /// A normalizált sarkokat képpont-koordinátára váltja (ha ismert a képméret),
-  /// és a backend --calib formátumában a vágólapra másolja.
+  /// A normalizált sarkokat képpont-koordinátára váltja, a vágólapra is
+  /// másolja (CLI-hez), és VISSZAADJA a hívónak (a feltöltő képernyő ezt
+  /// küldi el a feldolgozásnak a területtel/forgatással együtt).
   Future<void> _save() async {
     final w = _frameSize?.width ?? 1920.0;
     final h = _frameSize?.height ?? 1080.0;
@@ -232,9 +310,11 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     await Clipboard.setData(ClipboardData(text: json));
     if (!mounted) return;
     setState(() => _saved = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("calib másolva a vágólapra: $json")),
-    );
+    Navigator.of(context).pop(CalibrationResult(
+      corners: pixelCorners,
+      region: _region,
+      rotate: _rotate,
+    ));
   }
 
   Widget _cornerRow(String name, int i) => Padding(
@@ -254,8 +334,11 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
 /// Kirajzolja a húzható sarkokat + a pálya-modellt (a képkocka fölé).
 class _CalibPainter extends CustomPainter {
   final List<Offset> corners; // 4 kép-pont (pixel)
+  final String region; // full | left | right — mire illesztjük a 4 pontot
+  final bool rotate; // 180°-os forgatás (túloldali kamera)
   final bool drawBackground; // helyőrző háttér (ha nincs valódi képkocka)
-  _CalibPainter(this.corners, {this.drawBackground = true});
+  _CalibPainter(this.corners,
+      {this.region = "full", this.rotate = false, this.drawBackground = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -263,10 +346,19 @@ class _CalibPainter extends CustomPainter {
       canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF0C1119));
     }
 
-    // Homográfia: pálya-sarkok (méter) -> a húzott kép-pontok.
-    final courtCorners = [
-      [0.0, 0.0], [courtLength, 0.0], [courtLength, courtWidth], [0.0, courtWidth],
+    // A kijelölt terület (teljes pálya vagy térfél) sarkai méterben.
+    final (x0, x1) = switch (region) {
+      "left" => (0.0, courtLength / 2),
+      "right" => (courtLength / 2, courtLength),
+      _ => (0.0, courtLength),
+    };
+    var courtCorners = [
+      [x0, 0.0], [x1, 0.0], [x1, courtWidth], [x0, courtWidth],
     ];
+    if (rotate) {
+      // 180°: a képen bejelölt sarkok a terület átellenes sarkainak felelnek meg.
+      courtCorners = [courtCorners[2], courtCorners[3], courtCorners[0], courtCorners[1]];
+    }
     final dst = [for (final c in corners) [c.dx, c.dy]];
     final h = homographyFromPoints(courtCorners, dst);
     Offset p(double mx, double my) {
@@ -282,13 +374,16 @@ class _CalibPainter extends CustomPainter {
     for (int i = 1; i < 4; i++) { path.lineTo(corners[i].dx, corners[i].dy); }
     path.close();
     canvas.drawPath(path, line);
-    canvas.drawLine(p(courtLength / 2, 0), p(courtLength / 2, courtWidth), line);
+    // Felezővonal — csak ha a kijelölt területre esik (térfélnél a széle).
+    if (courtLength / 2 >= x0 && courtLength / 2 <= x1) {
+      canvas.drawLine(p(courtLength / 2, 0), p(courtLength / 2, courtWidth), line);
+    }
 
     const cy = courtWidth / 2;
-    canvas.drawLine(p(0, cy - 1.5), p(0, cy + 1.5), goalP);
-    canvas.drawLine(p(courtLength, cy - 1.5), p(courtLength, cy + 1.5), goalP);
-
+    // Kapuk + 6 méteres ívek — csak a látható területen lévő kapukra.
     for (final gx in [0.0, courtLength]) {
+      if (gx < x0 - 0.01 || gx > x1 + 0.01) continue; // ez a kapu nem látszik
+      canvas.drawLine(p(gx, cy - 1.5), p(gx, cy + 1.5), goalP);
       final s = gx == courtLength ? -1.0 : 1.0;
       Offset? prev;
       for (int i = 0; i <= 20; i++) {
@@ -308,5 +403,8 @@ class _CalibPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CalibPainter old) =>
-      old.corners != corners || old.drawBackground != drawBackground;
+      old.corners != corners ||
+      old.region != region ||
+      old.rotate != rotate ||
+      old.drawBackground != drawBackground;
 }

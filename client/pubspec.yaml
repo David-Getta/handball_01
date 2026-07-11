@@ -17,6 +17,7 @@ dependencies:
     sdk: flutter
   http: ^1.2.0          # a lokális backend REST API-jának hívásához
   file_picker: ^8.0.0   # meccsvideó kiválasztása (desktop/tablet natív fájlválasztó)
+  video_player: ^2.9.0  # jelenet-visszajátszás az elemzés mellett (macOS/iOS/Android)
 
 dev_dependencies:
   flutter_lints: ^4.0.0

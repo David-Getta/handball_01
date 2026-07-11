@@ -69,6 +69,10 @@ class _UploadScreenState extends State<UploadScreen> {
   String _quality = "balanced"; // fast | balanced | precise
   bool _trialRun = false; // igaz → csak az eleje (~2 perc), gyors kipróbáláshoz
 
+  // A kalibráló képernyőről visszakapott eredmény (sarkok + terület + forgatás)
+  // — ezzel lesz PONTOS a pálya-koordináta és a pályán kívüliek szűrése.
+  CalibrationResult? _calib;
+
   static const Map<String, (int, int, String)> _qualityPresets = {
     "fast": (5, 960, "Gyors"),
     "balanced": (3, 1280, "Kiegyensúlyozott"),
@@ -163,6 +167,10 @@ class _UploadScreenState extends State<UploadScreen> {
         max: max,
         homeTeam: _homeCtrl.text.trim(),
         awayTeam: _awayCtrl.text.trim(),
+        // A kalibráció (ha elkészült): pontos pálya-koordináta + szűrés.
+        calib: _calib?.corners,
+        calibRegion: _calib?.region,
+        calibRotate: _calib?.rotate ?? false,
       );
       _jobId = r["job_id"] as String;
       _matchId = r["match_id"] as String?;
@@ -279,22 +287,30 @@ class _UploadScreenState extends State<UploadScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: () {
+              onPressed: () async {
                 final path = _pathCtrl.text.trim();
-                Navigator.of(context).push(
+                final res = await Navigator.of(context).push<CalibrationResult>(
                   MaterialPageRoute(
                     builder: (_) => CalibrationScreen(
                       videoPath: path.isEmpty ? null : path,
                     ),
                   ),
                 );
+                if (res != null && mounted) setState(() => _calib = res);
               },
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.accent,
-                side: const BorderSide(color: AppColors.accent),
+                foregroundColor: _calib != null ? AppColors.gold : AppColors.accent,
+                side: BorderSide(
+                    color: _calib != null ? AppColors.gold : AppColors.accent),
               ),
-              icon: const Icon(Icons.grid_on, size: 18),
-              label: const Text("Pálya-kalibráció (4 sarok)"),
+              icon: Icon(_calib != null ? Icons.check_circle : Icons.grid_on, size: 18),
+              label: Text(_calib != null
+                  ? "Kalibráció kész (${switch (_calib!.region) {
+                      "left" => "bal térfél",
+                      "right" => "jobb térfél",
+                      _ => "teljes pálya",
+                    }}${_calib!.rotate ? ", forgatva" : ""})"
+                  : "Pálya-kalibráció (4 sarok)"),
             ),
           ),
           const SizedBox(height: AppSpacing.md),

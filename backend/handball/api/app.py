@@ -193,6 +193,10 @@ def create_app():
                     imgsz=int(body.get("imgsz", 1280)),
                     conf=float(body.get("conf", 0.20)),
                     calib_corners=body.get("calib"),
+                    # Térfél-kalibráció + forgatás (ha az induló képen csak
+                    # az egyik térfél látszik): "full" | "left" | "right".
+                    calib_region=body.get("calib_region", "full"),
+                    calib_rotate=bool(body.get("calib_rotate", False)),
                     start=int(body.get("start", 0)),
                     progress_cb=cb, match_id=match_id,
                     estimate=bool(body.get("estimate", True)),
