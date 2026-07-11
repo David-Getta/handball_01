@@ -50,6 +50,11 @@ class _MatchScreenState extends State<MatchScreen> {
   // A feldolgozás minőség-önellenőrzése (score + figyelmeztetések) — a
   // felhasználó lássa, mennyire megbízható az elemzés. Demó módban null.
   Map<String, dynamic>? _quality;
+  // Edzői jegyzetek (időbélyeggel) — a backend menti, kattintásra odaugrik
+  // a lejátszó. Demó módban nem elérhető (nincs hova menteni).
+  List<Map<String, dynamic>> _notes = [];
+  final TextEditingController _noteCtrl = TextEditingController();
+  bool _savingNote = false;
   int _frameIndex = 0;
   bool _playing = false;
   String _sourceLabel = "betöltés…";
@@ -76,6 +81,7 @@ class _MatchScreenState extends State<MatchScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _noteCtrl.dispose();
     super.dispose();
   }
 
@@ -84,6 +90,7 @@ class _MatchScreenState extends State<MatchScreen> {
     String label;
     List<Map<String, dynamic>> events = [];
     Map<String, dynamic>? quality;
+    List<Map<String, dynamic>> notes = [];
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -97,6 +104,11 @@ class _MatchScreenState extends State<MatchScreen> {
           quality = await _api.fetchQuality(widget.matchId);
         } catch (_) {
           quality = null; // minőség-jelentés nélkül is teljes a nézet
+        }
+        try {
+          notes = await _api.fetchNotes(widget.matchId);
+        } catch (_) {
+          notes = []; // jegyzetek nélkül is teljes a nézet
         }
       } catch (e) {
         match = buildDemoMatch();
@@ -112,6 +124,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _summary = computeMatchSummary(match);
       _events = events;
       _quality = quality;
+      _notes = notes;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -262,6 +275,145 @@ class _MatchScreenState extends State<MatchScreen> {
         ]),
       ),
     );
+  }
+
+  /// Edzői jegyzetek: a lejátszó aktuális idejéhez fűzhető megjegyzés.
+  /// A jegyzet a backendre mentődik, kattintásra a lejátszó odaugrik,
+  /// és a HTML-jelentésbe is bekerül.
+  Widget _notesPanel(Match match) {
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final demo = _sourceLabel == "demó";
+    return Column(children: [
+      // Új jegyzet a lejátszó aktuális pillanatához.
+      Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _noteCtrl,
+              enabled: !demo && !_savingNote,
+              style: AppText.value.copyWith(fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: demo
+                    ? "Demó módban nem menthető jegyzet"
+                    : "Jegyzet ${(_frameIndex / fps).toStringAsFixed(1)} s-hez…",
+                hintStyle: AppText.label.copyWith(fontSize: 12),
+              ),
+              onSubmitted: (_) => _addNote(match),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          IconButton(
+            onPressed: demo || _savingNote ? null : () => _addNote(match),
+            icon: const Icon(Icons.add_comment, color: AppColors.accent),
+            tooltip: "Jegyzet hozzáadása",
+          ),
+        ]),
+      ),
+      Expanded(
+        child: _notes.isEmpty
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Text(
+                    demo
+                        ? "A jegyzetek a backenden tárolódnak — demó módban nem elérhetők."
+                        : "Állítsd a lejátszót a kívánt pillanatra, és írd be a megjegyzést — "
+                            "a jegyzet a jelentésbe is bekerül.",
+                    style: AppText.label,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+                itemCount: _notes.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (_, i) => _noteRow(_notes[i], fps, match),
+              ),
+      ),
+    ]);
+  }
+
+  Widget _noteRow(Map<String, dynamic> n, double fps, Match match) {
+    final frame = (n["frame"] as num?)?.toInt() ?? 0;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      // Ugrás a jegyzet pillanatára — mint az eseményeknél.
+      onTap: () {
+        setState(() {
+          _timer?.cancel();
+          _playing = false;
+          _frameIndex = frame.clamp(0, match.frames.length - 1);
+          if (match.meta.videoPath != null && VideoPanel.supported) {
+            _showVideo = true;
+          }
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(frame));
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: _frameIndex == frame ? AppColors.accentSoft : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          const Icon(Icons.sticky_note_2_outlined, size: 16, color: AppColors.gold),
+          const SizedBox(width: 8),
+          Text("${(frame / fps).toStringAsFixed(1)} s",
+              style: AppText.value.copyWith(fontSize: 12, color: AppColors.accent)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text((n["text"] as String?) ?? "",
+                style: AppText.label.copyWith(
+                    fontSize: 12.5, color: AppColors.textPrimary)),
+          ),
+          InkWell(
+            onTap: () => _deleteNote(n),
+            child: const Icon(Icons.close, size: 14, color: AppColors.textFaint),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _addNote(Match match) async {
+    final text = _noteCtrl.text.trim();
+    if (text.isEmpty || _savingNote) return;
+    setState(() => _savingNote = true);
+    try {
+      await _api.addNote(widget.matchId, _frameIndex, text);
+      final notes = await _api.fetchNotes(widget.matchId);
+      if (!mounted) return;
+      setState(() {
+        _notes = notes;
+        _noteCtrl.clear();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Nem sikerült menteni a jegyzetet: $e")));
+    } finally {
+      if (mounted) setState(() => _savingNote = false);
+    }
+  }
+
+  Future<void> _deleteNote(Map<String, dynamic> n) async {
+    final id = (n["id"] as String?) ?? "";
+    if (id.isEmpty) return;
+    try {
+      await _api.deleteNote(widget.matchId, id);
+      if (!mounted) return;
+      setState(() => _notes.removeWhere((x) => x["id"] == id));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Nem sikerült törölni a jegyzetet: $e")));
+    }
   }
 
   /// Üres eredmény (0 képkocka) — pl. ha a feldolgozás nem talált tartalmat.
@@ -905,10 +1057,12 @@ class _MatchScreenState extends State<MatchScreen> {
       decoration: AppTheme.card(),
       clipBehavior: Clip.antiAlias,
       child: DefaultTabController(
-        length: 4,
+        length: 5,
         child: Column(
           children: [
             const TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               labelColor: AppColors.textPrimary,
               unselectedLabelColor: AppColors.textFaint,
               indicatorColor: AppColors.accent,
@@ -918,6 +1072,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 Tab(text: "Összegzés"),
                 Tab(text: "Döntések"),
                 Tab(text: "Események"),
+                Tab(text: "Jegyzetek"),
               ],
             ),
             Expanded(
@@ -929,6 +1084,7 @@ class _MatchScreenState extends State<MatchScreen> {
                       : SummaryPanel(summary: _summary!, homeName: match.meta.homeTeam, awayName: match.meta.awayTeam),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                   _eventsPanel(match),
+                  _notesPanel(match),
                 ],
               ),
             ),

@@ -41,3 +41,29 @@ def test_report_includes_heatmaps_when_given():
     html = match_report_html(m, {}, [], None, heatmaps=hms)
     assert "Területi lefedettség" in html
     assert html.count("<svg") == 2  # mindkét csapat hőtérképe
+
+
+def test_report_includes_player_load_when_given():
+    from handball.pipeline.stats import compute_player_stats
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=4)
+    html = match_report_html(m, {}, [], None,
+                             player_stats=compute_player_stats(m))
+    assert "Játékos-terhelés" in html
+    assert "Max km/h" in html and "Sprint" in html
+    # nélküle a szakasz sem jelenik meg
+    assert "Játékos-terhelés" not in match_report_html(m, {}, [], None)
+
+
+def test_report_includes_notes_sorted_and_escaped():
+    m = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    notes = [
+        {"id": "b", "frame": 100, "text": "Második <b>jegyzet</b>"},
+        {"id": "a", "frame": 25, "text": "Első jegyzet"},
+    ]
+    html = match_report_html(m, {}, [], None, notes=notes)
+    assert "Edzői jegyzetek" in html
+    # idő szerint rendezve: az 1 mp-es (25. kocka) előbb, mint a 4 mp-es
+    assert html.index("Első jegyzet") < html.index("Második")
+    assert "<b>jegyzet</b>" not in html  # escape-elve
+    # jegyzetek nélkül nincs szakasz
+    assert "Edzői jegyzetek" not in match_report_html(m, {}, [], None)

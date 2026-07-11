@@ -500,6 +500,67 @@ def create_app():
             pass
         return {"deleted": match_id}
 
+    def _notes_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.notes.json"
+
+    def _load_notes(match_id: str) -> list:
+        p = _notes_path(match_id)
+        if p.exists():
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d.get("notes"), list):
+                    return d["notes"]
+            except Exception:
+                pass
+        return []
+
+    @app.get("/matches/{match_id}/notes")
+    def get_notes(match_id: str):
+        """Az edzői jegyzetek a meccshez (időbélyeggel) — idő szerint rendezve."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        notes = _load_notes(match_id)
+        notes.sort(key=lambda n: n.get("frame", 0))
+        return {"notes": notes}
+
+    @app.post("/matches/{match_id}/notes")
+    def add_note(match_id: str, body: dict):
+        """Új edzői jegyzet. Törzs: {"frame": képkocka-index, "text": "..."}.
+        A jegyzet lemezre mentődik, és a HTML-jelentésbe is bekerül."""
+        import uuid
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        text = str(body.get("text") or "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="text required")
+        note = {
+            "id": uuid.uuid4().hex[:10],
+            "frame": max(0, int(body.get("frame") or 0)),
+            "text": text[:500],  # ésszerű hossz-korlát
+        }
+        notes = _load_notes(match_id)
+        notes.append(note)
+        _notes_path(match_id).write_text(
+            json.dumps({"notes": notes}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return note
+
+    @app.delete("/matches/{match_id}/notes/{note_id}")
+    def delete_note(match_id: str, note_id: str):
+        """Egy jegyzet törlése azonosító alapján."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        notes = _load_notes(match_id)
+        kept = [n for n in notes if n.get("id") != note_id]
+        if len(kept) == len(notes):
+            raise HTTPException(status_code=404, detail="note not found")
+        _notes_path(match_id).write_text(
+            json.dumps({"notes": kept}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return {"deleted": note_id}
+
     @app.get("/matches/{match_id}/quality")
     def get_quality(match_id: str):
         """A feldolgozás minőség-jelentése: mennyire megbízható az elemzés
@@ -621,8 +682,13 @@ def create_app():
                         for t in (Team.HOME, Team.AWAY)}
         except Exception:
             heatmaps = None  # hőtérkép nélkül is teljes a jelentés
+        try:
+            player_stats = summarize(match)  # terhelés-tábla a jelentésbe
+        except Exception:
+            player_stats = None
         html = match_report_html(match, tactics, events, quality,
-                                 heatmaps=heatmaps)
+                                 heatmaps=heatmaps, player_stats=player_stats,
+                                 notes=_load_notes(match_id))
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     @app.get("/matches/{match_id}/scouting")
