@@ -106,6 +106,13 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     import cv2
     from ultralytics import YOLO
     model = YOLO(_resolve_weights(weights))
+    # Eszköz-napló: GPU-n nagyságrenddel gyorsabb — a pilotnál ez a sebesség kulcsa.
+    try:
+        import torch
+        dev = "CUDA (GPU)" if torch.cuda.is_available() else "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"
+        print(f"inferencia-eszköz: {dev}")
+    except Exception:
+        pass
     poly = np.array(court_poly, np.int32) if court_poly else None
     # Pásztázás-követés: a kamera mozgását becsüljük, hogy a kalibráció a
     # pásztázás közben is érvényes maradjon (aktuális → alap képkocka mátrix).
@@ -257,9 +264,22 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # [A] kalibráció (ha van 4 sarok). A haladás nagy részét a detektálás adja.
     report("A", 0.02, "kalibráció" if calib_corners else "kalibráció nélkül")
 
-    # [B]/[C] detektálás + követés — a képkockánkénti haladást ide képezzük le.
+    # [B]/[C] detektálás + követés — a képkockánkénti haladást ide képezzük le,
+    # sebességgel és hátralévő idővel (teljes félidőnél ez órákban mérhető,
+    # a felhasználónak látnia kell, mire számítson).
+    import time as _time
+    _t0 = _time.time()
+
     def on_frame(kept, total):
-        report("B", 0.05 + 0.70 * (kept / max(1, total)), f"detektálás {kept}/{total}")
+        elapsed = _time.time() - _t0
+        rate = kept / elapsed if elapsed > 0 else 0.0
+        if rate > 0 and kept >= 3:  # az első pár kocka még torzít (modell-betöltés)
+            remain = (total - kept) / rate
+            eta = f" · {rate:.1f} kocka/mp · ~{int(remain // 60)}:{int(remain % 60):02d} hátra"
+        else:
+            eta = ""
+        report("B", 0.05 + 0.70 * (kept / max(1, total)),
+               f"detektálás {kept}/{total}{eta}")
 
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).

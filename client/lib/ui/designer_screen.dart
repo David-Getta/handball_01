@@ -1,9 +1,10 @@
 /// Figura-tervező — az edző a felülnézeti pályán mozgatja a támadókat, és
 /// lejátszatja a figurát a TANULT védelem ellen, kiértékeléssel.
 ///
-/// Két kulcs-pozíció (Kezdő / Vég) közt húzhatók a támadók; lejátszáskor a kettő
-/// között interpolálunk, a védők a tanult modell szerint reagálnak. A szimuláció
-/// kliensoldalon fut (analytics/play_simulation.dart).
+/// HÁROM kulcs-pozíció (Kezdő / Közép / Vég) közt húzhatók a támadók — így az ív
+/// (beúszás, kereszt) is megrajzolható. Lejátszáskor a pontokon át interpolálunk,
+/// a védők a tanult modell szerint reagálnak. A szimuláció kliensoldalon fut
+/// (analytics/play_simulation.dart).
 library;
 
 import "dart:async";
@@ -25,8 +26,21 @@ class DesignerScreen extends StatefulWidget {
 }
 
 class _DesignerScreenState extends State<DesignerScreen> {
-  // 5 támadó, két kulcs-pozícióval (0 = Kezdő, 1 = Vég).
+  // 5 támadó, HÁROM kulcs-pozícióval (0 = Kezdő, 1 = Közép, 2 = Vég) — így a
+  // figura íve (beúszás, kereszt) is megrajzolható, nem csak egyenes vonal.
   late List<List<Offset>> _attackers;
+
+  /// 3 kulcspozíció két végpontból (a közép a felezőpont — az edző elhúzza).
+  static List<Offset> _path3(Offset a, Offset b) =>
+      [a, Offset.lerp(a, b, 0.5)!, b];
+
+  /// Egy kulcspozíció-út mintavételezése t (0..1) helyen (szakaszonként lineáris).
+  static Offset _sample(List<Offset> path, double t) {
+    if (path.length == 1) return path.first;
+    final seg = (t * (path.length - 1)).clamp(0.0, (path.length - 1).toDouble());
+    final i = seg.floor().clamp(0, path.length - 2);
+    return Offset.lerp(path[i], path[i + 1], seg - i)!;
+  }
   int _editStep = 0;
   int? _dragIndex;
 
@@ -51,11 +65,11 @@ class _DesignerScreenState extends State<DesignerScreen> {
 
     // Alap figura: irányító, két átlövő, szélső, beálló — az edző átrendezi.
     _attackers = [
-      [const Offset(22, 10), const Offset(22, 10)], // irányító (labdás)
-      [const Offset(24, 5), const Offset(28, 5)],   // bal átlövő
-      [const Offset(24, 15), const Offset(28, 15)], // jobb átlövő
-      [const Offset(28, 2), const Offset(31, 2)],   // szélső
-      [const Offset(30, 10), const Offset(34, 10)], // beálló (a kapu felé gördül)
+      _path3(const Offset(22, 10), const Offset(22, 10)), // irányító (labdás)
+      _path3(const Offset(24, 5), const Offset(28, 5)),   // bal átlövő
+      _path3(const Offset(24, 15), const Offset(28, 15)), // jobb átlövő
+      _path3(const Offset(28, 2), const Offset(31, 2)),   // szélső
+      _path3(const Offset(30, 10), const Offset(34, 10)), // beálló (a kapu felé)
     ];
   }
 
@@ -96,13 +110,13 @@ class _DesignerScreenState extends State<DesignerScreen> {
   }
 
   void _play() {
-    // A két kulcs-pozíció között interpolálunk _animSteps lépésre.
+    // A kulcs-pozíciókon át (kezdő→közép→vég) szakaszonként interpolálunk.
     final interp = <List<Offset>>[];
     for (final a in _attackers) {
       final path = <Offset>[];
       for (int s = 0; s < _animSteps; s++) {
         final t = s / (_animSteps - 1);
-        path.add(Offset.lerp(a[0], a[1], t)!);
+        path.add(_sample(a, t));
       }
       interp.add(path);
     }
@@ -170,7 +184,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
       return;
     }
     try {
-      // A két kulcs-pozíció játékosonként: [[x0,y0],[x1,y1]] (méterben).
+      // A kulcs-pozíciók játékosonként (kezdő/közép/vég), méterben.
       final attackers = [
         for (final a in _attackers)
           [for (final p in a) [p.dx, p.dy]],
@@ -249,10 +263,13 @@ class _DesignerScreenState extends State<DesignerScreen> {
           .toList();
       if (!mounted) return;
       setState(() {
-        // A tervező két kulcs-pozícióval dolgozik: az első és az utolsó pontot vesszük.
+        // A tervező 3 kulcs-pozícióval dolgozik: első / középső / utolsó pont.
         _attackers = [
           for (final a in attackers)
-            if (a.isNotEmpty) [a.first, a.last],
+            if (a.isNotEmpty)
+              a.length >= 3
+                  ? [a.first, a[a.length ~/ 2], a.last]
+                  : _path3(a.first, a.last),
         ];
         _editStep = 0;
       });
@@ -344,7 +361,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
             showSelectedIcon: false,
             segments: const [
               ButtonSegment(value: 0, label: Text("Kezdő")),
-              ButtonSegment(value: 1, label: Text("Vég")),
+              ButtonSegment(value: 1, label: Text("Közép")),
+              ButtonSegment(value: 2, label: Text("Vég")),
             ],
             selected: {_editStep},
             onSelectionChanged: _playing ? null : (s) => setState(() => _editStep = s.first),
@@ -457,6 +475,21 @@ class _DesignerPainter extends CustomPainter {
     for (final d in defs) {
       final c = tr.toScreen(d.dx, d.dy);
       canvas.drawCircle(c, 0.6 * tr.scale, Paint()..color = AppColors.away.withOpacity(0.45));
+    }
+
+    // Útvonal-előnézet: halvány vonal a kulcs-pozíciókon át (látszik az ív).
+    final routePaint = Paint()
+      ..color = AppColors.home.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    for (final a in attackers) {
+      if (a.length < 2) continue;
+      final rp = Path()..moveTo(tr.toScreen(a.first.dx, a.first.dy).dx, tr.toScreen(a.first.dx, a.first.dy).dy);
+      for (final kp in a.skip(1)) {
+        final sp = tr.toScreen(kp.dx, kp.dy);
+        rp.lineTo(sp.dx, sp.dy);
+      }
+      canvas.drawPath(rp, routePaint);
     }
 
     // Támadók (húzható tokenek).
