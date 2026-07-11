@@ -324,8 +324,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           // a képet — annyi hely lesz körülötte, amennyi kell.
           Row(children: [
             IconButton(
-              onPressed: _imgScale > 0.41
-                  ? () => _setScale((_imgScale - 0.12).clamp(0.4, 1.0))
+              onPressed: _imgScale > 0.26
+                  ? () => _setScale((_imgScale - 0.12).clamp(0.25, 1.0))
                   : null,
               icon: const Icon(Icons.zoom_out, size: 20, color: AppColors.textSecondary),
               tooltip: "Kép kicsinyítése (több hely a sarkoknak)",
@@ -339,7 +339,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             ),
             IconButton(
               onPressed: _imgScale < 0.99
-                  ? () => _setScale((_imgScale + 0.12).clamp(0.4, 1.0))
+                  ? () => _setScale((_imgScale + 0.12).clamp(0.25, 1.0))
                   : null,
               icon: const Icon(Icons.zoom_in, size: 20, color: AppColors.textSecondary),
               tooltip: "Kép nagyítása",

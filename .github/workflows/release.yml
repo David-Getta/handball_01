@@ -76,6 +76,14 @@ jobs:
           if (-not (Test-Path packaging\weights\yolov8n.pt)) { throw "sulyfajl hianyzik" }
       - name: Motor becsomagolása (PyInstaller)
         run: pyinstaller packaging/backend.spec --noconfirm --distpath dist --workpath build/pyi
+      - name: A becsomagolt súlyfájl épség-ellenőrzése
+        # A sérült (csonka) modellfájl csak az ELSŐ feldolgozásnál derülne ki
+        # a felhasználónál ("incorrect header check") — itt fogjuk meg.
+        shell: pwsh
+        run: |
+          $w = Get-ChildItem -Recurse dist\handball_backend -Filter yolov8n.pt | Select-Object -First 1
+          if (-not $w) { throw "nincs sulyfajl a csomagban" }
+          python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]); print('sulyfajl OK:', sys.argv[1])" $w.FullName
       - name: Motor füstteszt (elindul és válaszol a /health-en)
         shell: pwsh
         run: |
@@ -167,6 +175,13 @@ jobs:
           test -f packaging/weights/yolov8n.pt
       - name: Motor becsomagolása (PyInstaller)
         run: pyinstaller packaging/backend.spec --noconfirm --distpath dist --workpath build/pyi
+      - name: A becsomagolt súlyfájl épség-ellenőrzése
+        # A sérült (csonka) modellfájl csak az ELSŐ feldolgozásnál derülne ki
+        # a felhasználónál ("incorrect header check") — itt fogjuk meg.
+        run: |
+          W=$(find dist/handball_backend -name yolov8n.pt | head -1)
+          test -n "$W"
+          python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]); print('sulyfajl OK:', sys.argv[1])" "$W"
       - name: Motor füstteszt (elindul és válaszol a /health-en)
         run: |
           ./dist/handball_backend/handball_backend & echo $! > engine.pid
