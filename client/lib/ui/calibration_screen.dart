@@ -69,12 +69,12 @@ class CalibrationScreen extends StatefulWidget {
   State<CalibrationScreen> createState() => _CalibrationScreenState();
 }
 
-// A képkocka körüli sáv aránya: a sarok-pontok a képen KÍVÜLRE is húzhatók
-// (pl. ha a kamerához közeli pályaszél kilóg a képből). A vászon 0..1
-// koordinátáiból a [margó .. 1-margó] tartomány a tényleges képkocka.
-const double _kViewMargin = 0.12;
-
 class _CalibrationScreenState extends State<CalibrationScreen> {
+  // A képkocka mérete a vásznon (kicsinyíthető): a kép körüli sávba a
+  // sarok-pontok KIHÚZHATÓK — ha a pálya széle messze kilóg a képből,
+  // kicsinyítéssel annyi hely lesz körülötte, amennyi kell.
+  double _imgScale = 0.76;
+  double get _margin => (1 - _imgScale) / 2;
   // A 4 sarok a VÁSZON területén, arányban (0..1) — a kép a vászon közepén ül,
   // körülötte sáv, így a pontok a képen kívülre is tehetők.
   // Sorrend: távoli-bal, távoli-jobb, közeli-jobb, közeli-bal.
@@ -200,8 +200,8 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
               children: [
                 Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: size.width * _kViewMargin,
-                    vertical: size.height * _kViewMargin,
+                    horizontal: size.width * _margin,
+                    vertical: size.height * _margin,
                   ),
                   child: _frameBytes != null
                       ? Image.memory(_frameBytes!, fit: BoxFit.fill, gaplessPlayback: true)
@@ -211,6 +211,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                   painter: _CalibPainter(pts,
                       region: _region,
                       rotate: _rotate,
+                      margin: _margin,
                       drawBackground: _frameBytes == null),
                   size: size,
                 ),
@@ -266,6 +267,34 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             "innen indul",
             style: AppText.label.copyWith(fontSize: 11),
           ),
+          const SizedBox(height: AppSpacing.md),
+          Text("KÉP MÉRETE", style: AppText.sectionLabel),
+          const SizedBox(height: 2),
+          // Kicsinyítés: ha a pálya sarka messze kilóg a képből, vedd kisebbre
+          // a képet — annyi hely lesz körülötte, amennyi kell.
+          Row(children: [
+            IconButton(
+              onPressed: _imgScale > 0.41
+                  ? () => _setScale((_imgScale - 0.12).clamp(0.4, 1.0))
+                  : null,
+              icon: const Icon(Icons.zoom_out, size: 20, color: AppColors.textSecondary),
+              tooltip: "Kép kicsinyítése (több hely a sarkoknak)",
+            ),
+            Expanded(
+              child: Text(
+                "${(_imgScale * 100).round()}% — kicsinyítsd, ha a sarok nem fér el",
+                style: AppText.label.copyWith(fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            IconButton(
+              onPressed: _imgScale < 0.99
+                  ? () => _setScale((_imgScale + 0.12).clamp(0.4, 1.0))
+                  : null,
+              icon: const Icon(Icons.zoom_in, size: 20, color: AppColors.textSecondary),
+              tooltip: "Kép nagyítása",
+            ),
+          ]),
           const SizedBox(height: AppSpacing.md),
           Text("TERÜLET", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
@@ -350,7 +379,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     // A vászon-koordinátából levonjuk a kép körüli sávot: a [margó..1-margó]
     // tartomány felel meg a képkockának. A sávba húzott pont képen KÍVÜLI
     // (negatív vagy W/H fölötti) képpontot ad — a homográfiának ez így jó.
-    double toImg(double v) => (v - _kViewMargin) / (1 - 2 * _kViewMargin);
+    double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
     final pixelCorners = [
       for (final cn in _corners)
         [(toImg(cn.dx) * w).round(), (toImg(cn.dy) * h).round()],
@@ -366,6 +395,24 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       rotate: _rotate,
       startFrame: _frameIdx,
     ));
+  }
+
+  /// Kép-kicsinyítés/nagyítás: a sarkokat átszámoljuk, hogy a KÉPHEZ képesti
+  /// helyükön maradjanak (ne csússzanak el a kép alatt a méretváltáskor).
+  void _setScale(double next) {
+    final mOld = _margin;
+    final mNew = (1 - next) / 2;
+    setState(() {
+      _corners = [
+        for (final c in _corners)
+          Offset(
+            (mNew + (c.dx - mOld) / (1 - 2 * mOld) * (1 - 2 * mNew)).clamp(0.0, 1.0),
+            (mNew + (c.dy - mOld) / (1 - 2 * mOld) * (1 - 2 * mNew)).clamp(0.0, 1.0),
+          ),
+      ];
+      _imgScale = next;
+      _saved = false;
+    });
   }
 
   /// Léptető gomb a referencia-képkockához (a delta 25 fps-sel számolt kocka).
@@ -405,9 +452,11 @@ class _CalibPainter extends CustomPainter {
   final List<Offset> corners; // 4 kép-pont (pixel)
   final String region; // full | left | right — mire illesztjük a 4 pontot
   final bool rotate; // 180°-os forgatás (túloldali kamera)
+  final double margin; // a képkocka körüli sáv aránya (kicsinyítésnél nő)
   final bool drawBackground; // helyőrző háttér (ha nincs valódi képkocka)
   _CalibPainter(this.corners,
-      {this.region = "full", this.rotate = false, this.drawBackground = true});
+      {this.region = "full", this.rotate = false, this.margin = 0.12,
+       this.drawBackground = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -418,8 +467,8 @@ class _CalibPainter extends CustomPainter {
     // A képkocka széle (a körülötte lévő sávban a pontok képen KÍVÜLI
     // helyet jelölnek — pl. a levágott közeli pályaszélet).
     canvas.drawRect(
-      Rect.fromLTRB(_kViewMargin * size.width, _kViewMargin * size.height,
-          (1 - _kViewMargin) * size.width, (1 - _kViewMargin) * size.height),
+      Rect.fromLTRB(margin * size.width, margin * size.height,
+          (1 - margin) * size.width, (1 - margin) * size.height),
       Paint()
         ..color = const Color(0x668492A6)
         ..style = PaintingStyle.stroke
@@ -486,5 +535,6 @@ class _CalibPainter extends CustomPainter {
       old.corners != corners ||
       old.region != region ||
       old.rotate != rotate ||
+      old.margin != margin ||
       old.drawBackground != drawBackground;
 }

@@ -28,22 +28,64 @@ class CourtPainter extends CustomPainter {
   final Frame? frame;
   final DisplayColors colors;
 
-  CourtPainter({required this.frame, this.colors = const DisplayColors()});
+  /// A kijelölt játékos track-azonosítója (kattintással) — arany kiemelés.
+  final int? selectedId;
 
-  @override
-  void paint(Canvas canvas, Size size) {
+  /// A kijelölt játékos nyomvonala MÉTERBEN (± pár másodperc útvonala).
+  final List<Offset>? trail;
+
+  CourtPainter({
+    required this.frame,
+    this.colors = const DisplayColors(),
+    this.selectedId,
+    this.trail,
+  });
+
+  /// A méter→pixel transzformáció paraméterei az adott vászonméretre
+  /// (skála + origó). A kattintás-visszafejtés (találat-keresés) UGYANEZT
+  /// használja, így a kép és a találat mindig egybeesik.
+  static (double, Offset) transformFor(Size size) {
     const margin = 28.0;
     final usableW = size.width - 2 * margin;
     final usableH = size.height - 2 * margin;
     final scale = math.min(usableW / courtLength, usableH / courtWidth);
     final originX = (size.width - courtLength * scale) / 2;
     final originY = (size.height - courtWidth * scale) / 2;
+    return (scale, Offset(originX, originY));
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final (scale, origin) = transformFor(size);
 
     Offset p(double mx, double my) =>
-        Offset(originX + mx * scale, originY + my * scale);
+        Offset(origin.dx + mx * scale, origin.dy + my * scale);
 
     _drawCourt(canvas, p, scale);
+    _drawTrail(canvas, p, scale);
     _drawFrame(canvas, p, scale);
+  }
+
+  /// A kijelölt játékos útvonala — a játékos-pontok ALATT, arany vonallal.
+  void _drawTrail(Canvas canvas, Offset Function(double, double) p, double scale) {
+    final tr = trail;
+    if (tr == null || tr.length < 2) return;
+    final path = Path()..moveTo(p(tr.first.dx, tr.first.dy).dx, p(tr.first.dx, tr.first.dy).dy);
+    for (final o in tr.skip(1)) {
+      final pt = p(o.dx, o.dy);
+      path.lineTo(pt.dx, pt.dy);
+    }
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = AppColors.gold.withOpacity(0.75)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round);
+    // A nyomvonal kezdőpontja: kis pötty, hogy látszódjon az irány.
+    canvas.drawCircle(p(tr.first.dx, tr.first.dy), 3,
+        Paint()..color = AppColors.gold.withOpacity(0.5));
   }
 
   void _drawCourt(Canvas canvas, Offset Function(double, double) p, double scale) {
@@ -109,6 +151,19 @@ class CourtPainter extends CustomPainter {
       final center = p(pl.x, pl.y);
       final radius = 0.6 * scale;
 
+      // Kijelölt játékos: vastag arany gyűrű (mért és becsült pontnál is).
+      final isSelected = pl.trackId == selectedId;
+      if (isSelected) {
+        canvas.drawCircle(center, radius + 5,
+            Paint()..color = AppColors.gold.withOpacity(0.18));
+        canvas.drawCircle(
+            center, radius + 4,
+            Paint()
+              ..color = AppColors.gold
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2.4);
+      }
+
       if (pl.isEstimated) {
         canvas.drawCircle(center, radius, Paint()..color = base.withOpacity(0.22));
         _drawDashedRing(canvas, center, radius + 2, base.withOpacity(0.55));
@@ -168,5 +223,6 @@ class CourtPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CourtPainter old) => old.frame != frame;
+  bool shouldRepaint(covariant CourtPainter old) =>
+      old.frame != frame || old.selectedId != selectedId || old.trail != trail;
 }
