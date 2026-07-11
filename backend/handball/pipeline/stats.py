@@ -29,12 +29,87 @@ class PlayerStats:
     - avg_speed_ms:        átlagsebesség (m/s) a mért mozgásból.
     - measured_frames:     hány frame-en volt MÉRT (látott) a játékos.
     - estimated_frames:    hány frame-en volt csak BECSÜLT.
+    - top_speed_ms:        legnagyobb (simított) sebesség (m/s) — terhelés-monitor.
+    - sprint_count:        hány sprint (tartósan >= küszöb sebességű szakasz).
+    - sprint_distance_m:   a sprintekben megtett táv (méter).
+    - zone_seconds:        sebesség-zónánkénti idő (mp): seta/kocogas/futas/sprint.
     """
     track_id: int
     distance_m: float = 0.0
     avg_speed_ms: float = 0.0
     measured_frames: int = 0
     estimated_frames: int = 0
+    top_speed_ms: float = 0.0
+    sprint_count: int = 0
+    sprint_distance_m: float = 0.0
+    zone_seconds: dict = field(default_factory=dict)
+
+
+# Sprint-elemzés küszöbei (kézilabdára hangolva):
+SPRINT_SPEED_MS = 5.0      # e fölött számít sprintnek a mozgás (m/s)
+SPRINT_MIN_S = 0.5         # legalább ennyi ideig kell tartania (mp)
+MAX_PLAUSIBLE_MS = 11.0    # efölötti "sebesség" követési hiba (ugrás) — kihagyjuk
+# Sebesség-zónák határai (m/s): séta < 1.4 <= kocogás < 3.0 <= futás < 5.0 <= sprint
+ZONE_EDGES = ((1.4, "seta"), (3.0, "kocogas"), (5.0, "futas"))
+
+
+def _speed_segments(samples: list, dt: float) -> list[tuple[float, float, float]]:
+    """A MÉRT pontpárok közti (idő mp, táv m, simított sebesség m/s) szakaszok.
+
+    Csak kis időbeli lyukat hidalunk át (max 3 feldolgozott kocka), a
+    valószínűtlenül nagy sebességű (követési hibás) szakaszokat kihagyjuk.
+    A sebességet 3 szakaszos mozgóátlaggal simítjuk, hogy egy-egy zajos
+    pozíció ne dobjon fals csúcssebességet."""
+    raw: list[tuple[float, float]] = []  # (szakasz-idő mp, táv m)
+    prev = None
+    for (t, x, y, source) in samples:
+        if source != PositionSource.MEASURED:
+            continue
+        if prev is not None:
+            gap = t - prev[0]
+            if 0 < gap <= 3:
+                seconds = gap * dt
+                dist = math.hypot(x - prev[1], y - prev[2])
+                if seconds > 0 and dist / seconds <= MAX_PLAUSIBLE_MS:
+                    raw.append((seconds, dist))
+        prev = (t, x, y)
+    out: list[tuple[float, float, float]] = []
+    for i, (seconds, dist) in enumerate(raw):
+        window = raw[max(0, i - 1):i + 2]
+        wsec = sum(s for s, _ in window)
+        wdist = sum(d for _, d in window)
+        out.append((seconds, dist, (wdist / wsec) if wsec > 0 else 0.0))
+    return out
+
+
+def _sprint_and_zones(stats: PlayerStats, segments: list) -> None:
+    """Csúcssebesség, sprintek és zóna-idők a szakaszlistából (helyben ír)."""
+    zones = {"seta": 0.0, "kocogas": 0.0, "futas": 0.0, "sprint": 0.0}
+    run_s = 0.0   # a folyamatban lévő sprint hossza (mp)
+    run_d = 0.0   # ... és távja (m)
+
+    def close_run():
+        nonlocal run_s, run_d
+        if run_s >= SPRINT_MIN_S:
+            stats.sprint_count += 1
+            stats.sprint_distance_m += run_d
+        run_s = run_d = 0.0
+
+    for (seconds, dist, speed) in segments:
+        stats.top_speed_ms = max(stats.top_speed_ms, speed)
+        zone = "sprint"
+        for edge, name in ZONE_EDGES:
+            if speed < edge:
+                zone = name
+                break
+        zones[zone] += seconds
+        if speed >= SPRINT_SPEED_MS:
+            run_s += seconds
+            run_d += dist
+        else:
+            close_run()
+    close_run()
+    stats.zone_seconds = {k: round(v, 1) for k, v in zones.items()}
 
 
 def compute_player_stats(match: Match) -> dict[int, PlayerStats]:
@@ -74,5 +149,7 @@ def compute_player_stats(match: Match) -> dict[int, PlayerStats]:
         # Átlagsebesség: a futott táv osztva a mért szakaszok idejével.
         moving_time = max(1, stats.measured_frames) * dt
         stats.avg_speed_ms = stats.distance_m / moving_time
+        # Terhelés-monitor: csúcssebesség, sprintek és sebesség-zónák.
+        _sprint_and_zones(stats, _speed_segments(samples, dt))
         result[track_id] = stats
     return result
