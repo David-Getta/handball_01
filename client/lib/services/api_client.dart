@@ -335,6 +335,9 @@ class ApiClient {
     List<List<int>>? calib,
     String? calibRegion, // "full" | "left" | "right" (térfél-kalibráció)
     bool calibRotate = false, // 180°-os forgatás (túloldali kamera)
+    // TÖBB kalibráció (pl. külön bal és jobb térfél, akár külön képkockán):
+    // [{"corners": [[x,y],...], "region": ..., "rotate": ..., "frame": ...}].
+    List<Map<String, dynamic>>? calibs,
     String? matchId,
     String? homeTeam,
     String? awayTeam,
@@ -349,6 +352,7 @@ class ApiClient {
       if (calib != null) "calib": calib,
       if (calib != null && calibRegion != null) "calib_region": calibRegion,
       if (calib != null) "calib_rotate": calibRotate,
+      if (calibs != null && calibs.isNotEmpty) "calibs": calibs,
       if (matchId != null) "match_id": matchId,
       if (homeTeam != null && homeTeam.isNotEmpty) "home_team": homeTeam,
       if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,

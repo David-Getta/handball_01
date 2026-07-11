@@ -297,7 +297,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
             progress_cb=None, match_id="video-1", estimate=True,
             home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
-            track_smooth=True, calib_region="full", calib_rotate=False):
+            track_smooth=True, calib_region="full", calib_rotate=False,
+            calibs=None):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -327,7 +328,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     disp_total = min(max_frames, est_total) if est_total else max_frames
 
     # [A] kalibráció (ha van 4 sarok). A haladás nagy részét a detektálás adja.
-    report("A", 0.02, "kalibráció" if calib_corners else "kalibráció nélkül")
+    # A kalibrációk EGYSÉGES listája: vagy a `calibs` (1-2 bejegyzés, pl.
+    # külön bal és jobb térfél, akár KÜLÖN képkockán bejelölve), vagy a régi
+    # egy-kalibrációs paraméterek egyetlen bejegyzésként.
+    calib_list = []
+    if calibs:
+        calib_list = [dict(c) for c in calibs if c.get("corners")]
+    elif calib_corners:
+        calib_list = [{"corners": calib_corners, "region": calib_region,
+                       "rotate": calib_rotate, "frame": start}]
+    report("A", 0.02, "kalibráció" if calib_list else "kalibráció nélkül")
 
     # [B]/[C] detektálás + követés — a képkockánkénti haladást ide képezzük le,
     # sebességgel és hátralévő idővel (teljes félidőnél ez órákban mérhető,
@@ -353,7 +363,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
         raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                                         court_poly, start=start, skip_dark=skip_dark,
-                                        on_frame=on_frame, pan=bool(calib_corners))
+                                        on_frame=on_frame, pan=bool(calib_list))
     else:
         raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
@@ -378,14 +388,39 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # váltunk, és a pályán KÍVÜL esőket (kispad/edző) eldobjuk (CourtRegion).
     to_court = None
     region = None
-    if calib_corners:
-        from handball.pipeline._homography import homography_from_points, apply_homography
+    if calib_list:
+        from handball.pipeline._homography import (
+            homography_from_points, apply_homography, invert_3x3, compose)
         from handball.pipeline.roi import CourtRegion
-        court_pts = _calib_court_points(calib_region, calib_rotate)
-        Himg2court = homography_from_points([tuple(p) for p in calib_corners], court_pts)
         region = CourtRegion(margin_m=2.0)
+
+        # Minden kalibrációt az ALAP képkocka koordinátáira vezetünk vissza:
+        # a kalibráció a saját képkockáján készült; a pásztázás-mátrix (G:
+        # aktuális→alap) inverzével a H ∘ G⁻¹ már alap-pixelből ad pályametert.
+        mappers = []  # (térfél x-tartománya, alapra vonatkoztatott H)
+        for c in calib_list:
+            pts = _calib_court_points(c.get("region", "full"), bool(c.get("rotate")))
+            H = homography_from_points([tuple(p) for p in c["corners"]], pts)
+            fidx = int(c.get("frame", start))
+            if raw:
+                idx = max(0, min(len(raw) - 1, round((fidx - start) / max(1, stride))))
+                panH_at = raw[idx][2]
+                if panH_at is not None and idx > 0:
+                    H = compose(H, invert_3x3(panH_at))
+            xs = [p[0] for p in pts]
+            mappers.append((min(xs), max(xs), H))
+
         def to_court(px, py):
-            return apply_homography(Himg2court, px, py)
+            # Az elsődleges kalibrációval számolunk; ha az eredmény egy MÁSIK
+            # kalibráció térfelére esik, azzal pontosítunk (ott az élesebb).
+            x, y = apply_homography(mappers[0][2], px, py)
+            for (x0, x1, H) in mappers[1:]:
+                if x0 - 1.0 <= x <= x1 + 1.0:
+                    try:
+                        return apply_homography(H, px, py)
+                    except ValueError:
+                        return (x, y)
+            return (x, y)
 
     def map_xy(px, py, panH=None):
         if to_court is not None:
@@ -448,7 +483,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             print(f"labda-utómunka: {bs['removed']} kiugró eldobva, "
                   f"{bs['filled']} hézag-kocka pótolva")
 
-    if estimate and calib_corners:
+    if estimate and calib_list:
         from handball.pipeline.estimation import augment_match_with_estimates
         added = augment_match_with_estimates(match)
         print(f"képen kívüli becslés: {added} becsült pozíció pótolva")

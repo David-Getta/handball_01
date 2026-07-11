@@ -69,9 +69,10 @@ class _UploadScreenState extends State<UploadScreen> {
   String _quality = "balanced"; // fast | balanced | precise
   bool _trialRun = false; // igaz → csak az eleje (~2 perc), gyors kipróbáláshoz
 
-  // A kalibráló képernyőről visszakapott eredmény (sarkok + terület + forgatás)
-  // — ezzel lesz PONTOS a pálya-koordináta és a pályán kívüliek szűrése.
-  CalibrationResult? _calib;
+  // A kalibráló képernyőről visszakapott eredmény: 1 kalibráció (teljes
+  // pálya / egy térfél) VAGY 2 (külön bal és jobb térfél, akár külön
+  // képkockán) — ezzel lesz PONTOS a pálya-koordináta és a szűrés.
+  CalibrationSet? _calib;
 
   static const Map<String, (int, int, String)> _qualityPresets = {
     "fast": (5, 960, "Gyors"),
@@ -167,12 +168,21 @@ class _UploadScreenState extends State<UploadScreen> {
         max: max,
         homeTeam: _homeCtrl.text.trim(),
         awayTeam: _awayCtrl.text.trim(),
-        // A kalibráció (ha elkészült): pontos pálya-koordináta + szűrés.
-        // A feldolgozás a kalibrált képkockától indul (a pásztázás-követés
-        // ehhez az álláshoz igazít).
-        calib: _calib?.corners,
-        calibRegion: _calib?.region,
-        calibRotate: _calib?.rotate ?? false,
+        // A kalibrációk (ha elkészültek): pontos pálya-koordináta + szűrés.
+        // A feldolgozás a legkorábbi kalibrált képkockától indul (a
+        // pásztázás-követés ehhez igazít; a második térfél-kalibrációt a
+        // szerver a pásztázás-mátrixszal vezeti vissza az alap-kockára).
+        calibs: _calib == null
+            ? null
+            : [
+                for (final c in _calib!.items)
+                  {
+                    "corners": c.corners,
+                    "region": c.region,
+                    "rotate": c.rotate,
+                    "frame": c.startFrame,
+                  },
+              ],
         start: _calib?.startFrame ?? 0,
       );
       _jobId = r["job_id"] as String;
@@ -292,7 +302,7 @@ class _UploadScreenState extends State<UploadScreen> {
             child: OutlinedButton.icon(
               onPressed: () async {
                 final path = _pathCtrl.text.trim();
-                final res = await Navigator.of(context).push<CalibrationResult>(
+                final res = await Navigator.of(context).push<CalibrationSet>(
                   MaterialPageRoute(
                     builder: (_) => CalibrationScreen(
                       videoPath: path.isEmpty ? null : path,
@@ -308,11 +318,7 @@ class _UploadScreenState extends State<UploadScreen> {
               ),
               icon: Icon(_calib != null ? Icons.check_circle : Icons.grid_on, size: 18),
               label: Text(_calib != null
-                  ? "Kalibráció kész (${switch (_calib!.region) {
-                      "left" => "bal térfél",
-                      "right" => "jobb térfél",
-                      _ => "teljes pálya",
-                    }}${_calib!.rotate ? ", forgatva" : ""})"
+                  ? "Kalibráció kész (${_calib!.label})"
                   : "Pálya-kalibráció (4 sarok)"),
             ),
           ),

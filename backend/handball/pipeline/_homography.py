@@ -107,6 +107,34 @@ def homography_from_points(src: list[tuple[float, float]],
     ]
 
 
+def invert_3x3(h: Matrix) -> Matrix:
+    """Egy 3x3-as mátrix inverze (adjungált / determináns módszerrel).
+
+    A kettős térfél-kalibrációnál kell: a második kalibráció képkockájáról az
+    ALAP képkockára visszavezetéshez a pásztázás-mátrix inverzét használjuk.
+    ValueError, ha a mátrix szinguláris.
+    """
+    a, b, c = h[0]
+    d, e, f = h[1]
+    g, i, j = h[2]
+    det = a * (e * j - f * i) - b * (d * j - f * g) + c * (d * i - e * g)
+    if abs(det) < 1e-12:
+        raise ValueError("szinguláris mátrix — nem invertálható")
+    return [
+        [(e * j - f * i) / det, (c * i - b * j) / det, (b * f - c * e) / det],
+        [(f * g - d * j) / det, (a * j - c * g) / det, (c * d - a * f) / det],
+        [(d * i - e * g) / det, (b * g - a * i) / det, (a * e - b * d) / det],
+    ]
+
+
+def compose(h2: Matrix, h1: Matrix) -> Matrix:
+    """Mátrix-szorzás: a visszaadott H a h1, MAJD h2 leképezés (H = h2·h1)."""
+    return [
+        [sum(h2[r][k] * h1[k][c] for k in range(3)) for c in range(3)]
+        for r in range(3)
+    ]
+
+
 def apply_homography(h: Matrix, px: float, py: float) -> tuple[float, float]:
     """Egy pontra (px, py) alkalmazza a H homográfiát, perspektív osztással.
 
