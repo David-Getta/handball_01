@@ -125,6 +125,19 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   CalibrationResult? _savedLeft;
   CalibrationResult? _savedRight;
 
+  // ÖSSZENÉZET (6 pontos finomhangolás): a két térfél EGY nézetben — a 4
+  // pályasarok ÉS a felezővonal két vége is külön állítható.
+  bool _fineTune = false;
+  // Sorrend: távoli-bal, felező-távoli, távoli-jobb, közeli-jobb,
+  // felező-közeli, közeli-bal.
+  List<Offset> _six = const [
+    Offset(0.16, 0.38), Offset(0.50, 0.36), Offset(0.84, 0.38),
+    Offset(0.92, 0.78), Offset(0.50, 0.82), Offset(0.08, 0.78),
+  ];
+
+  /// Az éppen szerkesztett pontlista (4 sarok VAGY a 6 pontos összenézet).
+  List<Offset> get _activePts => _fineTune ? _six : _corners;
+
   // A betöltött referencia-képkocka és eredeti mérete (a képpont-export miatt).
   Uint8List? _frameBytes;
   Size? _frameSize;
@@ -201,7 +214,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       child: LayoutBuilder(
         builder: (context, c) {
           final size = Size(c.maxWidth, c.maxHeight);
-          final pts = [for (final f in _corners) Offset(f.dx * size.width, f.dy * size.height)];
+          final pts = [for (final f in _activePts) Offset(f.dx * size.width, f.dy * size.height)];
           return GestureDetector(
             onPanStart: (d) {
               double best = 32;
@@ -214,11 +227,16 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             onPanUpdate: (d) {
               if (_drag == null) return;
               setState(() {
-                _corners = [..._corners];
-                _corners[_drag!] = Offset(
+                final next = [..._activePts];
+                next[_drag!] = Offset(
                   (d.localPosition.dx / size.width).clamp(0.0, 1.0),
                   (d.localPosition.dy / size.height).clamp(0.0, 1.0),
                 );
+                if (_fineTune) {
+                  _six = next;
+                } else {
+                  _corners = next;
+                }
                 _saved = false;
               });
             },
@@ -243,6 +261,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                       region: _region,
                       rotate: _rotate,
                       margin: _margin,
+                      fine: _fineTune,
                       drawBackground: _frameBytes == null),
                   size: size,
                 ),
@@ -327,6 +346,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             ),
           ]),
           const SizedBox(height: AppSpacing.md),
+          if (!_fineTune) ...[
           Text("TERÜLET", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           // Ha csak az egyik térfél látszik a képen, a 4 pontot a TÉRFÉL
@@ -361,21 +381,35 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
               }),
             ),
           ]),
+          ],
           const SizedBox(height: AppSpacing.md),
-          Text("SARKOK", style: AppText.sectionLabel),
+          Text(_fineTune ? "PONTOK (ÖSSZENÉZET)" : "SARKOK", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
-          _cornerRow("Távoli-bal", 0),
-          _cornerRow("Távoli-jobb", 1),
-          _cornerRow("Közeli-jobb", 2),
-          _cornerRow("Közeli-bal", 3),
+          if (_fineTune) ...[
+            _cornerRow("Távoli-bal", 0),
+            _cornerRow("Felező-távoli", 1),
+            _cornerRow("Távoli-jobb", 2),
+            _cornerRow("Közeli-jobb", 3),
+            _cornerRow("Felező-közeli", 4),
+            _cornerRow("Közeli-bal", 5),
+          ] else ...[
+            _cornerRow("Távoli-bal", 0),
+            _cornerRow("Távoli-jobb", 1),
+            _cornerRow("Közeli-jobb", 2),
+            _cornerRow("Közeli-bal", 3),
+          ],
           const Spacer(),
           Text(
-            _region == "full"
-                ? "Tipp: ha csak az egyik térfél látszik a képen, válaszd a "
-                    "Bal/Jobb fél gombot — a pontokat a térfél sarkaira húzd "
-                    "(a felezővonal két vége is sarok)."
-                : "A 4 pontot a KIVÁLASZTOTT TÉRFÉL sarkaira húzd: 2 valódi "
-                    "pályasarok + a felezővonal két vége.",
+            _fineTune
+                ? "ÖSSZENÉZET: a teljes pálya 6 ponttal — a 4 sarok ÉS a "
+                    "felezővonal két vége is húzható. Mindkét fél modellje "
+                    "élőben illeszkedik."
+                : _region == "full"
+                    ? "Tipp: ha csak az egyik térfél látszik a képen, válaszd a "
+                        "Bal/Jobb fél gombot — a pontokat a térfél sarkaira húzd "
+                        "(a felezővonal két vége is sarok)."
+                    : "A 4 pontot a KIVÁLASZTOTT TÉRFÉL sarkaira húzd: 2 valódi "
+                        "pályasarok + a felezővonal két vége.",
             style: AppText.label.copyWith(fontSize: 11, color: AppColors.gold),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -415,28 +449,56 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             ]),
             const SizedBox(height: AppSpacing.sm),
           ],
-          FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
-            onPressed: _save,
-            icon: const Icon(Icons.check),
-            label: Text(switch (_region) {
-              "left" => "Bal térfél mentése",
-              "right" => "Jobb térfél mentése",
-              _ => _saved ? "Kalibráció mentve" : "Kalibráció mentése",
-            }),
-          ),
-          // Térfél-kalibrációnál: visszatérés az elmentett felekkel.
-          if (_savedLeft != null || _savedRight != null) ...[
-            const SizedBox(height: AppSpacing.sm),
+          if (_fineTune) ...[
             FilledButton.icon(
               style: FilledButton.styleFrom(
                   backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
-              onPressed: _finish,
+              onPressed: _finishFine,
               icon: const Icon(Icons.done_all),
-              label: Text(_savedLeft != null && _savedRight != null
-                  ? "Kész (bal + jobb térfél)"
-                  : "Kész (1 térféllel)"),
+              label: const Text("Kész (összeillesztett pálya)"),
             ),
+            const SizedBox(height: AppSpacing.sm),
+            TextButton.icon(
+              onPressed: () => setState(() => _fineTune = false),
+              icon: const Icon(Icons.undo, size: 16),
+              label: const Text("Vissza a térfelekhez"),
+            ),
+          ] else ...[
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+              onPressed: _save,
+              icon: const Icon(Icons.check),
+              label: Text(switch (_region) {
+                "left" => "Bal térfél mentése",
+                "right" => "Jobb térfél mentése",
+                _ => _saved ? "Kalibráció mentve" : "Kalibráció mentése",
+              }),
+            ),
+            // Összenézet: a két mentett térfél összeillesztése és finomhangolása.
+            if (_savedLeft != null && _savedRight != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _enterFineTune,
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold)),
+                icon: const Icon(Icons.join_full, size: 18),
+                label: const Text("Összenézet: 6 pontos finomhangolás"),
+              ),
+            ],
+            // Térfél-kalibrációnál: visszatérés az elmentett felekkel.
+            if (_savedLeft != null || _savedRight != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+                onPressed: _finish,
+                icon: const Icon(Icons.done_all),
+                label: Text(_savedLeft != null && _savedRight != null
+                    ? "Kész (bal + jobb térfél)"
+                    : "Kész (1 térféllel)"),
+              ),
+            ],
           ],
         ],
       ),
@@ -494,6 +556,56 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             "képkockára), vagy nyomd meg a Kész gombot.")));
   }
 
+  /// Belépés az ÖSSZENÉZETBE: a 6 pont a mentett bal/jobb kalibrációból áll
+  /// össze (a felezővonal két vége a két oldal jelölésének átlaga).
+  void _enterFineTune() {
+    final l = _savedLeft, r = _savedRight;
+    if (l == null || r == null) return;
+    final w = _frameSize?.width ?? 1920.0;
+    final h = _frameSize?.height ?? 1080.0;
+    Offset toCanvas(List<int> p) => Offset(
+        _margin + p[0] / w * (1 - 2 * _margin),
+        _margin + p[1] / h * (1 - 2 * _margin));
+    Offset mid(Offset a, Offset b) =>
+        Offset((a.dx + b.dx) / 2, (a.dy + b.dy) / 2);
+    setState(() {
+      _six = [
+        toCanvas(l.corners[0]), // távoli-bal
+        mid(toCanvas(l.corners[1]), toCanvas(r.corners[0])), // felező-távoli
+        toCanvas(r.corners[1]), // távoli-jobb
+        toCanvas(r.corners[2]), // közeli-jobb
+        mid(toCanvas(l.corners[2]), toCanvas(r.corners[3])), // felező-közeli
+        toCanvas(l.corners[3]), // közeli-bal
+      ];
+      _fineTune = true;
+      _saved = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text("Összenézet: a 4 sarok ÉS a felezővonal két vége is "
+            "húzható. Ha a két felet külön képkockán jelölted, léptess olyan "
+            "kockára, ahol az egész pálya látszik.")));
+  }
+
+  /// Az összenézet mentése: a 6 pontból KÉT térfél-kalibráció készül
+  /// (ugyanarra a képkockára), és visszatérünk a feltöltő képernyőre.
+  void _finishFine() {
+    final w = _frameSize?.width ?? 1920.0;
+    final h = _frameSize?.height ?? 1080.0;
+    double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
+    List<int> px(Offset o) =>
+        [(toImg(o.dx) * w).round(), (toImg(o.dy) * h).round()];
+    final fl = px(_six[0]), mf = px(_six[1]), fr = px(_six[2]);
+    final nr = px(_six[3]), mn = px(_six[4]), nl = px(_six[5]);
+    Navigator.of(context).pop(CalibrationSet([
+      // Bal fél: távoli-bal, felező-távoli, felező-közeli, közeli-bal.
+      CalibrationResult(corners: [fl, mf, mn, nl], region: "left",
+          rotate: false, startFrame: _frameIdx),
+      // Jobb fél: felező-távoli, távoli-jobb, közeli-jobb, felező-közeli.
+      CalibrationResult(corners: [mf, fr, nr, mn], region: "right",
+          rotate: false, startFrame: _frameIdx),
+    ]));
+  }
+
   /// Visszatérés az elmentett térfél-kalibrációkkal (1 vagy 2 bejegyzés).
   void _finish() {
     final items = [
@@ -511,13 +623,17 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     final mOld = _margin;
     final mNew = (1 - next) / 2;
     setState(() {
-      _corners = [
-        for (final c in _corners)
-          Offset(
-            (mNew + (c.dx - mOld) / (1 - 2 * mOld) * (1 - 2 * mNew)).clamp(0.0, 1.0),
-            (mNew + (c.dy - mOld) / (1 - 2 * mOld) * (1 - 2 * mNew)).clamp(0.0, 1.0),
-          ),
-      ];
+      // NINCS levágás: a pont a KÉPHEZ képesti helyén marad akkor is, ha
+      // így a vásznon kívülre kerül — kicsinyítéskor újra elérhető.
+      List<Offset> remap(List<Offset> pts) => [
+            for (final c in pts)
+              Offset(
+                mNew + (c.dx - mOld) / (1 - 2 * mOld) * (1 - 2 * mNew),
+                mNew + (c.dy - mOld) / (1 - 2 * mOld) * (1 - 2 * mNew),
+              ),
+          ];
+      _corners = remap(_corners);
+      _six = remap(_six);
       _imgScale = next;
       _saved = false;
     });
@@ -549,7 +665,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             const SizedBox(width: 8),
             Text(name, style: AppText.label.copyWith(color: AppColors.textPrimary)),
           ]),
-          Text("${(_corners[i].dx * 100).round()}, ${(_corners[i].dy * 100).round()}",
+          Text("${(_activePts[i].dx * 100).round()}, ${(_activePts[i].dy * 100).round()}",
               style: AppText.label.copyWith(fontSize: 11)),
         ]),
       );
@@ -561,10 +677,11 @@ class _CalibPainter extends CustomPainter {
   final String region; // full | left | right — mire illesztjük a 4 pontot
   final bool rotate; // 180°-os forgatás (túloldali kamera)
   final double margin; // a képkocka körüli sáv aránya (kicsinyítésnél nő)
+  final bool fine; // összenézet: 6 pont (4 sarok + felezővonal két vége)
   final bool drawBackground; // helyőrző háttér (ha nincs valódi képkocka)
   _CalibPainter(this.corners,
       {this.region = "full", this.rotate = false, this.margin = 0.12,
-       this.drawBackground = true});
+       this.fine = false, this.drawBackground = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -582,6 +699,14 @@ class _CalibPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
+
+    // ÖSSZENÉZET: 6 pontból a KÉT térfél homográfiája — mindkét fél
+    // modellje élőben illeszkedik, a felezővonal a két fél közös éle.
+    if (fine && corners.length == 6) {
+      _paintFine(canvas);
+      _drawHandles(canvas);
+      return;
+    }
 
     // A kijelölt terület (teljes pálya vagy térfél) sarkai méterben.
     final (x0, x1) = switch (region) {
@@ -631,10 +756,65 @@ class _CalibPainter extends CustomPainter {
       }
     }
 
+    _drawHandles(canvas);
+  }
+
+  /// A húzható pontok (fogantyúk) kirajzolása.
+  void _drawHandles(Canvas canvas) {
     for (final c in corners) {
       canvas.drawCircle(c, 11, Paint()..color = AppColors.accent.withOpacity(0.25));
       canvas.drawCircle(c, 7, Paint()..color = AppColors.accent);
       canvas.drawCircle(c, 7, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5);
+    }
+  }
+
+  /// Összenézet: a 6 pontból (4 sarok + felezővonal két vége) a két térfél
+  /// KÜLÖN homográfiája — kapuk + 6 m-es ívek mindkét oldalon.
+  void _paintFine(Canvas canvas) {
+    final fl = corners[0], mf = corners[1], fr = corners[2];
+    final nr = corners[3], mn = corners[4], nl = corners[5];
+    final line = Paint()..color = AppColors.accent..style = PaintingStyle.stroke..strokeWidth = 2.5;
+    final gold = Paint()..color = AppColors.gold..style = PaintingStyle.stroke..strokeWidth = 2;
+    final goalP = Paint()..color = AppColors.away..style = PaintingStyle.stroke..strokeWidth = 4;
+
+    // Külső keret + felezővonal (a két fél közös éle).
+    final outer = Path()
+      ..moveTo(fl.dx, fl.dy)
+      ..lineTo(mf.dx, mf.dy)
+      ..lineTo(fr.dx, fr.dy)
+      ..lineTo(nr.dx, nr.dy)
+      ..lineTo(mn.dx, mn.dy)
+      ..lineTo(nl.dx, nl.dy)
+      ..close();
+    canvas.drawPath(outer, line);
+    canvas.drawLine(mf, mn, line);
+
+    const cy = courtWidth / 2;
+    final half = courtLength / 2;
+    // (négyszög, kapu x-koordinátája, a fél pálya-sarkai méterben)
+    final halves = [
+      ([fl, mf, mn, nl], 0.0,
+       [[0.0, 0.0], [half, 0.0], [half, courtWidth], [0.0, courtWidth]]),
+      ([mf, fr, nr, mn], courtLength,
+       [[half, 0.0], [courtLength, 0.0], [courtLength, courtWidth], [half, courtWidth]]),
+    ];
+    for (final (quad, gx, courtPts) in halves) {
+      final h = homographyFromPoints(
+          courtPts, [for (final q in quad) [q.dx, q.dy]]);
+      Offset p(double mx, double my) {
+        final r = applyHomography(h, mx, my);
+        return Offset(r[0], r[1]);
+      }
+
+      canvas.drawLine(p(gx, cy - 1.5), p(gx, cy + 1.5), goalP);
+      final s = gx == courtLength ? -1.0 : 1.0;
+      Offset? prev;
+      for (int i = 0; i <= 20; i++) {
+        final th = math.pi * i / 20;
+        final cur = p(gx + s * 6 * math.sin(th), cy - 6 * math.cos(th));
+        if (prev != null) canvas.drawLine(prev, cur, gold);
+        prev = cur;
+      }
     }
   }
 
@@ -644,5 +824,6 @@ class _CalibPainter extends CustomPainter {
       old.region != region ||
       old.rotate != rotate ||
       old.margin != margin ||
+      old.fine != fine ||
       old.drawBackground != drawBackground;
 }
