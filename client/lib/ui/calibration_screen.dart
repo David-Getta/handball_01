@@ -36,7 +36,7 @@ class CalibrationScreen extends StatefulWidget {
   const CalibrationScreen({
     super.key,
     this.videoPath,
-    this.baseUrl = "http://localhost:8000",
+    this.baseUrl = "http://127.0.0.1:8000",
     this.frameIndex = 180,
   });
 

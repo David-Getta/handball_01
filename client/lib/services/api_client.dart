@@ -16,7 +16,7 @@ class ApiClient {
   /// A backend alap-URL-je. Lokális teszthez a laptopon ez a localhost.
   final String baseUrl;
 
-  ApiClient({this.baseUrl = "http://localhost:8000"});
+  ApiClient({this.baseUrl = "http://127.0.0.1:8000"});
 
   /// Életjel: igaz, ha a backend elérhető (GET /health).
   Future<bool> isHealthy() async {
