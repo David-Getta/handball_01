@@ -97,6 +97,13 @@ class MatchMeta {
   final int frameHeight;
   final String? date;
 
+  /// Az eredeti videófájl útja a gépen (lokális mód) — a jelenet-lejátszáshoz.
+  final String? videoPath;
+
+  /// A feldolgozás első kép-indexe + mintavétel az eredeti videóban.
+  final int startFrame;
+  final int stride;
+
   MatchMeta({
     required this.matchId,
     required this.homeTeam,
@@ -105,6 +112,9 @@ class MatchMeta {
     required this.frameWidth,
     required this.frameHeight,
     this.date,
+    this.videoPath,
+    this.startFrame = 0,
+    this.stride = 1,
   });
 
   factory MatchMeta.fromJson(Map<String, dynamic> j) => MatchMeta(
@@ -115,7 +125,17 @@ class MatchMeta {
         frameWidth: (j["frame_width"] as num?)?.toInt() ?? 0,
         frameHeight: (j["frame_height"] as num?)?.toInt() ?? 0,
         date: j["date"] as String?,
+        videoPath: j["video_path"] as String?,
+        startFrame: (j["start_frame"] as num?)?.toInt() ?? 0,
+        stride: (j["stride"] as num?)?.toInt() ?? 1,
       );
+
+  /// Az i. tracking-frame ideje az EREDETI videóban, másodpercben.
+  /// (Az fps a tracking képrátája: az eredeti videóé osztva a stride-dal.)
+  double videoSecondsOfFrame(int i) {
+    if (fps <= 0) return 0;
+    return startFrame / (fps * stride) + i / fps;
+  }
 }
 
 /// A teljes Tracking: fejléc + minden frame. Ezt rajzolja ki a kliens.

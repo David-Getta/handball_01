@@ -314,6 +314,8 @@ class ApiClient {
     int imgsz = 1280,
     int start = 0,
     List<List<int>>? calib,
+    String? calibRegion, // "full" | "left" | "right" (térfél-kalibráció)
+    bool calibRotate = false, // 180°-os forgatás (túloldali kamera)
     String? matchId,
     String? homeTeam,
     String? awayTeam,
@@ -326,6 +328,8 @@ class ApiClient {
       "start": start,
       if (weights != null) "weights": weights,
       if (calib != null) "calib": calib,
+      if (calib != null && calibRegion != null) "calib_region": calibRegion,
+      if (calib != null) "calib_rotate": calibRotate,
       if (matchId != null) "match_id": matchId,
       if (homeTeam != null && homeTeam.isNotEmpty) "home_team": homeTeam,
       if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,

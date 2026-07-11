@@ -22,6 +22,7 @@ import "heatmap_painter.dart";
 import "shell/app_shell.dart";
 import "stats_panel.dart";
 import "summary_panel.dart";
+import "video_panel.dart";
 
 enum ViewMode { players, heatmap }
 
@@ -53,6 +54,11 @@ class _MatchScreenState extends State<MatchScreen> {
   ViewMode _viewMode = ViewMode.players;
   Team _heatmapTeam = Team.home;
   Heatmap? _heatmap;
+
+  // Jelenet-lejátszó: az eredeti videó megjelenítése az elemzés felett.
+  // Eseményre kattintva a videó a jelenet idejére ugrik.
+  final GlobalKey<VideoPanelState> _videoKey = GlobalKey<VideoPanelState>();
+  bool _showVideo = false;
 
   @override
   void initState() {
@@ -151,6 +157,17 @@ class _MatchScreenState extends State<MatchScreen> {
               children: [
                 _matchTitle(match),
                 const SizedBox(height: AppSpacing.lg),
+                // Jelenet-lejátszó (ha az eredeti videó elérhető és kérték).
+                if (_showVideo && match.meta.videoPath != null) ...[
+                  SizedBox(
+                    height: 230,
+                    child: VideoPanel(
+                      key: _videoKey,
+                      videoPath: match.meta.videoPath!,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -205,12 +222,22 @@ class _MatchScreenState extends State<MatchScreen> {
     final selected = _frameIndex == t;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
-      // Ugrás az esemény képkockájára (a lejátszót is megállítjuk).
-      onTap: () => setState(() {
-        _timer?.cancel();
-        _playing = false;
-        _frameIndex = t.clamp(0, match.frames.length - 1);
-      }),
+      // Ugrás az esemény képkockájára (a lejátszót is megállítjuk), és ha az
+      // eredeti videó elérhető, a jelenet-lejátszó is a jelenetre ugrik.
+      onTap: () {
+        setState(() {
+          _timer?.cancel();
+          _playing = false;
+          _frameIndex = t.clamp(0, match.frames.length - 1);
+          if (match.meta.videoPath != null && VideoPanel.supported) {
+            _showVideo = true;
+          }
+        });
+        // A panel épp most jelenhetett meg — a kirajzolás után ugrunk.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(t));
+        });
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -292,6 +319,14 @@ class _MatchScreenState extends State<MatchScreen> {
           label: const Text("Figura-tervező"),
         ),
         const SizedBox(width: AppSpacing.sm),
+        // Jelenet-lejátszó ki/be (csak ha az eredeti videó elérhető).
+        if (match.meta.videoPath != null)
+          IconButton(
+            onPressed: () => setState(() => _showVideo = !_showVideo),
+            icon: Icon(Icons.ondemand_video,
+                color: _showVideo ? AppColors.accent : AppColors.textSecondary),
+            tooltip: _showVideo ? "Videó elrejtése" : "Videó megjelenítése",
+          ),
         IconButton(
           onPressed: _sourceLabel == "demó" ? null : _editSuspensions,
           icon: const Icon(Icons.timer_outlined, color: AppColors.textSecondary),

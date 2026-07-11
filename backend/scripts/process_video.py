@@ -115,6 +115,27 @@ def _pick_device():
     return "cpu"
 
 
+def _calib_court_points(region="full", rotate=False):
+    """A kalibráció 4 cél-pontja a pályán (méter), a kijelölt terület szerint.
+
+    A képen bejelölt sarkok sorrendje: bal-fent, jobb-fent, jobb-lent, bal-lent.
+    Pásztázó kameránál az induló képen sokszor csak az EGYIK TÉRFÉL látszik —
+    ilyenkor a 4 pontot a térfél sarkaira (2 valódi sarok + a felezővonal két
+    vége) kell húzni, és itt a térfélnek megfelelő cél-téglalapot használjuk.
+
+    region: "full" (teljes pálya) | "left" (bal térfél) | "right" (jobb térfél)
+    rotate: 180°-os forgatás — ha a kamera a túloldali lelátóról néz, és a
+            pálya "fejjel lefelé" látszik a képen.
+    """
+    half = COURT_LENGTH_M / 2.0
+    spans = {"full": (0.0, COURT_LENGTH_M), "left": (0.0, half), "right": (half, COURT_LENGTH_M)}
+    x0, x1 = spans.get(region or "full", spans["full"])
+    pts = [(x0, 0.0), (x1, 0.0), (x1, COURT_WIDTH_M), (x0, COURT_WIDTH_M)]
+    if rotate:
+        pts = pts[2:] + pts[:2]  # a sarok-hozzárendelés 180°-os forgatása
+    return pts
+
+
 def _normalize_max_frames(max_frames):
     """0/None/negatív képkocka-plafon → 'nincs plafon' (a teljes videó).
 
@@ -276,7 +297,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             conf=0.20, court_poly=None, calib_corners=None, start=0, skip_dark=True,
             progress_cb=None, match_id="video-1", estimate=True,
             home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
-            track_smooth=True):
+            track_smooth=True, calib_region="full", calib_rotate=False):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -360,7 +381,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     if calib_corners:
         from handball.pipeline._homography import homography_from_points, apply_homography
         from handball.pipeline.roi import CourtRegion
-        court_pts = [(0.0, 0.0), (COURT_LENGTH_M, 0.0), (COURT_LENGTH_M, COURT_WIDTH_M), (0.0, COURT_WIDTH_M)]
+        court_pts = _calib_court_points(calib_region, calib_rotate)
         Himg2court = homography_from_points([tuple(p) for p in calib_corners], court_pts)
         region = CourtRegion(margin_m=2.0)
         def to_court(px, py):
@@ -379,7 +400,10 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # [E] pálya-koordináta (homográfia/arányos) + [F] pályán kívüliek szűrése.
     report("E", 0.90, "pálya-koordináta")
     meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
-                     fps=fps / stride, frame_width=W, frame_height=H)
+                     fps=fps / stride, frame_width=W, frame_height=H,
+                     # A videó-visszajátszáshoz: honnan játszható le a jelenet.
+                     video_path=str(video_path), start_frame=int(start),
+                     stride=int(stride))
     frames = []
     dropped = 0
     for t, (persons, ball_xy, panH) in enumerate(raw):
