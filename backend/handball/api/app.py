@@ -197,6 +197,9 @@ def create_app():
                     # az egyik térfél látszik): "full" | "left" | "right".
                     calib_region=body.get("calib_region", "full"),
                     calib_rotate=bool(body.get("calib_rotate", False)),
+                    # TÖBB kalibráció (pl. külön bal és jobb térfél, akár
+                    # külön képkockán): [{corners, region, rotate, frame}].
+                    calibs=body.get("calibs"),
                     start=int(body.get("start", 0)),
                     progress_cb=cb, match_id=match_id,
                     estimate=bool(body.get("estimate", True)),

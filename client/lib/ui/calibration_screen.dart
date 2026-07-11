@@ -47,6 +47,32 @@ class CalibrationResult {
   });
 }
 
+/// Egy vagy több kalibráció együtt: teljes pálya (1 bejegyzés), vagy KÜLÖN
+/// bal és jobb térfél (2 bejegyzés, akár különböző képkockán bejelölve) —
+/// a feldolgozás mindkettőt használja, a saját térfelén a pontosabbal.
+class CalibrationSet {
+  final List<CalibrationResult> items;
+  const CalibrationSet(this.items);
+
+  /// A feldolgozás kezdő képkockája: a legkorábbi kalibrált kocka.
+  int get startFrame =>
+      items.map((c) => c.startFrame).reduce((a, b) => a < b ? a : b);
+
+  /// Rövid, emberi leírás a feltöltő képernyő gombjára.
+  String get label {
+    if (items.length == 1) {
+      final c = items.first;
+      final area = switch (c.region) {
+        "left" => "bal térfél",
+        "right" => "jobb térfél",
+        _ => "teljes pálya",
+      };
+      return "$area${c.rotate ? ", forgatva" : ""}";
+    }
+    return "bal + jobb térfél";
+  }
+}
+
 class CalibrationScreen extends StatefulWidget {
   /// A feltöltött videó backend-oldali elérési útja (ebből tölti be a képkockát).
   /// Ha null, helyőrző jelenik meg a valódi kép helyett.
@@ -93,6 +119,11 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   String _region = "full"; // full | left | right
   // 180°-os forgatás: ha a kamera a túloldali lelátóról néz.
   bool _rotate = false;
+
+  // KÜLÖN elmentett bal/jobb térfél-kalibrációk (akár külön képkockán) —
+  // a Kész gombbal együtt kerülnek vissza a feltöltő képernyőre.
+  CalibrationResult? _savedLeft;
+  CalibrationResult? _savedRight;
 
   // A betöltött referencia-képkocka és eredeti mérete (a képpont-export miatt).
   Uint8List? _frameBytes;
@@ -359,42 +390,119 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             style: AppText.label.copyWith(fontSize: 11),
           ),
           const SizedBox(height: AppSpacing.md),
+          // Az elmentett térfél-kalibrációk állapota.
+          if (_savedLeft != null || _savedRight != null) ...[
+            Row(children: [
+              Icon(_savedLeft != null ? Icons.check_circle : Icons.circle_outlined,
+                  size: 15, color: _savedLeft != null ? AppColors.gold : AppColors.textFaint),
+              const SizedBox(width: 6),
+              Text(
+                  _savedLeft != null
+                      ? "Bal fél: mentve (${_savedLeft!.startFrame}. kocka)"
+                      : "Bal fél: nincs",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ]),
+            const SizedBox(height: 2),
+            Row(children: [
+              Icon(_savedRight != null ? Icons.check_circle : Icons.circle_outlined,
+                  size: 15, color: _savedRight != null ? AppColors.gold : AppColors.textFaint),
+              const SizedBox(width: 6),
+              Text(
+                  _savedRight != null
+                      ? "Jobb fél: mentve (${_savedRight!.startFrame}. kocka)"
+                      : "Jobb fél: nincs",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ]),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
             onPressed: _save,
             icon: const Icon(Icons.check),
-            label: Text(_saved ? "Kalibráció mentve" : "Kalibráció mentése"),
+            label: Text(switch (_region) {
+              "left" => "Bal térfél mentése",
+              "right" => "Jobb térfél mentése",
+              _ => _saved ? "Kalibráció mentve" : "Kalibráció mentése",
+            }),
           ),
+          // Térfél-kalibrációnál: visszatérés az elmentett felekkel.
+          if (_savedLeft != null || _savedRight != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+              onPressed: _finish,
+              icon: const Icon(Icons.done_all),
+              label: Text(_savedLeft != null && _savedRight != null
+                  ? "Kész (bal + jobb térfél)"
+                  : "Kész (1 térféllel)"),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  /// A normalizált sarkokat képpont-koordinátára váltja, a vágólapra is
-  /// másolja (CLI-hez), és VISSZAADJA a hívónak (a feltöltő képernyő ezt
-  /// küldi el a feldolgozásnak a területtel/forgatással együtt).
-  Future<void> _save() async {
+  /// Az aktuális beállítás (sarkok + terület + forgatás + képkocka) egy
+  /// CalibrationResult-tá alakítva, képpont-koordinátákkal.
+  CalibrationResult _currentResult() {
     final w = _frameSize?.width ?? 1920.0;
     final h = _frameSize?.height ?? 1080.0;
     // A vászon-koordinátából levonjuk a kép körüli sávot: a [margó..1-margó]
     // tartomány felel meg a képkockának. A sávba húzott pont képen KÍVÜLI
     // (negatív vagy W/H fölötti) képpontot ad — a homográfiának ez így jó.
     double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
-    final pixelCorners = [
-      for (final cn in _corners)
-        [(toImg(cn.dx) * w).round(), (toImg(cn.dy) * h).round()],
-    ];
-    // Egyszerű JSON kézzel (a --calib fájl [[x,y],...] alakot vár).
-    final json = "[${pixelCorners.map((p) => "[${p[0]},${p[1]}]").join(",")}]";
-    await Clipboard.setData(ClipboardData(text: json));
-    if (!mounted) return;
-    setState(() => _saved = true);
-    Navigator.of(context).pop(CalibrationResult(
-      corners: pixelCorners,
+    return CalibrationResult(
+      corners: [
+        for (final cn in _corners)
+          [(toImg(cn.dx) * w).round(), (toImg(cn.dy) * h).round()],
+      ],
       region: _region,
       rotate: _rotate,
       startFrame: _frameIdx,
-    ));
+    );
+  }
+
+  /// Mentés: teljes pályánál azonnal visszatér; térfélnél a bal/jobb HELYRE
+  /// menti el (így KÜLÖN kalibrálható a két térfél, akár külön képkockán),
+  /// és a Kész gombbal együtt kerülnek vissza a feltöltő képernyőre.
+  Future<void> _save() async {
+    final res = _currentResult();
+    // A vágólapra is (CLI-hez / hibakereséshez).
+    final json =
+        "[${res.corners.map((p) => "[${p[0]},${p[1]}]").join(",")}]";
+    await Clipboard.setData(ClipboardData(text: json));
+    if (!mounted) return;
+
+    if (_region == "full") {
+      setState(() => _saved = true);
+      Navigator.of(context).pop(CalibrationSet([res]));
+      return;
+    }
+    setState(() {
+      if (_region == "left") {
+        _savedLeft = res;
+      } else {
+        _savedRight = res;
+      }
+      _saved = true;
+    });
+    final other = _region == "left" ? "jobb" : "bal";
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("A(z) ${_region == "left" ? "bal" : "jobb"} térfél "
+            "elmentve. Jelölheted a $other térfelet is (léptethetsz másik "
+            "képkockára), vagy nyomd meg a Kész gombot.")));
+  }
+
+  /// Visszatérés az elmentett térfél-kalibrációkkal (1 vagy 2 bejegyzés).
+  void _finish() {
+    final items = [
+      // A korábbi képkockán lévő az első — a feldolgozás onnan indul.
+      if (_savedLeft != null) _savedLeft!,
+      if (_savedRight != null) _savedRight!,
+    ]..sort((a, b) => a.startFrame.compareTo(b.startFrame));
+    if (items.isEmpty) return;
+    Navigator.of(context).pop(CalibrationSet(items));
   }
 
   /// Kép-kicsinyítés/nagyítás: a sarkokat átszámoljuk, hogy a KÉPHEZ képesti
