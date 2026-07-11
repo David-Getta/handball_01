@@ -97,6 +97,16 @@ class ApiClient {
     }
   }
 
+  /// A meccs nyomtatható edzői jelentése HTML-ként (GET .../report/export).
+  Future<Uint8List> fetchMatchReportExport(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/report/export"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a jelentés: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// Felcseréli a két csapatot a meccsben (POST /matches/{id}/swap-teams) —
   /// ha a csapatszín-felismerés fordítva találta el, melyik szín a hazai.
   Future<void> swapTeams(String matchId) async {

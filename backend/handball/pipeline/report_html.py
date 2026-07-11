@@ -207,3 +207,178 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
 </body>
 </html>
 """
+
+
+# ---------------------------------------------------------------------------
+# MECCS-JELENTÉS — a teljes meccs egyoldalas, nyomtatható összefoglalója.
+# (A felderítő jelentés az ELLENFÉLRŐL szól; ez a meccsről magáról.)
+# ---------------------------------------------------------------------------
+
+def _fmt_clock(seconds: float) -> str:
+    """Másodperc → 'p:mm' játékóra-formátum (pl. 83.4 → '1:23')."""
+    m = int(seconds // 60)
+    s = int(seconds % 60)
+    return f"{m}:{s:02d}"
+
+
+def _phase_bars(phases: dict, home: str, away: str) -> str:
+    """A játékfázis-megoszlás sávjai (hazai támadás / vendég támadás / átmenet)."""
+    rows = []
+    for key, label, gold in [("home_attack", f"{home} támadás", False),
+                             ("away_attack", f"{away} támadás", False),
+                             ("transition", "Átmenet (fel-/visszarendeződés)", True)]:
+        pct = float(phases.get(key, 0.0))
+        cls = " gold" if gold else ""
+        rows.append(
+            f'<div class="bar-row"><span class="bar-label">{escape(label)}</span>'
+            f'<span class="bar"><span class="bar-fill{cls}" style="width:{pct:.0f}%"></span></span>'
+            f'<span class="bar-pct">{pct:.0f}%</span></div>')
+    return "".join(rows)
+
+
+def match_report_html(match, tactics: dict, events: list, quality: dict | None) -> str:
+    """A meccs egyoldalas edzői jelentése (önálló HTML; böngészőből PDF).
+
+    Bemenetek: a Match objektum + a taktikai profil (team_style_profile),
+    a felismert események (detect_events) és a minőség-önellenőrzés
+    (compute_quality_report, lehet None). Minden szakasz hiányzó adatnál is
+    értelmes szöveget ad — a jelentés sosem "törik el".
+    """
+    meta = match.meta
+    home, away = escape(meta.home_team), escape(meta.away_team)
+    fps = meta.fps if meta.fps > 0 else 25.0
+    dur_s = len(match.frames) / fps
+
+    # Esemény-összesítés csapatonként (gól/lövés/labdaeladás).
+    def _count(team_value: str, type_value: str) -> int:
+        n = 0
+        for e in events:
+            team = getattr(e.team, "value", e.team)
+            typ = getattr(e.type, "value", e.type)
+            if team == team_value and typ == type_value:
+                n += 1
+        return n
+
+    goals_h, goals_a = _count("home", "goal"), _count("away", "goal")
+    shots_h, shots_a = _count("home", "shot"), _count("away", "shot")
+    to_h, to_a = _count("home", "turnover"), _count("away", "turnover")
+
+    tempo = tactics.get("tempo", {}) if isinstance(tactics, dict) else {}
+    phases = tactics.get("phase_percentages", {}) if isinstance(tactics, dict) else {}
+    defense = tactics.get("defense_formations", {}) if isinstance(tactics, dict) else {}
+
+    metrics = "".join([
+        _metric("Elemzett játékidő", f"{dur_s / 60:.1f} perc"),
+        _metric("Támadások", str(tempo.get("possessions", "—"))),
+        _metric("Átl. támadáshossz", f"{tempo.get('avg_attack_duration_s', 0):.1f} s"),
+        _metric("Labda átlagsebesség", f"{tempo.get('avg_ball_speed_ms', 0):.1f} m/s"),
+        _metric("Átmenet-arány", f"{tempo.get('transition_pct', 0):.0f}%"),
+    ])
+
+    # Gól-idővonal: minden gól játékidővel, csapat szerint (a lényeg egy pillantásra).
+    goal_rows = []
+    for e in events:
+        typ = getattr(e.type, "value", e.type)
+        if typ != "goal":
+            continue
+        team = getattr(e.team, "value", e.team)
+        name = meta.home_team if team == "home" else meta.away_team
+        goal_rows.append(
+            f"<li><b>{_fmt_clock(e.t / fps)}</b> — GÓL · {escape(name)}</li>")
+    goals_html = ("<ul>" + "".join(goal_rows) + "</ul>") if goal_rows else \
+        '<p class="empty">Nincs felismert gól az elemzett szakaszban.</p>'
+
+    # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
+    q_html = ""
+    if quality:
+        warns = quality.get("warnings") or []
+        w_html = ("<ul>" + "".join(f"<li>{escape(str(w))}</li>" for w in warns) + "</ul>") \
+            if warns else '<p class="note">Nincs figyelmeztetés — az elemzés megbízható.</p>'
+        ball_cov = "{:.0f}%".format(quality.get("ball_coverage_pct", 0))
+        measured = "{:.1f}".format(quality.get("avg_measured_players", 0))
+        q_html = ('<h2>Elemzés megbízhatósága</h2><div class="metrics">'
+                  + _metric("Minőség-pontszám", str(quality.get("score", "—")) + "/100")
+                  + _metric("Labda-lefedettség", ball_cov)
+                  + _metric("Mért játékos/kocka", measured)
+                  + "</div>" + w_html)
+
+    return f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Meccsjelentés — {home} vs {away}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+         color: #101722; background: #fff; line-height: 1.5; }}
+  .page {{ max-width: 800px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px; margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+        color: #12988a; margin: 26px 0 10px; }}
+  ul {{ margin: 0; padding-left: 20px; }}
+  li {{ margin: 4px 0; font-size: 13.5px; }}
+  p.empty {{ color: #8492A6; font-size: 12.5px; }}
+  p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
+  .metrics {{ display: flex; flex-wrap: wrap; gap: 14px 26px; }}
+  .metric .mv {{ font-size: 20px; font-weight: 700; color: #12988a; }}
+  .metric .ml {{ font-size: 11px; color: #4A5768; }}
+  .bar-row {{ display: flex; align-items: center; gap: 10px; margin: 5px 0; font-size: 13px; }}
+  .bar-label {{ width: 210px; font-weight: 600; }}
+  .bar {{ flex: 1; height: 9px; background: #edf1f6; border-radius: 5px; overflow: hidden; }}
+  .bar-fill {{ display: block; height: 100%; background: #12988a; border-radius: 5px; }}
+  .bar-fill.gold {{ background: #9d7526; }}
+  .bar-pct {{ width: 42px; text-align: right; color: #4A5768; font-size: 12px; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+  th, td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid #e4e9f0; }}
+  th {{ font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #4A5768; }}
+  .num {{ text-align: right; }}
+  footer {{ margin-top: 34px; padding-top: 12px; border-top: 1px solid #e4e9f0;
+            color: #8492A6; font-size: 11px; display: flex; justify-content: space-between; }}
+  @media print {{ .page {{ padding: 0; max-width: none; }} }}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="brand">Sport Machine · Meccsjelentés</div>
+    <h1>{home} <span style="color:#8492A6">vs</span> {away}</h1>
+    <div class="sub">Elemzett szakasz: {dur_s / 60:.1f} perc · felismert gólok: {goals_h}–{goals_a}</div>
+  </header>
+
+  <h2>Mutatók</h2>
+  <div class="metrics">{metrics}</div>
+
+  <h2>Esemény-összesítő</h2>
+  <table>
+    <tr><th></th><th class="num">{home}</th><th class="num">{away}</th></tr>
+    <tr><td>Gól</td><td class="num"><b>{goals_h}</b></td><td class="num"><b>{goals_a}</b></td></tr>
+    <tr><td>Lövés</td><td class="num">{shots_h}</td><td class="num">{shots_a}</td></tr>
+    <tr><td>Labdaeladás</td><td class="num">{to_h}</td><td class="num">{to_a}</td></tr>
+  </table>
+
+  <h2>Játékfázisok</h2>
+  {_phase_bars(phases, meta.home_team, meta.away_team)}
+
+  <h2>Védekezési formák</h2>
+  <table>
+    <tr><th>Csapat</th><th>Leggyakoribb védekezés</th></tr>
+    <tr><td>{home}</td><td><b>{escape(str(defense.get('home', '—')))}</b></td></tr>
+    <tr><td>{away}</td><td><b>{escape(str(defense.get('away', '—')))}</b></td></tr>
+  </table>
+
+  <h2>Gól-idővonal</h2>
+  {goals_html}
+
+  {q_html}
+
+  <footer>
+    <span>Készült a Sport Machine kézilabda-elemzővel</span>
+    <span>Nyomtatás: Ctrl+P / ⌘P → Mentés PDF-ként</span>
+  </footer>
+</div>
+</body>
+</html>
+"""

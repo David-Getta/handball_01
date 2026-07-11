@@ -168,9 +168,12 @@ class _UploadScreenState extends State<UploadScreen> {
         homeTeam: _homeCtrl.text.trim(),
         awayTeam: _awayCtrl.text.trim(),
         // A kalibráció (ha elkészült): pontos pálya-koordináta + szűrés.
+        // A feldolgozás a kalibrált képkockától indul (a pásztázás-követés
+        // ehhez az álláshoz igazít).
         calib: _calib?.corners,
         calibRegion: _calib?.region,
         calibRotate: _calib?.rotate ?? false,
+        start: _calib?.startFrame ?? 0,
       );
       _jobId = r["job_id"] as String;
       _matchId = r["match_id"] as String?;

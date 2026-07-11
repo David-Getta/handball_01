@@ -434,6 +434,28 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return team_style_profile(match)
 
+    @app.get("/matches/{match_id}/report/export")
+    def export_match_report(match_id: str):
+        """A meccs egyoldalas edzői jelentése NYOMTATHATÓ HTML-ként.
+
+        Tartalma: mutatók, esemény-összesítő (gól/lövés/labdaeladás),
+        játékfázisok, védekezési formák, gól-idővonal, minőség-önellenőrzés.
+        Böngészőben megnyitva Ctrl+P/⌘P → PDF."""
+        from fastapi import Response
+        from ..pipeline.report_html import match_report_html
+        from ..pipeline.quality import compute_quality_report
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        tactics = team_style_profile(match)
+        events = detect_events(match)
+        try:
+            quality = compute_quality_report(match)
+        except Exception:
+            quality = None  # a jelentés minőség-szakasz nélkül is teljes
+        html = match_report_html(match, tactics, events, quality)
+        return Response(content=html, media_type="text/html; charset=utf-8")
+
     @app.get("/matches/{match_id}/scouting")
     def get_scouting(match_id: str, team: str = "away"):
         """Ellenfél-felderítő jelentés a megadott csapatról EGY meccsből.
