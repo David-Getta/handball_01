@@ -124,6 +124,29 @@ class ApiClient {
     }
   }
 
+  /// Az edző figurájának szimulációja egy meccsből TANULT védelem ellen
+  /// (POST /matches/{id}/simulate-setplay). A szerver a `defending` csapat
+  /// védekezését tanulja meg a meccsből, és az ellen játssza le a figurát.
+  /// Visszaadja a szimulált Tracking-et (Match-ként parse-olható "tracking").
+  Future<Map<String, dynamic>> simulateSetplayVsMatch(
+    String matchId, {
+    required List<List<List<double>>> attackers,
+    required List<int> ballCarrier,
+    String defending = "away",
+  }) async {
+    final uri = Uri.parse("$baseUrl/matches/$matchId/simulate-setplay")
+        .replace(queryParameters: {"defending": defending});
+    final resp = await http.post(
+      uri,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"attackers": attackers, "ball_carrier": ballCarrier}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a szimuláció: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Játékos-statisztika CSV-ben (GET .../stats/export) — Excel-barát.
   Future<Uint8List> fetchStatsCsv(String matchId) async {
     final resp =

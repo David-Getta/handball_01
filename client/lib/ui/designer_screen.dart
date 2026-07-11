@@ -142,6 +142,136 @@ class _DesignerScreenState extends State<DesignerScreen> {
     });
   }
 
+  /// A figura lejátszása egy VALÓDI meccsből tanult védelem ellen: az edző
+  /// kiválasztja a meccset és a védekező oldalt, a szerver megtanulja a
+  /// védekezésüket, és az ellen szimulálja a figurát.
+  Future<void> _playVsLearned() async {
+    List<Map<String, dynamic>> matches;
+    try {
+      matches = await _api.listMatches();
+    } catch (_) {
+      matches = [];
+    }
+    if (!mounted) return;
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Nincs elemzett meccs a könyvtárban — előbb dolgozz "
+              "fel egy videót (vagy készíts demó meccset).")));
+      return;
+    }
+
+    String? matchId = matches.first["match_id"] as String;
+    String side = "away";
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Melyik csapat védelme ellen?"),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "A rendszer a kiválasztott meccsből MEGTANULJA a védekező "
+                  "csapat stílusát, és az ellen játssza le a figurádat.",
+                  style: AppText.label.copyWith(fontSize: 12),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(children: [
+                      for (final m in matches)
+                        RadioListTile<String>(
+                          dense: true,
+                          activeColor: AppColors.gold,
+                          title: Text(
+                            "${m["home_team"]} vs ${m["away_team"]}",
+                            style: AppText.value.copyWith(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          value: m["match_id"] as String,
+                          groupValue: matchId,
+                          onChanged: (v) => setDlg(() => matchId = v),
+                        ),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                  segments: const [
+                    ButtonSegment(value: "home", label: Text("Hazai véd")),
+                    ButtonSegment(value: "away", label: Text("Vendég véd")),
+                  ],
+                  selected: {side},
+                  onSelectionChanged: (s) => setDlg(() => side = s.first),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Szimuláció"),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || matchId == null || !mounted) return;
+
+    // A kulcs-pozíciókból interpolált útvonalak (mint a helyi lejátszásnál).
+    final attackers = <List<List<double>>>[];
+    for (final a in _attackers) {
+      final path = <List<double>>[];
+      for (int s = 0; s < _animSteps; s++) {
+        final t = s / (_animSteps - 1);
+        final p = _sample(a, t);
+        path.add([p.dx, p.dy]);
+      }
+      attackers.add(path);
+    }
+    try {
+      final resp = await _api.simulateSetplayVsMatch(
+        matchId!,
+        attackers: attackers,
+        ballCarrier: List<int>.filled(_animSteps, 0),
+        defending: side,
+      );
+      final sim = Match.fromJson(resp["tracking"] as Map<String, dynamic>);
+      final eval = evaluateSetPlay(sim);
+      if (!mounted) return;
+      setState(() {
+        _sim = sim;
+        _eval = eval;
+        _playing = true;
+        _playIndex = 0;
+      });
+      _timer?.cancel();
+      final steps = sim.frames.length;
+      _timer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+        setState(() {
+          if (_playIndex < steps - 1) {
+            _playIndex++;
+          } else {
+            _timer?.cancel();
+          }
+        });
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Szimulációs hiba: $e")));
+    }
+  }
+
   void _backToEdit() {
     _timer?.cancel();
     setState(() {
@@ -420,12 +550,23 @@ class _DesignerScreenState extends State<DesignerScreen> {
                   icon: const Icon(Icons.edit),
                   label: const Text("Vissza a szerkesztéshez"),
                 )
-              : FilledButton.icon(
-                  onPressed: _play,
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: const Color(0xFF06231F)),
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text("Lejátszás a védelem ellen"),
-                ),
+              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  FilledButton.icon(
+                    onPressed: _play,
+                    style: FilledButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: const Color(0xFF06231F)),
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text("Lejátszás a védelem ellen"),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // A VALÓDI, meccsből tanult védelem ellen (könyvtárból).
+                  FilledButton.icon(
+                    onPressed: _playVsLearned,
+                    style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.gold, foregroundColor: AppColors.onAccent),
+                    icon: const Icon(Icons.psychology_outlined),
+                    label: const Text("Egy CSAPAT tanult védelme ellen"),
+                  ),
+                ]),
         ],
       ),
     );
