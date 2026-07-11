@@ -123,6 +123,7 @@ class _UploadScreenState extends State<UploadScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Feltöltve: ${saved["filename"]} (${_mb(saved["size"])})")),
       );
+      _loadSavedCalibration(saved["path"] as String);
     } catch (e) {
       if (!mounted) return;
       setState(() => _uploading = false);
@@ -135,6 +136,48 @@ class _UploadScreenState extends State<UploadScreen> {
   String _mb(Object? bytes) {
     final b = (bytes is num) ? bytes.toDouble() : 0.0;
     return "${(b / (1024 * 1024)).toStringAsFixed(1)} MB";
+  }
+
+  /// A kalibrációk hálózati (JSON) alakja — mentéshez és feldolgozáshoz.
+  List<Map<String, dynamic>> _calibMaps(CalibrationSet set) => [
+        for (final c in set.items)
+          {
+            "corners": c.corners,
+            "region": c.region,
+            "rotate": c.rotate,
+            "frame": c.startFrame,
+          },
+      ];
+
+  /// A videóhoz korábban ELMENTETT kalibráció betöltése (ha van) — a gomb
+  /// azonnal "kész" állapotot mutat, és a feldolgozás használja.
+  Future<void> _loadSavedCalibration(String path) async {
+    try {
+      final maps = await _api.fetchCalibration(path);
+      final items = <CalibrationResult>[];
+      for (final m in maps) {
+        final raw = (m["corners"] as List?) ?? const [];
+        final corners = [
+          for (final p in raw)
+            if (p is List && p.length >= 2)
+              [(p[0] as num).toInt(), (p[1] as num).toInt()],
+        ];
+        if (corners.length != 4) continue;
+        items.add(CalibrationResult(
+          corners: corners,
+          region: (m["region"] as String?) ?? "full",
+          rotate: (m["rotate"] as bool?) ?? false,
+          startFrame: (m["frame"] as num?)?.toInt() ?? 0,
+        ));
+      }
+      if (items.isEmpty || !mounted) return;
+      setState(() => _calib = CalibrationSet(items));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              "Elmentett kalibráció betöltve (${_calib!.label}) — nem kell újra bejelölni.")));
+    } catch (_) {
+      // nincs mentett kalibráció / nem elérhető — csendben megyünk tovább
+    }
   }
 
   /// Elindítja a feldolgozást a megadott videó-úton, majd időzítővel lekérdezi
@@ -172,17 +215,7 @@ class _UploadScreenState extends State<UploadScreen> {
         // A feldolgozás a legkorábbi kalibrált képkockától indul (a
         // pásztázás-követés ehhez igazít; a második térfél-kalibrációt a
         // szerver a pásztázás-mátrixszal vezeti vissza az alap-kockára).
-        calibs: _calib == null
-            ? null
-            : [
-                for (final c in _calib!.items)
-                  {
-                    "corners": c.corners,
-                    "region": c.region,
-                    "rotate": c.rotate,
-                    "frame": c.startFrame,
-                  },
-              ],
+        calibs: _calib == null ? null : _calibMaps(_calib!),
         start: _calib?.startFrame ?? 0,
       );
       _jobId = r["job_id"] as String;
@@ -309,7 +342,14 @@ class _UploadScreenState extends State<UploadScreen> {
                     ),
                   ),
                 );
-                if (res != null && mounted) setState(() => _calib = res);
+                if (res != null && mounted) {
+                  setState(() => _calib = res);
+                  // A kalibrációt a videóhoz is elmentjük — újrafeldolgozásnál
+                  // (vagy az app újraindítása után) nem kell újra bejelölni.
+                  try {
+                    await _api.saveCalibration(path, _calibMaps(res));
+                  } catch (_) {}
+                }
               },
               style: OutlinedButton.styleFrom(
                 foregroundColor: _calib != null ? AppColors.gold : AppColors.accent,

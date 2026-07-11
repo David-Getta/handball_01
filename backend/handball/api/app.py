@@ -305,6 +305,41 @@ def create_app():
         _put_match(match)  # memóriába + lemezre (perzisztencia)
         return {"match_id": match_id, "swapped": True}
 
+    def _calibration_path(video_path: str) -> Path:
+        """A videóhoz tartozó kalibráció-fájl (kulcs: a videó fájlneve)."""
+        import re
+        base = re.sub(r"[^A-Za-z0-9._-]", "_", Path(video_path).name) or "video"
+        d = data_root() / "data" / "calibrations"
+        d.mkdir(parents=True, exist_ok=True)
+        return d / f"{base}.json"
+
+    @app.get("/calibration")
+    def get_calibration(path: str):
+        """A videóhoz ELMENTETT kalibrációk — újrafeldolgozásnál (vagy az app
+        újraindítása után) nem kell újra bejelölni a sarkokat.
+        Válasz: {"calibs": [{corners, region, rotate, frame}, ...]} (lehet üres)."""
+        f = _calibration_path(path)
+        if f.exists():
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(d.get("calibs"), list):
+                    return {"calibs": d["calibs"]}
+            except Exception:
+                pass
+        return {"calibs": []}
+
+    @app.post("/calibration")
+    def save_calibration(body: dict):
+        """Kalibrációk mentése a videóhoz. Törzs: {"path": ..., "calibs": [...]}."""
+        path = body.get("path")
+        if not path:
+            raise HTTPException(status_code=400, detail="path required")
+        calibs = body.get("calibs") or []
+        _calibration_path(path).write_text(
+            json.dumps({"calibs": calibs}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return {"saved": len(calibs)}
+
     def _roster_path(match_id: str) -> Path:
         import re
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"

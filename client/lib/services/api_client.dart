@@ -97,6 +97,33 @@ class ApiClient {
     }
   }
 
+  /// A videóhoz ELMENTETT kalibrációk (GET /calibration) — üres lista, ha nincs.
+  Future<List<Map<String, dynamic>>> fetchCalibration(String videoPath) async {
+    final uri = Uri.parse("$baseUrl/calibration")
+        .replace(queryParameters: {"path": videoPath});
+    final resp = await http.get(uri).timeout(const Duration(seconds: 4));
+    if (resp.statusCode != 200) return const [];
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((json["calibs"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+  }
+
+  /// Kalibrációk mentése a videóhoz (POST /calibration) — újrafeldolgozásnál
+  /// nem kell újra bejelölni.
+  Future<void> saveCalibration(
+      String videoPath, List<Map<String, dynamic>> calibs) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/calibration"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"path": videoPath, "calibs": calibs}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a kalibráció mentése: HTTP ${resp.statusCode}");
+    }
+  }
+
   /// A meccs nyomtatható edzői jelentése HTML-ként (GET .../report/export).
   Future<Uint8List> fetchMatchReportExport(String matchId) async {
     final resp =
