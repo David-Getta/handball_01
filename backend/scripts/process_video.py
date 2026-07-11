@@ -100,19 +100,35 @@ def _resolve_weights(weights):
     return weights
 
 
+def _pick_device():
+    """A leggyorsabb elérhető inferencia-eszköz: CUDA (NVIDIA) → MPS (Apple
+    Silicon GPU-ja, M1..M5) → CPU. Az MPS a Macen többszörös gyorsulást ad."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        mps = getattr(getattr(torch, "backends", None), "mps", None)
+        if mps is not None and mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None, pan=False):
+    import os
+    # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
+    # hiba helyett. A torch importja ELŐTT kell beállítani.
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     import numpy as np
     import cv2
     from ultralytics import YOLO
     model = YOLO(_resolve_weights(weights))
-    # Eszköz-napló: GPU-n nagyságrenddel gyorsabb — a pilotnál ez a sebesség kulcsa.
-    try:
-        import torch
-        dev = "CUDA (GPU)" if torch.cuda.is_available() else "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"
-        print(f"inferencia-eszköz: {dev}")
-    except Exception:
-        pass
+    device = _pick_device()
+    labels = {"cuda": "CUDA (NVIDIA GPU)", "mps": "MPS (Apple Silicon GPU)",
+              "cpu": "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"}
+    print(f"inferencia-eszköz: {labels[device]}")
     poly = np.array(court_poly, np.int32) if court_poly else None
     # Pásztázás-követés: a kamera mozgását becsüljük, hogy a kalibráció a
     # pásztázás közben is érvényes maradjon (aktuális → alap képkocka mátrix).
@@ -126,7 +142,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     # ne jöjjenek téves emberek. Így egy inferencia/frame (kétszer gyorsabb).
     # A `start` a bevezető (sötét) rész átugrására: csak innen dolgozunk fel.
     results = model.track(source=video_path, stream=True, persist=True,
-                          classes=[0, 32], imgsz=1920, conf=0.05,
+                          classes=[0, 32], imgsz=1920, conf=0.05, device=device,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
     kept = 0
     skipped_dark = 0
