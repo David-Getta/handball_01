@@ -35,10 +35,15 @@ class CalibrationResult {
   /// 180°-os forgatás (a kamera a túloldalról néz).
   final bool rotate;
 
+  /// A referencia-képkocka indexe — a feldolgozásnak ETTŐL a képkockától kell
+  /// indulnia, mert a pásztázás-követés ehhez az álláshoz igazítja a kamerát.
+  final int startFrame;
+
   const CalibrationResult({
     required this.corners,
     required this.region,
     required this.rotate,
+    required this.startFrame,
   });
 }
 
@@ -64,12 +69,22 @@ class CalibrationScreen extends StatefulWidget {
   State<CalibrationScreen> createState() => _CalibrationScreenState();
 }
 
+// A képkocka körüli sáv aránya: a sarok-pontok a képen KÍVÜLRE is húzhatók
+// (pl. ha a kamerához közeli pályaszél kilóg a képből). A vászon 0..1
+// koordinátáiból a [margó .. 1-margó] tartomány a tényleges képkocka.
+const double _kViewMargin = 0.12;
+
 class _CalibrationScreenState extends State<CalibrationScreen> {
-  // A 4 sarok a kép-területen belül, arányban (0..1), hogy méretfüggetlen legyen.
+  // A 4 sarok a VÁSZON területén, arányban (0..1) — a kép a vászon közepén ül,
+  // körülötte sáv, így a pontok a képen kívülre is tehetők.
   // Sorrend: távoli-bal, távoli-jobb, közeli-jobb, közeli-bal.
   List<Offset> _corners = const [
-    Offset(0.20, 0.35), Offset(0.75, 0.32), Offset(0.90, 0.72), Offset(0.10, 0.78),
+    Offset(0.25, 0.40), Offset(0.75, 0.38), Offset(0.85, 0.75), Offset(0.15, 0.80),
   ];
+
+  // Az aktuális referencia-képkocka indexe — léptethető, hogy olyan állást
+  // válassz, ahol a bejelölendő terület a legjobban látszik.
+  late int _frameIdx = widget.frameIndex;
   int? _drag;
   bool _saved = false;
 
@@ -97,7 +112,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     setState(() => _loading = true);
     try {
       final api = ApiClient(baseUrl: widget.baseUrl);
-      final bytes = await api.fetchReferenceFrame(widget.videoPath!, t: widget.frameIndex);
+      final bytes = await api.fetchReferenceFrame(widget.videoPath!, t: _frameIdx);
       final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       final img = frame.image;
@@ -128,7 +143,10 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         children: [
           Text("Pálya-kalibráció", style: AppText.title),
           const SizedBox(height: 4),
-          Text("Húzd a 4 sarkot a pálya sarkaira — a modell élőben illeszkedik.", style: AppText.subtitle),
+          Text(
+              "Húzd a 4 sarkot a pálya sarkaira — a kép KÖRÜLI sávba is húzhatod, "
+              "ha a pálya széle kilóg a képből. A képkocka léptethető.",
+              style: AppText.subtitle),
           const SizedBox(height: AppSpacing.lg),
           Expanded(
             child: Row(
@@ -174,15 +192,21 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
               });
             },
             onPanEnd: (_) => _drag = null,
-            // A valódi képkocka a sarkok ALATT (BoxFit.fill: a 0..1 arány közvetlenül
-            // az eredeti képkocka arányára képződik le → tiszta képpont-export).
+            // A valódi képkocka a sarkok ALATT, a vászon közepén, körülötte
+            // sávval — így a pontok a képen KÍVÜLRE is húzhatók (pl. ha a
+            // közeli pályaszél kilóg a képből). Exportnál a sávot levonjuk.
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (_frameBytes != null)
-                  Image.memory(_frameBytes!, fit: BoxFit.fill, gaplessPlayback: true)
-                else
-                  _placeholder(),
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: size.width * _kViewMargin,
+                    vertical: size.height * _kViewMargin,
+                  ),
+                  child: _frameBytes != null
+                      ? Image.memory(_frameBytes!, fit: BoxFit.fill, gaplessPlayback: true)
+                      : _placeholder(),
+                ),
                 CustomPaint(
                   painter: _CalibPainter(pts,
                       region: _region,
@@ -222,6 +246,27 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text("KÉPKOCKA", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          // Léptetés a videóban: válassz olyan képkockát, ahol a bejelölendő
+          // terület a LEGJOBBAN látszik. A feldolgozás ettől a kockától indul,
+          // a pásztázás-követés innen követi a kamerát a többi állásra.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _stepBtn("−30s", -750),
+              _stepBtn("−5s", -125),
+              _stepBtn("+5s", 125),
+              _stepBtn("+30s", 750),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "~${(_frameIdx / 25).round()} mp ($_frameIdx. kocka) — a feldolgozás "
+            "innen indul",
+            style: AppText.label.copyWith(fontSize: 11),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Text("TERÜLET", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           // Ha csak az egyik térfél látszik a képen, a 4 pontot a TÉRFÉL
@@ -302,8 +347,13 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   Future<void> _save() async {
     final w = _frameSize?.width ?? 1920.0;
     final h = _frameSize?.height ?? 1080.0;
+    // A vászon-koordinátából levonjuk a kép körüli sávot: a [margó..1-margó]
+    // tartomány felel meg a képkockának. A sávba húzott pont képen KÍVÜLI
+    // (negatív vagy W/H fölötti) képpontot ad — a homográfiának ez így jó.
+    double toImg(double v) => (v - _kViewMargin) / (1 - 2 * _kViewMargin);
     final pixelCorners = [
-      for (final cn in _corners) [(cn.dx * w).round(), (cn.dy * h).round()],
+      for (final cn in _corners)
+        [(toImg(cn.dx) * w).round(), (toImg(cn.dy) * h).round()],
     ];
     // Egyszerű JSON kézzel (a --calib fájl [[x,y],...] alakot vár).
     final json = "[${pixelCorners.map((p) => "[${p[0]},${p[1]}]").join(",")}]";
@@ -314,8 +364,27 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       corners: pixelCorners,
       region: _region,
       rotate: _rotate,
+      startFrame: _frameIdx,
     ));
   }
+
+  /// Léptető gomb a referencia-képkockához (a delta 25 fps-sel számolt kocka).
+  Widget _stepBtn(String label, int delta) => OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          foregroundColor: AppColors.textSecondary,
+          side: const BorderSide(color: AppColors.borderStrong),
+        ),
+        onPressed: () {
+          setState(() {
+            _frameIdx = (_frameIdx + delta).clamp(0, 1 << 20);
+            _saved = false;
+          });
+          _loadReferenceFrame();
+        },
+        child: Text(label, style: const TextStyle(fontSize: 11)),
+      );
 
   Widget _cornerRow(String name, int i) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -345,6 +414,17 @@ class _CalibPainter extends CustomPainter {
     if (drawBackground) {
       canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF0C1119));
     }
+
+    // A képkocka széle (a körülötte lévő sávban a pontok képen KÍVÜLI
+    // helyet jelölnek — pl. a levágott közeli pályaszélet).
+    canvas.drawRect(
+      Rect.fromLTRB(_kViewMargin * size.width, _kViewMargin * size.height,
+          (1 - _kViewMargin) * size.width, (1 - _kViewMargin) * size.height),
+      Paint()
+        ..color = const Color(0x668492A6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
 
     // A kijelölt terület (teljes pálya vagy térfél) sarkai méterben.
     final (x0, x1) = switch (region) {

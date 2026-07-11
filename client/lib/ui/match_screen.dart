@@ -5,6 +5,9 @@
 library;
 
 import "dart:async";
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../analytics/court_analytics.dart";
@@ -338,9 +341,41 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.swap_horiz, color: AppColors.textSecondary),
           tooltip: "Csapatok felcserélése (ha a színek fordítva vannak)",
         ),
+        // Egyoldalas edzői meccsjelentés mentése (HTML → böngészőből PDF).
+        IconButton(
+          onPressed: _sourceLabel == "demó" ? null : _exportReport,
+          icon: const Icon(Icons.description_outlined, color: AppColors.textSecondary),
+          tooltip: "Meccsjelentés mentése (nyomtatható)",
+        ),
         IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppColors.textSecondary)),
       ],
     );
+  }
+
+  /// Meccsjelentés mentése: nyomtatható HTML (böngészőből Ctrl+P/⌘P → PDF).
+  Future<void> _exportReport() async {
+    final match = _match;
+    if (match == null) return;
+    try {
+      final bytes = await _api.fetchMatchReportExport(widget.matchId);
+      final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Meccsjelentés mentése",
+        fileName: "meccsjelentes_$name.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Jelentés mentve: $path — böngészőből ⌘P → PDF")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Jelentés-hiba: $e")));
+    }
   }
 
   /// Csapatok felcserélése — ha a színfelismerés fordítva osztotta ki, melyik
