@@ -164,6 +164,68 @@ List<(double, double, double)> _speedSegments(
   return out;
 }
 
+/// Egy idő-ablak intenzitása: a két csapat átlagos mozgás-sebessége (m/s).
+class IntensityWindow {
+  final int startFrame; // az ablak kezdete (tracking-frame)
+  final double homeAvgMs;
+  final double awayAvgMs;
+  const IntensityWindow(this.startFrame, this.homeAvgMs, this.awayAvgMs);
+}
+
+/// Intenzitás-idővonal: a meccset idő-ablakokra bontva csapatonként az
+/// átlagos mozgás-sebesség — ebből látszik, mikor esett vissza a tempó
+/// (fáradás, letámadás hatása). Csak MÉRT, hihető szakaszokból számol,
+/// mint a játékos-statisztika.
+List<IntensityWindow> computeIntensityTimeline(Match match,
+    {double windowS = 300.0}) {
+  final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+  final dt = 1.0 / fps;
+  final total = match.frames.length;
+  if (total < 2) return const [];
+  // Rövid felvételnél kisebb ablak, hogy legyen legalább ~6 pont.
+  final durS = total / fps;
+  final winS = durS / windowS < 6 ? (durS / 6).clamp(5.0, windowS) : windowS;
+  final winFrames = (winS * fps).round().clamp(1, total);
+  final nWin = (total / winFrames).ceil();
+
+  // ablak-index × csapat → (össz-táv, össz-idő)
+  final dist = List.generate(nWin, (_) => [0.0, 0.0]);
+  final time = List.generate(nWin, (_) => [0.0, 0.0]);
+
+  // track_id -> időrendi (t, pozíció) minták — mint a játékos-statisztikánál.
+  final samples = <int, List<(int, PlayerPosition)>>{};
+  for (final f in match.frames) {
+    for (final p in f.players) {
+      if (p.isEstimated) continue;
+      samples.putIfAbsent(p.trackId, () => []).add((f.t, p));
+    }
+  }
+  samples.forEach((_, pts) {
+    for (var i = 1; i < pts.length; i++) {
+      final gap = pts[i].$1 - pts[i - 1].$1;
+      if (gap <= 0 || gap > 3) continue; // lyuk — nem hidaljuk át
+      final seconds = gap * dt;
+      final d = math.sqrt(
+          math.pow(pts[i].$2.x - pts[i - 1].$2.x, 2) +
+              math.pow(pts[i].$2.y - pts[i - 1].$2.y, 2));
+      if (d / seconds > maxPlausibleMs) continue; // követési hiba
+      final w = (pts[i - 1].$1 ~/ winFrames).clamp(0, nWin - 1);
+      final ti = pts[i].$2.team == Team.home ? 0 : 1;
+      dist[w][ti] += d;
+      time[w][ti] += seconds;
+    }
+  });
+
+  return [
+    for (var w = 0; w < nWin; w++)
+      IntensityWindow(
+        w * winFrames,
+        time[w][0] > 0 ? dist[w][0] / time[w][0] : 0.0,
+        time[w][1] > 0 ? dist[w][1] / time[w][1] : 0.0,
+      )
+  ];
+}
+
 /// Hőtérkép: a pályát rácsra osztva, cellánként a látogatottság.
 class Heatmap {
   final int binsX;

@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from ..models.tracking import Match, PositionSource
+from ..models.tracking import Match, PositionSource, Team
 
 
 @dataclass
@@ -153,3 +153,56 @@ def compute_player_stats(match: Match) -> dict[int, PlayerStats]:
         _sprint_and_zones(stats, _speed_segments(samples, dt))
         result[track_id] = stats
     return result
+
+
+def compute_intensity_timeline(match: Match, window_s: float = 300.0) -> list[dict]:
+    """Intenzitás-idővonal: a meccset idő-ablakokra bontva csapatonként az
+    átlagos mozgás-sebesség (m/s) — ebből látszik, mikor esett vissza a
+    tempó (fáradás, letámadás hatása). A kliens court_analytics tükre.
+
+    Csak MÉRT, hihető (<= MAX_PLAUSIBLE_MS) szakaszokból számol, legfeljebb
+    3 kockányi lyukat áthidalva — mint a játékos-statisztika. Rövid
+    felvételnél az ablak zsugorodik, hogy legalább ~6 pont legyen.
+
+    Visszatérés: [{"start_frame", "home_avg_ms", "away_avg_ms"}, ...]
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dt = 1.0 / fps
+    total = len(match.frames)
+    if total < 2:
+        return []
+    dur_s = total / fps
+    win_s = min(window_s, max(5.0, dur_s / 6)) if dur_s / window_s < 6 else window_s
+    win_frames = max(1, min(total, round(win_s * fps)))
+    n_win = (total + win_frames - 1) // win_frames
+
+    dist = [[0.0, 0.0] for _ in range(n_win)]
+    time_ = [[0.0, 0.0] for _ in range(n_win)]
+
+    by_player: dict[int, list] = {}
+    for frame in match.frames:
+        for p in frame.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            by_player.setdefault(p.track_id, []).append((frame.t, p.x, p.y, p.team))
+    for samples in by_player.values():
+        samples.sort(key=lambda s: s[0])
+        for (a, b) in zip(samples, samples[1:]):
+            gap = b[0] - a[0]
+            if gap <= 0 or gap > 3:
+                continue
+            seconds = gap * dt
+            d = math.hypot(b[1] - a[1], b[2] - a[2])
+            if d / seconds > MAX_PLAUSIBLE_MS:
+                continue
+            w = min(n_win - 1, a[0] // win_frames)
+            ti = 0 if b[3] == Team.HOME else 1
+            dist[w][ti] += d
+            time_[w][ti] += seconds
+
+    return [
+        {"start_frame": w * win_frames,
+         "home_avg_ms": round(dist[w][0] / time_[w][0], 3) if time_[w][0] > 0 else 0.0,
+         "away_avg_ms": round(dist[w][1] / time_[w][1], 3) if time_[w][1] > 0 else 0.0}
+        for w in range(n_win)
+    ]

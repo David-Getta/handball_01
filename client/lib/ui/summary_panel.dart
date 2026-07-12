@@ -3,9 +3,11 @@ library;
 
 import "package:flutter/material.dart";
 
+import "../analytics/court_analytics.dart";
 import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
 import "../theme/app_theme.dart";
+import "intensity_chart.dart";
 import "score_chart.dart";
 
 class SummaryPanel extends StatelessWidget {
@@ -19,6 +21,9 @@ class SummaryPanel extends StatelessWidget {
   final double fps;
   final void Function(int frame)? onSeekFrame;
 
+  /// Intenzitás-ablakok a tempó-grafikonhoz (2-nél kevesebbnél nincs grafikon).
+  final List<IntensityWindow> intensity;
+
   const SummaryPanel({
     super.key,
     required this.summary,
@@ -28,6 +33,7 @@ class SummaryPanel extends StatelessWidget {
     this.totalFrames = 0,
     this.fps = 25.0,
     this.onSeekFrame,
+    this.intensity = const [],
   });
 
   @override
@@ -40,6 +46,19 @@ class SummaryPanel extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           ScoreChart(
             goals: goals,
+            totalFrames: totalFrames,
+            fps: fps,
+            homeName: homeName,
+            awayName: awayName,
+            onSeekFrame: onSeekFrame,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
+        if (intensity.length >= 2) ...[
+          Text("TEMPÓ-ALAKULÁS (FÁRADÁS)", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          IntensityChart(
+            windows: intensity,
             totalFrames: totalFrames,
             fps: fps,
             homeName: homeName,
