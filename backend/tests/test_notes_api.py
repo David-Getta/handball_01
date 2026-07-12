@@ -33,6 +33,9 @@ from handball.sim.match_simulator import simulate_ground_truth  # noqa: E402
 
 def _client_with_match():
     """Lemezre írt meccsel indított app — a tár indításkor onnan tölt."""
+    # Híváskor állítjuk az adatmappát (más API-tesztmodulok is állítják
+    # import-időben) — így a modulok bármilyen sorrendben futhatnak.
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
     m = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
     matches_dir = Path(_tmp) / "data" / "matches"
     matches_dir.mkdir(parents=True, exist_ok=True)

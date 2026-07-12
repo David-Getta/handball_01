@@ -1309,12 +1309,96 @@ class _MatchScreenState extends State<MatchScreen> {
         const SizedBox(width: 6),
         Text(label, style: AppText.value.copyWith(fontSize: 12)),
         const SizedBox(width: 6),
+        // Mezszám megadása/javítása — a szám mindenhol (statisztika,
+        // passzháló, jelentés, CSV) megjelenik, és mentésre kerül.
+        InkWell(
+          onTap: _sourceLabel == "demó" ? null : () => _editJersey(match, id),
+          child: Icon(Icons.badge_outlined, size: 15,
+              color: _sourceLabel == "demó"
+                  ? AppColors.textFaint
+                  : AppColors.accent),
+        ),
+        const SizedBox(width: 6),
         InkWell(
           onTap: () => setState(() => _selectedTrack = null),
           child: const Icon(Icons.close, size: 14, color: AppColors.textFaint),
         ),
       ]),
     );
+  }
+
+  /// Mezszám-szerkesztő párbeszéd a kijelölt játékoshoz. Mentés után a
+  /// helyi meccs-adatot is frissítjük, így minden nézet azonnal a számot
+  /// mutatja (újratöltés nélkül).
+  Future<void> _editJersey(Match match, int trackId) async {
+    int? current;
+    for (final f in match.frames) {
+      for (final p in f.players) {
+        if (p.trackId == trackId && p.jerseyNumber != null) {
+          current = p.jerseyNumber;
+          break;
+        }
+      }
+      if (current != null) break;
+    }
+    final ctrl = TextEditingController(text: current?.toString() ?? "");
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Mezszám — játékos #$trackId",
+            style: AppText.value.copyWith(fontSize: 16)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          style: AppText.value,
+          decoration: InputDecoration(
+            hintText: "pl. 23 (üresen hagyva törli)",
+            hintStyle: AppText.label,
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Mégse"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text("Mentés"),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return; // Mégse
+    final trimmed = result.trim();
+    final jersey = trimmed.isEmpty ? null : int.tryParse(trimmed);
+    if (trimmed.isNotEmpty && (jersey == null || jersey < 0 || jersey > 99)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("A mezszám 0 és 99 közötti szám lehet.")));
+      return;
+    }
+    try {
+      await _api.setJersey(widget.matchId, trackId, jersey);
+      // Helyi frissítés: a szám ráírása minden kockára + a származtatott
+      // nézetek (statisztika, passzháló) újraszámítása.
+      for (final f in match.frames) {
+        for (final p in f.players) {
+          if (p.trackId == trackId) p.jerseyNumber = jersey;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _stats = computePlayerStats(match);
+        _passNetwork = computePassNetwork(match, _events, _passTeam);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Mezszám-mentés hiba: $e")));
+    }
   }
 
   Widget _tacticalCaption(Match match) {

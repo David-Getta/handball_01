@@ -275,6 +275,19 @@ class ApiClient {
     return resp.bodyBytes;
   }
 
+  /// Mezszám hozzárendelése egy játékoshoz (POST /matches/{id}/jerseys).
+  /// jersey = null törli a hozzárendelést.
+  Future<void> setJersey(String matchId, int trackId, int? jersey) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/jerseys"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"track_id": trackId, "jersey": jersey}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a mezszám mentése: HTTP ${resp.statusCode}");
+    }
+  }
+
   /// Edzői jegyzetek a meccshez (GET /matches/{id}/notes) — idő szerint.
   Future<List<Map<String, dynamic>>> fetchNotes(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/notes"));

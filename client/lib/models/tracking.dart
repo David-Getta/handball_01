@@ -25,7 +25,9 @@ class PlayerPosition {
   final double y; // méter, a 20 m-es szélesség mentén
   final PositionSource source;
   final double confidence;
-  final int? jerseyNumber;
+  // Módosítható: a kézi mezszám-hozzárendelés (és később az OCR) a betöltött
+  // meccsen is átírja, hogy minden nézet azonnal a számot mutassa.
+  int? jerseyNumber;
   final String? role;
 
   PlayerPosition({
