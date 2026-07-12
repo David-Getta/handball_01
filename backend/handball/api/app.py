@@ -773,6 +773,51 @@ def create_app():
         _put_match(match)
         return {"jerseys": mapping}
 
+    @app.get("/players/trend")
+    def get_player_trend(team: str, jersey: int):
+        """Egy játékos fejlődése MECCSRŐL MECCSRE, mezszám alapján.
+
+        A megadott csapatnévhez és mezszámhoz tartozó játékos terhelés-
+        mutatói minden tárolt meccsből, időrendben. Ha egy meccsen több
+        track viseli ugyanazt a számot (megszakadt követés), összegzünk —
+        pont ezért éri meg mezszámot rendelni a játékosokhoz.
+        """
+        points = []
+        for match in _store.values():
+            side = None
+            if match.meta.home_team == team:
+                side = Team.HOME
+            elif match.meta.away_team == team:
+                side = Team.AWAY
+            if side is None:
+                continue
+            tracks = set()
+            for fr in match.frames:
+                for p in fr.players:
+                    if p.team == side and p.jersey_number == jersey:
+                        tracks.add(p.track_id)
+            if not tracks:
+                continue
+            stats = summarize(match)
+            fps = match.meta.fps if match.meta.fps > 0 else 25.0
+            distance = sum(stats[t].distance_m for t in tracks if t in stats)
+            top = max((stats[t].top_speed_ms for t in tracks if t in stats),
+                      default=0.0)
+            sprints = sum(stats[t].sprint_count for t in tracks if t in stats)
+            frames = sum(stats[t].measured_frames for t in tracks if t in stats)
+            points.append({
+                "match_id": match.meta.match_id,
+                "date": match.meta.date,
+                "opponent": (match.meta.away_team if side == Team.HOME
+                             else match.meta.home_team),
+                "distance_m": round(distance, 1),
+                "top_speed_ms": round(top, 2),
+                "sprint_count": sprints,
+                "minutes": round(frames / fps / 60.0, 1),
+            })
+        points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
+        return {"team": team, "jersey": jersey, "points": points}
+
     @app.get("/matches/{match_id}/intensity")
     def get_intensity(match_id: str, window_s: float = 300.0):
         """Intenzitás-idővonal: csapatonkénti átlagos mozgás-sebesség

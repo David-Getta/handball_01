@@ -95,3 +95,28 @@ if __name__ == "__main__":
     test_clear_jersey_with_null()
     test_validation()
     print("Minden mezszám-API teszt OK.")
+
+
+def test_player_trend_by_jersey():
+    """A mezszámhoz rendelt játékos meccsről meccsre visszakérdezhető,
+    és a megszakadt követés (két track ugyanazzal a számmal) összegződik."""
+    client, mid = _client_with_match()
+    match = client.get(f"/matches/{mid}").json()
+    team_name = match["meta"]["home_team"]
+    # Két hazai track kapja ugyanazt a számot (mintha a követés megszakadt
+    # volna) — a trendben egy játékosként, összegezve jelennek meg.
+    home_tracks = sorted({p["track_id"] for fr in match["frames"]
+                          for p in fr["players"] if p["team"] == "home"})[:2]
+    for t in home_tracks:
+        client.post(f"/matches/{mid}/jerseys",
+                    json={"track_id": t, "jersey": 9})
+    r = client.get("/players/trend",
+                   params={"team": team_name, "jersey": 9}).json()
+    assert len(r["points"]) == 1
+    p = r["points"][0]
+    assert p["match_id"] == mid and p["distance_m"] > 0
+    assert p["opponent"] == match["meta"]["away_team"]
+    # Nem létező szám: üres lista (nem hiba).
+    r2 = client.get("/players/trend",
+                    params={"team": team_name, "jersey": 88}).json()
+    assert r2["points"] == []
