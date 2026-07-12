@@ -704,6 +704,16 @@ def create_app():
         return FileResponse(str(zip_path), media_type="application/zip",
                             filename=f"klipek_{match_id}.zip")
 
+    @app.get("/matches/{match_id}/intensity")
+    def get_intensity(match_id: str, window_s: float = 300.0):
+        """Intenzitás-idővonal: csapatonkénti átlagos mozgás-sebesség
+        idő-ablakonként (fáradás-elemzés)."""
+        from ..pipeline.stats import compute_intensity_timeline
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"windows": compute_intensity_timeline(match, window_s=window_s)}
+
     @app.get("/matches/{match_id}/heatmap")
     def get_heatmap(match_id: str, team: str = "home",
                     bins_x: int = 20, bins_y: int = 10):

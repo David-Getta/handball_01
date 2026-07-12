@@ -45,6 +45,8 @@ class _MatchScreenState extends State<MatchScreen> {
   Match? _match;
   Map<int, PlayerStat> _stats = {};
   MatchSummary? _summary;
+  // Tempó-alakulás idő-ablakonként (fáradás-grafikon az Összegzés fülön).
+  List<IntensityWindow> _intensity = [];
   // Felismert események a backendből (passz/lövés/gól/labdaeladás) — kattintásra
   // a lejátszó az esemény képkockájára ugrik. Demó módban üres.
   List<Map<String, dynamic>> _events = [];
@@ -132,6 +134,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _match = match;
       _stats = computePlayerStats(match);
       _summary = computeMatchSummary(match);
+      _intensity = computeIntensityTimeline(match);
       _events = events;
       _shots = _computeShotMarkers(match, events);
       _quality = quality;
@@ -1408,6 +1411,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           totalFrames: match.frames.length,
                           fps: match.meta.fps > 0 ? match.meta.fps : 25.0,
                           onSeekFrame: (t) => _seekToFrame(match, t),
+                          intensity: _intensity,
                         ),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                   _eventsPanel(match),
