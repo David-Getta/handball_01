@@ -704,6 +704,75 @@ def create_app():
         return FileResponse(str(zip_path), media_type="application/zip",
                             filename=f"klipek_{match_id}.zip")
 
+    def _jerseys_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.jerseys.json"
+
+    def _apply_jerseys(match, mapping: dict) -> None:
+        """A track_id → mezszám hozzárendelés ráírása a meccs kockáira."""
+        for fr in match.frames:
+            for p in fr.players:
+                key = str(p.track_id)
+                if key in mapping:
+                    p.jersey_number = mapping[key]
+
+    @app.get("/matches/{match_id}/jerseys")
+    def get_jerseys(match_id: str):
+        """A kézzel hozzárendelt mezszámok (track_id → szám)."""
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        p = _jerseys_path(match_id)
+        if p.exists():
+            try:
+                return {"jerseys": json.loads(p.read_text(encoding="utf-8"))}
+            except Exception:
+                pass
+        return {"jerseys": {}}
+
+    @app.post("/matches/{match_id}/jerseys")
+    def set_jersey(match_id: str, body: dict):
+        """Mezszám hozzárendelése egy játékoshoz (track-hez) — a szám a
+        meccs MINDEN kockájára ráíródik, így a statisztika, a passzháló,
+        a jelentés és a CSV is név szerint (mezszámmal) beszél.
+
+        Törzs: {"track_id": 7, "jersey": 23} — jersey=null törli a számot.
+        A hozzárendelés lemezre mentődik, és a meccs betöltésekor újra
+        érvényesül; a későbbi mezszám-OCR is ezt a tárat tölti majd."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        try:
+            track_id = int(body["track_id"])
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="track_id required")
+        jersey = body.get("jersey")
+        if jersey is not None:
+            try:
+                jersey = int(jersey)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="invalid jersey")
+            if not (0 <= jersey <= 99):
+                raise HTTPException(status_code=400,
+                                    detail="jersey must be 0..99")
+        p = _jerseys_path(match_id)
+        mapping: dict = {}
+        if p.exists():
+            try:
+                mapping = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                mapping = {}
+        if jersey is None:
+            mapping.pop(str(track_id), None)
+        else:
+            mapping[str(track_id)] = jersey
+        p.write_text(json.dumps(mapping, ensure_ascii=False, indent=2),
+                     encoding="utf-8")
+        # Azonnal érvényesítjük a memóriabeli meccsen, és lemezre tükrözzük.
+        _apply_jerseys(match, {str(track_id): jersey})
+        _put_match(match)
+        return {"jerseys": mapping}
+
     @app.get("/matches/{match_id}/intensity")
     def get_intensity(match_id: str, window_s: float = 300.0):
         """Intenzitás-idővonal: csapatonkénti átlagos mozgás-sebesség
