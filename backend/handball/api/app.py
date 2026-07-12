@@ -636,6 +636,74 @@ def create_app():
             headers={"Content-Disposition":
                      f'attachment; filename="statisztika_{match_id}.csv"'})
 
+    @app.post("/matches/{match_id}/clips/export")
+    def start_clip_export(match_id: str, body: dict):
+        """Videóklip-export indítása HÁTTÉRSZÁLON: a kiválasztott típusú
+        események jelenetei külön MP4-be, majd egy zip-be. A haladás a
+        GET /jobs/{job_id} végponton követhető; a kész zip a
+        GET /matches/{id}/clips/download címen tölthető le.
+
+        Törzs: {"types": ["goal", "shot", "turnover"]} — üres/hiányzó
+        lista esetén csak a gólok."""
+        import time
+        import uuid
+        from ..pipeline.clips import export_event_clips
+
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        types = set(body.get("types") or ["goal"])
+
+        job_id = uuid.uuid4().hex[:12]
+        job = {"job_id": job_id, "match_id": match_id, "status": "running",
+               "stage": "K", "progress": 0.0, "message": "klipvágás indítása",
+               "error": None, "created": time.time(),
+               "video": Path(match.meta.video_path or "").name}
+        _jobs[job_id] = job
+
+        out_dir = _clips_dir(match_id)
+
+        def _work():
+            try:
+                events = detect_events(match)
+                ev = [{"t": e.t, "type": e.type.value, "team": e.team.value}
+                      for e in events]
+
+                def cb(done, total, msg):
+                    job["progress"] = round(done / max(1, total), 3)
+                    job["message"] = msg
+
+                res = export_event_clips(match, ev, types, out_dir,
+                                         progress_cb=cb)
+                job["status"] = "done"
+                job["progress"] = 1.0
+                job["message"] = f"kész: {res.count} klip"
+            except Exception as e:
+                job["status"] = "error"
+                job["error"] = str(e)
+                job["message"] = f"hiba: {e}"
+
+        _threading.Thread(target=_work, daemon=True).start()
+        return {"job_id": job_id}
+
+    def _clips_dir(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return data_root() / "clips" / safe
+
+    @app.get("/matches/{match_id}/clips/download")
+    def download_clips(match_id: str):
+        """A legutóbb exportált klip-csomag (zip) letöltése."""
+        from fastapi.responses import FileResponse
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        zip_path = _clips_dir(match_id) / "klipek.zip"
+        if not zip_path.exists():
+            raise HTTPException(status_code=404,
+                                detail="nincs kész klip-csomag ehhez a meccshez")
+        return FileResponse(str(zip_path), media_type="application/zip",
+                            filename=f"klipek_{match_id}.zip")
+
     @app.get("/matches/{match_id}/heatmap")
     def get_heatmap(match_id: str, team: str = "home",
                     bins_x: int = 20, bins_y: int = 10):

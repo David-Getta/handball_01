@@ -242,6 +242,39 @@ class ApiClient {
     return (json["events"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Videóklip-export indítása (POST /matches/{id}/clips/export) — job_id-t ad.
+  Future<String> startClipExport(String matchId, List<String> types) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/clips/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"types": types}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem indult el a klipvágás: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return json["job_id"] as String;
+  }
+
+  /// Egy job állapota (GET /jobs/{id}) — a klipvágás haladásához.
+  Future<Map<String, dynamic>> fetchJob(String jobId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/jobs/$jobId"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a job lekérése: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  /// A kész klip-csomag (zip) letöltése bájtokként.
+  Future<List<int>> fetchClipsZip(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/clips/download"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a klipek letöltése: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// Edzői jegyzetek a meccshez (GET /matches/{id}/notes) — idő szerint.
   Future<List<Map<String, dynamic>>> fetchNotes(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/notes"));
