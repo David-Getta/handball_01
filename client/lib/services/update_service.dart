@@ -21,6 +21,7 @@ library;
 import "dart:convert";
 import "dart:io";
 
+import "package:crypto/crypto.dart";
 import "package:http/http.dart" as http;
 
 import "../version.dart";
@@ -40,11 +41,19 @@ class UpdateInfo {
   /// A csomag fájlneve (pl. "SportMachine-macOS.zip").
   final String assetName;
 
+  /// A csomag várt mérete bájtban (a GitHub API-ból; 0 = ismeretlen).
+  final int size;
+
+  /// A csomag várt sha256-a ("sha256:..." a GitHub API-ból; üres = ismeretlen).
+  final String digest;
+
   const UpdateInfo({
     required this.version,
     required this.url,
     required this.apiUrl,
     required this.assetName,
+    this.size = 0,
+    this.digest = "",
   });
 }
 
@@ -156,6 +165,8 @@ class UpdateService {
           apiUrl: (map["url"] as String?) ??
               "https://api.github.com/repos/$owner/$repo/releases/assets/${map["id"]}",
           assetName: asset,
+          size: (map["size"] as num?)?.toInt() ?? 0,
+          digest: (map["digest"] as String?) ?? "",
         );
       }
     }
@@ -187,6 +198,11 @@ class UpdateService {
     }
     await sink.close();
 
+    // ÉPSÉG-ELLENŐRZÉS a telepítés ELŐTT: egy csonka/sérült letöltés sérült
+    // telepítést adna (tünete: érthetetlen "decompressing" hibák futás
+    // közben). Méret + sha256 a GitHub API-ból; eltérésnél nem telepítünk.
+    await _verifyDownload(target, info);
+
     // A futó motor fogná a fájlokat — a csere előtt leállítjuk.
     BackendLauncher.instance?.stop();
 
@@ -194,6 +210,28 @@ class UpdateService {
       await _installMacOS(target, tmp);
     } else if (Platform.isWindows) {
       await _installWindows(target);
+    }
+  }
+
+  /// A letöltött csomag épség-ellenőrzése (méret + sha256) a telepítés előtt.
+  /// Hibánál kivételt dob — a hívó érthető üzenetet mutat, és NEM telepít.
+  Future<void> _verifyDownload(File target, UpdateInfo info) async {
+    final actualSize = await target.length();
+    if (info.size > 0 && actualSize != info.size) {
+      throw Exception(
+          "A letöltött csomag csonka (${actualSize} bájt a várt ${info.size} "
+          "helyett) — ellenőrizd az internetkapcsolatot, és próbáld újra.");
+    }
+    final digest = info.digest;
+    if (digest.startsWith("sha256:")) {
+      final expected = digest.substring("sha256:".length).toLowerCase();
+      final actual =
+          (await sha256.bind(target.openRead()).first).toString().toLowerCase();
+      if (actual != expected) {
+        throw Exception(
+            "A letöltött csomag sérült (sha256 eltérés) — próbáld újra a "
+            "frissítést.");
+      }
     }
   }
 

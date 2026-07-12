@@ -16,6 +16,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0          # a lokális backend REST API-jának hívásához
+  crypto: ^3.0.3        # a letöltött frissítés sha256-ellenőrzéséhez
   file_picker: ^8.0.0   # meccsvideó kiválasztása (desktop/tablet natív fájlválasztó)
   video_player: ^2.9.0  # jelenet-visszajátszás az elemzés mellett (macOS/iOS/Android)
 
