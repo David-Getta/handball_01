@@ -297,12 +297,16 @@ class UpdateService {
           "a csere kihagyva.");
     }
 
-    // Leválasztott csere-szkript: vár, töröl, másol, újraindít.
+    // Leválasztott csere-szkript: vár, töröl, másol, KARANTÉN-TÖRLÉS,
+    // újraindít. A karantén-attribútum eltávolítása nélkül a Gatekeeper a
+    // beágyazott motort csendben blokkolhatná (tünet: "Connection refused").
     await Process.start(
       "/bin/bash",
       [
         "-c",
-        'sleep 1; rm -rf "\$0"; /usr/bin/ditto "\$1" "\$0"; open "\$0"',
+        'sleep 1; rm -rf "\$0"; /usr/bin/ditto "\$1" "\$0"; '
+            '/usr/bin/xattr -dr com.apple.quarantine "\$0" 2>/dev/null; '
+            'open "\$0"',
         appPath,
         newApp,
       ],
