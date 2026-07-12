@@ -64,6 +64,12 @@ időzítés), **Impact** (piaci potenciál, skálázhatóság, EU-érdek),
   pipeline sportfüggetlen: kosárlabda, futsal, jégkorong ugyanazzal a
   motorral — skálázási történet.
 
+- **Reprodukálható validációs benchmark** a repóban
+  (`python -m scripts.benchmark`): a kalibráció, a képen kívüli becslés, az
+  eseményfelismerés és a zaj-robusztusság számszerű, verziónként
+  összevethető metrikái — az Excellence-kritérium "mérhető innováció"
+  bizonyítéka, és egyben regresszió-őr a fejlesztésben.
+
 **Gyenge pontok, amiket a zsűri kérdezni fog** (készüljünk):
 - Mennyire „deep tech" ez a versenytársakhoz képest? → a válasz a
   pásztázó-kamerás kalibráció + képen kívüli becslés + egykamerás
