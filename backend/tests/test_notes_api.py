@@ -20,7 +20,12 @@ os.environ["HANDBALL_DATA_DIR"] = _tmp
 import json  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-from fastapi.testclient import TestClient  # noqa: E402
+import pytest  # noqa: E402
+
+# A CI minimál-környezetében nincs FastAPI — ott ez a modul kihagyja magát
+# (az API-t a teljes fejlesztői/csomagolt környezetben teszteljük).
+TestClient = pytest.importorskip(
+    "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
 
 from handball.api.app import create_app  # noqa: E402
 from handball.sim.match_simulator import simulate_ground_truth  # noqa: E402
