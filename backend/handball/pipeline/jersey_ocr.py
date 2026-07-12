@@ -1,0 +1,159 @@
+"""
+[M2] Mezszám-OCR prototípus — kísérleti számfelismerés + szavazó.
+
+Cél: a játékosok mezszámának automatikus leolvasása, hogy a track-ek
+maguktól névre (számra) szólóvá váljanak. A feladat két, jól szétváló
+részre bomlik:
+
+1. FELISMERŐ (recognizer): egy mez-kivágásból (törzs-régió) számjegyeket
+   olvas. Itt egy klasszikus képfeldolgozásos ALAPVONAL van (kontraszt-
+   küszöbölés + kontúr-szűrés + sablon-illesztés) — tiszta, nagy számokon
+   működik, éles videón korlátozott; a végleges megoldás egy tanított
+   számjegy-osztályozó lesz (a finomhangolási eszköztárral gyűjthető
+   adatból). A felismerő CSERÉLHETŐ: a szavazónak csak (szám, bizonyosság)
+   párok kellenek.
+
+2. SZAVAZÓ (JerseyVoter): egy track sok képkockán látszik — az egyes
+   leolvasások zajosak, de a TÖBBSÉGI szavazat megbízható. A szavazó
+   trackenként gyűjti a jelölteket, és csak elég szavazat + elég előny
+   esetén hirdet eredményt. A kimenete pontosan a kézi mezszám-
+   hozzárendelés (/matches/{id}/jerseys) formátuma — az OCR ugyanazt a
+   tárat tölti majd, amit a kézi felület javítani tud.
+
+A modul KÍSÉRLETI: a feldolgozó lánc alapból nem használja.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass
+class JerseyVoter:
+    """Trackenkénti többségi szavazás a leolvasott mezszámokra.
+
+    - min_votes:  ennyi (súlyozott) szavazat kell egy szám kihirdetéséhez.
+    - min_margin: a győztesnek ennyiszer több szavazata kell legyen, mint a
+                  második helyezettnek (zajos leolvasások kiszűrése).
+    """
+    min_votes: float = 3.0
+    min_margin: float = 2.0
+    _votes: dict = field(default_factory=dict)  # track_id -> {szám: súly}
+
+    def add(self, track_id: int, number: int, confidence: float = 1.0) -> None:
+        """Egy leolvasás hozzáadása (a bizonyosság a szavazat súlya)."""
+        if not (0 <= number <= 99) or confidence <= 0:
+            return
+        bucket = self._votes.setdefault(track_id, {})
+        bucket[number] = bucket.get(number, 0.0) + confidence
+
+    def decide(self, track_id: int) -> int | None:
+        """A track kihirdetett mezszáma, vagy None, ha még bizonytalan."""
+        bucket = self._votes.get(track_id)
+        if not bucket:
+            return None
+        ranked = sorted(bucket.items(), key=lambda kv: kv[1], reverse=True)
+        best_num, best_w = ranked[0]
+        if best_w < self.min_votes:
+            return None
+        second_w = ranked[1][1] if len(ranked) > 1 else 0.0
+        if second_w > 0 and best_w / second_w < self.min_margin:
+            return None
+        return best_num
+
+    def decisions(self) -> dict[int, int]:
+        """Minden track kihirdetett száma ({track_id: szám}) — a
+        /matches/{id}/jerseys tár formátumához igazodva."""
+        out = {}
+        for tid in self._votes:
+            n = self.decide(tid)
+            if n is not None:
+                out[tid] = n
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Alapvonal-felismerő: klasszikus CV, tanított modell nélkül.
+# ---------------------------------------------------------------------------
+
+def _digit_templates(size: int = 28):
+    """Számjegy-sablonok 0..9 — több vastagsággal renderelve (cv2.putText).
+
+    A sablont a számjegy BEFOGLALÓJÁRA vágjuk, majd size×size-ra nyújtjuk —
+    a felismerő a jelölt-kivágást ugyanígy normálja, ezért az illesztés a
+    méret- és pozíció-eltérésekre érzéketlen."""
+    import cv2
+    import numpy as np
+    templates = {}
+    for d in range(10):
+        variants = []
+        for thickness in (2, 3):
+            img = np.zeros((64, 64), np.uint8)
+            cv2.putText(img, str(d), (8, 52), cv2.FONT_HERSHEY_SIMPLEX,
+                        1.8, 255, thickness)
+            ys, xs = np.nonzero(img)
+            tight = img[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+            variants.append(cv2.resize(tight, (size, size),
+                                       interpolation=cv2.INTER_AREA))
+        templates[d] = variants
+    return templates
+
+
+def read_jersey_number(crop, min_confidence: float = 0.55):
+    """Mezszám leolvasása egy törzs-kivágásból.
+
+    Visszatérés: (szám, bizonyosság) vagy None. Alapvonal-módszer:
+    1. szürkeárnyalat + adaptív binarizálás (a szám világos VAGY sötét
+       lehet a mezhez képest — mindkét polaritást próbáljuk);
+    2. kontúr-szűrés: számjegy-szerű (arány/méret) komponensek balról
+       jobbra, legfeljebb kettő;
+    3. minden jelöltet 28x28-ra normálva sablon-illesztés (0..9), a
+       bizonyosság az illeszkedési pontszám.
+    """
+    import cv2
+    import numpy as np
+
+    if crop is None or crop.size == 0 or min(crop.shape[:2]) < 20:
+        return None
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+    gray = cv2.resize(gray, (96, 96), interpolation=cv2.INTER_CUBIC)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+
+    templates = _digit_templates()
+    best = None
+    for invert in (False, True):
+        _, bw = cv2.threshold(gray, 0, 255,
+                              (cv2.THRESH_BINARY_INV if invert
+                               else cv2.THRESH_BINARY) + cv2.THRESH_OTSU)
+        contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+        boxes = []
+        for c in contours:
+            x, y, w, h = cv2.boundingRect(c)
+            if h < 24 or h > 88 or w < 6 or w / h > 1.2 or h / w > 6:
+                continue  # nem számjegy-szerű komponens
+            boxes.append((x, y, w, h))
+        if not (1 <= len(boxes) <= 2):
+            continue
+        boxes.sort(key=lambda b: b[0])  # balról jobbra (tízes, egyes)
+        digits, confs = [], []
+        for (x, y, w, h) in boxes:
+            roi = bw[y:y + h, x:x + w]
+            roi = cv2.resize(roi, (28, 28), interpolation=cv2.INTER_AREA)
+            best_d, best_score = None, -1.0
+            for d, variants in templates.items():
+                for tpl in variants:
+                    score = cv2.matchTemplate(
+                        roi.astype(np.float32), tpl.astype(np.float32),
+                        cv2.TM_CCOEFF_NORMED)[0][0]
+                    if score > best_score:
+                        best_d, best_score = d, float(score)
+            digits.append(best_d)
+            confs.append(best_score)
+        if not digits or any(d is None for d in digits):
+            continue
+        number = digits[0] if len(digits) == 1 else digits[0] * 10 + digits[1]
+        conf = min(confs)
+        if conf >= min_confidence and (best is None or conf > best[1]):
+            best = (number, conf)
+    return best
