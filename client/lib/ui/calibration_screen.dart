@@ -9,7 +9,6 @@
 /// (a képkocka eredeti W×H-jából), és kiírjuk a backend --calib formátumában.
 library;
 
-import "dart:math" as math;
 import "dart:typed_data";
 import "dart:ui" as ui;
 
@@ -742,15 +741,15 @@ class _CalibPainter extends CustomPainter {
     }
 
     const cy = courtWidth / 2;
-    // Kapuk + 6 méteres ívek — csak a látható területen lévő kapukra.
+    // Kapuk + 6 m-es kapuelőtér — csak a látható területen lévő kapukra.
+    // A vonal a SZABÁLYKÖNYVI alak (goalAreaBoundary): a két kapufától húzott
+    // 6 m-es negyedkörív, köztük a kapu előtt 3 m-es egyenes — NEM félkör.
     for (final gx in [0.0, courtLength]) {
       if (gx < x0 - 0.01 || gx > x1 + 0.01) continue; // ez a kapu nem látszik
       canvas.drawLine(p(gx, cy - 1.5), p(gx, cy + 1.5), goalP);
-      final s = gx == courtLength ? -1.0 : 1.0;
       Offset? prev;
-      for (int i = 0; i <= 20; i++) {
-        final th = math.pi * i / 20;
-        final cur = p(gx + s * 6 * math.sin(th), cy - 6 * math.cos(th));
+      for (final b in goalAreaBoundary(leftSide: gx == 0.0, segments: 20)) {
+        final cur = p(b.dx, b.dy);
         if (prev != null) canvas.drawLine(prev, cur, gold);
         prev = cur;
       }
@@ -807,11 +806,10 @@ class _CalibPainter extends CustomPainter {
       }
 
       canvas.drawLine(p(gx, cy - 1.5), p(gx, cy + 1.5), goalP);
-      final s = gx == courtLength ? -1.0 : 1.0;
+      // Szabálykönyvi kapuelőtér-vonal (negyedkörívek + 3 m egyenes).
       Offset? prev;
-      for (int i = 0; i <= 20; i++) {
-        final th = math.pi * i / 20;
-        final cur = p(gx + s * 6 * math.sin(th), cy - 6 * math.cos(th));
+      for (final b in goalAreaBoundary(leftSide: gx == 0.0, segments: 20)) {
+        final cur = p(b.dx, b.dy);
         if (prev != null) canvas.drawLine(prev, cur, gold);
         prev = cur;
       }
