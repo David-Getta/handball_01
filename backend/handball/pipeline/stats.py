@@ -206,3 +206,55 @@ def compute_intensity_timeline(match: Match, window_s: float = 300.0) -> list[di
          "away_avg_ms": round(dist[w][1] / time_[w][1], 3) if time_[w][1] > 0 else 0.0}
         for w in range(n_win)
     ]
+
+
+def aggregate_by_jersey(stats: dict, team_of: dict, jersey_of: dict,
+                        fps: float = 25.0) -> list[dict]:
+    """Játékos-statisztikák MEZSZÁM szerint összevonva.
+
+    Ha a követés megszakadt és egy játékos több track_id-t kapott, a kézi
+    (vagy OCR-es) mezszám-hozzárendelés után itt válik újra EGY játékossá:
+    az azonos (csapat, mezszám) párhoz tartozó trackek táv/sprint értékei
+    összeadódnak, a csúcssebesség a maximum. A szám nélküli trackek külön
+    sorok maradnak.
+
+    Visszatérés: [{"label", "team", "jersey", "track_ids", distance_m,
+    avg_speed_ms, top_speed_ms, sprint_count, sprint_distance_m,
+    measured_frames, estimated_frames}], táv szerint csökkenő sorrendben.
+    """
+    groups: dict = {}
+    for tid, s in stats.items():
+        jersey = jersey_of.get(tid)
+        team = team_of.get(tid, "?")
+        key = (team, jersey) if jersey is not None else (team, f"id-{tid}")
+        g = groups.setdefault(key, {
+            "label": f"#{jersey}" if jersey is not None else f"id {tid}",
+            "team": team, "jersey": jersey, "track_ids": [],
+            "distance_m": 0.0, "top_speed_ms": 0.0, "sprint_count": 0,
+            "sprint_distance_m": 0.0, "measured_frames": 0,
+            "estimated_frames": 0,
+            "zone_seconds": {"seta": 0.0, "kocogas": 0.0, "futas": 0.0,
+                             "sprint": 0.0},
+        })
+        g["track_ids"].append(tid)
+        g["distance_m"] += s.distance_m
+        g["top_speed_ms"] = max(g["top_speed_ms"], s.top_speed_ms)
+        g["sprint_count"] += s.sprint_count
+        g["sprint_distance_m"] += s.sprint_distance_m
+        g["measured_frames"] += s.measured_frames
+        g["estimated_frames"] += s.estimated_frames
+        for k, v in (s.zone_seconds or {}).items():
+            g["zone_seconds"][k] = g["zone_seconds"].get(k, 0.0) + v
+    out = list(groups.values())
+    dt = 1.0 / (fps if fps > 0 else 25.0)
+    for g in out:
+        # Az átlagsebesség az összevont távból és mért időből számolódik újra.
+        moving_time = max(1, g["measured_frames"]) * dt
+        g["avg_speed_ms"] = g["distance_m"] / moving_time
+        g["distance_m"] = round(g["distance_m"], 1)
+        g["avg_speed_ms"] = round(g["avg_speed_ms"], 2)
+        g["top_speed_ms"] = round(g["top_speed_ms"], 2)
+        g["sprint_distance_m"] = round(g["sprint_distance_m"], 1)
+        g["track_ids"].sort()
+    out.sort(key=lambda g: g["distance_m"], reverse=True)
+    return out

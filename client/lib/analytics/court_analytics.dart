@@ -164,6 +164,55 @@ List<(double, double, double)> _speedSegments(
   return out;
 }
 
+/// Játékos-statisztikák MEZSZÁM szerint összevonva — ha a követés
+/// megszakadt és egy játékos több track_id-t kapott, a mezszám-
+/// hozzárendelés után itt válik újra EGY játékossá (táv/sprint összeg,
+/// csúcssebesség maximum). A szám nélküli trackek külön sorok maradnak.
+List<PlayerStat> aggregateStatsByJersey(Map<int, PlayerStat> stats,
+    {double fps = 25.0}) {
+  final groups = <String, List<PlayerStat>>{};
+  stats.forEach((tid, s) {
+    final key = s.jerseyNumber != null
+        ? "${s.team.name}#${s.jerseyNumber}"
+        : "${s.team.name}id$tid";
+    groups.putIfAbsent(key, () => []).add(s);
+  });
+  final dt = 1.0 / (fps > 0 ? fps : 25.0);
+  final out = <PlayerStat>[];
+  groups.forEach((_, list) {
+    if (list.length == 1) {
+      out.add(list.first);
+      return;
+    }
+    var distance = 0.0, sprintDist = 0.0, top = 0.0;
+    var sprints = 0, measured = 0, estimated = 0;
+    final zones = <String, double>{};
+    for (final s in list) {
+      distance += s.distanceM;
+      sprintDist += s.sprintDistanceM;
+      if (s.topSpeedMs > top) top = s.topSpeedMs;
+      sprints += s.sprintCount;
+      measured += s.measuredFrames;
+      estimated += s.estimatedFrames;
+      s.zoneSeconds.forEach((k, v) => zones[k] = (zones[k] ?? 0) + v);
+    }
+    out.add(PlayerStat(
+      trackId: list.first.trackId,
+      team: list.first.team,
+      jerseyNumber: list.first.jerseyNumber,
+      distanceM: distance,
+      avgSpeedMs: distance / (measured > 0 ? measured * dt : 1.0),
+      measuredFrames: measured,
+      estimatedFrames: estimated,
+      topSpeedMs: top,
+      sprintCount: sprints,
+      sprintDistanceM: sprintDist,
+      zoneSeconds: zones,
+    ));
+  });
+  return out;
+}
+
 /// A passzháló egy csomópontja: a játékos átlagos (mért) helye a pályán +
 /// hány passzban vett részt (küldött + fogadott).
 class PassNode {
