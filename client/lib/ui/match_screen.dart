@@ -1147,8 +1147,14 @@ class _MatchScreenState extends State<MatchScreen> {
       }
       target ??= events.last; // az elején körbeér a végére
     }
-    final t = ((target["t"] as num?)?.toInt() ?? 0)
-        .clamp(0, match.frames.length - 1);
+    _seekToFrame(match, (target["t"] as num?)?.toInt() ?? 0);
+  }
+
+  /// Ugrás egy adott képkockára: megállítjuk a lejátszást, és ha van eredeti
+  /// videó, azt is a jelenetre állítjuk (közös logika esemény/jegyzet/grafikon
+  /// kattintáshoz).
+  void _seekToFrame(Match match, int frame) {
+    final t = frame.clamp(0, match.frames.length - 1);
     setState(() {
       _timer?.cancel();
       _playing = false;
@@ -1191,7 +1197,17 @@ class _MatchScreenState extends State<MatchScreen> {
                   StatsPanel(stats: _stats, homeName: match.meta.homeTeam, awayName: match.meta.awayTeam),
                   _summary == null
                       ? const SizedBox()
-                      : SummaryPanel(summary: _summary!, homeName: match.meta.homeTeam, awayName: match.meta.awayTeam),
+                      : SummaryPanel(
+                          summary: _summary!,
+                          homeName: match.meta.homeTeam,
+                          awayName: match.meta.awayTeam,
+                          goals: _events
+                              .where((e) => e["type"] == "goal")
+                              .toList(),
+                          totalFrames: match.frames.length,
+                          fps: match.meta.fps > 0 ? match.meta.fps : 25.0,
+                          onSeekFrame: (t) => _seekToFrame(match, t),
+                        ),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                   _eventsPanel(match),
                   _notesPanel(match),
