@@ -10,6 +10,7 @@ import "dart:math" as math;
 
 import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 
 import "../analytics/court_analytics.dart";
 import "../analytics/match_summary.dart";
@@ -72,6 +73,8 @@ class _MatchScreenState extends State<MatchScreen> {
   ViewMode _viewMode = ViewMode.players;
   Team _heatmapTeam = Team.home;
   Heatmap? _heatmap;
+  // Lejátszási sebesség (0.5–4×) — elemzésnél a gyors áttekintés kulcsa.
+  double _speed = 1.0;
   // Lövéstérkép: a lövés/gól események helye a pályán (a lövő pozíciójából,
   // annak híján a labdáéból). Koppintásra a lejátszó a jelenetre ugrik.
   List<ShotMarker> _shots = [];
@@ -199,20 +202,35 @@ class _MatchScreenState extends State<MatchScreen> {
     final match = _match;
     if (match == null) return;
     setState(() => _playing = !_playing);
+    _restartTimer(match);
+  }
+
+  /// A lejátszó-óra (újra)indítása az aktuális sebességgel — sebesség-
+  /// váltásnál futás közben is újraindul.
+  void _restartTimer(Match match) {
     _timer?.cancel();
-    if (_playing) {
-      final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
-      _timer = Timer.periodic(Duration(milliseconds: (1000 / fps).round()), (_) {
-        setState(() {
-          if (_frameIndex < match.frames.length - 1) {
-            _frameIndex++;
-          } else {
-            _playing = false;
-            _timer?.cancel();
-          }
-        });
+    if (!_playing) return;
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    final interval = (1000 / (fps * _speed)).round().clamp(8, 4000);
+    _timer = Timer.periodic(Duration(milliseconds: interval), (_) {
+      setState(() {
+        if (_frameIndex < match.frames.length - 1) {
+          _frameIndex++;
+        } else {
+          _playing = false;
+          _timer?.cancel();
+        }
       });
-    }
+    });
+  }
+
+  /// Léptetés adott számú képkockával (billentyűzet: ←/→, Shift+←/→).
+  void _step(Match match, int frames) {
+    setState(() {
+      _timer?.cancel();
+      _playing = false;
+      _frameIndex = (_frameIndex + frames).clamp(0, match.frames.length - 1);
+    });
   }
 
   @override
@@ -227,7 +245,7 @@ class _MatchScreenState extends State<MatchScreen> {
           ? const Center(child: CircularProgressIndicator())
           : match.frames.isEmpty
               ? _emptyState()
-              : Column(
+              : _withShortcuts(match, Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _matchTitle(match),
@@ -254,7 +272,33 @@ class _MatchScreenState extends State<MatchScreen> {
                   ),
                 ),
               ],
-            ),
+            )),
+    );
+  }
+
+  /// Billentyűzet-vezérlés a lejátszóhoz: szóköz = lejátszás/szünet,
+  /// ←/→ = 1 kocka, Shift+←/→ = 5 mp, Q/E = előző/következő esemény.
+  /// Szövegmezőben gépelve a karakterek a mezőé maradnak (a fókuszált
+  /// TextField elnyeli őket), így a jegyzetírást nem zavarja.
+  Widget _withShortcuts(Match match, Widget child) {
+    final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.space): _togglePlay,
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            _step(match, -1),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            _step(match, 1),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): () =>
+            _step(match, -(5 * fps).round()),
+        const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () =>
+            _step(match, (5 * fps).round()),
+        const SingleActivator(LogicalKeyboardKey.keyQ): () =>
+            _jumpToEvent(match, -1),
+        const SingleActivator(LogicalKeyboardKey.keyE): () =>
+            _jumpToEvent(match, 1),
+      },
+      child: Focus(autofocus: true, child: child),
     );
   }
 
@@ -1485,9 +1529,48 @@ class _MatchScreenState extends State<MatchScreen> {
         const SizedBox(width: AppSpacing.sm),
         Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
         Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
+        const SizedBox(width: AppSpacing.sm),
+        // Lejátszási sebesség — billentyűzetről is: szóköz/nyilak/E/Q
+        // (a gomb tooltipje sorolja a gyorsbillentyűket).
+        PopupMenuButton<double>(
+          tooltip: "Sebesség: ${_speedLabel(_speed)}\n"
+              "Gyorsbillentyűk: szóköz = lejátszás/szünet · ←/→ = 1 kocka · "
+              "Shift+←/→ = 5 mp · Q/E = előző/következő esemény",
+          color: AppColors.surface,
+          onSelected: (v) {
+            setState(() => _speed = v);
+            final m = _match;
+            if (m != null) _restartTimer(m);
+          },
+          itemBuilder: (_) => [
+            for (final v in const [0.5, 1.0, 2.0, 4.0])
+              PopupMenuItem(
+                value: v,
+                child: Text(_speedLabel(v),
+                    style: AppText.value.copyWith(
+                        color: v == _speed
+                            ? AppColors.accent
+                            : AppColors.textPrimary)),
+              ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(_speedLabel(_speed),
+                style: AppText.value.copyWith(
+                    fontSize: 12, color: AppColors.accent)),
+          ),
+        ),
       ],
     );
   }
+
+  static String _speedLabel(double v) =>
+      v == v.roundToDouble() ? "${v.toInt()}×" : "$v×";
 
   /// A lejátszó ugrása a legközelebbi (szűrt) eseményre a megadott irányban.
   void _jumpToEvent(Match match, int dir) {
