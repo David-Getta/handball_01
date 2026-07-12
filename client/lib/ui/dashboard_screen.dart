@@ -6,7 +6,9 @@
 library;
 
 import "dart:async";
+import "dart:io";
 
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -77,6 +79,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Beépített súgó: a teljes edzői munkamenet lépésről lépésre — hogy egy
   /// új felhasználó (pl. a pilot-csapat edzője) segítség nélkül boldoguljon.
+  /// A teljes meccskönyvtár mentése zip-be (gépváltás / biztonsági mentés).
+  Future<void> _exportLibrary() async {
+    try {
+      final bytes = await _api.exportLibrary();
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Meccskönyvtár mentése (zip)",
+        fileName: "sportmachine_konyvtar.zip",
+        type: FileType.custom,
+        allowedExtensions: const ["zip"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Könyvtár mentve: $path — az új gépen a "
+              "\"Könyvtár visszaállítása\" tölti be.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Mentés-hiba: $e")));
+    }
+  }
+
+  /// Meccskönyvtár visszaállítása korábbi mentésből (zip).
+  Future<void> _importLibrary() async {
+    try {
+      final res = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ["zip"],
+        withData: true,
+      );
+      if (res == null || res.files.isEmpty) return; // megszakítva
+      final f = res.files.first;
+      final bytes = f.bytes ??
+          (f.path != null ? await File(f.path!).readAsBytes() : null);
+      if (bytes == null) return;
+      final r = await _api.importLibrary(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Visszaállítva: ${r["matches"]} meccs "
+              "(${r["restored_files"]} fájl).")));
+      await _load(); // a lista frissítése az új meccsekkel
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Visszaállítás-hiba: $e")));
+    }
+  }
+
   Future<void> _showHelp() async {
     Widget step(String n, String title, String body) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -708,6 +759,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                   icon: const Icon(Icons.timeline, color: AppColors.textSecondary),
                   tooltip: "Játékos-fejlődés (mezszám alapján)",
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.archive_outlined,
+                      color: AppColors.textSecondary),
+                  tooltip: "Meccskönyvtár mentése / visszaállítása",
+                  color: AppColors.surface,
+                  onSelected: (v) {
+                    if (v == "export") _exportLibrary();
+                    if (v == "import") _importLibrary();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: "export",
+                      child: ListTile(
+                        leading: Icon(Icons.download, size: 18),
+                        title: Text("Könyvtár mentése (zip)"),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: "import",
+                      child: ListTile(
+                        leading: Icon(Icons.upload, size: 18),
+                        title: Text("Könyvtár visszaállítása"),
+                        dense: true,
+                      ),
+                    ),
+                  ],
                 ),
                 IconButton(
                   onPressed: _showHelp,
