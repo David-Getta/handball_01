@@ -32,19 +32,43 @@ class BackendStatus {
 }
 
 class BackendLauncher {
-  final String baseUrl;
   final int port;
+
+  /// Hány portot fésülünk át a kezdőtől felfelé — a motor (serve.py)
+  /// ugyanekkora tartományban keres szabad portot, ha a 8000-es foglalt.
+  static const portRange = 11;
 
   /// Az utoljára létrehozott indító — a frissítő ezen keresztül állítja le a
   /// motort a fájlcsere előtt (különben a futó motor fogná a fájlokat).
   static BackendLauncher? instance;
 
-  BackendLauncher({this.baseUrl = "http://127.0.0.1:8000", this.port = 8000}) {
+  BackendLauncher({this.port = 8000}) {
     instance = this;
   }
 
   Process? _process;
-  final _api = ApiClient(baseUrl: "http://127.0.0.1:8000");
+
+  /// Megkeresi, melyik porton válaszol a motor (a kezdőtől felfelé), és
+  /// TALÁLATKOR átállítja az alapértelmezett kliens-címet is — az ezután
+  /// létrejövő ApiClient-ek automatikusan a jó portra beszélnek.
+  Future<int?> _findHealthyPort() async {
+    // Párhuzamos próbák (a nem futó portok azonnal elutasítanak) — a
+    // legkisebb válaszoló portot választjuk.
+    final probes = [
+      for (var p = port; p < port + portRange; p++)
+        ApiClient(baseUrl: "http://127.0.0.1:$p")
+            .isHealthy()
+            .then((ok) => ok ? p : null)
+    ];
+    final results = await Future.wait(probes);
+    for (final p in results) {
+      if (p != null) {
+        ApiClient.defaultBaseUrl = "http://127.0.0.1:$p";
+        return p;
+      }
+    }
+    return null;
+  }
 
   /// A motor kimenetének naplófájlja a felhasználói adatmappában — ha a motor
   /// nem indul, ebből látszik, miért (engine-app.log).
@@ -76,9 +100,11 @@ class BackendLauncher {
   /// Elindítja (ha kell) a backendet, és visszaadja a végállapotot.
   /// `onLog`: a motor kimenete/állapot-üzenetek a kezdőképernyőnek.
   Future<BackendStatus> ensureRunning({void Function(String)? onLog}) async {
-    // 1) Már fut?
-    if (await _api.isHealthy()) {
-      onLog?.call("A motor már fut.");
+    // 1) Már fut valamelyik porton? (A 8000-es foglaltsága esetén a motor
+    // tartalék portra köt — ugyanazt a tartományt fésüljük át.)
+    final running = await _findHealthyPort();
+    if (running != null) {
+      onLog?.call("A motor már fut (port: $running).");
       return const BackendStatus(BackendPhase.ready, "A motor fut.");
     }
 
@@ -158,12 +184,13 @@ class BackendLauncher {
     return BackendStatus(BackendPhase.failed, why);
   }
 
-  /// Megvárja, míg a /health elérhető (rövid lekérdezésekkel), vagy lejár az
-  /// idő. `isExited`: ha a motor-folyamat közben leállt, nincs mire várni.
+  /// Megvárja, míg a /health elérhető a port-tartomány VALAMELYIK portján
+  /// (a motor tartalék portra köthetett), vagy lejár az idő.
+  /// `isExited`: ha a motor-folyamat közben leállt, nincs mire várni.
   Future<bool> _waitForHealth(Duration timeout, {bool Function()? isExited}) async {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      if (await _api.isHealthy()) return true;
+      if (await _findHealthyPort() != null) return true;
       if (isExited != null && isExited()) return false;
       await Future<void>.delayed(const Duration(milliseconds: 600));
     }

@@ -35,13 +35,36 @@ def _ensure_streams() -> None:
             sys.stderr = f
 
 
+def pick_free_port(host: str, start_port: int, tries: int = 11) -> int:
+    """Az első SZABAD port a start_porttól felfelé (max `tries` próbálkozás).
+
+    Ha a 8000-est már használja valami (másik program, beragadt régi motor),
+    a motor nem hal el, hanem a következő szabad portra köt — a kliens
+    indítója ugyanezt a tartományt fésüli át a /health-tel."""
+    import socket
+    for port in range(start_port, start_port + tries):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind((host, port))
+            return port
+        except OSError:
+            continue
+        finally:
+            s.close()
+    return start_port  # nincs szabad — az eredeti, érthető bind-hibát adja
+
+
 def main() -> int:
     _ensure_streams()
     import uvicorn
     from handball.api.app import create_app
 
     host = os.environ.get("HANDBALL_HOST", "127.0.0.1")
-    port = int(os.environ.get("HANDBALL_PORT", "8000"))
+    want = int(os.environ.get("HANDBALL_PORT", "8000"))
+    port = pick_free_port(host, want)
+    if port != want:
+        print(f"FIGYELEM: a {want}-es port foglalt — tartalék port: {port}",
+              flush=True)
 
     # A frozen (PyInstaller) kiadásban NEM adhatunk import-sztringet a uvicornnak
     # (nincs reload/worker), ezért közvetlenül a kész app-objektumot indítjuk.
