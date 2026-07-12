@@ -54,6 +54,8 @@ class _MatchScreenState extends State<MatchScreen> {
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
+  // Fut-e épp videóklip-export (a gomb letiltásához + pörgettyűhöz).
+  bool _exportingClips = false;
   // Edzői jegyzetek (időbélyeggel) — a backend menti, kattintásra odaugrik
   // a lejátszó. Demó módban nem elérhető (nincs hova menteni).
   List<Map<String, dynamic>> _notes = [];
@@ -272,12 +274,28 @@ class _MatchScreenState extends State<MatchScreen> {
       Padding(
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-        child: Wrap(spacing: 6, runSpacing: 4, children: [
-          _filterChip("all", "Mind"),
-          _filterChip("goal", "Gól"),
-          _filterChip("shot", "Lövés"),
-          _filterChip("turnover", "Labdaeladás"),
-          _filterChip("pass", "Passz"),
+        child: Row(children: [
+          Expanded(
+            child: Wrap(spacing: 6, runSpacing: 4, children: [
+              _filterChip("all", "Mind"),
+              _filterChip("goal", "Gól"),
+              _filterChip("shot", "Lövés"),
+              _filterChip("turnover", "Labdaeladás"),
+              _filterChip("pass", "Passz"),
+            ]),
+          ),
+          // Klip-export: a SZŰRT eseménytípusok jelenetei MP4-ekben, zip-ben.
+          IconButton(
+            tooltip: _exportingClips
+                ? "Klipvágás folyamatban…"
+                : "Videóklipek exportálása (a szűrt típusból)",
+            onPressed:
+                _exportingClips ? null : () => _exportClips(match),
+            icon: _exportingClips
+                ? const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.movie_outlined, color: AppColors.accent),
+          ),
         ]),
       ),
       Expanded(
@@ -292,6 +310,59 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
       ),
     ]);
+  }
+
+  /// Videóklip-export: a szűrt eseménytípusok jelenetei külön MP4-ekbe,
+  /// egy zip-be csomagolva. A vágás a backenden fut (job), a haladást
+  /// pollozzuk, a kész zip-et a felhasználó által választott helyre mentjük.
+  Future<void> _exportClips(Match match) async {
+    // "Mind" szűrőnél passz-klipeket nem vágunk (túl sok, kevés érték).
+    final types = _eventFilter == "all"
+        ? ["goal", "shot", "turnover"]
+        : [_eventFilter];
+    if (types.contains("pass") && types.length == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Passzokból nem készül klip — válassz gólt, lövést "
+              "vagy labdaeladást.")));
+      return;
+    }
+    setState(() => _exportingClips = true);
+    try {
+      final jobId = await _api.startClipExport(widget.matchId, types);
+      // A vágás haladásának követése (másodpercenként).
+      while (true) {
+        await Future.delayed(const Duration(seconds: 1));
+        final job = await _api.fetchJob(jobId);
+        final status = job["status"] as String?;
+        if (status == "done") break;
+        if (status == "error") {
+          throw Exception(job["error"] ?? "ismeretlen hiba");
+        }
+        if (!mounted) return; // közben elnavigáltak — a job magától befejeződik
+      }
+      final bytes = await _api.fetchClipsZip(widget.matchId);
+      if (!mounted) return;
+      final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Videóklipek mentése (zip)",
+        fileName: "klipek_$name.zip",
+        type: FileType.custom,
+        allowedExtensions: const ["zip"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Klipek mentve: $path — kicsomagolás után "
+              "lejátszhatók/megoszthatók")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Klip-export hiba: $e")));
+    } finally {
+      if (mounted) setState(() => _exportingClips = false);
+    }
   }
 
   /// A szűrőnek megfelelő események — az „előző/következő" léptetés is ezt
