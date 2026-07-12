@@ -205,7 +205,8 @@ def _normalize_max_frames(max_frames):
 
 
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                  court_poly=None, start=0, skip_dark=True, on_frame=None, pan=False):
+                  court_poly=None, start=0, skip_dark=True, on_frame=None,
+                  pan=False, jersey_voter=None, ocr_every=5):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -301,7 +302,18 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                         continue
                     color = _torso_color(img, x1, y1, x2, y2)
                     all_colors.append(color)
-                    persons.append((int(b.id[0]), fx, y2, color))
+                    tid = int(b.id[0])
+                    persons.append((tid, fx, y2, color))
+                    # KÍSÉRLETI mezszám-OCR: ritkított mintavétellel (minden
+                    # ocr_every-edik megtartott kockán) leolvasás + szavazat.
+                    if jersey_voter is not None and kept % ocr_every == 0:
+                        from handball.pipeline.jersey_ocr import (
+                            read_jersey_number, torso_crop)
+                        crop = torso_crop(img, (x1, y1, x2, y2))
+                        if crop is not None:
+                            r = read_jersey_number(crop)
+                            if r is not None:
+                                jersey_voter.add(tid, r[0], r[1])
                 elif cls in ball_ids:  # labda — a legmegbízhatóbbat tartjuk
                     if best_ball is None or bc > best_ball[0]:
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
@@ -387,7 +399,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             progress_cb=None, match_id="video-1", estimate=True,
             home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
             track_smooth=True, calib_region="full", calib_rotate=False,
-            calibs=None):
+            calibs=None, jersey_ocr=False):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -448,11 +460,19 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         frac = min(1.0, kept / max(1, show))
         report("B", 0.05 + 0.70 * frac, f"detektálás {kept}/{show}{eta}")
 
+    # KÍSÉRLETI mezszám-OCR: feldolgozás közben leolvasás + szavazás; a
+    # döntések a kész Match-re íródnak (a kézi hozzárendelés erősebb).
+    jersey_voter = None
+    if jersey_ocr:
+        from handball.pipeline.jersey_ocr import JerseyVoter
+        jersey_voter = JerseyVoter()
+
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
         raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                                         court_poly, start=start, skip_dark=skip_dark,
-                                        on_frame=on_frame, pan=bool(calib_list))
+                                        on_frame=on_frame, pan=bool(calib_list),
+                                        jersey_voter=jersey_voter)
     else:
         raw, all_colors = _process_hog(video_path, stride, max_frames)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
@@ -553,6 +573,14 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # (ott valós méter-koordináták vannak).
     report("F", 0.95, "képen kívüli becslés")
     match = Match(meta=meta, frames=frames)
+
+    # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
+    if jersey_voter is not None:
+        from handball.pipeline.jersey_ocr import apply_jersey_decisions
+        n_ocr = apply_jersey_decisions(match, jersey_voter.decisions())
+        if n_ocr:
+            print(f"mezszám-OCR: {n_ocr} track kapott számot "
+                  f"({jersey_voter.decisions()})")
 
     # Játékos-pálya simítás: a detektálási remegés (jitter) csökkentése — a
     # táv/sebesség statisztika ne a dobozok ugrálását mérje. Csak a mért
