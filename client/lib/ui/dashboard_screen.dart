@@ -14,6 +14,7 @@ import "../services/update_service.dart";
 import "../theme/app_theme.dart";
 import "../version.dart";
 import "match_screen.dart";
+import "player_trend_screen.dart";
 import "scouting_screen.dart";
 import "shell/app_shell.dart";
 import "trend_screen.dart";
@@ -691,6 +692,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: AppText.subtitle),
                     ],
                   ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    // Csapatnevek a könyvtárból (egyediek, betűrendben).
+                    final teams = <String>{
+                      for (final m in _matches) ...[
+                        if (m["home_team"] != null) m["home_team"] as String,
+                        if (m["away_team"] != null) m["away_team"] as String,
+                      ]
+                    }.toList()
+                      ..sort();
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => PlayerTrendScreen(teams: teams)));
+                  },
+                  icon: const Icon(Icons.timeline, color: AppColors.textSecondary),
+                  tooltip: "Játékos-fejlődés (mezszám alapján)",
                 ),
                 IconButton(
                   onPressed: _showHelp,

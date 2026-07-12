@@ -275,6 +275,20 @@ class ApiClient {
     return resp.bodyBytes;
   }
 
+  /// Egy játékos fejlődése meccsről meccsre, mezszám alapján
+  /// (GET /players/trend?team=...&jersey=...).
+  Future<Map<String, dynamic>> fetchPlayerTrend(
+      String team, int jersey) async {
+    final uri = Uri.parse("$baseUrl/players/trend").replace(
+        queryParameters: {"team": team, "jersey": "$jersey"});
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült a játékos-fejlődés lekérése: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Mezszám hozzárendelése egy játékoshoz (POST /matches/{id}/jerseys).
   /// jersey = null törli a hozzárendelést.
   Future<void> setJersey(String matchId, int trackId, int? jersey) async {
