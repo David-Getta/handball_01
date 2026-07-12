@@ -164,6 +164,89 @@ List<(double, double, double)> _speedSegments(
   return out;
 }
 
+/// A passzháló egy csomópontja: a játékos átlagos (mért) helye a pályán +
+/// hány passzban vett részt (küldött + fogadott).
+class PassNode {
+  final int trackId;
+  final int? jerseyNumber;
+  final double x;
+  final double y;
+  final int involvement;
+  const PassNode(this.trackId, this.jerseyNumber, this.x, this.y,
+      this.involvement);
+}
+
+/// A passzháló egy éle: két játékos közti passzok száma (oda-vissza együtt —
+/// az edzőt a kapcsolat erőssége érdekli).
+class PassEdge {
+  final int a;
+  final int b;
+  final int count;
+  const PassEdge(this.a, this.b, this.count);
+}
+
+class PassNetwork {
+  final List<PassNode> nodes;
+  final List<PassEdge> edges;
+  final int totalPasses;
+  const PassNetwork(this.nodes, this.edges, this.totalPasses);
+}
+
+/// Passzháló egy csapatra: ki kinek passzol és milyen gyakran. A csomópontok
+/// a játékosok átlagos MÉRT helyén ülnek (ez a posztjukat közelíti), az élek
+/// vastagsága a passzok számával nő — a csapatjáték szerkezete egy képen.
+PassNetwork computePassNetwork(Match match,
+    List<Map<String, dynamic>> events, Team team) {
+  final teamValue = team == Team.home ? "home" : "away";
+  // Él-számláló: rendezetlen pár → passzok száma.
+  final edgeCount = <String, int>{};
+  final involvement = <int, int>{};
+  var total = 0;
+  for (final e in events) {
+    if (e["type"] != "pass" || e["team"] != teamValue) continue;
+    final from = (e["player_id"] as num?)?.toInt();
+    final to = ((e["detail"] as Map?)?["receiver_id"] as num?)?.toInt();
+    if (from == null || to == null || from == to) continue;
+    total++;
+    involvement[from] = (involvement[from] ?? 0) + 1;
+    involvement[to] = (involvement[to] ?? 0) + 1;
+    final key = from < to ? "$from-$to" : "$to-$from";
+    edgeCount[key] = (edgeCount[key] ?? 0) + 1;
+  }
+
+  // Átlagos mért pozíció + mezszám a résztvevő játékosokhoz.
+  final sumX = <int, double>{};
+  final sumY = <int, double>{};
+  final n = <int, int>{};
+  final jersey = <int, int>{};
+  for (final f in match.frames) {
+    for (final p in f.players) {
+      if (p.isEstimated || !involvement.containsKey(p.trackId)) continue;
+      sumX[p.trackId] = (sumX[p.trackId] ?? 0) + p.x;
+      sumY[p.trackId] = (sumY[p.trackId] ?? 0) + p.y;
+      n[p.trackId] = (n[p.trackId] ?? 0) + 1;
+      if (p.jerseyNumber != null) jersey[p.trackId] ??= p.jerseyNumber!;
+    }
+  }
+  final nodes = <PassNode>[
+    for (final id in involvement.keys)
+      if ((n[id] ?? 0) > 0)
+        PassNode(id, jersey[id], sumX[id]! / n[id]!, sumY[id]! / n[id]!,
+            involvement[id]!)
+  ];
+  final known = {for (final node in nodes) node.trackId};
+  final edges = <PassEdge>[];
+  edgeCount.forEach((key, count) {
+    final parts = key.split("-");
+    final a = int.parse(parts[0]), b = int.parse(parts[1]);
+    if (known.contains(a) && known.contains(b)) {
+      edges.add(PassEdge(a, b, count));
+    }
+  });
+  edges.sort((x, y) => y.count.compareTo(x.count));
+  return PassNetwork(nodes, edges, total);
+}
+
 /// Egy idő-ablak intenzitása: a két csapat átlagos mozgás-sebessége (m/s).
 class IntensityWindow {
   final int startFrame; // az ablak kezdete (tracking-frame)

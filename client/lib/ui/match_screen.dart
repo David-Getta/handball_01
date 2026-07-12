@@ -23,13 +23,14 @@ import "decisions_panel.dart";
 import "designer_screen.dart";
 import "scouting_screen.dart";
 import "heatmap_painter.dart";
+import "pass_network_painter.dart";
 import "shell/app_shell.dart";
 import "shot_map_painter.dart";
 import "stats_panel.dart";
 import "summary_panel.dart";
 import "video_panel.dart";
 
-enum ViewMode { players, heatmap, shots }
+enum ViewMode { players, heatmap, shots, passes }
 
 class MatchScreen extends StatefulWidget {
   final String matchId;
@@ -75,6 +76,9 @@ class _MatchScreenState extends State<MatchScreen> {
   // annak híján a labdáéból). Koppintásra a lejátszó a jelenetre ugrik.
   List<ShotMarker> _shots = [];
   String _shotTeam = "all"; // all | home | away — szűrő a lövéstérképen
+  // Passzháló: melyik csapatét mutatjuk (a két háló egymáson olvashatatlan).
+  Team _passTeam = Team.home;
+  PassNetwork? _passNetwork; // a kiválasztott csapat hálója (cache)
 
   // Jelenet-lejátszó: az eredeti videó megjelenítése az elemzés felett.
   // Eseményre kattintva a videó a jelenet idejére ugrik.
@@ -137,6 +141,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _intensity = computeIntensityTimeline(match);
       _events = events;
       _shots = _computeShotMarkers(match, events);
+      _passNetwork = computePassNetwork(match, events, _passTeam);
       _quality = quality;
       _notes = notes;
       _sourceLabel = label;
@@ -1011,11 +1016,37 @@ class _MatchScreenState extends State<MatchScreen> {
             ButtonSegment(value: ViewMode.players, label: Text("Játékosok"), icon: Icon(Icons.groups, size: 18)),
             ButtonSegment(value: ViewMode.heatmap, label: Text("Hőtérkép"), icon: Icon(Icons.whatshot, size: 18)),
             ButtonSegment(value: ViewMode.shots, label: Text("Lövések"), icon: Icon(Icons.sports_handball, size: 18)),
+            ButtonSegment(value: ViewMode.passes, label: Text("Passzháló"), icon: Icon(Icons.hub_outlined, size: 18)),
           ],
           selected: {_viewMode},
           onSelectionChanged: (s) => setState(() => _viewMode = s.first),
         ),
         const SizedBox(width: AppSpacing.md),
+        if (_viewMode == ViewMode.passes)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButton<Team>(
+              value: _passTeam,
+              underline: const SizedBox(),
+              dropdownColor: AppColors.surfaceAlt,
+              items: [
+                DropdownMenuItem(value: Team.home, child: Text(match.meta.homeTeam)),
+                DropdownMenuItem(value: Team.away, child: Text(match.meta.awayTeam)),
+              ],
+              onChanged: (t) {
+                if (t == null) return;
+                setState(() {
+                  _passTeam = t;
+                  _passNetwork = computePassNetwork(_match!, _events, t);
+                });
+              },
+            ),
+          ),
         if (_viewMode == ViewMode.shots)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1107,6 +1138,15 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
             if (_viewMode == ViewMode.shots)
               Positioned(left: 10, top: 10, child: _shotMapChip()),
+            if (_viewMode == ViewMode.passes && _passNetwork != null)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: PassNetworkPainter(
+                      network: _passNetwork!, team: _passTeam),
+                ),
+              ),
+            if (_viewMode == ViewMode.passes)
+              Positioned(left: 10, top: 10, child: _passNetworkChip(match)),
             // A kijelölt játékos adat-kártyája (bal-felső sarok).
             if (_selectedTrack != null && _viewMode == ViewMode.players)
               Positioned(left: 10, top: 10, child: _playerChip(match)),
@@ -1153,6 +1193,38 @@ class _MatchScreenState extends State<MatchScreen> {
                 : "$goals gól / ${shots.length} lövés · $pct%",
             style: AppText.value.copyWith(fontSize: 12)),
       ]),
+    );
+  }
+
+  /// A passzháló összegző kártyája: összes passz + a legerősebb kapcsolat.
+  Widget _passNetworkChip(Match match) {
+    final net = _passNetwork;
+    String text;
+    if (net == null || net.totalPasses == 0) {
+      text = "nincs felismert passz ehhez a csapathoz";
+    } else {
+      text = "${net.totalPasses} passz";
+      if (net.edges.isNotEmpty) {
+        final top = net.edges.first;
+        String name(int id) {
+          for (final n in net.nodes) {
+            if (n.trackId == id) {
+              return n.jerseyNumber != null ? "#${n.jerseyNumber}" : "id $id";
+            }
+          }
+          return "id $id";
+        }
+        text += " · legerősebb: ${name(top.a)} ↔ ${name(top.b)} (${top.count}×)";
+      }
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(text, style: AppText.value.copyWith(fontSize: 12)),
     );
   }
 
