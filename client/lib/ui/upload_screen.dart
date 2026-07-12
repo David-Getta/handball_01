@@ -73,6 +73,7 @@ class _UploadScreenState extends State<UploadScreen> {
   // A profilok (stride, imgsz): gyors = ritkább mintavétel kisebb képen;
   // pontos = sűrűbb mintavétel nagy felbontáson (lassabb, de jobb labda-követés).
   String _quality = "balanced"; // fast | balanced | precise
+  bool _jerseyOcr = false; // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt
   // Feldolgozott hossz: "trial" (~2 perc, gyors ellenőrzés) | "half" (~35
   // perc — ha a videóban az egész meccs van, de csak egy félidő kell;
   // a kezdőpontot a kalibrált képkocka adja) | "full" (a teljes videó).
@@ -253,6 +254,7 @@ class _UploadScreenState extends State<UploadScreen> {
         // szerver a pásztázás-mátrixszal vezeti vissza az alap-kockára).
         calibs: _calib == null ? null : _calibMaps(_calib!),
         start: _calib?.startFrame ?? 0,
+        jerseyOcr: _jerseyOcr,
       );
       _jobId = r["job_id"] as String;
       _matchId = r["match_id"] as String?;
@@ -287,6 +289,7 @@ class _UploadScreenState extends State<UploadScreen> {
               awayTeam: _awayCtrl.text.trim(),
               calibs: calibs,
               start: startFrame,
+              jerseyOcr: _jerseyOcr,
             );
             queued++;
           } catch (e) {
@@ -510,6 +513,23 @@ class _UploadScreenState extends State<UploadScreen> {
             },
             style: AppText.label.copyWith(fontSize: 11),
           ),
+          const SizedBox(height: 6),
+          // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt — a felismert
+          // számokat a szavazó csak elég bizonyíték esetén hirdeti ki,
+          // és a kézi hozzárendelés mindig felülírhatja.
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              height: 28,
+              child: Switch(
+                value: _jerseyOcr,
+                onChanged: (v) => setState(() => _jerseyOcr = v),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text("Mezszám-felismerés (kísérleti) — a leolvasott számok "
+                "kézzel javíthatók a meccs-nézetben",
+                style: AppText.label.copyWith(fontSize: 11)),
+          ]),
           const SizedBox(height: AppSpacing.md),
           Row(children: [
             FilledButton.icon(

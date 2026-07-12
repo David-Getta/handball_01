@@ -245,6 +245,8 @@ def create_app():
                     track_smooth=bool(body.get("track_smooth", True)),
                     home_team=body.get("home_team") or "Csapat A",
                     away_team=body.get("away_team") or "Csapat B",
+                    # KÍSÉRLETI: mezszám-OCR a feldolgozás alatt.
+                    jersey_ocr=bool(body.get("jersey_ocr", False)),
                 )
                 app.state.put_match(match)
                 job["status"] = "done"

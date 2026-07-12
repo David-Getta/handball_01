@@ -72,6 +72,49 @@ class JerseyVoter:
         return out
 
 
+def torso_crop(img, box):
+    """A mezszám-régió (törzs) kivágása egy játékos-dobozból.
+
+    A szám jellemzően a mez hátán/mellén van: a doboz felső-középső
+    sávját vágjuk (fej alatt, csípő felett, oldalt karok nélkül).
+    Kicsi doboznál (nem olvasható szám) None."""
+    x1, y1, x2, y2 = [int(v) for v in box]
+    w, h = x2 - x1, y2 - y1
+    if w < 24 or h < 60:
+        return None
+    ty1 = y1 + int(0.12 * h)
+    ty2 = y1 + int(0.50 * h)
+    tx1 = x1 + int(0.15 * w)
+    tx2 = x2 - int(0.15 * w)
+    H, W = img.shape[:2]
+    ty1, ty2 = max(0, ty1), min(H, ty2)
+    tx1, tx2 = max(0, tx1), min(W, tx2)
+    if ty2 - ty1 < 20 or tx2 - tx1 < 16:
+        return None
+    return img[ty1:ty2, tx1:tx2]
+
+
+def apply_jersey_decisions(match, decisions: dict) -> int:
+    """A szavazó döntéseinek ráírása a Match kockáira ({track_id: szám}).
+
+    Csak azoknak a trackeknek ír számot, amelyeknek még NINCS (a kézi
+    hozzárendelés erősebb az OCR-nél). Visszaadja, hány tracknek adott."""
+    if not decisions:
+        return 0
+    has_manual = set()
+    for fr in match.frames:
+        for p in fr.players:
+            if p.jersey_number is not None:
+                has_manual.add(p.track_id)
+    applied = set()
+    for fr in match.frames:
+        for p in fr.players:
+            if p.track_id in decisions and p.track_id not in has_manual:
+                p.jersey_number = decisions[p.track_id]
+                applied.add(p.track_id)
+    return len(applied)
+
+
 # ---------------------------------------------------------------------------
 # Alapvonal-felismerő: klasszikus CV, tanított modell nélkül.
 # ---------------------------------------------------------------------------

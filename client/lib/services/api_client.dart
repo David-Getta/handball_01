@@ -516,6 +516,7 @@ class ApiClient {
     String? matchId,
     String? homeTeam,
     String? awayTeam,
+    bool jerseyOcr = false, // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -531,6 +532,7 @@ class ApiClient {
       if (matchId != null) "match_id": matchId,
       if (homeTeam != null && homeTeam.isNotEmpty) "home_team": homeTeam,
       if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,
+      if (jerseyOcr) "jersey_ocr": true,
     };
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/process"),

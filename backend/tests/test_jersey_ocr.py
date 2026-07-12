@@ -103,3 +103,34 @@ if __name__ == "__main__":
     test_voter_decisions_format_matches_jerseys_store()
     test_end_to_end_ocr_plus_voter()
     print("Minden mezszám-OCR teszt OK.")
+
+
+def test_torso_crop_geometry():
+    from handball.pipeline.jersey_ocr import torso_crop
+    img = np.zeros((400, 400, 3), np.uint8)
+    crop = torso_crop(img, (100, 100, 180, 300))  # 80 széles, 200 magas doboz
+    assert crop is not None
+    # A törzs-sáv: y 124..200 (0.12h..0.5h), x 112..168 (15% margó).
+    assert crop.shape[0] == 76 and crop.shape[1] == 56
+    # Kicsi doboz: nem olvasható → None.
+    assert torso_crop(img, (0, 0, 20, 50)) is None
+    # Kép szélére lógó doboz: levágva, de nem hibázik.
+    assert torso_crop(img, (350, 300, 480, 600)) is not None
+
+
+def test_apply_decisions_respects_manual_assignments():
+    from handball.models.tracking import (
+        Frame, Match, MatchMeta, PlayerPosition, Team,
+    )
+    from handball.pipeline.jersey_ocr import apply_jersey_decisions
+    frames = [Frame(t=0, players=[
+        PlayerPosition(track_id=1, team=Team.HOME, x=1.0, y=1.0),
+        PlayerPosition(track_id=2, team=Team.HOME, x=2.0, y=2.0,
+                       jersey_number=99),  # kézi szám — az OCR nem írja felül
+    ])]
+    m = Match(meta=MatchMeta(match_id="t", home_team="H", away_team="A",
+                             fps=25.0), frames=frames)
+    n = apply_jersey_decisions(m, {1: 23, 2: 11, 5: 4})
+    assert n == 1
+    assert frames[0].players[0].jersey_number == 23
+    assert frames[0].players[1].jersey_number == 99  # a kézi maradt
