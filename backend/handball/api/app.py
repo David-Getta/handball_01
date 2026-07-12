@@ -615,22 +615,29 @@ def create_app():
         def num(x):
             return f"{x:.1f}".replace(".", ",")  # tizedesvessző (magyar Excel)
 
-        lines = ["Játékos;Csapat;Mezszám;Táv (m);Átl. sebesség (m/s);"
+        # Azonos mezszám = egy játékos: a megszakadt követés trackjei a
+        # mezszám-hozzárendelés után itt EGY sorrá olvadnak össze.
+        from ..pipeline.stats import aggregate_by_jersey
+        fps = match.meta.fps if match.meta.fps > 0 else 25.0
+        rows = aggregate_by_jersey(stats, team_of, jersey_of, fps=fps)
+
+        lines = ["Játékos;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
                  "Max sebesség (km/h);Sprintek;Sprint táv (m);"
                  "Séta (mp);Kocogás (mp);Futás (mp);Sprint (mp);"
                  "Mért kocka;Becsült kocka"]
-        for tid, s in sorted(stats.items()):
-            team = (match.meta.home_team if team_of.get(tid) == "home"
+        for g in rows:
+            team = (match.meta.home_team if g["team"] == "home"
                     else match.meta.away_team)
-            zones = s.zone_seconds or {}
+            zones = g["zone_seconds"]
             lines.append(";".join([
-                f"#{tid}", team, str(jersey_of.get(tid, "")),
-                num(s.distance_m), num(s.avg_speed_ms),
-                num(s.top_speed_ms * 3.6), str(s.sprint_count),
-                num(s.sprint_distance_m),
+                g["label"], team,
+                "+".join(str(t) for t in g["track_ids"]),
+                num(g["distance_m"]), num(g["avg_speed_ms"]),
+                num(g["top_speed_ms"] * 3.6), str(g["sprint_count"]),
+                num(g["sprint_distance_m"]),
                 num(zones.get("seta", 0.0)), num(zones.get("kocogas", 0.0)),
                 num(zones.get("futas", 0.0)), num(zones.get("sprint", 0.0)),
-                str(s.measured_frames), str(s.estimated_frames),
+                str(g["measured_frames"]), str(g["estimated_frames"]),
             ]))
         csv = "\ufeff" + "\r\n".join(lines) + "\r\n"  # BOM: Excel-kompatibilitás
         return Response(

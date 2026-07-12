@@ -479,8 +479,10 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                        '<div class="cols">' + "".join(cols) + "</div>")
 
     # Játékos-terhelés (ha van): a legtöbbet dolgozó játékosok táblája.
+    # Azonos mezszámú trackek EGY játékosként (aggregate_by_jersey).
     load_html = ""
     if player_stats:
+        from .stats import aggregate_by_jersey
         team_of: dict = {}
         jersey_of: dict = {}
         for fr in match.frames:
@@ -488,18 +490,16 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 team_of.setdefault(p.track_id, getattr(p.team, "value", p.team))
                 if p.jersey_number is not None:
                     jersey_of.setdefault(p.track_id, p.jersey_number)
-        ranked = sorted(player_stats.items(),
-                        key=lambda kv: kv[1].distance_m, reverse=True)[:10]
+        ranked = aggregate_by_jersey(player_stats, team_of, jersey_of,
+                                     fps=fps)[:10]
         rows = []
-        for tid, s in ranked:
-            name = meta.home_team if team_of.get(tid) == "home" else meta.away_team
-            jersey = jersey_of.get(tid)
-            label = f"#{jersey}" if jersey is not None else f"id {tid}"
+        for g in ranked:
+            name = meta.home_team if g["team"] == "home" else meta.away_team
             rows.append(
-                f"<tr><td>{escape(label)}</td><td>{escape(name)}</td>"
-                f'<td class="num">{s.distance_m:.0f} m</td>'
-                f'<td class="num">{s.top_speed_ms * 3.6:.1f}</td>'
-                f'<td class="num">{s.sprint_count}</td></tr>')
+                f"<tr><td>{escape(g['label'])}</td><td>{escape(name)}</td>"
+                f'<td class="num">{g["distance_m"]:.0f} m</td>'
+                f'<td class="num">{g["top_speed_ms"] * 3.6:.1f}</td>'
+                f'<td class="num">{g["sprint_count"]}</td></tr>')
         if rows:
             load_html = ('<h2>Játékos-terhelés (top 10 táv szerint)</h2>'
                          '<table><tr><th>Játékos</th><th>Csapat</th>'

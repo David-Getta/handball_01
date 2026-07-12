@@ -108,3 +108,46 @@ if __name__ == "__main__":
     test_zones_sum_to_moving_time()
     test_estimated_positions_do_not_sprint()
     print("Minden sprint-statisztika teszt OK.")
+
+
+def test_aggregate_by_jersey_merges_broken_tracks():
+    """Azonos (csapat, mezszám) trackek egy játékossá olvadnak össze."""
+    from handball.pipeline.stats import PlayerStats, aggregate_by_jersey
+    stats = {
+        1: PlayerStats(track_id=1, distance_m=100.0, top_speed_ms=6.0,
+                       sprint_count=2, sprint_distance_m=20.0,
+                       measured_frames=250,
+                       zone_seconds={"seta": 5.0, "futas": 3.0}),
+        2: PlayerStats(track_id=2, distance_m=50.0, top_speed_ms=7.5,
+                       sprint_count=1, sprint_distance_m=10.0,
+                       measured_frames=250,
+                       zone_seconds={"seta": 2.0, "sprint": 1.0}),
+        3: PlayerStats(track_id=3, distance_m=80.0, top_speed_ms=5.0,
+                       measured_frames=100),
+    }
+    team_of = {1: "home", 2: "home", 3: "away"}
+    jersey_of = {1: 23, 2: 23}  # a 3-asnak nincs száma — külön sor marad
+    rows = aggregate_by_jersey(stats, team_of, jersey_of, fps=25.0)
+    assert len(rows) == 2
+    merged = next(r for r in rows if r["jersey"] == 23)
+    assert merged["track_ids"] == [1, 2]
+    assert merged["distance_m"] == 150.0
+    assert merged["top_speed_ms"] == 7.5  # maximum, nem összeg
+    assert merged["sprint_count"] == 3
+    # Átlagsebesség az összevont adatból: 150 m / (500 kocka / 25 fps) = 7.5.
+    assert abs(merged["avg_speed_ms"] - 7.5) < 0.01
+    assert merged["zone_seconds"]["seta"] == 7.0
+    solo = next(r for r in rows if r["jersey"] is None)
+    assert solo["label"] == "id 3" and solo["distance_m"] == 80.0
+
+
+def test_aggregate_same_jersey_different_teams_stay_separate():
+    """A 23-as hazai és a 23-as vendég NEM ugyanaz a játékos."""
+    from handball.pipeline.stats import PlayerStats, aggregate_by_jersey
+    stats = {
+        1: PlayerStats(track_id=1, distance_m=10.0, measured_frames=25),
+        2: PlayerStats(track_id=2, distance_m=20.0, measured_frames=25),
+    }
+    rows = aggregate_by_jersey(stats, {1: "home", 2: "away"},
+                               {1: 23, 2: 23}, fps=25.0)
+    assert len(rows) == 2

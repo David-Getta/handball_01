@@ -36,8 +36,11 @@ class _StatsPanelState extends State<StatsPanel> {
   String _sort = "dist";
 
   List<PlayerStat> _team(Team team) {
-    final list =
-        widget.stats.values.where((s) => s.team == team).toList();
+    // Azonos mezszám = egy játékos: a megszakadt követés trackjei a
+    // mezszám-hozzárendelés után egy sorrá olvadnak össze.
+    final list = aggregateStatsByJersey(widget.stats)
+        .where((s) => s.team == team)
+        .toList();
     switch (_sort) {
       case "dist":
         list.sort((a, b) => b.distanceM.compareTo(a.distanceM));
