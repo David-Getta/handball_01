@@ -24,11 +24,12 @@ import "designer_screen.dart";
 import "scouting_screen.dart";
 import "heatmap_painter.dart";
 import "shell/app_shell.dart";
+import "shot_map_painter.dart";
 import "stats_panel.dart";
 import "summary_panel.dart";
 import "video_panel.dart";
 
-enum ViewMode { players, heatmap }
+enum ViewMode { players, heatmap, shots }
 
 class MatchScreen extends StatefulWidget {
   final String matchId;
@@ -66,6 +67,10 @@ class _MatchScreenState extends State<MatchScreen> {
   ViewMode _viewMode = ViewMode.players;
   Team _heatmapTeam = Team.home;
   Heatmap? _heatmap;
+  // Lövéstérkép: a lövés/gól események helye a pályán (a lövő pozíciójából,
+  // annak híján a labdáéból). Koppintásra a lejátszó a jelenetre ugrik.
+  List<ShotMarker> _shots = [];
+  String _shotTeam = "all"; // all | home | away — szűrő a lövéstérképen
 
   // Jelenet-lejátszó: az eredeti videó megjelenítése az elemzés felett.
   // Eseményre kattintva a videó a jelenet idejére ugrik.
@@ -126,12 +131,49 @@ class _MatchScreenState extends State<MatchScreen> {
       _stats = computePlayerStats(match);
       _summary = computeMatchSummary(match);
       _events = events;
+      _shots = _computeShotMarkers(match, events);
       _quality = quality;
       _notes = notes;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
     });
+  }
+
+  /// A lövés/gól események helye a pályán. A lövő játékos pozícióját
+  /// használjuk az esemény képkockájából; ha a lövő nem azonosítható, a
+  /// labda helyét; ha az sincs, az eseményt kihagyjuk a térképről.
+  List<ShotMarker> _computeShotMarkers(
+      Match match, List<Map<String, dynamic>> events) {
+    // frame.t → frame index (a t nem feltétlenül a lista-index).
+    final byT = <int, Frame>{for (final f in match.frames) f.t: f};
+    final out = <ShotMarker>[];
+    for (final e in events) {
+      final type = e["type"] as String?;
+      if (type != "shot" && type != "goal") continue;
+      final t = (e["t"] as num?)?.toInt() ?? 0;
+      final frame = byT[t];
+      if (frame == null) continue;
+      final team = e["team"] == "home" ? Team.home : Team.away;
+      final pid = (e["player_id"] as num?)?.toInt();
+      double? x, y;
+      if (pid != null) {
+        for (final p in frame.players) {
+          if (p.trackId == pid) {
+            x = p.x;
+            y = p.y;
+            break;
+          }
+        }
+      }
+      if (x == null && frame.ball != null) {
+        x = frame.ball!.x;
+        y = frame.ball!.y;
+      }
+      if (x == null || y == null) continue;
+      out.add(ShotMarker(t, team, type == "goal", x, y));
+    }
+    return out;
   }
 
   void _setHeatmapTeam(Team team) {
@@ -894,11 +936,33 @@ class _MatchScreenState extends State<MatchScreen> {
           segments: const [
             ButtonSegment(value: ViewMode.players, label: Text("Játékosok"), icon: Icon(Icons.groups, size: 18)),
             ButtonSegment(value: ViewMode.heatmap, label: Text("Hőtérkép"), icon: Icon(Icons.whatshot, size: 18)),
+            ButtonSegment(value: ViewMode.shots, label: Text("Lövések"), icon: Icon(Icons.sports_handball, size: 18)),
           ],
           selected: {_viewMode},
           onSelectionChanged: (s) => setState(() => _viewMode = s.first),
         ),
         const SizedBox(width: AppSpacing.md),
+        if (_viewMode == ViewMode.shots)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButton<String>(
+              value: _shotTeam,
+              underline: const SizedBox(),
+              dropdownColor: AppColors.surfaceAlt,
+              items: [
+                const DropdownMenuItem(value: "all", child: Text("Mindkét csapat")),
+                DropdownMenuItem(value: "home", child: Text(match.meta.homeTeam)),
+                DropdownMenuItem(value: "away", child: Text(match.meta.awayTeam)),
+              ],
+              onChanged: (v) =>
+                  v == null ? null : setState(() => _shotTeam = v),
+            ),
+          ),
         if (_viewMode == ViewMode.heatmap)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -960,6 +1024,15 @@ class _MatchScreenState extends State<MatchScreen> {
                   ),
                 ),
               ),
+            if (_viewMode == ViewMode.shots)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: ShotMapPainter(
+                      shots: _filteredShots(), currentFrame: _frameIndex),
+                ),
+              ),
+            if (_viewMode == ViewMode.shots)
+              Positioned(left: 10, top: 10, child: _shotMapChip()),
             // A kijelölt játékos adat-kártyája (bal-felső sarok).
             if (_selectedTrack != null && _viewMode == ViewMode.players)
               Positioned(left: 10, top: 10, child: _playerChip(match)),
@@ -969,9 +1042,66 @@ class _MatchScreenState extends State<MatchScreen> {
     });
   }
 
+  /// A csapat-szűrőnek megfelelő lövés-jelölők.
+  List<ShotMarker> _filteredShots() {
+    if (_shotTeam == "all") return _shots;
+    final team = _shotTeam == "home" ? Team.home : Team.away;
+    return _shots.where((s) => s.team == team).toList();
+  }
+
+  /// A lövéstérkép összegző kártyája (bal-felső sarok): lövések, gólok,
+  /// hatékonyság a szűrt jelölőkből + jelmagyarázat.
+  Widget _shotMapChip() {
+    final shots = _filteredShots();
+    final goals = shots.where((s) => s.goal).length;
+    final pct = shots.isEmpty ? 0 : (goals * 100 / shots.length).round();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 9, height: 9, decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.gold, width: 2))),
+        const SizedBox(width: 4),
+        Text("gól", style: AppText.label.copyWith(fontSize: 11)),
+        const SizedBox(width: 10),
+        Container(width: 9, height: 9, decoration: const BoxDecoration(
+            color: AppColors.textFaint, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text("lövés", style: AppText.label.copyWith(fontSize: 11)),
+        const SizedBox(width: 12),
+        Text(shots.isEmpty
+                ? "nincs felismert lövés"
+                : "$goals gól / ${shots.length} lövés · $pct%",
+            style: AppText.value.copyWith(fontSize: 12)),
+      ]),
+    );
+  }
+
   /// Kattintás-visszafejtés: a képpontból méter, majd a legközelebbi játékos
   /// (1,5 m-en belül). Ugyanarra kattintva a kijelölés megszűnik.
   void _handleCourtTap(Offset pos, Size size, Frame frame) {
+    if (_viewMode == ViewMode.shots) {
+      // Lövés-jelölőre koppintás → a lejátszó a jelenetre ugrik.
+      final (scale, origin) = CourtPainter.transformFor(size);
+      if (scale <= 0) return;
+      ShotMarker? best;
+      var bestD = 20.0; // px találati sugár
+      for (final s in _filteredShots()) {
+        final p = Offset(origin.dx + s.x * scale, origin.dy + s.y * scale);
+        final d = (p - pos).distance;
+        if (d < bestD) {
+          bestD = d;
+          best = s;
+        }
+      }
+      if (best != null) _seekToFrame(_match!, best.t);
+      return;
+    }
     if (_viewMode != ViewMode.players) return;
     final (scale, origin) = CourtPainter.transformFor(size);
     if (scale <= 0) return;
