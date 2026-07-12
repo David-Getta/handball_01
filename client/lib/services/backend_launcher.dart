@@ -104,7 +104,25 @@ class BackendLauncher {
           "teljes (motorral csomagolt) kiadás kell.");
     }
 
-    // 3) Elindítjuk és megvárjuk, míg válaszol.
+    // 3) macOS: karantén-öngyógyítás. A letöltött (nem notarizált) appban a
+    // beágyazott motort a Gatekeeper a karantén-attribútum miatt CSENDBEN
+    // blokkolhatja — az eredmény: "Connection refused", motor nélkül. Az
+    // attribútum eltávolítása a saját csomagunkon belül biztonságos.
+    if (Platform.isMacOS) {
+      try {
+        final r = await Process.run("/usr/bin/xattr",
+            ["-dr", "com.apple.quarantine", exe.parent.path]);
+        _logLine("karantén-attribútum eltávolítása (kilépési kód: ${r.exitCode})",
+            onLog);
+      } catch (e) {
+        _logLine("karantén-eltávolítás kihagyva: $e", onLog);
+      }
+      try {
+        await Process.run("/bin/chmod", ["+x", exe.path]);
+      } catch (_) {}
+    }
+
+    // 4) Elindítjuk és megvárjuk, míg válaszol.
     _logLine("Motor indítása: ${exe.path}", onLog);
     var exited = false; // idő előtti leállás jelzése a várakozónak
     try {

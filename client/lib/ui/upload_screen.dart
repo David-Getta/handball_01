@@ -14,6 +14,7 @@ import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
+import "../services/backend_launcher.dart";
 import "../theme/app_theme.dart";
 import "calibration_screen.dart";
 import "match_screen.dart";
@@ -110,6 +111,27 @@ class _UploadScreenState extends State<UploadScreen> {
     );
     if (res == null || res.files.isEmpty) return; // a felhasználó megszakította
     final files = res.files;
+
+    // A feltöltés a helyi motorra megy — ha az nem fut, a nyers hálózati
+    // hiba ("Connection refused") semmitmondó. Előbb ellenőrizzük, és ha
+    // kell, megpróbáljuk ÚJRAINDÍTANI a motort (karantén-öngyógyítással).
+    if (!await _api.isHealthy()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A motor nem fut — újraindítás…")));
+      final status = await (BackendLauncher.instance ?? BackendLauncher())
+          .ensureRunning();
+      if (!mounted) return;
+      if (status.phase != BackendPhase.ready) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 12),
+            content: Text("A motor nem indult el: ${status.message}\n"
+                "Próbáld újraindítani a programot; ha marad, a napló "
+                "megmondja az okot (engine-app.log a SportMachine "
+                "adatmappában).")));
+        return;
+      }
+    }
     setState(() {
       _uploading = true;
       _uploadProgress = 0.0;
