@@ -254,9 +254,19 @@ def create_app():
                 job["status"] = "cancelled"
                 job["message"] = "megszakítva"
             except Exception as e:  # a hibát a kliensnek is megmutatjuk
+                msg = str(e)
+                # A nyers zlib-hiba ("Error -3 ... incorrect header check")
+                # önmagában semmitmondó — lefordítjuk cselekvésre: sérült
+                # tömörített fájl (modell-súly vagy programfájl) a tünet.
+                if "incorrect header check" in msg or "decompressing" in msg:
+                    msg += (" — Egy tömörített fájl sérült (modell-súlyfájl "
+                            "vagy program-összetevő). Próbáld újra a "
+                            "feldolgozást (a modellt újratöltjük); ha "
+                            "marad, telepítsd újra a programot a legfrissebb "
+                            "telepítővel.")
                 job["status"] = "error"
-                job["error"] = str(e)
-                job["message"] = f"hiba: {e}"
+                job["error"] = msg
+                job["message"] = f"hiba: {msg}"
 
     @app.get("/jobs")
     def list_jobs():

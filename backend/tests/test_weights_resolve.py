@@ -5,13 +5,30 @@ from scripts.process_video import _resolve_weights, _weights_ok
 
 
 def test_weights_ok_detects_zip_and_junk(tmp_path):
+    import zipfile
     good = tmp_path / "good.pt"
-    good.write_bytes(b"PK\x03\x04 tovabbi tartalom")
+    with zipfile.ZipFile(good, "w") as z:  # valódi, ép zip
+        z.writestr("model.bin", b"sulyok")
     junk = tmp_path / "junk.pt"
     junk.write_bytes(b"<html>hiba</html>")
     assert _weights_ok(str(good)) is True
     assert _weights_ok(str(junk)) is False
     assert _weights_ok(str(tmp_path / "nincs.pt")) is False
+
+
+def test_weights_ok_rejects_truncated_zip(tmp_path):
+    """FÉLBESZAKADT letöltés: 'PK'-val kezdődik, de a zip-jegyzék hiányzik —
+    betöltéskor ez adja az "Error -3 ... incorrect header check" hibát,
+    ezért az épség-ellenőrzésnek el kell utasítania."""
+    import zipfile
+    whole = tmp_path / "whole.pt"
+    with zipfile.ZipFile(whole, "w") as z:
+        z.writestr("model.bin", b"x" * 10000)
+    data = whole.read_bytes()
+    truncated = tmp_path / "truncated.pt"
+    truncated.write_bytes(data[: len(data) // 2])  # a fájl fele hiányzik
+    assert truncated.read_bytes()[:2] == b"PK"  # a régi (2 bájtos) checket átverné
+    assert _weights_ok(str(truncated)) is False
 
 
 def test_resolve_skips_corrupt_candidate(tmp_path, monkeypatch):
@@ -38,6 +55,8 @@ def test_resolve_prefers_valid_downloaded_copy(tmp_path, monkeypatch):
     monkeypatch.setenv("HANDBALL_DATA_DIR", str(tmp_path))
     wdir = tmp_path / "weights"
     wdir.mkdir(parents=True)
-    (wdir / "yolov8n.pt").write_bytes(b"PK\x03\x04 ep fajl")
+    import zipfile
+    with zipfile.ZipFile(wdir / "yolov8n.pt", "w") as z:  # valódi, ép zip
+        z.writestr("model.bin", b"sulyok")
     out = _resolve_weights("yolov8n.pt")
     assert out == str(wdir / "yolov8n.pt")

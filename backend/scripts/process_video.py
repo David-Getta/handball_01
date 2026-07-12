@@ -72,16 +72,21 @@ def _is_dark(img, thresh=40.0):
 
 
 def _weights_ok(path):
-    """Gyors épség-ellenőrzés: a .pt fájl valójában zip, 'PK'-val kezdődik.
-
-    Sérült/csonka fájlnál (tipikus tünet: "Error -3 ... incorrect header
-    check" betöltéskor) inkább továbblépünk a következő jelöltre vagy a
-    letöltésre, mint hogy érthetetlen zlib-hibával elszálljon a feldolgozás.
+    """Épség-ellenőrzés: a .pt fájl valójában zip — a 'PK' kezdet MELLETT a
+    zip központi jegyzékét is ellenőrizzük (zipfile). Egy FÉLBESZAKADT
+    letöltés ugyanis 'PK'-val kezdődik, de a vége (a jegyzék) hiányzik —
+    az ilyen fájl betöltéskor érthetetlen zlib-hibát ad ("Error -3 ...
+    incorrect header check"). Inkább itt szűrjük ki, és újratöltjük.
     """
+    import zipfile
     try:
         with open(path, "rb") as f:
-            return f.read(2) == b"PK"
-    except OSError:
+            if f.read(2) != b"PK":
+                return False
+        with zipfile.ZipFile(path) as z:
+            z.namelist()  # csonka fájlnál (hiányzó jegyzék) itt dob
+        return True
+    except Exception:
         return False
 
 
@@ -194,12 +199,32 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     resolved = _resolve_weights(weights)
     try:
         model = YOLO(resolved)
-    except Exception as e:
-        # Érthető hibaüzenet a felhasználónak (a nyers zlib/torch hiba helyett).
-        raise RuntimeError(
-            f"A detektáló modell nem tölthető be ({resolved}): {e} — "
-            "a súlyfájl sérült lehet; internetkapcsolattal a rendszer "
-            "magától letölti a jót, próbáld újra.") from e
+    except Exception as first_err:
+        # ÖNGYÓGYÍTÁS: ha a fájl a kezelt (letöltött) súly-mappánkban van és
+        # nem tölthető be, sérültnek tekintjük — töröljük, újratöltjük, és
+        # MÉG EGYSZER próbáljuk, mielőtt hibával leállnánk.
+        retried = None
+        try:
+            from handball.storage import data_root
+            managed = str(data_root() / "weights")
+            if os.path.exists(resolved) and \
+                    os.path.abspath(resolved).startswith(os.path.abspath(managed)):
+                print(f"sérült súlyfájl törlése és újratöltése: {resolved}")
+                os.remove(resolved)
+                retried = _resolve_weights(weights)  # újratölti a friss fájlt
+        except Exception:
+            retried = None
+        try:
+            if retried is None:
+                raise first_err
+            model = YOLO(retried)
+        except Exception as e:
+            # Érthető hibaüzenet a felhasználónak (a nyers zlib/torch hiba
+            # helyett), cselekvési javaslattal.
+            raise RuntimeError(
+                f"A detektáló modell nem tölthető be ({resolved}): {e} — "
+                "a súlyfájl sérült lehet; internetkapcsolattal a rendszer "
+                "magától letölti a jót, próbáld újra.") from e
     device = _pick_device()
     labels = {"cuda": "CUDA (NVIDIA GPU)", "mps": "MPS (Apple Silicon GPU)",
               "cpu": "CPU (lassabb — GPU-s gépen sokkal gyorsabb)"}
