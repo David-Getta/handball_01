@@ -21,8 +21,14 @@ on:
         description: "Kiadás verziószáma (pl. 0.1.2). Üresen: csak próba-build."
         required: false
         default: ""
+      platforms:
+        description: "Melyik csomag készüljön (a macOS futtató 10x Actions-percet fogyaszt — iterálás közben érdemes szűkíteni)"
+        required: false
+        default: "all"
+        type: choice
+        options: ["all", "windows", "macos"]
   push:
-    tags: ["v*"]          # verziócímkére automatikus kiadás
+    tags: ["v*"]          # verziócímkére automatikus kiadás (minden platform)
 
 # A Releases oldalra való feltöltéshez írási jog kell a repó tartalmához —
 # enélkül a kiadás-lépés "Resource not accessible by integration" hibát ad.
@@ -53,8 +59,12 @@ jobs:
   # A teljes Windows-telepítő legyártása.
   windows-installer:
     needs: tests
+    # Csak ha kérték (platforms: all/windows); címke-indításnál mindig.
+    if: ${{ github.event.inputs.platforms == '' || github.event.inputs.platforms == null || github.event.inputs.platforms == 'all' || github.event.inputs.platforms == 'windows' }}
     runs-on: windows-latest
-    timeout-minutes: 90
+    # Szoros plafon: egy beragadt job feleslegesen égetné az Actions-percet
+    # (a build normál esetben ~25 perc).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -138,7 +148,7 @@ jobs:
         with:
           name: SportMachine-Setup
           path: dist/installer/SportMachine-Setup.exe
-          retention-days: 14
+          retention-days: 7
 
       - name: Kiadás a Releases oldalra
         if: env.RELEASE_TAG != ''
@@ -153,10 +163,16 @@ jobs:
             Tovább → Telepítés. Részletes (laikus) útmutató: TELEPITES.md.
 
   # A teljes macOS-alkalmazás legyártása (app + beágyazott motor, zip-ben).
+  # FIGYELEM: a macOS futtató 10x szorzóval fogyasztja az Actions-percet —
+  # ez viszi a kiadási költség ~85%-át; iterálás közben hagyd ki (platforms).
   macos-app:
     needs: tests
+    # Csak ha kérték (platforms: all/macos); címke-indításnál mindig.
+    if: ${{ github.event.inputs.platforms == '' || github.event.inputs.platforms == null || github.event.inputs.platforms == 'all' || github.event.inputs.platforms == 'macos' }}
     runs-on: macos-latest
-    timeout-minutes: 90
+    # Szoros plafon: egy beragadt macOS-job 10x szorzóval égetné a keretet
+    # (a build normál esetben ~25 perc).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -243,7 +259,7 @@ jobs:
         with:
           name: SportMachine-macOS
           path: SportMachine-macOS.zip
-          retention-days: 14
+          retention-days: 7
 
       - name: Kiadás a Releases oldalra
         if: env.RELEASE_TAG != ''
