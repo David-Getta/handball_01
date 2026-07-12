@@ -50,6 +50,9 @@ class _MatchScreenState extends State<MatchScreen> {
   // A feldolgozás minőség-önellenőrzése (score + figyelmeztetések) — a
   // felhasználó lássa, mennyire megbízható az elemzés. Demó módban null.
   Map<String, dynamic>? _quality;
+  // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
+  // előző/következő esemény léptetés is a szűrt listán belül ugrál.
+  String _eventFilter = "all";
   // Edzői jegyzetek (időbélyeggel) — a backend menti, kattintásra odaugrik
   // a lejátszó. Demó módban nem elérhető (nincs hova menteni).
   List<Map<String, dynamic>> _notes = [];
@@ -221,11 +224,54 @@ class _MatchScreenState extends State<MatchScreen> {
       );
     }
     final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
-    return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      itemCount: _events.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 6),
-      itemBuilder: (_, i) => _eventRow(_events[i], fps, match),
+    final shown = _filteredEvents();
+    return Column(children: [
+      // Típus-szűrő: az edző pl. csak a gólokat nézi végig, gólról gólra.
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+        child: Wrap(spacing: 6, runSpacing: 4, children: [
+          _filterChip("all", "Mind"),
+          _filterChip("goal", "Gól"),
+          _filterChip("shot", "Lövés"),
+          _filterChip("turnover", "Labdaeladás"),
+          _filterChip("pass", "Passz"),
+        ]),
+      ),
+      Expanded(
+        child: shown.isEmpty
+            ? Center(
+                child: Text("Nincs ilyen típusú esemény.", style: AppText.label))
+            : ListView.separated(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                itemCount: shown.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (_, i) => _eventRow(shown[i], fps, match),
+              ),
+      ),
+    ]);
+  }
+
+  /// A szűrőnek megfelelő események — az „előző/következő" léptetés is ezt
+  /// használja, így a léptetés a kiválasztott típuson belül ugrál.
+  List<Map<String, dynamic>> _filteredEvents() {
+    if (_eventFilter == "all") return _events;
+    return _events.where((e) => e["type"] == _eventFilter).toList();
+  }
+
+  Widget _filterChip(String value, String label) {
+    final selected = _eventFilter == value;
+    return ChoiceChip(
+      label: Text(label, style: AppText.label.copyWith(
+          fontSize: 11,
+          color: selected ? AppColors.onAccent : AppColors.textSecondary)),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: AppColors.accent,
+      backgroundColor: AppColors.surfaceAlt,
+      side: BorderSide(color: selected ? AppColors.accent : AppColors.border),
+      visualDensity: VisualDensity.compact,
+      onSelected: (_) => setState(() => _eventFilter = value),
     );
   }
 
@@ -1037,19 +1083,83 @@ class _MatchScreenState extends State<MatchScreen> {
           onPressed: _togglePlay,
           icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_fill),
         ),
+        // Előző/következő esemény — a szűrt listán belül ugrál (pl. csak gólok).
+        IconButton(
+          iconSize: 24,
+          color: AppColors.textSecondary,
+          tooltip: "Előző esemény",
+          onPressed: _filteredEvents().isEmpty ? null : () => _jumpToEvent(match, -1),
+          icon: const Icon(Icons.skip_previous),
+        ),
+        IconButton(
+          iconSize: 24,
+          color: AppColors.textSecondary,
+          tooltip: "Következő esemény",
+          onPressed: _filteredEvents().isEmpty ? null : () => _jumpToEvent(match, 1),
+          icon: const Icon(Icons.skip_next),
+        ),
         Expanded(
-          child: Slider(
-            value: _frameIndex.toDouble(),
-            min: 0,
-            max: (match.frames.length - 1).toDouble(),
-            onChanged: (v) => setState(() => _frameIndex = v.round()),
-          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Slider(
+              value: _frameIndex.toDouble(),
+              min: 0,
+              max: (match.frames.length - 1).toDouble(),
+              onChanged: (v) => setState(() => _frameIndex = v.round()),
+            ),
+            // Esemény-jelölők az idővonal alatt: arany = gól, türkiz = lövés,
+            // piros = labdaeladás — ránézésre látszik, hol történt valami.
+            if (_events.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: SizedBox(
+                  height: 6,
+                  child: CustomPaint(
+                    size: const Size(double.infinity, 6),
+                    painter: _EventTickPainter(
+                        events: _events, frames: match.frames.length),
+                  ),
+                ),
+              ),
+          ]),
         ),
         const SizedBox(width: AppSpacing.sm),
         Text("${(_frameIndex / fps).toStringAsFixed(1)} s", style: AppText.value),
         Text("  /  ${(match.frames.length / fps).toStringAsFixed(0)} s", style: AppText.label),
       ],
     );
+  }
+
+  /// A lejátszó ugrása a legközelebbi (szűrt) eseményre a megadott irányban.
+  void _jumpToEvent(Match match, int dir) {
+    final events = _filteredEvents();
+    if (events.isEmpty) return;
+    Map<String, dynamic>? target;
+    if (dir > 0) {
+      for (final e in events) {
+        final t = (e["t"] as num?)?.toInt() ?? 0;
+        if (t > _frameIndex) { target = e; break; }
+      }
+      target ??= events.first; // a végén körbeér az elejére
+    } else {
+      for (final e in events.reversed) {
+        final t = (e["t"] as num?)?.toInt() ?? 0;
+        if (t < _frameIndex) { target = e; break; }
+      }
+      target ??= events.last; // az elején körbeér a végére
+    }
+    final t = ((target["t"] as num?)?.toInt() ?? 0)
+        .clamp(0, match.frames.length - 1);
+    setState(() {
+      _timer?.cancel();
+      _playing = false;
+      _frameIndex = t;
+      if (match.meta.videoPath != null && VideoPanel.supported) {
+        _showVideo = true;
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(t));
+    });
   }
 
   Widget _rightPanel(Match match) {
@@ -1093,4 +1203,38 @@ class _MatchScreenState extends State<MatchScreen> {
       ),
     );
   }
+}
+
+/// Esemény-jelölők az idővonal alatt: minden eseményhez egy kis függőleges
+/// vonás a meccsen belüli helyén (arany = gól, türkiz = lövés, piros =
+/// labdaeladás; a passzokat nem rajzoljuk — túl sűrű lenne).
+class _EventTickPainter extends CustomPainter {
+  final List<Map<String, dynamic>> events;
+  final int frames;
+  _EventTickPainter({required this.events, required this.frames});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (frames <= 1) return;
+    for (final e in events) {
+      final type = (e["type"] as String?) ?? "";
+      final color = switch (type) {
+        "goal" => AppColors.gold,
+        "shot" => AppColors.accent,
+        "turnover" => AppColors.away,
+        _ => null,
+      };
+      if (color == null) continue; // passzokat nem jelöljük
+      final t = (e["t"] as num?)?.toInt() ?? 0;
+      final x = size.width * t / (frames - 1);
+      final h = type == "goal" ? size.height : size.height * 0.66;
+      canvas.drawLine(
+          Offset(x, size.height - h), Offset(x, size.height),
+          Paint()..color = color..strokeWidth = type == "goal" ? 2.5 : 1.5);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _EventTickPainter old) =>
+      old.events != events || old.frames != frames;
 }
