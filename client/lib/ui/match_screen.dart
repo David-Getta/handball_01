@@ -19,6 +19,7 @@ import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
+import "court_geometry.dart";
 import "court_painter.dart";
 import "decisions_panel.dart";
 import "designer_screen.dart";
@@ -1208,37 +1209,100 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   /// A lövéstérkép összegző kártyája (bal-felső sarok): lövések, gólok,
-  /// hatékonyság a szűrt jelölőkből + jelmagyarázat.
+  /// hatékonyság + zóna-bontás (irány és távolság szerint). A csapat-
+  /// szűrővel nézőpontot váltasz: a saját csapat = honnan lövünk; az
+  /// ellenfél = honnan kapjuk (védekezés-elemzés).
   Widget _shotMapChip() {
     final shots = _filteredShots();
     final goals = shots.where((s) => s.goal).length;
     final pct = shots.isEmpty ? 0 : (goals * 100 / shots.length).round();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.surface.withOpacity(0.92),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 9, height: 9, decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.gold, width: 2))),
-        const SizedBox(width: 4),
-        Text("gól", style: AppText.label.copyWith(fontSize: 11)),
-        const SizedBox(width: 10),
-        Container(width: 9, height: 9, decoration: const BoxDecoration(
-            color: AppColors.textFaint, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text("lövés", style: AppText.label.copyWith(fontSize: 11)),
-        const SizedBox(width: 12),
-        Text(shots.isEmpty
-                ? "nincs felismert lövés"
-                : "$goals gól / ${shots.length} lövés · $pct%",
-            style: AppText.value.copyWith(fontSize: 12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 9, height: 9, decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.gold, width: 2))),
+          const SizedBox(width: 4),
+          Text("gól", style: AppText.label.copyWith(fontSize: 11)),
+          const SizedBox(width: 10),
+          Container(width: 9, height: 9, decoration: const BoxDecoration(
+              color: AppColors.textFaint, shape: BoxShape.circle)),
+          const SizedBox(width: 4),
+          Text("lövés", style: AppText.label.copyWith(fontSize: 11)),
+          const SizedBox(width: 12),
+          Text(shots.isEmpty
+                  ? "nincs felismert lövés"
+                  : "$goals gól / ${shots.length} lövés · $pct%",
+              style: AppText.value.copyWith(fontSize: 12)),
+        ]),
+        if (shots.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _zoneLine("irány", _zoneBreakdown(shots, _lateralZone,
+              const ["bal szél", "közép", "jobb szél"])),
+          _zoneLine("táv", _zoneBreakdown(shots, _distanceZone,
+              const ["6 m-es", "9 m-es", "távoli"])),
+        ],
       ]),
     );
   }
+
+  /// Melyik oldali sávból jött a lövés — a MEGTÁMADOTT kapu felől nézve
+  /// (a bal szél mindkét kapunál ugyanazt a támadó-oldalt jelenti).
+  static int _lateralZone(ShotMarker s) {
+    final attackingLeftGoal = s.x < courtLength / 2;
+    final third = s.y < courtWidth / 3
+        ? 0
+        : s.y < 2 * courtWidth / 3
+            ? 1
+            : 2;
+    return attackingLeftGoal ? 2 - third : third;
+  }
+
+  /// Milyen távolságról jött a lövés (a közelebbi kapu középpontjától).
+  static int _distanceZone(ShotMarker s) {
+    final gx = s.x < courtLength / 2 ? 0.0 : courtLength;
+    final d = math.sqrt(math.pow(s.x - gx, 2) +
+        math.pow(s.y - courtWidth / 2, 2));
+    return d < 7.5 ? 0 : d < 11.0 ? 1 : 2;
+  }
+
+  /// "gól/lövés" bontás zónánként: [(címke, gól, lövés), ...]
+  static List<(String, int, int)> _zoneBreakdown(List<ShotMarker> shots,
+      int Function(ShotMarker) zoneOf, List<String> labels) {
+    final g = List<int>.filled(labels.length, 0);
+    final n = List<int>.filled(labels.length, 0);
+    for (final s in shots) {
+      final z = zoneOf(s).clamp(0, labels.length - 1);
+      n[z]++;
+      if (s.goal) g[z]++;
+    }
+    return [for (var i = 0; i < labels.length; i++) (labels[i], g[i], n[i])];
+  }
+
+  Widget _zoneLine(String title, List<(String, int, int)> zones) => Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(width: 38, child: Text(title,
+              style: AppText.label.copyWith(
+                  fontSize: 10, color: AppColors.textFaint))),
+          for (final (label, g, n) in zones)
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Text(n == 0 ? "$label –" : "$label $g/$n",
+                  style: AppText.label.copyWith(
+                      fontSize: 11,
+                      color: n == 0
+                          ? AppColors.textFaint
+                          : AppColors.textPrimary)),
+            ),
+        ]),
+      );
 
   /// A passzháló összegző kártyája: összes passz + a legerősebb kapcsolat.
   Widget _passNetworkChip(Match match) {
