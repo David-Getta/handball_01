@@ -16,7 +16,12 @@ class ApiClient {
   /// A backend alap-URL-je. Lokális teszthez a laptopon ez a localhost.
   final String baseUrl;
 
-  ApiClient({this.baseUrl = "http://127.0.0.1:8000"});
+  /// Az alapértelmezett cím — a motor-indító ÁTÁLLÍTJA, ha a motor tartalék
+  /// porton indult (a 8000-es foglalt volt). Az ezután létrejövő kliensek
+  /// automatikusan a jó címet használják.
+  static String defaultBaseUrl = "http://127.0.0.1:8000";
+
+  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? defaultBaseUrl;
 
   /// Életjel: igaz, ha a backend elérhető (GET /health).
   Future<bool> isHealthy() async {

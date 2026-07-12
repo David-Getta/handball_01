@@ -77,8 +77,9 @@ class CalibrationScreen extends StatefulWidget {
   /// Ha null, helyőrző jelenik meg a valódi kép helyett.
   final String? videoPath;
 
-  /// A backend alap-URL-je (lokális módban localhost:8000).
-  final String baseUrl;
+  /// A backend alap-URL-je; null = az aktuális alapértelmezés
+  /// (ApiClient.defaultBaseUrl — a motor tartalék-portját is követi).
+  final String? baseUrl;
 
   /// Melyik képkockát töltse be referenciának (a bevezető után, tartalmas rész).
   final int frameIndex;
@@ -86,7 +87,7 @@ class CalibrationScreen extends StatefulWidget {
   const CalibrationScreen({
     super.key,
     this.videoPath,
-    this.baseUrl = "http://127.0.0.1:8000",
+    this.baseUrl,
     this.frameIndex = 180,
   });
 
