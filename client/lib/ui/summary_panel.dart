@@ -6,17 +6,28 @@ import "package:flutter/material.dart";
 import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
 import "../theme/app_theme.dart";
+import "score_chart.dart";
 
 class SummaryPanel extends StatelessWidget {
   final MatchSummary summary;
   final String homeName;
   final String awayName;
 
+  /// Gól-események az eredmény-alakulás grafikonhoz (üresnél nincs grafikon).
+  final List<Map<String, dynamic>> goals;
+  final int totalFrames;
+  final double fps;
+  final void Function(int frame)? onSeekFrame;
+
   const SummaryPanel({
     super.key,
     required this.summary,
     required this.homeName,
     required this.awayName,
+    this.goals = const [],
+    this.totalFrames = 0,
+    this.fps = 25.0,
+    this.onSeekFrame,
   });
 
   @override
@@ -24,6 +35,19 @@ class SummaryPanel extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        if (goals.isNotEmpty) ...[
+          Text("EREDMÉNY-ALAKULÁS", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          ScoreChart(
+            goals: goals,
+            totalFrames: totalFrames,
+            fps: fps,
+            homeName: homeName,
+            awayName: awayName,
+            onSeekFrame: onSeekFrame,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
         Text("FÁZIS-MEGOSZLÁS", style: AppText.sectionLabel),
         const SizedBox(height: AppSpacing.sm),
         _bar("Hazai támadás", summary.phasePercentages[Phase.homeAttack] ?? 0, AppColors.home),
