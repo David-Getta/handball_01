@@ -280,6 +280,29 @@ class ApiClient {
     return resp.bodyBytes;
   }
 
+  /// A teljes meccskönyvtár letöltése zip-ként (GET /library/export).
+  Future<List<int>> exportLibrary() async {
+    final resp = await http.get(Uri.parse("$baseUrl/library/export"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a könyvtár mentése: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
+  /// Meccskönyvtár visszaállítása zip-ből (POST /library/import).
+  Future<Map<String, dynamic>> importLibrary(List<int> zipBytes) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/library/import"),
+      headers: {"Content-Type": "application/zip"},
+      body: zipBytes,
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült a könyvtár visszaállítása: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Egy játékos fejlődése meccsről meccsre, mezszám alapján
   /// (GET /players/trend?team=...&jersey=...).
   Future<Map<String, dynamic>> fetchPlayerTrend(

@@ -77,13 +77,25 @@ def create_app():
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
         return _data_dir / f"{safe}.json"
 
+    def _load_store_from_disk() -> int:
+        """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
+        visszaállítás után). A jegyzet/mezszám/roster kísérőfájlokat a nevük
+        különbözteti meg (*.notes.json stb.) — azok nem meccsek."""
+        loaded = 0
+        for f in sorted(_data_dir.glob("*.json")):
+            if any(f.name.endswith(s) for s in
+                   (".notes.json", ".jerseys.json", ".roster.json")):
+                continue
+            try:
+                m = Match.from_json(f.read_text(encoding="utf-8"))
+                _store[m.meta.match_id] = m
+                loaded += 1
+            except Exception:
+                pass  # sérült fájlt átugrunk, ne akadályozza az indulást
+        return loaded
+
     # Indításkor betöltjük a korábban lementett meccseket a memóriába.
-    for _f in sorted(_data_dir.glob("*.json")):
-        try:
-            _m = Match.from_json(_f.read_text(encoding="utf-8"))
-            _store[_m.meta.match_id] = _m
-        except Exception:
-            pass  # sérült fájlt átugrunk, ne akadályozza az indulást
+    _load_store_from_disk()
 
     @app.get("/health")
     def health():
@@ -781,6 +793,62 @@ def create_app():
         _apply_jerseys(match, {str(track_id): jersey})
         _put_match(match)
         return {"jerseys": mapping}
+
+    @app.get("/library/export")
+    def export_library():
+        """A TELJES meccskönyvtár egyetlen zip-ben: meccsek + jegyzetek +
+        mezszámok + kiállítások + kalibrációk. Gépváltáshoz / biztonsági
+        mentéshez — a videófájlokat NEM tartalmazza (azok nagyok és a
+        felhasználó saját mappáiban vannak)."""
+        import zipfile
+        from fastapi.responses import FileResponse
+        root = data_root() / "data"
+        if not root.exists():
+            raise HTTPException(status_code=404, detail="nincs még adat")
+        zip_path = data_root() / "konyvtar_mentes.zip"
+        n = 0
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(root.rglob("*")):
+                if f.is_file():
+                    z.write(f, f.relative_to(root).as_posix())
+                    n += 1
+        if n == 0:
+            raise HTTPException(status_code=404, detail="nincs még adat")
+        return FileResponse(str(zip_path), media_type="application/zip",
+                            filename="sportmachine_konyvtar.zip")
+
+    async def import_library(request):
+        """Meccskönyvtár visszaállítása a /library/export zip-jéből (nyers
+        bájt-folyam a törzsben). A meglévő fájlokat felülírja, majd újra
+        betölti a tárat. Path-traversal ellen csak a data/ alá csomagolunk ki.
+        """
+        import io
+        import zipfile
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+        try:
+            z = zipfile.ZipFile(io.BytesIO(bytes(body)))
+        except Exception:
+            raise HTTPException(status_code=400,
+                                detail="a feltöltött fájl nem érvényes zip")
+        root = (data_root() / "data").resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        restored = 0
+        for info in z.infolist():
+            if info.is_dir():
+                continue
+            dest = (root / info.filename).resolve()
+            if not str(dest).startswith(str(root)):
+                continue  # kitörési kísérlet (../ vagy abszolút út) — kihagyjuk
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(z.read(info))
+            restored += 1
+        loaded = _load_store_from_disk()
+        return {"restored_files": restored, "matches": loaded}
+
+    import_library.__annotations__["request"] = Request
+    app.post("/library/import")(import_library)
 
     @app.get("/players/trend")
     def get_player_trend(team: str, jersey: int):
