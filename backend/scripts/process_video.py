@@ -140,6 +140,23 @@ def _resolve_weights(weights):
     return weights
 
 
+def _class_ids(names) -> tuple[list[int], list[int]]:
+    """(játékos-osztályok, labda-osztályok) a modell osztálynevei alapján.
+
+    Az előtanított COCO-modellben a person=0 és a sports ball=32; a saját,
+    kézilabdára finomhangolt modellben (scripts/finetune.py) person=0 és
+    ball=1. A neveket nézzük, így MINDKÉT modell külön beállítás nélkül
+    működik — ismeretlen névlistánál a COCO-kiosztás a tartalék."""
+    person, ball = [], []
+    for k, v in (names or {}).items():
+        n = str(v).strip().lower()
+        if n == "person":
+            person.append(int(k))
+        elif "ball" in n:
+            ball.append(int(k))
+    return (person or [0]), (ball or [32])
+
+
 def _pick_device():
     """A leggyorsabb elérhető inferencia-eszköz: CUDA (NVIDIA) → MPS (Apple
     Silicon GPU-ja, M1..M5) → CPU. Az MPS a Macen többszörös gyorsulást ad."""
@@ -241,8 +258,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     # is elkapja; a JÁTÉKOSOKAT utólag szűrjük a megadott (magasabb) küszöbre, hogy
     # ne jöjjenek téves emberek. Így egy inferencia/frame (kétszer gyorsabb).
     # A `start` a bevezető (sötét) rész átugrására: csak innen dolgozunk fel.
+    # Osztály-kiosztás a modell NEVEI alapján (COCO: person=0, sports ball=32;
+    # saját finomhangolt modell: person=0, ball=1) — mindkettő működik.
+    person_ids, ball_ids = _class_ids(getattr(model, "names", None))
     results = model.track(source=video_path, stream=True, persist=True,
-                          classes=[0, 32], imgsz=1920, conf=0.05, device=device,
+                          classes=person_ids + ball_ids, imgsz=1920, conf=0.05,
+                          device=device,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
     kept = 0
     skipped_dark = 0
@@ -271,7 +292,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                 bc = float(b.conf[0])
                 x1, y1, x2, y2 = [int(v) for v in b.xyxy[0].tolist()]
                 fx = (x1 + x2) / 2.0
-                if cls == 0:
+                if cls in person_ids:
                     if bc < conf:  # játékos-küszöb (a low-conf téves emberek kiszűrése)
                         continue
                     if poly is not None and cv2.pointPolygonTest(poly, (float(fx), float(y2)), False) < 0:
@@ -281,7 +302,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     color = _torso_color(img, x1, y1, x2, y2)
                     all_colors.append(color)
                     persons.append((int(b.id[0]), fx, y2, color))
-                elif cls == 32:  # labda — a legmegbízhatóbbat tartjuk
+                elif cls in ball_ids:  # labda — a legmegbízhatóbbat tartjuk
                     if best_ball is None or bc > best_ball[0]:
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
         ball_xy = (best_ball[1], best_ball[2]) if best_ball else None
