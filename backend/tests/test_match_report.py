@@ -40,7 +40,10 @@ def test_report_includes_heatmaps_when_given():
     hms = {t.value: compute_team_heatmap(m, t) for t in (Team.HOME, Team.AWAY)}
     html = match_report_html(m, {}, [], None, heatmaps=hms)
     assert "Területi lefedettség" in html
-    assert html.count("<svg") == 2  # mindkét csapat hőtérképe
+    # Mindkét csapat hőtérképe megvan (más szakaszok — pl. tempó-grafikon —
+    # további SVG-ket adhatnak, ezért a hőtérkép-szakaszon belül számolunk).
+    hm_section = html.split("Területi lefedettség")[1]
+    assert hm_section.count("<svg") == 2
 
 
 def test_report_includes_player_load_when_given():
@@ -67,3 +70,27 @@ def test_report_includes_notes_sorted_and_escaped():
     assert "<b>jegyzet</b>" not in html  # escape-elve
     # jegyzetek nélkül nincs szakasz
     assert "Edzői jegyzetek" not in match_report_html(m, {}, [], None)
+
+
+def test_report_includes_shot_map_and_passes_when_events_exist():
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=5)
+    events = detect_events(m)
+    html = match_report_html(m, {}, events, None)
+    has_shot = any(getattr(e.type, "value", e.type) in ("shot", "goal")
+                   for e in events)
+    has_pass = any(getattr(e.type, "value", e.type) == "pass" for e in events)
+    if has_shot:
+        assert "Lövéstérkép" in html
+    if has_pass:
+        assert "passz-kapcsolatok" in html.lower()
+    # események nélkül egyik szakasz sincs
+    empty = match_report_html(m, {}, [], None)
+    assert "Lövéstérkép" not in empty
+    assert "passz-kapcsolatok" not in empty.lower()
+
+
+def test_report_includes_intensity_chart():
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=6)
+    html = match_report_html(m, {}, [], None)
+    assert "Tempó-alakulás" in html
+    assert html.count("<polyline") >= 2  # két csapat vonala

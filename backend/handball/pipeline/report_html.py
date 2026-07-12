@@ -269,6 +269,140 @@ def _heatmap_svg(hm, color: str = "#12988a", width: int = 360) -> str:
         f'</svg>')
 
 
+def _shot_positions(match, events) -> list[tuple[float, float, str, bool]]:
+    """A lövés/gól események helye (x, y méter, csapat, gól-e) — a lövő
+    pozíciójából az esemény kockáján, annak híján a labdáéból."""
+    by_t = {f.t: f for f in match.frames}
+    out = []
+    for e in events:
+        typ = getattr(getattr(e, "type", None), "value", None) or \
+            (e.get("type") if isinstance(e, dict) else None)
+        if typ not in ("shot", "goal"):
+            continue
+        t = getattr(e, "t", None) if not isinstance(e, dict) else e.get("t")
+        frame = by_t.get(int(t or 0))
+        if frame is None:
+            continue
+        team = getattr(getattr(e, "team", None), "value", None) or \
+            (e.get("team") if isinstance(e, dict) else "")
+        pid = getattr(e, "player_id", None) if not isinstance(e, dict) \
+            else e.get("player_id")
+        x = y = None
+        if pid is not None:
+            for p in frame.players:
+                if p.track_id == pid:
+                    x, y = p.x, p.y
+                    break
+        if x is None and frame.ball is not None:
+            x, y = frame.ball.x, frame.ball.y
+        if x is None:
+            continue
+        out.append((x, y, str(team), typ == "goal"))
+    return out
+
+
+def _shot_map_svg(shots, width: int = 480) -> str:
+    """Lövéstérkép-SVG a jelentésbe: pálya + lövés-pontok (gól = arany
+    körvonal, kimaradt = halványabb), a csapatok a jelentés színeivel."""
+    height = width // 2
+    sx, sy = width / 40.0, height / 20.0
+    colors = {"home": "#2f6fb2", "away": "#b2453a"}
+    dots = []
+    for (x, y, team, goal) in shots:
+        c = colors.get(team, "#8492A6")
+        extra = ' stroke="#9d7526" stroke-width="2.5"' if goal else ""
+        dots.append(
+            f'<circle cx="{x * sx:.1f}" cy="{y * sy:.1f}" r="5" fill="{c}" '
+            f'fill-opacity="{1.0 if goal else 0.45}"{extra}/>')
+    mid = width / 2
+    return (
+        f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" '
+        f'xmlns="http://www.w3.org/2000/svg">'
+        f'<rect x="0" y="0" width="{width}" height="{height}" rx="8" '
+        f'fill="#f4f7fa" stroke="#c9d3de"/>'
+        f'<line x1="{mid}" y1="0" x2="{mid}" y2="{height}" stroke="#8492A6" '
+        f'stroke-width="1"/>' + "".join(dots) + "</svg>")
+
+
+def _intensity_svg(windows, total_frames: int, fps: float,
+                   width: int = 720, height: int = 150) -> str:
+    """Tempó-alakulás SVG: a két csapat átlagsebessége idő-ablakonként."""
+    if len(windows) < 2 or total_frames < 2:
+        return ""
+    pad_l, pad_r, pad_t, pad_b = 30, 10, 8, 22
+    peak = max(max(w["home_avg_ms"], w["away_avg_ms"]) for w in windows)
+    peak = peak * 1.15 if peak > 0 else 1.0
+
+    def x(frame):
+        return pad_l + (width - pad_l - pad_r) * frame / (total_frames - 1)
+
+    def y(ms):
+        return height - pad_b - (height - pad_t - pad_b) * ms / peak
+
+    def center(i):
+        nxt = windows[i + 1]["start_frame"] if i + 1 < len(windows) else total_frames
+        return (windows[i]["start_frame"] + nxt) / 2
+
+    parts = []
+    step = 0.5 if peak <= 2 else 1.0
+    v = 0.0
+    while v <= peak:
+        parts.append(f'<line x1="{pad_l}" y1="{y(v):.1f}" x2="{width - pad_r}" '
+                     f'y2="{y(v):.1f}" stroke="#e4e9f0" stroke-width="1"/>'
+                     f'<text x="4" y="{y(v) + 3:.1f}" font-size="9" '
+                     f'fill="#8492A6">{v:g}</text>')
+        v += step
+    dur_min = total_frames / fps / 60.0
+    parts.append(f'<text x="{pad_l}" y="{height - 6}" font-size="9" '
+                 f'fill="#8492A6">0\'</text>'
+                 f'<text x="{width - pad_r - 16}" y="{height - 6}" font-size="9" '
+                 f'fill="#8492A6">{dur_min:.0f}\'</text>')
+    for key, color in (("home_avg_ms", "#2f6fb2"), ("away_avg_ms", "#b2453a")):
+        pts = " ".join(f"{x(center(i)):.1f},{y(w[key]):.1f}"
+                       for i, w in enumerate(windows))
+        parts.append(f'<polyline points="{pts}" fill="none" stroke="{color}" '
+                     f'stroke-width="2"/>')
+    return (f'<svg viewBox="0 0 {width} {height}" width="{width}" '
+            f'height="{height}" xmlns="http://www.w3.org/2000/svg">'
+            + "".join(parts) + "</svg>")
+
+
+def _pass_pairs(match, events, team_value: str, top: int = 5):
+    """Egy csapat passz-összegzése: (összes passz, top párok listája
+    [(A-label, B-label, darab), ...]) — mezszámmal, ha ismert."""
+    jersey = {}
+    for fr in match.frames:
+        for p in fr.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    def label(tid):
+        j = jersey.get(tid)
+        return f"#{j}" if j is not None else f"id {tid}"
+
+    pairs: dict[tuple, int] = {}
+    total = 0
+    for e in events:
+        typ = getattr(getattr(e, "type", None), "value", None) or \
+            (e.get("type") if isinstance(e, dict) else None)
+        team = getattr(getattr(e, "team", None), "value", None) or \
+            (e.get("team") if isinstance(e, dict) else "")
+        if typ != "pass" or team != team_value:
+            continue
+        pid = getattr(e, "player_id", None) if not isinstance(e, dict) \
+            else e.get("player_id")
+        detail = (getattr(e, "detail", None) if not isinstance(e, dict)
+                  else e.get("detail")) or {}
+        rid = detail.get("receiver_id")
+        if pid is None or rid is None or pid == rid:
+            continue
+        total += 1
+        key = (min(pid, rid), max(pid, rid))
+        pairs[key] = pairs.get(key, 0) + 1
+    ranked = sorted(pairs.items(), key=lambda kv: kv[1], reverse=True)[:top]
+    return total, [(label(a), label(b), n) for (a, b), n in ranked]
+
+
 def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                       heatmaps: dict | None = None,
                       player_stats: dict | None = None,
@@ -373,6 +507,54 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                          '<th class="num">Sprint</th></tr>' + "".join(rows)
                          + "</table>")
 
+    # Lövéstérkép (ha van lövés/gól esemény): honnan lőttek és mi lett belőle.
+    shots_html = ""
+    try:
+        shots = _shot_positions(match, events)
+        if shots:
+            shots_html = ('<h2>Lövéstérkép</h2>'
+                          '<div style="text-align:center">'
+                          + _shot_map_svg(shots) +
+                          '<p class="note">arany körvonal = gól · halvány = '
+                          'kimaradt lövés · kék = ' + home + ' · piros = '
+                          + away + '</p></div>')
+    except Exception:
+        pass  # a jelentés lövéstérkép nélkül is teljes
+
+    # Tempó-alakulás (fáradás): csapatonkénti átlagsebesség idő-ablakonként.
+    intensity_html = ""
+    try:
+        from .stats import compute_intensity_timeline
+        windows = compute_intensity_timeline(match)
+        svg = _intensity_svg(windows, len(match.frames), fps)
+        if svg:
+            intensity_html = ('<h2>Tempó-alakulás (fáradás)</h2>' + svg +
+                              '<p class="note">átlagos mozgás-sebesség (m/s) '
+                              'idő-ablakonként · kék = ' + home + ' · piros = '
+                              + away + '</p>')
+    except Exception:
+        pass
+
+    # Passz-kapcsolatok: csapatonként a legerősebb párok.
+    passes_html = ""
+    try:
+        cols = []
+        for team_value, name in (("home", meta.home_team),
+                                 ("away", meta.away_team)):
+            total, ranked = _pass_pairs(match, events, team_value)
+            if total == 0:
+                continue
+            rows = "".join(
+                f'<tr><td>{escape(a)} ↔ {escape(b)}</td>'
+                f'<td class="num">{n}×</td></tr>' for a, b, n in ranked)
+            cols.append(f'<div class="col"><b>{escape(name)}</b> '
+                        f'({total} passz)<table>{rows}</table></div>')
+        if cols:
+            passes_html = ('<h2>Legerősebb passz-kapcsolatok</h2>'
+                           '<div class="cols">' + "".join(cols) + "</div>")
+    except Exception:
+        pass
+
     # Edzői jegyzetek (ha vannak): időbélyeggel, idő szerint rendezve.
     notes_html = ""
     if notes:
@@ -467,6 +649,12 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   {goals_html}
 
   {load_html}
+
+  {shots_html}
+
+  {intensity_html}
+
+  {passes_html}
 
   {notes_html}
 
