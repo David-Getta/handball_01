@@ -90,3 +90,33 @@ class TeamClassifier:
         kiszűrjük (a pipeline átugorja). Lásd docs/FOOTAGE_NOTES.md.
         """
         return self._label_for(track) == AppearanceLabel.REFEREE
+
+
+def majority_team_by_track(colors_by_track: dict, centers) -> dict:
+    """Track-szintű TÖBBSÉGI csapat-döntés a színmintákból.
+
+    A kockánkénti szín-döntés zajos: egy határeset-mezű játékos (árnyék,
+    megvilágítás) kockáról kockára villoghatna a két csapat között. Itt a
+    track ÖSSZES színmintája szavaz — a többség dönt, és a track minden
+    pozíciója ugyanazt a csapat-címkét kapja.
+
+    - colors_by_track: {track_id: [(r, g, b) vagy hasonló színvektor, ...]}
+    - centers: a két klaszter-középpont (kmeans eredménye); None esetén
+      mindenki HOME (nincs mire szavazni).
+
+    Visszatérés: {track_id: Team}.
+    """
+    if centers is None:
+        return {tid: Team.HOME for tid in colors_by_track}
+
+    def _dist(a, b):
+        return sum((float(x) - float(y)) ** 2 for x, y in zip(a, b))
+
+    out = {}
+    for tid, colors in colors_by_track.items():
+        votes_home = 0
+        for c in colors:
+            if _dist(c, centers[0]) <= _dist(c, centers[1]):
+                votes_home += 1
+        out[tid] = Team.HOME if votes_home * 2 >= len(colors) else Team.AWAY
+    return out

@@ -526,6 +526,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         d1 = float(np.linalg.norm(np.array(color) - centers2[1]))
         return Team.HOME if d0 <= d1 else Team.AWAY
 
+    # Track-szintű TÖBBSÉGI csapat-döntés: a kockánkénti szín-döntés zajos
+    # (árnyék/megvilágítás miatt egy játékos villoghatna a két csapat
+    # között) — a track összes színmintája szavaz, a többség dönt.
+    from handball.pipeline.teams import majority_team_by_track
+    _colors_by_track: dict = {}
+    for (persons_, _b_, _p_) in raw:
+        for (tid_, _fx_, _fy_, color_) in persons_:
+            _colors_by_track.setdefault(tid_, []).append(color_)
+    team_of_track = majority_team_by_track(_colors_by_track, centers2)
+
     # KALIBRÁCIÓ: ha van 4 sarok (kép-pixel), homográfiával pontos pálya-koordinátára
     # váltunk, és a pályán KÍVÜL esőket (kispad/edző) eldobjuk (CourtRegion).
     to_court = None
@@ -590,8 +600,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             if region is not None and not region.contains(cx, cy):
                 dropped += 1
                 continue  # pályán kívül (kispad/edző/néző)
-            players.append(PlayerPosition(track_id=tid, team=team_of(color),
-                                          x=cx, y=cy, source=PositionSource.MEASURED, confidence=1.0))
+            players.append(PlayerPosition(
+                track_id=tid,
+                # A track többségi csapata; tartalék a kockánkénti döntés.
+                team=team_of_track.get(tid, team_of(color)),
+                x=cx, y=cy, source=PositionSource.MEASURED, confidence=1.0))
         ball = None
         if ball_xy:
             bx, by = map_xy(ball_xy[0], ball_xy[1], panH)
