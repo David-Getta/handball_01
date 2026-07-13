@@ -887,6 +887,19 @@ def create_app():
                       default=0.0)
             sprints = sum(stats[t].sprint_count for t in tracks if t in stats)
             frames = sum(stats[t].measured_frames for t in tracks if t in stats)
+            # Lövés-hatékonyság: a lövés-események lövője (player_id) a
+            # játékos valamelyik trackje — így a gól/lövés trend is látszik.
+            shots = goals = 0
+            try:
+                from ..pipeline.event_detection import EventType, detect_shots
+                for e in detect_shots(match):
+                    if e.player_id not in tracks or e.team != side:
+                        continue
+                    shots += 1
+                    if e.type == EventType.GOAL:
+                        goals += 1
+            except Exception:
+                pass
             points.append({
                 "match_id": match.meta.match_id,
                 "date": match.meta.date,
@@ -896,6 +909,9 @@ def create_app():
                 "top_speed_ms": round(top, 2),
                 "sprint_count": sprints,
                 "minutes": round(frames / fps / 60.0, 1),
+                "shots": shots,
+                "goals": goals,
+                "shot_pct": round(100.0 * goals / shots, 1) if shots else None,
             })
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey, "points": points}

@@ -182,12 +182,19 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
     final bestTop = _points.fold(
         0.0, (m, p) => (p["top_speed_ms"] as num) > m
             ? (p["top_speed_ms"] as num).toDouble() : m);
+    final totalShots = _points.fold(
+        0, (s, p) => s + ((p["shots"] as num?)?.toInt() ?? 0));
+    final totalGoals = _points.fold(
+        0, (s, p) => s + ((p["goals"] as num?)?.toInt() ?? 0));
     return [
       // Szezon-összkép.
       Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
         _chip("${_points.length} meccs"),
         _chip("legjobb max sebesség: ${(bestTop * 3.6).toStringAsFixed(1)} km/h"),
         _chip("összes sprint: $totalSprints"),
+        if (totalShots > 0)
+          _chip("gól/lövés: $totalGoals/$totalShots "
+              "(${(100.0 * totalGoals / totalShots).toStringAsFixed(0)}%)"),
       ]),
       const SizedBox(height: AppSpacing.lg),
       // Fejléc + meccsenkénti sorok (táv-csíkkal — a forma ránézésre látszik).
@@ -199,6 +206,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           _cell("táv", 64),
           _cell("max km/h", 66),
           _cell("sprint", 48),
+          _cell("gól/löv", 56),
           _cell("perc", 44),
         ]),
       ),
@@ -267,6 +275,15 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 textAlign: TextAlign.right,
                 style: AppText.label.copyWith(
                     fontSize: 13, color: AppColors.gold))),
+        SizedBox(
+            width: 56,
+            child: Text(
+                ((p["shots"] as num?)?.toInt() ?? 0) > 0
+                    ? "${p["goals"] ?? 0}/${p["shots"]}"
+                    : "—",
+                textAlign: TextAlign.right,
+                style: AppText.label.copyWith(
+                    fontSize: 13, color: AppColors.textPrimary))),
         SizedBox(
             width: 44,
             child: Text("${p["minutes"] ?? "-"}",
