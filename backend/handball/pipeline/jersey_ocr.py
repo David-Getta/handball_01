@@ -116,8 +116,43 @@ def apply_jersey_decisions(match, decisions: dict) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Alapvonal-felismerő: klasszikus CV, tanított modell nélkül.
+# Számjegy-osztályozás: TANÍTOTT kis háló (digit_net.npz — lásd
+# scripts/train_digit_net.py), tartalékként sablon-illesztés.
 # ---------------------------------------------------------------------------
+
+_NET_CACHE: dict = {}
+
+
+def _load_digit_net():
+    """A csomaggal szállított tanított számjegy-háló betöltése (egyszer).
+    None, ha a fájl hiányzik/sérült — ilyenkor sablon-illesztés megy."""
+    if "net" in _NET_CACHE:
+        return _NET_CACHE["net"]
+    net = None
+    try:
+        import numpy as np
+        from pathlib import Path
+        p = Path(__file__).parent / "digit_net.npz"
+        if p.exists():
+            d = np.load(str(p))
+            net = (d["w1"], d["b1"], d["w2"], d["b2"])
+    except Exception:
+        net = None
+    _NET_CACHE["net"] = net
+    return net
+
+
+def _classify_digit(roi28, net):
+    """Egy 28x28-as (fehér jegy fekete alapon) kivágás osztályozása a
+    tanított hálóval → (számjegy, valószínűség)."""
+    import numpy as np
+    x = roi28.astype(np.float32).reshape(1, -1) / 255.0
+    h = np.maximum(0.0, x @ net[0] + net[1])
+    logits = h @ net[2] + net[3]
+    e = np.exp(logits - logits.max())
+    p = e / e.sum()
+    d = int(p.argmax())
+    return d, float(p[0, d])
 
 def _digit_templates(size: int = 28):
     """Számjegy-sablonok 0..9 — több vastagsággal renderelve (cv2.putText).
@@ -179,18 +214,23 @@ def read_jersey_number(crop, min_confidence: float = 0.55):
         if not (1 <= len(boxes) <= 2):
             continue
         boxes.sort(key=lambda b: b[0])  # balról jobbra (tízes, egyes)
+        net = _load_digit_net()
         digits, confs = [], []
         for (x, y, w, h) in boxes:
             roi = bw[y:y + h, x:x + w]
             roi = cv2.resize(roi, (28, 28), interpolation=cv2.INTER_AREA)
-            best_d, best_score = None, -1.0
-            for d, variants in templates.items():
-                for tpl in variants:
-                    score = cv2.matchTemplate(
-                        roi.astype(np.float32), tpl.astype(np.float32),
-                        cv2.TM_CCOEFF_NORMED)[0][0]
-                    if score > best_score:
-                        best_d, best_score = d, float(score)
+            if net is not None:
+                # Tanított háló: pontosabb és torzítás-tűrőbb, mint a sablon.
+                best_d, best_score = _classify_digit(roi, net)
+            else:
+                best_d, best_score = None, -1.0
+                for d, variants in templates.items():
+                    for tpl in variants:
+                        score = cv2.matchTemplate(
+                            roi.astype(np.float32), tpl.astype(np.float32),
+                            cv2.TM_CCOEFF_NORMED)[0][0]
+                        if score > best_score:
+                            best_d, best_score = d, float(score)
             digits.append(best_d)
             confs.append(best_score)
         if not digits or any(d is None for d in digits):

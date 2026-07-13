@@ -43,6 +43,15 @@ hiddenimports += collect_submodules("uvicorn")
 # process), ezért kifejezetten fel kell venni, különben kimarad a csomagból.
 hiddenimports += ["handball", "scripts", "scripts.process_video", "scripts.serve"]
 
+# A tanított számjegy-háló (mezszám-OCR) a handball csomag adata — a
+# PyInstaller a .py-kon kívül mást nem visz magától, ezért kifejezetten.
+_digit_net = os.path.join(BACKEND, "handball", "pipeline", "digit_net.npz")
+if os.path.exists(_digit_net):
+    datas += [(_digit_net, "handball/pipeline")]
+else:
+    print("[backend.spec] FIGYELEM: digit_net.npz hiányzik — a mezszám-OCR "
+          "sablon-illesztéssel (gyengébben) megy.")
+
 # A YOLO súlyfájl becsomagolása (a build-szkript teszi ide).
 _weights = os.path.join(SPECPATH, "weights", "yolov8n.pt")
 if os.path.exists(_weights):

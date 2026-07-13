@@ -134,3 +134,46 @@ def test_apply_decisions_respects_manual_assignments():
     assert n == 1
     assert frames[0].players[0].jersey_number == 23
     assert frames[0].players[1].jersey_number == 99  # a kézi maradt
+
+
+def test_digit_net_ships_and_classifies():
+    """A tanított számjegy-háló a csomag része, betölthető, és a
+    renderelt jegyeket magas találati aránnyal osztályozza — beleértve
+    olyan torzításokat is (elforgatás), amiken a sablon-illesztés elvérzik."""
+    from handball.pipeline.jersey_ocr import _classify_digit, _load_digit_net
+    net = _load_digit_net()
+    assert net is not None, "digit_net.npz hiányzik a csomagból"
+
+    rng = np.random.default_rng(5)
+    ok = 0
+    total = 0
+    for d in range(10):
+        for _ in range(20):
+            # Renderelés a felismerő normalizálásával (szoros vágás + 28x28),
+            # elforgatással és zajjal.
+            img = np.zeros((72, 72), np.uint8)
+            cv2.putText(img, str(d), (14, 58), cv2.FONT_HERSHEY_SIMPLEX,
+                        float(rng.uniform(1.5, 2.2)), 255,
+                        int(rng.integers(2, 5)))
+            M = cv2.getRotationMatrix2D((36, 36), float(rng.uniform(-10, 10)), 1.0)
+            img = cv2.warpAffine(img, M, (72, 72))
+            ys, xs = np.nonzero(img)
+            roi = img[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+            roi = cv2.resize(roi, (28, 28), interpolation=cv2.INTER_AREA)
+            pred, conf = _classify_digit(roi, net)
+            total += 1
+            if pred == d:
+                ok += 1
+    assert ok / total >= 0.95, f"pontosság: {ok}/{total}"
+
+
+def test_reader_still_works_with_net():
+    """A teljes felismerő (kivágás→binarizálás→háló) továbbra is olvas —
+    és most már döntött (forgatott) számot is."""
+    crop = _jersey_crop(23)
+    # Enyhe forgatás az egész kivágáson.
+    M = cv2.getRotationMatrix2D((60, 60), 8.0, 1.0)
+    rotated = cv2.warpAffine(crop, M, (120, 120),
+                             borderValue=(40, 40, 40))
+    r = read_jersey_number(rotated)
+    assert r is not None and r[0] == 23, f"lett: {r}"
