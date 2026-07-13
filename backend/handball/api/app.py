@@ -971,6 +971,17 @@ def create_app():
             "per_match": per,
         }
 
+    @app.get("/matches/{match_id}/goalkeepers")
+    def get_goalkeeper_stats(match_id: str):
+        """Kapus-teljesítmény: kapott kapura tartó lövések, védések,
+        kapott gólok (zóna-bontással) és védés-hatékonyság csapatonként.
+        Üres szótár, ha a meccsen nincs kapus-jelölés."""
+        from ..pipeline.goalkeeper import goalkeeper_stats
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"goalkeepers": goalkeeper_stats(match)}
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,

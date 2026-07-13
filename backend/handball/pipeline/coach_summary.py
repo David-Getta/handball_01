@@ -169,6 +169,22 @@ def _players_section(match: Match, home: str, away: str) -> dict | None:
     return {"title": "Kiugró játékosok", "body": " ".join(sentences)}
 
 
+def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
+    from .goalkeeper import goalkeeper_stats
+    stats = goalkeeper_stats(match)
+    parts: list[str] = []
+    for key, name in (("home", home), ("away", away)):
+        rec = stats.get(key)
+        if not rec or not rec["on_target"]:
+            continue
+        parts.append(f"a(z) {name} kapusára {rec['on_target']} kapura tartó "
+                     f"lövés érkezett, ebből {rec['saves']} védés "
+                     f"({rec['save_pct']:.0f}%)")
+    if not parts:
+        return None
+    return {"title": "Kapusok", "body": "; ".join(parts).capitalize() + "."}
+
+
 def coach_summary(match: Match) -> dict:
     """A meccs automatikus edzői összefoglalója.
 
@@ -198,6 +214,13 @@ def coach_summary(match: Match) -> dict:
 
     try:
         s = _players_section(match, home, away)
+        if s:
+            sections.append(s)
+    except Exception:
+        pass
+
+    try:
+        s = _goalkeepers_section(match, home, away)
         if s:
             sections.append(s)
     except Exception:
