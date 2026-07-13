@@ -60,6 +60,8 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic>? _quality;
   // Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary).
   Map<String, dynamic>? _coach;
+  // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
+  List<Map<String, dynamic>> _attacks = [];
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -118,6 +120,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic>? quality;
     List<Map<String, dynamic>> notes = [];
     Map<String, dynamic>? coach;
+    List<Map<String, dynamic>> attacks = [];
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -131,6 +134,12 @@ class _MatchScreenState extends State<MatchScreen> {
           coach = await _api.fetchCoachSummary(widget.matchId);
         } catch (_) {
           coach = null; // az összefoglaló nélkül is teljes a nézet
+        }
+        try {
+          final r = await _api.fetchAttacks(widget.matchId);
+          attacks = (r["attacks"] as List).cast<Map<String, dynamic>>();
+        } catch (_) {
+          attacks = []; // támadás-címkék nélkül is teljes a nézet
         }
         try {
           quality = await _api.fetchQuality(widget.matchId);
@@ -162,6 +171,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _quality = quality;
       _notes = notes;
       _coach = coach;
+      _attacks = attacks;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -335,9 +345,17 @@ class _MatchScreenState extends State<MatchScreen> {
       );
     }
     final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
-    final shown = _filteredEvents();
+    final attackMode = _eventFilter.startsWith("atk:");
+    final shownAttacks = attackMode
+        ? [
+            for (final a in _attacks)
+              if (a["type"] == _eventFilter.substring(4)) a
+          ]
+        : const <Map<String, dynamic>>[];
+    final shown = attackMode ? const <Map<String, dynamic>>[] : _filteredEvents();
     return Column(children: [
       // Típus-szűrő: az edző pl. csak a gólokat nézi végig, gólról gólra.
+      // A támadás-címkék (atk:) a szakasz-listára váltanak.
       Padding(
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
@@ -349,6 +367,12 @@ class _MatchScreenState extends State<MatchScreen> {
               _filterChip("shot", "Lövés"),
               _filterChip("turnover", "Labdaeladás"),
               _filterChip("pass", "Passz"),
+              if (_attacks.isNotEmpty) ...[
+                _filterChip("atk:lerohanás", "Lerohanás"),
+                _filterChip("atk:gyors indítás", "Gyors indítás"),
+                _filterChip("atk:felállt támadás", "Felállt"),
+                _filterChip("atk:7 a 6", "7 a 6"),
+              ],
             ]),
           ),
           // Klip-export: a SZŰRT eseménytípusok jelenetei MP4-ekben, zip-ben.
@@ -366,25 +390,78 @@ class _MatchScreenState extends State<MatchScreen> {
         ]),
       ),
       Expanded(
-        child: shown.isEmpty
-            ? Center(
-                child: Text("Nincs ilyen típusú esemény.", style: AppText.label))
-            : ListView.separated(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                itemCount: shown.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 6),
-                itemBuilder: (_, i) => _eventRow(shown[i], fps, match),
-              ),
+        child: attackMode
+            ? (shownAttacks.isEmpty
+                ? Center(child: Text("Nincs ilyen típusú támadás.",
+                    style: AppText.label))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: shownAttacks.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (_, i) =>
+                        _attackRow(shownAttacks[i], fps, match),
+                  ))
+            : shown.isEmpty
+                ? Center(
+                    child: Text("Nincs ilyen típusú esemény.", style: AppText.label))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: shown.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (_, i) => _eventRow(shown[i], fps, match),
+                  ),
       ),
     ]);
+  }
+
+  /// Egy címkézett támadás-szakasz sora: típus + csapat + kezdet/hossz —
+  /// koppintásra a lejátszó a szakasz elejére ugrik.
+  Widget _attackRow(Map<String, dynamic> a, double fps, Match match) {
+    final start = (a["start_frame"] as num?)?.toInt() ?? 0;
+    final durS = (a["duration_s"] as num?)?.toDouble() ?? 0.0;
+    final team = (a["team"] as String?) == "home"
+        ? match.meta.homeTeam
+        : match.meta.awayTeam;
+    final type = (a["type"] as String?) ?? "";
+    final (icon, color) = switch (type) {
+      "lerohanás" => (Icons.bolt, AppColors.gold),
+      "gyors indítás" => (Icons.fast_forward, AppColors.accent),
+      "7 a 6" => (Icons.group_add, AppColors.away),
+      _ => (Icons.grid_view, AppColors.textSecondary),
+    };
+    final selected = _frameIndex >= start &&
+        _frameIndex <= ((a["end_frame"] as num?)?.toInt() ?? start);
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _seekToFrame(match, start),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.accentSoft : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(type, style: AppText.value.copyWith(fontSize: 12.5, color: color)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(team,
+              style: AppText.label.copyWith(fontSize: 11.5),
+              overflow: TextOverflow.ellipsis)),
+          Text("${(start / fps).toStringAsFixed(1)} s · ${durS.toStringAsFixed(1)} s",
+              style: AppText.label.copyWith(fontSize: 11.5)),
+        ]),
+      ),
+    );
   }
 
   /// Videóklip-export: a szűrt eseménytípusok jelenetei külön MP4-ekbe,
   /// egy zip-be csomagolva. A vágás a backenden fut (job), a haladást
   /// pollozzuk, a kész zip-et a felhasználó által választott helyre mentjük.
   Future<void> _exportClips(Match match) async {
-    // "Mind" szűrőnél passz-klipeket nem vágunk (túl sok, kevés érték).
-    final types = _eventFilter == "all"
+    // "Mind" (és támadás-) szűrőnél passz-klipeket nem vágunk (túl sok,
+    // kevés érték) — a klip-export az eseménytípusokból dolgozik.
+    final types = _eventFilter == "all" || _eventFilter.startsWith("atk:")
         ? ["goal", "shot", "turnover"]
         : [_eventFilter];
     if (types.contains("pass") && types.length == 1) {
