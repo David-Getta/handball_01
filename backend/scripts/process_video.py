@@ -607,6 +607,13 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     report("F", 0.95, "képen kívüli becslés")
     match = Match(meta=meta, frames=frames)
 
+    # Track-összefűzés: a takarásnál megszakadt követés automatikus
+    # helyreállítása (óvatos küszöbökkel) — az elemzés egy játékost lásson.
+    from handball.pipeline.track_stitch import stitch_tracks
+    stitched = stitch_tracks(match)
+    if stitched:
+        print(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
+
     # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
     if jersey_voter is not None:
         from handball.pipeline.jersey_ocr import apply_jersey_decisions
