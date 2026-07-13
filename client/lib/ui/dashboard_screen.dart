@@ -172,8 +172,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 step("1", "Videó feltöltése",
-                    "Feltöltés fül → kattints a mezőre, válaszd ki a meccsvideót "
-                    "(MP4/MOV/MKV). Add meg a két csapat nevét."),
+                    "Új elemzés menü → a varázsló lépésről lépésre vezet: "
+                    "videó (MP4/MOV/MKV) → csapatnevek → kalibráció → indítás."),
                 step("2", "Pálya-kalibráció",
                     "Léptess olyan képkockára, ahol a pálya jól látszik. Ha csak "
                     "egy térfél látszik: Bal/Jobb fél → a 4 pontot a térfél "
@@ -960,7 +960,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   action: _demoButton())
             else if (_matches.isEmpty)
               _notice(Icons.video_library_outlined, "Még nincs elemzett meccs",
-                  "Tölts fel és dolgozz fel egy videót a Feltöltés fülön — itt fog megjelenni.",
+                  "Tölts fel és dolgozz fel egy videót az Új elemzés menüben — itt fog megjelenni.",
                   action: _demoButton())
             else if (_filteredMatches.isEmpty)
               _notice(Icons.search_off, "Nincs találat",
