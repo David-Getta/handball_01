@@ -533,9 +533,11 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             body += " Ragaszkodnak hozzá — egy begyakorolt ellenszer sokat ér."
         out.append({"title": "Védekezésük", "body": body})
 
-    # Befejezésük: hatékonyság + kedvenc zóna.
+    # Befejezésük: hatékonyság + kedvenc zóna. Több meccsnél az összegek
+    # félrevezetők lennének jelzés nélkül — kiírjuk a meccs-számot.
     if rep.shots:
-        body = (f"{rep.shots} lövésükből {rep.goals} gól "
+        prefix = f"{rep.matches} meccs alatt " if rep.matches > 1 else ""
+        body = (f"{prefix}{rep.shots} lövésükből {rep.goals} gól "
                 f"({rep.shot_efficiency_pct:.0f}%-os gólarány).")
         total = sum(z["shots"] for z in rep.shot_zones.values())
         if total:
@@ -545,6 +547,22 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
         if rep.turnovers:
             body += f" Labdaeladásuk: {rep.turnovers}."
         out.append({"title": "Befejezésük", "body": body})
+
+    # Kapusuk: védés-hatékonyság, csak érdemi mintánál (>=4 kapura tartó).
+    if rep.gk_on_target >= 4:
+        pct = 100.0 * rep.gk_saves / rep.gk_on_target
+        if pct >= 40.0:
+            body = (f"Kapusuk erős: {rep.gk_on_target} kapura tartó lövésből "
+                    f"{rep.gk_saves} védés ({pct:.0f}%) — a tiszta helyzetig "
+                    "érdemes türelmesen játszani.")
+        elif pct <= 20.0:
+            body = (f"Kapusuk bizonytalan: {rep.gk_on_target} kapura tartó "
+                    f"lövésből csak {rep.gk_saves} védés ({pct:.0f}%) — "
+                    "a kapura lövés kifizetődő.")
+        else:
+            body = (f"Kapusuk átlagos: {rep.gk_saves} védés "
+                    f"{rep.gk_on_target} kapura tartó lövésből ({pct:.0f}%).")
+        out.append({"title": "Kapusuk", "body": body})
 
     # Kulcsjátékos: akinél a legtöbb labda megfordul — a kapust átugorjuk
     # (nála kidobásoknál jár a labda, nem ő szervezi a támadást).
