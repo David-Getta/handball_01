@@ -91,6 +91,9 @@ class ScoutingReport:
     sh_seconds: float = 0.0
     # Támadás-mix: {típus: százalék} — lerohanás / gyors indítás / felállt / 7a6.
     attack_mix: dict = field(default_factory=dict)
+    # Védekezés-váltások: [{"t","from","to","margin"}] — mikor és milyen
+    # állásnál váltottak formát (margin < 0: hátrányban voltak).
+    defense_switches: list = field(default_factory=list)
     # Kulcsjátékosok + edzői kulcsok
     key_players: list = field(default_factory=list)
     strengths: list = field(default_factory=list)
@@ -194,6 +197,55 @@ def _shot_zones(match: Match, team: Team, config: TacticsConfig) -> dict:
             rec["goals"] += 1
     # A leggyakoribb zóna elöl (a jelentésben így olvasható).
     return dict(sorted(zones.items(), key=lambda kv: -kv[1]["shots"]))
+
+
+def formation_switch_profile(match: Match, team: Team,
+                             config: Optional[TacticsConfig] = None) -> list[dict]:
+    """Védekezés-váltások: MIKOR váltott a csapat formát, és milyen állásnál.
+
+    15 mp-es ablakonként a többségi védekezési forma (csak érdemi, legalább
+    ~1 mp-nyi védekezéssel rendelkező ablakok); két szomszédos ablak eltérő
+    formája = váltás. A váltás pillanatához az AKTUÁLIS gólkülönbséget is
+    kiszámoljuk (a felismert gólokból) — ebből látszik a minta: pl.
+    "hátrányban 5-1-re váltanak".
+
+    Visszatérés: [{"t", "from", "to", "margin"}] — margin < 0: a csapat
+    épp hátrányban volt a váltáskor.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = max(1, round(15.0 * fps))
+
+    goals = [(e.t, e.team) for e in detect_events(match, config)
+             if e.type == EventType.GOAL]
+
+    def margin_at(t: int) -> int:
+        own = sum(1 for gt, gteam in goals if gt <= t and gteam == team)
+        opp = sum(1 for gt, gteam in goals if gt <= t and gteam != team)
+        return own - opp
+
+    timeline: list[tuple[int, str]] = []
+    frames = match.frames
+    for w0 in range(0, len(frames), win):
+        tally: dict[str, int] = {}
+        for f in frames[w0:w0 + win]:
+            phase = classify_phase(f, config)
+            defends = (phase == Phase.HOME_ATTACK and team == Team.AWAY) or \
+                      (phase == Phase.AWAY_ATTACK and team == Team.HOME)
+            if not defends:
+                continue
+            label = detect_formation(f, team, config).label
+            tally[label] = tally.get(label, 0) + 1
+        if sum(tally.values()) >= fps:
+            timeline.append((frames[w0].t,
+                             max(tally.items(), key=lambda kv: kv[1])[0]))
+
+    switches: list[dict] = []
+    for (_, a), (t1, b) in zip(timeline, timeline[1:]):
+        if a != b:
+            switches.append({"t": t1, "from": a, "to": b,
+                             "margin": margin_at(t1)})
+    return switches
 
 
 def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) -> list[KeyPlayer]:
@@ -311,6 +363,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                               f"({rep.sh_conceded} kapott gól "
                               f"{rep.sh_seconds / 60:.1f} perc alatt).")
 
+    # Védekezés-váltás minta: hátrányban ismétlődően ugyanarra a formára
+    # váltanak → az edző előre begyakorolhatja az ellenszert.
+    trailing = [s_ for s_ in rep.defense_switches if s_.get("margin", 0) < 0]
+    if trailing:
+        tally: dict = {}
+        for s_ in trailing:
+            tally[s_["to"]] = tally.get(s_["to"], 0) + 1
+        to, n = max(tally.items(), key=lambda kv: kv[1])
+        if n >= 2:
+            keys.append(f"Amikor hátrányban vannak, {to} védekezésre "
+                        f"váltanak ({n}×) — legyen begyakorolt támadásod "
+                        "ellene.")
+
     # 7 a 6: ha érdemben használják (meccsenként >= 20 mp), készülj rá.
     if rep.empty_net_s / max(1, rep.matches) >= 20.0:
         strengths.append(f"Tudatosan játszanak 7 a 6 ellen "
@@ -389,6 +454,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     except Exception:
         pass
     try:
+        rep.defense_switches = formation_switch_profile(match, team, config)
+    except Exception:
+        pass
+    try:
         from .rules import powerplay_efficiency
         eff = powerplay_efficiency(match, config).get(team.value)
         if eff:
@@ -463,6 +532,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
         sh_seconds=round(sum(r.sh_seconds for r in reports), 1),
+        defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
     # Kapott-gól zónák egyesítése.
     for r in reports:
