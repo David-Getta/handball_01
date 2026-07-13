@@ -929,7 +929,7 @@ def create_app():
             return cached[1]
         from ..pipeline.event_detection import EventType, detect_shots
         fps = m.meta.fps if m.meta.fps > 0 else 25.0
-        goals_home = goals_away = shots = 0
+        goals_home = goals_away = shots = saves = 0
         try:
             for e in detect_shots(m):
                 if e.type == EventType.GOAL:
@@ -939,6 +939,8 @@ def create_app():
                         goals_away += 1
                 elif e.type == EventType.SHOT:
                     shots += 1
+                    if (e.detail or {}).get("outcome") == "save":
+                        saves += 1
         except Exception:
             pass  # sérült/üres meccsnél a többi mutató még érték
         distance_m = 0.0
@@ -965,6 +967,7 @@ def create_app():
             "goals_home": goals_home,
             "goals_away": goals_away,
             "shots": shots,
+            "saves": saves,
             "distance_m": round(distance_m, 1),
             "sprints": sprints,
             "seven_meters": seven_meters,
@@ -991,6 +994,7 @@ def create_app():
             "teams": teams,
             "goals": sum(d["goals_home"] + d["goals_away"] for d in per),
             "shots": sum(d["shots"] for d in per),
+            "saves": sum(d.get("saves", 0) for d in per),
             "sprints": sum(d["sprints"] for d in per),
             "distance_km": round(sum(d["distance_m"] for d in per) / 1000.0, 2),
             "per_match": per,

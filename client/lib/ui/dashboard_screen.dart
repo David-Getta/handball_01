@@ -1110,8 +1110,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           s != null ? "${(s["teams"] as List).length} csapat a könyvtárban"
                     : "${_matches.length} meccs feldolgozva"),
       if (s != null)
-        _statCard("GÓL-ESEMÉNY", "${s["goals"]}",
-            "${s["shots"]} további lövéssel"),
+        _statCard("GÓL-ESEMÉNY", "${s["goals"]}", _goalNote(s)),
       if (s != null)
         _statCard("FUTOTT TÁV", "${s["distance_km"]} km",
             "${s["sprints"]} sprint összesen"),
@@ -1125,6 +1124,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ],
     );
+  }
+
+  /// A gól-kártya kis jegyzete: lövések + szezon-gólarány (+ védések).
+  String _goalNote(Map<String, dynamic> s) {
+    final goals = (s["goals"] as num?)?.toInt() ?? 0;
+    final shots = (s["shots"] as num?)?.toInt() ?? 0;
+    final saves = (s["saves"] as num?)?.toInt() ?? 0;
+    final attempts = goals + shots;
+    var note = "$shots további lövéssel";
+    if (attempts > 0) {
+      note += " · ${(100.0 * goals / attempts).toStringAsFixed(0)}% gólarány";
+    }
+    if (saves > 0) note += " · $saves védés";
+    return note;
   }
 
   Widget _statCard(String label, String value, String note, {bool accent = false}) {
@@ -1192,7 +1205,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (sum != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                        "${sum["shots"]} lövés · ${sum["sprints"]} sprint · "
+                        "${sum["shots"]} lövés"
+                        "${((sum["saves"] as num?) ?? 0) != 0 ? " (${sum["saves"]} védés)" : ""}"
+                        " · ${sum["sprints"]} sprint · "
                         "${(((sum["distance_m"] as num?) ?? 0) / 1000).toStringAsFixed(1)} km futás"
                         "${((sum["seven_meters"] as num?) ?? 0) != 0 ? " · ${sum["seven_meters"]} hétméteres" : ""}"
                         "${((sum["suspensions"] as num?) ?? 0) != 0 ? " · ${sum["suspensions"]} kiállítás" : ""}",
