@@ -54,6 +54,12 @@ class _LiveScreenState extends State<LiveScreen> {
   final List<_FeedEntry> _feed = [];
   static const _feedMax = 40;
 
+  // Időzített taktikai jelzések a backend felismerőiből (7a6, ember-
+  // hátrány, hétméteres, passzív) — a lejátszó a megfelelő pillanatban
+  // tolja be őket a folyamba, arany kiemeléssel.
+  List<_FeedEntry> _alerts = [];
+  int _alertIdx = 0;
+
   @override
   void initState() {
     super.initState();
@@ -98,6 +104,11 @@ class _LiveScreenState extends State<LiveScreen> {
       label = "demó";
       selected = null;
     }
+    // Időzített taktikai jelzések a backend felismerőiből (csak valódi
+    // meccsnél; hibánál üres lista — a mód enélkül is teljes).
+    final alerts = selected == null
+        ? <_FeedEntry>[]
+        : await _buildAlerts(selected, match);
     if (!mounted) return;
     _timer?.cancel();
     setState(() {
@@ -107,7 +118,57 @@ class _LiveScreenState extends State<LiveScreen> {
       _frameIndex = 0;
       _playing = false;
       _feed.clear();
+      _alerts = alerts;
+      _alertIdx = 0;
     });
+  }
+
+  /// A backend felismerőinek időzített jelzésekké alakítása (frame + szöveg).
+  Future<List<_FeedEntry>> _buildAlerts(String matchId, Match match) async {
+    final names = {
+      "home": match.meta.homeTeam,
+      "away": match.meta.awayTeam,
+    };
+    final out = <_FeedEntry>[];
+    try {
+      for (final w in await _api.fetchEmptyNet(matchId)) {
+        final team = names[w["team"]] ?? "";
+        out.add(_FeedEntry(
+            (w["start_frame"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika",
+                "7 a 6! $team lehozta a kapust — labdaszerzésnél azonnali "
+                "hosszú indítás az üres kapura!")));
+      }
+    } catch (_) {}
+    try {
+      final r = await _api.fetchRules(matchId);
+      for (final w in ((r["powerplay"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()) {
+        final down = names[w["team_down"]] ?? "";
+        out.add(_FeedEntry(
+            (w["start_frame"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "taktika",
+                "Emberhátrány: $down kevesebben van — a létszámfölényt "
+                "gyors, széles játékkal érdemes kihasználni.")));
+      }
+      for (final e in ((r["seven_meters"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()) {
+        final team = names[e["team"]] ?? "";
+        out.add(_FeedEntry(
+            (e["t"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika", "Hétméteres következik — $team dob.")));
+      }
+      for (final a in ((r["passive_risk"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()) {
+        out.add(_FeedEntry(
+            (a["start_frame"] as num?)?.toInt() ?? 0,
+            Suggestion(4, "taktika",
+                "Passzív-kockázat: elhúzódó támadás lövés nélkül — "
+                "kényszeríts ritmusváltást vagy lövést.")));
+      }
+    } catch (_) {}
+    out.sort((a, b) => a.frame.compareTo(b.frame));
+    return out;
   }
 
   void _togglePlay() {
@@ -151,6 +212,12 @@ class _LiveScreenState extends State<LiveScreen> {
       if (!repeat) {
         _feed.insert(0, _FeedEntry(_frameIndex, s));
       }
+    }
+    // Időzített taktikai jelzések: az épp esedékesek a folyam elejére.
+    while (_alertIdx < _alerts.length &&
+        _alerts[_alertIdx].frame <= _frameIndex) {
+      _feed.insert(0, _alerts[_alertIdx]);
+      _alertIdx++;
     }
     while (_feed.length > _feedMax) {
       _feed.removeLast();
@@ -299,6 +366,7 @@ class _LiveScreenState extends State<LiveScreen> {
           onPressed: () => setState(() {
             _frameIndex = 0;
             _feed.clear();
+            _alertIdx = 0;
           }),
           icon: const Icon(Icons.restart_alt),
         ),
