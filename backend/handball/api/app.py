@@ -933,6 +933,13 @@ def create_app():
                 sprints += s.sprint_count
         except Exception:
             pass
+        seven_meters = suspensions = 0
+        try:
+            from ..pipeline.rules import detect_powerplay, detect_seven_meters
+            seven_meters = len(detect_seven_meters(m))
+            suspensions = len(detect_powerplay(m))
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -944,6 +951,8 @@ def create_app():
             "shots": shots,
             "distance_m": round(distance_m, 1),
             "sprints": sprints,
+            "seven_meters": seven_meters,
+            "suspensions": suspensions,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out

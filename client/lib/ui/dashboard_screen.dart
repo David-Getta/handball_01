@@ -1193,7 +1193,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 4),
                     Text(
                         "${sum["shots"]} lövés · ${sum["sprints"]} sprint · "
-                        "${(((sum["distance_m"] as num?) ?? 0) / 1000).toStringAsFixed(1)} km futás",
+                        "${(((sum["distance_m"] as num?) ?? 0) / 1000).toStringAsFixed(1)} km futás"
+                        "${((sum["seven_meters"] as num?) ?? 0) != 0 ? " · ${sum["seven_meters"]} hétméteres" : ""}"
+                        "${((sum["suspensions"] as num?) ?? 0) != 0 ? " · ${sum["suspensions"]} kiállítás" : ""}",
                         style: AppText.label.copyWith(
                             fontSize: 12, color: AppColors.accent)),
                   ],
