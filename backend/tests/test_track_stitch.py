@@ -146,6 +146,48 @@ def test_missing_colors_fall_back_to_spatiotemporal():
     assert stitch_tracks(m, colors_by_track={1: [(200.0, 30.0, 30.0)] * 5}) == 1
 
 
+def test_jersey_gate_blocks_different_numbers():
+    """Tér-időben jó jelölt, de ELTÉRŐ OCR-mezszám → nincs összefűzés."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0)
+    m = _match(_frames(a, b))
+    assert stitch_tracks(m, jerseys_by_track={1: 23, 7: 9}) == 0
+
+
+def test_same_jersey_overrides_color_gate():
+    """Azonos mezszámnál a szín-kapu sem tilthat (a szám erősebb jel)."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0)
+    m = _match(_frames(a, b))
+    colors = {1: [(200.0, 30.0, 30.0)] * 5,   # piros
+              7: [(30.0, 200.0, 30.0)] * 5}   # zöld — önmagában tiltana
+    assert stitch_tracks(m, colors_by_track=colors,
+                         jerseys_by_track={1: 23, 7: 23}) == 1
+
+
+def test_same_jersey_candidate_wins():
+    """Két hasonló utód közül az azonos mezszámú nyer."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0, y=5.0)
+    c = _walk(8, Team.HOME, 60, 100, x0=15.1, y=5.2)
+    m = _match(_frames(a, b, c))
+    assert stitch_tracks(m, jerseys_by_track={1: 23, 8: 23}) == 1
+    ids = {p.track_id for f in m.frames for p in f.players}
+    assert 8 not in ids and 7 in ids  # a 8-as (azonos szám) olvadt be
+
+
+def test_rename_out_reports_final_mapping():
+    """A rename_out a lánc-feloldott végleges leképezést adja vissza."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0)
+    c = _walk(9, Team.HOME, 110, 150, x0=19.0)
+    m = _match(_frames(a, b, c))
+    mapping: dict = {}
+    n = stitch_tracks(m, rename_out=mapping)
+    assert n == 2
+    assert mapping == {7: 1, 9: 1}  # lánc: 9→7→1, mindkettő a gyökérre
+
+
 if __name__ == "__main__":
     test_stitches_broken_track()
     test_does_not_stitch_far_or_slow_gap()
@@ -157,4 +199,8 @@ if __name__ == "__main__":
     test_similar_colors_still_stitch()
     test_color_prefers_matching_candidate()
     test_missing_colors_fall_back_to_spatiotemporal()
+    test_jersey_gate_blocks_different_numbers()
+    test_same_jersey_overrides_color_gate()
+    test_same_jersey_candidate_wins()
+    test_rename_out_reports_final_mapping()
     print("Minden track-összefűzés teszt OK.")

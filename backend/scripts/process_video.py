@@ -624,7 +624,12 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # helyreállítása (óvatos küszöbökkel) — az elemzés egy játékost lásson.
     # A track-színminták is beleszólnak: eltérő mez → nincs összefűzés.
     from handball.pipeline.track_stitch import stitch_tracks
-    stitched = stitch_tracks(match, colors_by_track=_colors_by_track)
+    _stitch_rename: dict = {}
+    stitched = stitch_tracks(
+        match, colors_by_track=_colors_by_track,
+        jerseys_by_track=(jersey_voter.decisions()
+                          if jersey_voter is not None else None),
+        rename_out=_stitch_rename)
     if stitched:
         print(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
 
@@ -655,7 +660,12 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
     if jersey_voter is not None:
         from handball.pipeline.jersey_ocr import apply_jersey_decisions
-        n_ocr = apply_jersey_decisions(match, jersey_voter.decisions())
+        # Az összefűzésnél beolvadt trackek OCR-döntéseit a megmaradó
+        # azonosítóra visszük át — eddig ezek elvesztek.
+        decisions = {}
+        for tid, num in jersey_voter.decisions().items():
+            decisions[_stitch_rename.get(tid, tid)] = num
+        n_ocr = apply_jersey_decisions(match, decisions)
         if n_ocr:
             print(f"mezszám-OCR: {n_ocr} track kapott számot "
                   f"({jersey_voter.decisions()})")
