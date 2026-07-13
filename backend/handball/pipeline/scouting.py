@@ -372,9 +372,87 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
     return rep
 
 
+def scouting_narrative(rep: ScoutingReport) -> list[dict]:
+    """Összefüggő magyar mondatok a jelentés számaiból: hogyan játszik a
+    csapat, és hol fogható meg. A felderítő képernyő és a nyomtatott
+    jelentés bevezetője — sablon-alapú és determinisztikus (minden mondat
+    mögött kiszámolt szám áll).
+
+    Visszatérés: [{"title", "body"}, ...]
+    """
+    name = rep.team_name or "Az ellenfél"
+    out: list[dict] = []
+
+    # Így támadnak: tempó + lerohanás-hajlam.
+    parts: list[str] = []
+    if rep.avg_attack_duration_s:
+        if rep.avg_attack_duration_s < 6.0:
+            parts.append("gyorsan, átlag "
+                         f"{rep.avg_attack_duration_s:.0f} másodperces támadásokkal jön")
+        elif rep.avg_attack_duration_s >= 12.0:
+            parts.append("türelmesen építkezik (átlag "
+                         f"{rep.avg_attack_duration_s:.0f} s egy támadás)")
+        else:
+            parts.append("közepes tempóban építkezik (átlag "
+                         f"{rep.avg_attack_duration_s:.0f} s egy támadás)")
+    if rep.fast_break_pct >= 12.0:
+        parts.append(f"a labdás ideje {rep.fast_break_pct:.0f}%-ában gyorsan "
+                     "indít — a lerohanás fegyverük")
+    elif rep.fast_break_pct > 0:
+        parts.append(f"lerohanást ritkán vezet ({rep.fast_break_pct:.0f}%)")
+    if parts:
+        out.append({"title": "Így támadnak",
+                    "body": f"{name} " + ", ".join(parts) + "."})
+
+    # Védekezésük: fő forma + váltogatás.
+    if rep.defense_distribution:
+        items = list(rep.defense_distribution.items())
+        main, share = items[0]
+        body = f"Fő védekezési formájuk a {main} (az idő {share:.0f}%-ában)."
+        if len(items) >= 2 and items[1][1] >= 25.0:
+            body += (f" Sokat váltanak {items[1][0]}-ra is "
+                     f"({items[1][1]:.0f}%) — készülj mindkettőre.")
+        elif share >= 75.0:
+            body += " Ragaszkodnak hozzá — egy begyakorolt ellenszer sokat ér."
+        out.append({"title": "Védekezésük", "body": body})
+
+    # Befejezésük: hatékonyság + kedvenc zóna.
+    if rep.shots:
+        body = (f"{rep.shots} lövésükből {rep.goals} gól "
+                f"({rep.shot_efficiency_pct:.0f}%-os gólarány).")
+        total = sum(z["shots"] for z in rep.shot_zones.values())
+        if total:
+            zone, rec = next(iter(rep.shot_zones.items()))
+            body += (f" Legtöbbet innen lőnek: {zone} "
+                     f"(a lövéseik {100.0 * rec['shots'] / total:.0f}%-a).")
+        if rep.turnovers:
+            body += f" Labdaeladásuk: {rep.turnovers}."
+        out.append({"title": "Befejezésük", "body": body})
+
+    # Kulcsjátékos: akinél a legtöbb labda megfordul.
+    if rep.key_players:
+        kp = rep.key_players[0]
+        if kp.get("possession_frames", 0) > 0:
+            out.append({
+                "title": "Kulcsjátékos",
+                "body": (f"A legtöbb labda a(z) {kp['track_id']}. játékosnál "
+                         f"fordult meg ({kp.get('role', 'mezőnyjátékos')}) — az "
+                         "ő megfogása a támadásaik kulcsa."),
+            })
+
+    if not out:
+        out.append({"title": "Kevés adat",
+                    "body": "Ehhez a csapathoz még kevés a minta — több "
+                            "meccs felderítése pontosít."})
+    return out
+
+
 def report_to_dict(rep: ScoutingReport) -> dict:
-    """A jelentés JSON-barát szótárrá alakítása (az API-hoz)."""
-    return asdict(rep)
+    """A jelentés JSON-barát szótárrá alakítása (az API-hoz) — a szöveges
+    narratívával kiegészítve."""
+    d = asdict(rep)
+    d["narrative"] = scouting_narrative(rep)
+    return d
 
 
 # ---- Fejlődés-követés (trend) ------------------------------------------------
