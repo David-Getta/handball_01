@@ -85,3 +85,60 @@ def detect_goalkeepers(match: Match,
                 if p.track_id in chosen:
                     p.role = ROLE_GOALKEEPER
     return chosen
+
+def goalkeeper_stats(match: Match, config=None) -> dict:
+    """Kapus-teljesítmény a lövés-kimenetelekből (lásd event_detection).
+
+    Csapatonként (amelyiknek van megjelölt kapusa): hány kapura tartó
+    lövést kapott, ebből mennyit hárított / hány gólt kapott, védés-
+    hatékonyság, és a KAPOTT gólok zóna-bontása (honnan verhető).
+
+    Visszatérés: {"home"/"away": {"track_id", "on_target", "saves",
+    "conceded", "save_pct", "conceded_zones": {zóna: db}}} — csak azok a
+    csapatok szerepelnek, ahol van kapus-jelölés.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .scouting import _shot_zone
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    gk_of_team: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.role == ROLE_GOALKEEPER and p.team not in gk_of_team:
+                gk_of_team[p.team] = p.track_id
+    if not gk_of_team:
+        return {}
+
+    frames_by_t = {f.t: f for f in match.frames}
+    out: dict = {}
+    for team, tid in gk_of_team.items():
+        out[team.value] = {"track_id": tid, "on_target": 0, "saves": 0,
+                           "conceded": 0, "save_pct": 0.0,
+                           "conceded_zones": {}}
+
+    for e in detect_shots(match, config):
+        defending = Team.AWAY if e.team == Team.HOME else Team.HOME
+        rec = out.get(defending.value)
+        if rec is None:
+            continue
+        outcome = (e.detail or {}).get("outcome")
+        if outcome not in ("goal", "save"):
+            continue  # a mellé menő lövés nem a kapus dolga
+        rec["on_target"] += 1
+        if outcome == "save":
+            rec["saves"] += 1
+        else:
+            rec["conceded"] += 1
+            # Honnan kapta: a lövés pillanatának labda-pozíciójából.
+            frame = frames_by_t.get(e.t)
+            if frame is not None and frame.ball is not None:
+                goal_x = config.attacks_toward_x(e.team)
+                z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)
+                rec["conceded_zones"][z] = rec["conceded_zones"].get(z, 0) + 1
+
+    for rec in out.values():
+        if rec["on_target"]:
+            rec["save_pct"] = round(100.0 * rec["saves"] / rec["on_target"], 1)
+    return out

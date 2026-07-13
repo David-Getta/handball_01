@@ -216,6 +216,31 @@ def test_narrative_empty_report_degrades():
     assert sections and sections[0]["title"] == "Kevés adat"
 
 
+def test_coach_keys_flag_weak_goalkeeper_and_zone():
+    """Gyenge kapus (alacsony védés%) → gyengeség; halmozott kapott-gól
+    zóna → "támadd onnan" kulcs."""
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél KC",
+        gk_on_target=6, gk_saves=1,
+        gk_conceded_zones={"átlövés bal": 3, "beálló (6 m)": 2},
+    )
+    from handball.pipeline.scouting import _coach_keys
+    strengths, weaknesses, keys = _coach_keys(rep)
+    assert any("Bizonytalan kapus" in w for w in weaknesses)
+    assert any("átlövés bal" in k and "támadd" in k for k in keys)
+
+
+def test_combine_reports_merges_goalkeeper_stats():
+    a = ScoutingReport(team="away", team_name="X", gk_on_target=4,
+                       gk_saves=2, gk_conceded_zones={"átlövés bal": 2})
+    b = ScoutingReport(team="away", team_name="X", gk_on_target=6,
+                       gk_saves=1, gk_conceded_zones={"átlövés bal": 1,
+                                                      "jobbszél": 2})
+    merged = combine_reports([a, b])
+    assert merged.gk_on_target == 10 and merged.gk_saves == 3
+    assert merged.gk_conceded_zones == {"átlövés bal": 3, "jobbszél": 2}
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

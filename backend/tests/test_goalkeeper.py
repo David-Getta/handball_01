@@ -93,3 +93,48 @@ def test_estimated_positions_ignored():
                                       y=10.0, source=PositionSource.ESTIMATED)))
     m = _match(_frames(est, n=n))
     assert detect_goalkeepers(m) == {}
+
+
+def _shot_sequence(t0, gk_track, save=True):
+    """Vendég kapu (x=40) felé tartó hazai lövés kockái t0-tól: a kapus a
+    kapuban áll; védésnél a labda nála áll meg, gólnál eléri a vonalat."""
+    from handball.models.tracking import Ball
+    frames = []
+    gk = PlayerPosition(track_id=gk_track, team=Team.AWAY, x=39.0, y=10.0,
+                        source=PositionSource.MEASURED, confidence=1.0,
+                        role="kapus")
+    shooter = PlayerPosition(track_id=4, team=Team.HOME, x=33.5, y=10.0,
+                             source=PositionSource.MEASURED, confidence=1.0)
+    for i in range(8):
+        x = 33.6 + i
+        if save:
+            x = min(x, 38.8)  # a kapusnál megáll
+        players = [gk] + ([shooter] if i == 0 else [])
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_goalkeeper_stats_counts_saves_and_conceded():
+    from handball.pipeline.goalkeeper import goalkeeper_stats
+    # Két lövés: egy védés + egy gól, közte a labda visszamegy középre
+    # (a debounce miatt külön kapu-megközelítés kell).
+    from handball.models.tracking import Ball
+    frames = _shot_sequence(0, gk_track=9, save=True)
+    frames.append(Frame(t=8, players=[], ball=Ball(x=20.0, y=10.0,
+                                                   confidence=1.0)))
+    frames += _shot_sequence(9, gk_track=9, save=False)
+    m = _match(frames)
+    stats = goalkeeper_stats(m)
+    away = stats["away"]
+    assert away["track_id"] == 9
+    assert away["on_target"] == 2
+    assert away["saves"] == 1 and away["conceded"] == 1
+    assert away["save_pct"] == 50.0
+    assert sum(away["conceded_zones"].values()) == 1
+
+
+def test_goalkeeper_stats_empty_without_role():
+    from handball.pipeline.goalkeeper import goalkeeper_stats
+    m = _match(_frames(_stay(1, Team.HOME, 20.0, 10.0, 100), n=100))
+    assert goalkeeper_stats(m) == {}

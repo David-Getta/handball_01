@@ -76,6 +76,11 @@ class ScoutingReport:
     # Lövési zónák: zóna -> {"shots": n, "goals": n} — HONNAN lőnek és honnan
     # eredményesek (balszél / beálló / átlövés bal-közép-jobb / jobbszél).
     shot_zones: dict = field(default_factory=dict)
+    # A FELDERÍTETT csapat kapusa (a kapus-jelölésből, ha van):
+    # kapott kapura tartó lövések / védések / kapott gólok zóna-bontással.
+    gk_on_target: int = 0
+    gk_saves: int = 0
+    gk_conceded_zones: dict = field(default_factory=dict)
     # Kulcsjátékosok + edzői kulcsok
     key_players: list = field(default_factory=list)
     strengths: list = field(default_factory=list)
@@ -263,6 +268,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                                  f"({rec['goals']}/{rec['shots']} gól).")
                 break
 
+    # Kapusuk: erős/gyenge védés-hatékonyság és a verhető zóna.
+    if rep.gk_on_target >= 4:
+        save_pct = 100.0 * rep.gk_saves / rep.gk_on_target
+        if save_pct >= 40.0:
+            strengths.append(f"Jó kapus ({save_pct:.0f}% védés) — a rossz "
+                             "helyzetű lövést megfogja.")
+        elif save_pct <= 20.0:
+            weaknesses.append(f"Bizonytalan kapus ({save_pct:.0f}% védés) — "
+                              "érdemes kapura menni.")
+    if rep.gk_conceded_zones:
+        zone, n = max(rep.gk_conceded_zones.items(), key=lambda kv: kv[1])
+        if n >= 2:
+            keys.append(f"Kapusuk innen kapta a legtöbb gólt: {zone} "
+                        f"({n} gól) — támadd onnan.")
+
     if not keys:
         keys.append("Kevés a minta — több meccsük felderítése pontosít.")
     return strengths, weaknesses, keys
@@ -314,6 +334,17 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         shot_zones=_shot_zones(match, team, config),
         key_players=[asdict(k) for k in _key_players(match, team, config)],
     )
+    # A felderített csapat KAPUSÁNAK mutatói (ha van kapus-jelölés) —
+    # ebből jön a "kapusuk innen verhető" kulcs.
+    try:
+        from .goalkeeper import goalkeeper_stats
+        gk = goalkeeper_stats(match, config).get(team.value)
+        if gk:
+            rep.gk_on_target = gk["on_target"]
+            rep.gk_saves = gk["saves"]
+            rep.gk_conceded_zones = dict(gk["conceded_zones"])
+    except Exception:
+        pass
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
@@ -372,7 +403,13 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         shot_efficiency_pct=round(100.0 * goals / shots, 1) if shots else 0.0,
         shot_zones=merged_zones,
         key_players=[],  # játékos-azonosítók meccsenként eltérők; összevonás nem triviális
+        gk_on_target=sum(r.gk_on_target for r in reports),
+        gk_saves=sum(r.gk_saves for r in reports),
     )
+    # Kapott-gól zónák egyesítése.
+    for r in reports:
+        for z, n in r.gk_conceded_zones.items():
+            rep.gk_conceded_zones[z] = rep.gk_conceded_zones.get(z, 0) + n
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
