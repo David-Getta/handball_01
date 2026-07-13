@@ -46,6 +46,9 @@ class StitchConfig:
     slack_m: float = 1.0
     max_color_dist: float = 90.0
     color_weight: float = 0.02
+    # Azonos OCR-mezszám: ekkora pontszám-előny (méter-egyenérték) — a
+    # mezszám a legerősebb azonosító jel, felülírja a szín-kaput is.
+    jersey_bonus_m: float = 2.0
 
 
 def _mean_colors(colors_by_track: dict | None) -> dict:
@@ -60,7 +63,9 @@ def _mean_colors(colors_by_track: dict | None) -> dict:
 
 
 def stitch_tracks(match: Match, config: StitchConfig | None = None,
-                  colors_by_track: dict | None = None) -> int:
+                  colors_by_track: dict | None = None,
+                  jerseys_by_track: dict | None = None,
+                  rename_out: dict | None = None) -> int:
     """Megszakadt trackek összefűzése (helyben) — visszaadja, hány
     összefűzés történt. Csak MÉRT szakaszokra épít; az összefűzött track
     a KORÁBBI azonosítót viszi tovább (az elemzések egy játékost látnak).
@@ -69,6 +74,15 @@ def stitch_tracks(match: Match, config: StitchConfig | None = None,
     a feldolgozásból. Ha adott, a megjelenés is beleszól a döntésbe:
     nagyon eltérő színű trackek nem fűződnek össze, a hasonlóbb színű
     jelölt előnyt kap.
+
+    `jerseys_by_track` (opcionális): track_id → OCR-mezszám. A mezszám a
+    legerősebb azonosító jel: ELTÉRŐ számú trackek sosem fűződnek össze;
+    AZONOS számnál a jelölt előnyt kap, és a szín-kapu sem tilthatja le
+    (a mezszám-egyezés erősebb bizonyíték, mint a színkülönbség).
+
+    `rename_out` (opcionális): ha adott szótár, a hívó megkapja a végleges
+    átcímkézést (régi track_id → megmaradó track_id) — pl. hogy az
+    OCR-döntéseket is át lehessen vinni az összefűzött trackekre.
     """
     config = config or StitchConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
@@ -101,16 +115,25 @@ def stitch_tracks(match: Match, config: StitchConfig | None = None,
             allowed = config.max_speed_ms * (gap / fps) + config.slack_m
             if dist > allowed:
                 continue
+            # Mezszám-kapu: eltérő OCR-szám = két külön játékos; azonos
+            # szám = erős egyezés (bónusz + a szín-kapu sem tilthat).
+            jerseys = jerseys_by_track or {}
+            ja, jb = jerseys.get(a), jerseys.get(b)
+            same_jersey = ja is not None and jb is not None and ja == jb
+            if ja is not None and jb is not None and ja != jb:
+                continue  # más mezszám — nem ugyanaz a játékos
             # Megjelenés-kapu és -súly: csak ha MINDKÉT track színe ismert
             # (ismeretlen színnél a tér-időbeli logika dönt, mint eddig).
             color_pen = 0.0
             ca, cb = mean_color.get(a), mean_color.get(b)
-            if ca is not None and cb is not None:
+            if ca is not None and cb is not None and not same_jersey:
                 cdist = math.dist(ca, cb)
                 if cdist > config.max_color_dist:
                     continue  # más mez — nem ugyanaz a játékos
                 color_pen = config.color_weight * cdist
-            candidates.append((dist + gap / fps + color_pen, a, b))  # kisebb = jobb
+            jersey_bonus = config.jersey_bonus_m if same_jersey else 0.0
+            candidates.append(
+                (dist + gap / fps + color_pen - jersey_bonus, a, b))  # kisebb = jobb
 
     # Kölcsönösen legjobb párok, mohón (a legjobb pontszámtól felfelé):
     # egy track csak EGYSZER lehet előd és egyszer utód.
@@ -135,6 +158,9 @@ def stitch_tracks(match: Match, config: StitchConfig | None = None,
             seen.add(tid)
             tid = rename[tid]
         return tid
+
+    if rename_out is not None:
+        rename_out.update({b: root(b) for b in rename})
 
     # Átcímkézés + ütközés-feloldás: ha egy kockán az előd BECSÜLT és az
     # utód MÉRT pozíciója is jelen van (a becslő kitöltötte a lyukat),
