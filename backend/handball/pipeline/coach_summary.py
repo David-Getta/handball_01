@@ -226,6 +226,29 @@ def coach_summary(match: Match) -> dict:
     except Exception:
         pass
 
+    # 7 a 6 elleni (üres kapus) szakaszok — ha voltak, külön szekció + jelzés.
+    try:
+        from .goalkeeper import detect_empty_net
+        windows = detect_empty_net(match)
+        if windows:
+            per_team: dict[str, float] = {}
+            for w in windows:
+                per_team[w["team"]] = per_team.get(w["team"], 0.0) + w["duration_s"]
+            names = {"home": home, "away": away}
+            parts = [f"a(z) {names.get(t, t)} összesen "
+                     f"{s_:.0f} másodpercet játszott lehozott kapussal"
+                     for t, s_ in per_team.items()]
+            sections.append({
+                "title": "Hetedik mezőnyjátékos",
+                "body": ("7 a 6 elleni játék: " + "; ".join(parts) +
+                         f" ({len(windows)} szakasz)."),
+            })
+            highlights.append(
+                "Üres kapu ellen a labdaszerzés utáni azonnali kapura dobás "
+                "gólt érhet — gyakorold a hosszú indítást.")
+    except Exception:
+        pass
+
     # Mezszám-lefedettség: ha alacsony, maga az összefoglaló hívja fel rá a
     # figyelmet — a játékos-mondatok mezszámmal sokkal használhatóbbak.
     try:

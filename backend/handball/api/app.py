@@ -982,6 +982,17 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"goalkeepers": goalkeeper_stats(match)}
 
+    @app.get("/matches/{match_id}/empty-net")
+    def get_empty_net(match_id: str):
+        """7 a 6 elleni (üres kapus) szakaszok: mikor és mennyi ideig
+        játszott egy csapat lehozott kapussal. Üres lista, ha nincs
+        kapus-jelölés vagy nem volt ilyen szakasz."""
+        from ..pipeline.goalkeeper import detect_empty_net
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"windows": detect_empty_net(match)}
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,

@@ -81,6 +81,8 @@ class ScoutingReport:
     gk_on_target: int = 0
     gk_saves: int = 0
     gk_conceded_zones: dict = field(default_factory=dict)
+    # 7 a 6 elleni (lehozott kapusos) játék összideje másodpercben.
+    empty_net_s: float = 0.0
     # Kulcsjátékosok + edzői kulcsok
     key_players: list = field(default_factory=list)
     strengths: list = field(default_factory=list)
@@ -283,6 +285,13 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(f"Kapusuk innen kapta a legtöbb gólt: {zone} "
                         f"({n} gól) — támadd onnan.")
 
+    # 7 a 6: ha érdemben használják (meccsenként >= 20 mp), készülj rá.
+    if rep.empty_net_s / max(1, rep.matches) >= 20.0:
+        strengths.append(f"Tudatosan játszanak 7 a 6 ellen "
+                         f"(~{rep.empty_net_s / rep.matches:.0f} mp/meccs).")
+        keys.append("Lehozott kapussal támadnak — labdaszerzés után az "
+                    "ÜRES KAPURA azonnal dobhatsz, gyakorold a hosszú indítást.")
+
     if not keys:
         keys.append("Kevés a minta — több meccsük felderítése pontosít.")
     return strengths, weaknesses, keys
@@ -337,12 +346,15 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     # A felderített csapat KAPUSÁNAK mutatói (ha van kapus-jelölés) —
     # ebből jön a "kapusuk innen verhető" kulcs.
     try:
-        from .goalkeeper import goalkeeper_stats
+        from .goalkeeper import detect_empty_net, goalkeeper_stats
         gk = goalkeeper_stats(match, config).get(team.value)
         if gk:
             rep.gk_on_target = gk["on_target"]
             rep.gk_saves = gk["saves"]
             rep.gk_conceded_zones = dict(gk["conceded_zones"])
+        rep.empty_net_s = round(sum(
+            w["duration_s"] for w in detect_empty_net(match, config)
+            if w["team"] == team.value), 1)
     except Exception:
         pass
     s, w, k = _coach_keys(rep)
@@ -405,6 +417,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         key_players=[],  # játékos-azonosítók meccsenként eltérők; összevonás nem triviális
         gk_on_target=sum(r.gk_on_target for r in reports),
         gk_saves=sum(r.gk_saves for r in reports),
+        empty_net_s=round(sum(r.empty_net_s for r in reports), 1),
     )
     # Kapott-gól zónák egyesítése.
     for r in reports:
