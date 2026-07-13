@@ -598,6 +598,71 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass
 
+    # Szabály-réteg blokk: támadás-mix, 7a6, kiállítások + emberelőny-
+    # hatékonyság, hétméteresek — csak ha van mit mutatni.
+    rules_html = ""
+    try:
+        team_names = {"home": home, "away": away}
+        parts_html: list[str] = []
+
+        from .attack_types import attack_mix
+        mix = attack_mix(match)
+        cols = []
+        for key, name in (("home", home), ("away", away)):
+            m_ = mix.get(key)
+            if m_:
+                cols.append(f'<div class="col"><b>{name}</b>'
+                            + _defense_bars(m_) + "</div>")
+        if cols:
+            parts_html.append('<h2>Támadás-mix (típus szerint)</h2>'
+                              '<div class="cols">' + "".join(cols) + "</div>")
+
+        from .goalkeeper import detect_empty_net
+        empty = detect_empty_net(match)
+        if empty:
+            per_en: dict = {}
+            for w in empty:
+                per_en[w["team"]] = per_en.get(w["team"], 0.0) + w["duration_s"]
+            lis = "".join(
+                f"<li>{team_names.get(t, t)}: összesen {s_:.0f} mp "
+                "lehozott kapussal</li>" for t, s_ in per_en.items())
+            parts_html.append("<h2>Hetedik mezőnyjátékos (7 a 6)</h2><ul>"
+                              + lis + "</ul>")
+
+        from .rules import (detect_powerplay, detect_seven_meters,
+                            powerplay_efficiency)
+        pps = detect_powerplay(match)
+        if pps:
+            fps_ = match.meta.fps if match.meta.fps > 0 else 25.0
+            rows = "".join(
+                f"<li><b>{_fmt_clock(w['start_frame'] / fps_)}</b> — "
+                f"{team_names.get(w['team_down'], w['team_down'])} "
+                f"emberhátrányban {w['duration_s']:.0f} mp-ig</li>"
+                for w in pps)
+            eff = powerplay_efficiency(match)
+            eff_rows = ""
+            for key, name in (("home", home), ("away", away)):
+                rec = eff.get(key)
+                if rec and rec["pp_shots"]:
+                    eff_rows += (f"<li>{name} emberelőnyben: "
+                                 f"{rec['pp_goals']}/{rec['pp_shots']} gól "
+                                 f"({rec['pp_eff_pct']:.0f}%)</li>")
+            parts_html.append("<h2>Kiállítások és emberelőny</h2><ul>"
+                              + rows + eff_rows + "</ul>")
+
+        sevens = detect_seven_meters(match)
+        if sevens:
+            fps_ = match.meta.fps if match.meta.fps > 0 else 25.0
+            lis = "".join(
+                f"<li><b>{_fmt_clock(e['t'] / fps_)}</b> — "
+                f"{team_names.get(e['team'], e['team'])} hétméterese</li>"
+                for e in sevens)
+            parts_html.append("<h2>Hétméteresek</h2><ul>" + lis + "</ul>")
+
+        rules_html = "".join(parts_html)
+    except Exception:
+        pass
+
     # Kapus-teljesítmény (ha van kapus-jelölés a meccsen).
     gk_html = ""
     try:
@@ -661,6 +726,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   p.empty {{ color: #8492A6; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
   p.cs {{ font-size: 13.5px; margin: 8px 0; }}
+  .cols {{ display: flex; gap: 22px; }}
+  .col {{ flex: 1; }}
   .metrics {{ display: flex; flex-wrap: wrap; gap: 14px 26px; }}
   .metric .mv {{ font-size: 20px; font-weight: 700; color: #12988a; }}
   .metric .ml {{ font-size: 11px; color: #4A5768; }}
@@ -711,6 +778,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   </table>
 
   {gk_html}
+
+  {rules_html}
 
   <h2>Gól-idővonal</h2>
   {goals_html}

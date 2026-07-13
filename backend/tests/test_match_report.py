@@ -94,3 +94,35 @@ def test_report_includes_intensity_chart():
     html = match_report_html(m, {}, [], None)
     assert "Tempó-alakulás" in html
     assert html.count("<polyline") >= 2  # két csapat vonala
+
+
+def test_report_includes_attack_mix_section():
+    """A szimulált meccsen van támadás-szakasz → a támadás-mix blokk bekerül."""
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=3)
+    html = match_report_html(m, team_style_profile(m), detect_events(m),
+                             compute_quality_report(m))
+    assert "Támadás-mix (típus szerint)" in html
+
+
+def test_report_includes_powerplay_and_seven_meter_sections():
+    """Kiállításos + hétméteres szintetikus meccs: mindkét blokk bekerül."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(i, team, x, y):
+        return PlayerPosition(track_id=i, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0)
+
+    frames = []
+    # 60 mp hazai emberhátrány (5 vs 6) — közben a labda a 7 m-es ponton áll.
+    for t in range(60 * 25):
+        players = [pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k) for k in range(5)]
+        players += [pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k) for k in range(6)]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="r", home_team="H", away_team="A", fps=25.0),
+              frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Kiállítások és emberelőny" in html
+    assert "Hétméteresek" in html
