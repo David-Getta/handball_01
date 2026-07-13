@@ -7,6 +7,7 @@ import "../analytics/court_analytics.dart";
 import "../analytics/match_summary.dart";
 import "../analytics/tactics.dart";
 import "../theme/app_theme.dart";
+import "defense_timeline.dart";
 import "intensity_chart.dart";
 import "score_chart.dart";
 
@@ -24,6 +25,9 @@ class SummaryPanel extends StatelessWidget {
   /// Intenzitás-ablakok a tempó-grafikonhoz (2-nél kevesebbnél nincs grafikon).
   final List<IntensityWindow> intensity;
 
+  /// Védekezés-idővonal ablakai (üresnél nincs sáv).
+  final List<FormationWindow> formations;
+
   const SummaryPanel({
     super.key,
     required this.summary,
@@ -34,6 +38,7 @@ class SummaryPanel extends StatelessWidget {
     this.fps = 25.0,
     this.onSeekFrame,
     this.intensity = const [],
+    this.formations = const [],
   });
 
   @override
@@ -59,6 +64,19 @@ class SummaryPanel extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           IntensityChart(
             windows: intensity,
+            totalFrames: totalFrames,
+            fps: fps,
+            homeName: homeName,
+            awayName: awayName,
+            onSeekFrame: onSeekFrame,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
+        if (formations.length >= 2) ...[
+          Text("VÉDEKEZÉS-IDŐVONAL", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          DefenseTimeline(
+            windows: formations,
             totalFrames: totalFrames,
             fps: fps,
             homeName: homeName,
