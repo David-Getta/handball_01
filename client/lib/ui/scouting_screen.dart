@@ -119,7 +119,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   @override
   Widget build(BuildContext context) {
     return AppShell(
-      active: NavId.matches,
+      active: NavId.scouting,
       crumbTag: "1c",
       crumbPath: "FELDERÍTÉS · ELLENFÉL-JELENTÉS",
       collapsed: true,
