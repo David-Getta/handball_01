@@ -203,6 +203,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final r = _report!;
     return ListView(
       children: [
+        if (((r["narrative"] as List?) ?? const []).isNotEmpty) ...[
+          _narrativeCard(r),
+          const SizedBox(height: AppSpacing.lg),
+        ],
         _keysCard(r),
         const SizedBox(height: AppSpacing.lg),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -224,6 +228,36 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         _keyPlayersCard(r),
         const SizedBox(height: AppSpacing.xl),
       ],
+    );
+  }
+
+  /// Szöveges bevezető: hogyan játszanak — mondatokban, a számok elé.
+  Widget _narrativeCard(Map<String, dynamic> r) {
+    final sections =
+        ((r["narrative"] as List?) ?? const []).cast<Map<String, dynamic>>();
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("ÍGY JÁTSZANAK", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          for (final s in sections)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text.rich(TextSpan(children: [
+                TextSpan(
+                    text: "${s["title"]}. ",
+                    style: AppText.value.copyWith(fontSize: 13)),
+                TextSpan(
+                    text: (s["body"] as String?) ?? "",
+                    style: AppText.label.copyWith(
+                        fontSize: 13, color: AppColors.textPrimary)),
+              ])),
+            ),
+        ],
+      ),
     );
   }
 

@@ -18,6 +18,7 @@ from handball.models.tracking import (
 )
 from handball.pipeline.scouting import (
     scout_team, combine_reports, ScoutingReport, _shot_zone, trend_report,
+    scouting_narrative, report_to_dict,
 )
 
 
@@ -183,6 +184,36 @@ def test_trend_no_change_summary():
     """Változatlan időszakok: "nincs jelentős változás" összegzés."""
     r = trend_report(_rep_for_trend(), _rep_for_trend())
     assert r["summary"] == ["Nincs jelentős változás a két időszak között."]
+
+
+def test_narrative_sections_from_real_report():
+    """A narratíva a jelentés számaiból áll össze, üres mondat nélkül."""
+    rep = scout_team(_attack_60(), Team.HOME)
+    sections = scouting_narrative(rep)
+    assert sections
+    for s in sections:
+        assert s["title"] and s["body"]
+    # Az API-válaszba is bekerül.
+    d = report_to_dict(rep)
+    assert d["narrative"] == sections
+
+
+def test_narrative_defense_switching_mentioned():
+    """Ha a második védőforma is gyakori (>=25%), a szöveg felhívja rá a figyelmet."""
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél KC",
+        defense_main="6-0",
+        defense_distribution={"6-0": 55.0, "5-1": 40.0},
+    )
+    bodies = " ".join(s["body"] for s in scouting_narrative(rep))
+    assert "5-1" in bodies and "készülj" in bodies
+
+
+def test_narrative_empty_report_degrades():
+    """Üres jelentésnél is ad legalább egy ("kevés adat") szekciót."""
+    rep = ScoutingReport(team="away", team_name="X")
+    sections = scouting_narrative(rep)
+    assert sections and sections[0]["title"] == "Kevés adat"
 
 
 if __name__ == "__main__":

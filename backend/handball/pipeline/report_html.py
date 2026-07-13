@@ -103,6 +103,16 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
 
+    # Szöveges bevezető: hogyan játszanak — mondatokban, a számok elé.
+    from .scouting import scouting_narrative
+    narrative_html = ""
+    try:
+        narrative_html = "".join(
+            f'<p class="cs"><b>{escape(s["title"])}.</b> {escape(s["body"])}</p>'
+            for s in scouting_narrative(rep))
+    except Exception:
+        pass
+
     metrics = "".join([
         _metric("Szervezett támadás", f"{rep.attack_share_pct:.0f}%"),
         _metric("Gyors indítás", f"{rep.fast_break_pct:.0f}%"),
@@ -136,6 +146,7 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
   li {{ margin: 4px 0; font-size: 13.5px; }}
   li.empty, p.empty {{ color: #8492A6; list-style: none; margin-left: -20px; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
+  p.cs {{ font-size: 13.5px; margin: 8px 0; }}
   .cols {{ display: flex; gap: 22px; }}
   .col {{ flex: 1; }}
   .metrics {{ display: flex; flex-wrap: wrap; gap: 14px 26px; }}
@@ -167,6 +178,8 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
     <h1>{name}</h1>
     <div class="sub">{escape(matches)} · fő védekezés: <b>{escape(rep.defense_main)}</b></div>
   </header>
+
+  {narrative_html}
 
   <div class="keys">
     <h2>Hogyan játssz ellenük</h2>
