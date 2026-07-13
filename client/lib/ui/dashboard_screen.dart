@@ -35,6 +35,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _offline = false; // a backend nem elérhető
   List<Map<String, dynamic>> _matches = [];
 
+  // Szezon-összkép (GET /library/summary) — hibánál null, a kártyák a
+  // helyi számokra esnek vissza. Meccsenkénti kivonat id szerint.
+  Map<String, dynamic>? _summary;
+  Map<String, Map<String, dynamic>> _perMatch = {};
+
+  // Könyvtár-kereső: csapatnévre / meccs-azonosítóra szűr.
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = "";
+
   // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is látszanak,
   // és amíg van aktív munka, pár másodpercenként frissülnek.
   List<Map<String, dynamic>> _jobs = [];
@@ -74,6 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _jobsTimer?.cancel();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -407,6 +417,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _loading = false;
       });
       _refreshJobs();
+      _refreshSummary();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -414,6 +425,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _matches = [];
         _loading = false;
       });
+    }
+  }
+
+  /// Szezon-összkép betöltése — a lista után, hogy a könyvtár ne várjon rá.
+  Future<void> _refreshSummary() async {
+    try {
+      final s = await _api.fetchLibrarySummary();
+      if (!mounted) return;
+      setState(() {
+        _summary = s;
+        _perMatch = {
+          for (final d
+              in (s["per_match"] as List).cast<Map<String, dynamic>>())
+            d["match_id"] as String: d,
+        };
+      });
+    } catch (_) {
+      // a kártyák a helyi (lista-alapú) számokat mutatják tovább
     }
   }
 
@@ -714,6 +743,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// A kereső-szűrésnek megfelelő meccsek (üres keresésnél mind).
+  List<Map<String, dynamic>> get _filteredMatches {
+    if (_query.isEmpty) return _matches;
+    bool hit(Map<String, dynamic> m) {
+      final hay = "${m["match_id"]} ${m["home_team"] ?? ""} "
+              "${m["away_team"] ?? ""}"
+          .toLowerCase();
+      return hay.contains(_query);
+    }
+
+    return [for (final m in _matches) if (hit(m)) m];
+  }
+
   double get _totalDurationS =>
       _matches.fold(0.0, (s, m) => s + ((m["duration_s"] as num?)?.toDouble() ?? 0.0));
 
@@ -829,17 +871,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.xl),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: _statCard("ELEMZETT MECCS", "${_matches.length}",
-                    _offline ? "backend offline" : "a tárolt könyvtárból", accent: true)),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(child: _statCard("ÖSSZ. JÁTÉKIDŐ",
-                    "${(_totalDurationS / 60).toStringAsFixed(1)} perc",
-                    "${_matches.length} meccs feldolgozva")),
-              ],
-            ),
+            _seasonCards(),
             // Folyamatban lévő feldolgozások (sor): élő állapot + megszakítás.
             if (_jobs.any(_isActiveJob)) ...[
               const SizedBox(height: AppSpacing.xl),
@@ -848,6 +880,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: AppSpacing.xl),
             Row(children: [
               Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
+              const SizedBox(width: AppSpacing.lg),
+              // Gyorskereső: csapatnévre vagy azonosítóra szűr, élőben.
+              SizedBox(
+                width: 220,
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: AppText.value.copyWith(fontSize: 13),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: "Keresés (csapat, meccs)…",
+                    hintStyle: AppText.label.copyWith(fontSize: 12),
+                    prefixIcon: const Icon(Icons.search,
+                        size: 16, color: AppColors.textFaint),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear, size: 14),
+                            color: AppColors.textFaint,
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _query = "");
+                            },
+                          ),
+                  ),
+                  onChanged: (v) =>
+                      setState(() => _query = v.trim().toLowerCase()),
+                ),
+              ),
               const Spacer(),
               // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
               OutlinedButton.icon(
@@ -902,8 +962,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _notice(Icons.video_library_outlined, "Még nincs elemzett meccs",
                   "Tölts fel és dolgozz fel egy videót a Feltöltés fülön — itt fog megjelenni.",
                   action: _demoButton())
+            else if (_filteredMatches.isEmpty)
+              _notice(Icons.search_off, "Nincs találat",
+                  "Nincs a keresésre (\"$_query\") illő meccs a könyvtárban.")
             else
-              for (final m in _matches) ...[
+              for (final m in _filteredMatches) ...[
                 _matchCard(m),
                 const SizedBox(height: AppSpacing.md),
               ],
@@ -1033,6 +1096,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Szezon-összkép kártyasor: a backend-összesítőből, ha megjött; addig
+  /// a meccslistából számolt alap-számok látszanak.
+  Widget _seasonCards() {
+    final s = _summary;
+    final durMin = s != null
+        ? ((s["total_duration_s"] as num).toDouble() / 60)
+        : (_totalDurationS / 60);
+    final cards = <Widget>[
+      _statCard("ELEMZETT MECCS", "${s?["matches"] ?? _matches.length}",
+          _offline ? "backend offline" : "a tárolt könyvtárból", accent: true),
+      _statCard("ÖSSZ. JÁTÉKIDŐ", "${durMin.toStringAsFixed(1)} perc",
+          s != null ? "${(s["teams"] as List).length} csapat a könyvtárban"
+                    : "${_matches.length} meccs feldolgozva"),
+      if (s != null)
+        _statCard("GÓL-ESEMÉNY", "${s["goals"]}",
+            "${s["shots"]} további lövéssel"),
+      if (s != null)
+        _statCard("FUTOTT TÁV", "${s["distance_km"]} km",
+            "${s["sprints"]} sprint összesen"),
+    ];
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < cards.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.lg),
+          Expanded(child: cards[i]),
+        ],
+      ],
+    );
+  }
+
   Widget _statCard(String label, String value, String note, {bool accent = false}) {
     return Container(
       decoration: AppTheme.card(),
@@ -1058,6 +1152,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final durS = (m["duration_s"] as num?)?.toDouble() ?? 0.0;
     final fps = (m["fps"] as num?)?.toDouble() ?? 25.0;
     final meta = "$id · $frames képkocka · ${durS.toStringAsFixed(1)} s · ${fps.toStringAsFixed(0)} fps";
+    // Az összkép-kivonat kiegészítése, ha már megjött: eredmény + dátum.
+    final sum = _perMatch[id];
+    final date = (sum?["date"] as String?) ?? "";
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -1079,9 +1176,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(home, style: AppText.value.copyWith(fontSize: 17, color: AppColors.home)),
                     Text("  vs  ", style: AppText.label),
                     Text(away, style: AppText.value.copyWith(fontSize: 17, color: AppColors.away)),
+                    if (sum != null) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Text("${sum["goals_home"]} : ${sum["goals_away"]}",
+                          style: AppText.value.copyWith(
+                              fontSize: 15, color: AppColors.gold)),
+                    ],
+                    if (date.isNotEmpty) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Text(date, style: AppText.label.copyWith(fontSize: 12)),
+                    ],
                   ]),
                   const SizedBox(height: 6),
                   Text(meta, style: AppText.label.copyWith(fontSize: 12)),
+                  if (sum != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                        "${sum["shots"]} lövés · ${sum["sprints"]} sprint · "
+                        "${(((sum["distance_m"] as num?) ?? 0) / 1000).toStringAsFixed(1)} km futás",
+                        style: AppText.label.copyWith(
+                            fontSize: 12, color: AppColors.accent)),
+                  ],
                 ],
               ),
             ),

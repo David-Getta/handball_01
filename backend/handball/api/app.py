@@ -900,6 +900,77 @@ def create_app():
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey, "points": points}
 
+    # Szezon-összkép gyorsítótár: meccsenkénti kivonat, a frame-szám a
+    # kulcs érvényessége — újrafeldolgozásnál magától frissül.
+    _summary_cache: dict = {}
+
+    def _match_summary(m) -> dict:
+        # Érvényesség: frame-szám + csapatnevek + dátum — átnevezés vagy
+        # újrafeldolgozás után a kivonat újraszámolódik.
+        key = (len(m.frames), m.meta.home_team, m.meta.away_team, m.meta.date)
+        cached = _summary_cache.get(m.meta.match_id)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        from ..pipeline.event_detection import EventType, detect_shots
+        fps = m.meta.fps if m.meta.fps > 0 else 25.0
+        goals_home = goals_away = shots = 0
+        try:
+            for e in detect_shots(m):
+                if e.type == EventType.GOAL:
+                    if e.team == Team.HOME:
+                        goals_home += 1
+                    else:
+                        goals_away += 1
+                elif e.type == EventType.SHOT:
+                    shots += 1
+        except Exception:
+            pass  # sérült/üres meccsnél a többi mutató még érték
+        distance_m = 0.0
+        sprints = 0
+        try:
+            for s in summarize(m).values():
+                distance_m += s.distance_m
+                sprints += s.sprint_count
+        except Exception:
+            pass
+        out = {
+            "match_id": m.meta.match_id,
+            "home_team": m.meta.home_team,
+            "away_team": m.meta.away_team,
+            "date": m.meta.date,
+            "duration_s": round(len(m.frames) / fps, 1),
+            "goals_home": goals_home,
+            "goals_away": goals_away,
+            "shots": shots,
+            "distance_m": round(distance_m, 1),
+            "sprints": sprints,
+        }
+        _summary_cache[m.meta.match_id] = (key, out)
+        return out
+
+    @app.get("/library/summary")
+    def library_summary():
+        """Szezon-összkép a kezdőlapnak: a teljes könyvtár összesített
+        mutatói + meccsenkénti kivonat (gólok, lövések, táv, sprintek).
+
+        A meccsenkénti számítás gyorsítótárazott (frame-szám az érvényesség),
+        így a kezdőlap újranyitása nagy könyvtárnál is azonnali.
+        """
+        per = [_match_summary(m) for m in _store.values()]
+        per.sort(key=lambda d: (d.get("date") or "", d["match_id"]))
+        teams = sorted({t for d in per
+                        for t in (d["home_team"], d["away_team"]) if t})
+        return {
+            "matches": len(per),
+            "total_duration_s": round(sum(d["duration_s"] for d in per), 1),
+            "teams": teams,
+            "goals": sum(d["goals_home"] + d["goals_away"] for d in per),
+            "shots": sum(d["shots"] for d in per),
+            "sprints": sum(d["sprints"] for d in per),
+            "distance_km": round(sum(d["distance_m"] for d in per) / 1000.0, 2),
+            "per_match": per,
+        }
+
     @app.get("/matches/{match_id}/intensity")
     def get_intensity(match_id: str, window_s: float = 300.0):
         """Intenzitás-idővonal: csapatonkénti átlagos mozgás-sebesség

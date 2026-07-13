@@ -467,6 +467,18 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Szezon-összkép a kezdőlapnak (GET /library/summary): összesített
+  /// mutatók (meccsek, játékidő, gólok, táv, sprintek) + meccsenkénti
+  /// kivonat a "per_match" kulcs alatt.
+  Future<Map<String, dynamic>> fetchLibrarySummary() async {
+    final resp = await http.get(Uri.parse("$baseUrl/library/summary"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni az összképet: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Átírja a meccs csapatneveit (PATCH /matches/{id}) — a könyvtár és a
   /// felderítő jelentés is az új neveket mutatja; lemezre is mentődik.
   Future<void> updateMatchNames(String matchId,
