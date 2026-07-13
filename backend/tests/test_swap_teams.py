@@ -46,3 +46,28 @@ def test_swap_survives_json_roundtrip():
     m.swap_teams()
     m2 = Match.from_json(m.to_json())
     assert m2.frames[0].players[0].team == Team.AWAY
+
+
+def test_majority_team_voting_is_stable_under_noise():
+    """Track-szintű szavazás: a zajos (kisebbségi) színminták nem
+    billentik át a track csapat-címkéjét."""
+    from handball.pipeline.teams import majority_team_by_track
+    centers = [(200.0, 40.0, 40.0), (40.0, 40.0, 200.0)]  # piros vs kék
+    colors_by_track = {
+        # Zömmel piros, néhány zajos (kékes) mintával: PIROS marad.
+        1: [(190, 50, 50)] * 8 + [(60, 60, 180)] * 2,
+        # Zömmel kék: KÉK.
+        2: [(50, 50, 190)] * 9 + [(180, 60, 60)],
+        # Fele-fele: döntetlennél a HOME (determinista viselkedés).
+        3: [(190, 50, 50)] * 5 + [(50, 50, 190)] * 5,
+    }
+    teams = majority_team_by_track(colors_by_track, centers)
+    assert teams[1] == Team.HOME
+    assert teams[2] == Team.AWAY
+    assert teams[3] == Team.HOME
+
+
+def test_majority_team_without_centers_defaults_home():
+    from handball.pipeline.teams import majority_team_by_track
+    teams = majority_team_by_track({1: [(1, 2, 3)], 2: []}, None)
+    assert teams == {1: Team.HOME, 2: Team.HOME}
