@@ -103,3 +103,51 @@ def test_passive_play_risk_flags_long_shotless_attack():
     risks = passive_play_risks(Match(_meta(), frames))
     assert len(risks) == 1
     assert risks[0]["duration_s"] >= 35.0
+
+
+def _pp_match_with_shots():
+    """Hazai emberelőny (vendég 5 fő) alatt egy hazai gól; utána egyenlő
+    létszámnál egy hazai védett lövés. A kapus-jel a védéshez kell."""
+    fps = 25.0
+    frames = []
+    # 60 mp emberelőny: hazai 6, vendég 5 mezőnyjátékos + vendég kapus.
+    gk = PlayerPosition(track_id=99, team=Team.AWAY, x=39.0, y=10.0,
+                        source=PositionSource.MEASURED, confidence=1.0,
+                        role="kapus")
+    n_pp = int(60 * fps)
+    for i in range(n_pp):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k) for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k) for k in range(5)]
+        players.append(gk)
+        # A szakasz elején egy gyors hazai gól-esemény (x 33.6 → 40).
+        bx = 33.6 + i if i < 8 else 20.0
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=min(bx, 40.0), y=10.0, confidence=1.0)))
+    # 60 mp egyenlő létszám, az elején egy VÉDETT hazai lövés (megáll a kapusnál).
+    for i in range(int(60 * fps)):
+        t = n_pp + i
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k) for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k) for k in range(6)]
+        players.append(gk)
+        bx = min(33.6 + i, 38.8) if i < 12 else 20.0
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_powerplay_efficiency_split():
+    from handball.pipeline.rules import powerplay_efficiency
+    eff = powerplay_efficiency(_pp_match_with_shots())
+    home = eff["home"]
+    assert home["pp_shots"] == 1 and home["pp_goals"] == 1
+    assert home["pp_eff_pct"] == 100.0
+    assert home["eq_shots"] == 1 and home["eq_goals"] == 0
+    # A hátrányban lévő vendég kapta a gólt.
+    assert eff["away"]["sh_conceded"] == 1
+    assert eff["away"]["sh_seconds"] >= 45.0
+
+
+def test_powerplay_efficiency_empty_without_suspension():
+    from handball.pipeline.rules import powerplay_efficiency
+    m = Match(_meta(), _roster_frames(0, 90, 6, 6))
+    assert powerplay_efficiency(m) == {}
