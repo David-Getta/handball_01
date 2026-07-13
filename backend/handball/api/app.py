@@ -971,6 +971,17 @@ def create_app():
             "per_match": per,
         }
 
+    @app.get("/matches/{match_id}/coach-summary")
+    def get_coach_summary(match_id: str):
+        """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
+        mi volt feltűnő, mire érdemes ránézni. Sablon-alapú (minden mondat
+        mögött kiszámolt szám áll), determinisztikus."""
+        from ..pipeline.coach_summary import coach_summary
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return coach_summary(match)
+
     @app.get("/matches/{match_id}/intensity")
     def get_intensity(match_id: str, window_s: float = 300.0):
         """Intenzitás-idővonal: csapatonkénti átlagos mozgás-sebesség

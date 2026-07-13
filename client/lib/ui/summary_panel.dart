@@ -28,6 +28,11 @@ class SummaryPanel extends StatelessWidget {
   /// Védekezés-idővonal ablakai (üresnél nincs sáv).
   final List<FormationWindow> formations;
 
+  /// Automatikus edzői összefoglaló a backendtől:
+  /// {"sections": [{"title","body"}...], "highlights": [...]} — null-nál
+  /// a panel a grafikonokkal kezd (pl. demónál nincs backend-összefoglaló).
+  final Map<String, dynamic>? coach;
+
   const SummaryPanel({
     super.key,
     required this.summary,
@@ -39,13 +44,64 @@ class SummaryPanel extends StatelessWidget {
     this.onSeekFrame,
     this.intensity = const [],
     this.formations = const [],
+    this.coach,
   });
 
   @override
   Widget build(BuildContext context) {
+    final sections =
+        ((coach?["sections"] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final highlights =
+        ((coach?["highlights"] as List?) ?? const []).cast<String>();
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        if (sections.isNotEmpty) ...[
+          Text("EDZŐI ÖSSZEFOGLALÓ", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final s in sections)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text.rich(TextSpan(children: [
+                      TextSpan(
+                          text: "${s["title"]}. ",
+                          style: AppText.value.copyWith(fontSize: 12.5)),
+                      TextSpan(
+                          text: (s["body"] as String?) ?? "",
+                          style: AppText.label.copyWith(
+                              fontSize: 12.5, color: AppColors.textPrimary)),
+                    ])),
+                  ),
+                for (final h in highlights)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.tips_and_updates_outlined,
+                              size: 14, color: AppColors.gold),
+                          const SizedBox(width: 6),
+                          Expanded(
+                              child: Text(h,
+                                  style: AppText.label.copyWith(
+                                      fontSize: 12, color: AppColors.gold))),
+                        ]),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
         if (goals.isNotEmpty) ...[
           Text("EREDMÉNY-ALAKULÁS", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
