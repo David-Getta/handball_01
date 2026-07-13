@@ -83,6 +83,8 @@ class ScoutingReport:
     gk_conceded_zones: dict = field(default_factory=dict)
     # 7 a 6 elleni (lehozott kapusos) játék összideje másodpercben.
     empty_net_s: float = 0.0
+    # Támadás-mix: {típus: százalék} — lerohanás / gyors indítás / felállt / 7a6.
+    attack_mix: dict = field(default_factory=dict)
     # Kulcsjátékosok + edzői kulcsok
     key_players: list = field(default_factory=list)
     strengths: list = field(default_factory=list)
@@ -357,6 +359,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             if w["team"] == team.value), 1)
     except Exception:
         pass
+    try:
+        from .attack_types import attack_mix
+        rep.attack_mix = attack_mix(match, config).get(team.value, {})
+    except Exception:
+        pass
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
@@ -423,6 +430,16 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
     for r in reports:
         for z, n in r.gk_conceded_zones.items():
             rep.gk_conceded_zones[z] = rep.gk_conceded_zones.get(z, 0) + n
+
+    # Támadás-mix egyesítése: a támadás-számmal súlyozott átlag.
+    total_atk = sum(max(1, r.attacks) for r in reports)
+    mix: dict[str, float] = {}
+    for r in reports:
+        w = max(1, r.attacks) / total_atk
+        for t, pct in r.attack_mix.items():
+            mix[t] = mix.get(t, 0.0) + pct * w
+    rep.attack_mix = {t: round(v, 1) for t, v in
+                      sorted(mix.items(), key=lambda kv: -kv[1])}
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
@@ -457,8 +474,14 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
     elif rep.fast_break_pct > 0:
         parts.append(f"lerohanást ritkán vezet ({rep.fast_break_pct:.0f}%)")
     if parts:
-        out.append({"title": "Így támadnak",
-                    "body": f"{name} " + ", ".join(parts) + "."})
+        body = f"{name} " + ", ".join(parts) + "."
+        # Támadás-mix: a legjellemzőbb típus kiemelése.
+        if rep.attack_mix:
+            top_type, top_pct = next(iter(rep.attack_mix.items()))
+            if top_pct >= 40.0:
+                body += (f" Támadásaik {top_pct:.0f}%-a {top_type} — "
+                         "erre készülj elsőként.")
+        out.append({"title": "Így támadnak", "body": body})
 
     # Védekezésük: fő forma + váltogatás.
     if rep.defense_distribution:

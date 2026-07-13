@@ -982,6 +982,17 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"goalkeepers": goalkeeper_stats(match)}
 
+    @app.get("/matches/{match_id}/attacks")
+    def get_attacks(match_id: str):
+        """Támadás-szakaszok típus-címkével (lerohanás / gyors indítás /
+        felállt / 7 a 6) + csapatonkénti támadás-mix százalékban."""
+        from ..pipeline.attack_types import attack_mix, classify_attacks
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"attacks": classify_attacks(match),
+                "mix": attack_mix(match)}
+
     @app.get("/matches/{match_id}/empty-net")
     def get_empty_net(match_id: str):
         """7 a 6 elleni (üres kapus) szakaszok: mikor és mennyi ideig
