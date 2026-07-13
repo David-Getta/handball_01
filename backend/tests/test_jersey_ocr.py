@@ -95,6 +95,38 @@ def test_end_to_end_ocr_plus_voter():
     assert v.decide(1) == 9
 
 
+
+
+def _letter_crop(ch: str, size=(120, 120)):
+    """Szintetikus mez-kivágás BETŰVEL (pl. a név egy betűje) — nem mezszám."""
+    img = np.full((size[1], size[0], 3), 40, np.uint8)
+    tw = cv2.getTextSize(ch, cv2.FONT_HERSHEY_SIMPLEX, 2.2, 4)[0]
+    org = ((size[0] - tw[0]) // 2, (size[1] + tw[1]) // 2)
+    cv2.putText(img, ch, org, cv2.FONT_HERSHEY_SIMPLEX, 2.2,
+                (235, 235, 235), 4)
+    return img
+
+
+def test_rejects_letters_via_reject_class():
+    """A 11 osztályos háló a betűket elutasítja — nem lesz belőlük hamis
+    mezszám (a hamis szám rosszabb, mint a hiányzó)."""
+    rejected = 0
+    for ch in "AEFKMRTX":
+        if read_jersey_number(_letter_crop(ch)) is None:
+            rejected += 1
+    # Nem minden betű "számjegy-szerű" a kontúr-szűrőnek sem; a lényeg,
+    # hogy a többségük ne kapjon számot.
+    assert rejected >= 6, f"csak {rejected}/8 betű lett elutasítva"
+
+
+def test_digits_still_read_with_reject_class():
+    """Az elutasító osztály NEM ronthatja el a valódi számok leolvasását."""
+    for number in (2, 9, 13, 77):
+        r = read_jersey_number(_jersey_crop(number))
+        assert r is not None and r[0] == number
+
+
+
 if __name__ == "__main__":
     test_reads_single_and_double_digits()
     test_reads_dark_number_on_light_jersey()
