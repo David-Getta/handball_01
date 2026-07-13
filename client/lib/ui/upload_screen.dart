@@ -172,6 +172,7 @@ class _UploadScreenState extends State<UploadScreen> {
       setState(() {
         _uploading = false;
         _uploadProgress = 1.0;
+        if (_wstep == 0) _wstep = 1; // videó kész → tovább a csapatnevekhez
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(okCount == 1
@@ -391,217 +392,397 @@ class _UploadScreenState extends State<UploadScreen> {
     );
   }
 
+  // A varázsló aktuális lépése (0: videó, 1: csapatok, 2: kalibráció,
+  // 3: beállítás + indítás). A fejlécekre kattintva bármelyik újranyitható.
+  int _wstep = 0;
+
+  bool get _hasVideo => _pathCtrl.text.trim().isNotEmpty;
+  bool get _teamsGiven =>
+      _homeCtrl.text.trim().isNotEmpty && _awayCtrl.text.trim().isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
       active: NavId.upload,
       crumbTag: "1f",
-      crumbPath: "FELTÖLTÉS · FELDOLGOZÁSI PIPELINE",
+      crumbPath: "ÚJ ELEMZÉS · VEZETETT FOLYAMAT",
       collapsed: true,
       child: ListView(
         children: [
-          Text("Videó feltöltése", style: AppText.title),
+          Text("Új elemzés", style: AppText.title),
           const SizedBox(height: 4),
-          Text("Pásztázó-kamerás meccsvideó → Tracking adatmodell", style: AppText.subtitle),
+          Text("négy lépés: videó → csapatok → kalibráció → indítás",
+              style: AppText.subtitle),
           const SizedBox(height: AppSpacing.xl),
-          _dropzone(),
-          const SizedBox(height: AppSpacing.md),
-          // Lokális mód: a backend-oldali videó útja, hogy a kalibráció a valódi
-          // képkockát töltse be (fájlválasztó nélkül is működjön a desktop-teszt).
-          TextField(
-            controller: _pathCtrl,
-            style: AppText.value.copyWith(fontSize: 13),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: "Backend-oldali videó útja (pl. /home/.../match.mp4)",
-              hintStyle: AppText.label.copyWith(fontSize: 12),
-              prefixIcon: const Icon(Icons.folder_open, size: 18, color: AppColors.textSecondary),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.borderStrong),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.accent),
-              ),
-            ),
-          ),
-          // A kötegben várakozó további felvételek (a fő videón felül) —
-          // a feldolgozás indításakor mind sorba kerül; az X-szel kivehető.
-          if (_batchPaths.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.xs,
-              children: [
-                for (final p in _batchPaths)
-                  Chip(
-                    label: Text(p.split("/").last,
-                        style: AppText.label.copyWith(fontSize: 12)),
-                    avatar: const Icon(Icons.movie_outlined,
-                        size: 16, color: AppColors.textSecondary),
-                    backgroundColor: AppColors.surfaceAlt,
-                    side: const BorderSide(color: AppColors.border),
-                    deleteIcon: const Icon(Icons.close, size: 16),
-                    onDeleted: () => setState(() => _batchPaths.remove(p)),
-                  ),
-              ],
-            ),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          // Csapatnevek: a könyvtár és a felderítő jelentés ezeket mutatja.
-          Row(children: [
-            Expanded(child: _teamField(_homeCtrl, "Hazai csapat (pl. Veszprém)", AppColors.home)),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(child: _teamField(_awayCtrl, "Vendég csapat (pl. Szeged)", AppColors.away)),
-          ]),
-          const SizedBox(height: AppSpacing.md),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final path = _pathCtrl.text.trim();
-                final res = await Navigator.of(context).push<CalibrationSet>(
-                  MaterialPageRoute(
-                    builder: (_) => CalibrationScreen(
-                      videoPath: path.isEmpty ? null : path,
-                    ),
-                  ),
-                );
-                if (res != null && mounted) {
-                  setState(() => _calib = res);
-                  // A kalibrációt a videóhoz is elmentjük — újrafeldolgozásnál
-                  // (vagy az app újraindítása után) nem kell újra bejelölni.
-                  try {
-                    await _api.saveCalibration(path, _calibMaps(res));
-                  } catch (_) {}
-                }
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _calib != null ? AppColors.gold : AppColors.accent,
-                side: BorderSide(
-                    color: _calib != null ? AppColors.gold : AppColors.accent),
-              ),
-              icon: Icon(_calib != null ? Icons.check_circle : Icons.grid_on, size: 18),
-              label: Text(_calib != null
-                  ? "Kalibráció kész (${_calib!.label})"
-                  : "Pálya-kalibráció (4 sarok)"),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          // Feldolgozási beállítások: minőség + próba mód. Alapból a TELJES
-          // videó készül el a kiegyensúlyozott profillal.
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SegmentedButton<String>(
-                showSelectedIcon: false,
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: [
-                  for (final e in _qualityPresets.entries)
-                    ButtonSegment(value: e.key, label: Text(e.value.$3)),
-                ],
-                selected: {_quality},
-                onSelectionChanged: _status == "running"
-                    ? null
-                    : (s) => setState(() => _quality = s.first),
-              ),
-              SegmentedButton<String>(
-                showSelectedIcon: false,
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: const [
-                  ButtonSegment(value: "trial", label: Text("Próba (~2 p)")),
-                  ButtonSegment(value: "half", label: Text("Félidő (~35 p)")),
-                  ButtonSegment(value: "full", label: Text("Teljes videó")),
-                ],
-                selected: {_length},
-                onSelectionChanged: (s) => setState(() => _length = s.first),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            switch (_length) {
-              "trial" =>
-                "Csak a videó eleje készül el — gyors ellenőrzéshez (kalibráció, színek).",
-              "half" =>
-                "~35 percnyi játék készül el a kalibrált képkockától — ha a videóban "
-                    "az egész meccs van, de csak ez a félidő kell.",
-              _ =>
-                "A teljes videó feldolgozása — egy félidő a gép erejétől függően "
-                    "10–60 perc is lehet, a haladás és a hátralévő idő végig látszik.",
-            },
-            style: AppText.label.copyWith(fontSize: 11),
-          ),
-          const SizedBox(height: 6),
-          // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt — a felismert
-          // számokat a szavazó csak elég bizonyíték esetén hirdeti ki,
-          // és a kézi hozzárendelés mindig felülírhatja.
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            SizedBox(
-              height: 28,
-              child: Switch(
-                value: _jerseyOcr,
-                onChanged: (v) => setState(() => _jerseyOcr = v),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text("Mezszám-felismerés (kísérleti) — a leolvasott számok "
-                "kézzel javíthatók a meccs-nézetben",
-                style: AppText.label.copyWith(fontSize: 11)),
-          ]),
-          const SizedBox(height: AppSpacing.md),
-          Row(children: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
-              onPressed: _uploading ? null : _startProcessing,
-              icon: const Icon(Icons.play_arrow, size: 18),
-              // Futó feldolgozás mellett is indítható újabb: a szerver
-              // SORBA teszi, és egymás után dolgozza fel őket.
-              label: Text(_batchPaths.isNotEmpty
-                  ? "Feldolgozás indítása (${_batchPaths.length + 1} videó)"
-                  : _status == "running" || _status == "queued"
-                      ? "Új videó sorba állítása"
-                      : "Feldolgozás indítása"),
-            ),
-            if (_status == "running") ...[
-              const SizedBox(width: AppSpacing.md),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.away,
-                  side: const BorderSide(color: AppColors.away),
-                ),
-                onPressed: _cancelProcessing,
-                icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                label: const Text("Megszakítás"),
-              ),
-            ],
-          ]),
-          const SizedBox(height: AppSpacing.xl),
-          Text("Feldolgozás állapota", style: AppText.value.copyWith(fontSize: 17)),
-          const SizedBox(height: AppSpacing.md),
-          _processingCard(),
-          // Kész eredmény: kézi megnyitás (az automatikus átugrás mellett — ha
-          // visszaléptél a meccs-nézetről, innen újra megnyithatod).
-          if (_status == "done" && _matchId != null) ...[
+          _stepCard(0, "Meccsvideó kiválasztása",
+              _hasVideo ? _pathCtrl.text.trim().split("/").last : null,
+              _videoStepContent(),
+              complete: _hasVideo),
+          _stepCard(1, "Csapatnevek",
+              _teamsGiven
+                  ? "${_homeCtrl.text.trim()} vs ${_awayCtrl.text.trim()}"
+                  : null,
+              _teamsStepContent(),
+              complete: _teamsGiven),
+          _stepCard(2, "Pálya-kalibráció",
+              _calib != null ? "kész (${_calib!.label})" : null,
+              _calibStepContent(),
+              complete: _calib != null),
+          _stepCard(3, "Beállítás és indítás",
+              _status == "running" ? "feldolgozás folyamatban…" : null,
+              _startStepContent(),
+              complete: _status == "done"),
+          // A feldolgozás állapota csak akkor látszik, ha már történt valami —
+          // az üres állapot-kártya nem zavarja az első lépéseket.
+          if (_status != "idle") ...[
+            const SizedBox(height: AppSpacing.xl),
+            Text("Feldolgozás állapota", style: AppText.value.copyWith(fontSize: 17)),
             const SizedBox(height: AppSpacing.md),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
-                onPressed: _openResult,
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text("Eredmény megnyitása"),
+            _processingCard(),
+            // Kész eredmény: kézi megnyitás (az automatikus átugrás mellett — ha
+            // visszaléptél a meccs-nézetről, innen újra megnyithatod).
+            if (_status == "done" && _matchId != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+                  onPressed: _openResult,
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text("Eredmény megnyitása"),
+                ),
               ),
-            ),
+            ],
           ],
         ],
       ),
     );
+  }
+
+  /// Egy varázsló-lépés kártyája: számozott, kattintható fejléc; a tartalom
+  /// csak az AKTÍV lépésnél nyílik ki — az edzőt lépésről lépésre vezetjük.
+  Widget _stepCard(int i, String title, String? doneNote, Widget content,
+      {required bool complete}) {
+    final active = _wstep == i;
+    final Color badge = complete
+        ? AppColors.accent
+        : active
+            ? AppColors.gold
+            : AppColors.surfaceAlt;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: active ? AppColors.gold : AppColors.border,
+            width: active ? 1.4 : 1),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => setState(() => _wstep = i),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(children: [
+              Container(
+                width: 26, height: 26, alignment: Alignment.center,
+                decoration: BoxDecoration(color: badge, shape: BoxShape.circle),
+                child: complete
+                    ? const Icon(Icons.check, size: 16, color: AppColors.onAccent)
+                    : Text("${i + 1}",
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: active
+                                ? AppColors.onAccent
+                                : AppColors.textSecondary)),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Text(title, style: AppText.value.copyWith(fontSize: 15)),
+              const SizedBox(width: AppSpacing.md),
+              if (doneNote != null)
+                Expanded(
+                    child: Text(doneNote,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: AppText.label.copyWith(
+                            fontSize: 12, color: AppColors.accent)))
+              else
+                const Spacer(),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(active ? Icons.expand_less : Icons.expand_more,
+                  size: 18, color: AppColors.textFaint),
+            ]),
+          ),
+        ),
+        if (active)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+            child: content,
+          ),
+      ]),
+    );
+  }
+
+  /// Lépés-navigáció: Vissza/Tovább — a Tovább csak kész lépésnél él.
+  Widget _stepNav({bool canNext = true, String? hint}) {
+    return Row(children: [
+      if (_wstep > 0)
+        OutlinedButton(
+          onPressed: () => setState(() => _wstep -= 1),
+          child: const Text("Vissza"),
+        ),
+      if (_wstep > 0) const SizedBox(width: AppSpacing.sm),
+      FilledButton(
+        style: FilledButton.styleFrom(
+            backgroundColor: AppColors.accent,
+            foregroundColor: AppColors.onAccent),
+        onPressed: canNext ? () => setState(() => _wstep += 1) : null,
+        child: const Text("Tovább"),
+      ),
+      if (hint != null) ...[
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+            child: Text(hint, style: AppText.label.copyWith(fontSize: 11))),
+      ],
+    ]);
+  }
+
+  /// 1. lépés: videó kiválasztása/feltöltése (+ backend-oldali út kézzel).
+  Widget _videoStepContent() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _dropzone(),
+      const SizedBox(height: AppSpacing.md),
+      // Lokális mód: a backend-oldali videó útja, hogy a kalibráció a valódi
+      // képkockát töltse be (fájlválasztó nélkül is működjön a desktop-teszt).
+      TextField(
+        controller: _pathCtrl,
+        style: AppText.value.copyWith(fontSize: 13),
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: "Backend-oldali videó útja (pl. /home/.../match.mp4)",
+          hintStyle: AppText.label.copyWith(fontSize: 12),
+          prefixIcon: const Icon(Icons.folder_open, size: 18, color: AppColors.textSecondary),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.borderStrong),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.accent),
+          ),
+        ),
+      ),
+      // A kötegben várakozó további felvételek (a fő videón felül) —
+      // a feldolgozás indításakor mind sorba kerül; az X-szel kivehető.
+      if (_batchPaths.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final p in _batchPaths)
+              Chip(
+                label: Text(p.split("/").last,
+                    style: AppText.label.copyWith(fontSize: 12)),
+                avatar: const Icon(Icons.movie_outlined,
+                    size: 16, color: AppColors.textSecondary),
+                backgroundColor: AppColors.surfaceAlt,
+                side: const BorderSide(color: AppColors.border),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                onDeleted: () => setState(() => _batchPaths.remove(p)),
+              ),
+          ],
+        ),
+      ],
+      const SizedBox(height: AppSpacing.md),
+      _stepNav(
+          canNext: _hasVideo,
+          hint: _hasVideo ? null : "Előbb válassz ki egy meccsvideót."),
+    ]);
+  }
+
+  /// 2. lépés: csapatnevek — a könyvtár és a jelentések ezeket mutatják.
+  Widget _teamsStepContent() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: _teamField(_homeCtrl, "Hazai csapat (pl. Veszprém)", AppColors.home)),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(child: _teamField(_awayCtrl, "Vendég csapat (pl. Szeged)", AppColors.away)),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      _stepNav(
+          hint: _teamsGiven
+              ? null
+              : "A nevek később is átírhatók a könyvtárban — de itt megadva "
+                  "minden jelentés rögtön névvel készül."),
+    ]);
+  }
+
+  /// 3. lépés: pálya-kalibráció — enélkül a méter-alapú adatok pontatlanok.
+  Widget _calibStepContent() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(
+        "Jelöld be a pálya 4 sarkát egy jól látható képkockán — ebből lesz "
+        "PONTOS a méter-alapú pozíció, táv és sebesség. A kalibráció a "
+        "videóhoz mentődik, újrafeldolgozásnál nem kell újra bejelölni.",
+        style: AppText.label.copyWith(fontSize: 12),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      OutlinedButton.icon(
+        onPressed: () async {
+          final path = _pathCtrl.text.trim();
+          final res = await Navigator.of(context).push<CalibrationSet>(
+            MaterialPageRoute(
+              builder: (_) => CalibrationScreen(
+                videoPath: path.isEmpty ? null : path,
+              ),
+            ),
+          );
+          if (res != null && mounted) {
+            setState(() {
+              _calib = res;
+              if (_wstep == 2) _wstep = 3; // kész → tovább az indításhoz
+            });
+            // A kalibrációt a videóhoz is elmentjük — újrafeldolgozásnál
+            // (vagy az app újraindítása után) nem kell újra bejelölni.
+            try {
+              await _api.saveCalibration(path, _calibMaps(res));
+            } catch (_) {}
+          }
+        },
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _calib != null ? AppColors.gold : AppColors.accent,
+          side: BorderSide(
+              color: _calib != null ? AppColors.gold : AppColors.accent),
+        ),
+        icon: Icon(_calib != null ? Icons.check_circle : Icons.grid_on, size: 18),
+        label: Text(_calib != null
+            ? "Kalibráció kész (${_calib!.label}) — újranyitás"
+            : "Pálya-kalibráció megnyitása"),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      _stepNav(
+          hint: _calib != null
+              ? null
+              : "Kalibráció nélkül is indítható, de a táv/sebesség adatok "
+                  "pontatlanok lehetnek."),
+    ]);
+  }
+
+  /// 4. lépés: minőség/hossz beállítása és a feldolgozás indítása.
+  Widget _startStepContent() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Feldolgozási beállítások: minőség + próba mód. Alapból a TELJES
+      // videó készül el a kiegyensúlyozott profillal.
+      Wrap(
+        spacing: AppSpacing.md,
+        runSpacing: AppSpacing.sm,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [
+              for (final e in _qualityPresets.entries)
+                ButtonSegment(value: e.key, label: Text(e.value.$3)),
+            ],
+            selected: {_quality},
+            onSelectionChanged: _status == "running"
+                ? null
+                : (s) => setState(() => _quality = s.first),
+          ),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: const [
+              ButtonSegment(value: "trial", label: Text("Próba (~2 p)")),
+              ButtonSegment(value: "half", label: Text("Félidő (~35 p)")),
+              ButtonSegment(value: "full", label: Text("Teljes videó")),
+            ],
+            selected: {_length},
+            onSelectionChanged: (s) => setState(() => _length = s.first),
+          ),
+        ],
+      ),
+      const SizedBox(height: 6),
+      Text(
+        switch (_length) {
+          "trial" =>
+            "Csak a videó eleje készül el — gyors ellenőrzéshez (kalibráció, színek). "
+                "Először MINDIG ezt érdemes futtatni.",
+          "half" =>
+            "~35 percnyi játék készül el a kalibrált képkockától — ha a videóban "
+                "az egész meccs van, de csak ez a félidő kell.",
+          _ =>
+            "A teljes videó feldolgozása — egy félidő a gép erejétől függően "
+                "10–60 perc is lehet, a haladás és a hátralévő idő végig látszik.",
+        },
+        style: AppText.label.copyWith(fontSize: 11),
+      ),
+      const SizedBox(height: 6),
+      // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt — a felismert
+      // számokat a szavazó csak elég bizonyíték esetén hirdeti ki,
+      // és a kézi hozzárendelés mindig felülírhatja.
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        SizedBox(
+          height: 28,
+          child: Switch(
+            value: _jerseyOcr,
+            onChanged: (v) => setState(() => _jerseyOcr = v),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text("Mezszám-felismerés (kísérleti) — a leolvasott számok "
+            "kézzel javíthatók a meccs-nézetben",
+            style: AppText.label.copyWith(fontSize: 11)),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      Row(children: [
+        if (_wstep > 0) ...[
+          OutlinedButton(
+            onPressed: () => setState(() => _wstep -= 1),
+            child: const Text("Vissza"),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.accent, foregroundColor: AppColors.onAccent),
+          onPressed: _uploading || !_hasVideo ? null : _startProcessing,
+          icon: const Icon(Icons.play_arrow, size: 18),
+          // Futó feldolgozás mellett is indítható újabb: a szerver
+          // SORBA teszi, és egymás után dolgozza fel őket.
+          label: Text(_batchPaths.isNotEmpty
+              ? "Feldolgozás indítása (${_batchPaths.length + 1} videó)"
+              : _status == "running" || _status == "queued"
+                  ? "Új videó sorba állítása"
+                  : "Feldolgozás indítása"),
+        ),
+        if (_status == "running") ...[
+          const SizedBox(width: AppSpacing.md),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.away,
+              side: const BorderSide(color: AppColors.away),
+            ),
+            onPressed: _cancelProcessing,
+            icon: const Icon(Icons.stop_circle_outlined, size: 18),
+            label: const Text("Megszakítás"),
+          ),
+        ],
+        if (!_hasVideo) ...[
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+              child: Text("Előbb válassz videót az 1. lépésben.",
+                  style: AppText.label.copyWith(fontSize: 11))),
+        ],
+      ]),
+    ]);
   }
 
   /// Csapatnév-mező (a csapat megjelenítési színével jelölve).
@@ -609,6 +790,8 @@ class _UploadScreenState extends State<UploadScreen> {
     return TextField(
       controller: ctrl,
       style: AppText.value.copyWith(fontSize: 13),
+      // A lépés-fejléc ("Csapatnevek — X vs Y") élőben kövesse a gépelést.
+      onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
         isDense: true,
         hintText: hint,
