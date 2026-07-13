@@ -628,6 +628,20 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     if stitched:
         print(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
 
+    # Félidő-érzékelés + térfélcsere-normalizálás: teljes meccset egyben
+    # tartalmazó felvételnél a 2. félidő koordinátáit tükrözi, hogy a
+    # támadás-irányok egységesek legyenek. A kapus-azonosítás ELŐTT fut.
+    from handball.pipeline.halftime import auto_normalize
+    ht_info = auto_normalize(match)
+    if ht_info is not None:
+        if ht_info["swapped"]:
+            print(f"félidő felismerve (frame {ht_info['halftime_t']}): "
+                  f"térfélcsere normalizálva "
+                  f"({ht_info['mirrored_frames']} kocka tükrözve)")
+        else:
+            print(f"félidő felismerve (frame {ht_info['halftime_t']}): "
+                  "nincs térfélcsere-jel, a koordináták változatlanok")
+
     # Kapus-azonosítás pozíció-prior alapján: aki a mért idejének nagy
     # részét a kapuelőtérben tölti, role="kapus" jelölést kap. Az
     # összefűzés UTÁN fut (egyben látja a track teljes idejét).
