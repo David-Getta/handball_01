@@ -58,6 +58,8 @@ class _MatchScreenState extends State<MatchScreen> {
   // A feldolgozás minőség-önellenőrzése (score + figyelmeztetések) — a
   // felhasználó lássa, mennyire megbízható az elemzés. Demó módban null.
   Map<String, dynamic>? _quality;
+  // Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary).
+  Map<String, dynamic>? _coach;
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -115,6 +117,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> events = [];
     Map<String, dynamic>? quality;
     List<Map<String, dynamic>> notes = [];
+    Map<String, dynamic>? coach;
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -123,6 +126,11 @@ class _MatchScreenState extends State<MatchScreen> {
           events = await _api.fetchEvents(widget.matchId);
         } catch (_) {
           events = []; // esemény nélkül is működik a nézet
+        }
+        try {
+          coach = await _api.fetchCoachSummary(widget.matchId);
+        } catch (_) {
+          coach = null; // az összefoglaló nélkül is teljes a nézet
         }
         try {
           quality = await _api.fetchQuality(widget.matchId);
@@ -153,6 +161,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _passNetwork = computePassNetwork(match, events, _passTeam);
       _quality = quality;
       _notes = notes;
+      _coach = coach;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -1776,6 +1785,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           onSeekFrame: (t) => _seekToFrame(match, t),
                           intensity: _intensity,
                           formations: _formations,
+                          coach: _coach,
                         ),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                   _eventsPanel(match),

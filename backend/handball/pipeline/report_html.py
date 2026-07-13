@@ -564,6 +564,23 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             f"{escape(str(n.get('text', '')))}</li>" for n in items)
         notes_html = "<h2>Edzői jegyzetek</h2><ul>" + lis + "</ul>"
 
+    # Automatikus edzői összefoglaló: mondatokban, a jelentés elejére.
+    summary_html = ""
+    try:
+        from .coach_summary import coach_summary
+        cs = coach_summary(match)
+        if cs["sections"]:
+            paras = "".join(
+                f'<p class="cs"><b>{escape(s["title"])}.</b> '
+                f'{escape(s["body"])}</p>' for s in cs["sections"])
+            hl = ""
+            if cs["highlights"]:
+                hl = ('<ul>' + "".join(
+                    f"<li>{escape(h)}</li>" for h in cs["highlights"]) + "</ul>")
+            summary_html = "<h2>Edzői összefoglaló</h2>" + paras + hl
+    except Exception:
+        pass
+
     # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
     q_html = ""
     if quality:
@@ -598,6 +615,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   li {{ margin: 4px 0; font-size: 13.5px; }}
   p.empty {{ color: #8492A6; font-size: 12.5px; }}
   p.note {{ color: #4A5768; font-size: 12px; margin: 8px 0 0; }}
+  p.cs {{ font-size: 13.5px; margin: 8px 0; }}
   .metrics {{ display: flex; flex-wrap: wrap; gap: 14px 26px; }}
   .metric .mv {{ font-size: 20px; font-weight: 700; color: #12988a; }}
   .metric .ml {{ font-size: 11px; color: #4A5768; }}
@@ -623,6 +641,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     <h1>{home} <span style="color:#8492A6">vs</span> {away}</h1>
     <div class="sub">Elemzett szakasz: {dur_s / 60:.1f} perc · felismert gólok: {goals_h}–{goals_a}</div>
   </header>
+
+  {summary_html}
 
   <h2>Mutatók</h2>
   <div class="metrics">{metrics}</div>
