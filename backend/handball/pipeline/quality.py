@@ -93,6 +93,45 @@ def compute_quality_report(match: Match) -> dict:
             f"Hosszú labda-kiesés ({longest_gap / fps:.1f} mp) — az események egy "
             "része kimaradhat ebben a szakaszban.")
 
+    # --- Követés-egészség: töredezettség, csapat-arány, mezszám-lefedettség ---
+    track_meas: dict = {}       # track_id -> mért kockák száma
+    team_meas = {"home": 0, "away": 0}
+    tracks_with_jersey: set = set()
+    for f in match.frames:
+        for p in f.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            track_meas[p.track_id] = track_meas.get(p.track_id, 0) + 1
+            key = getattr(p.team, "value", p.team)
+            if key in team_meas:
+                team_meas[key] += 1
+            if p.jersey_number is not None:
+                tracks_with_jersey.add(p.track_id)
+
+    track_count = len(track_meas)
+    avg_track_s = (sum(track_meas.values()) / track_count / fps
+                   if track_count else 0.0)
+    # Töredezettség: hány track jut egy elvárt játékosra. Ideálisan ~1;
+    # 3 fölött a követés sokat szakad (takarás, tömörülés, gyenge felvétel).
+    fragmentation = track_count / EXPECTED_PLAYERS if track_count else 0.0
+    if fragmentation > 3.0:
+        warnings.append(
+            f"A követés töredezett ({track_count} track ≈ "
+            f"{fragmentation:.1f}x az elvárt játékosszám) — az automatikus "
+            "track-összefűzés segít, a maradékot a mezszám-hozzárendeléssel "
+            "kötheted össze a meccs-nézetben.")
+
+    total_team = team_meas["home"] + team_meas["away"]
+    home_share = 100.0 * team_meas["home"] / total_team if total_team else 50.0
+    if total_team and not (35.0 <= home_share <= 65.0):
+        warnings.append(
+            f"A csapat-besorolás egyoldalú (hazai arány: {home_share:.0f}%) — "
+            "hasonló mezszíneknél előfordul; a meccs-nézet "
+            "\"Csapatok felcserélése\" gombja és a mezszámok segítenek.")
+
+    jersey_pct = (100.0 * len(tracks_with_jersey) / track_count
+                  if track_count else 0.0)
+
     return {
         "frames": n,
         "score": score,
@@ -101,5 +140,10 @@ def compute_quality_report(match: Match) -> dict:
         "estimated_ratio_pct": round(est_ratio, 1),
         "ball_coverage_pct": round(ball_pct, 1),
         "longest_ball_gap_s": round(longest_gap / fps, 1),
+        "track_count": track_count,
+        "avg_track_length_s": round(avg_track_s, 1),
+        "fragmentation": round(fragmentation, 2),
+        "home_share_pct": round(home_share, 1),
+        "jersey_coverage_pct": round(jersey_pct, 1),
         "warnings": warnings,
     }

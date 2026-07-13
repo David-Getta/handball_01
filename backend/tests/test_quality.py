@@ -23,7 +23,10 @@ def _meta(fps=25.0):
 
 
 def _pl(i, source=PositionSource.MEASURED):
-    return PlayerPosition(track_id=i, team=Team.HOME, x=20.0, y=10.0,
+    # Kiegyensúlyozott felállás: a páros indexek hazaiak, a páratlanok
+    # vendégek — mint egy valódi meccsen (az arány-ellenőrzés miatt).
+    team = Team.HOME if i % 2 == 0 else Team.AWAY
+    return PlayerPosition(track_id=i, team=team, x=20.0, y=10.0,
                           source=source, confidence=1.0)
 
 
@@ -97,3 +100,46 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_tracking_health_metrics_present():
+    """Az új követés-egészség mutatók jelen vannak és értelmesek."""
+    from handball.sim.match_simulator import simulate_ground_truth
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=2)
+    q = compute_quality_report(m)
+    assert q["track_count"] == 14  # a szimulátor 14 stabil játékosa
+    assert abs(q["fragmentation"] - 1.0) < 0.01  # nincs szakadás
+    assert q["avg_track_length_s"] > 5.0
+    assert 35.0 <= q["home_share_pct"] <= 65.0
+    assert q["jersey_coverage_pct"] == 100.0  # a szimulátor mezszámot is ad
+    # Kiegyensúlyozott, ép követésnél nincs töredezettség/arány-figyelmeztetés.
+    assert not any("töredezett" in w for w in q["warnings"])
+    assert not any("egyoldalú" in w for w in q["warnings"])
+
+
+def test_fragmentation_warning_on_many_short_tracks():
+    """Sok rövid track (szakadozó követés) → töredezettség-figyelmeztetés."""
+    frames = []
+    for t in range(100):
+        # Minden 2 kockán új track-azonosító — extrém töredezettség.
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=1000 + t // 2, team=Team.HOME,
+                           x=10.0 + (t % 5), y=5.0),
+        ]))
+    m = Match(meta=_meta(), frames=frames)
+    q = compute_quality_report(m)
+    assert q["fragmentation"] > 3.0
+    assert any("töredezett" in w for w in q["warnings"])
+
+
+def test_one_sided_team_share_warning():
+    """Ha szinte minden mért pozíció egy csapaté → arány-figyelmeztetés."""
+    frames = [Frame(t=t, players=[
+        PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=5.0),
+        PlayerPosition(track_id=2, team=Team.HOME, x=12.0, y=6.0),
+        PlayerPosition(track_id=3, team=Team.HOME, x=14.0, y=7.0),
+    ]) for t in range(50)]
+    m = Match(meta=_meta(), frames=frames)
+    q = compute_quality_report(m)
+    assert q["home_share_pct"] > 90.0
+    assert any("egyoldalú" in w for w in q["warnings"])
