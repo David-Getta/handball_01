@@ -467,6 +467,19 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Szabály-értő réteg (GET /matches/{id}/rules): emberhátrány-szakaszok,
+  /// emberelőny-hatékonyság, hétméteresek, passzív-játék kockázat.
+  Future<Map<String, dynamic>> fetchRules(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/rules"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni a szabály-elemzést: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Támadás-szakaszok típus-címkével + csapatonkénti támadás-mix
   /// (GET /matches/{id}/attacks): {"attacks": [...], "mix": {...}}.
   Future<Map<String, dynamic>> fetchAttacks(String matchId) async {
