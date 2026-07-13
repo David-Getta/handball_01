@@ -982,6 +982,16 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"goalkeepers": goalkeeper_stats(match)}
 
+    @app.get("/matches/{match_id}/rules")
+    def get_rules(match_id: str):
+        """Szabály-értő réteg: emberhátrány-szakaszok (kiállítás lenyomata),
+        hétméteresek és passzív-játék kockázatú támadások."""
+        from ..pipeline.rules import rules_report
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return rules_report(match)
+
     @app.get("/matches/{match_id}/attacks")
     def get_attacks(match_id: str):
         """Támadás-szakaszok típus-címkével (lerohanás / gyors indítás /

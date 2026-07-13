@@ -226,6 +226,38 @@ def coach_summary(match: Match) -> dict:
     except Exception:
         pass
 
+    # Szabály-értő réteg: kiállítások (emberhátrány), hétméteresek,
+    # passzív-játék kockázat — csak ha van mit mondani.
+    try:
+        from .rules import detect_powerplay, detect_seven_meters, passive_play_risks
+        names = {"home": home, "away": away}
+        pps = detect_powerplay(match)
+        sevens = detect_seven_meters(match)
+        passive = passive_play_risks(match)
+        parts: list[str] = []
+        if pps:
+            per: dict[str, float] = {}
+            for w in pps:
+                per[w["team_down"]] = per.get(w["team_down"], 0.0) + w["duration_s"]
+            parts.append("emberhátrány: " + "; ".join(
+                f"a(z) {names.get(t, t)} összesen {s_:.0f} mp-et játszott "
+                "kevesebb emberrel" for t, s_ in per.items()))
+        if sevens:
+            per7: dict[str, int] = {}
+            for e in sevens:
+                per7[e["team"]] = per7.get(e["team"], 0) + 1
+            parts.append("hétméteres: " + ", ".join(
+                f"{names.get(t, t)} {n}" for t, n in per7.items()))
+        if parts:
+            sections.append({"title": "Kiállítások és hétméteresek",
+                             "body": (" · ".join(parts)).capitalize() + "."})
+        if passive:
+            highlights.append(
+                f"{len(passive)} hosszú, lövés nélküli felállt támadás volt "
+                "(passzív-játék kockázat) — nézd vissza, hol akadt el a játék.")
+    except Exception:
+        pass
+
     # 7 a 6 elleni (üres kapus) szakaszok — ha voltak, külön szekció + jelzés.
     try:
         from .goalkeeper import detect_empty_net
