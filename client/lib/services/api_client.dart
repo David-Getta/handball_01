@@ -467,6 +467,19 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Támadás-szakaszok típus-címkével + csapatonkénti támadás-mix
+  /// (GET /matches/{id}/attacks): {"attacks": [...], "mix": {...}}.
+  Future<Map<String, dynamic>> fetchAttacks(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/attacks"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni a támadásokat: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary):
   /// {"sections": [{"title","body"}...], "highlights": [...]} magyarul.
   Future<Map<String, dynamic>> fetchCoachSummary(String matchId) async {
