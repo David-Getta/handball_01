@@ -194,6 +194,10 @@ def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) 
             poss_frames[holder.track_id] = poss_frames.get(holder.track_id, 0) + 1
 
     stats = compute_player_stats(match)
+    # A kapus-jelölést (role="kapus", lásd goalkeeper.py) átvesszük — a
+    # kapus ne "irányítóként" szerepeljen, csak mert nála is jár a labda.
+    gk_tracks = {p.track_id for f in match.frames for p in f.players
+                 if p.role == "kapus"}
     rows: list[KeyPlayer] = []
     # A csapat játékosai: akiket többségében ehhez a csapathoz soroltunk.
     for tid, tteam in team_of.items():
@@ -201,8 +205,10 @@ def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) 
             continue
         pf = poss_frames.get(tid, 0)
         dist = stats[tid].distance_m if tid in stats else 0.0
-        rows.append(KeyPlayer(track_id=tid, possession_frames=pf, distance_m=round(dist, 1),
-                              role="irányító" if pf > 0 else "mezőnyjátékos"))
+        role = ("kapus" if tid in gk_tracks
+                else "irányító" if pf > 0 else "mezőnyjátékos")
+        rows.append(KeyPlayer(track_id=tid, possession_frames=pf,
+                              distance_m=round(dist, 1), role=role))
     # Rendezés: előbb a legtöbb labdabirtoklás, majd a legaktívabb.
     rows.sort(key=lambda r: (r.possession_frames, r.distance_m), reverse=True)
     # A legaktívabbat "irányítónak" csak akkor hívjuk, ha tényleg birtokolt sokat.
@@ -429,9 +435,10 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             body += f" Labdaeladásuk: {rep.turnovers}."
         out.append({"title": "Befejezésük", "body": body})
 
-    # Kulcsjátékos: akinél a legtöbb labda megfordul.
-    if rep.key_players:
-        kp = rep.key_players[0]
+    # Kulcsjátékos: akinél a legtöbb labda megfordul — a kapust átugorjuk
+    # (nála kidobásoknál jár a labda, nem ő szervezi a támadást).
+    kp = next((k for k in rep.key_players if k.get("role") != "kapus"), None)
+    if kp is not None:
         if kp.get("possession_frames", 0) > 0:
             out.append({
                 "title": "Kulcsjátékos",
