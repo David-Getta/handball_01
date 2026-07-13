@@ -1,0 +1,95 @@
+"""
+Tesztek a támadás-típus címkézésre (attack_types.py).
+
+A pálya 40x20 m; a HAZAI a +x (x=40) kapu felé támad.
+
+Futtatás:
+    python -m pytest tests/test_attack_types.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from handball.models.tracking import (
+    Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+)
+from handball.pipeline.attack_types import (
+    AttackType, attack_mix, classify_attacks,
+)
+
+
+def _meta(fps=25.0):
+    return MatchMeta(match_id="a", home_team="H", away_team="A", fps=fps)
+
+
+def _pl(track_id, team, x, y, role=None):
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0,
+                          role=role)
+
+
+def _attack_frames(t0, seconds, x_from, x_to, fps=25.0, gk_x=1.5):
+    """HAZAI támadás-szakasz: a labda (és a labdás játékos) x_from→x_to
+    halad; a védő vendégek a saját kapujuknál állnak."""
+    n = int(seconds * fps)
+    frames = []
+    for i in range(n):
+        x = x_from + (x_to - x_from) * i / max(1, n - 1)
+        players = [
+            _pl(1, Team.HOME, x, 10.0),
+            _pl(2, Team.HOME, x - 3.0, 6.0),
+            _pl(9, Team.HOME, gk_x, 10.0, role="kapus"),
+            _pl(21, Team.AWAY, 37.0, 8.0),
+            _pl(22, Team.AWAY, 37.0, 12.0),
+        ]
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_fast_break_label():
+    """4 mp alatt 22→38 m (4 m/s előrehaladás) → lerohanás."""
+    m = Match(_meta(), _attack_frames(0, 4.0, 22.0, 38.0))
+    attacks = [a for a in classify_attacks(m) if a["team"] == "home"]
+    assert attacks and attacks[0]["type"] == AttackType.FAST_BREAK.value
+
+
+def test_positional_label():
+    """20 mp-en át topogás a 9 m körül (nincs előrehaladás) → felállt támadás."""
+    m = Match(_meta(), _attack_frames(0, 20.0, 30.0, 31.0))
+    attacks = [a for a in classify_attacks(m) if a["team"] == "home"]
+    assert attacks and attacks[0]["type"] == AttackType.POSITIONAL.value
+
+
+def test_quick_label():
+    """10 mp alatt 22→38 m (~1,6 m/s) → gyors indítás (nem teljes sprint)."""
+    m = Match(_meta(), _attack_frames(0, 10.0, 22.0, 38.0))
+    attacks = [a for a in classify_attacks(m) if a["team"] == "home"]
+    assert attacks and attacks[0]["type"] == AttackType.QUICK.value
+
+
+def test_seven_six_label_overrides():
+    """Ha a szakasz lehozott kapusos ablakban fut (a kapus elöl játszik),
+    a címke 7 a 6 — akkor is, ha egyébként felállt támadás lenne."""
+    m = Match(_meta(), _attack_frames(0, 20.0, 30.0, 31.0, gk_x=22.0))
+    attacks = [a for a in classify_attacks(m) if a["team"] == "home"]
+    assert attacks and attacks[0]["type"] == AttackType.SEVEN_SIX.value
+
+
+def test_attack_mix_percentages():
+    """A mix a címkék darabszám-aránya, 100%-ra összegződve."""
+    frames = _attack_frames(0, 4.0, 22.0, 38.0)  # lerohanás
+    # Szünet (nincs támadó fázis): a labda középen, senki a közelében.
+    t0 = len(frames)
+    for i in range(10):
+        frames.append(Frame(t=t0 + i, players=[], ball=None))
+    frames += _attack_frames(t0 + 10, 20.0, 30.0, 31.0)  # felállt
+    m = Match(_meta(), frames)
+    mix = attack_mix(m).get("home", {})
+    assert set(mix) == {AttackType.FAST_BREAK.value,
+                        AttackType.POSITIONAL.value}
+    assert abs(sum(mix.values()) - 100.0) < 0.2

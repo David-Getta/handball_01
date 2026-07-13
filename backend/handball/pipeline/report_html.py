@@ -29,10 +29,11 @@ def _metric(label: str, value: str) -> str:
             f'<div class="ml">{escape(label)}</div></div>')
 
 
-def _defense_bars(dist: dict) -> str:
-    """Védőforma-megoszlás vízszintes sávokkal (inline szélesség = %)."""
+def _defense_bars(dist: dict, empty: str = "Nincs elég védekező minta.") -> str:
+    """Megoszlás vízszintes sávokkal (inline szélesség = %) — védőformákra
+    és támadás-mixre is."""
     if not dist:
-        return '<p class="empty">Nincs elég védekező minta.</p>'
+        return f'<p class="empty">{escape(empty)}</p>'
     out = []
     for label, pct in dist.items():
         p = max(0.0, min(100.0, float(pct)))
@@ -205,6 +206,9 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
 
   {("<h2>Ismert figuráik (a könyvtárunkból)</h2>" + _playbook_rows(playbook_match))
    if playbook_match else ""}
+
+  <h2>Támadás-mix (típus szerint)</h2>
+  {_defense_bars(rep.attack_mix, empty="Nincs elég támadás-minta.")}
 
   <h2>Védekezésük (amikor ők védenek)</h2>
   {_defense_bars(rep.defense_distribution)}
