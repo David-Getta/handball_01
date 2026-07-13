@@ -197,6 +197,72 @@ def rules_report(match: Match) -> dict:
     """A szabály-értő réteg összegzése egy hívásban (az API-nak)."""
     return {
         "powerplay": detect_powerplay(match),
+        "powerplay_efficiency": powerplay_efficiency(match),
         "seven_meters": detect_seven_meters(match),
         "passive_risk": passive_play_risks(match),
     }
+
+def powerplay_efficiency(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Emberelőny-hatékonyság: mire váltja a csapat a kiállításokat.
+
+    Csapatonként szétválogatja a kapura tartó lövéseket (gól + védés)
+    aszerint, hogy EMBERELŐNYBEN (az ellenfél kiállítása alatt), EGYENLŐ
+    létszámnál vagy EMBERHÁTRÁNYBAN születtek — és számolja a hátrányban
+    kapott gólokat is.
+
+    Visszatérés csapatonként: {"pp_shots", "pp_goals", "pp_eff_pct",
+    "eq_shots", "eq_goals", "eq_eff_pct", "pp_seconds",
+    "sh_seconds", "sh_conceded"} — üres szótár, ha nem volt kiállítás.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    windows = detect_powerplay(match)
+    if not windows:
+        return {}
+
+    def _down_at(t: int) -> Optional[str]:
+        for w in windows:
+            if w["start_frame"] <= t <= w["end_frame"]:
+                return w["team_down"]
+        return None
+
+    out = {team: {"pp_shots": 0, "pp_goals": 0, "pp_eff_pct": 0.0,
+                  "eq_shots": 0, "eq_goals": 0, "eq_eff_pct": 0.0,
+                  "pp_seconds": 0.0, "sh_seconds": 0.0, "sh_conceded": 0}
+           for team in ("home", "away")}
+    for w in windows:
+        down = w["team_down"]
+        up = "away" if down == "home" else "home"
+        out[up]["pp_seconds"] += w["duration_s"]
+        out[down]["sh_seconds"] += w["duration_s"]
+
+    for e in detect_shots(match, config):
+        outcome = (e.detail or {}).get("outcome")
+        if outcome not in ("goal", "save"):
+            continue  # a mellé menő lövésből nem mérünk hatékonyságot
+        team = e.team.value
+        down = _down_at(e.t)
+        if down is None or down == team:
+            # Egyenlő létszám (vagy hátrányban lőtt — az az "eq"-t se rontsa).
+            if down is None:
+                out[team]["eq_shots"] += 1
+                if outcome == "goal":
+                    out[team]["eq_goals"] += 1
+        else:
+            out[team]["pp_shots"] += 1
+            if outcome == "goal":
+                out[team]["pp_goals"] += 1
+        if outcome == "goal" and down is not None and down != team:
+            # A hátrányban lévő csapat kapta a gólt.
+            out[down]["sh_conceded"] += 1
+
+    for rec in out.values():
+        if rec["pp_shots"]:
+            rec["pp_eff_pct"] = round(100.0 * rec["pp_goals"] / rec["pp_shots"], 1)
+        if rec["eq_shots"]:
+            rec["eq_eff_pct"] = round(100.0 * rec["eq_goals"] / rec["eq_shots"], 1)
+        rec["pp_seconds"] = round(rec["pp_seconds"], 1)
+        rec["sh_seconds"] = round(rec["sh_seconds"], 1)
+    return out

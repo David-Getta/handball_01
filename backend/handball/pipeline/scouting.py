@@ -83,6 +83,12 @@ class ScoutingReport:
     gk_conceded_zones: dict = field(default_factory=dict)
     # 7 a 6 elleni (lehozott kapusos) játék összideje másodpercben.
     empty_net_s: float = 0.0
+    # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
+    # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
+    pp_shots: int = 0
+    pp_goals: int = 0
+    sh_conceded: int = 0
+    sh_seconds: float = 0.0
     # Támadás-mix: {típus: százalék} — lerohanás / gyors indítás / felállt / 7a6.
     attack_mix: dict = field(default_factory=dict)
     # Kulcsjátékosok + edzői kulcsok
@@ -287,6 +293,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(f"Kapusuk innen kapta a legtöbb gólt: {zone} "
                         f"({n} gól) — támadd onnan.")
 
+    # Emberelőny: ha jól váltják gólra, a kiállítás ellenük duplán fáj.
+    if rep.pp_shots >= 3:
+        pp_eff = 100.0 * rep.pp_goals / rep.pp_shots
+        if pp_eff >= 60.0:
+            strengths.append(f"Emberelőnyben nagyon hatékonyak "
+                             f"({rep.pp_goals}/{rep.pp_shots} gól) — "
+                             "kerüld a felesleges kiállítást.")
+        elif pp_eff <= 25.0:
+            weaknesses.append(f"Az emberelőnyt rosszul használják ki "
+                              f"({pp_eff:.0f}%) — hátrányban is védekezhetsz "
+                              "bátran.")
+    if rep.sh_seconds >= 60.0 and rep.sh_conceded >= 2:
+        per_min = 60.0 * rep.sh_conceded / rep.sh_seconds
+        if per_min >= 1.0:
+            weaknesses.append("Emberhátrányban összeomlanak "
+                              f"({rep.sh_conceded} kapott gól "
+                              f"{rep.sh_seconds / 60:.1f} perc alatt).")
+
     # 7 a 6: ha érdemben használják (meccsenként >= 20 mp), készülj rá.
     if rep.empty_net_s / max(1, rep.matches) >= 20.0:
         strengths.append(f"Tudatosan játszanak 7 a 6 ellen "
@@ -364,6 +388,16 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.attack_mix = attack_mix(match, config).get(team.value, {})
     except Exception:
         pass
+    try:
+        from .rules import powerplay_efficiency
+        eff = powerplay_efficiency(match, config).get(team.value)
+        if eff:
+            rep.pp_shots = eff["pp_shots"]
+            rep.pp_goals = eff["pp_goals"]
+            rep.sh_conceded = eff["sh_conceded"]
+            rep.sh_seconds = eff["sh_seconds"]
+    except Exception:
+        pass
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
@@ -425,6 +459,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gk_on_target=sum(r.gk_on_target for r in reports),
         gk_saves=sum(r.gk_saves for r in reports),
         empty_net_s=round(sum(r.empty_net_s for r in reports), 1),
+        pp_shots=sum(r.pp_shots for r in reports),
+        pp_goals=sum(r.pp_goals for r in reports),
+        sh_conceded=sum(r.sh_conceded for r in reports),
+        sh_seconds=round(sum(r.sh_seconds for r in reports), 1),
     )
     # Kapott-gól zónák egyesítése.
     for r in reports:

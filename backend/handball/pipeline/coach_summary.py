@@ -248,6 +248,24 @@ def coach_summary(match: Match) -> dict:
                 per7[e["team"]] = per7.get(e["team"], 0) + 1
             parts.append("hétméteres: " + ", ".join(
                 f"{names.get(t, t)} {n}" for t, n in per7.items()))
+        # Emberelőny-hatékonyság: mire váltotta a csapat a kiállításokat.
+        from .rules import powerplay_efficiency
+        eff = powerplay_efficiency(match)
+        for key, name in (("home", home), ("away", away)):
+            rec = eff.get(key)
+            if not rec or not rec["pp_shots"]:
+                continue
+            parts.append(
+                f"a(z) {name} emberelőnyben {rec['pp_goals']} gólt dobott "
+                f"{rec['pp_shots']} kapura tartó lövésből "
+                f"({rec['pp_eff_pct']:.0f}%)")
+            if (rec["pp_shots"] >= 3 and rec["eq_shots"] >= 3
+                    and rec["pp_eff_pct"] < rec["eq_eff_pct"]):
+                highlights.append(
+                    f"{name}: az emberelőny nem hozott jobb gólarányt "
+                    f"({rec['pp_eff_pct']:.0f}% vs {rec['eq_eff_pct']:.0f}% "
+                    "egyenlő létszámnál) — érdemes a létszámfölényes "
+                    "figurákat gyakorolni.")
         if parts:
             sections.append({"title": "Kiállítások és hétméteresek",
                              "body": (" · ".join(parts)).capitalize() + "."})
