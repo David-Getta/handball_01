@@ -206,7 +206,8 @@ def _normalize_max_frames(max_frames):
 
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None,
-                  pan=False, jersey_voter=None, ocr_every=5):
+                  pan=False, jersey_voter=None, ocr_every=5,
+                  ball_recover=True):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -254,6 +255,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pan:
         from handball.pipeline.pan_tracking import PanTracker
         pan_tracker = PanTracker()
+    # Labda-visszaszerzés: elveszett labdánál a várható helye körüli KIS
+    # kivágásban keresünk újra — ott a labda relatíve nagy, jobb az esély.
+    reacquirer = None
+    if ball_recover:
+        from handball.pipeline.ball_reacquire import BallReacquirer
+        reacquirer = BallReacquirer()
     raw, all_colors = [], []
     # EGY menet nagy felbontáson (1920) + alacsony küszöb (0.05), hogy a kis labdát
     # is elkapja; a JÁTÉKOSOKAT utólag szűrjük a megadott (magasabb) küszöbre, hogy
@@ -318,6 +325,32 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     if best_ball is None or bc > best_ball[0]:
                         best_ball = (bc, (x1 + x2) / 2.0, (y1 + y2) / 2.0)
         ball_xy = (best_ball[1], best_ball[2]) if best_ball else None
+        # Ha a teljes képen nem lett meg a labda, célzott újrakeresés a
+        # várható helye körüli kivágásban (a kivágásban nagyobbnak látszik).
+        if ball_xy is None and reacquirer is not None:
+            roi = reacquirer.roi_for(fi * stride, img.shape[1], img.shape[0])
+            if roi is not None:
+                crop = img[roi[1]:roi[3], roi[0]:roi[2]]
+                try:
+                    rr = model.predict(crop, imgsz=640, conf=0.03,
+                                       classes=ball_ids, device=device,
+                                       verbose=False)
+                    best = None
+                    for r2 in rr:
+                        if r2.boxes is None:
+                            continue
+                        for b2 in r2.boxes:
+                            bc2 = float(b2.conf[0])
+                            if best is None or bc2 > best[0]:
+                                bx1, by1, bx2, by2 = \
+                                    [float(v) for v in b2.xyxy[0].tolist()]
+                                best = (bc2, (bx1 + bx2) / 2, (by1 + by2) / 2)
+                    if best is not None:
+                        ball_xy = reacquirer.map_back(roi, best[1], best[2])
+                except Exception:
+                    pass  # az újrakeresés hibája sosem állítja meg a feldolgozást
+        if reacquirer is not None:
+            reacquirer.note(fi * stride, ball_xy)
         raw.append((persons, ball_xy, panH))
     if skipped_dark:
         print(f"sötét bevezető képkocka kihagyva: {skipped_dark}")
