@@ -34,6 +34,10 @@ TURNOVER_SUPPRESS = 12   # lövés után ennyi frame-en belüli labdaeladást el
 _GOAL_Y_LOW = COURT_WIDTH_M / 2.0 - 1.5   # 8.5 — alsó kapufa
 _GOAL_Y_HIGH = COURT_WIDTH_M / 2.0 + 1.5  # 11.5 — felső kapufa
 
+SHOOTER_LOOKBACK_S = 0.8  # a lövés előtt ennyi időn belülről keressük a lövőt
+SAVE_RADIUS_M = 1.6       # a labda ennyire a kapushoz érve = védés
+_GK_NEAR_GOAL_M = 9.0     # a kapus csak a SAJÁT kapujánál "véd"
+
 
 class EventType(str, Enum):
     PASS = "pass"           # passz (csapaton belül)
@@ -63,6 +67,40 @@ class MatchEvent:
 def _attacking_team_for_goal(goal_x: float, config: TacticsConfig) -> Team:
     """Melyik csapat TÁMADJA a megadott kaput (annak a kapunak a támadója)."""
     return Team.HOME if config.attacks_toward_x(Team.HOME) == goal_x else Team.AWAY
+
+
+def _shooter_before(match: Match, idx: int, team: Team,
+                    config: TacticsConfig, fps: float) -> Optional[int]:
+    """A lövő: az utolsó labdabirtokos a TÁMADÓ csapatból a lövés előtt.
+
+    A lövés pillanatában a labda már úton van (nincs birtokos), ezért
+    visszafelé keresünk legfeljebb SHOOTER_LOOKBACK_S másodpercet."""
+    back = max(0, idx - round(SHOOTER_LOOKBACK_S * fps))
+    for j in range(idx, back - 1, -1):
+        holder = ball_holder(match.frames[j], config)
+        if holder is not None and holder.team == team:
+            return holder.track_id
+    return None
+
+
+def _save_by_goalkeeper(match: Match, idx: int, goal_x: float) -> Optional[int]:
+    """Nem-gól lövésnél: hárította-e a kapus? A kapus-jelölést (role=
+    "kapus", lásd goalkeeper.py) használja — ha a labda a lövés utáni
+    ablakban a SAJÁT kapujánál álló kapus közelébe ér, az védés.
+
+    Visszatérés: a védő kapus track_id-ja, vagy None (mellé/blokk)."""
+    end = min(len(match.frames), idx + GOAL_LOOKAHEAD)
+    for j in range(idx, end):
+        f = match.frames[j]
+        b = f.ball
+        if b is None:
+            continue
+        for p in f.players:
+            if p.role != "kapus" or abs(p.x - goal_x) > _GK_NEAR_GOAL_M:
+                continue
+            if math.hypot(p.x - b.x, p.y - b.y) <= SAVE_RADIUS_M:
+                return p.track_id
+    return None
 
 
 def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
@@ -107,10 +145,21 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
             if dxg <= APPROACH_X_M and toward and speed >= SHOT_SPEED_MS and not in_zone[goal_x]:
                 in_zone[goal_x] = True
                 is_goal = _reaches_goal_line(match, i, goal_x)
+                attacking = _attacking_team_for_goal(goal_x, config)
+                shooter = _shooter_before(match, i, attacking, config, fps)
+                # Kimenetel: gól / védés (a kapus-jel alapján) / mellé-blokk.
+                if is_goal:
+                    detail: dict = {"outcome": "goal"}
+                else:
+                    gk = _save_by_goalkeeper(match, i, goal_x)
+                    detail = ({"outcome": "save", "goalkeeper_id": gk}
+                              if gk is not None else {"outcome": "miss"})
                 events.append(MatchEvent(
                     t=f.t,
                     type=EventType.GOAL if is_goal else EventType.SHOT,
-                    team=_attacking_team_for_goal(goal_x, config),
+                    team=attacking,
+                    player_id=shooter,
+                    detail=detail,
                 ))
             if dxg > APPROACH_X_M + 1.0:
                 in_zone[goal_x] = False

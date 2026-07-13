@@ -503,8 +503,12 @@ class _MatchScreenState extends State<MatchScreen> {
     final type = (e["type"] as String?) ?? "";
     final t = (e["t"] as num?)?.toInt() ?? 0;
     final team = (e["team"] as String?) == "home" ? match.meta.homeTeam : match.meta.awayTeam;
+    // Lövés-kimenetel a backendtől: védés (a kapus hárította) vagy mellé.
+    final outcome = ((e["detail"] as Map?)?["outcome"] as String?) ?? "";
     final (label, icon, color) = switch (type) {
       "goal" => ("GÓL", Icons.sports_score, AppColors.gold),
+      "shot" when outcome == "save" =>
+        ("Lövés — védés", Icons.front_hand, AppColors.accent),
       "shot" => ("Lövés", Icons.sports_handball, AppColors.accent),
       "turnover" => ("Labdaeladás", Icons.swap_horiz, AppColors.away),
       _ => ("Passz", Icons.arrow_forward, AppColors.textSecondary),

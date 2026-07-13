@@ -91,6 +91,49 @@ def test_event_counts():
     assert c["by_type"]["pass"] == 1
 
 
+def test_shot_outcome_save_with_goalkeeper():
+    """Nem-gól lövés, ahol a labda a megjelölt KAPUS közelébe ér → védés."""
+    gk = PlayerPosition(track_id=9, team=Team.AWAY, x=39.0, y=10.0,
+                        source=PositionSource.MEASURED, confidence=1.0,
+                        role="kapus")
+    # A labda a kapu felé száll (kapufák között), de a kapusnál megáll —
+    # nem éri el a gólvonalat.
+    frames = []
+    for i in range(6):
+        x = min(34.0 + i, 38.8)
+        frames.append(Frame(t=i, players=[gk],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    shots = detect_shots(Match(_meta(), frames))
+    assert len(shots) == 1
+    e = shots[0]
+    assert e.type == EventType.SHOT
+    assert e.detail["outcome"] == "save"
+    assert e.detail["goalkeeper_id"] == 9
+
+
+def test_shot_outcome_miss_without_goalkeeper():
+    """Kapus-jel nélkül a nem-gól lövés kimenetele "miss"."""
+    frames = [Frame(t=i, players=[], ball=Ball(x=34.0 + i, y=5.0, confidence=1.0))
+              for i in range(6)]
+    shots = detect_shots(Match(_meta(), frames))
+    assert shots[0].detail["outcome"] == "miss"
+
+
+def test_goal_outcome_and_shooter():
+    """Gólnál a kimenetel "goal", és a lövő (az utolsó hazai birtokos) is megvan."""
+    shooter = _pl(4, Team.HOME, 33.5, 10.0)
+    frames = [Frame(t=0, players=[shooter],
+                    ball=Ball(x=33.6, y=10.0, confidence=1.0))]
+    for i in range(1, 8):
+        frames.append(Frame(t=i, players=[],
+                            ball=Ball(x=33.6 + i, y=10.0, confidence=1.0)))
+    shots = detect_shots(Match(_meta(), frames))
+    goals = [e for e in shots if e.type == EventType.GOAL]
+    assert len(goals) == 1
+    assert goals[0].detail["outcome"] == "goal"
+    assert goals[0].player_id == 4
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
