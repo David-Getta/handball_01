@@ -138,3 +138,49 @@ def test_goalkeeper_stats_empty_without_role():
     from handball.pipeline.goalkeeper import goalkeeper_stats
     m = _match(_frames(_stay(1, Team.HOME, 20.0, 10.0, 100), n=100))
     assert goalkeeper_stats(m) == {}
+
+
+def _empty_net_match(gk_far=True, seconds=5, poss_own=True):
+    """HAZAI támadás a labdával; a hazai kapus vagy elöl (7a6), vagy otthon."""
+    from handball.models.tracking import Ball
+    n = int(seconds * 25)
+    frames = []
+    for t in range(n):
+        gk_x = 20.0 if gk_far else 1.5  # elöl játszik vs a kapujában áll
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=gk_x, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME, x=30.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+            PlayerPosition(track_id=3, team=Team.AWAY, x=35.0, y=8.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        # A labda a hazai (2-es) vagy a vendég (3-as) játékosnál.
+        bx, by = (30.0, 10.0) if poss_own else (35.0, 8.0)
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+    return _match(frames)
+
+
+def test_empty_net_detected_when_gk_upfield():
+    from handball.pipeline.goalkeeper import detect_empty_net
+    windows = detect_empty_net(_empty_net_match(gk_far=True, seconds=5))
+    assert len(windows) == 1
+    w = windows[0]
+    assert w["team"] == "home"
+    assert w["duration_s"] >= 4.5
+
+
+def test_no_empty_net_when_gk_home_or_defending():
+    from handball.pipeline.goalkeeper import detect_empty_net
+    # A kapus a kapujában → nincs 7a6.
+    assert detect_empty_net(_empty_net_match(gk_far=False)) == []
+    # A kapus elöl, de az ELLENFÉL birtokol (pl. lerohanás ellenük) → nem 7a6.
+    assert detect_empty_net(_empty_net_match(gk_far=True, poss_own=False)) == []
+
+
+def test_short_burst_filtered():
+    from handball.pipeline.goalkeeper import detect_empty_net
+    # 2 mp-es szakasz a 3 mp-es küszöb alatt marad.
+    assert detect_empty_net(_empty_net_match(gk_far=True, seconds=2)) == []

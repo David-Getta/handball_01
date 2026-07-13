@@ -142,3 +142,81 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
         if rec["on_target"]:
             rec["save_pct"] = round(100.0 * rec["saves"] / rec["on_target"], 1)
     return out
+
+# 7 a 6 elleni (üres kapus) játék felismerése:
+EMPTY_NET_FAR_M = 12.0   # a kapus ennyire elhagyta a saját kapuját
+EMPTY_NET_MIN_S = 3.0    # legalább ennyi ideig tartó szakasz számít
+EMPTY_NET_JOIN_S = 1.0   # ennél rövidebb megszakadást összevonunk
+
+
+def detect_empty_net(match: Match, config=None) -> list[dict]:
+    """7 a 6 elleni (üres kapus) szakaszok felismerése.
+
+    Jele: a megjelölt kapus tartósan TÁVOL van a saját kapujától (vagy
+    lecserélték — a track eltűnt), miközben a CSAPATA birtokolja a labdát.
+    A modern kézilabda tudatos fegyvere — az ellenfélnek (és a saját
+    edzőnek) is fontos tudni, mikor és mennyit játszotta a csapat.
+
+    Visszatérés: [{"team", "start_frame", "end_frame", "duration_s"}, ...]
+    időrendben. Kapus-jelölés nélkül üres lista.
+    """
+    from .tactics import TacticsConfig, possession_team
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+
+    gk_of_team: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.role == ROLE_GOALKEEPER and p.team not in gk_of_team:
+                gk_of_team[p.team] = p.track_id
+    if not gk_of_team:
+        return []
+
+    # Kockánként: csapatonként "üres-e a kapu, miközben ők támadnak".
+    flags: dict = {team: [] for team in gk_of_team}
+    for f in match.frames:
+        poss = possession_team(f, config)
+        for team, tid in gk_of_team.items():
+            gk_pos = next((p for p in f.players if p.track_id == tid), None)
+            if gk_pos is None:
+                away_from_goal = True  # lecserélve / nem látszik
+            else:
+                own_x = config.own_goal_x(team)
+                away_from_goal = math.hypot(
+                    gk_pos.x - own_x,
+                    gk_pos.y - COURT_WIDTH_M / 2.0) > EMPTY_NET_FAR_M
+            flags[team].append(bool(away_from_goal and poss == team))
+
+    # Összefüggő szakaszok kigyűjtése + rövid lyukak összevonása.
+    min_frames = max(1, round(EMPTY_NET_MIN_S * fps))
+    join_frames = max(1, round(EMPTY_NET_JOIN_S * fps))
+    out: list[dict] = []
+    for team, seq in flags.items():
+        runs: list[list[int]] = []
+        start = None
+        for i, on in enumerate(seq):
+            if on and start is None:
+                start = i
+            elif not on and start is not None:
+                runs.append([start, i - 1])
+                start = None
+        if start is not None:
+            runs.append([start, len(seq) - 1])
+        # Rövid megszakadások összevonása (pl. a labda 1-2 kockára szabad).
+        merged: list[list[int]] = []
+        for run in runs:
+            if merged and run[0] - merged[-1][1] <= join_frames:
+                merged[-1][1] = run[1]
+            else:
+                merged.append(run)
+        for (a, b) in merged:
+            if b - a + 1 >= min_frames:
+                out.append({
+                    "team": team.value,
+                    "start_frame": match.frames[a].t,
+                    "end_frame": match.frames[b].t,
+                    "duration_s": round((b - a + 1) / fps, 1),
+                })
+    out.sort(key=lambda w: w["start_frame"])
+    return out
