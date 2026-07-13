@@ -278,6 +278,65 @@ def test_scouting_report_html_hides_absent_metrics():
     assert "7 a 6 összesen" not in html
 
 
+def _switching_match():
+    """AWAY véd a x=40 kapunál: 6-0 → (hazai gól) → 5-1 → 6-0 → 5-1.
+
+    A hazai gól után az AWAY hátrányban van, és kétszer is 5-1-re vált —
+    ebből születik a "hátrányban 5-1-re váltanak" felderítési kulcs.
+    """
+    frames = []
+    t = 0
+
+    def defense(seconds, formation):
+        nonlocal t
+        for _ in range(int(seconds * 25)):
+            players = [_pl(1, Team.HOME, 28.0, 10.0),
+                       _pl(2, Team.HOME, 30.0, 6.0)]
+            if formation == "6-0":
+                xs = [35.0] * 6      # mind a hátsó sávban (depth 5)
+            else:  # 5-1
+                xs = [35.0] * 5 + [31.0]  # egy előretolt (depth 9 → mid)
+            for j, x in enumerate(xs):
+                players.append(_pl(20 + j, Team.AWAY, x, 3.0 + j * 2.5))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def home_goal():
+        nonlocal t
+        for i in range(8):
+            x = min(33.6 + i, 40.0)
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x - 1, 10.0)],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    defense(30, "6-0")
+    home_goal()
+    defense(15, "6-0")  # a gól után még 6-0 — a váltás már hátrányban jön
+    defense(30, "5-1")
+    defense(30, "6-0")
+    defense(30, "5-1")
+    return Match(_meta(), frames)
+
+
+def test_formation_switch_profile_detects_switches_with_margin():
+    from handball.pipeline.scouting import formation_switch_profile
+    m = _switching_match()
+    switches = formation_switch_profile(m, Team.AWAY)
+    assert len(switches) >= 3
+    to_51 = [s for s in switches if s["to"] == "5-1"]
+    assert len(to_51) >= 2
+    # A hazai gól után minden váltás hátrányban történt.
+    assert all(s["margin"] < 0 for s in to_51)
+
+
+def test_trailing_switch_key_in_report():
+    m = _switching_match()
+    rep = scout_team(m, Team.AWAY)
+    assert any("hátrányban" in k.lower() and "5-1" in k
+               for k in rep.keys_to_game), rep.keys_to_game
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
