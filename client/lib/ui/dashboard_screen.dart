@@ -908,6 +908,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       setState(() => _query = v.trim().toLowerCase()),
                 ),
               ),
+              // Csapat-szűrő: egy koppintás a kereső kitöltése helyett.
+              if (((_summary?["teams"] as List?) ?? const []).isNotEmpty)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.filter_list,
+                      size: 18, color: AppColors.textSecondary),
+                  tooltip: "Szűrés csapatra",
+                  color: AppColors.surface,
+                  onSelected: (t) => setState(() {
+                    _searchCtrl.text = t == "*" ? "" : t;
+                    _query = t == "*" ? "" : t.toLowerCase();
+                  }),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: "*", child: Text("Mind")),
+                    for (final t in ((_summary!["teams"] as List).cast<String>()))
+                      PopupMenuItem(value: t, child: Text(t)),
+                  ],
+                ),
               const Spacer(),
               // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
               OutlinedButton.icon(
@@ -1157,6 +1174,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Kis eredmény-címke a felismert gólokból: ki nyerte a felvételt.
+  /// (Csak ha volt gól — a 0:0 jellemzően rövid próba-feldolgozás.)
+  List<Widget> _resultBadge(Map<String, dynamic> sum) {
+    final gh = (sum["goals_home"] as num?)?.toInt() ?? 0;
+    final ga = (sum["goals_away"] as num?)?.toInt() ?? 0;
+    if (gh + ga == 0) return const [];
+    final (label, color) = gh > ga
+        ? ("hazai siker", AppColors.home)
+        : ga > gh
+            ? ("vendég siker", AppColors.away)
+            : ("döntetlen", AppColors.textFaint);
+    return [
+      const SizedBox(width: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.6)),
+        ),
+        child: Text(label,
+            style: AppText.label.copyWith(fontSize: 10.5, color: color)),
+      ),
+    ];
+  }
+
   Widget _matchCard(Map<String, dynamic> m) {
     final id = m["match_id"] as String;
     final home = (m["home_team"] as String?) ?? "Hazai";
@@ -1194,6 +1237,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text("${sum["goals_home"]} : ${sum["goals_away"]}",
                           style: AppText.value.copyWith(
                               fontSize: 15, color: AppColors.gold)),
+                      ..._resultBadge(sum),
                     ],
                     if (date.isNotEmpty) ...[
                       const SizedBox(width: AppSpacing.md),
