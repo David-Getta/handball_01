@@ -132,6 +132,51 @@ def compute_quality_report(match: Match) -> dict:
     jersey_pct = (100.0 * len(tracks_with_jersey) / track_count
                   if track_count else 0.0)
 
+    # --- Az új felismerők önellenőrzése: kapus, félidő, hétméteres ---
+    duration_s = n / fps
+    gk_teams: set = set()
+    for f in match.frames:
+        for p in f.players:
+            if p.role == "kapus":
+                gk_teams.add(getattr(p.team, "value", p.team))
+    goalkeepers = {"home": "home" in gk_teams, "away": "away" in gk_teams}
+    # Kapus-jelzés csak érdemi hosszúságú felvételen elvárás.
+    if duration_s >= 120.0 and len(gk_teams) < 2:
+        missing = [name for key, name in (("home", "hazai"), ("away", "vendég"))
+                   if key not in gk_teams]
+        warnings.append(
+            f"Nem sikerült kapust azonosítani ({', '.join(missing)}) — a "
+            "védés/kapus-statisztika hiányos lesz. Ellenőrizd a kalibrációt "
+            "(a kapuelőtér a pályán belülre essen).")
+
+    halftime_frame = None
+    try:
+        from .halftime import detect_halftime
+        halftime_frame = detect_halftime(match)
+    except Exception:
+        pass
+    # 40+ percnyi felvételben félidőnek lennie kell(ene).
+    if duration_s >= 2400.0 and halftime_frame is None:
+        warnings.append(
+            "Hosszú felvétel félidő-jel nélkül — ha a videóban térfélcsere "
+            "volt, a 2. félidő irány-érzékeny elemzései (támadás-irány, "
+            "kapus-oldal) pontatlanok lehetnek.")
+
+    seven_meters = 0
+    try:
+        from .rules import detect_seven_meters
+        seven_meters = len(detect_seven_meters(match))
+    except Exception:
+        pass
+    # Aránytalanul sok "hétméteres" = álló labdás jelenetek (bemelegítés,
+    # időkérés) kerültek a felvételre, vagy rossz a kalibráció.
+    if duration_s > 0 and seven_meters / (duration_s / 60.0) > 0.8:
+        warnings.append(
+            f"Gyanúsan sok hétméteres-jel ({seven_meters} db) — valószínűleg "
+            "álló labdás jelenetek (bemelegítés, időkérés) is a felvételen "
+            "vannak; érdemes a meccs tényleges kezdetétől indítani a "
+            "feldolgozást.")
+
     return {
         "frames": n,
         "score": score,
@@ -145,5 +190,8 @@ def compute_quality_report(match: Match) -> dict:
         "fragmentation": round(fragmentation, 2),
         "home_share_pct": round(home_share, 1),
         "jersey_coverage_pct": round(jersey_pct, 1),
+        "goalkeepers": goalkeepers,
+        "halftime_frame": halftime_frame,
+        "seven_meters": seven_meters,
         "warnings": warnings,
     }

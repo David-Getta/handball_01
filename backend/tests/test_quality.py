@@ -88,6 +88,46 @@ def test_empty_match():
     assert r["warnings"]
 
 
+def test_goalkeeper_warning_on_long_match_without_roles():
+    """2+ perces felvételen kapus-jelölés nélkül figyelmeztetés jár."""
+    frames = [Frame(t=t, players=[_pl(i) for i in range(14)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))
+              for t in range(int(150 * 25))]
+    r = compute_quality_report(Match(_meta(), frames))
+    assert r["goalkeepers"] == {"home": False, "away": False}
+    assert any("kapust" in w for w in r["warnings"])
+
+
+def test_goalkeeper_fields_true_when_marked():
+    """Megjelölt kapusokkal nincs kapus-figyelmeztetés."""
+    def gk(i, team):
+        return PlayerPosition(track_id=i, team=team, x=1.5, y=10.0,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+    frames = [Frame(t=t, players=[_pl(i) for i in range(12)]
+                    + [gk(50, Team.HOME), gk(51, Team.AWAY)],
+                    ball=Ball(x=20.0, y=10.0, confidence=1.0))
+              for t in range(int(150 * 25))]
+    r = compute_quality_report(Match(_meta(), frames))
+    assert r["goalkeepers"] == {"home": True, "away": True}
+    assert not any("kapust" in w for w in r["warnings"])
+
+
+def test_seven_meter_spam_warning():
+    """Percenként ~2 "hétméteres" (álló labda a 7 m-es ponton) gyanús."""
+    frames = []
+    for t in range(int(120 * 25)):
+        # A labda 33/10-en áll (a +x kapu 7 m-es pontja), 25 mp-enként
+        # 5 mp-re "elmozdul", hogy sok külön esemény szülessen.
+        moving = (t // 25) % 6 == 5
+        bx = 20.0 if moving else 33.0
+        frames.append(Frame(t=t, players=[_pl(i) for i in range(14)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+    r = compute_quality_report(Match(_meta(), frames))
+    assert r["seven_meters"] >= 2
+    assert any("hétméteres" in w for w in r["warnings"])
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
