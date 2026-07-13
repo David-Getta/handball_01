@@ -15,6 +15,7 @@ import "../models/tracking.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "court_geometry.dart";
+import "shell/app_shell.dart";
 import "court_painter.dart";
 
 class DesignerScreen extends StatefulWidget {
@@ -442,7 +443,16 @@ class _DesignerScreenState extends State<DesignerScreen> {
   Widget _header() => Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            // A tervező menüből (csere-navigációval) is nyílhat — ha nincs
+            // hova visszalépni, a Kezdőlapra megyünk (nincs zsákutca).
+            onPressed: () {
+              final nav = Navigator.of(context);
+              if (nav.canPop()) {
+                nav.pop();
+              } else {
+                navTo(context, NavId.dashboard);
+              }
+            },
             icon: const Icon(Icons.arrow_back, color: AppColors.textSecondary),
           ),
           const SizedBox(width: AppSpacing.sm),

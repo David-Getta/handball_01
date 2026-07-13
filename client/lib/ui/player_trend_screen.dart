@@ -13,10 +13,11 @@ import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
 
 class PlayerTrendScreen extends StatefulWidget {
-  /// A csapatnevek a meccs-könyvtárból (a választóhoz).
+  /// A csapatnevek a meccs-könyvtárból (a választóhoz). Üresen hagyva a
+  /// képernyő maga tölti be — így a menüből közvetlenül is nyitható.
   final List<String> teams;
 
-  const PlayerTrendScreen({super.key, required this.teams});
+  const PlayerTrendScreen({super.key, this.teams = const []});
 
   @override
   State<PlayerTrendScreen> createState() => _PlayerTrendScreenState();
@@ -26,6 +27,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   final ApiClient _api = ApiClient();
   final TextEditingController _jerseyCtrl = TextEditingController();
 
+  List<String> _teams = [];
   String? _team;
   bool _loading = false;
   String? _error;
@@ -34,7 +36,32 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.teams.isNotEmpty) _team = widget.teams.first;
+    _teams = List.of(widget.teams);
+    if (_teams.isNotEmpty) {
+      _team = _teams.first;
+    } else {
+      _loadTeams(); // menüből nyitva: csapatnevek a könyvtárból
+    }
+  }
+
+  Future<void> _loadTeams() async {
+    try {
+      final ms = await _api.listMatches();
+      if (!mounted) return;
+      final teams = <String>{
+        for (final m in ms) ...[
+          if (m["home_team"] != null) m["home_team"] as String,
+          if (m["away_team"] != null) m["away_team"] as String,
+        ]
+      }.toList()
+        ..sort();
+      setState(() {
+        _teams = teams;
+        if (_team == null && teams.isNotEmpty) _team = teams.first;
+      });
+    } catch (_) {
+      // a képernyő enélkül is használható marad (üres választó)
+    }
   }
 
   @override
@@ -73,8 +100,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
   @override
   Widget build(BuildContext context) {
     return AppShell(
-      active: NavId.dashboard,
-      crumbTag: "1g",
+      active: NavId.playerTrend,
       crumbPath: "DASHBOARD · JÁTÉKOS-FEJLŐDÉS",
       child: ListView(
         children: [
@@ -98,7 +124,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 underline: const SizedBox(),
                 dropdownColor: AppColors.surfaceAlt,
                 items: [
-                  for (final t in widget.teams)
+                  for (final t in _teams)
                     DropdownMenuItem(value: t, child: Text(t)),
                 ],
                 onChanged: (t) => setState(() => _team = t),
