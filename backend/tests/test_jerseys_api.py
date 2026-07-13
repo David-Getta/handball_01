@@ -116,6 +116,9 @@ def test_player_trend_by_jersey():
     p = r["points"][0]
     assert p["match_id"] == mid and p["distance_m"] > 0
     assert p["opponent"] == match["meta"]["away_team"]
+    # A lövés-hatékonyság mezők mindig jelen vannak (0/None is érvényes).
+    assert "shots" in p and "goals" in p and "shot_pct" in p
+    assert p["goals"] <= p["shots"]
     # Nem létező szám: üres lista (nem hiba).
     r2 = client.get("/players/trend",
                     params={"team": team_name, "jersey": 88}).json()
