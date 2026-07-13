@@ -7,7 +7,8 @@ vastagság, elforgatás, eltolás, elmosás, zaj, vékonyítás/hízlalás. Így
 VALÓDI címkézett adat nélkül is tanítható egy kis háló, ami a
 sablon-illesztésnél lényegesen strapabíróbb.
 
-A háló szándékosan pici (28x28 → 128 → 10, ~100k paraméter), numpy-val
+A háló szándékosan pici (28x28 → 128 → 11, ~100k paraméter; a 11.
+osztály a "nem számjegy" elutasítás), numpy-val
 tanítjuk és numpy-val is fut (jersey_ocr) — se torch, se új függőség a
 kiadásban. A kész súly a handball/pipeline/digit_net.npz fájlba kerül
 (a csomag része), a pontosság a metaadatban.
@@ -70,6 +71,62 @@ def render_digit(digit: int, rng: np.random.Generator) -> np.ndarray:
     return np.clip(x, 0.0, 1.0)
 
 
+def _finish(img, rng: np.random.Generator) -> np.ndarray:
+    """Közös normalizálás: szoros vágás + 28x28 + elmosás + zaj — ugyanúgy,
+    ahogy a felismerő normálja az éles kivágásokat."""
+    import cv2
+    ys, xs = np.nonzero(img)
+    if len(ys) == 0:
+        return None
+    img = img[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    img = cv2.resize(img, (28, 28), interpolation=cv2.INTER_AREA)
+    if rng.random() < 0.6:
+        sigma = float(rng.uniform(0.4, 1.4))
+        img = cv2.GaussianBlur(img, (3, 3), sigma)
+    x = img.astype(np.float32) / 255.0
+    x *= float(rng.uniform(0.7, 1.0))
+    x += rng.normal(0, rng.uniform(0.01, 0.08), x.shape).astype(np.float32)
+    return np.clip(x, 0.0, 1.0)
+
+
+def render_negative(rng: np.random.Generator) -> np.ndarray:
+    """Egy 28x28-as "NEM számjegy" minta — a 10-es (elutasító) osztály.
+
+    Olyasmi, amit a kontúr-szűrő számjegy-szerűnek lát, de nem mezszám:
+    betű (név a mezen), vonal-köteg (gyűrődés, minta), kitöltött folt
+    (címer, logó). Erre tanítva a háló megtanul NEM-et mondani — a hamis
+    mezszám rosszabb, mint a hiányzó."""
+    import cv2
+    fonts = [cv2.FONT_HERSHEY_SIMPLEX, cv2.FONT_HERSHEY_DUPLEX,
+             cv2.FONT_HERSHEY_TRIPLEX, cv2.FONT_HERSHEY_PLAIN,
+             cv2.FONT_HERSHEY_COMPLEX]
+    img = np.zeros((72, 72), np.uint8)
+    kind = int(rng.integers(3))
+    if kind == 0:
+        # Betű (a 0/1-hez túl hasonló O/I/l kihagyva).
+        letters = "ABCDEFGHKLMNPRTUVXYZ"
+        ch = letters[int(rng.integers(len(letters)))]
+        cv2.putText(img, ch, (14, 58), fonts[int(rng.integers(len(fonts)))],
+                    float(rng.uniform(1.4, 2.4)), 255, int(rng.integers(2, 6)))
+    elif kind == 1:
+        # Vonal-köteg (gyűrődés, mez-minta).
+        for _ in range(int(rng.integers(2, 5))):
+            p1 = (int(rng.integers(4, 68)), int(rng.integers(4, 68)))
+            p2 = (int(rng.integers(4, 68)), int(rng.integers(4, 68)))
+            cv2.line(img, p1, p2, 255, int(rng.integers(2, 5)))
+    else:
+        # Kitöltött folt (címer/logó) — a számjegy vonalas, ez tömör.
+        c = (int(rng.integers(24, 48)), int(rng.integers(24, 48)))
+        axes = (int(rng.integers(10, 26)), int(rng.integers(10, 26)))
+        cv2.ellipse(img, c, axes, float(rng.uniform(0, 180)), 0, 360, 255, -1)
+    out = _finish(img, rng)
+    return out if out is not None else render_negative(rng)
+
+
+# Az elutasító ("nem számjegy") osztály címkéje.
+REJECT_CLASS = 10
+
+
 def make_dataset(per_digit: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
     rng = np.random.default_rng(seed)
     xs, ys = [], []
@@ -77,6 +134,10 @@ def make_dataset(per_digit: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
         for _ in range(per_digit):
             xs.append(render_digit(d, rng).reshape(-1))
             ys.append(d)
+    # A 10-es osztály: ugyanannyi "nem számjegy" minta.
+    for _ in range(per_digit):
+        xs.append(render_negative(rng).reshape(-1))
+        ys.append(REJECT_CLASS)
     x = np.stack(xs).astype(np.float32)
     y = np.array(ys, np.int64)
     idx = rng.permutation(len(y))
@@ -84,12 +145,13 @@ def make_dataset(per_digit: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def train(epochs: int, per_digit: int, seed: int = 7):
-    """Kis MLP (784→128→10) tanítása numpy-val (SGD + momentum)."""
+    """Kis MLP (784→128→11) tanítása numpy-val (SGD + momentum) —
+    10 számjegy + 1 elutasító ("nem számjegy") osztály."""
     rng = np.random.default_rng(seed)
     x_train, y_train = make_dataset(per_digit, seed)
     x_val, y_val = make_dataset(max(200, per_digit // 5), seed + 1)
 
-    n_in, n_hid, n_out = 784, 128, 10
+    n_in, n_hid, n_out = 784, 128, 11
     w1 = rng.normal(0, np.sqrt(2.0 / n_in), (n_in, n_hid)).astype(np.float32)
     b1 = np.zeros(n_hid, np.float32)
     w2 = rng.normal(0, np.sqrt(2.0 / n_hid), (n_hid, n_out)).astype(np.float32)

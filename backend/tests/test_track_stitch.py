@@ -103,6 +103,49 @@ def test_duplicate_resolution_prefers_measured():
     assert players60[0].source == PositionSource.MEASURED
 
 
+def test_color_gate_blocks_different_kits():
+    """Tér-időben jó jelölt, de NAGYON eltérő mezszín (pl. kapus vs
+    mezőnyjátékos ugyanabban a csapatban) → nincs összefűzés."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0)
+    m = _match(_frames(a, b))
+    colors = {1: [(200.0, 30.0, 30.0)] * 5,   # piros mez
+              7: [(30.0, 200.0, 30.0)] * 5}   # zöld mez
+    assert stitch_tracks(m, colors_by_track=colors) == 0
+
+
+def test_similar_colors_still_stitch():
+    """Hasonló (zajszórású) mezszín nem akadályozza az összefűzést."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0)
+    m = _match(_frames(a, b))
+    colors = {1: [(200.0, 30.0, 30.0)] * 5,
+              7: [(180.0, 45.0, 40.0)] * 5}  # ~30 egység távolság
+    assert stitch_tracks(m, colors_by_track=colors) == 1
+
+
+def test_color_prefers_matching_candidate():
+    """Két tér-időben hasonló utód közül a HASONLÓBB színű nyer."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0, y=5.0)   # eltérő tónus
+    c = _walk(8, Team.HOME, 60, 100, x0=15.1, y=5.2)   # egyező tónus
+    m = _match(_frames(a, b, c))
+    colors = {1: [(200.0, 30.0, 30.0)] * 5,
+              7: [(150.0, 80.0, 60.0)] * 5,   # ~85 egység (kapun belül)
+              8: [(195.0, 35.0, 32.0)] * 5}   # ~7 egység
+    assert stitch_tracks(m, colors_by_track=colors) == 1
+    ids = {p.track_id for f in m.frames for p in f.players}
+    assert 8 not in ids and 7 in ids  # a 8-as olvadt be, a 7-es önálló maradt
+
+
+def test_missing_colors_fall_back_to_spatiotemporal():
+    """Ismeretlen szín (nincs minta) → a régi tér-időbeli viselkedés."""
+    a = _walk(1, Team.HOME, 0, 49, x0=10.0)
+    b = _walk(7, Team.HOME, 60, 100, x0=15.0)
+    m = _match(_frames(a, b))
+    assert stitch_tracks(m, colors_by_track={1: [(200.0, 30.0, 30.0)] * 5}) == 1
+
+
 if __name__ == "__main__":
     test_stitches_broken_track()
     test_does_not_stitch_far_or_slow_gap()
@@ -110,4 +153,8 @@ if __name__ == "__main__":
     test_does_not_stitch_long_gap()
     test_chain_of_breaks_resolves_to_root()
     test_duplicate_resolution_prefers_measured()
+    test_color_gate_blocks_different_kits()
+    test_similar_colors_still_stitch()
+    test_color_prefers_matching_candidate()
+    test_missing_colors_fall_back_to_spatiotemporal()
     print("Minden track-összefűzés teszt OK.")

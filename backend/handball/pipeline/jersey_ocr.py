@@ -144,7 +144,12 @@ def _load_digit_net():
 
 def _classify_digit(roi28, net):
     """Egy 28x28-as (fehér jegy fekete alapon) kivágás osztályozása a
-    tanított hálóval → (számjegy, valószínűség)."""
+    tanított hálóval → (számjegy, valószínűség).
+
+    A 11 kimenetű hálónál a 10-es osztály az ELUTASÍTÁS ("nem számjegy":
+    betű, gyűrődés, címer) — ilyenkor (None, valószínűség) jön vissza, és
+    a hívó eldobja a jelöltet. A régi, 10 kimenetű háló változatlanul
+    működik (ott nincs elutasító osztály)."""
     import numpy as np
     x = roi28.astype(np.float32).reshape(1, -1) / 255.0
     h = np.maximum(0.0, x @ net[0] + net[1])
@@ -152,7 +157,10 @@ def _classify_digit(roi28, net):
     e = np.exp(logits - logits.max())
     p = e / e.sum()
     d = int(p.argmax())
-    return d, float(p[0, d])
+    conf = float(p[0, d])
+    if p.shape[1] >= 11 and d >= 10:
+        return None, conf  # "nem számjegy" — a hamis szám rosszabb a hiányzónál
+    return d, conf
 
 def _digit_templates(size: int = 28):
     """Számjegy-sablonok 0..9 — több vastagsággal renderelve (cv2.putText).

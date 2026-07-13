@@ -622,8 +622,9 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
 
     # Track-összefűzés: a takarásnál megszakadt követés automatikus
     # helyreállítása (óvatos küszöbökkel) — az elemzés egy játékost lásson.
+    # A track-színminták is beleszólnak: eltérő mez → nincs összefűzés.
     from handball.pipeline.track_stitch import stitch_tracks
-    stitched = stitch_tracks(match)
+    stitched = stitch_tracks(match, colors_by_track=_colors_by_track)
     if stitched:
         print(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
 
