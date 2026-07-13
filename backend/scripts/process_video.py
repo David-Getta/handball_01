@@ -628,6 +628,16 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     if stitched:
         print(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
 
+    # Kapus-azonosítás pozíció-prior alapján: aki a mért idejének nagy
+    # részét a kapuelőtérben tölti, role="kapus" jelölést kap. Az
+    # összefűzés UTÁN fut (egyben látja a track teljes idejét).
+    from handball.pipeline.goalkeeper import detect_goalkeepers
+    gks = detect_goalkeepers(match)
+    if gks:
+        print("kapus-azonosítás: " + ", ".join(
+            f"track {tid} ({share * 100:.0f}% kapuelőtér)"
+            for tid, share in gks.items()))
+
     # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
     if jersey_voter is not None:
         from handball.pipeline.jersey_ocr import apply_jersey_decisions

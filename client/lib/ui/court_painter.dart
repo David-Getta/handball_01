@@ -180,8 +180,16 @@ class CourtPainter extends CustomPainter {
               ..strokeWidth = isCarrier ? 2.4 : 1.2);
       }
 
+      // Kapus: szaggatott fehér gyűrű — ránézésre elkülönül a mezőnytől.
+      if (pl.role == "kapus") {
+        _drawDashedRing(
+            canvas, center, radius + 4, Colors.white.withOpacity(0.9));
+      }
+
       if (pl.jerseyNumber != null) {
         _drawLabel(canvas, center, "${pl.jerseyNumber}", radius);
+      } else if (pl.role == "kapus") {
+        _drawLabel(canvas, center, "K", radius);
       }
     }
 
