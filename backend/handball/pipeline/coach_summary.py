@@ -53,7 +53,7 @@ def _player_label(track_id: int, team_of: dict, jersey_of: dict,
 
 
 def _events_section(match: Match, home: str, away: str) -> dict | None:
-    goals_h = goals_a = shots = 0
+    goals_h = goals_a = shots = saves = 0
     for e in detect_shots(match):
         if e.type == EventType.GOAL:
             if e.team == Team.HOME:
@@ -62,11 +62,15 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
                 goals_a += 1
         elif e.type == EventType.SHOT:
             shots += 1
+            if (e.detail or {}).get("outcome") == "save":
+                saves += 1
     attempts = goals_h + goals_a + shots
     if attempts == 0:
         return None
     body = (f"A rendszer {goals_h + goals_a} gól-eseményt és {shots} további "
             f"kapura tartó lövést ismert fel ({home} {goals_h} : {goals_a} {away}).")
+    if saves:
+        body += f" Ebből {saves} lövést a kapusok hárítottak."
     if attempts >= 5:
         eff = 100.0 * (goals_h + goals_a) / attempts
         body += f" A felismert kísérletek {eff:.0f}%-a végződött gólban."
