@@ -114,7 +114,7 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
     except Exception:
         pass
 
-    metrics = "".join([
+    metric_items = [
         _metric("Szervezett támadás", f"{rep.attack_share_pct:.0f}%"),
         _metric("Gyors indítás", f"{rep.fast_break_pct:.0f}%"),
         _metric("Átl. támadáshossz", f"{rep.avg_attack_duration_s:.1f} s"),
@@ -123,7 +123,20 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
         _metric("Gólarány", f"{rep.shot_efficiency_pct:.0f}%"),
         _metric("Labdaeladás", str(rep.turnovers)),
         _metric("Figurák", str(rep.num_figures)),
-    ])
+    ]
+    # Az új felismerő-rétegek mutatói — csak ha van mögöttük adat.
+    if rep.gk_on_target:
+        metric_items.append(_metric(
+            "Kapusuk védés%",
+            f"{100.0 * rep.gk_saves / rep.gk_on_target:.0f}%"))
+    if rep.pp_shots:
+        metric_items.append(_metric(
+            "Emberelőny-gólarány",
+            f"{100.0 * rep.pp_goals / rep.pp_shots:.0f}%"))
+    if rep.empty_net_s:
+        metric_items.append(_metric("7 a 6 összesen",
+                                    f"{rep.empty_net_s:.0f} s"))
+    metrics = "".join(metric_items)
 
     return f"""<!DOCTYPE html>
 <html lang="hu">

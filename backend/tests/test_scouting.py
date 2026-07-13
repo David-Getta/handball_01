@@ -241,6 +241,43 @@ def test_combine_reports_merges_goalkeeper_stats():
     assert merged.gk_conceded_zones == {"átlövés bal": 3, "jobbszél": 2}
 
 
+def test_narrative_multi_match_prefix_and_gk_section():
+    """Több meccsnél a befejezés-mondat jelzi a meccs-számot; a kapus-
+    szekció a védés-hatékonyságot mondja el."""
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél KC", matches=3,
+        shots=24, goals=12, shot_efficiency_pct=50.0,
+        gk_on_target=10, gk_saves=5,
+    )
+    sections = scouting_narrative(rep)
+    bodies = {s["title"]: s["body"] for s in sections}
+    assert "3 meccs alatt" in bodies["Befejezésük"]
+    assert "Kapusuk" in bodies and "50%" in bodies["Kapusuk"]
+
+
+def test_scouting_report_html_shows_new_metrics():
+    """A HTML-jelentés metrika-sora kiírja az új mutatókat, ha van adat."""
+    from handball.pipeline.report_html import scouting_report_html
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél KC",
+        gk_on_target=10, gk_saves=4, pp_shots=5, pp_goals=3,
+        empty_net_s=45.0,
+    )
+    html = scouting_report_html(rep)
+    assert "Kapusuk védés%" in html and "40%" in html
+    assert "Emberelőny-gólarány" in html and "60%" in html
+    assert "7 a 6 összesen" in html
+
+
+def test_scouting_report_html_hides_absent_metrics():
+    """Adat nélkül az új metrikák nem jelennek meg (nincs üres 0%)."""
+    from handball.pipeline.report_html import scouting_report_html
+    html = scouting_report_html(ScoutingReport(team="away", team_name="X"))
+    assert "Kapusuk védés%" not in html
+    assert "Emberelőny-gólarány" not in html
+    assert "7 a 6 összesen" not in html
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
