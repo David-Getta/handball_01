@@ -330,6 +330,31 @@ class ApiClient {
     }
   }
 
+  /// Meccs-csomag készítése (POST /matches/{id}/package/export) — job_id.
+  Future<String> startPackageExport(
+      String matchId, List<String> clipTypes) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/matches/$matchId/package/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"clip_types": clipTypes}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem indult el a csomag-készítés: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return json["job_id"] as String;
+  }
+
+  /// A kész meccs-csomag (zip) letöltése bájtokként.
+  Future<List<int>> fetchPackageZip(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/package/download"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a csomag letöltése: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// Edzői jegyzetek a meccshez (GET /matches/{id}/notes) — idő szerint.
   Future<List<Map<String, dynamic>>> fetchNotes(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/notes"));

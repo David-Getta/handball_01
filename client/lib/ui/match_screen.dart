@@ -63,6 +63,8 @@ class _MatchScreenState extends State<MatchScreen> {
   String _eventFilter = "all";
   // Fut-e épp videóklip-export (a gomb letiltásához + pörgettyűhöz).
   bool _exportingClips = false;
+  // Fut-e épp meccs-csomag export.
+  bool _exportingPackage = false;
   // Edzői jegyzetek (időbélyeggel) — a backend menti, kattintásra odaugrik
   // a lejátszó. Demó módban nem elérhető (nincs hova menteni).
   List<Map<String, dynamic>> _notes = [];
@@ -421,6 +423,50 @@ class _MatchScreenState extends State<MatchScreen> {
     }
   }
 
+  /// Meccs-csomag: jelentés + CSV + gólklipek egy zip-ben (a backend állítja
+  /// össze job-ként), mentés a felhasználó által választott helyre.
+  Future<void> _exportPackage() async {
+    final match = _match;
+    if (match == null) return;
+    setState(() => _exportingPackage = true);
+    try {
+      final jobId =
+          await _api.startPackageExport(widget.matchId, const ["goal"]);
+      while (true) {
+        await Future.delayed(const Duration(seconds: 1));
+        final job = await _api.fetchJob(jobId);
+        final status = job["status"] as String?;
+        if (status == "done") break;
+        if (status == "error") {
+          throw Exception(job["error"] ?? "ismeretlen hiba");
+        }
+        if (!mounted) return;
+      }
+      final bytes = await _api.fetchPackageZip(widget.matchId);
+      if (!mounted) return;
+      final name = "${match.meta.homeTeam}_${match.meta.awayTeam}"
+          .replaceAll(RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Meccs-csomag mentése (zip)",
+        fileName: "meccs_csomag_$name.zip",
+        type: FileType.custom,
+        allowedExtensions: const ["zip"],
+      );
+      if (path == null) return;
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Meccs-csomag mentve: $path — jelentés + statisztika "
+              "+ gólklipek egy fájlban, mehet a csapatnak.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Csomag-export hiba: $e")));
+    } finally {
+      if (mounted) setState(() => _exportingPackage = false);
+    }
+  }
+
   /// A szűrőnek megfelelő események — az „előző/következő" léptetés is ezt
   /// használja, így a léptetés a kiválasztott típuson belül ugrál.
   List<Map<String, dynamic>> _filteredEvents() {
@@ -717,6 +763,17 @@ class _MatchScreenState extends State<MatchScreen> {
           onPressed: _sourceLabel == "demó" ? null : _exportReport,
           icon: const Icon(Icons.description_outlined, color: AppColors.textSecondary),
           tooltip: "Meccsjelentés mentése (nyomtatható)",
+        ),
+        // MECCS-CSOMAG: jelentés + CSV + gólklipek EGY zip-ben — megosztásra.
+        IconButton(
+          onPressed: _sourceLabel == "demó" || _exportingPackage
+              ? null
+              : _exportPackage,
+          icon: _exportingPackage
+              ? const SizedBox(width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.card_giftcard, color: AppColors.accent),
+          tooltip: "Meccs-csomag (jelentés + CSV + gólklipek egy zip-ben)",
         ),
         // Játékos-statisztika mentése CSV-ben (Excelben nyitható).
         IconButton(

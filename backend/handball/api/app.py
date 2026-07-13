@@ -605,15 +605,10 @@ def create_app():
         # A dataclass-okat egyszerű szótárrá alakítjuk a JSON-válaszhoz.
         return {str(tid): vars(s) for tid, s in stats.items()}
 
-    @app.get("/matches/{match_id}/stats/export")
-    def export_stats_csv(match_id: str):
-        """Játékos-statisztika CSV-ben, Excel-barát formában (pontosvessző
-        elválasztó, UTF-8 BOM, tizedesvessző) — az edző táblázatban dolgozhat
-        tovább az adatokkal."""
-        from fastapi import Response
-        match = _store.get(match_id)
-        if match is None:
-            raise HTTPException(status_code=404, detail="match not found")
+    def _stats_csv(match) -> str:
+        """A játékos-statisztika CSV tartalma (Excel-barát: pontosvessző,
+        UTF-8 BOM, tizedesvessző) — a /stats/export és a meccs-csomag közös
+        építője. Azonos mezszám = egy játékos (aggregate_by_jersey)."""
         stats = summarize(match)
         # Csapat + mezszám a frame-ekből (első előfordulás alapján).
         team_of: dict = {}
@@ -651,7 +646,17 @@ def create_app():
                 num(zones.get("futas", 0.0)), num(zones.get("sprint", 0.0)),
                 str(g["measured_frames"]), str(g["estimated_frames"]),
             ]))
-        csv = "\ufeff" + "\r\n".join(lines) + "\r\n"  # BOM: Excel-kompatibilitás
+        return "\ufeff" + "\r\n".join(lines) + "\r\n"  # BOM: Excel
+
+    @app.get("/matches/{match_id}/stats/export")
+    def export_stats_csv(match_id: str):
+        """Játékos-statisztika CSV-ben, Excel-barát formában — az edző
+        táblázatban dolgozhat tovább az adatokkal."""
+        from fastapi import Response
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        csv = _stats_csv(match)
         return Response(
             content=csv, media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition":
@@ -904,6 +909,112 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         return {"windows": compute_intensity_timeline(match, window_s=window_s)}
+
+    @app.post("/matches/{match_id}/package/export")
+    def start_package_export(match_id: str, body: dict):
+        """MECCS-CSOMAG készítése háttérszálon: nyomtatható jelentés (HTML) +
+        játékos-statisztika (CSV) + gól/lövés-klipek egyetlen zip-ben — az
+        edző egy fájlt küld a klubnak/csapatnak. A haladás a /jobs/{id}-n
+        követhető; a kész zip a GET /matches/{id}/package/download címen.
+
+        Törzs: {"clip_types": ["goal", ...]} — üres lista = nincs klip;
+        hiányzó kulcs = csak a gólok. Ha az eredeti videó nem érhető el, a
+        csomag klipek nélkül készül el (a jelentés + CSV akkor is érték)."""
+        import time
+        import uuid
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        clip_types = body.get("clip_types")
+        types = set(clip_types) if clip_types is not None else {"goal"}
+
+        job_id = uuid.uuid4().hex[:12]
+        job = {"job_id": job_id, "match_id": match_id, "status": "running",
+               "stage": "P", "progress": 0.0, "message": "csomag készítése",
+               "error": None, "created": time.time(),
+               "video": Path(match.meta.video_path or "").name}
+        _jobs[job_id] = job
+
+        out_dir = _clips_dir(match_id)  # a klipek munkamappája újrahasznosítva
+
+        def _work():
+            import zipfile
+            from ..pipeline.clips import export_event_clips
+            from ..pipeline.quality import compute_quality_report
+            from ..pipeline.report_html import match_report_html
+            try:
+                out_dir.mkdir(parents=True, exist_ok=True)
+                events = detect_events(match)
+                # 1) Jelentés (HTML) — minden mellék-adattal, ami van.
+                job["message"] = "jelentés készítése"
+                try:
+                    quality = compute_quality_report(match)
+                except Exception:
+                    quality = None
+                try:
+                    heatmaps = {t.value: compute_team_heatmap(match, t)
+                                for t in (Team.HOME, Team.AWAY)}
+                except Exception:
+                    heatmaps = None
+                try:
+                    player_stats = summarize(match)
+                except Exception:
+                    player_stats = None
+                html = match_report_html(
+                    match, team_style_profile(match), events, quality,
+                    heatmaps=heatmaps, player_stats=player_stats,
+                    notes=_load_notes(match_id))
+                # 2) CSV.
+                job["progress"] = 0.2
+                job["message"] = "statisztika (CSV)"
+                csv = _stats_csv(match)
+                # 3) Klipek (ha kérték és van videó) — a hiba nem végzetes.
+                clips_zip = None
+                if types:
+                    def cb(done, total, msg):
+                        job["progress"] = 0.25 + 0.65 * (done / max(1, total))
+                        job["message"] = msg
+                    try:
+                        ev = [{"t": e.t, "type": e.type.value,
+                               "team": e.team.value} for e in events]
+                        res = export_event_clips(match, ev, types, out_dir,
+                                                 progress_cb=cb)
+                        clips_zip = Path(res.zip_path)
+                    except Exception as e:
+                        job["message"] = f"klipek kihagyva: {e}"
+                # 4) Minden egy zip-be.
+                job["progress"] = 0.95
+                job["message"] = "csomagolás"
+                pkg = out_dir / "meccs_csomag.zip"
+                with zipfile.ZipFile(pkg, "w", zipfile.ZIP_STORED) as z:
+                    z.writestr("jelentes.html", html)
+                    z.writestr("statisztika.csv", csv.encode("utf-8"))
+                    if clips_zip is not None and clips_zip.exists():
+                        z.write(clips_zip, "klipek.zip")
+                job["status"] = "done"
+                job["progress"] = 1.0
+                job["message"] = ("kész (jelentés + CSV"
+                                  + (" + klipek)" if clips_zip else ")"))
+            except Exception as e:
+                job["status"] = "error"
+                job["error"] = str(e)
+                job["message"] = f"hiba: {e}"
+
+        _threading.Thread(target=_work, daemon=True).start()
+        return {"job_id": job_id}
+
+    @app.get("/matches/{match_id}/package/download")
+    def download_package(match_id: str):
+        """A legutóbb elkészített meccs-csomag (zip) letöltése."""
+        from fastapi.responses import FileResponse
+        if match_id not in _store:
+            raise HTTPException(status_code=404, detail="match not found")
+        pkg = _clips_dir(match_id) / "meccs_csomag.zip"
+        if not pkg.exists():
+            raise HTTPException(status_code=404,
+                                detail="nincs kész csomag ehhez a meccshez")
+        return FileResponse(str(pkg), media_type="application/zip",
+                            filename=f"meccs_csomag_{match_id}.zip")
 
     @app.get("/matches/{match_id}/heatmap")
     def get_heatmap(match_id: str, team: str = "home",
