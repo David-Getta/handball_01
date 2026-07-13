@@ -67,12 +67,21 @@ python -m scripts.finetune --data dataset/dataset.yaml --epochs 60 --install
 
 ## Mérés: jobb lett-e?
 
-- A tanítás végén az ultralytics kiírja a val-metrikákat (mAP50 stb.) —
+- **Egy paranccsal, egymás mellett** (ez a fő eszköz):
+
+  ```bash
+  python -m scripts.compare_models MECCS.mp4 \
+      --weights-b runs/handball/weights/best.pt
+  ```
+
+  Eredménylap (Markdown + JSON) készül a kulcsmutatókkal: **labda-
+  lefedettség %** (ezen múlik az eseményfelismerés), átlagos játékos-
+  darabszám és annak ingadozása, bizonyosságok, sebesség. A `--weights-b`
+  nélkül futtatva a kiindulási szintet méred (tanítás ELŐTT érdemes).
+- A tanítás végén az ultralytics is kiír val-metrikákat (mAP50 stb.) —
   a labda-osztály javulása a lényeg.
-- Éles teszt: dolgozd fel ugyanazt a félidőt a régi és az új modellel, és
-  hasonlítsd össze a minőség-jelentést (labda-lefedettség %, mért
-  játékos/kocka) + az eseménylistát. A labda-lefedettségnek érezhetően
-  nőnie kell.
+- Éles ellenpróba: dolgozd fel ugyanazt a félidőt mindkét modellel, és
+  vesd össze a minőség-jelentést + az eseménylistát.
 
 ## Tippek
 
