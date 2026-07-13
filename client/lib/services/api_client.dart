@@ -467,6 +467,19 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
+  Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/empty-net"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni a 7a6-szakaszokat: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["windows"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// Szabály-értő réteg (GET /matches/{id}/rules): emberhátrány-szakaszok,
   /// emberelőny-hatékonyság, hétméteresek, passzív-játék kockázat.
   Future<Map<String, dynamic>> fetchRules(String matchId) async {
