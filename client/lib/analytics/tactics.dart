@@ -103,3 +103,64 @@ String phaseLabelHu(Phase phase) {
       return "—";
   }
 }
+
+/// Egy idő-ablak védekezési képe: melyik csapat milyen formában védekezett
+/// (null, ha az ablakban a csapat nem védekezett érdemben).
+class FormationWindow {
+  final int startFrame;
+  final String? homeDefense;
+  final String? awayDefense;
+  const FormationWindow(this.startFrame, this.homeDefense, this.awayDefense);
+}
+
+/// Védekezés-idővonal: a meccset idő-ablakokra bontva csapatonként a
+/// LEGGYAKORIBB védekezési forma — ebből látszik, MIKOR váltott az ellenfél
+/// (pl. 6-0-ról 5-1-re a második félidőben). Ablakonként többségi címke;
+/// kevés védekező kockánál (zaj) az ablak üres marad.
+List<FormationWindow> computeFormationTimeline(Match match,
+    {double windowS = 15.0, TacticsConfig config = const TacticsConfig()}) {
+  final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+  final total = match.frames.length;
+  if (total < 2) return const [];
+  final winFrames = (windowS * fps).round().clamp(1, total);
+  final nWin = (total / winFrames).ceil();
+  // ablak × csapat → {forma: darab}
+  final counts = List.generate(nWin, (_) => [<String, int>{}, <String, int>{}]);
+
+  for (final f in match.frames) {
+    final phase = classifyPhase(f, config);
+    // A VÉDEKEZŐ csapat formáját számoljuk: hazai támadásnál a vendégét.
+    final (defender, slot) = switch (phase) {
+      Phase.homeAttack => (Team.away, 1),
+      Phase.awayAttack => (Team.home, 0),
+      _ => (null, -1),
+    };
+    if (defender == null) continue;
+    final w = (f.t ~/ winFrames).clamp(0, nWin - 1);
+    final label = detectFormation(f, defender, config);
+    final bucket = counts[w][slot];
+    bucket[label] = (bucket[label] ?? 0) + 1;
+  }
+
+  String? majority(Map<String, int> bucket) {
+    // Legalább ~1 mp-nyi védekező kocka kell, hogy az ablak címkét kapjon.
+    var total = 0;
+    bucket.forEach((_, v) => total += v);
+    if (total < fps) return null;
+    String? best;
+    var bestN = 0;
+    bucket.forEach((k, v) {
+      if (v > bestN) {
+        best = k;
+        bestN = v;
+      }
+    });
+    return best;
+  }
+
+  return [
+    for (var w = 0; w < nWin; w++)
+      FormationWindow(
+          w * winFrames, majority(counts[w][0]), majority(counts[w][1]))
+  ];
+}
