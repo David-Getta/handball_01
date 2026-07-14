@@ -439,24 +439,41 @@ def create_app():
 
     @app.patch("/matches/{match_id}")
     def update_match(match_id: str, body: dict):
-        """A meccs metaadatainak frissítése (jelenleg: csapatnevek átírása).
+        """A meccs metaadatainak frissítése (csapatnevek, dátum).
 
-        Törzs: {"home_team": "...", "away_team": "..."} — bármelyik elhagyható.
-        A módosítás a lemezre is kiíródik, így újraindítás után is megmarad."""
+        Törzs: {"home_team": "...", "away_team": "...", "date": "ÉÉÉÉ-HH-NN"}
+        — bármelyik elhagyható; üres date törli a dátumot. A módosítás a
+        lemezre is kiíródik, így újraindítás után is megmarad."""
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         home = body.get("home_team")
         away = body.get("away_team")
-        if home is None and away is None:
-            raise HTTPException(status_code=400, detail="home_team or away_team required")
+        date = body.get("date")
+        if home is None and away is None and date is None:
+            raise HTTPException(status_code=400,
+                                detail="home_team, away_team or date required")
         if home is not None:
             match.meta.home_team = str(home).strip() or match.meta.home_team
         if away is not None:
             match.meta.away_team = str(away).strip() or match.meta.away_team
+        if date is not None:
+            d = str(date).strip()
+            if d:
+                import datetime
+                try:
+                    datetime.date.fromisoformat(d)
+                except ValueError:
+                    raise HTTPException(status_code=400,
+                                        detail="date must be YYYY-MM-DD")
+                match.meta.date = d
+            else:
+                match.meta.date = None  # üres = a dátum törlése
         _put_match(match)  # memóriába + lemezre (perzisztencia)
         return {"match_id": match_id,
-                "home_team": match.meta.home_team, "away_team": match.meta.away_team}
+                "home_team": match.meta.home_team,
+                "away_team": match.meta.away_team,
+                "date": match.meta.date}
 
     @app.post("/matches/{match_id}/swap-teams")
     def swap_teams(match_id: str):
