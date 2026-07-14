@@ -586,11 +586,17 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
 
     # [E] pálya-koordináta (homográfia/arányos) + [F] pályán kívüliek szűrése.
     report("E", 0.90, "pálya-koordináta")
+    # A meccs dátuma a videó metaadatából (mvhd creation_time, tartalék:
+    # fájl-mtime) — a játékos-trend és a könyvtár időrendje erre épül.
+    from handball.pipeline.video_meta import video_recording_date
+    rec_date = video_recording_date(str(video_path))
     meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
                      fps=fps / stride, frame_width=W, frame_height=H,
                      # A videó-visszajátszáshoz: honnan játszható le a jelenet.
                      video_path=str(video_path), start_frame=int(start),
-                     stride=int(stride))
+                     stride=int(stride), date=rec_date)
+    if rec_date:
+        print(f"meccs-dátum a videóból: {rec_date}")
     frames = []
     dropped = 0
     for t, (persons, ball_xy, panH) in enumerate(raw):
