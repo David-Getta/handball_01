@@ -32,13 +32,17 @@ Nyelv: angol (felirat segít). Alább: idővonal, kép, szöveg (EN) + HU súgó
 
 **Kép:** képernyőfelvétel az appból, 6-8 mp-es snittek, felirat-címkékkel:
 
-1. Videó feltöltése + 4 sarok bejelölése → "calibrate in 30 seconds"
+1. Varázsló: feltöltés + 4 sarok + detektálás-próba → "calibrate and
+   verify in 60 seconds"
 2. Feldolgozás fut (haladás-sáv) → "AI tracking, on-device"
 3. Meccs-nézet: pálya + videó együtt, játékos-kijelölés nyomvonallal
-4. Lövéstérkép → "every shot, where it came from"
-5. Terhelés-rangsor + fáradás-görbe → "who's tired before they know it"
-6. Passzháló → "your team's structure at a glance"
-7. Klip-export → "share every goal with the team, one click"
+4. Lövéstérkép + esemény-szűrők (gól / védés / lerohanás / 7-on-6) →
+   "every shot — goal, save or miss, and who took it"
+5. Edzői összefoglaló (Összegzés fül teteje) → "the AI writes the
+   coach's summary — in your language"
+6. Terhelés-rangsor + fáradás-görbe → "who's tired before they know it"
+7. Felderítő jelentés kulcsokkal ("hátrányban 5-1-re váltanak") →
+   "opponent scouting with keys to beat them"
 8. Nyomtatott jelentés → "match report, ready for the team meeting"
 
 *(HU: MINDEN snitt valódi képernyő legyen — a zsűri kiszúrja a mockupot.
@@ -50,8 +54,10 @@ A feliratok angolul, a snitt-lista pont a mostani funkciókra épül.)*
 
 > "How accurate? We publish a reproducible benchmark with every version:
 > calibration error six centimeters; 99% event recall from a partial
-> camera view. And it's not a lab toy — [TODO: N] clubs in Hungary use it
-> on real matches today. [TODO: rövid edzői idézet vagy pálya-videó.]"
+> camera view. Every insight is explainable — measured rules, not a black
+> box, and nothing ever leaves the laptop. And it's not a lab toy —
+> [TODO: N] clubs in Hungary use it on real matches today.
+> [TODO: rövid edzői idézet vagy pálya-videó.]"
 
 *(HU: ha van pilot-edző, egy 5 mp-es "it saves me hours" bevágás aranyat
 ér [TODO].)*
@@ -60,10 +66,12 @@ A feliratok angolul, a snitt-lista pont a mostani funkciókra épül.)*
 
 **Kép:** vissza a beszélőre.
 
-> "With EIC backing we'll fine-tune our own sport-specific AI models,
-> add jersey-number identity, and expand the same engine to basketball
-> and futsal — making professional analytics a utility every team in
-> Europe can afford, not a privilege."
+> "We already read jersey numbers with our own neural net, reconstruct
+> referee decisions from tracking data alone, and auto-write the coach's
+> report. With EIC backing we'll fine-tune sport-specific detection
+> models, add referee-signal recognition from video, and expand the same
+> engine to basketball and futsal — making professional analytics a
+> utility every team in Europe can afford, not a privilege."
 
 *(HU: a grant-cél = K+F (saját modell, OCR, több sport) — összhangban a
 deck 10. diájával.)*
