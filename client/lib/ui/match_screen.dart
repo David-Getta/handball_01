@@ -331,6 +331,12 @@ class _MatchScreenState extends State<MatchScreen> {
             _jumpToEvent(match, -1),
         const SingleActivator(LogicalKeyboardKey.keyE): () =>
             _jumpToEvent(match, 1),
+        // Fel/le nyíl: ugyanaz, mint a Q/E — előző/következő ugrópont
+        // az AKTÍV szűrő szerint (esemény / támadás-típus / szabály).
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+            _jumpToEvent(match, -1),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+            _jumpToEvent(match, 1),
       },
       child: Focus(autofocus: true, child: child),
     );
@@ -1806,14 +1812,14 @@ class _MatchScreenState extends State<MatchScreen> {
           iconSize: 24,
           color: AppColors.textSecondary,
           tooltip: "Előző esemény",
-          onPressed: _filteredEvents().isEmpty ? null : () => _jumpToEvent(match, -1),
+          onPressed: _navPoints().isEmpty ? null : () => _jumpToEvent(match, -1),
           icon: const Icon(Icons.skip_previous),
         ),
         IconButton(
           iconSize: 24,
           color: AppColors.textSecondary,
           tooltip: "Következő esemény",
-          onPressed: _filteredEvents().isEmpty ? null : () => _jumpToEvent(match, 1),
+          onPressed: _navPoints().isEmpty ? null : () => _jumpToEvent(match, 1),
           icon: const Icon(Icons.skip_next),
         ),
         Expanded(
@@ -1887,24 +1893,38 @@ class _MatchScreenState extends State<MatchScreen> {
       v == v.roundToDouble() ? "${v.toInt()}×" : "$v×";
 
   /// A lejátszó ugrása a legközelebbi (szűrt) eseményre a megadott irányban.
-  void _jumpToEvent(Match match, int dir) {
-    final events = _filteredEvents();
-    if (events.isEmpty) return;
-    Map<String, dynamic>? target;
-    if (dir > 0) {
-      for (final e in events) {
-        final t = (e["t"] as num?)?.toInt() ?? 0;
-        if (t > _frameIndex) { target = e; break; }
-      }
-      target ??= events.first; // a végén körbeér az elejére
+  /// Az aktív szűrő ugrópontjai (képkocka-idők) — a Q/E és a fel/le
+  /// billentyűk ezeken lépkednek. Esemény-szűrőnél az események, támadás-
+  /// szűrőnél a szakasz-kezdetek, szabály-szűrőnél a szabály-sorok.
+  List<int> _navPoints() {
+    List<int> pts;
+    if (_eventFilter.startsWith("rule:")) {
+      pts = [for (final r in _ruleRows()) (r["frame"] as num?)?.toInt() ?? 0];
+    } else if (_eventFilter.startsWith("atk:")) {
+      pts = [
+        for (final a in _attacks)
+          if (a["type"] == _eventFilter.substring(4))
+            (a["start_frame"] as num?)?.toInt() ?? 0
+      ];
     } else {
-      for (final e in events.reversed) {
-        final t = (e["t"] as num?)?.toInt() ?? 0;
-        if (t < _frameIndex) { target = e; break; }
-      }
-      target ??= events.last; // az elején körbeér a végére
+      pts = [for (final e in _filteredEvents()) (e["t"] as num?)?.toInt() ?? 0];
     }
-    _seekToFrame(match, (target["t"] as num?)?.toInt() ?? 0);
+    pts.sort();
+    return pts;
+  }
+
+  void _jumpToEvent(Match match, int dir) {
+    final points = _navPoints();
+    if (points.isEmpty) return;
+    int target;
+    if (dir > 0) {
+      target = points.firstWhere((t) => t > _frameIndex,
+          orElse: () => points.first); // a végén körbeér az elejére
+    } else {
+      target = points.lastWhere((t) => t < _frameIndex,
+          orElse: () => points.last); // az elején körbeér a végére
+    }
+    _seekToFrame(match, target);
   }
 
   /// Ugrás egy adott képkockára: megállítjuk a lejátszást, és ha van eredeti
