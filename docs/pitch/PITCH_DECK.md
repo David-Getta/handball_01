@@ -30,8 +30,12 @@ helyeket a cégadatokkal és a pilot-számokkal kell feltölteni.
 > One panning camera → full tactical and physical analysis, on the coach's
 > own laptop. Upload the match video, mark 4 court corners, get: player
 > tracking, heatmaps, shot maps, pass networks, sprint/load monitoring,
-> fatigue curves, auto-detected events with video clips, printable match
-> reports, and opponent scouting.
+> fatigue curves, auto-detected events with video clips (goal / save /
+> miss, with the shooter identified), attack-type breakdown (fast break /
+> quick restart / positional / 7-on-6), rule-level insights (suspensions,
+> penalties, passive-play risk, power-play efficiency), goalkeeper
+> analytics, an auto-written coach summary in plain language, printable
+> match reports, and opponent scouting with "how to beat them" keys.
 
 - 3-4 valódi képernyőkép (meccs-nézet, lövéstérkép, jelentés, klip-export).
 - *(HU: a funkciólista kész — a képernyőképeket a valódi appból kell lőni.)*
@@ -39,11 +43,16 @@ helyeket a cégadatokkal és a pilot-számokkal kell feltölteni.
 ## Slide 4 — Why now / Why us (the deep tech)
 
 > The hard problem: a **single panning camera** never sees the full court.
-> Our engine solves it with three proprietary pieces working together:
+> Our engine solves it with proprietary pieces working together:
 > (1) pan-tracking calibration that keeps pixel→meter mapping valid while
 > the camera moves; (2) off-screen state estimation that never contaminates
 > measured data; (3) plausibility-filtered load analytics robust to
-> detection noise.
+> detection noise; (4) a **rule-understanding layer** that reconstructs
+> referee decisions (suspensions, penalties, passive play) purely from
+> tracking data — unique in the market; (5) a fully **explainable,
+> on-device AI chain** (identity gates from space-time + jersey colour +
+> our own digit-recognition net trained without any external data) —
+> no cloud, no black box, GDPR/AI-Act friendly for youth sport.
 >
 > **Measured, reproducible accuracy** (public benchmark in repo):
 > calibration error 0.06 m mean · 91% direct measurement coverage ·
@@ -56,8 +65,10 @@ helyeket a cégadatokkal és a pilot-számokkal kell feltölteni.
 ## Slide 5 — Product status (TRL evidence)
 
 > Working product today (v0.1.x, Windows + macOS): full pipeline from
-> video upload to printed report, auto-updating desktop app, 200+
-> automated tests, versioned accuracy benchmark as regression gate.
+> video upload to printed report, guided analysis wizard with one-frame
+> detection preview, auto-updating desktop app, 300+ automated tests,
+> versioned accuracy benchmark as regression gate, built-in quality
+> self-check that tells the coach what to fix in plain language.
 > Pilot deployments with [TODO: N] clubs in Hungary — [TODO: quotes/LOIs].
 
 - *(HU: TRL 5-6 állítás — a pilot-számok és LOI-k NÉLKÜL ez a dia gyenge;
