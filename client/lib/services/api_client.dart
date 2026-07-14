@@ -552,10 +552,12 @@ class ApiClient {
   /// Átírja a meccs csapatneveit (PATCH /matches/{id}) — a könyvtár és a
   /// felderítő jelentés is az új neveket mutatja; lemezre is mentődik.
   Future<void> updateMatchNames(String matchId,
-      {String? homeTeam, String? awayTeam}) async {
+      {String? homeTeam, String? awayTeam, String? date}) async {
     final body = <String, dynamic>{
       if (homeTeam != null) "home_team": homeTeam,
       if (awayTeam != null) "away_team": awayTeam,
+      // date: "" = a dátum törlése; null = nem nyúlunk hozzá.
+      if (date != null) "date": date,
     };
     final resp = await http.patch(
       Uri.parse("$baseUrl/matches/$matchId"),

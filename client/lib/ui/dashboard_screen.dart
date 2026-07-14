@@ -666,10 +666,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Csapatnevek átírása — a könyvtár és a felderítő jelentés is az újat mutatja.
+  /// Csapatnevek és dátum átírása — a könyvtár és a jelentések is az újat
+  /// mutatják. A dátumot a feldolgozás a videó metaadatából tölti ki; itt
+  /// javítható, ha téves (üresre törölve a dátum is törlődik).
   Future<void> _rename(Map<String, dynamic> m) async {
     final homeCtrl = TextEditingController(text: (m["home_team"] as String?) ?? "");
     final awayCtrl = TextEditingController(text: (m["away_team"] as String?) ?? "");
+    final dateCtrl = TextEditingController(
+        text: (_perMatch[m["match_id"]]?["date"] as String?) ?? "");
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -693,6 +697,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 prefixIcon: Icon(Icons.groups, size: 18, color: AppColors.away),
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: dateCtrl,
+              decoration: const InputDecoration(
+                labelText: "Meccs dátuma (ÉÉÉÉ-HH-NN)",
+                hintText: "pl. 2024-11-20 — üresen hagyva törlődik",
+                prefixIcon: Icon(Icons.event, size: 18, color: AppColors.gold),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -709,11 +722,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (ok != true) return;
     try {
       await _api.updateMatchNames(m["match_id"] as String,
-          homeTeam: homeCtrl.text.trim(), awayTeam: awayCtrl.text.trim());
+          homeTeam: homeCtrl.text.trim(),
+          awayTeam: awayCtrl.text.trim(),
+          date: dateCtrl.text.trim());
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Átnevezési hiba: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("$e".contains("400")
+              ? "Hibás dátum-formátum — ÉÉÉÉ-HH-NN alakban add meg "
+                  "(pl. 2024-11-20)."
+              : "Átnevezési hiba: $e")));
     }
   }
 
