@@ -467,6 +467,24 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Egy-képkockás detektálás-próba (GET /detect-preview): a YOLO által
+  /// talált játékosok/labda berajzolva + darabszámok — az indítás előtti
+  /// gyors ellenőrzéshez. Az első hívás lassabb (modell-betöltés).
+  Future<Map<String, dynamic>> fetchDetectPreview(String path,
+      {int t = 100}) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/detect-preview").replace(queryParameters: {
+      "path": path,
+      "t": "$t",
+    }))
+        .timeout(const Duration(seconds: 90));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült a detektálás-próba: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http
