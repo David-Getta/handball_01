@@ -145,6 +145,99 @@ def create_app():
         ok, buf = cv2.imencode(".png", frame)
         return Response(content=buf.tobytes(), media_type="image/png")
 
+    @app.get("/detect-preview")
+    def detect_preview(path: str, t: int = 100, imgsz: int = 1280):
+        """Egy-képkockás detektálási PRÓBA a hosszú feldolgozás előtt.
+
+        Lefuttatja a YOLO-t a kért kockán, berajzolja a talált játékosokat
+        (a két mezszín-klaszter szerint színezve), a bírót és a labdát —
+        az edző az indítás ELŐTT látja, jól látja-e a rendszer a pályát.
+
+        Visszatérés: {"persons", "balls", "referees", "image_b64" (JPEG)}.
+        404: a videó/kocka nem olvasható; 503: a detektor nem elérhető.
+        """
+        import base64
+        import os
+
+        import cv2
+        import numpy as np
+
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="video not found")
+        cap = cv2.VideoCapture(path)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, t)
+        ok, frame = cap.read()
+        cap.release()
+        if not ok:
+            raise HTTPException(status_code=404, detail="frame not read")
+
+        # A nehéz feldolgozó segédei (súly-feloldás, osztályok, mezszín).
+        import sys
+        from pathlib import Path
+        backend_dir = str(Path(__file__).resolve().parents[2])
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        try:
+            from ultralytics import YOLO
+            from scripts.process_video import (
+                _class_ids, _is_referee, _pick_device, _resolve_weights,
+                _torso_color,
+            )
+            model = YOLO(_resolve_weights("yolov8n.pt"))
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"a detektor nem érhető el: {e}")
+
+        person_ids, ball_ids = _class_ids(getattr(model, "names", None))
+        res = model.predict(frame, imgsz=imgsz, conf=0.2, verbose=False,
+                            device=_pick_device())[0]
+
+        persons = []   # (x1, y1, x2, y2, mezszín)
+        referees = 0
+        balls = []
+        for b in res.boxes:
+            cls = int(b.cls[0])
+            x1, y1, x2, y2 = (int(v) for v in b.xyxy[0])
+            if cls in person_ids:
+                if _is_referee(frame, x1, y1, x2, y2):
+                    referees += 1
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                    cv2.putText(frame, "biro", (x1, max(0, y1 - 6)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                else:
+                    persons.append((x1, y1, x2, y2,
+                                    _torso_color(frame, x1, y1, x2, y2)))
+            elif cls in ball_ids:
+                balls.append((x1, y1, x2, y2))
+
+        # Két mezszín-klaszter (mint a feldolgozásban) — a doboz színe
+        # mutatja, melyik csapathoz sorolná a rendszer a játékost.
+        team_of_idx = [0] * len(persons)
+        if len(persons) >= 4:
+            data = np.array([c for (_, _, _, _, c) in persons], np.float32)
+            crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 0.5)
+            _, labels, _ = cv2.kmeans(data, 2, None, crit, 5,
+                                      cv2.KMEANS_PP_CENTERS)
+            team_of_idx = [int(l) for l in labels.ravel()]
+        draw_colors = [(196, 217, 47), (107, 107, 255)]  # BGR: accent / away
+        for (x1, y1, x2, y2, _c), ti in zip(persons, team_of_idx):
+            cv2.rectangle(frame, (x1, y1), (x2, y2), draw_colors[ti], 2)
+        for (x1, y1, x2, y2) in balls:
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            cv2.circle(frame, (cx, cy), max(8, x2 - x1), (107, 179, 216), 3)
+            cv2.putText(frame, "labda", (x1, max(0, y1 - 6)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (107, 179, 216), 2)
+
+        ok, buf = cv2.imencode(".jpg", frame,
+                               [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+        return {
+            "persons": len(persons),
+            "referees": referees,
+            "balls": len(balls),
+            "image_b64": base64.b64encode(buf.tobytes()).decode("ascii"),
+        }
+
     # Feldolgozási munkák (job) állapota — a kliens ezt kérdezi le a haladáshoz.
     # Memóriabeli, mint a _store; a szerver újraindításáig él.
     _jobs: dict[str, dict] = {}

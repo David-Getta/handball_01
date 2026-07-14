@@ -8,6 +8,7 @@
 library;
 
 import "dart:async";
+import "dart:convert";
 
 import "package:file_picker/file_picker.dart";
 import "package:flutter/foundation.dart" show kIsWeb;
@@ -397,6 +398,77 @@ class _UploadScreenState extends State<UploadScreen> {
   int _wstep = 0;
 
   bool get _hasVideo => _pathCtrl.text.trim().isNotEmpty;
+
+  // Detektálás-próba folyamatban?
+  bool _previewing = false;
+
+  /// Egy-képkockás detektálási próba: a backend berajzolja a találatokat,
+  /// az eredmény párbeszédablakban jelenik meg darabszámokkal.
+  Future<void> _runDetectPreview() async {
+    setState(() => _previewing = true);
+    try {
+      final r = await _api.fetchDetectPreview(_pathCtrl.text.trim(),
+          t: _calib?.startFrame ?? 100);
+      if (!mounted) return;
+      final bytes = base64Decode(r["image_b64"] as String);
+      final persons = (r["persons"] as num?)?.toInt() ?? 0;
+      final balls = (r["balls"] as num?)?.toInt() ?? 0;
+      final refs = (r["referees"] as num?)?.toInt() ?? 0;
+      final ok = persons >= 8;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Detektálás-próba"),
+          content: SizedBox(
+            width: 720,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  "$persons játékos · $balls labda · $refs bíró a próbakockán",
+                  style: AppText.value.copyWith(fontSize: 13.5),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  ok
+                      ? "Jól néz ki — a dobozok színe mutatja, melyik "
+                          "csapathoz sorolná a rendszer a játékost."
+                      : "Kevés játékos látszik — léptess olyan kockára, ahol "
+                          "a pálya jól látszik (kalibráció), vagy válassz "
+                          "tisztább felvételt.",
+                  style: AppText.label.copyWith(
+                      fontSize: 12,
+                      color: ok ? AppColors.accent : AppColors.gold),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Rendben"),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Detektálás-próba hiba: $e")));
+    } finally {
+      if (mounted) setState(() => _previewing = false);
+    }
+  }
   bool get _teamsGiven =>
       _homeCtrl.text.trim().isNotEmpty && _awayCtrl.text.trim().isNotEmpty;
 
@@ -741,6 +813,23 @@ class _UploadScreenState extends State<UploadScreen> {
             "kézzel javíthatók a meccs-nézetben",
             style: AppText.label.copyWith(fontSize: 11)),
       ]),
+      const SizedBox(height: 6),
+      // Detektálás-próba: egy kockán lefuttatott YOLO, berajzolt
+      // találatokkal — a hosszú feldolgozás ELŐTT kiderül, jól látja-e
+      // a rendszer a játékosokat és a színeket.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: !_hasVideo || _previewing ? null : _runDetectPreview,
+          icon: _previewing
+              ? const SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.visibility_outlined, size: 18),
+          label: Text(_previewing
+              ? "Próba fut… (első alkalommal lassabb)"
+              : "Detektálás-próba (1 képkocka)"),
+        ),
+      ),
       const SizedBox(height: AppSpacing.md),
       Row(children: [
         if (_wstep > 0) ...[
