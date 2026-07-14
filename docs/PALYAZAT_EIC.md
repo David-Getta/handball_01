@@ -69,11 +69,33 @@ időzítés), **Impact** (piaci potenciál, skálázhatóság, EU-érdek),
   eseményfelismerés és a zaj-robusztusság számszerű, verziónként
   összevethető metrikái — az Excellence-kritérium "mérhető innováció"
   bizonyítéka, és egyben regresszió-őr a fejlesztésben.
+- **Magyarázható (explainable) MI-lánc** — a zsűri és a GDPR/AI Act
+  szempontjából is erős érv: minden felismerés mögött kiszámolt,
+  visszakövethető szabály áll, nem fekete doboz. A lánc rétegei:
+  - *játékos-azonosság*: követés-összefűzés tér-idő + mezszín + OCR-
+    mezszám kapukkal; saját tanítású számjegy-háló (szintetikus adatból,
+    elutasító osztállyal — külső adat és felhő nélkül),
+  - *szerep-felismerés*: kapus pozíció-priorból (színfüggetlen),
+  - *esemény-értelmezés*: gól / kapusvédés / mellé kimenetel + a lövő
+    azonosítása; támadás-típusok (lerohanás / gyors indítás / felállt /
+    7 a 6) mért küszöbökkel,
+  - *szabály-értő réteg*: kiállítás (emberhátrány), hétméteres és
+    passzív-játék felismerés a bírói döntések lenyomatából; emberelőny-
+    hatékonyság; védekezés-váltás minták ("hátrányban 5-1-re váltanak"),
+  - *robusztusság*: félidő-érzékelés + térfélcsere-normalizálás,
+    minőség-önellenőrzés magyar nyelvű teendőkkel.
+- **Automatikus edzői kimenetek magyarul**: meccs-összefoglaló és
+  ellenfél-felderítő narratíva ("így játszanak — így törd meg") edzői
+  kulcsokkal, nyomtatható jelentések — a technológia edzői nyelvre
+  fordítva, ami a piaci belépés (Impact-kritérium) kulcsa.
 
 **Gyenge pontok, amiket a zsűri kérdezni fog** (készüljünk):
 - Mennyire „deep tech" ez a versenytársakhoz képest? → a válasz a
   pásztázó-kamerás kalibráció + képen kívüli becslés + egykamerás
-  labdakövetés kombinációja (publikálható/szabadalmaztatható elemek).
+  labdakövetés kombinációja (publikálható/szabadalmaztatható elemek),
+  KIEGÉSZÍTVE a szabály-értő réteggel (a bírói döntések lenyomatának
+  felismerése követési adatból — a piacon egyedülálló) és a teljesen
+  helyben futó, magyarázható MI-lánccal.
 - Bevétel-modell és eddigi trakció (fizető pilot, LOI-k).
 - Miért nem finanszírozza bank/VC (non-bankability érv).
 
