@@ -33,6 +33,9 @@ class SummaryPanel extends StatelessWidget {
   /// a panel a grafikonokkal kezd (pl. demónál nincs backend-összefoglaló).
   final Map<String, dynamic>? coach;
 
+  /// Gól-sorozatok az eredmény-grafikon kiemeléséhez (üresnél nincs sáv).
+  final List<Map<String, dynamic>> runs;
+
   const SummaryPanel({
     super.key,
     required this.summary,
@@ -45,6 +48,7 @@ class SummaryPanel extends StatelessWidget {
     this.intensity = const [],
     this.formations = const [],
     this.coach,
+    this.runs = const [],
   });
 
   @override
@@ -112,6 +116,7 @@ class SummaryPanel extends StatelessWidget {
             homeName: homeName,
             awayName: awayName,
             onSeekFrame: onSeekFrame,
+            runs: runs,
           ),
           const SizedBox(height: AppSpacing.xl),
         ],

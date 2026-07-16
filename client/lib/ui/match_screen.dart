@@ -62,6 +62,8 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic>? _coach;
   // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
   List<Map<String, dynamic>> _attacks = [];
+  // Gól-sorozatok (GET /matches/{id}/momentum) — az eredmény-grafikonon.
+  List<Map<String, dynamic>> _momentum = [];
   // Szabály-réteg (GET /matches/{id}/rules): 7m, emberhátrány, passzív.
   Map<String, dynamic> _rules = {};
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
@@ -123,6 +125,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> notes = [];
     Map<String, dynamic>? coach;
     List<Map<String, dynamic>> attacks = [];
+    List<Map<String, dynamic>> momentum = [];
     Map<String, dynamic> rules = {};
     if (await _api.isHealthy()) {
       try {
@@ -148,6 +151,11 @@ class _MatchScreenState extends State<MatchScreen> {
           rules = await _api.fetchRules(widget.matchId);
         } catch (_) {
           rules = {}; // szabály-réteg nélkül is teljes a nézet
+        }
+        try {
+          momentum = await _api.fetchMomentum(widget.matchId);
+        } catch (_) {
+          momentum = []; // sorozatok nélkül is teljes a nézet
         }
         try {
           quality = await _api.fetchQuality(widget.matchId);
@@ -180,6 +188,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _notes = notes;
       _coach = coach;
       _attacks = attacks;
+      _momentum = momentum;
       _rules = rules;
       _sourceLabel = label;
       _frameIndex = 0;
@@ -1987,6 +1996,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           intensity: _intensity,
                           formations: _formations,
                           coach: _coach,
+                          runs: _momentum,
                         ),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                   _eventsPanel(match),
