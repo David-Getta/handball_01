@@ -20,6 +20,10 @@ class ScoreChart extends StatelessWidget {
   final String awayName;
   final void Function(int frame)? onSeekFrame;
 
+  /// Gól-sorozatok a backendtől: {"team", "start_frame", "end_frame",
+  /// "length", ...} — halvány csapatszínű sávként kiemelve a grafikonon.
+  final List<Map<String, dynamic>> runs;
+
   const ScoreChart({
     super.key,
     required this.goals,
@@ -28,6 +32,7 @@ class ScoreChart extends StatelessWidget {
     required this.homeName,
     required this.awayName,
     this.onSeekFrame,
+    this.runs = const [],
   });
 
   @override
@@ -51,13 +56,16 @@ class ScoreChart extends StatelessWidget {
             child: CustomPaint(
               size: Size(constraints.maxWidth, 120),
               painter: _ScoreChartPainter(
-                  goals: goals, totalFrames: totalFrames, fps: fps),
+                  goals: goals, totalFrames: totalFrames, fps: fps, runs: runs),
             ),
           );
         }),
       ),
       const SizedBox(height: 2),
-      Text("koppints egy gólra — a lejátszó odaugrik",
+      Text(
+          runs.isEmpty
+              ? "koppints egy gólra — a lejátszó odaugrik"
+              : "a sávok gól-sorozatok — koppints egy gólra vagy sávra",
           style: AppText.label.copyWith(fontSize: 10, color: AppColors.textFaint)),
     ]);
   }
@@ -88,7 +96,15 @@ class ScoreChart extends StatelessWidget {
         bestFrame = t;
       }
     }
-    if (bestFrame != null) onSeekFrame!(bestFrame);
+    if (bestFrame != null) { onSeekFrame!(bestFrame); return; }
+    // Nem gól-jelölő: ha az x egy sorozat-sávba esik, a sorozat elejére.
+    final fx = geom.x(0), lx = geom.x(totalFrames - 1);
+    for (final r in runs) {
+      final s0 = (r["start_frame"] as num?)?.toInt() ?? 0;
+      final s1 = (r["end_frame"] as num?)?.toInt() ?? s0;
+      final xa = geom.x(s0).clamp(fx, lx), xb = geom.x(s1).clamp(fx, lx);
+      if (pos.dx >= xa - 6 && pos.dx <= xb + 6) { onSeekFrame!(s0); return; }
+    }
   }
 }
 
@@ -122,13 +138,35 @@ class _ScoreChartPainter extends CustomPainter {
   final List<Map<String, dynamic>> goals;
   final int totalFrames;
   final double fps;
+  final List<Map<String, dynamic>> runs;
   _ScoreChartPainter(
-      {required this.goals, required this.totalFrames, required this.fps});
+      {required this.goals, required this.totalFrames, required this.fps,
+       this.runs = const []});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (totalFrames <= 1) return;
     final geom = _ChartGeom(size, goals, totalFrames);
+
+    // Gól-sorozatok: halvány csapatszínű sáv a teljes magasságban, a rács
+    // és a vonalak MÖGÉ. Így a fordulópontok ránézésre kirajzolódnak.
+    final topY = _ChartGeom.padT, botY = size.height - _ChartGeom.padB;
+    for (final r in runs) {
+      final s0 = (r["start_frame"] as num?)?.toInt() ?? 0;
+      final s1 = (r["end_frame"] as num?)?.toInt() ?? s0;
+      final color = r["team"] == "home" ? AppColors.home : AppColors.away;
+      final xa = geom.x(s0.clamp(0, totalFrames - 1));
+      final xb = geom.x(s1.clamp(0, totalFrames - 1));
+      final rect = Rect.fromLTRB(xa, topY, xb <= xa ? xa + 2 : xb, botY);
+      canvas.drawRect(rect, Paint()..color = color.withOpacity(0.13));
+      // A sorozat hossza a sáv tetején (pl. "4-0").
+      final len = (r["length"] as num?)?.toInt() ?? 0;
+      if (len > 0) {
+        _text(canvas, "$len-0",
+            Offset(xa + 2, topY - 1),
+            TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color));
+      }
+    }
 
     // Visszafogott rács: legfeljebb 4 vízszintes vonal, egész gól-értékeknél.
     final grid = Paint()..color = AppColors.border.withOpacity(0.5)..strokeWidth = 1;
@@ -185,5 +223,6 @@ class _ScoreChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScoreChartPainter old) =>
-      old.goals != goals || old.totalFrames != totalFrames || old.fps != fps;
+      old.goals != goals || old.totalFrames != totalFrames ||
+      old.fps != fps || old.runs != runs;
 }

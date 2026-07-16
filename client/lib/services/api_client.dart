@@ -485,6 +485,19 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Gól-sorozatok (GET /matches/{id}/momentum): válasz nélküli szériák
+  /// a felismert gólokból, a pillanatnyi állással.
+  Future<List<Map<String, dynamic>>> fetchMomentum(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/momentum"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült lekérni a sorozatokat: HTTP ${resp.statusCode}");
+    }
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["runs"] as List).cast<Map<String, dynamic>>();
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http
