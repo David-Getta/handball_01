@@ -185,6 +185,36 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
     return {"title": "Kapusok", "body": "; ".join(parts).capitalize() + "."}
 
 
+def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, list[str]]:
+    """Gól-sorozatok: válasz nélküli szériák, játékóra-idővel és állással."""
+    from .momentum import scoring_runs
+    runs = scoring_runs(match)
+    if not runs:
+        return None, []
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    names = {"home": home, "away": away}
+
+    def clock(frame: int) -> str:
+        sec = frame / fps
+        return f"{int(sec // 60)}:{int(sec % 60):02d}"
+
+    parts: list[str] = []
+    highlights: list[str] = []
+    for r in runs:
+        name = names.get(r["team"], r["team"])
+        h, a = r["score_after"]
+        parts.append(f"{name} {r['length']} gólos sorozata a {clock(r['start_frame'])}"
+                     f"–{clock(r['end_frame'])} között (állás utána {h}–{a})")
+    # A leghosszabb sorozat külön "mire nézz rá" jelzést kap.
+    top = max(runs, key=lambda r: r["length"])
+    tname = names.get(top["team"], top["team"])
+    highlights.append(
+        f"{tname} {top['length']} gólos sorozatot futott — nézd vissza, mi "
+        "működött, és a másik oldalon hol akadt el a játék (időkérés, "
+        "védekezés-váltás).")
+    return {"title": "Sorozatok", "body": "; ".join(parts).capitalize() + "."}, highlights
+
+
 def coach_summary(match: Match) -> dict:
     """A meccs automatikus edzői összefoglalója.
 
@@ -223,6 +253,14 @@ def coach_summary(match: Match) -> dict:
         s = _goalkeepers_section(match, home, away)
         if s:
             sections.append(s)
+    except Exception:
+        pass
+
+    try:
+        s, hl = _momentum_section(match, home, away)
+        if s:
+            sections.append(s)
+        highlights.extend(hl)
     except Exception:
         pass
 

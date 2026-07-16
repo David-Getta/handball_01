@@ -1153,6 +1153,17 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"windows": detect_empty_net(match)}
 
+    @app.get("/matches/{match_id}/momentum")
+    def get_momentum(match_id: str):
+        """Gól-sorozatok (momentum): válasz nélküli szériák a felismert
+        gólokból, a pillanatnyi állással. Üres lista, ha nincs érdemi
+        sorozat vagy nincs felismert gól."""
+        from ..pipeline.momentum import scoring_runs
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return {"runs": scoring_runs(match)}
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
