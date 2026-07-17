@@ -70,7 +70,8 @@ def test_package_without_video_contains_report_and_csv():
     import json as _json
     analyses = _json.loads(z.read("elemzesek.json").decode("utf-8"))
     for key in ("coach_summary", "xg", "defense", "rules", "training",
-                "progression", "attack_efficiency"):
+                "progression", "attack_efficiency", "assist_network",
+                "possession"):
         assert key in analyses, key
     # Az edzői összefoglaló sima szövegként is (osszefoglalo.txt).
     assert "osszefoglalo.txt" in names
