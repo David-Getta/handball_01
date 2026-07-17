@@ -207,7 +207,8 @@ def _normalize_max_frames(max_frames):
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None,
                   pan=False, jersey_voter=None, ocr_every=5,
-                  ball_recover=True, stop_check=None):
+                  ball_recover=True, stop_check=None,
+                  raw_out=None, colors_out=None):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -261,7 +262,10 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if ball_recover:
         from handball.pipeline.ball_reacquire import BallReacquirer
         reacquirer = BallReacquirer()
-    raw, all_colors = [], []
+    # A hívó adhat megosztott listákat (checkpoint-mentéshez): a detektálás
+    # ezekbe épít, így a részeredmény menet közben is látható.
+    raw = raw_out if raw_out is not None else []
+    all_colors = colors_out if colors_out is not None else []
     # EGY menet nagy felbontáson (1920) + alacsony küszöb (0.05), hogy a kis labdát
     # is elkapja; a JÁTÉKOSOKAT utólag szűrjük a megadott (magasabb) küszöbre, hogy
     # ne jöjjenek téves emberek. Így egy inferencia/frame (kétszer gyorsabb).
@@ -391,7 +395,8 @@ class _SimpleTracker:
         return assigned
 
 
-def _process_hog(video_path, stride, max_frames, stop_check=None):
+def _process_hog(video_path, stride, max_frames, stop_check=None,
+                 raw_out=None, colors_out=None, on_frame=None):
     import cv2
     cap = cv2.VideoCapture(video_path)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
@@ -404,7 +409,8 @@ def _process_hog(video_path, stride, max_frames, stop_check=None):
     except AttributeError:
         hog = None
     tracker = _SimpleTracker()
-    raw, all_colors = [], []
+    raw = raw_out if raw_out is not None else []
+    all_colors = colors_out if colors_out is not None else []
     fi = out_i = 0
     while out_i < max_frames:
         if stop_check is not None and stop_check():
@@ -431,6 +437,8 @@ def _process_hog(video_path, stride, max_frames, stop_check=None):
             persons.append((ids[(cx, (y1 + y2) / 2.0)], cx / scale, y2 / scale, color))
         raw.append((persons, None, None))  # HOG-nál nincs labda és pásztázás-mátrix
         out_i += 1
+        if on_frame is not None:  # haladás-jelzés + időszakos checkpoint
+            on_frame(out_i, max_frames)
     cap.release()
     return raw, all_colors
 
@@ -440,7 +448,8 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             progress_cb=None, match_id="video-1", estimate=True,
             home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
             track_smooth=True, calib_region="full", calib_rotate=False,
-            calibs=None, jersey_ocr=False, stop_check=None):
+            calibs=None, jersey_ocr=False, stop_check=None,
+            checkpoint_save=None, checkpoint_every_s=180.0):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
@@ -486,11 +495,244 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                        "rotate": calib_rotate, "frame": start}]
     report("A", 0.02, "kalibráció" if calib_list else "kalibráció nélkül")
 
+    # KÍSÉRLETI mezszám-OCR: feldolgozás közben leolvasás + szavazás; a
+    # döntések a kész Match-re íródnak (a kézi hozzárendelés erősebb).
+    jersey_voter = None
+    if jersey_ocr:
+        from handball.pipeline.jersey_ocr import JerseyVoter
+        jersey_voter = JerseyVoter()
+
+    # A detektálás KÖZBEN növekvő nyers listák — a checkpoint-mentés ezekre
+    # futtatja le az utómunkát, ezért a hívó (process) birtokolja őket.
+    raw: list = []
+    all_colors: list = []
+
+    def _finalize(raw, all_colors, quiet=False):
+        """A detektálás utáni TELJES utómunka: csapatszín, kalibráció,
+        összefűzés, félidő, kapus, simítás, becslés → kész Match.
+
+        A checkpoint-mentés is ezt hívja (quiet=True: napló/haladás-jelzés
+        nélkül), így a részeredmény PONTOSAN ugyanazon az úton készül,
+        mint a végleges — nincs külön "checkpoint-minőség".
+        """
+        def say(msg):
+            if not quiet:
+                print(msg)
+
+        def rep(stage, prog, msg):
+            if not quiet:
+                report(stage, prog, msg)
+
+        say(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
+        rep("C", 0.78, "követés kész")
+
+        # [D] csapatszín-klaszterezés (kapus/bíró külön kezelése a szín-profilban).
+        rep("D", 0.82, "csapatszín / kapus / bíró")
+        centers2 = None
+        if len(all_colors) >= 2:
+            data = np.array(all_colors, dtype=np.float32)
+            crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+            _, _, centers2 = cv2.kmeans(data, 2, None, crit, 5, cv2.KMEANS_PP_CENTERS)
+
+        def team_of(color):
+            if centers2 is None:
+                return Team.HOME
+            d0 = float(np.linalg.norm(np.array(color) - centers2[0]))
+            d1 = float(np.linalg.norm(np.array(color) - centers2[1]))
+            return Team.HOME if d0 <= d1 else Team.AWAY
+
+        # Track-szintű TÖBBSÉGI csapat-döntés: a kockánkénti szín-döntés zajos
+        # (árnyék/megvilágítás miatt egy játékos villoghatna a két csapat
+        # között) — a track összes színmintája szavaz, a többség dönt.
+        from handball.pipeline.teams import majority_team_by_track
+        _colors_by_track: dict = {}
+        for (persons_, _b_, _p_) in raw:
+            for (tid_, _fx_, _fy_, color_) in persons_:
+                _colors_by_track.setdefault(tid_, []).append(color_)
+        team_of_track = majority_team_by_track(_colors_by_track, centers2)
+
+        # KALIBRÁCIÓ: ha van 4 sarok (kép-pixel), homográfiával pontos pálya-koordinátára
+        # váltunk, és a pályán KÍVÜL esőket (kispad/edző) eldobjuk (CourtRegion).
+        to_court = None
+        region = None
+        if calib_list:
+            from handball.pipeline._homography import (
+                homography_from_points, apply_homography, invert_3x3, compose)
+            from handball.pipeline.roi import CourtRegion
+            region = CourtRegion(margin_m=2.0)
+
+            # Minden kalibrációt az ALAP képkocka koordinátáira vezetünk vissza:
+            # a kalibráció a saját képkockáján készült; a pásztázás-mátrix (G:
+            # aktuális→alap) inverzével a H ∘ G⁻¹ már alap-pixelből ad pályametert.
+            mappers = []  # (térfél x-tartománya, alapra vonatkoztatott H)
+            for c in calib_list:
+                pts = _calib_court_points(c.get("region", "full"), bool(c.get("rotate")))
+                # Hm: a kalibráció homográfiája — szándékosan NEM `H`, hogy ne
+                # árnyékolja a videó magasságát a bezáró (closure) hatókörben.
+                Hm = homography_from_points([tuple(p) for p in c["corners"]], pts)
+                fidx = int(c.get("frame", start))
+                if raw:
+                    idx = max(0, min(len(raw) - 1, round((fidx - start) / max(1, stride))))
+                    panH_at = raw[idx][2]
+                    if panH_at is not None and idx > 0:
+                        Hm = compose(Hm, invert_3x3(panH_at))
+                xs = [p[0] for p in pts]
+                mappers.append((min(xs), max(xs), Hm))
+
+            def to_court(px, py):
+                # Az elsődleges kalibrációval számolunk; ha az eredmény egy MÁSIK
+                # kalibráció térfelére esik, azzal pontosítunk (ott az élesebb).
+                x, y = apply_homography(mappers[0][2], px, py)
+                for (x0, x1, Hm) in mappers[1:]:
+                    if x0 - 1.0 <= x <= x1 + 1.0:
+                        try:
+                            return apply_homography(Hm, px, py)
+                        except ValueError:
+                            return (x, y)
+                return (x, y)
+
+        def map_xy(px, py, panH=None):
+            if to_court is not None:
+                if panH is not None:
+                    # Előbb vissza az ALAP képkocka koordinátáiba (a kamera mozgásának
+                    # kompenzálása), és csak utána a pálya-homográfia.
+                    from handball.pipeline.pan_tracking import apply_h
+                    px, py = apply_h(panH, px, py)
+                return to_court(px, py)
+            return (px / W * COURT_LENGTH_M, py / H * COURT_WIDTH_M)  # kalibráció nélkül: arányos
+
+        # [E] pálya-koordináta (homográfia/arányos) + [F] pályán kívüliek szűrése.
+        rep("E", 0.90, "pálya-koordináta")
+        # A meccs dátuma a videó metaadatából (mvhd creation_time, tartalék:
+        # fájl-mtime) — a játékos-trend és a könyvtár időrendje erre épül.
+        from handball.pipeline.video_meta import video_recording_date
+        rec_date = video_recording_date(str(video_path))
+        meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
+                         fps=fps / stride, frame_width=W, frame_height=H,
+                         # A videó-visszajátszáshoz: honnan játszható le a jelenet.
+                         video_path=str(video_path), start_frame=int(start),
+                         stride=int(stride), date=rec_date)
+        if rec_date:
+            say(f"meccs-dátum a videóból: {rec_date}")
+        frames = []
+        dropped = 0
+        for t, (persons, ball_xy, panH) in enumerate(raw):
+            players = []
+            for (tid, fx, fy, color) in persons:
+                cx, cy = map_xy(fx, fy, panH)
+                if region is not None and not region.contains(cx, cy):
+                    dropped += 1
+                    continue  # pályán kívül (kispad/edző/néző)
+                players.append(PlayerPosition(
+                    track_id=tid,
+                    # A track többségi csapata; tartalék a kockánkénti döntés.
+                    team=team_of_track.get(tid, team_of(color)),
+                    x=cx, y=cy, source=PositionSource.MEASURED, confidence=1.0))
+            ball = None
+            if ball_xy:
+                bx, by = map_xy(ball_xy[0], ball_xy[1], panH)
+                ball = Ball(x=bx, y=by, confidence=1.0)
+            frames.append(Frame(t=t, players=players, ball=ball))
+        if region is not None:
+            say(f"kalibrációval: pályán kívüli detektálás eldobva: {dropped}")
+
+        # [F] képen kívüli becslés — a pásztázó kamera képéből kilógó játékosokat
+        # mozgásmodellel pótoljuk (source=ESTIMATED, csökkenő confidence), hogy a
+        # felülnézeten a TELJES csapat látszódjon. Csak kalibrációval értelmes
+        # (ott valós méter-koordináták vannak).
+        rep("F", 0.95, "képen kívüli becslés")
+        match = Match(meta=meta, frames=frames)
+
+        # Track-összefűzés: a takarásnál megszakadt követés automatikus
+        # helyreállítása (óvatos küszöbökkel) — az elemzés egy játékost lásson.
+        # A track-színminták is beleszólnak: eltérő mez → nincs összefűzés.
+        from handball.pipeline.track_stitch import stitch_tracks
+        _stitch_rename: dict = {}
+        stitched = stitch_tracks(
+            match, colors_by_track=_colors_by_track,
+            jerseys_by_track=(jersey_voter.decisions()
+                              if jersey_voter is not None else None),
+            rename_out=_stitch_rename)
+        if stitched:
+            say(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
+
+        # Félidő-érzékelés + térfélcsere-normalizálás: teljes meccset egyben
+        # tartalmazó felvételnél a 2. félidő koordinátáit tükrözi, hogy a
+        # támadás-irányok egységesek legyenek. A kapus-azonosítás ELŐTT fut.
+        from handball.pipeline.halftime import auto_normalize
+        ht_info = auto_normalize(match)
+        if ht_info is not None:
+            if ht_info["swapped"]:
+                say(f"félidő felismerve (frame {ht_info['halftime_t']}): "
+                      f"térfélcsere normalizálva "
+                      f"({ht_info['mirrored_frames']} kocka tükrözve)")
+            else:
+                say(f"félidő felismerve (frame {ht_info['halftime_t']}): "
+                      "nincs térfélcsere-jel, a koordináták változatlanok")
+
+        # Kapus-azonosítás pozíció-prior alapján: aki a mért idejének nagy
+        # részét a kapuelőtérben tölti, role="kapus" jelölést kap. Az
+        # összefűzés UTÁN fut (egyben látja a track teljes idejét).
+        from handball.pipeline.goalkeeper import detect_goalkeepers
+        gks = detect_goalkeepers(match)
+        if gks:
+            say("kapus-azonosítás: " + ", ".join(
+                f"track {tid} ({share * 100:.0f}% kapuelőtér)"
+                for tid, share in gks.items()))
+
+        # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
+        if jersey_voter is not None:
+            from handball.pipeline.jersey_ocr import apply_jersey_decisions
+            # Az összefűzésnél beolvadt trackek OCR-döntéseit a megmaradó
+            # azonosítóra visszük át — eddig ezek elvesztek.
+            decisions = {}
+            for tid, num in jersey_voter.decisions().items():
+                decisions[_stitch_rename.get(tid, tid)] = num
+            n_ocr = apply_jersey_decisions(match, decisions)
+            if n_ocr:
+                say(f"mezszám-OCR: {n_ocr} track kapott számot "
+                      f"({jersey_voter.decisions()})")
+
+        # Játékos-pálya simítás: a detektálási remegés (jitter) csökkentése — a
+        # táv/sebesség statisztika ne a dobozok ugrálását mérje. Csak a mért
+        # pozíciókat érinti, az éles irányváltást a kis ablak megőrzi.
+        if track_smooth:
+            from handball.pipeline.track_filter import smooth_player_tracks
+            ts = smooth_player_tracks(match)
+            if ts:
+                say(f"játékos-simítás: {ts} pozíció simítva")
+
+        # Labda-utómunka: a téves (kiugró) észlelések eldobása + a rövid hézagok
+        # pótlása — a birtoklás/passz/lövés-felismerés folytonos labda-pályát igényel.
+        if ball_smooth:
+            from handball.pipeline.ball_filter import smooth_ball
+            bs = smooth_ball(match)
+            if bs["removed"] or bs["filled"]:
+                say(f"labda-utómunka: {bs['removed']} kiugró eldobva, "
+                      f"{bs['filled']} hézag-kocka pótolva")
+
+        if estimate and calib_list:
+            from handball.pipeline.estimation import augment_match_with_estimates
+            added = augment_match_with_estimates(match)
+            say(f"képen kívüli becslés: {added} becsült pozíció pótolva")
+
+        # Minőség-önellenőrzés: a napló végén látszik, mennyire megbízható az eredmény.
+        from handball.pipeline.quality import compute_quality_report
+        q = compute_quality_report(match)
+        say(f"minőség: {q['score']}/100 | játékos/kocka: {q['avg_measured_players']} | "
+              f"labda-lefedettség: {q['ball_coverage_pct']}%")
+        for w in q["warnings"]:
+            say(f"  FIGYELEM: {w}")
+
+        rep("H", 1.0, f"kész ({len(frames)} frame)")
+        return match
+
     # [B]/[C] detektálás + követés — a képkockánkénti haladást ide képezzük le,
     # sebességgel és hátralévő idővel (teljes félidőnél ez órákban mérhető,
     # a felhasználónak látnia kell, mire számítson).
     import time as _time
     _t0 = _time.time()
+    _cp = {"last": _time.time()}
 
     def on_frame(kept, total):
         # A kijelzéshez a becsült teljes darabszámot használjuk (a `total` a
@@ -505,232 +747,35 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             eta = ""
         frac = min(1.0, kept / max(1, show))
         report("B", 0.05 + 0.70 * frac, f"detektálás {kept}/{show}{eta}")
-
-    # KÍSÉRLETI mezszám-OCR: feldolgozás közben leolvasás + szavazás; a
-    # döntések a kész Match-re íródnak (a kézi hozzárendelés erősebb).
-    jersey_voter = None
-    if jersey_ocr:
-        from handball.pipeline.jersey_ocr import JerseyVoter
-        jersey_voter = JerseyVoter()
+        # IDŐSZAKOS CHECKPOINT: pár percenként lefut az utómunka az addig
+        # feldolgozott kockákra, és a részeredmény ELMENTŐDIK — a motor
+        # összeomlása / áramszünet így legfeljebb pár percnyi munkát visz el.
+        if (checkpoint_save is not None and kept >= 10
+                and _time.time() - _cp["last"] >= checkpoint_every_s):
+            _cp["last"] = _time.time()
+            try:
+                checkpoint_save(_finalize(raw, all_colors, quiet=True))
+                print(f"checkpoint: részeredmény mentve ({kept} kocka)")
+            except Exception as e:  # a mentés hibája nem állíthatja le a futást
+                print(f"FIGYELEM: részeredmény-mentés nem sikerült: {e}")
 
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
-        raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                                        court_poly, start=start, skip_dark=skip_dark,
-                                        on_frame=on_frame, pan=bool(calib_list),
-                                        jersey_voter=jersey_voter,
-                                        stop_check=stop_check)
+        _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
+                      court_poly, start=start, skip_dark=skip_dark,
+                      on_frame=on_frame, pan=bool(calib_list),
+                      jersey_voter=jersey_voter, stop_check=stop_check,
+                      raw_out=raw, colors_out=all_colors)
     else:
-        raw, all_colors = _process_hog(video_path, stride, max_frames,
-                                       stop_check=stop_check)
-    print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
-    report("C", 0.78, "követés kész")
-
-    # [D] csapatszín-klaszterezés (kapus/bíró külön kezelése a szín-profilban).
-    report("D", 0.82, "csapatszín / kapus / bíró")
-    centers2 = None
-    if len(all_colors) >= 2:
-        data = np.array(all_colors, dtype=np.float32)
-        crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        _, _, centers2 = cv2.kmeans(data, 2, None, crit, 5, cv2.KMEANS_PP_CENTERS)
-
-    def team_of(color):
-        if centers2 is None:
-            return Team.HOME
-        d0 = float(np.linalg.norm(np.array(color) - centers2[0]))
-        d1 = float(np.linalg.norm(np.array(color) - centers2[1]))
-        return Team.HOME if d0 <= d1 else Team.AWAY
-
-    # Track-szintű TÖBBSÉGI csapat-döntés: a kockánkénti szín-döntés zajos
-    # (árnyék/megvilágítás miatt egy játékos villoghatna a két csapat
-    # között) — a track összes színmintája szavaz, a többség dönt.
-    from handball.pipeline.teams import majority_team_by_track
-    _colors_by_track: dict = {}
-    for (persons_, _b_, _p_) in raw:
-        for (tid_, _fx_, _fy_, color_) in persons_:
-            _colors_by_track.setdefault(tid_, []).append(color_)
-    team_of_track = majority_team_by_track(_colors_by_track, centers2)
-
-    # KALIBRÁCIÓ: ha van 4 sarok (kép-pixel), homográfiával pontos pálya-koordinátára
-    # váltunk, és a pályán KÍVÜL esőket (kispad/edző) eldobjuk (CourtRegion).
-    to_court = None
-    region = None
-    if calib_list:
-        from handball.pipeline._homography import (
-            homography_from_points, apply_homography, invert_3x3, compose)
-        from handball.pipeline.roi import CourtRegion
-        region = CourtRegion(margin_m=2.0)
-
-        # Minden kalibrációt az ALAP képkocka koordinátáira vezetünk vissza:
-        # a kalibráció a saját képkockáján készült; a pásztázás-mátrix (G:
-        # aktuális→alap) inverzével a H ∘ G⁻¹ már alap-pixelből ad pályametert.
-        mappers = []  # (térfél x-tartománya, alapra vonatkoztatott H)
-        for c in calib_list:
-            pts = _calib_court_points(c.get("region", "full"), bool(c.get("rotate")))
-            H = homography_from_points([tuple(p) for p in c["corners"]], pts)
-            fidx = int(c.get("frame", start))
-            if raw:
-                idx = max(0, min(len(raw) - 1, round((fidx - start) / max(1, stride))))
-                panH_at = raw[idx][2]
-                if panH_at is not None and idx > 0:
-                    H = compose(H, invert_3x3(panH_at))
-            xs = [p[0] for p in pts]
-            mappers.append((min(xs), max(xs), H))
-
-        def to_court(px, py):
-            # Az elsődleges kalibrációval számolunk; ha az eredmény egy MÁSIK
-            # kalibráció térfelére esik, azzal pontosítunk (ott az élesebb).
-            x, y = apply_homography(mappers[0][2], px, py)
-            for (x0, x1, H) in mappers[1:]:
-                if x0 - 1.0 <= x <= x1 + 1.0:
-                    try:
-                        return apply_homography(H, px, py)
-                    except ValueError:
-                        return (x, y)
-            return (x, y)
-
-    def map_xy(px, py, panH=None):
-        if to_court is not None:
-            if panH is not None:
-                # Előbb vissza az ALAP képkocka koordinátáiba (a kamera mozgásának
-                # kompenzálása), és csak utána a pálya-homográfia.
-                from handball.pipeline.pan_tracking import apply_h
-                px, py = apply_h(panH, px, py)
-            return to_court(px, py)
-        return (px / W * COURT_LENGTH_M, py / H * COURT_WIDTH_M)  # kalibráció nélkül: arányos
-
-    # [E] pálya-koordináta (homográfia/arányos) + [F] pályán kívüliek szűrése.
-    report("E", 0.90, "pálya-koordináta")
-    # A meccs dátuma a videó metaadatából (mvhd creation_time, tartalék:
-    # fájl-mtime) — a játékos-trend és a könyvtár időrendje erre épül.
-    from handball.pipeline.video_meta import video_recording_date
-    rec_date = video_recording_date(str(video_path))
-    meta = MatchMeta(match_id=match_id, home_team=home_team, away_team=away_team,
-                     fps=fps / stride, frame_width=W, frame_height=H,
-                     # A videó-visszajátszáshoz: honnan játszható le a jelenet.
-                     video_path=str(video_path), start_frame=int(start),
-                     stride=int(stride), date=rec_date)
-    if rec_date:
-        print(f"meccs-dátum a videóból: {rec_date}")
-    frames = []
-    dropped = 0
-    for t, (persons, ball_xy, panH) in enumerate(raw):
-        players = []
-        for (tid, fx, fy, color) in persons:
-            cx, cy = map_xy(fx, fy, panH)
-            if region is not None and not region.contains(cx, cy):
-                dropped += 1
-                continue  # pályán kívül (kispad/edző/néző)
-            players.append(PlayerPosition(
-                track_id=tid,
-                # A track többségi csapata; tartalék a kockánkénti döntés.
-                team=team_of_track.get(tid, team_of(color)),
-                x=cx, y=cy, source=PositionSource.MEASURED, confidence=1.0))
-        ball = None
-        if ball_xy:
-            bx, by = map_xy(ball_xy[0], ball_xy[1], panH)
-            ball = Ball(x=bx, y=by, confidence=1.0)
-        frames.append(Frame(t=t, players=players, ball=ball))
-    if region is not None:
-        print(f"kalibrációval: pályán kívüli detektálás eldobva: {dropped}")
-
-    # [F] képen kívüli becslés — a pásztázó kamera képéből kilógó játékosokat
-    # mozgásmodellel pótoljuk (source=ESTIMATED, csökkenő confidence), hogy a
-    # felülnézeten a TELJES csapat látszódjon. Csak kalibrációval értelmes
-    # (ott valós méter-koordináták vannak).
-    report("F", 0.95, "képen kívüli becslés")
-    match = Match(meta=meta, frames=frames)
-
-    # Track-összefűzés: a takarásnál megszakadt követés automatikus
-    # helyreállítása (óvatos küszöbökkel) — az elemzés egy játékost lásson.
-    # A track-színminták is beleszólnak: eltérő mez → nincs összefűzés.
-    from handball.pipeline.track_stitch import stitch_tracks
-    _stitch_rename: dict = {}
-    stitched = stitch_tracks(
-        match, colors_by_track=_colors_by_track,
-        jerseys_by_track=(jersey_voter.decisions()
-                          if jersey_voter is not None else None),
-        rename_out=_stitch_rename)
-    if stitched:
-        print(f"track-összefűzés: {stitched} megszakadt track helyreállítva")
-
-    # Félidő-érzékelés + térfélcsere-normalizálás: teljes meccset egyben
-    # tartalmazó felvételnél a 2. félidő koordinátáit tükrözi, hogy a
-    # támadás-irányok egységesek legyenek. A kapus-azonosítás ELŐTT fut.
-    from handball.pipeline.halftime import auto_normalize
-    ht_info = auto_normalize(match)
-    if ht_info is not None:
-        if ht_info["swapped"]:
-            print(f"félidő felismerve (frame {ht_info['halftime_t']}): "
-                  f"térfélcsere normalizálva "
-                  f"({ht_info['mirrored_frames']} kocka tükrözve)")
-        else:
-            print(f"félidő felismerve (frame {ht_info['halftime_t']}): "
-                  "nincs térfélcsere-jel, a koordináták változatlanok")
-
-    # Kapus-azonosítás pozíció-prior alapján: aki a mért idejének nagy
-    # részét a kapuelőtérben tölti, role="kapus" jelölést kap. Az
-    # összefűzés UTÁN fut (egyben látja a track teljes idejét).
-    from handball.pipeline.goalkeeper import detect_goalkeepers
-    gks = detect_goalkeepers(match)
-    if gks:
-        print("kapus-azonosítás: " + ", ".join(
-            f"track {tid} ({share * 100:.0f}% kapuelőtér)"
-            for tid, share in gks.items()))
-
-    # KÍSÉRLETI mezszám-OCR: a szavazó döntéseinek ráírása a kockákra.
-    if jersey_voter is not None:
-        from handball.pipeline.jersey_ocr import apply_jersey_decisions
-        # Az összefűzésnél beolvadt trackek OCR-döntéseit a megmaradó
-        # azonosítóra visszük át — eddig ezek elvesztek.
-        decisions = {}
-        for tid, num in jersey_voter.decisions().items():
-            decisions[_stitch_rename.get(tid, tid)] = num
-        n_ocr = apply_jersey_decisions(match, decisions)
-        if n_ocr:
-            print(f"mezszám-OCR: {n_ocr} track kapott számot "
-                  f"({jersey_voter.decisions()})")
-
-    # Játékos-pálya simítás: a detektálási remegés (jitter) csökkentése — a
-    # táv/sebesség statisztika ne a dobozok ugrálását mérje. Csak a mért
-    # pozíciókat érinti, az éles irányváltást a kis ablak megőrzi.
-    if track_smooth:
-        from handball.pipeline.track_filter import smooth_player_tracks
-        ts = smooth_player_tracks(match)
-        if ts:
-            print(f"játékos-simítás: {ts} pozíció simítva")
-
-    # Labda-utómunka: a téves (kiugró) észlelések eldobása + a rövid hézagok
-    # pótlása — a birtoklás/passz/lövés-felismerés folytonos labda-pályát igényel.
-    if ball_smooth:
-        from handball.pipeline.ball_filter import smooth_ball
-        bs = smooth_ball(match)
-        if bs["removed"] or bs["filled"]:
-            print(f"labda-utómunka: {bs['removed']} kiugró eldobva, "
-                  f"{bs['filled']} hézag-kocka pótolva")
-
-    if estimate and calib_list:
-        from handball.pipeline.estimation import augment_match_with_estimates
-        added = augment_match_with_estimates(match)
-        print(f"képen kívüli becslés: {added} becsült pozíció pótolva")
-
-    # Minőség-önellenőrzés: a napló végén látszik, mennyire megbízható az eredmény.
-    from handball.pipeline.quality import compute_quality_report
-    q = compute_quality_report(match)
-    print(f"minőség: {q['score']}/100 | játékos/kocka: {q['avg_measured_players']} | "
-          f"labda-lefedettség: {q['ball_coverage_pct']}%")
-    for w in q["warnings"]:
-        print(f"  FIGYELEM: {w}")
+        _process_hog(video_path, stride, max_frames, stop_check=stop_check,
+                     raw_out=raw, colors_out=all_colors, on_frame=on_frame)
+    match = _finalize(raw, all_colors)
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(match.to_json(indent=2))
-        print(f"Tracking JSON kiírva: {out_path} ({len(frames)} frame)")
-
-    # [H] statisztika/hőtérkép igény szerint (külön végpontok) — az adat kész.
-    report("H", 1.0, f"kész ({len(frames)} frame)")
+        print(f"Tracking JSON kiírva: {out_path} ({len(match.frames)} frame)")
     return match
-
 
 def main(argv):
     if len(argv) < 3:

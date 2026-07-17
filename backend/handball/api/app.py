@@ -353,6 +353,10 @@ def create_app():
                     # Szelíd megszakítás: a Megszakítás gombra a detektálás
                     # megáll, az eddigi rész feldolgozva elmentődik.
                     stop_check=lambda: bool(job.get("cancel")),
+                    # Időszakos checkpoint: hosszú feldolgozásnál pár percenként
+                    # elmentjük a részeredményt, így áramszünet/összeomlás után
+                    # sem vész el minden — a könyvtárban ott a legutóbbi állapot.
+                    checkpoint_save=lambda m: app.state.put_match(m),
                 )
                 cancelled = bool(job.pop("cancel", False))
                 if cancelled and not match.frames:
