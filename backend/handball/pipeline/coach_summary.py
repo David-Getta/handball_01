@@ -122,6 +122,13 @@ def _xg_section(match: Match, home: str, away: str) -> dict | None:
     for rec, name in ((th, home), (ta, away)):
         if rec["shots"] < 3:
             continue
+        q = rec.get("avg_xg_per_shot", 0.0)
+        if q >= 0.45:
+            body += (f" A(z) {name} jó helyzeteket alakított ki "
+                     f"(átlag {q:.2f} xG/lövés).")
+        elif q and q <= 0.28:
+            body += (f" A(z) {name} sok kis esélyű lövést vállalt "
+                     f"(átlag {q:.2f} xG/lövés).")
         if rec["diff"] >= 0.8:
             body += (f" A(z) {name} a helyzeteinél többet ért el "
                      f"(+{rec['diff']:.1f}) — pontos befejezés.")

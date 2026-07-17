@@ -109,3 +109,14 @@ def test_shooterless_shot_not_in_breakdown():
     r = match_xg(Match(_meta(), frames))
     assert r["teams"]["home"]["shots"] == 1
     assert r["shooters"] == []
+
+
+def test_avg_xg_per_shot_reported():
+    """A csapat-összegzés tartalmazza az átlagos xG/lövést, és az a
+    lövések számából jön ki."""
+    frames = _shot_frames(0, 33.0, 10.0, goal=True)
+    frames.append(Frame(t=8, players=[], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _shot_frames(40, 28.0, 3.0, goal=False)
+    r = match_xg(Match(_meta(), frames))["teams"]["home"]
+    assert r["shots"] == 2
+    assert abs(r["avg_xg_per_shot"] - r["xg"] / 2) < 0.02

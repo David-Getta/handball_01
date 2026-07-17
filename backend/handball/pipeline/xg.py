@@ -100,6 +100,11 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             teams[side]["goals"] += 1
 
     for side in ("home", "away"):
+        # A lövés-választás minősége: átlagos xG lövésenként (magas = jó
+        # helyzetek, alacsony = sok kis esélyű lövés).
+        n_sh = teams[side]["shots"]
+        teams[side]["avg_xg_per_shot"] = (round(teams[side]["xg"] / n_sh, 3)
+                                          if n_sh else 0.0)
         teams[side]["xg"] = round(teams[side]["xg"], 2)
         teams[side]["diff"] = round(teams[side]["goals"] - teams[side]["xg"], 2)
 
