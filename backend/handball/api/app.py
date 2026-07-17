@@ -456,6 +456,43 @@ def create_app():
                 job["status"] = "error"
                 job["error"] = msg
                 job["message"] = f"hiba: {msg}"
+            _log_job(job)
+
+    # Feldolgozás-napló: a LEZÁRT job-ok (kész/hiba/megszakítva) egy sora
+    # a lemezre kerül — újraindítás után is visszanézhető, mi történt.
+    _jobs_log_path = data_root() / "data" / "jobs_log.jsonl"
+
+    def _log_job(job):
+        try:
+            import time as _t
+            rec = {k: job.get(k) for k in
+                   ("job_id", "match_id", "status", "message", "error",
+                    "created", "video", "stage")}
+            rec["finished"] = _t.time()
+            _jobs_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(_jobs_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except Exception:
+            pass  # a naplózás hibája nem érinti a feldolgozást
+
+    @app.get("/jobs/history")
+    def job_history(limit: int = 20):
+        """A lezárt feldolgozások naplója (legutóbbi elöl) — újraindítás
+        után is megvan; hibakereséshez és "mi futott le" áttekintéshez."""
+        rows = []
+        try:
+            with open(_jobs_log_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            rows.append(json.loads(line))
+                        except Exception:
+                            pass
+        except FileNotFoundError:
+            pass
+        rows.reverse()
+        return {"jobs": rows[:max(1, min(int(limit), 100))]}
 
     @app.get("/jobs")
     def list_jobs():
@@ -983,6 +1020,7 @@ def create_app():
                 job["status"] = "error"
                 job["error"] = str(e)
                 job["message"] = f"hiba: {e}"
+            _log_job(job)
 
         _threading.Thread(target=_work, daemon=True).start()
         return {"job_id": job_id}
@@ -1644,6 +1682,7 @@ def create_app():
                 job["status"] = "error"
                 job["error"] = str(e)
                 job["message"] = f"hiba: {e}"
+            _log_job(job)
 
         _threading.Thread(target=_work, daemon=True).start()
         return {"job_id": job_id}
