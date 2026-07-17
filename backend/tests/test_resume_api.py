@@ -171,3 +171,36 @@ def test_job_history_logged_and_survives_restart(tmp_path):
     client2 = _TC(create_app())
     h2 = client2.get("/jobs/history").json()["jobs"]
     assert any(j["match_id"] == "napló1" for j in h2)
+
+
+def test_reprocess_with_saved_params(tmp_path):
+    """Az újra-feldolgozás a mentett beállításokkal fut, és az eredmény a
+    régi meccs HELYÉRE kerül; mentett beállítások híján 404."""
+    import tempfile
+
+    video = tmp_path / "re.mp4"
+    _tiny_video(video, frames=10)
+    client = _partial_setup(tempfile.mkdtemp(prefix="hb_re_"), video,
+                            partial=False)
+
+    # Első feldolgozás — ez menti a params-sidecart is.
+    r = client.post("/matches/process",
+                    json={"path": str(video), "match_id": "ujra1",
+                          "stride": 1})
+    _wait_done(client, r.json()["job_id"])
+    first = client.get("/matches/ujra1").json()
+    assert len(first["frames"]) == 10
+
+    # Újra-feldolgozás: ugyanaz a beállítás, ugyanarra az azonosítóra.
+    r2 = client.post("/matches/ujra1/reprocess")
+    assert r2.status_code == 200
+    body = r2.json()
+    assert body["match_id"] == "ujra1"
+    _wait_done(client, body["job_id"])
+    again = client.get("/matches/ujra1").json()
+    assert len(again["frames"]) == 10  # a régi helyére dolgozott
+
+    # Mentett beállítások nélkül érthető hiba.
+    r3 = client.post("/matches/nincs-ilyen/reprocess")
+    assert r3.status_code == 404
+    assert "mentett" in r3.json()["detail"]

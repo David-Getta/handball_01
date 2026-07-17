@@ -950,6 +950,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Hibás feldolgozás újraindítása a mentett beállításokkal — a job a
+  /// sorba kerül, az eredmény a régi meccs helyére dolgozik.
+  Future<void> _reprocess(String matchId) async {
+    try {
+      await _api.reprocessMatch(matchId);
+      await _refreshJobs();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Újra-feldolgozás elindítva: $matchId — lásd a "
+              "feldolgozási sort.")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("$e")));
+    }
+  }
+
   /// Részleges meccs + a folytatásai egy gombbal, időrendben összefűzve —
   /// mivel ugyanabból a videóból jöttek, a lejátszás is megmarad.
   Future<void> _mergeWithContinuation(String id, List<String> contIds) async {
@@ -1369,6 +1386,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: AppText.label.copyWith(
                             fontSize: 11.5, color: AppColors.textPrimary)),
                   ),
+                  // Hibás VIDEÓ-feldolgozás (nem klip/csomag): egy
+                  // kattintással újraindítható a mentett beállításokkal.
+                  if (j["status"] == "error" &&
+                      j["match_id"] != null &&
+                      j["stage"] != "K" &&
+                      j["stage"] != "P")
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _reprocess(j["match_id"] as String),
+                      icon: const Icon(Icons.replay,
+                          size: 16, color: AppColors.accent),
+                      tooltip:
+                          "Újra-feldolgozás a mentett beállításokkal",
+                    ),
                 ]),
               ),
           ],
