@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#131)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#142)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -51,7 +51,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   "fogd meg" kulcs a felderítésben. (#103)
 - **Edzés-fókusz**: a meccs gyengeségeiből következő gyakorlás-javaslatok
   (meccs- és szezon-szinten, visszatérő gyengeségekkel). (#114, #115,
-  #117)
+  #117, #140, #142)
+- **Támadás-hatékonyság**: melyik támadás-típus (lerohanás/gyors/felállt/
+  7a6) mennyire eredményes — összefoglalóban, jelentésben, felderítésben,
+  a meccs-nézetben. (#136, #137, #138, #139)
+- **Átmenet-védekezés**: gyors kapott gólok labdavesztés után (a
+  visszazárás mérőszáma) — kiemeléssel és felderítési kulccsal. (#141,
+  #142)
 
 ### Kliens-élmény
 - **Meccs-sztori idővonal**: gólok, sorozatok, emberelőnyök, 7 a 6,
@@ -74,6 +80,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Jelentés**: xG-blokk, védekezés-blokk zóna-sávokkal, edzés-fókusz,
   kapus 7 m-es oszlop, fejléc-összkép. (#97, #102, #106, #115, #128,
   #131)
+
+### Bemenet-jövőkép (bővítési alap)
+- **TV-közvetítés elő-feldolgozása**: vágás-felismerő + totálkép-szűrő —
+  a vágott közvetítés csak a használható szakaszokból elemezhető (a
+  visszajátszás nem számol duplán gólt). A tévés-út első lépcsője. (#134,
+  #135)
+- **`docs/BROADCAST_AND_SENSORS.md`**: a teljes bemenet-jövőkép —
+  telepített többkamerás + lidaros csarnok-rendszer ÉS a tévés-út
+  lépcsői (auto-kalibráció, eredményjelző-OCR, élő stream). (#134)
 
 ## v0.1.17 és korábbi
 A korábbi kiadások tartalmát a Releases oldal és a PR-történet őrzi:
