@@ -108,3 +108,26 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as d:
         test_exports_selected_types_only(Path(d) / "a")
     print("Minden klip-teszt OK.")
+
+
+def test_new_layer_types_get_hungarian_names(tmp_path):
+    """Az új rétegek klip-típusai (hétméteres/időkérés/csere) magyar
+    fájlnevet kapnak, és a szűrés rájuk is működik."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [
+        {"t": 40, "type": "seven_meter", "team": "home"},
+        {"t": 80, "type": "timeout", "team": "away"},
+        {"t": 120, "type": "substitution", "team": "home"},
+        {"t": 150, "type": "goal", "team": "home"},
+    ]
+    res = export_event_clips(m, events, {"seven_meter", "timeout",
+                                         "substitution"}, tmp_path / "ki")
+    assert res.count == 3
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "hetmeteres" in names
+    assert "idokeres" in names
+    assert "csere" in names
+    assert "gol" not in names  # a gól nem volt kérve

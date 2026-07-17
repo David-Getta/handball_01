@@ -872,6 +872,35 @@ def create_app():
                 events = detect_events(match)
                 ev = [{"t": e.t, "type": e.type.value, "team": e.team.value}
                       for e in events]
+                # Az új elemző rétegek jelenetei is kérhetők klipnek:
+                # hétméteres, időkérés (a leálláshoz vezető jelenet) és
+                # cserehullám — hibatűrően, rétegenként.
+                if "seven_meter" in types:
+                    try:
+                        from ..pipeline.rules import seven_meter_outcomes
+                        ev += [{"t": sm["t"], "type": "seven_meter",
+                                "team": sm["team"]}
+                               for sm in seven_meter_outcomes(match)]
+                    except Exception:
+                        pass
+                if "timeout" in types:
+                    try:
+                        from ..pipeline.stoppages import detect_stoppages
+                        ev += [{"t": st["start_frame"], "type": "timeout",
+                                "team": st["likely_team"] or "home"}
+                               for st in detect_stoppages(match)
+                               if st["kind"] == "időkérés"]
+                    except Exception:
+                        pass
+                if "substitution" in types:
+                    try:
+                        from ..pipeline.substitutions import (
+                            detect_substitutions)
+                        ev += [{"t": sw["t"], "type": "substitution",
+                                "team": sw["team"]}
+                               for sw in detect_substitutions(match)]
+                    except Exception:
+                        pass
 
                 def cb(done, total, msg):
                     job["progress"] = round(done / max(1, total), 3)

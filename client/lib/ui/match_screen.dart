@@ -672,14 +672,26 @@ class _MatchScreenState extends State<MatchScreen> {
   /// pollozzuk, a kész zip-et a felhasználó által választott helyre mentjük.
   Future<void> _exportClips(Match match) async {
     // "Mind" (és támadás-) szűrőnél passz-klipeket nem vágunk (túl sok,
-    // kevés érték) — a klip-export az eseménytípusokból dolgozik.
+    // kevés érték) — a klip-export az eseménytípusokból dolgozik. A
+    // szabály-szűrők a megfelelő klip-típusra képződnek le.
+    const ruleClipTypes = {
+      "rule:7m": "seven_meter",
+      "rule:timeout": "timeout",
+    };
     final types = _eventFilter == "all" || _eventFilter.startsWith("atk:")
         ? ["goal", "shot", "turnover"]
-        : [_eventFilter];
+        : [ruleClipTypes[_eventFilter] ?? _eventFilter];
     if (types.contains("pass") && types.length == 1) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text("Passzokból nem készül klip — válassz gólt, lövést "
               "vagy labdaeladást.")));
+      return;
+    }
+    if (types.first.startsWith("rule:")) {
+      // A hosszú szakaszokból (emberhátrány, passzív) nem vágunk klipet.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Ebből a szűrőből nem készül klip — a hétméteres és "
+              "az időkérés szűrőnél elérhető a vágás.")));
       return;
     }
     setState(() => _exportingClips = true);
