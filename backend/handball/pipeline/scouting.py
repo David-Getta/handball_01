@@ -84,6 +84,9 @@ class ScoutingReport:
     def_goals_against: int = 0
     def_free_shots: int = 0
     def_zones: dict = field(default_factory=dict)
+    # Átmenet-védekezés: gyors kapott gólok labdavesztés után (%).
+    transition_turnovers: int = 0
+    transition_goals_against: int = 0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
     # lövésig jutásuk, ha ő nincs a labdánál ("fogd meg" kulcs).
     playmaker_id: int | None = None
@@ -385,6 +388,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                               f"utáni mérlegük {diff} gól — a forgatásuk "
                               "utáni percekben érdemes rájuk ijeszteni.")
 
+    # Gyenge visszazárásuk: futtass rájuk labdaszerzés után.
+    if (rep.transition_turnovers >= 4
+            and rep.transition_goals_against >= 2):
+        pct = 100.0 * rep.transition_goals_against / rep.transition_turnovers
+        keys.append(f"Gyenge a visszazárásuk (a labdavesztéseik "
+                    f"{pct:.0f}%-a gyors kapott gól) — labdaszerzés után "
+                    "azonnal indíts, keresd a lerohanást.")
+
     # A VÉDEKEZÉSÜK gyengéi: szabad lövések és lyukas zóna — "hova játssz".
     if rep.def_shots_against >= 4:
         free_pct = 100.0 * rep.def_free_shots / rep.def_shots_against
@@ -554,6 +565,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.def_goals_against = drec["goals_against"]
         rep.def_free_shots = drec["free_shots"]
         rep.def_zones = {z: dict(v) for z, v in drec["zones"].items()}
+        from .defense import transition_defense
+        trec = transition_defense(match, config)[team.value]
+        rep.transition_turnovers = trec["turnovers"]
+        rep.transition_goals_against = trec["transition_goals_against"]
     except Exception:
         pass
     try:
@@ -673,6 +688,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         def_shots_against=sum(r.def_shots_against for r in reports),
         def_goals_against=sum(r.def_goals_against for r in reports),
         def_free_shots=sum(r.def_free_shots for r in reports),
+        transition_turnovers=sum(r.transition_turnovers for r in reports),
+        transition_goals_against=sum(r.transition_goals_against for r in reports),
         sub_rotations=sum(r.sub_rotations for r in reports),
         sub_trailing=sum(r.sub_trailing for r in reports),
         sub_after_for=sum(r.sub_after_for for r in reports),
