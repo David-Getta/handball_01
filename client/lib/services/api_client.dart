@@ -569,6 +569,19 @@ class ApiClient {
     return (json["progression"] as Map?)?.cast<String, dynamic>() ?? {};
   }
 
+  /// Gól-idővonal (GET /matches/{id}/momentum → "timeline"): dobott/kapott
+  /// gólok idő-vödrönként.
+  Future<List<Map<String, dynamic>>> fetchScoringTimeline(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/momentum"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) return const [];
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    final tl = (json["timeline"] as Map?)?.cast<String, dynamic>();
+    return ((tl?["buckets"] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+  }
+
   /// Helyzetminőség (GET /matches/{id}/xg): lövésenkénti xG + csapat-
   /// összegzés (várható gól vs tényleges).
   Future<Map<String, dynamic>> fetchXg(String matchId) async {
