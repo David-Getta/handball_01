@@ -125,6 +125,9 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
         *([_metric("Várható gól (xG)", f"{rep.xg:.1f}"),
            _metric("Befejezés (gól−xG)", f"{rep.xg_diff:+.1f}")]
           if getattr(rep, "xg", 0.0) > 0 else []),
+        *([_metric("Szabad lövést enged",
+                   f"{100.0 * rep.def_free_shots / rep.def_shots_against:.0f}%")]
+          if getattr(rep, "def_shots_against", 0) >= 4 else []),
         _metric("Labdaeladás", str(rep.turnovers)),
         _metric("Figurák", str(rep.num_figures)),
     ]
@@ -737,6 +740,44 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
+    # Védekezés: kapott lövések, szabad lövők, lyukas zónák.
+    defense_html = ""
+    try:
+        from .defense import defense_analysis
+        dres = defense_analysis(match)
+        drows = []
+        for side, name in (("home", home), ("away", away)):
+            rec = dres[side]
+            if rec["shots_against"] < 4:
+                continue
+            free = (f'{rec["free_pct"]:.0f}%'
+                    if rec["free_pct"] is not None else "—")
+            worst = rec["worst_zone"] or "—"
+            if rec["worst_zone"]:
+                wz = rec["zones"][rec["worst_zone"]]
+                worst = f'{rec["worst_zone"]} ({wz["goals"]} gól)'
+            drows.append(f"<tr><td>{escape(name)}</td>"
+                         f'<td class="num">{rec["shots_against"]}</td>'
+                         f'<td class="num">{rec["goals_against"]}</td>'
+                         f'<td class="num">{rec["xg_against"]:.1f}</td>'
+                         f'<td class="num"><b>{free}</b></td>'
+                         f"<td>{escape(worst)}</td></tr>")
+        if drows:
+            defense_html = (
+                "<h2>Védekezés (kapott lövések)</h2>"
+                "<table><tr><th>Csapat</th>"
+                '<th class="num">Kapott lövés</th>'
+                '<th class="num">Kapott gól</th>'
+                '<th class="num">Engedett xG</th>'
+                '<th class="num">Szabad lövő</th>'
+                "<th>Leglyukasabb zóna</th></tr>"
+                + "".join(drows) + "</table>"
+                + '<p class="note">Szabad lövő: a lövés pillanatában nem '
+                  'volt védő a lövő 2 m-es körzetében — fedezés-hiba, '
+                  'érdemes videóról visszanézni.</p>')
+    except Exception:
+        pass  # a jelentés e blokk nélkül is teljes
+
     # Kapus-teljesítmény (ha van kapus-jelölés a meccsen).
     gk_html = ""
     try:
@@ -852,6 +893,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   </table>
 
   {xg_html}
+
+  {defense_html}
 
   {gk_html}
 

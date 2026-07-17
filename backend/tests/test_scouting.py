@@ -383,3 +383,50 @@ def test_combine_reports_sums_xg():
     comb = combine_reports([r1, r2])
     assert abs(comb.xg - (r1.xg + r2.xg)) < 0.05
     assert abs(comb.xg_diff - (comb.goals - comb.xg)) < 0.05
+
+
+def _shots_against_match(n_shots=4, free=True):
+    """n_shots HAZAI lövés a +x kapura → az AWAY védekezése kapja őket.
+    free=False esetén egy vendég-védő áll a lövő mellett (0,7 m)."""
+    frames = []
+    t = 0
+    for _ in range(n_shots):
+        for i in range(7):
+            players = [_pl(1, Team.HOME, 33.0, 10.0)]
+            if not free:
+                players.append(_pl(20, Team.AWAY, 32.5, 10.5))
+            else:
+                players.append(_pl(20, Team.AWAY, 33.0, 16.0))  # 6 m-re
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    return Match(_meta(), frames)
+
+
+def test_scout_team_defense_profile():
+    """A felderített csapat védekezés-képe: kapott lövések, szabad lövők,
+    zónák — és a gyengeség/kulcs a szabadon hagyott lövőkről."""
+    rep = scout_team(_shots_against_match(free=True), Team.AWAY)
+    assert rep.def_shots_against >= 4
+    assert rep.def_free_shots == rep.def_shots_against  # mind szabad volt
+    assert rep.def_zones  # zóna-bontás is van
+    assert any("SZABADON" in w for w in rep.weaknesses)
+    assert any("tiszta lövésig" in k for k in rep.keys_to_game)
+    # Fedezett lövéseknél nincs ilyen gyengeség.
+    rep2 = scout_team(_shots_against_match(free=False), Team.AWAY)
+    assert rep2.def_free_shots == 0
+    assert not any("SZABADON" in w for w in rep2.weaknesses)
+
+
+def test_combine_reports_sums_defense():
+    """Összevonásnál a védekezési számok összeadódnak, a zónák egyesülnek."""
+    r1 = scout_team(_shots_against_match(free=True), Team.AWAY)
+    r2 = scout_team(_shots_against_match(free=True), Team.AWAY)
+    comb = combine_reports([r1, r2])
+    assert comb.def_shots_against == r1.def_shots_against + r2.def_shots_against
+    assert comb.def_free_shots == r1.def_free_shots + r2.def_free_shots
+    total = sum(v["shots"] for v in comb.def_zones.values())
+    assert total == comb.def_shots_against

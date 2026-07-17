@@ -156,6 +156,9 @@ def test_report_xg_block():
     assert "Helyzetminőség (várható gól)" in html
     assert "Várható gól (xG)" in html
     assert "#9" in html  # a lövő mezszámmal szerepel
+    # A védekezés-blokk is megjelenik (a vendég kapta a 4 lövést).
+    assert "Védekezés (kapott lövések)" in html
+    assert "Szabad lövő" in html
 
     # Lövés nélküli meccsen a blokk nem jelenik meg.
     empty = Match(MatchMeta(match_id="xr2", home_team="H", away_team="A",
