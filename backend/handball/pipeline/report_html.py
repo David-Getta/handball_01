@@ -161,6 +161,8 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
           if getattr(rep, "possession_pct", 0) else []),
         *([_metric("Gólpassz-vezér", f"{rep.top_assist_count} gólpassz")]
           if getattr(rep, "top_assist_count", 0) >= 2 else []),
+        *([_metric("Véd. nyomás", f"{rep.defensive_pressure_m:.1f} m")]
+          if getattr(rep, "defensive_pressure_m", 0) else []),
         _metric("Figurák", str(rep.num_figures)),
     ]
     # Az új felismerő-rétegek mutatói — csak ha van mögöttük adat.
