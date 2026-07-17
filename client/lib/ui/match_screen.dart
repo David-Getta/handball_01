@@ -678,7 +678,7 @@ class _MatchScreenState extends State<MatchScreen> {
   /// Videóklip-export: a szűrt eseménytípusok jelenetei külön MP4-ekbe,
   /// egy zip-be csomagolva. A vágás a backenden fut (job), a haladást
   /// pollozzuk, a kész zip-et a felhasználó által választott helyre mentjük.
-  Future<void> _exportClips(Match match) async {
+  Future<void> _exportClips(Match match, {List<String>? typesOverride}) async {
     // "Mind" (és támadás-) szűrőnél passz-klipeket nem vágunk (túl sok,
     // kevés érték) — a klip-export az eseménytípusokból dolgozik. A
     // szabály-szűrők a megfelelő klip-típusra képződnek le.
@@ -686,9 +686,10 @@ class _MatchScreenState extends State<MatchScreen> {
       "rule:7m": "seven_meter",
       "rule:timeout": "timeout",
     };
-    final types = _eventFilter == "all" || _eventFilter.startsWith("atk:")
-        ? ["goal", "shot", "turnover"]
-        : [ruleClipTypes[_eventFilter] ?? _eventFilter];
+    final types = typesOverride ??
+        (_eventFilter == "all" || _eventFilter.startsWith("atk:")
+            ? ["goal", "shot", "turnover"]
+            : [ruleClipTypes[_eventFilter] ?? _eventFilter]);
     if (types.contains("pass") && types.length == 1) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text("Passzokból nem készül klip — válassz gólt, lövést "
@@ -910,6 +911,18 @@ class _MatchScreenState extends State<MatchScreen> {
             onPressed: demo || _savingNote ? null : () => _addNote(match),
             icon: const Icon(Icons.add_comment, color: AppColors.accent),
             tooltip: "Jegyzet hozzáadása",
+          ),
+          // A megjelölt pillanatok jelenetei MP4-klipekben — a fájlnévben
+          // a jegyzet szövegével.
+          IconButton(
+            onPressed: demo || _notes.isEmpty || _exportingClips
+                ? null
+                : () => _exportClips(match, typesOverride: ["note"]),
+            icon: _exportingClips
+                ? const SizedBox(width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.movie_outlined, color: AppColors.gold),
+            tooltip: "Jegyzet-klipek exportja (zip)",
           ),
         ]),
       ),
