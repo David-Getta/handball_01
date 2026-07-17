@@ -1765,6 +1765,10 @@ def create_app():
                 _layer("defense", lambda: defense_analysis(match))
                 _layer("rules", lambda: rules_report(match))
                 _layer("momentum", lambda: annotate_runs(match))
+                from ..pipeline.momentum import score_progression
+                _layer("progression", lambda: score_progression(match))
+                from ..pipeline.attack_types import attack_efficiency
+                _layer("attack_efficiency", lambda: attack_efficiency(match))
                 _layer("playmaker", lambda: playmaker_dependency(match))
                 _layer("substitutions", lambda: substitution_impact(match))
                 _layer("stoppages", lambda: timeout_effects(match))
