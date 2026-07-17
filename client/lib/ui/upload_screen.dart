@@ -985,8 +985,8 @@ class _UploadScreenState extends State<UploadScreen> {
                     if (_status == "running") ...[
                       const SizedBox(height: 4),
                       Text(
-                        "Ne zárd be az appot feldolgozás közben — a motor vele "
-                        "együtt leáll, és a munka elveszik.",
+                        "Az app bezárásakor a feldolgozás leáll, de az addig "
+                        "kész rész automatikusan mentésre kerül.",
                         style: AppText.label.copyWith(fontSize: 11, color: AppColors.gold),
                       ),
                     ],
