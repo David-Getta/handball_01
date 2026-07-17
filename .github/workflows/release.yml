@@ -162,6 +162,8 @@ jobs:
             Letöltés után dupla kattintás a `SportMachine-Setup.exe`-re, majd
             Tovább → Telepítés. Részletes (laikus) útmutató: TELEPITES.md.
 
+            Újdonságok e kiadásban: lásd a CHANGELOG.md-t a repó gyökerében.
+
   # A teljes macOS-alkalmazás legyártása (app + beágyazott motor, zip-ben).
   # FIGYELEM: a macOS futtató 10x szorzóval fogyasztja az Actions-percet —
   # ez viszi a kiadási költség ~85%-át; iterálás közben hagyd ki (platforms).
