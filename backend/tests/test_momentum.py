@@ -141,3 +141,98 @@ def test_annotate_accepts_precomputed_runs():
     runs = scoring_runs(m)
     out = annotate_runs(m, runs=runs)
     assert out is runs and all("context" in r for r in out)
+
+
+# ---- Új kontextus-jelek: időkérés + cserehullám ------------------------------
+
+import math as _math
+
+
+def _squad(t, moving=True, exclude=()):
+    """8 mezőnyjátékos (4-4), mozgásban vagy állva — az időkérés-jelhez."""
+    out = []
+    for k in range(8):
+        if (k + 1) in exclude:
+            continue
+        team = Team.HOME if k < 4 else Team.AWAY
+        bx, by = 12.0 + 2.0 * k, 6.0 + (k % 4) * 2.5
+        if moving:
+            bx += 2.0 * _math.sin(t / 5.0 + k)
+            by += 1.5 * _math.cos(t / 4.0 + k)
+        out.append(PlayerPosition(track_id=k + 1, team=team, x=bx, y=by,
+                                  source=PositionSource.MEASURED,
+                                  confidence=1.0))
+    return out
+
+
+def test_run_despite_opponent_timeout():
+    """A hazai széria közben a vendég időt kér, de a sorozat utána is
+    folytatódik → "az ellenfél időkérése ellenére" címke."""
+    frames = []
+    t = 0
+
+    def moving(sec, away_holds=False):
+        nonlocal t
+        for _ in range(int(sec * 25)):
+            players = _squad(t)
+            if away_holds:  # a vendég 5-ös birtokol (ő "kéri" az időt)
+                hp = players[4]
+                ball = Ball(x=hp.x, y=hp.y, confidence=1.0)
+            else:
+                ball = Ball(x=20.0, y=10.0, confidence=1.0)
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+
+    def goal():
+        nonlocal t
+        for i in range(7):
+            frames.append(Frame(t=t, players=_squad(t),
+                                ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            t += 1
+
+    moving(4)
+    goal()          # 1. hazai gól — a sorozat kezdete
+    moving(3)
+    goal()          # 2. gól
+    moving(4, away_holds=True)   # a vendég birtokol az időkérés előtt
+    for _ in range(int(20 * 25)):  # 20 mp állás = időkérés
+        frames.append(Frame(t=t, players=_squad(0, moving=False), ball=None))
+        t += 1
+    moving(3)
+    goal()          # 3. gól — a széria az időkérés UTÁN is megy
+    moving(4)
+
+    runs = annotate_runs(Match(_meta(), frames))
+    assert len(runs) == 1 and runs[0]["length"] == 3
+    assert "az ellenfél időkérése ellenére" in runs[0]["context"]
+
+
+def test_run_after_substitution_wave():
+    """A hazai a széria előtt cserehullámot futott → "cserehullám után"."""
+    frames = []
+    t = 0
+    for _ in range(1000):
+        players = _squad(t)
+        if t <= 200:  # a 20-as track a cserezónába megy, ott tűnik el
+            frac = t / 200.0
+            players.append(PlayerPosition(
+                track_id=20, team=Team.HOME,
+                x=28.0 + (20.0 - 28.0) * frac, y=8.0 + (1.0 - 8.0) * frac,
+                source=PositionSource.MEASURED, confidence=1.0))
+        if t >= 210:  # a 21-es ott jelenik meg, majd beáll
+            frac = min(1.0, (t - 210) / 100.0)
+            players.append(PlayerPosition(
+                track_id=21, team=Team.HOME,
+                x=20.0 + (30.0 - 20.0) * frac, y=1.0 + (12.0 - 1.0) * frac,
+                source=PositionSource.MEASURED, confidence=1.0))
+        # Három hazai gól a csere után (t=300/380/460).
+        ball = Ball(x=20.0, y=10.0, confidence=1.0)
+        for g0 in (300, 380, 460):
+            if g0 <= t < g0 + 7:
+                ball = Ball(x=34.0 + (t - g0), y=10.0, confidence=1.0)
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+
+    runs = annotate_runs(Match(_meta(), frames))
+    assert len(runs) == 1 and runs[0]["team"] == "home"
+    assert "cserehullám után" in runs[0]["context"]
