@@ -132,6 +132,12 @@ def test_goalkeeper_stats_counts_saves_and_conceded():
     assert away["saves"] == 1 and away["conceded"] == 1
     assert away["save_pct"] == 50.0
     assert sum(away["conceded_zones"].values()) == 1
+    # Minden kapura tartó lövés bekerül a zóna-bontásba (védés is), és a
+    # zóna szerinti védés-hatékonyság számolható.
+    assert sum(away["on_target_zones"].values()) == 2
+    assert away["zone_save_pct"]  # legalább egy zónára van érték
+    for zone, pct in away["zone_save_pct"].items():
+        assert 0.0 <= pct <= 100.0
 
 
 def test_goalkeeper_stats_empty_without_role():
