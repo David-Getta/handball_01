@@ -104,6 +104,40 @@ def test_report_includes_attack_mix_section():
     assert "Támadás-mix (típus szerint)" in html
 
 
+def test_report_attack_efficiency_table():
+    """Lerohanás-gólos szintetikus meccsen a támadás-hatékonyság tábla
+    megjelenik a gól-százalékkal."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(tid, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0,
+                              role=role)
+
+    frames = []
+    t = 0
+    for _ in range(2):  # két lerohanás-gól (a tábla legalább 2 támadást kér)
+        for i in range(100):  # lerohanás 22→33
+            x = 22.0 + (33.0 - 22.0) * i / 99.0
+            frames.append(Frame(t=t, players=[pl(1, x, 10.0), pl(9, 1.5, 10.0)],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):  # gól a +x kapura
+            frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):  # szünet a következő támadás előtt (debounce)
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    m = Match(MatchMeta(match_id="ae", home_team="H", away_team="A", fps=25.0),
+              frames)
+    html = match_report_html(m, {}, detect_events(m), None)
+    assert "Támadás-hatékonyság (típusonként)" in html
+    assert "lerohanás" in html
+
+
 def test_report_includes_powerplay_and_seven_meter_sections():
     """Kiállításos + hétméteres szintetikus meccs: mindkét blokk bekerül."""
     from handball.models.tracking import (
