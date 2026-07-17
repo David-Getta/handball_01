@@ -266,9 +266,13 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
         rec = stats.get(key)
         if not rec or not rec["on_target"]:
             continue
-        parts.append(f"a(z) {name} kapusára {rec['on_target']} kapura tartó "
-                     f"lövés érkezett, ebből {rec['saves']} védés "
-                     f"({rec['save_pct']:.0f}%)")
+        sent = (f"a(z) {name} kapusára {rec['on_target']} kapura tartó "
+                f"lövés érkezett, ebből {rec['saves']} védés "
+                f"({rec['save_pct']:.0f}%)")
+        if rec.get("seven_faced"):
+            sent += (f"; hétméteresből {rec['seven_saved']}/"
+                     f"{rec['seven_faced']}-t fogott meg")
+        parts.append(sent)
     if not parts:
         return None
     return {"title": "Kapusok", "body": "; ".join(parts).capitalize() + "."}
