@@ -146,6 +146,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 6b) Gyenge támadás-típus: gyakori, de rosszul konvertáló támadásmód.
+    try:
+        from .attack_types import attack_efficiency
+        eff = attack_efficiency(match, config)
+        _drills = {
+            "felállt támadás": "felállt védelem elleni figurák: beúszás, "
+                               "keresztmozgás, tudatos befejezés-választás",
+            "lerohanás": "lerohanás-befejezés fáradtan: 1-1, 2-1 helyzetek "
+                         "kapura, gyors döntéssel",
+            "gyors indítás": "gyors indítás utáni rendezett befejezés — "
+                             "ne kapkodott lövés",
+            "7 a 6": "7 a 6 elleni figurák: a plusz ember kihasználása "
+                     "idő-kényszerrel",
+        }
+        for side in ("home", "away"):
+            for typ, rec in (eff.get(side) or {}).items():
+                if rec["attacks"] >= 4 and rec["goal_pct"] <= 25.0:
+                    add(side, "támadás", f"Befejezés: {typ}",
+                        f"a(z) {typ} támadásaik {rec['goal_pct']:.0f}%-a lett "
+                        f"gól ({rec['goals']}/{rec['attacks']})",
+                        _drills.get(typ, "az adott támadásmód befejezésének "
+                                    "gyakorlása"))
+    except Exception:
+        pass
+
     # 7) Irányító-függés: a saját támadás egyetlen emberen múlik.
     try:
         from .playmaker import playmaker_dependency

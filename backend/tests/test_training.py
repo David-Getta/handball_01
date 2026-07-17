@@ -115,3 +115,26 @@ def test_library_recurring_focus_endpoint(tmp_path):
     # A hazai (Veszprém) oldalon nincs visszatérő gyengeség ebből a jelből.
     assert "Veszprém" not in r["teams"] or all(
         it["title"] != "Fedezés-fegyelem" for it in r["teams"]["Veszprém"])
+
+
+def test_weak_attack_type_triggers_focus():
+    """Sok felállt támadás gól nélkül → befejezés-fókusz az adott típusra."""
+    frames = []
+    t = 0
+    # 4 felállt támadás lövés/gól nélkül (topogás a 9 m körül).
+    for _ in range(4):
+        for i in range(int(18 * 25)):  # 18 mp felállt
+            x = 30.0 + 0.5 * (i % 3)
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, x, 10.0),
+                _pl(2, Team.HOME, x - 2.0, 6.0),
+                _pl(20, Team.AWAY, 37.0, 8.0),
+                _pl(21, Team.AWAY, 37.0, 12.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(30):  # szünet a következő támadás előtt
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    tf = training_focus(Match(_meta(), frames))
+    home = tf["home"]
+    assert any(it["title"].startswith("Befejezés: felállt") for it in home)
