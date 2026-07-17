@@ -104,6 +104,36 @@ def test_report_includes_attack_mix_section():
     assert "Támadás-mix (típus szerint)" in html
 
 
+def test_report_progression_header_line():
+    """Fordulatos (HHAAA) meccsen a fejlécben megjelenik a meccs íve."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def goal(t0, toward_home_goal):
+        fr = []
+        for i in range(7):
+            x = (6.4 - i) if toward_home_goal else (34.0 + i)
+            fr.append(Frame(t=t0 + i, players=[],
+                            ball=Ball(x=max(0.0, min(40.0, x)), y=10.0,
+                                      confidence=1.0)))
+        return fr
+
+    frames = []
+    t = 0
+    for ch in "HHAAA":
+        frames += goal(t, toward_home_goal=(ch == "A"))
+        t += 8
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="pg", home_team="H", away_team="A", fps=25.0),
+              frames)
+    html = match_report_html(m, {}, detect_events(m), None)
+    assert "fordult" in html
+    assert "legnagyobb előny" in html
+
+
 def test_report_attack_efficiency_table():
     """Lerohanás-gólos szintetikus meccsen a támadás-hatékonyság tábla
     megjelenik a gól-százalékkal."""
