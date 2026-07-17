@@ -950,6 +950,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Rendszer-ellenőrzés: a backend teljes egészség-listája dialógusban.
+  Future<void> _healthCheck() async {
+    Map<String, dynamic> r;
+    try {
+      r = await _api.fetchHealthFull();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("$e")));
+      return;
+    }
+    if (!mounted) return;
+    final checks = ((r["checks"] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+    final allOk = (r["ok"] as bool?) ?? false;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Row(children: [
+          Icon(allOk ? Icons.check_circle : Icons.warning_amber,
+              color: allOk ? AppColors.accent : AppColors.gold, size: 20),
+          const SizedBox(width: 8),
+          const Text("Rendszer-ellenőrzés"),
+        ]),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final c in checks)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                              (c["ok"] as bool?) == true
+                                  ? Icons.check_circle_outline
+                                  : Icons.error_outline,
+                              size: 16,
+                              color: (c["ok"] as bool?) == true
+                                  ? AppColors.accent
+                                  : AppColors.away),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text.rich(TextSpan(children: [
+                              TextSpan(
+                                  text: "${c["name"]}: ",
+                                  style:
+                                      AppText.value.copyWith(fontSize: 12.5)),
+                              TextSpan(
+                                  text: "${c["detail"]}",
+                                  style: AppText.label.copyWith(
+                                      fontSize: 12,
+                                      color: AppColors.textPrimary)),
+                            ])),
+                          ),
+                        ]),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Bezárás")),
+        ],
+      ),
+    );
+  }
+
   /// Hibás feldolgozás újraindítása a mentett beállításokkal — a job a
   /// sorba kerül, az eredmény a régi meccs helyére dolgozik.
   Future<void> _reprocess(String matchId) async {
@@ -1127,6 +1202,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onPressed: _load,
                   icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
                   tooltip: "Lista frissítése",
+                ),
+                // Telepítés-diagnosztika: csomagok, modell, írási jog,
+                // tárhely, kodek — pilot-gépeken az első ellenőrzés.
+                IconButton(
+                  onPressed: _healthCheck,
+                  icon: const Icon(Icons.health_and_safety_outlined,
+                      color: AppColors.textSecondary),
+                  tooltip: "Rendszer-ellenőrzés",
                 ),
               ],
             ),
