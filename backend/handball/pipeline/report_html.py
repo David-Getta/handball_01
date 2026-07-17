@@ -864,9 +864,23 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 f'szabad lövőt enged: {_fp("home")} / {_fp("away")}')
     except Exception:
         pass
+    # A meccs íve: fordulatok + legnagyobb előny (ha volt vezetés-váltás).
+    prog_line = ""
+    try:
+        from .momentum import score_progression
+        prog = score_progression(match)
+        if prog["lead_changes"] >= 1:
+            bl = prog["biggest_lead"]
+            top = home if bl["home"] >= bl["away"] else away
+            top_v = max(bl["home"], bl["away"])
+            prog_line = (f'<div class="sub">A meccs {prog["lead_changes"]}-szor '
+                         f'fordult · legnagyobb előny: {escape(top)} +{top_v}'
+                         '</div>')
+    except Exception:
+        pass
     header_extra = (
-        f'<div class="sub">{" · ".join(header_bits)}</div>'
-        if header_bits else "")
+        (f'<div class="sub">{" · ".join(header_bits)}</div>'
+         if header_bits else "") + prog_line)
 
     # Kapus-teljesítmény (ha van kapus-jelölés a meccsen).
     gk_html = ""
