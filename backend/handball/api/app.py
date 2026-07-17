@@ -1267,6 +1267,16 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return defense_analysis(match)
 
+    @app.get("/matches/{match_id}/playmaker")
+    def get_playmaker(match_id: str):
+        """Irányító-függés: a fő szervező azonosítása, és a vele/nélküle
+        futott támadások eredményességének összevetése csapatonként."""
+        from ..pipeline.playmaker import playmaker_dependency
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return playmaker_dependency(match)
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
