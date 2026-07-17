@@ -219,6 +219,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         const SizedBox(height: AppSpacing.lg),
         _shotZonesCard(r),
         const SizedBox(height: AppSpacing.lg),
+        _defZonesCard(r),
+        const SizedBox(height: AppSpacing.lg),
         if (_playbookMatch != null) ...[
           _playbookCard(_playbookMatch!),
           const SizedBox(height: AppSpacing.lg),
@@ -451,7 +453,40 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     );
   }
 
-  Widget _zoneBar(String zone, Map<String, dynamic> rec, int total) {
+  /// Védekezési zónák: honnan KAPJÁK a lövéseket, és hol hagyják
+  /// szabadon a lövőt — a "hova játssz ellene" képernyős párja a
+  /// nyomtatott jelentés blokkjának.
+  Widget _defZonesCard(Map<String, dynamic> r) {
+    final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>() ?? {};
+    int total = 0;
+    for (final v in zones.values) {
+      total += ((v as Map)["shots"] as num?)?.toInt() ?? 0;
+    }
+    if (zones.isEmpty || total < 4) return const SizedBox.shrink();
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("HONNAN KAPJÁK A LÖVÉSEKET (védekezésük)",
+              style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.md),
+          for (final e in zones.entries)
+            _zoneBar(e.key, (e.value as Map).cast<String, dynamic>(), total,
+                showFree: true),
+          const SizedBox(height: 4),
+          Text("szabad: a lövés pillanatában nem volt védő a lövő 2 m-es "
+              "körzetében",
+              style: AppText.label.copyWith(
+                  fontSize: 10, color: AppColors.textFaint)),
+        ],
+      ),
+    );
+  }
+
+  Widget _zoneBar(String zone, Map<String, dynamic> rec, int total,
+      {bool showFree = false}) {
     final shots = (rec["shots"] as num?)?.toInt() ?? 0;
     final goals = (rec["goals"] as num?)?.toInt() ?? 0;
     final frac = total > 0 ? shots / total : 0.0;
@@ -472,8 +507,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
-        SizedBox(width: 44, child: Text("$goals/$shots",
-            textAlign: TextAlign.right, style: AppText.label.copyWith(fontSize: 12))),
+        SizedBox(
+            width: showFree ? 108 : 44,
+            child: Text(
+                showFree &&
+                        (((rec["free"] as num?)?.toInt() ?? 0) > 0)
+                    ? "$goals/$shots · szabad: ${rec["free"]}"
+                    : "$goals/$shots",
+                textAlign: TextAlign.right,
+                style: AppText.label.copyWith(fontSize: 12))),
       ]),
     );
   }
