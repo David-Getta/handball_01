@@ -243,6 +243,28 @@ def create_app():
         ok, buf = cv2.imencode(".png", frame)
         return Response(content=buf.tobytes(), media_type="image/png")
 
+    @app.get("/broadcast/segments")
+    def broadcast_segments(path: str, stride: int = 5, max: int = 0):
+        """TV-KÖZVETÍTÉS elő-elemzése: vágások + totál/közeli szakaszok.
+
+        A közvetítés (a saját pásztázó kamerával szemben) vágott: totál →
+        közeli → visszajátszás. Ez a végpont a felvételt szakaszokra bontja
+        és megjelöli a HASZNÁLHATÓ (elég hosszú totálkép) szakaszokat — csak
+        ezekből érdemes követést/kalibrációt futtatni, és így a visszajátszás
+        nem számolja duplán a gólt. A tévés-út első lépcsője.
+
+        404: a videó nem olvasható."""
+        import os
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="video not found")
+        from ..pipeline.broadcast import analyze_broadcast
+        try:
+            return analyze_broadcast(path, stride=int(stride),
+                                     max_frames=int(max))
+        except Exception as e:
+            raise HTTPException(status_code=500,
+                                detail=f"a közvetítés-elemzés nem sikerült: {e}")
+
     @app.get("/detect-preview")
     def detect_preview(path: str, t: int = 100, imgsz: int = 1280,
                        calib: str | None = None, region: str = "full",
