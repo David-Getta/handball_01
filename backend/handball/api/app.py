@@ -1452,6 +1452,16 @@ def create_app():
                 poss_home, poss_away = ps["home"]["pct"], ps["away"]["pct"]
         except Exception:
             pass
+        cond_home = cond_away = None
+        try:
+            from ..pipeline.stats import intensity_trend
+            it = intensity_trend(m)
+            if it["home"]["first_ms"]:
+                cond_home = it["home"]["drop_pct"]
+            if it["away"]["first_ms"]:
+                cond_away = it["away"]["drop_pct"]
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -1472,6 +1482,8 @@ def create_app():
             "free_pct_away": free_away,
             "possession_home": poss_home,
             "possession_away": poss_away,
+            "cond_drop_home": cond_home,
+            "cond_drop_away": cond_away,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out
