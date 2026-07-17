@@ -381,11 +381,23 @@ def coach_summary(match: Match) -> dict:
                 f"a(z) {names.get(t, t)} összesen {s_:.0f} mp-et játszott "
                 "kevesebb emberrel" for t, s_ in per.items()))
         if sevens:
-            per7: dict[str, int] = {}
-            for e in sevens:
-                per7[e["team"]] = per7.get(e["team"], 0) + 1
-            parts.append("hétméteres: " + ", ".join(
-                f"{names.get(t, t)} {n}" for t, n in per7.items()))
+            from .rules import seven_meter_summary
+            summ7 = seven_meter_summary(match)
+            bits = []
+            for t in ("home", "away"):
+                rec7 = summ7[t]
+                if not rec7["attempts"]:
+                    continue
+                extra = []
+                if rec7["goals"]:
+                    extra.append(f"{rec7['goals']} gól")
+                if rec7["saved"]:
+                    extra.append(f"{rec7['saved']} védés")
+                if rec7["missed"]:
+                    extra.append(f"{rec7['missed']} kihagyva")
+                bits.append(f"{names.get(t, t)} {rec7['attempts']}"
+                            + (f" ({', '.join(extra)})" if extra else ""))
+            parts.append("hétméteres: " + ", ".join(bits))
         # Emberelőny-hatékonyság: mire váltotta a csapat a kiállításokat.
         from .rules import powerplay_efficiency
         eff = powerplay_efficiency(match)

@@ -513,7 +513,16 @@ class _MatchScreenState extends State<MatchScreen> {
         return [
           for (final e in ((_rules["seven_meters"] as List?) ?? const [])
               .cast<Map<String, dynamic>>())
-            {"label": "Hétméteres", "team": e["team"], "frame": e["t"]},
+            {
+              // A kimenetel a backendről jön (gól/védés/kihagyva) — ha van,
+              // a címkében is látszik.
+              "label": (e["outcome"] as String?) != null &&
+                      e["outcome"] != "ismeretlen"
+                  ? "Hétméteres — ${e["outcome"]}"
+                  : "Hétméteres",
+              "team": e["team"],
+              "frame": e["t"],
+            },
         ];
       case "rule:pp":
         return [

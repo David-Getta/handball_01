@@ -193,12 +193,73 @@ def passive_play_risks(match: Match,
     return out
 
 
+# A 7 m-es után ennyi másodpercen belüli lövést párosítjuk hozzá kimenetelként.
+SEVEN_OUTCOME_WINDOW_S = 6.0
+
+
+def seven_meter_outcomes(match: Match,
+                         config: Optional[TacticsConfig] = None) -> list[dict]:
+    """A felismert hétméteresek KIMENETELLEL: gól / védés / kihagyva.
+
+    A 7 m-es esemény utáni SEVEN_OUTCOME_WINDOW_S-en belüli, ugyanarra a
+    kapura, ugyanattól a csapattól jövő ELSŐ lövés-eseményt párosítjuk
+    hozzá (a lövés-kimenetel a meglévő detect_shots detail-jéből jön).
+    Ha az ablakban nincs lövés, az outcome "ismeretlen" (pl. újra
+    lefújták, vagy a labda nem látszott).
+
+    Visszatérés: [{"t", "team", "goal_x", "outcome", "shooter_id"}]."""
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(SEVEN_OUTCOME_WINDOW_S * fps)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out = []
+    for sm in detect_seven_meters(match, config):
+        rec = dict(sm)
+        rec["outcome"] = "ismeretlen"
+        rec["shooter_id"] = None
+        for e in shots:
+            if not (sm["t"] <= e.t <= sm["t"] + win):
+                continue
+            if e.team.value != sm["team"]:
+                continue
+            rec["outcome"] = ("gól" if e.type == EventType.GOAL else
+                              "védés" if (e.detail or {}).get("outcome") == "save"
+                              else "kihagyva")
+            rec["shooter_id"] = e.player_id
+            break
+        out.append(rec)
+    return out
+
+
+def seven_meter_summary(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hétméteres-mérleg csapatonként: kísérlet / gól / védés / kihagyva."""
+    out = {side: {"attempts": 0, "goals": 0, "saved": 0, "missed": 0}
+           for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        rec = out[sm["team"]]
+        rec["attempts"] += 1
+        if sm["outcome"] == "gól":
+            rec["goals"] += 1
+        elif sm["outcome"] == "védés":
+            rec["saved"] += 1
+        elif sm["outcome"] == "kihagyva":
+            rec["missed"] += 1
+    return out
+
+
 def rules_report(match: Match) -> dict:
     """A szabály-értő réteg összegzése egy hívásban (az API-nak)."""
     return {
         "powerplay": detect_powerplay(match),
         "powerplay_efficiency": powerplay_efficiency(match),
-        "seven_meters": detect_seven_meters(match),
+        # A hétméteresek kimenetellel (gól/védés/kihagyva) mennek ki.
+        "seven_meters": seven_meter_outcomes(match),
+        "seven_meter_summary": seven_meter_summary(match),
         "passive_risk": passive_play_risks(match),
     }
 
