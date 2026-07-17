@@ -529,6 +529,19 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Cserehullámok (GET /matches/{id}/substitutions): ki-be lépések a
+  /// cserezónán át + a cserék utáni 90 mp mérlege.
+  Future<Map<String, dynamic>> fetchSubstitutions(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/substitutions"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni a cseréket: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Védekezés-elemzés (GET /matches/{id}/defense): kapott lövések —
   /// szabadon hagyott lövők, zóna-lyukak, kapott xG.
   Future<Map<String, dynamic>> fetchDefense(String matchId) async {

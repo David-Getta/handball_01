@@ -339,6 +339,24 @@ def coach_summary(match: Match) -> dict:
         pass
 
     try:
+        from .substitutions import substitution_impact
+        si = substitution_impact(match)
+        parts = []
+        for side, name in (("home", home), ("away", away)):
+            rec = si["teams"][side]
+            if not rec["rotations"]:
+                continue
+            parts.append(
+                f"a(z) {name} {rec['rotations']} cserehullámot futott; a "
+                f"cseréket követő másfél percben {rec['goals_for_after']} "
+                f"dobott és {rec['goals_against_after']} kapott gól")
+        if parts:
+            sections.append({"title": "Cserék",
+                             "body": ("; ".join(parts) + ".").capitalize()})
+    except Exception:
+        pass
+
+    try:
         s, hl = _intensity_section(match, home, away)
         if s:
             sections.append(s)
