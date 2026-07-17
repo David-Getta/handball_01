@@ -389,6 +389,24 @@ def coach_summary(match: Match) -> dict:
     except Exception:
         pass
 
+    # Edzés-fókusz: a meccs gyengeségeiből következő gyakorlás (top 3).
+    try:
+        from .training import training_focus
+        tf = training_focus(match)
+        parts = []
+        for side, name in (("home", home), ("away", away)):
+            items = tf.get(side) or []
+            if items:
+                parts.append(f"{name}: " + "; ".join(
+                    f"{it['title'].lower()} ({it['why']})"
+                    for it in items[:3]))
+        if parts:
+            sections.append({
+                "title": "Edzés-fókusz a meccs alapján",
+                "body": ". ".join(parts) + "."})
+    except Exception:
+        pass
+
     try:
         s = _players_section(match, home, away)
         if s:

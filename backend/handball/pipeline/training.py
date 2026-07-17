@@ -1,0 +1,165 @@
+"""Edzés-fókusz javaslatok — a meccs gyengeségeiből következő gyakorlás.
+
+A meccs utáni elemzés akkor ér célba, ha a következő EDZÉST alakítja.
+Ez a réteg a már kiszámolt elemzésekből (védekezés, helyzetminőség,
+hetesek, labdabiztonság, erőnlét, emberelőny, irányító-függés) állít
+össze csapatonként rangsorolt gyakorlás-fókuszokat:
+
+    {"area":  a terület (védekezés/befejezés/...),
+     "title": a fókusz egy mondatban,
+     "why":   a meccs-adat, ami indokolja,
+     "drill": javasolt gyakorlat-típus}
+
+Szándékosan szabály-alapú (nem nyelvi modell): minden javaslat mögött
+kiszámolt szám áll, így az edző ellenőrizheti. A lista rangsorolt, és
+legfeljebb MAX_ITEMS elemű — a fókusz attól fókusz, hogy kevés.
+"""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from ..models.tracking import Match, Team
+from .tactics import TacticsConfig
+
+MAX_ITEMS = 5
+
+
+def training_focus(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...})."""
+    config = config or TacticsConfig()
+    out: dict = {"home": [], "away": []}
+
+    def add(side, area, title, why, drill):
+        if len(out[side]) < MAX_ITEMS:
+            out[side].append({"area": area, "title": title,
+                              "why": why, "drill": drill})
+
+    # 1) Fedezés-fegyelem: sok szabadon hagyott lövő.
+    try:
+        from .defense import defense_analysis
+        d = defense_analysis(match, config)
+        for side in ("home", "away"):
+            rec = d[side]
+            if rec["shots_against"] >= 4 and (rec["free_pct"] or 0) >= 40:
+                add(side, "védekezés", "Fedezés-fegyelem",
+                    f"a kapott lövések {rec['free_pct']:.0f}%-ánál nem volt "
+                    "védő a lövő 2 m-es körzetében",
+                    "2v2/3v3 zárás-lecsúszás, kilépés a lövőre, "
+                    "segítő-visszazárás párban")
+            if rec["worst_zone"] and \
+                    rec["zones"][rec["worst_zone"]]["goals"] >= 2:
+                add(side, "védekezés",
+                    f"Zóna-védekezés: {rec['worst_zone']}",
+                    f"{rec['zones'][rec['worst_zone']]['goals']} kapott gól "
+                    "ebből a zónából",
+                    "a zóna páros-hármas védekezési helyzeteinek ismétlése "
+                    "sokszorozott támadó-befejezéssel")
+    except Exception:
+        pass
+
+    # 2) Befejezés: a helyzetek megvoltak, a gólok nem.
+    try:
+        from .xg import match_xg
+        tx = match_xg(match, config)["teams"]
+        for side in ("home", "away"):
+            rec = tx[side]
+            if rec["shots"] >= 4 and rec["diff"] <= -1.5:
+                add(side, "befejezés", "Befejezés nyomás alatt",
+                    f"a várhatónál {abs(rec['diff']):.1f} góllal kevesebb "
+                    "született a kidolgozott helyzetekből",
+                    "kapura lövés fáradtan/kontakt után, döntéshelyzetes "
+                    "befejező sorozatok időkényszerrel")
+    except Exception:
+        pass
+
+    # 3) Hetesek: kihagyott büntetők.
+    try:
+        from .rules import seven_meter_summary
+        s7 = seven_meter_summary(match, config)
+        for side in ("home", "away"):
+            rec = s7[side]
+            misses = rec["saved"] + rec["missed"]
+            if rec["attempts"] >= 2 and misses * 2 >= rec["attempts"]:
+                add(side, "befejezés", "Hétméteres-rutin",
+                    f"{rec['attempts']} büntetőből {misses} kimaradt",
+                    "hetes-sorozatok meccs-szimulált nyomással "
+                    "(fáradt állapotban, sorrenddel)")
+    except Exception:
+        pass
+
+    # 4) Labdabiztonság: több eladott labda, mint lövés.
+    try:
+        from .event_detection import EventType, detect_events
+        ev = detect_events(match, config)
+        for team, side in ((Team.HOME, "home"), (Team.AWAY, "away")):
+            to = sum(1 for e in ev
+                     if e.type == EventType.TURNOVER and e.team == team)
+            sh = sum(1 for e in ev
+                     if e.type in (EventType.SHOT, EventType.GOAL)
+                     and e.team == team)
+            if to >= 3 and to >= sh:
+                add(side, "támadás", "Labdabiztonság",
+                    f"{to} labdaeladás {sh} kapura lövés mellett",
+                    "passz-folyosós játékok létszámhátrányban, "
+                    "labdavezetés-korlátos kisjátékok")
+    except Exception:
+        pass
+
+    # 5) Erőnlét: nagy intenzitás-esés a hajrára.
+    try:
+        from .stats import compute_intensity_timeline
+        windows = compute_intensity_timeline(match)
+        usable = [w for w in windows
+                  if w["home_avg_ms"] > 0 or w["away_avg_ms"] > 0]
+        third = max(1, len(usable) // 3)
+        if len(usable) >= 3:
+            for side in ("home", "away"):
+                key = f"{side}_avg_ms"
+                start = [w[key] for w in usable[:third] if w[key] > 0]
+                end = [w[key] for w in usable[-third:] if w[key] > 0]
+                if start and end:
+                    s_avg = sum(start) / len(start)
+                    e_avg = sum(end) / len(end)
+                    if s_avg > 0 and (s_avg - e_avg) / s_avg >= 0.12:
+                        drop = 100.0 * (s_avg - e_avg) / s_avg
+                        add(side, "erőnlét", "Meccsvégi állóképesség",
+                            f"az intenzitás a hajrára {drop:.0f}%-kal esett",
+                            "intervallumos állóképesség + a csere-ritmus "
+                            "áttekintése (rövidebb etapok a hajrában)")
+    except Exception:
+        pass
+
+    # 6) Emberelőny: a létszámfölény nem hozott jobb gólarányt.
+    try:
+        from .rules import powerplay_efficiency
+        eff = powerplay_efficiency(match, config)
+        for side in ("home", "away"):
+            rec = eff.get(side)
+            if rec and rec["pp_shots"] >= 3 and rec["eq_shots"] >= 3 \
+                    and rec["pp_eff_pct"] < rec["eq_eff_pct"]:
+                add(side, "támadás", "Emberelőnyös figurák",
+                    f"emberelőnyben {rec['pp_eff_pct']:.0f}% a gólarány, "
+                    f"egyenlő létszámnál {rec['eq_eff_pct']:.0f}%",
+                    "6v5 felállt figurák begyakorlása időkényszerrel")
+    except Exception:
+        pass
+
+    # 7) Irányító-függés: a saját támadás egyetlen emberen múlik.
+    try:
+        from .playmaker import playmaker_dependency
+        pd = playmaker_dependency(match, config)
+        for side in ("home", "away"):
+            rec = pd[side]
+            if rec["dependency"] == "magas":
+                add(side, "támadás", "Második szervező felépítése",
+                    "az irányító nélkül futott támadások lövésig jutása "
+                    f"{100 * (rec['shot_rate_drop'] or 0):.0f} "
+                    "százalékponttal esik",
+                    "támadásszervezés-gyakorlás az első számú irányító "
+                    "nélkül, átlövő/beálló indítási variációk")
+    except Exception:
+        pass
+
+    return out
