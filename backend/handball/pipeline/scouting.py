@@ -73,6 +73,10 @@ class ScoutingReport:
     goals: int = 0
     turnovers: int = 0
     shot_efficiency_pct: float = 0.0
+    # Helyzetminőség: az összes lövésük várható gól-értéke (xG) és a
+    # befejezés-eltérés (gól − xG): pozitív = a helyzeteik felett lőnek.
+    xg: float = 0.0
+    xg_diff: float = 0.0
     # Lövési zónák: zóna -> {"shots": n, "goals": n} — HONNAN lőnek és honnan
     # eredményesek (balszél / beálló / átlövés bal-közép-jobb / jobbszél).
     shot_zones: dict = field(default_factory=dict)
@@ -316,6 +320,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     if rep.turnovers >= 3 and rep.turnovers >= rep.shots:
         weaknesses.append("Sok labdaeladás — agresszív, aktív védekezés kifizetődő ellenük.")
 
+    # Helyzetminőség: a gólarányuknál mélyebb kép — a helyzeteikhez képest
+    # lőnek-e többet/kevesebbet, és milyen minőségű helyzetekig jutnak el.
+    if rep.shots >= 4 and rep.xg > 0:
+        if rep.xg_diff >= 1.5:
+            strengths.append(f"A helyzeteik FELETT teljesítenek "
+                             f"(+{rep.xg_diff:.1f} gól a várhatóhoz képest) — "
+                             "a kis esélyű lövéseiket is belövik.")
+            keys.append("Ne engedj tiszta helyzetet — minden hibát büntetnek.")
+        elif rep.xg_diff <= -1.5:
+            weaknesses.append(f"A helyzeteiknél kevesebbet lőnek "
+                              f"({rep.xg_diff:.1f}) — a befejezésük bizonytalan.")
+        avg_q = rep.xg / rep.shots
+        if avg_q >= 0.45:
+            keys.append("Türelmesen NAGY helyzetekig jutnak — előbb a beúszást "
+                        "és a hatosról jövő lövést zárd le.")
+        elif avg_q <= 0.28:
+            keys.append("Sok kis esélyű (távoli/szélső) lövést vállalnak — "
+                        "belső zónában maradhat szoros a fal.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -454,6 +477,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     except Exception:
         pass
     try:
+        from .xg import match_xg
+        trec = match_xg(match, config)["teams"][team.value]
+        rep.xg = trec["xg"]
+        rep.xg_diff = trec["diff"]
+    except Exception:
+        pass
+    try:
         rep.defense_switches = formation_switch_profile(match, team, config)
     except Exception:
         pass
@@ -532,6 +562,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
         sh_seconds=round(sum(r.sh_seconds for r in reports), 1),
+        xg=round(sum(r.xg for r in reports), 2),
+        xg_diff=round(goals - sum(r.xg for r in reports), 2),
         defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
     # Kapott-gól zónák egyesítése.

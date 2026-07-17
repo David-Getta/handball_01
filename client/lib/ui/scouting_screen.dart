@@ -335,6 +335,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ["Átl. támadáshossz", fmt(r["avg_attack_duration_s"], " s")],
       ["Lövés / gól", "${fmt(r["shots"])} / ${fmt(r["goals"])}"],
       ["Gólarány", fmt(r["shot_efficiency_pct"], "%")],
+      // Helyzetminőség: várható gól + befejezés-eltérés (ha számolható).
+      if (((r["xg"] as num?) ?? 0) > 0) ...[
+        ["Várható gól (xG)", (r["xg"] as num).toStringAsFixed(1)],
+        [
+          "Befejezés (gól−xG)",
+          "${((r["xg_diff"] as num?) ?? 0) >= 0 ? "+" : ""}"
+              "${((r["xg_diff"] as num?) ?? 0).toStringAsFixed(1)}"
+        ],
+      ],
       ["Labdaeladás", fmt(r["turnovers"])],
       ["Figurák", fmt(r["num_figures"])],
     ];
