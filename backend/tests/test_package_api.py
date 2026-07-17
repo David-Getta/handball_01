@@ -54,6 +54,9 @@ def test_package_without_video_contains_report_and_csv():
     """Videó nélkül (szimulált meccs) a csomag jelentés + CSV — a klipek
     hiánya nem végzetes."""
     client, mid = _client_with_match()
+    # Egy jegyzet is kerül a meccshez — a csomagnak ezt is vinnie kell.
+    client.post(f"/matches/{mid}/notes",
+                json={"frame": 10, "text": "fontos pillanat"})
     r = client.post(f"/matches/{mid}/package/export", json={})
     job = _wait_job(client, r.json()["job_id"])
     assert job["status"] == "done", job
@@ -72,6 +75,10 @@ def test_package_without_video_contains_report_and_csv():
     assert "osszefoglalo.txt" in names
     txt = z.read("osszefoglalo.txt").decode("utf-8")
     assert "vs" in txt
+    # A jegyzetek időbélyeggel, sima szövegként (jegyzetek.txt).
+    assert "jegyzetek.txt" in names
+    jtxt = z.read("jegyzetek.txt").decode("utf-8")
+    assert "fontos pillanat" in jtxt and "[" in jtxt
     assert "klipek.zip" not in names  # nincs videó → nincs klip
     html = z.read("jelentes.html").decode("utf-8")
     assert "Meccsjelentés" in html

@@ -31,7 +31,7 @@ MAX_CLIPS = 60  # ésszerű plafon — ennél több klip zip-je már kezelhetetl
 
 _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "seven_meter": "hetmeteres", "timeout": "idokeres",
-            "substitution": "csere"}
+            "substitution": "csere", "note": "jegyzet"}
 
 
 @dataclass
@@ -113,9 +113,13 @@ def export_event_clips(match: Match, events: list, types: set[str],
             continue
 
         game_s = t / fps  # játékidő a feldolgozott szakaszon belül
-        safe_team = re.sub(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+", "_", team_name)
+        # A fájlnév vége: az esemény opcionális címkéje (pl. a jegyzet
+        # szövege), különben a csapatnév.
+        label = _field(e, "label") or team_name
+        safe_label = re.sub(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+", "_",
+                            str(label))[:32].strip("_") or "klip"
         name = (f"{i + 1:02d}_{_TYPE_HU.get(typ, typ)}_{_clock(game_s)}"
-                f"_{safe_team}.mp4")
+                f"_{safe_label}.mp4")
         dest = out_dir / name
 
         if progress_cb:

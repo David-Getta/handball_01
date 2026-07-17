@@ -959,6 +959,16 @@ def create_app():
                                for sw in detect_substitutions(match)]
                     except Exception:
                         pass
+                if "note" in types:
+                    # Az edző saját jegyzetei — a megjelölt pillanat
+                    # jelenete, a jegyzet szövegével a fájlnévben.
+                    try:
+                        ev += [{"t": int(n.get("frame", 0)), "type": "note",
+                                "team": "home",
+                                "label": str(n.get("text", ""))[:40]}
+                               for n in _load_notes(match_id)]
+                    except Exception:
+                        pass
 
                 def cb(done, total, msg):
                     job["progress"] = round(done / max(1, total), 3)
@@ -1609,6 +1619,18 @@ def create_app():
                     z.writestr("statisztika.csv", csv.encode("utf-8"))
                     z.writestr("elemzesek.json",
                                analyses_json.encode("utf-8"))
+                    # Az edzői jegyzetek sima szövegként (időbélyeggel).
+                    notes = _load_notes(match_id)
+                    if notes:
+                        fps_n = match.meta.fps if match.meta.fps > 0 else 25.0
+                        nl = []
+                        for n in sorted(notes,
+                                        key=lambda x: x.get("frame", 0)):
+                            sec = (n.get("frame", 0) or 0) / fps_n
+                            nl.append(f"[{int(sec // 60)}:{int(sec % 60):02d}]"
+                                      f" {n.get('text', '')}")
+                        z.writestr("jegyzetek.txt",
+                                   "\n".join(nl).encode("utf-8"))
                     if summary_txt:
                         z.writestr("osszefoglalo.txt",
                                    summary_txt.encode("utf-8"))

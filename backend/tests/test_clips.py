@@ -131,3 +131,19 @@ def test_new_layer_types_get_hungarian_names(tmp_path):
     assert "idokeres" in names
     assert "csere" in names
     assert "gol" not in names  # a gól nem volt kérve
+
+
+def test_note_clip_uses_label_in_filename(tmp_path):
+    """A jegyzet-klip fájlnevében a jegyzet szövege szerepel (tisztítva)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "note", "team": "home",
+               "label": "szép indítás a szélre!"}]
+    res = export_event_clips(m, events, {"note"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        name = z.namelist()[0]
+    assert "jegyzet" in name
+    assert "szép_indítás" in name
+    assert "!" not in name  # az írásjelek kimaradnak a fájlnévből
