@@ -132,6 +132,11 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
            _metric("Cserék utáni mérleg",
                    f"{rep.sub_after_for - rep.sub_after_against:+d} gól")]
           if getattr(rep, "sub_rotations", 0) >= 2 else []),
+        *([_metric("Irányító-függés",
+                   f"{rep.playmaker_dependency}"
+                   + (f" (−{100 * rep.playmaker_drop:.0f} pont nélküle)"
+                      if rep.playmaker_drop is not None else ""))]
+          if getattr(rep, "playmaker_dependency", None) else []),
         _metric("Labdaeladás", str(rep.turnovers)),
         _metric("Figurák", str(rep.num_figures)),
     ]
