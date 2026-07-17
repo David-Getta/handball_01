@@ -376,7 +376,7 @@ class _UploadScreenState extends State<UploadScreen> {
     try {
       await _api.cancelJob(id);
       if (!mounted) return;
-      setState(() => _message = "megszakítás folyamatban…");
+      setState(() => _message = "leállítás — az eddigi rész mentése…");
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
