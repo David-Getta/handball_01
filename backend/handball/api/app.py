@@ -1078,6 +1078,17 @@ def create_app():
                         goals += 1
             except Exception:
                 pass
+            # Helyzetminőség: a játékos lövéseinek várható gól-értéke ezen a
+            # meccsen — a gól/xG trendből a FORMA látszik (a gólarány önmagában
+            # a helyzetek minőségét is méri, nem csak a befejezést).
+            xg = None
+            try:
+                from ..pipeline.xg import match_xg
+                v = sum(r["xg"] for r in match_xg(match)["shooters"]
+                        if r["player_id"] in tracks)
+                xg = round(v, 2) if v > 0 else None
+            except Exception:
+                pass
             points.append({
                 "match_id": match.meta.match_id,
                 "date": match.meta.date,
@@ -1090,6 +1101,8 @@ def create_app():
                 "shots": shots,
                 "goals": goals,
                 "shot_pct": round(100.0 * goals / shots, 1) if shots else None,
+                "xg": xg,
+                "xg_diff": round(goals - xg, 2) if xg is not None else None,
             })
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey, "points": points}
