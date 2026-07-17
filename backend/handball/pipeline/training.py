@@ -202,4 +202,21 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 9) Laza védekezés: sok tér a lövőnek (magas engedett xG mellett).
+    try:
+        from .defense import defense_analysis, defensive_pressure
+        dp = defensive_pressure(match, config)
+        da = defense_analysis(match, config)
+        for side in ("home", "away"):
+            pr = dp[side]["avg_pressure_m"]
+            if (pr is not None and pr >= 2.5
+                    and da[side]["shots_against"] >= 4):
+                add(side, "védekezés", "Aktívabb kilépés a lövőre",
+                    f"a labdásra átlag {pr:.1f} m-re álltak — sok tér a "
+                    "9 m-es lövéshez",
+                    "kilépés-visszalépés drill, aktív kéz a lövősávban, "
+                    "kettős blokk gyakorlása")
+    except Exception:
+        pass
+
     return out
