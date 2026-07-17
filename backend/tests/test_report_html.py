@@ -33,6 +33,19 @@ def _rep(**kw):
     return ScoutingReport(**base)
 
 
+def test_defense_zone_block():
+    """A védekezési zóna-blokk csak def_zones-szal jelenik meg, a szabad
+    lövések számával a sáv-feliratban."""
+    rep = _rep(def_zones={"beálló (6 m)": {"shots": 5, "goals": 3, "free": 2},
+                          "balszél": {"shots": 2, "goals": 0, "free": 0}})
+    html = scouting_report_html(rep)
+    assert "Honnan kapják a lövéseket" in html
+    assert "3/5 · szabad: 2" in html
+    assert "0/2" in html
+    # def_zones nélkül a blokk nem jelenik meg.
+    assert "Honnan kapják a lövéseket" not in scouting_report_html(_rep())
+
+
 def test_contains_core_content():
     """A HTML tartalmazza a csapatnevet, a kulcsokat és a védőformát."""
     html = scouting_report_html(_rep())

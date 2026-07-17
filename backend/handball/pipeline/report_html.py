@@ -61,6 +61,25 @@ def _shot_zone_bars(zones: dict) -> str:
     return "".join(out)
 
 
+def _def_zone_bars(zones: dict) -> str:
+    """Kapott lövések zónánként: arány-sáv + "gól/lövés · szabad: n"."""
+    if not zones:
+        return '<p class="empty">Nincs elég kapott-lövés minta.</p>'
+    total = sum(int(rec.get("shots", 0)) for rec in zones.values()) or 1
+    out = []
+    for zone, rec in zones.items():
+        shots = int(rec.get("shots", 0))
+        goals = int(rec.get("goals", 0))
+        free = int(rec.get("free", 0))
+        p = max(0.0, min(100.0, 100.0 * shots / total))
+        label = f"{goals}/{shots}" + (f" · szabad: {free}" if free else "")
+        out.append(
+            f'<div class="bar-row"><span class="bar-label">{escape(str(zone))}</span>'
+            f'<span class="bar"><span class="bar-fill gold" style="width:{p:.0f}%"></span></span>'
+            f'<span class="bar-pct">{label}</span></div>')
+    return "".join(out)
+
+
 def _playbook_rows(pm: dict) -> str:
     """Figura-egyezés sorai: melyik MENTETT figurát hányszor játszották."""
     matched = pm.get("matched") or {}
@@ -232,6 +251,9 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
 
   <h2>Honnan lőnek (gól/lövés)</h2>
   {_shot_zone_bars(rep.shot_zones)}
+
+  {("<h2>Honnan kapják a lövéseket (védekezésük)</h2>" + _def_zone_bars(rep.def_zones))
+   if getattr(rep, "def_zones", None) else ""}
 
   {("<h2>Ismert figuráik (a könyvtárunkból)</h2>" + _playbook_rows(playbook_match))
    if playbook_match else ""}
@@ -771,6 +793,12 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                          f'<td class="num">{rec["xg_against"]:.1f}</td>'
                          f'<td class="num"><b>{free}</b></td>'
                          f"<td>{escape(worst)}</td></tr>")
+        dcols = []
+        for side, name in (("home", home), ("away", away)):
+            rec = dres[side]
+            if rec["shots_against"] >= 4 and rec["zones"]:
+                dcols.append(f'<div class="col"><b>{escape(name)}</b>'
+                             + _def_zone_bars(rec["zones"]) + "</div>")
         if drows:
             defense_html = (
                 "<h2>Védekezés (kapott lövések)</h2>"
@@ -781,6 +809,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 '<th class="num">Szabad lövő</th>'
                 "<th>Leglyukasabb zóna</th></tr>"
                 + "".join(drows) + "</table>"
+                + (('<div class="cols">' + "".join(dcols) + "</div>")
+                   if dcols else "")
                 + '<p class="note">Szabad lövő: a lövés pillanatában nem '
                   'volt védő a lövő 2 m-es körzetében — fedezés-hiba, '
                   'érdemes videóról visszanézni.</p>')

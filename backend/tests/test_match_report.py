@@ -159,6 +159,9 @@ def test_report_xg_block():
     # A védekezés-blokk is megjelenik (a vendég kapta a 4 lövést).
     assert "Védekezés (kapott lövések)" in html
     assert "Szabad lövő" in html
+    # A zóna-sávok is: mind a 4 lövés a beállóból jött.
+    assert "beálló (6 m)" in html
+    assert "4/4" in html  # 4 gól / 4 lövés a zóna-sávon
     # A 4 szabadon hagyott lövésből edzés-fókusz javaslat is születik.
     assert "Edzés-fókusz a meccs alapján" in html
     assert "Gyakorlat:" in html
