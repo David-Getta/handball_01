@@ -165,6 +165,9 @@ def test_report_xg_block():
     # A 4 szabadon hagyott lövésből edzés-fókusz javaslat is születik.
     assert "Edzés-fókusz a meccs alapján" in html
     assert "Gyakorlat:" in html
+    # A fejléc-összkép sáv: xG és szabad lövő-arány első pillantásra.
+    assert "várható gól (xG):" in html
+    assert "szabad lövőt enged:" in html
 
     # Lövés nélküli meccsen a blokk nem jelenik meg.
     empty = Match(MatchMeta(match_id="xr2", home_team="H", away_team="A",
