@@ -357,16 +357,22 @@ def coach_summary(match: Match) -> dict:
         pass
 
     try:
-        from .stoppages import detect_stoppages
-        stops = detect_stoppages(match)
+        from .stoppages import timeout_effects
+        stops = timeout_effects(match)
         touts = [s_ for s_ in stops if s_["kind"] == "időkérés"]
         if touts:
             names = {"home": home, "away": away}
             bits = []
             for s_ in touts:
                 who = names.get(s_["likely_team"] or "", "")
-                bits.append(f"{s_['duration_s']:.0f} mp"
-                            + (f" (valószínűleg {who})" if who else ""))
+                bit = (f"{s_['duration_s']:.0f} mp"
+                       + (f" (valószínűleg {who})" if who else ""))
+                # Működött-e: a kapott gólok üteme az időkérés előtt/után.
+                if s_["verdict"]:
+                    bit += (f" — {s_['verdict']} "
+                            f"({s_['conceded_before']} kapott gól előtte, "
+                            f"{s_['conceded_after']} utána)")
+                bits.append(bit)
             sections.append({
                 "title": "Időkérések",
                 "body": (f"{len(touts)} időkérés-szerű játékmegszakítás: "

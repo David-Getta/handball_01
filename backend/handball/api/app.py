@@ -1290,12 +1290,13 @@ def create_app():
     @app.get("/matches/{match_id}/stoppages")
     def get_stoppages(match_id: str):
         """Játékmegszakítások (időkérés-szerű tartós leállások) a mozgás-
-        jelekből, a valószínű kérő csapattal."""
-        from ..pipeline.stoppages import detect_stoppages
+        jelekből, a valószínű kérő csapattal és az időkérés HATÁSÁVAL
+        (előtte/utána kapott gólok, ítélet)."""
+        from ..pipeline.stoppages import timeout_effects
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {"stoppages": detect_stoppages(match)}
+        return {"stoppages": timeout_effects(match)}
 
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):

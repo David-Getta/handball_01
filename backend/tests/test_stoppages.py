@@ -91,3 +91,78 @@ def test_empty_frames_are_not_stoppage():
     """Üres (követés-vesztett) képkockák nem számítanak leállásnak."""
     frames = [Frame(t=t, players=[], ball=None) for t in range(1000)]
     assert detect_stoppages(Match(_meta(), frames)) == []
+
+
+# ---- Időkérés-hatás (megtörte-e a sorozatot) ---------------------------------
+
+from handball.pipeline.stoppages import timeout_effects
+
+
+def _goal_frames(t0, toward_home_goal):
+    """Gól-kockák: a labda a kapuba száguld (8 játékos áll a pályán, hogy a
+    leállás-jel ne zavarodjon össze — ők mozognak közben)."""
+    frames = []
+    for i in range(7):
+        x = (6.4 - i) if toward_home_goal else (34.0 + i)
+        frames.append(Frame(t=t0 + i, players=_players(t0 + i, moving=True),
+                            ball=Ball(x=max(0.0, min(40.0, x)), y=10.0,
+                                      confidence=1.0)))
+    return frames
+
+
+def test_timeout_that_breaks_the_run():
+    """A hazai 2 gólt kap → időkérés → utána nincs kapott gól → "megtörte"."""
+    fps = 25.0
+    frames = []
+    t = 0
+    # Mozgás + 2 vendég-gól (a -x kapura → a HAZAI kapja).
+    for _ in range(int(20 * fps)):
+        players = _players(t, moving=True)
+        hp = players[0]  # a hazai 1-es birtokol (ő "kéri" majd az időt)
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+        t += 1
+    for g in _goal_frames(t, toward_home_goal=True):
+        frames.append(g)
+    t = frames[-1].t + 1
+    for _ in range(int(3 * fps)):  # kis szünet a két gól közt (debounce)
+        players = _players(t, moving=True)
+        hp = players[0]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+        t += 1
+    for g in _goal_frames(t, toward_home_goal=True):
+        frames.append(g)
+    t = frames[-1].t + 1
+    # A hazai birtokol pár mp-ig, majd időkérés (20 mp állás).
+    for _ in range(int(4 * fps)):
+        players = _players(t, moving=True)
+        hp = players[0]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+        t += 1
+    for _ in range(int(20 * fps)):
+        frames.append(Frame(t=t, players=_players(0, moving=False), ball=None))
+        t += 1
+    # Utána mozgás, kapott gól nélkül.
+    for _ in range(int(30 * fps)):
+        frames.append(Frame(t=t, players=_players(t, moving=True),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+
+    effects = [e for e in timeout_effects(Match(_meta(fps), frames))
+               if e["kind"] == "időkérés"]
+    assert len(effects) == 1
+    e = effects[0]
+    assert e["likely_team"] == "home"
+    assert e["conceded_before"] == 2 and e["conceded_after"] == 0
+    assert e["verdict"] == "megtörte a sorozatot"
+
+
+def test_timeout_without_prior_run_has_no_verdict():
+    """Ha az időkérés előtt nem volt kapott gól-sorozat, nincs ítélet."""
+    effects = [e for e in timeout_effects(_match())
+               if e["kind"] == "időkérés"]
+    assert len(effects) == 1
+    assert effects[0]["verdict"] is None
+    assert effects[0]["conceded_before"] == 0
