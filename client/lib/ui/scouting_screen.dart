@@ -395,6 +395,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ["Labdaeladás", fmt(r["turnovers"])],
       if (((r["possession_pct"] as num?) ?? 0) > 0)
         ["Labdabirtoklás", "${(r["possession_pct"] as num).toStringAsFixed(0)}%"],
+      if (((r["top_assist_count"] as num?) ?? 0) >= 2)
+        ["Gólpassz-vezér", "${r["top_assist_count"]} gólpassz"],
       ["Figurák", fmt(r["num_figures"])],
     ];
     return Container(
