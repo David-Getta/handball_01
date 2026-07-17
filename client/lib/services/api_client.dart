@@ -661,7 +661,8 @@ class ApiClient {
   }
 
   /// Támadás-szakaszok típus-címkével + csapatonkénti támadás-mix
-  /// (GET /matches/{id}/attacks): {"attacks": [...], "mix": {...}}.
+  /// (GET /matches/{id}/attacks): {"attacks": [...], "mix": {...},
+  /// "efficiency": {...}}.
   Future<Map<String, dynamic>> fetchAttacks(String matchId) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/matches/$matchId/attacks"))

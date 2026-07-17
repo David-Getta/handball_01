@@ -63,6 +63,8 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic>? _coach;
   // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
   List<Map<String, dynamic>> _attacks = [];
+  // Támadás-hatékonyság csapatonként/típusonként (a /attacks "efficiency").
+  Map<String, dynamic> _attackEff = {};
   // Gól-sorozatok (GET /matches/{id}/momentum) — az eredmény-grafikonon.
   List<Map<String, dynamic>> _momentum = [];
   // Lövőnkénti helyzetminőség (player_id → {shots, goals, xg, diff}).
@@ -135,6 +137,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> notes = [];
     Map<String, dynamic>? coach;
     List<Map<String, dynamic>> attacks = [];
+    Map<String, dynamic> attackEff = {};
     List<Map<String, dynamic>> momentum = [];
     Map<String, dynamic> rules = {};
     List<Map<String, dynamic>> emptyNet = [];
@@ -161,6 +164,7 @@ class _MatchScreenState extends State<MatchScreen> {
         try {
           final r = await _api.fetchAttacks(widget.matchId);
           attacks = (r["attacks"] as List).cast<Map<String, dynamic>>();
+          attackEff = (r["efficiency"] as Map?)?.cast<String, dynamic>() ?? {};
         } catch (_) {
           attacks = []; // támadás-címkék nélkül is teljes a nézet
         }
@@ -257,6 +261,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _notes = notes;
       _coach = coach;
       _attacks = attacks;
+      _attackEff = attackEff;
       _momentum = momentum;
       _rules = rules;
       _emptyNet = emptyNet;
@@ -577,13 +582,18 @@ class _MatchScreenState extends State<MatchScreen> {
             ? (shownAttacks.isEmpty
                 ? Center(child: Text("Nincs ilyen típusú támadás.",
                     style: AppText.label))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    itemCount: shownAttacks.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
-                    itemBuilder: (_, i) =>
-                        _attackRow(shownAttacks[i], fps, match),
-                  ))
+                : Column(children: [
+                    _attackEffBanner(_eventFilter.substring(4), match),
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        itemCount: shownAttacks.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        itemBuilder: (_, i) =>
+                            _attackRow(shownAttacks[i], fps, match),
+                      ),
+                    ),
+                  ]))
             : shown.isEmpty
                 ? Center(
                     child: Text("Nincs ilyen típusú esemény.", style: AppText.label))
@@ -700,6 +710,39 @@ class _MatchScreenState extends State<MatchScreen> {
 
   /// Egy címkézett támadás-szakasz sora: típus + csapat + kezdet/hossz —
   /// koppintásra a lejátszó a szakasz elejére ugrik.
+  /// A kiválasztott támadás-típus hatékonysága csapatonként — a lista
+  /// fölött ("H: 4/5 lövés, 3 gól · 60%"). Üres, ha nincs hatékonyság-adat.
+  Widget _attackEffBanner(String type, Match match) {
+    final rows = <Widget>[];
+    for (final side in ["home", "away"]) {
+      final rec = (_attackEff[side] as Map?)?[type] as Map?;
+      if (rec == null || ((rec["attacks"] as num?) ?? 0) < 1) continue;
+      final name = side == "home" ? match.meta.homeTeam : match.meta.awayTeam;
+      final color = side == "home" ? AppColors.home : AppColors.away;
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Text(
+            "$name: ${rec["shots"]}/${rec["attacks"]} lövésig, "
+            "${rec["goals"]} gól · ${(rec["goal_pct"] as num).toStringAsFixed(0)}% gól",
+            style: AppText.label.copyWith(fontSize: 12, color: color)),
+      ));
+    }
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: rows),
+    );
+  }
+
   Widget _attackRow(Map<String, dynamic> a, double fps, Match match) {
     final start = (a["start_frame"] as num?)?.toInt() ?? 0;
     final durS = (a["duration_s"] as num?)?.toDouble() ?? 0.0;
