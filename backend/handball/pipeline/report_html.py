@@ -905,13 +905,20 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     team_metrics_html = ""
     try:
         from .defense import defensive_pressure, transition_defense
-        from .stats import possession_share
+        from .stats import possession_share, intensity_trend
         ps = possession_share(match)
         dp = defensive_pressure(match)
         td = transition_defense(match)
+        it = intensity_trend(match)
 
         def _cell(v, suf=""):
             return f"{v}{suf}" if v is not None else "—"
+
+        def _drop(side):
+            d = it[side]["drop_pct"]
+            if not it[side]["first_ms"]:
+                return "—"
+            return f"−{d:.0f}%" if d > 0 else f"+{-d:.0f}%"
 
         rows = [
             ("Labdabirtoklás",
@@ -923,6 +930,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             ("Átmenet-gól (labdavesztés után)",
              _cell(td["home"]["transition_goals_against"]),
              _cell(td["away"]["transition_goals_against"])),
+            ("Tempó-esés a 2. félidőre",
+             _drop("home"), _drop("away")),
         ]
         body = "".join(
             f"<tr><td>{escape(lab)}</td>"
