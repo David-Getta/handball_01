@@ -70,6 +70,7 @@ class _MatchScreenState extends State<MatchScreen> {
   // Szabály-réteg (GET /matches/{id}/rules): 7m, emberhátrány, passzív.
   Map<String, dynamic> _rules = {};
   List<Map<String, dynamic>> _emptyNet = [];
+  List<Map<String, dynamic>> _subs = [];
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -132,6 +133,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> momentum = [];
     Map<String, dynamic> rules = {};
     List<Map<String, dynamic>> emptyNet = [];
+    List<Map<String, dynamic>> subs = [];
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
     Map<int, bool> freeByT = {};
@@ -164,6 +166,13 @@ class _MatchScreenState extends State<MatchScreen> {
           emptyNet = await _api.fetchEmptyNet(widget.matchId);
         } catch (_) {
           emptyNet = []; // 7 a 6 réteg nélkül is teljes a nézet
+        }
+        try {
+          final si = await _api.fetchSubstitutions(widget.matchId);
+          subs = ((si["events"] as List?) ?? const [])
+              .cast<Map<String, dynamic>>();
+        } catch (_) {
+          subs = []; // csere-réteg nélkül is teljes a nézet
         }
         try {
           momentum = await _api.fetchMomentum(widget.matchId);
@@ -234,6 +243,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _momentum = momentum;
       _rules = rules;
       _emptyNet = emptyNet;
+      _subs = subs;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -1963,6 +1973,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 sevens: ((_rules["seven_meters"] as List?) ?? const [])
                     .cast<Map<String, dynamic>>(),
                 emptyNets: _emptyNet,
+                subs: _subs,
                 currentFrame: _frameIndex,
                 onSeek: (f) => _seekTimelineTo(match, f),
               ),

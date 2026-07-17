@@ -1277,6 +1277,16 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return playmaker_dependency(match)
 
+    @app.get("/matches/{match_id}/substitutions")
+    def get_substitutions(match_id: str):
+        """Cserehullámok (a cserezónán át ki-be lépő track-ekből) + a
+        cserék utáni 90 mp mérlege (dobott/kapott gól) csapatonként."""
+        from ..pipeline.substitutions import substitution_impact
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return substitution_impact(match)
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
