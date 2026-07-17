@@ -849,6 +849,18 @@ class ApiClient {
     }
   }
 
+  /// Teljes rendszer-ellenőrzés (GET /health/full) — telepítés-
+  /// diagnosztika: csomagok, modell, írási jog, tárhely, kodek.
+  Future<Map<String, dynamic>> fetchHealthFull() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/health/full"))
+        .timeout(const Duration(seconds: 15));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült az ellenőrzés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   Future<List<Map<String, dynamic>>> fetchJobs() async {
     try {
       final resp = await http

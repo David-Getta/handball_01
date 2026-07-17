@@ -66,3 +66,29 @@ if __name__ == "__main__":
     test_skips_occupied_port()
     test_gives_up_after_range_and_returns_start()
     print("Minden port-választó teszt OK.")
+
+
+def test_health_full_checklist():
+    """A teljes egészség-ellenőrzés: minden elem name/ok/detail hármas,
+    és a teszt-környezet alap-ellenőrzései zöldek."""
+    import os
+    import tempfile
+
+    os.environ["HANDBALL_DATA_DIR"] = tempfile.mkdtemp(prefix="hb_health_")
+    from fastapi.testclient import TestClient
+
+    from handball.api.app import create_app
+    client = TestClient(create_app())
+    r = client.get("/health/full")
+    assert r.status_code == 200
+    body = r.json()
+    assert "ok" in body and isinstance(body["checks"], list)
+    names = {c["name"] for c in body["checks"]}
+    for c in body["checks"]:
+        assert set(c) == {"name", "ok", "detail"}
+    assert "Adatmappa írható" in names
+    assert "Videó-írás (mp4v)" in names
+    by_name = {c["name"]: c for c in body["checks"]}
+    assert by_name["Adatmappa írható"]["ok"] is True
+    assert by_name["OpenCV (videó-kezelés)"]["ok"] is True
+    assert by_name["Meccskönyvtár"]["ok"] is True

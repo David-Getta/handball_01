@@ -108,6 +108,98 @@ def create_app():
         """Életjel — a kliens ezzel ellenőrzi, hogy a backend elérhető."""
         return {"status": "ok"}
 
+    @app.get("/health/full")
+    def health_full():
+        """Teljes rendszer-ellenőrzés — a pilot-telepítések gyors
+        diagnosztikája egyetlen hívásban.
+
+        Minden ellenőrzés {"name", "ok", "detail"} — a kliens listaként
+        mutatja. A súlyfájl-ellenőrzés NEM tölt le semmit, csak a helyi
+        jelölteket nézi (első futásnál a letöltés a feldolgozáskor
+        történik)."""
+        import os
+        import shutil
+
+        checks: list[dict] = []
+
+        def add(name, ok, detail):
+            checks.append({"name": name, "ok": bool(ok),
+                           "detail": str(detail)})
+
+        # 1) Python-környezet: a kulcs-csomagok betölthetők-e.
+        for mod, label in (("cv2", "OpenCV (videó-kezelés)"),
+                           ("numpy", "NumPy (számítás)"),
+                           ("ultralytics", "Ultralytics YOLO (detektor)")):
+            try:
+                m = __import__(mod)
+                add(label, True, getattr(m, "__version__", "elérhető"))
+            except Exception as e:
+                add(label, False, f"nem tölthető be: {e}")
+
+        # 2) Inferencia-eszköz (CUDA / Apple GPU / CPU).
+        try:
+            import sys as _sys
+            from pathlib import Path as _P
+            backend_dir = str(_P(__file__).resolve().parents[2])
+            if backend_dir not in _sys.path:
+                _sys.path.insert(0, backend_dir)
+            from scripts.process_video import _pick_device, _weights_ok
+            add("Inferencia-eszköz", True, _pick_device())
+            # 3) Modell-súly: van-e ÉP helyi példány (letöltés nélkül).
+            candidates = []
+            env_dir = os.environ.get("HANDBALL_WEIGHTS_DIR")
+            if env_dir:
+                candidates.append(_P(env_dir) / "yolov8n.pt")
+            candidates.append(data_root() / "weights" / "yolov8n.pt")
+            found = next((c for c in candidates
+                          if c.exists() and _weights_ok(str(c))), None)
+            add("Modell-súlyfájl (yolov8n)", found is not None,
+                str(found) if found else
+                "nincs helyi példány — az első feldolgozáskor letöltődik")
+        except Exception as e:
+            add("Inferencia-eszköz", False, str(e))
+
+        # 4) Adatmappa írható-e (könyvtár, jegyzetek, napló ide kerül).
+        try:
+            probe = data_root() / "data" / ".health_probe"
+            probe.parent.mkdir(parents=True, exist_ok=True)
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            add("Adatmappa írható", True, str(data_root()))
+        except Exception as e:
+            add("Adatmappa írható", False, f"{data_root()} — {e}")
+
+        # 5) Szabad tárhely az adatmappán (a klip/csomag-exporthoz kell).
+        try:
+            free_gb = shutil.disk_usage(str(data_root())).free / 1e9
+            add("Szabad tárhely", free_gb >= 2.0, f"{free_gb:.1f} GB")
+        except Exception as e:
+            add("Szabad tárhely", False, str(e))
+
+        # 6) Videó-írás (mp4v kodek) — a klipvágás ezen múlik.
+        try:
+            import tempfile
+
+            import cv2
+            import numpy as np
+            with tempfile.TemporaryDirectory() as td:
+                out = str(Path(td) / "probe.mp4")
+                vw = cv2.VideoWriter(out,
+                                     cv2.VideoWriter_fourcc(*"mp4v"),
+                                     25.0, (64, 48))
+                vw.write(np.zeros((48, 64, 3), np.uint8))
+                vw.release()
+                ok_write = Path(out).exists() and Path(out).stat().st_size > 0
+            add("Videó-írás (mp4v)", ok_write,
+                "működik" if ok_write else "a klipvágás nem fog menni")
+        except Exception as e:
+            add("Videó-írás (mp4v)", False, str(e))
+
+        # 7) Könyvtár-állapot.
+        add("Meccskönyvtár", True, f"{len(_store)} meccs betöltve")
+
+        return {"ok": all(c["ok"] for c in checks), "checks": checks}
+
     async def upload_video(request, filename: str = "match.mp4"):
         """Meccsvideó feltöltése (nyers bájt-folyam a törzsben, `filename` query).
 
