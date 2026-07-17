@@ -77,6 +77,13 @@ class ScoutingReport:
     # befejezés-eltérés (gól − xG): pozitív = a helyzeteik felett lőnek.
     xg: float = 0.0
     xg_diff: float = 0.0
+    # A VÉDEKEZÉSÜK képe (defense.py): mennyi lövést engednek, ebből
+    # mennyi volt SZABAD (nem volt védő a lövő 2 m-es körzetében), és
+    # zónánként hol lyukas a faluk — ebből jön a "hova játssz" kulcs.
+    def_shots_against: int = 0
+    def_goals_against: int = 0
+    def_free_shots: int = 0
+    def_zones: dict = field(default_factory=dict)
     # Lövési zónák: zóna -> {"shots": n, "goals": n} — HONNAN lőnek és honnan
     # eredményesek (balszél / beálló / átlövés bal-közép-jobb / jobbszél).
     shot_zones: dict = field(default_factory=dict)
@@ -339,6 +346,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append("Sok kis esélyű (távoli/szélső) lövést vállalnak — "
                         "belső zónában maradhat szoros a fal.")
 
+    # A VÉDEKEZÉSÜK gyengéi: szabad lövések és lyukas zóna — "hova játssz".
+    if rep.def_shots_against >= 4:
+        free_pct = 100.0 * rep.def_free_shots / rep.def_shots_against
+        if free_pct >= 40.0:
+            weaknesses.append(f"A lövők {free_pct:.0f}%-át SZABADON hagyják — "
+                              "türelmes körbejátszással kijön a tiszta lövés.")
+            keys.append("Járasd a labdát a tiszta lövésig — gyakran marad "
+                        "őrizetlen a lövő ellenük.")
+        worst = max(rep.def_zones.items(),
+                    key=lambda kv: (kv[1]["goals"], kv[1]["shots"]),
+                    default=(None, None))[0] if rep.def_zones else None
+        if worst and rep.def_zones[worst]["goals"] >= 2:
+            keys.append(f"A faluk itt lyukas: {worst} "
+                        f"({rep.def_zones[worst]['goals']} kapott gól) — "
+                        "ide szervezz befejezést.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -484,6 +507,15 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     except Exception:
         pass
     try:
+        from .defense import defense_analysis
+        drec = defense_analysis(match, config)[team.value]
+        rep.def_shots_against = drec["shots_against"]
+        rep.def_goals_against = drec["goals_against"]
+        rep.def_free_shots = drec["free_shots"]
+        rep.def_zones = {z: dict(v) for z, v in drec["zones"].items()}
+    except Exception:
+        pass
+    try:
         rep.defense_switches = formation_switch_profile(match, team, config)
     except Exception:
         pass
@@ -564,12 +596,23 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sh_seconds=round(sum(r.sh_seconds for r in reports), 1),
         xg=round(sum(r.xg for r in reports), 2),
         xg_diff=round(goals - sum(r.xg for r in reports), 2),
+        def_shots_against=sum(r.def_shots_against for r in reports),
+        def_goals_against=sum(r.def_goals_against for r in reports),
+        def_free_shots=sum(r.def_free_shots for r in reports),
         defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
     # Kapott-gól zónák egyesítése.
     for r in reports:
         for z, n in r.gk_conceded_zones.items():
             rep.gk_conceded_zones[z] = rep.gk_conceded_zones.get(z, 0) + n
+    # Védekezési zónák egyesítése (kapott lövés/gól/szabad zónánként).
+    for r in reports:
+        for z, v in r.def_zones.items():
+            m = rep.def_zones.setdefault(z, {"shots": 0, "goals": 0, "free": 0})
+            for k in ("shots", "goals", "free"):
+                m[k] += v.get(k, 0)
+    rep.def_zones = dict(sorted(rep.def_zones.items(),
+                                key=lambda kv: -kv[1]["shots"]))
 
     # Támadás-mix egyesítése: a támadás-számmal súlyozott átlag.
     total_atk = sum(max(1, r.attacks) for r in reports)

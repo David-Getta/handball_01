@@ -323,6 +323,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     );
   }
 
+  /// A felderített csapat leglyukasabb védekezési zónája (legtöbb kapott
+  /// gól, döntetlennél lövés) — a "hova játssz" gyors jele.
+  String? _worstZone(Map<String, dynamic> r) {
+    final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
+    if (zones == null || zones.isEmpty) return null;
+    String? best;
+    var bestKey = const [-1, -1];
+    zones.forEach((z, v) {
+      final m = (v as Map).cast<String, dynamic>();
+      final key = [((m["goals"] as num?) ?? 0).toInt(),
+                   ((m["shots"] as num?) ?? 0).toInt()];
+      if (key[0] > bestKey[0] ||
+          (key[0] == bestKey[0] && key[1] > bestKey[1])) {
+        bestKey = key;
+        best = z;
+      }
+    });
+    final g = bestKey[0];
+    return g >= 2 ? "$best ($g gól)" : best;
+  }
+
   Widget _metricsCard(Map<String, dynamic> r) {
     // FONTOS: a segédfüggvény neve NEM lehet "num" — az kitakarná a beépített
     // num típust (fordítási hiba volt az első CI-buildben).
@@ -335,6 +356,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ["Átl. támadáshossz", fmt(r["avg_attack_duration_s"], " s")],
       ["Lövés / gól", "${fmt(r["shots"])} / ${fmt(r["goals"])}"],
       ["Gólarány", fmt(r["shot_efficiency_pct"], "%")],
+      // A védekezésük gyengéi: szabad lövés-arány + leglyukasabb zóna.
+      if (((r["def_shots_against"] as num?) ?? 0) >= 4) ...[
+        [
+          "Szabad lövést enged",
+          "${(100.0 * ((r["def_free_shots"] as num?) ?? 0) / (r["def_shots_against"] as num)).toStringAsFixed(0)}%"
+        ],
+        if (_worstZone(r) != null) ["Lyukas zóna", _worstZone(r)!],
+      ],
       // Helyzetminőség: várható gól + befejezés-eltérés (ha számolható).
       if (((r["xg"] as num?) ?? 0) > 0) ...[
         ["Várható gól (xG)", (r["xg"] as num).toStringAsFixed(1)],
