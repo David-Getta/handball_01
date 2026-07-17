@@ -81,3 +81,38 @@ def test_zones_and_worst_zone():
     assert "beálló (6 m)" in d["zones"]
     assert d["worst_zone"] == "beálló (6 m)"
     assert d["xg_against"] > 0
+
+
+def test_transition_defense_counts_fast_goals():
+    """Labdaeladás → az ellenfél gólja 8 mp-en belül = átmenet-gól."""
+    from handball.pipeline.defense import transition_defense
+
+    frames = []
+    t = 0
+    # A hazai birtokol, majd a vendég szerzi meg (labdaeladás a hazainak).
+    frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0)],
+                        ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+    t += 1
+    frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 20.0, 10.0)],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    t += 1
+    # Hézag: a vendég vezeti a labdát ~1 mp-ig (a lövés-közeli labdaeladás-
+    # elnyomás miatt kell távolság a labdaeladás és a lövés között), de a
+    # gól még a 8 mp-es átmenet-ablakon belül van.
+    for i in range(25):
+        bx = 20.0 - i * 0.4
+        frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, bx, 10.0)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        t += 1
+    # A vendég gólt lő a -x (x=0) kapura (a hazai kapujára).
+    for i in range(7):
+        frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 7.0, 10.0)],
+                            ball=Ball(x=max(0.0, 6.4 - i), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    td = transition_defense(Match(_meta(), frames))
+    assert td["home"]["turnovers"] >= 1
+    assert td["home"]["transition_goals_against"] >= 1
+    assert td["home"]["pct"] > 0
+    # A vendég nem vesztett labdát ebben a jelenetben.
+    assert td["away"]["transition_goals_against"] == 0

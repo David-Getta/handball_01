@@ -1609,11 +1609,14 @@ def create_app():
     def get_defense(match_id: str):
         """Védekezés-elemzés: kapott lövések — szabadon hagyott lövők,
         zóna-lyukak, kapott xG (csapatonként, a védekező szemszögéből)."""
-        from ..pipeline.defense import defense_analysis
+        from ..pipeline.defense import (defense_analysis,
+                                        transition_defense)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return defense_analysis(match)
+        res = defense_analysis(match)
+        res["transition"] = transition_defense(match)
+        return res
 
     @app.get("/matches/{match_id}/playmaker")
     def get_playmaker(match_id: str):
