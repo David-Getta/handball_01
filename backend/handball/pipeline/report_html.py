@@ -157,6 +157,8 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
                       if rep.playmaker_drop is not None else ""))]
           if getattr(rep, "playmaker_dependency", None) else []),
         _metric("Labdaeladás", str(rep.turnovers)),
+        *([_metric("Labdabirtoklás", f"{rep.possession_pct:.0f}%")]
+          if getattr(rep, "possession_pct", 0) else []),
         _metric("Figurák", str(rep.num_figures)),
     ]
     # Az új felismerő-rétegek mutatói — csak ha van mögöttük adat.

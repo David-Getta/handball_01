@@ -87,6 +87,8 @@ class ScoutingReport:
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (%).
     transition_turnovers: int = 0
     transition_goals_against: int = 0
+    # Labdabirtoklás-arány (a felderített csapaté, %).
+    possession_pct: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
     # lövésig jutásuk, ha ő nincs a labdánál ("fogd meg" kulcs).
     playmaker_id: int | None = None
@@ -569,6 +571,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         trec = transition_defense(match, config)[team.value]
         rep.transition_turnovers = trec["turnovers"]
         rep.transition_goals_against = trec["transition_goals_against"]
+        from .stats import possession_share
+        rep.possession_pct = possession_share(match, config)[team.value]["pct"]
     except Exception:
         pass
     try:
@@ -690,6 +694,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         def_free_shots=sum(r.def_free_shots for r in reports),
         transition_turnovers=sum(r.transition_turnovers for r in reports),
         transition_goals_against=sum(r.transition_goals_against for r in reports),
+        possession_pct=round(
+            sum(r.possession_pct for r in reports if r.possession_pct)
+            / max(1, sum(1 for r in reports if r.possession_pct)), 1),
         sub_rotations=sum(r.sub_rotations for r in reports),
         sub_trailing=sum(r.sub_trailing for r in reports),
         sub_after_for=sum(r.sub_after_for for r in reports),
