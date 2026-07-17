@@ -97,7 +97,11 @@ def annotate_runs(match: Match, runs: Optional[list[dict]] = None,
     - "az ellenfél védekezés-váltása után" — az ellenfél épp formát
       váltott (az új felállás még nem ült össze);
     - "az ellenfél tempó-esése mellett" — az ellenfél mozgás-sebessége a
-      sorozat alatt a saját meccs-átlaga alá esett (fáradás jele).
+      sorozat alatt a saját meccs-átlaga alá esett (fáradás jele);
+    - "az ellenfél időkérése ellenére" — az ellenfél a sorozat közben időt
+      kért, de a széria az időkérés UTÁN is folytatódott;
+    - "cserehullám után" — a sorozatot futó csapat közvetlenül előtte
+      frissített (cserehullám a felvezető ablakban).
 
     A jelek egymástól függetlenek, több is állhat egy sorozat mellett;
     jel nélkül a context üres lista. Minden részelemzés hibatűrő: egy
@@ -124,9 +128,14 @@ def annotate_runs(match: Match, runs: Optional[list[dict]] = None,
     from .rules import detect_powerplay
     from .scouting import formation_switch_profile
     from .stats import compute_intensity_timeline
+    from .stoppages import detect_stoppages
+    from .substitutions import detect_substitutions
 
     powerplays = _safe(detect_powerplay, match)
     empty_nets = _safe(detect_empty_net, match, config)
+    timeouts = [t_ for t_ in _safe(detect_stoppages, match, config)
+                if t_["kind"] == "időkérés"]
+    sub_waves = _safe(detect_substitutions, match, config)
     switches = {t: _safe(formation_switch_profile, match, t, config)
                 for t in (Team.HOME, Team.AWAY)}
     intensity = _safe(compute_intensity_timeline, match)
@@ -166,6 +175,19 @@ def annotate_runs(match: Match, runs: Optional[list[dict]] = None,
         # Az ellenfél védekezés-váltása közvetlenül a sorozat előtt/alatt.
         if any(w0 <= s["t"] <= w1 for s in switches.get(opp_team, [])):
             ctx.append("az ellenfél védekezés-váltása után")
+
+        # Az ellenfél időt kért a sorozat közben, de a széria az időkérés
+        # UTÁN is folytatódott (jött még gól) — a megszakítás nem segített.
+        if any(t_["likely_team"] == opp
+               and r["start_frame"] <= t_["start_frame"] <= w1
+               and t_["end_frame"] < w1
+               for t_ in timeouts):
+            ctx.append("az ellenfél időkérése ellenére")
+
+        # A sorozatot futó csapat közvetlenül előtte frissített (csere).
+        if any(sw["team"] == team and w0 <= sw["t"] <= r["start_frame"]
+               for sw in sub_waves):
+            ctx.append("cserehullám után")
 
         # Az ellenfél tempó-esése: a sorozattal átfedő intenzitás-ablakokban
         # az átlagsebessége érezhetően a meccs-átlaga alatt volt.
