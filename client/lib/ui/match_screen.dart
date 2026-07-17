@@ -29,6 +29,7 @@ import "pass_network_painter.dart";
 import "shell/app_shell.dart";
 import "shot_map_painter.dart";
 import "stats_panel.dart";
+import "story_timeline.dart";
 import "summary_panel.dart";
 import "video_panel.dart";
 
@@ -68,6 +69,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<int, Map<String, dynamic>> _xgShooters = {};
   // Szabály-réteg (GET /matches/{id}/rules): 7m, emberhátrány, passzív.
   Map<String, dynamic> _rules = {};
+  List<Map<String, dynamic>> _emptyNet = [];
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -129,6 +131,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> attacks = [];
     List<Map<String, dynamic>> momentum = [];
     Map<String, dynamic> rules = {};
+    List<Map<String, dynamic>> emptyNet = [];
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
     Map<int, bool> freeByT = {};
@@ -156,6 +159,11 @@ class _MatchScreenState extends State<MatchScreen> {
           rules = await _api.fetchRules(widget.matchId);
         } catch (_) {
           rules = {}; // szabály-réteg nélkül is teljes a nézet
+        }
+        try {
+          emptyNet = await _api.fetchEmptyNet(widget.matchId);
+        } catch (_) {
+          emptyNet = []; // 7 a 6 réteg nélkül is teljes a nézet
         }
         try {
           momentum = await _api.fetchMomentum(widget.matchId);
@@ -225,6 +233,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _attacks = attacks;
       _momentum = momentum;
       _rules = rules;
+      _emptyNet = emptyNet;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -1892,6 +1901,18 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
+  /// A sztori-sávon koppintott helyre ugrás (a videó-lejátszóval együtt).
+  void _seekTimelineTo(Match match, int frame) {
+    setState(() {
+      _timer?.cancel();
+      _playing = false;
+      _frameIndex = frame.clamp(0, match.frames.length - 1);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _videoKey.currentState?.seekTo(match.meta.videoSecondsOfFrame(_frameIndex));
+    });
+  }
+
   Widget _controls(Match match) {
     final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
     return Row(
@@ -1919,6 +1940,24 @@ class _MatchScreenState extends State<MatchScreen> {
         ),
         Expanded(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // Meccs-sztori sáv: gólok, sorozatok, emberelőnyök, 7 a 6 és
+            // hétméteresek egy idővonalon — koppintásra odaugrik a lejátszó.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: StoryTimeline(
+                totalFrames: match.frames.length,
+                fps: fps,
+                events: _events,
+                runs: _momentum,
+                powerplays: ((_rules["powerplay"] as List?) ?? const [])
+                    .cast<Map<String, dynamic>>(),
+                sevens: ((_rules["seven_meters"] as List?) ?? const [])
+                    .cast<Map<String, dynamic>>(),
+                emptyNets: _emptyNet,
+                currentFrame: _frameIndex,
+                onSeek: (f) => _seekTimelineTo(match, f),
+              ),
+            ),
             Slider(
               value: _frameIndex.toDouble(),
               min: 0,
