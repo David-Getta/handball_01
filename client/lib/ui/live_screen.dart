@@ -167,6 +167,50 @@ class _LiveScreenState extends State<LiveScreen> {
                 "kényszeríts ritmusváltást vagy lövést.")));
       }
     } catch (_) {}
+    // Gól-sorozatok: a széria lezárultakor jelzés az okokkal — élőben ez
+    // az "időt kell kérni / váltani kell" pillanat.
+    try {
+      for (final r in await _api.fetchMomentum(matchId)) {
+        final team = names[r["team"]] ?? "";
+        final ctx = ((r["context"] as List?) ?? const []).cast<String>();
+        out.add(_FeedEntry(
+            (r["end_frame"] as num?)?.toInt() ?? 0,
+            Suggestion(
+                5,
+                "momentum",
+                "${r["length"]}-0-s sorozat: $team elhúzott"
+                "${ctx.isNotEmpty ? " (${ctx.first})" : ""} — időkérés vagy "
+                "védekezés-váltás jöhet.")));
+      }
+    } catch (_) {}
+    // Cserehullámok: a forgatás utáni első támadás a legérzékenyebb.
+    try {
+      final si = await _api.fetchSubstitutions(matchId);
+      for (final ev in ((si["events"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()) {
+        final team = names[ev["team"]] ?? "";
+        out.add(_FeedEntry(
+            (ev["t"] as num?)?.toInt() ?? 0,
+            Suggestion(3, "csere",
+                "Cserehullám: $team frissít — az első támadásukra dupla "
+                "figyelem, a friss sor tempót válthat.")));
+      }
+    } catch (_) {}
+    // Időkérések: a folytatásban gyakran vált a védekezés.
+    try {
+      for (final st in await _api.fetchStoppages(matchId)) {
+        if (st["kind"] != "időkérés") continue;
+        final team = names[st["likely_team"]] ?? "";
+        out.add(_FeedEntry(
+            (st["start_frame"] as num?)?.toInt() ?? 0,
+            Suggestion(
+                4,
+                "taktika",
+                "Időkérés${team.isNotEmpty ? " ($team)" : ""} — a "
+                "folytatásban figyeld a felállást: gyakran itt jön a "
+                "védekezés-váltás.")));
+      }
+    } catch (_) {}
     out.sort((a, b) => a.frame.compareTo(b.frame));
     return out;
   }
