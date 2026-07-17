@@ -90,6 +90,12 @@ class ScoutingReport:
     playmaker_involvement_pct: float = 0.0
     playmaker_drop: float | None = None
     playmaker_dependency: str | None = None
+    # Csere-minták (substitutions.py): hány cserehullámot futnak, ebből
+    # hány jött HÁTRÁNYBAN, és mi a cserék utáni 90 mp gól-mérlege.
+    sub_rotations: int = 0
+    sub_trailing: int = 0
+    sub_after_for: int = 0
+    sub_after_against: int = 0
     # Lövési zónák: zóna -> {"shots": n, "goals": n} — HONNAN lőnek és honnan
     # eredményesek (balszél / beálló / átlövés bal-közép-jobb / jobbszél).
     shot_zones: dict = field(default_factory=dict)
@@ -361,6 +367,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         keys.append("Fogd meg az irányítót (emberfogás/korai kontakt) — "
                     "nélküle leáll a támadásépítésük.")
 
+    # Csere-mintáik: mikor forgatnak, és mit hoznak a cseréik.
+    if rep.sub_rotations >= 2:
+        trail_pct = 100.0 * rep.sub_trailing / rep.sub_rotations
+        diff = rep.sub_after_for - rep.sub_after_against
+        if trail_pct >= 70.0:
+            keys.append("Jellemzően hátrányban forgatnak — a cserehullámuk "
+                        "után friss sorra és tempóváltásra készülj.")
+        if diff >= 2:
+            strengths.append(f"A cseréik frissítést hoznak: a cserehullámok "
+                             f"utáni mérlegük +{diff} gól.")
+        elif diff <= -2:
+            weaknesses.append(f"A cserehullámaik után megingnak: a cserék "
+                              f"utáni mérlegük {diff} gól — a forgatásuk "
+                              "utáni percekben érdemes rájuk ijeszteni.")
+
     # A VÉDEKEZÉSÜK gyengéi: szabad lövések és lyukas zóna — "hova játssz".
     if rep.def_shots_against >= 4:
         free_pct = 100.0 * rep.def_free_shots / rep.def_shots_against
@@ -540,6 +561,30 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     except Exception:
         pass
     try:
+        from .substitutions import substitution_impact
+        goals_sorted = sorted(
+            (e.t, e.team) for e in detect_events(match, config)
+            if e.type == EventType.GOAL)
+
+        def _margin_at(t: int) -> int:
+            own = sum(1 for gt, gteam in goals_sorted
+                      if gt <= t and gteam == team)
+            opp = sum(1 for gt, gteam in goals_sorted
+                      if gt <= t and gteam != team)
+            return own - opp
+
+        si = substitution_impact(match, config)
+        for ev in si["events"]:
+            if ev["team"] != team.value:
+                continue
+            rep.sub_rotations += 1
+            if _margin_at(ev["t"]) < 0:
+                rep.sub_trailing += 1
+            rep.sub_after_for += ev["goals_for_after"]
+            rep.sub_after_against += ev["goals_against_after"]
+    except Exception:
+        pass
+    try:
         rep.defense_switches = formation_switch_profile(match, team, config)
     except Exception:
         pass
@@ -623,6 +668,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         def_shots_against=sum(r.def_shots_against for r in reports),
         def_goals_against=sum(r.def_goals_against for r in reports),
         def_free_shots=sum(r.def_free_shots for r in reports),
+        sub_rotations=sum(r.sub_rotations for r in reports),
+        sub_trailing=sum(r.sub_trailing for r in reports),
+        sub_after_for=sum(r.sub_after_for for r in reports),
+        sub_after_against=sum(r.sub_after_against for r in reports),
         defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
     # Kapott-gól zónák egyesítése.

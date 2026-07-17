@@ -128,6 +128,10 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
         *([_metric("Szabad lövést enged",
                    f"{100.0 * rep.def_free_shots / rep.def_shots_against:.0f}%")]
           if getattr(rep, "def_shots_against", 0) >= 4 else []),
+        *([_metric("Cserehullám", str(rep.sub_rotations)),
+           _metric("Cserék utáni mérleg",
+                   f"{rep.sub_after_for - rep.sub_after_against:+d} gól")]
+          if getattr(rep, "sub_rotations", 0) >= 2 else []),
         _metric("Labdaeladás", str(rep.turnovers)),
         _metric("Figurák", str(rep.num_figures)),
     ]

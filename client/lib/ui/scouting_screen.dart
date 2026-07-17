@@ -356,6 +356,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ["Átl. támadáshossz", fmt(r["avg_attack_duration_s"], " s")],
       ["Lövés / gól", "${fmt(r["shots"])} / ${fmt(r["goals"])}"],
       ["Gólarány", fmt(r["shot_efficiency_pct"], "%")],
+      // Csere-minták: hány hullám, és mit hoznak a cseréik.
+      if (((r["sub_rotations"] as num?) ?? 0) >= 2) ...[
+        ["Cserehullám", "${r["sub_rotations"]}"],
+        [
+          "Cserék utáni mérleg",
+          "${(((r["sub_after_for"] as num?) ?? 0) - ((r["sub_after_against"] as num?) ?? 0)) >= 0 ? "+" : ""}"
+              "${((r["sub_after_for"] as num?) ?? 0) - ((r["sub_after_against"] as num?) ?? 0)} gól"
+        ],
+      ],
       // Irányító-függés: mennyire épül minden a fő szervezőre.
       if (r["playmaker_dependency"] != null) ...[
         [
