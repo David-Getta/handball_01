@@ -90,6 +90,20 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
             total = sum(assists.values())
             body += (f" {total} gól előtt gólpassz is azonosítható; "
                      f"a legtöbbet {label} adta ({top_n}).")
+            # A legerősebb gól-páros (ha van bejáratott kapcsolat).
+            from .event_detection import assist_network
+            net = assist_network(match)
+            best = None
+            for side in ("home", "away"):
+                for pr in net[side]["pairs"]:
+                    if best is None or pr["goals"] > best["goals"]:
+                        best = pr
+            if best and best["goals"] >= 2:
+                tof, jof = _team_of_track(match), _jersey_of_track(match)
+                lf = _player_label(best["from"], tof, jof, home, away)
+                lt = _player_label(best["to"], tof, jof, home, away)
+                body += (f" A legerősebb gól-páros: {lf} → {lt} "
+                         f"({best['goals']} gól).")
     except Exception:
         pass
     return {"title": "Gólok és lövések", "body": body}
