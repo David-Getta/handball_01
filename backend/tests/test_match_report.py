@@ -126,3 +126,40 @@ def test_report_includes_powerplay_and_seven_meter_sections():
     html = match_report_html(m, {}, [], None)
     assert "Kiállítások és emberelőny" in html
     assert "Hétméteresek" in html
+
+
+def test_report_xg_block():
+    """Legalább 4 lövésnél megjelenik a Helyzetminőség blokk a lövő-táblával;
+    kevés lövésnél nem."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0,
+                              jersey_number=9)
+
+    frames = []
+    t = 0
+    for _ in range(4):  # 4 hazai lövés a +x kapura, mind a 9-es játékostól
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[], ball=Ball(x=20.0, y=10.0,
+                                                       confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="xr", home_team="H", away_team="A", fps=25.0),
+              frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Helyzetminőség (várható gól)" in html
+    assert "Várható gól (xG)" in html
+    assert "#9" in html  # a lövő mezszámmal szerepel
+
+    # Lövés nélküli meccsen a blokk nem jelenik meg.
+    empty = Match(MatchMeta(match_id="xr2", home_team="H", away_team="A",
+                            fps=25.0),
+                  [Frame(t=i, players=[], ball=None) for i in range(10)])
+    assert "Helyzetminőség (várható gól)" not in \
+        match_report_html(empty, {}, [], None)
