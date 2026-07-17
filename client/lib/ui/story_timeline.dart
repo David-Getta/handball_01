@@ -19,6 +19,7 @@ class StoryTimeline extends StatelessWidget {
   final List<Map<String, dynamic>> sevens;     // hétméteres jelölők
   final List<Map<String, dynamic>> emptyNets;  // 7 a 6 szakaszok
   final List<Map<String, dynamic>> subs;       // cserehullám-jelölők
+  final List<Map<String, dynamic>> stoppages;  // időkérés/megszakítás sávok
   final int currentFrame;
   final void Function(int frame)? onSeek;
 
@@ -32,6 +33,7 @@ class StoryTimeline extends StatelessWidget {
     this.sevens = const [],
     this.emptyNets = const [],
     this.subs = const [],
+    this.stoppages = const [],
     this.currentFrame = 0,
     this.onSeek,
   });
@@ -39,7 +41,8 @@ class StoryTimeline extends StatelessWidget {
   bool get _hasContent =>
       events.any((e) => e["type"] == "goal") ||
       runs.isNotEmpty || powerplays.isNotEmpty ||
-      sevens.isNotEmpty || emptyNets.isNotEmpty || subs.isNotEmpty;
+      sevens.isNotEmpty || emptyNets.isNotEmpty || subs.isNotEmpty ||
+      stoppages.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +65,7 @@ class StoryTimeline extends StatelessWidget {
               sevens: sevens,
               emptyNets: emptyNets,
               subs: subs,
+              stoppages: stoppages,
               currentFrame: currentFrame,
             ),
           ),
@@ -78,6 +82,8 @@ class StoryTimeline extends StatelessWidget {
         if (sevens.isNotEmpty) _legend(AppColors.gold, "7 m"),
         if (subs.isNotEmpty)
           _legend(AppColors.textFaint, "csere"),
+        if (stoppages.isNotEmpty)
+          _legend(AppColors.textFaint.withOpacity(0.5), "időkérés"),
       ]),
     ]);
   }
@@ -108,6 +114,7 @@ class _StoryPainter extends CustomPainter {
   final List<Map<String, dynamic>> sevens;
   final List<Map<String, dynamic>> emptyNets;
   final List<Map<String, dynamic>> subs;
+  final List<Map<String, dynamic>> stoppages;
   final int currentFrame;
 
   _StoryPainter({
@@ -118,6 +125,7 @@ class _StoryPainter extends CustomPainter {
     required this.sevens,
     required this.emptyNets,
     required this.subs,
+    required this.stoppages,
     required this.currentFrame,
   });
 
@@ -133,6 +141,14 @@ class _StoryPainter extends CustomPainter {
         RRect.fromRectAndRadius(
             Rect.fromLTWH(0, midY - 1.5, size.width, 3), const Radius.circular(2)),
         Paint()..color = AppColors.surfaceAlt);
+
+    // Megszakítások (időkérés): szürke sáv — a játék állt.
+    for (final w in stoppages) {
+      final a = _x((w["start_frame"] as num?) ?? 0, size);
+      final b = _x((w["end_frame"] as num?) ?? 0, size);
+      canvas.drawRect(Rect.fromLTRB(a, 2, b <= a ? a + 2 : b, size.height - 2),
+          Paint()..color = AppColors.textFaint.withOpacity(0.18));
+    }
 
     // Gól-sorozat sávok: teljes magasságú, halvány csapatszínű hátterek.
     for (final r in runs) {
@@ -225,5 +241,6 @@ class _StoryPainter extends CustomPainter {
       old.powerplays != powerplays ||
       old.sevens != sevens ||
       old.emptyNets != emptyNets ||
-      old.subs != subs;
+      old.subs != subs ||
+      old.stoppages != stoppages;
 }

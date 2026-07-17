@@ -357,6 +357,25 @@ def coach_summary(match: Match) -> dict:
         pass
 
     try:
+        from .stoppages import detect_stoppages
+        stops = detect_stoppages(match)
+        touts = [s_ for s_ in stops if s_["kind"] == "időkérés"]
+        if touts:
+            names = {"home": home, "away": away}
+            bits = []
+            for s_ in touts:
+                who = names.get(s_["likely_team"] or "", "")
+                bits.append(f"{s_['duration_s']:.0f} mp"
+                            + (f" (valószínűleg {who})" if who else ""))
+            sections.append({
+                "title": "Időkérések",
+                "body": (f"{len(touts)} időkérés-szerű játékmegszakítás: "
+                         + "; ".join(bits) + ". A megszakítás körüli "
+                         "jeleneteket a sztori-sávról érdemes visszanézni.")})
+    except Exception:
+        pass
+
+    try:
         s, hl = _intensity_section(match, home, away)
         if s:
             sections.append(s)

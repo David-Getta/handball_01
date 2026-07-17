@@ -71,6 +71,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic> _rules = {};
   List<Map<String, dynamic>> _emptyNet = [];
   List<Map<String, dynamic>> _subs = [];
+  List<Map<String, dynamic>> _stoppages = [];
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -134,6 +135,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic> rules = {};
     List<Map<String, dynamic>> emptyNet = [];
     List<Map<String, dynamic>> subs = [];
+    List<Map<String, dynamic>> stoppages = [];
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
     Map<int, bool> freeByT = {};
@@ -173,6 +175,11 @@ class _MatchScreenState extends State<MatchScreen> {
               .cast<Map<String, dynamic>>();
         } catch (_) {
           subs = []; // csere-réteg nélkül is teljes a nézet
+        }
+        try {
+          stoppages = await _api.fetchStoppages(widget.matchId);
+        } catch (_) {
+          stoppages = []; // megszakítás-réteg nélkül is teljes a nézet
         }
         try {
           momentum = await _api.fetchMomentum(widget.matchId);
@@ -244,6 +251,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _rules = rules;
       _emptyNet = emptyNet;
       _subs = subs;
+      _stoppages = stoppages;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -1974,6 +1982,7 @@ class _MatchScreenState extends State<MatchScreen> {
                     .cast<Map<String, dynamic>>(),
                 emptyNets: _emptyNet,
                 subs: _subs,
+                stoppages: _stoppages,
                 currentFrame: _frameIndex,
                 onSeek: (f) => _seekTimelineTo(match, f),
               ),
