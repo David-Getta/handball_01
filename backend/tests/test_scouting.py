@@ -430,3 +430,40 @@ def test_combine_reports_sums_defense():
     assert comb.def_free_shots == r1.def_free_shots + r2.def_free_shots
     total = sum(v["shots"] for v in comb.def_zones.values())
     assert total == comb.def_shots_against
+
+
+def _sub_pattern_match():
+    """Vendég gól (t=100) → hazai cserehullám hátrányban (t≈200-210) →
+    hazai gól a csere után (t=300)."""
+    frames = []
+    for t in range(600):
+        players = [_pl(1, Team.HOME, 25.0, 10.0),
+                   _pl(2, Team.AWAY, 15.0, 10.0)]
+        if t <= 200:  # az 5-ös a cserezóna felé tart, ott tűnik el
+            frac = t / 200.0
+            players.append(_pl(5, Team.HOME, 28.0 + (20.0 - 28.0) * frac,
+                               8.0 + (1.0 - 8.0) * frac))
+        if t >= 210:  # a 6-os a cserezónában jelenik meg
+            frac = min(1.0, (t - 210) / 100.0)
+            players.append(_pl(6, Team.HOME, 20.0 + (30.0 - 20.0) * frac,
+                               1.0 + (12.0 - 1.0) * frac))
+        ball = Ball(x=20.0, y=10.0, confidence=1.0)
+        if 100 <= t < 107:  # vendég gól a -x kapura
+            ball = Ball(x=max(0.0, 6.4 - (t - 100)), y=10.0, confidence=1.0)
+        if 300 <= t < 307:  # hazai gól a +x kapura
+            ball = Ball(x=min(40.0, 34.0 + (t - 300)), y=10.0, confidence=1.0)
+        frames.append(Frame(t=t, players=players, ball=ball))
+    return Match(_meta(), frames)
+
+
+def test_scout_team_substitution_patterns():
+    """A felderítés méri a cserehullámokat: darab, hátrányban-e, utó-mérleg."""
+    rep = scout_team(_sub_pattern_match(), Team.HOME)
+    assert rep.sub_rotations == 1
+    assert rep.sub_trailing == 1        # a hullám 0-1-nél jött
+    assert rep.sub_after_for == 1       # a csere után jött hazai gól
+    assert rep.sub_after_against == 0
+    # Összevonásnál a számok összeadódnak.
+    comb = combine_reports([rep, scout_team(_sub_pattern_match(), Team.HOME)])
+    assert comb.sub_rotations == 2 and comb.sub_trailing == 2
+    assert comb.sub_after_for == 2
