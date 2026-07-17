@@ -184,3 +184,35 @@ def test_short_burst_filtered():
     from handball.pipeline.goalkeeper import detect_empty_net
     # 2 mp-es szakasz a 3 mp-es küszöb alatt marad.
     assert detect_empty_net(_empty_net_match(gk_far=True, seconds=2)) == []
+
+
+def test_goalkeeper_seven_meter_balance():
+    """A kapus-statisztika a hétméteres-mérleget is hozza: hány büntetővel
+    nézett szembe (seven_faced) és mennyit fogott (seven_saved)."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import goalkeeper_stats
+
+    def pl(tid, team, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y, role=role)
+
+    frames = []
+    t = 0
+    # Hazai hétméteres a +x kapura: álló labda a 7 m-es ponton (33, 10)...
+    for _ in range(30):
+        frames.append(Frame(t=t, players=[
+            pl(1, Team.HOME, 32.0, 10.0),
+            pl(90, Team.AWAY, 39.5, 10.0, role="kapus"),
+        ], ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    # ...majd a lövést a vendég kapus fogja (a labda a kapusnál áll meg).
+    for i in range(7):
+        frames.append(Frame(t=t, players=[
+            pl(1, Team.HOME, 32.0, 10.0),
+            pl(90, Team.AWAY, 39.0, 10.0, role="kapus"),
+        ], ball=Ball(x=min(34.0 + i, 39.0), y=10.0, confidence=1.0)))
+        t += 1
+    stats = goalkeeper_stats(_match(frames))
+    rec = stats["away"]
+    assert rec["seven_faced"] == 1
+    assert rec["seven_saved"] == 1
+    assert rec["saves"] >= 1  # a normál védés-statisztikában is benne van

@@ -791,17 +791,22 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             zones = ", ".join(f"{z}: {n}" for z, n in
                               sorted(rec["conceded_zones"].items(),
                                      key=lambda kv: -kv[1])) or "—"
+            seven = (f"{rec.get('seven_saved', 0)}/{rec.get('seven_faced', 0)}"
+                     if rec.get("seven_faced") else "—")
             rows.append(f"<tr><td>{name}</td>"
                         f"<td class='num'>{rec['on_target']}</td>"
                         f"<td class='num'>{rec['saves']}</td>"
                         f"<td class='num'>{rec['conceded']}</td>"
                         f"<td class='num'><b>{rec['save_pct']:.0f}%</b></td>"
+                        f"<td class='num'>{seven}</td>"
                         f"<td>{escape(zones)}</td></tr>")
         if rows:
             gk_html = ("<h2>Kapus-teljesítmény</h2><table>"
                        "<tr><th>Csapat</th><th class='num'>Kapura</th>"
                        "<th class='num'>Védés</th><th class='num'>Kapott</th>"
-                       "<th class='num'>Védés%</th><th>Kapott gólok zónái</th></tr>"
+                       "<th class='num'>Védés%</th>"
+                       "<th class='num'>7 m-es (fogott/kapott)</th>"
+                       "<th>Kapott gólok zónái</th></tr>"
                        + "".join(rows) + "</table>")
     except Exception:
         pass

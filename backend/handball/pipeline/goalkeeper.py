@@ -94,8 +94,10 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
     hatékonyság, és a KAPOTT gólok zóna-bontása (honnan verhető).
 
     Visszatérés: {"home"/"away": {"track_id", "on_target", "saves",
-    "conceded", "save_pct", "conceded_zones": {zóna: db}}} — csak azok a
-    csapatok szerepelnek, ahol van kapus-jelölés.
+    "conceded", "save_pct", "conceded_zones": {zóna: db},
+    "seven_faced", "seven_saved"}} — a hétméteres-mérleg a kapus
+    szemszögéből (hány büntetővel nézett szembe / mennyit fogott).
+    Csak azok a csapatok szerepelnek, ahol van kapus-jelölés.
     """
     from ..models.tracking import Team
     from .event_detection import EventType, detect_shots
@@ -116,7 +118,8 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
     for team, tid in gk_of_team.items():
         out[team.value] = {"track_id": tid, "on_target": 0, "saves": 0,
                            "conceded": 0, "save_pct": 0.0,
-                           "conceded_zones": {}}
+                           "conceded_zones": {},
+                           "seven_faced": 0, "seven_saved": 0}
 
     for e in detect_shots(match, config):
         defending = Team.AWAY if e.team == Team.HOME else Team.HOME
@@ -137,6 +140,21 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
                 goal_x = config.attacks_toward_x(e.team)
                 z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)
                 rec["conceded_zones"][z] = rec["conceded_zones"].get(z, 0) + 1
+
+    # Hétméteresek a kapus szemszögéből: a VÉDEKEZŐ (kapus-) csapathoz
+    # írjuk, hány büntetővel nézett szembe és mennyit fogott meg.
+    try:
+        from .rules import seven_meter_outcomes
+        for sm in seven_meter_outcomes(match, config):
+            defending = Team.AWAY if sm["team"] == "home" else Team.HOME
+            rec = out.get(defending.value)
+            if rec is None or sm["outcome"] == "ismeretlen":
+                continue
+            rec["seven_faced"] += 1
+            if sm["outcome"] == "védés":
+                rec["seven_saved"] += 1
+    except Exception:
+        pass  # a mérleg nélkül is teljes a kapus-statisztika
 
     for rec in out.values():
         if rec["on_target"]:
