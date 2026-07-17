@@ -542,6 +542,19 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Edzés-fókusz javaslatok (GET /matches/{id}/training): csapatonként
+  /// rangsorolt gyakorlás-fókuszok (terület, fókusz, indok, gyakorlat).
+  Future<Map<String, dynamic>> fetchTraining(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/training"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni az edzés-fókuszt: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Játékmegszakítások (GET /matches/{id}/stoppages): időkérés-szerű
   /// tartós leállások a valószínű kérő csapattal.
   Future<List<Map<String, dynamic>>> fetchStoppages(String matchId) async {

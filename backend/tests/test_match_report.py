@@ -159,6 +159,9 @@ def test_report_xg_block():
     # A védekezés-blokk is megjelenik (a vendég kapta a 4 lövést).
     assert "Védekezés (kapott lövések)" in html
     assert "Szabad lövő" in html
+    # A 4 szabadon hagyott lövésből edzés-fókusz javaslat is születik.
+    assert "Edzés-fókusz a meccs alapján" in html
+    assert "Gyakorlat:" in html
 
     # Lövés nélküli meccsen a blokk nem jelenik meg.
     empty = Match(MatchMeta(match_id="xr2", home_team="H", away_team="A",
