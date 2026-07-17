@@ -258,3 +258,37 @@ def aggregate_by_jersey(stats: dict, team_of: dict, jersey_of: dict,
         g["track_ids"].sort()
     out.sort(key=lambda g: g["distance_m"], reverse=True)
     return out
+
+
+def possession_share(match: Match, config=None) -> dict:
+    """Labdabirtoklás-arány csapatonként.
+
+    Kockánként megnézzük, melyik csapaté a labda (possession_team), és a
+    birtoklott kockákat összegezzük. Visszatérés:
+    {"home", "away": {"frames", "seconds", "pct"}, "contested_pct"} —
+    a pct a MEGHATÁROZOTT birtoklású kockákra vetített arány; a
+    contested_pct a se-nem-egyik (szabad labda / nincs labda) kockák
+    aránya az egészhez. Kevés adatnál nulla értékek."""
+    from .tactics import TacticsConfig, possession_team
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    home = away = neither = 0
+    for f in match.frames:
+        t = possession_team(f, config)
+        if t == Team.HOME:
+            home += 1
+        elif t == Team.AWAY:
+            away += 1
+        else:
+            neither += 1
+    determined = home + away
+    total = home + away + neither
+    out = {
+        "home": {"frames": home, "seconds": round(home / fps, 1),
+                 "pct": round(100.0 * home / determined, 1) if determined else 0.0},
+        "away": {"frames": away, "seconds": round(away / fps, 1),
+                 "pct": round(100.0 * away / determined, 1) if determined else 0.0},
+        "contested_pct": round(100.0 * neither / total, 1) if total else 0.0,
+    }
+    return out
