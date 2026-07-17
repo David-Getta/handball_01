@@ -151,3 +151,57 @@ def test_powerplay_efficiency_empty_without_suspension():
     from handball.pipeline.rules import powerplay_efficiency
     m = Match(_meta(), _roster_frames(0, 90, 6, 6))
     assert powerplay_efficiency(m) == {}
+
+
+# ---- Hétméteres KIMENETEL (gól / védés / kihagyva) ---------------------------
+
+from handball.pipeline.rules import seven_meter_outcomes, seven_meter_summary
+
+
+def _seven_then_shot(goal=True, save=False):
+    """Hazai hétméteres a +x kapura (1 mp álló labda a 7 m-es ponton), majd
+    lövés: gól (y=10), védés (y=10 előtt kapus) vagy mellé (y=5)."""
+    frames = []
+    t = 0
+    for _ in range(30):  # álló labda a (33, 10) ponton — 7 m a 40-es kaputól
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    y = 10.0 if (goal or save) else 5.0
+    for i in range(7):  # a lövés
+        players = [_pl(1, Team.HOME, 32.0, 10.0)]
+        if save:
+            players.append(PlayerPosition(track_id=90, team=Team.AWAY,
+                                          x=39.0, y=10.0, role="kapus",
+                                          source=PositionSource.MEASURED,
+                                          confidence=1.0))
+        bx = min(34.0 + i, 39.0 if save else 40.0)
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=bx, y=y, confidence=1.0)))
+        t += 1
+    return Match(_meta(), frames)
+
+
+def test_seven_meter_goal_outcome():
+    out = seven_meter_outcomes(_seven_then_shot(goal=True))
+    assert len(out) == 1
+    assert out[0]["team"] == "home" and out[0]["outcome"] == "gól"
+    summ = seven_meter_summary(_seven_then_shot(goal=True))
+    assert summ["home"] == {"attempts": 1, "goals": 1, "saved": 0, "missed": 0}
+
+
+def test_seven_meter_missed_outcome():
+    out = seven_meter_outcomes(_seven_then_shot(goal=False))
+    assert len(out) == 1
+    assert out[0]["outcome"] == "kihagyva"
+
+
+def test_seven_meter_no_shot_is_unknown():
+    """Ha az ablakban nincs lövés (pl. újra lefújták), a kimenetel ismeretlen."""
+    frames = []
+    for t in range(30):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+    out = seven_meter_outcomes(Match(_meta(), frames))
+    assert len(out) == 1
+    assert out[0]["outcome"] == "ismeretlen" and out[0]["shooter_id"] is None
