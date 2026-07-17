@@ -156,3 +156,44 @@ def transition_defense(match, config=None) -> dict:
             rec["pct"] = round(
                 100.0 * rec["transition_goals_against"] / rec["turnovers"], 1)
     return out
+
+
+def defensive_pressure(match, config=None) -> dict:
+    """Védekezési nyomás: mennyire szorosan védekezik egy csapat.
+
+    A védekezés minőségének egyik jele, hogy MILYEN KÖZEL van a labdás
+    támadóhoz a legközelebbi védő. Kockánként (amikor egy csapat védekezik
+    — az ellenfél birtokol) megkeressük a labdabirtokost és a legközelebbi
+    VÉDŐ mezőnyjátékost, és átlagoljuk a távolságukat. Alacsonyabb átlag =
+    szorosabb, agresszívabb védekezés.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ csapaté):
+    {"avg_pressure_m", "frames"} — avg_pressure_m None, ha nincs mérhető
+    szakasz."""
+    import math
+
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    acc = {Team.HOME: [0.0, 0], Team.AWAY: [0.0, 0]}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        defender_team = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        dists = [math.hypot(p.x - holder.x, p.y - holder.y)
+                 for p in f.players
+                 if p.team == defender_team and p.role != "kapus"]
+        if dists:
+            acc[defender_team][0] += min(dists)
+            acc[defender_team][1] += 1
+    out = {}
+    for team in (Team.HOME, Team.AWAY):
+        total, n = acc[team]
+        out[team.value] = {
+            "avg_pressure_m": round(total / n, 2) if n else None,
+            "frames": n,
+        }
+    return out

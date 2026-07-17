@@ -1629,6 +1629,11 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         res = defense_analysis(match)
         res["transition"] = transition_defense(match)
+        try:
+            from ..pipeline.defense import defensive_pressure
+            res["pressure"] = defensive_pressure(match)
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/playmaker")
