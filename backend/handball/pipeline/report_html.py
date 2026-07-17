@@ -901,6 +901,40 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
+    # Csapat-mutatók összefoglaló tábla (birtoklás, véd. nyomás, átmenet).
+    team_metrics_html = ""
+    try:
+        from .defense import defensive_pressure, transition_defense
+        from .stats import possession_share
+        ps = possession_share(match)
+        dp = defensive_pressure(match)
+        td = transition_defense(match)
+
+        def _cell(v, suf=""):
+            return f"{v}{suf}" if v is not None else "—"
+
+        rows = [
+            ("Labdabirtoklás",
+             _cell(ps["home"]["pct"], "%") if ps["home"]["pct"] else "—",
+             _cell(ps["away"]["pct"], "%") if ps["away"]["pct"] else "—"),
+            ("Védekezési nyomás (kilépés)",
+             _cell(dp["home"]["avg_pressure_m"], " m"),
+             _cell(dp["away"]["avg_pressure_m"], " m")),
+            ("Átmenet-gól (labdavesztés után)",
+             _cell(td["home"]["transition_goals_against"]),
+             _cell(td["away"]["transition_goals_against"])),
+        ]
+        body = "".join(
+            f"<tr><td>{escape(lab)}</td>"
+            f'<td class="num">{h}</td><td class="num">{a}</td></tr>'
+            for (lab, h, a) in rows)
+        team_metrics_html = (
+            "<h2>Csapat-mutatók</h2><table>"
+            f'<tr><th></th><th class="num">{escape(home)}</th>'
+            f'<th class="num">{escape(away)}</th></tr>' + body + "</table>")
+    except Exception:
+        pass
+
     # Fejléc-összkép: dátum + xG + szabad lövő-arány egy sávban — a
     # jelentés első pillantásra elmondja a meccs lényegét.
     header_bits = []
@@ -1105,6 +1139,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   {xg_html}
 
   {defense_html}
+
+  {team_metrics_html}
 
   {training_html}
 
