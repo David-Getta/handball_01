@@ -812,6 +812,26 @@ class ApiClient {
 
   /// A feldolgozási munkák listája (GET /jobs) — legújabb elöl. A kezdőlap
   /// "folyamatban" kártyája ebből épül; hibánál üres listát adunk.
+  /// A lezárt feldolgozások naplója (GET /jobs/history) — újraindítás
+  /// után is megvan; hibánál üres lista.
+  Future<List<Map<String, dynamic>>> fetchJobHistory({int limit = 10}) async {
+    try {
+      final resp = await http
+          .get(Uri.parse("$baseUrl/jobs/history")
+              .replace(queryParameters: {"limit": "$limit"}))
+          .timeout(const Duration(seconds: 4));
+      if (resp.statusCode != 200) return const [];
+      final json =
+          jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+      return ((json["jobs"] as List?) ?? const [])
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> fetchJobs() async {
     try {
       final resp = await http

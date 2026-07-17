@@ -49,6 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is látszanak,
   // és amíg van aktív munka, pár másodpercenként frissülnek.
   List<Map<String, dynamic>> _jobs = [];
+  List<Map<String, dynamic>> _jobHistory = [];
   Timer? _jobsTimer;
 
   bool _isActiveJob(Map<String, dynamic> j) =>
@@ -419,6 +420,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _loading = false;
       });
       _refreshJobs();
+      _api.fetchJobHistory().then((h) {
+        if (mounted) setState(() => _jobHistory = h);
+      });
       _refreshSummary();
     } catch (_) {
       if (!mounted) return;
@@ -1121,6 +1125,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: AppSpacing.xl),
               _jobsCard(),
             ],
+            // Lezárt feldolgozások naplója — összecsukva, hogy ne foglaljon.
+            if (_jobHistory.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              _jobHistoryCard(),
+            ],
             const SizedBox(height: AppSpacing.xl),
             Row(children: [
               Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
@@ -1308,6 +1317,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// A feldolgozási sor kártyája: futó/sorban álló munkák élő haladással.
+  /// A lezárt feldolgozások naplója (backend jobs_log): mi futott le,
+  /// mikor és mi lett a vége — a hibaüzenetekkel, újraindítás után is.
+  Widget _jobHistoryCard() {
+    String when(num? ts) {
+      if (ts == null) return "";
+      final d = DateTime.fromMillisecondsSinceEpoch((ts * 1000).round());
+      return "${d.month.toString().padLeft(2, "0")}."
+          "${d.day.toString().padLeft(2, "0")} "
+          "${d.hour.toString().padLeft(2, "0")}:"
+          "${d.minute.toString().padLeft(2, "0")}";
+    }
+
+    return Container(
+      decoration: AppTheme.card(),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          title: Text("FELDOLGOZÁS-ELŐZMÉNYEK (${_jobHistory.length})",
+              style: AppText.label.copyWith(fontSize: 11, letterSpacing: 0.6)),
+          childrenPadding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+          children: [
+            for (final j in _jobHistory)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  Icon(
+                      j["status"] == "done"
+                          ? Icons.check_circle_outline
+                          : j["status"] == "cancelled"
+                              ? Icons.cancel_outlined
+                              : Icons.error_outline,
+                      size: 15,
+                      color: j["status"] == "done"
+                          ? AppColors.accent
+                          : j["status"] == "cancelled"
+                              ? AppColors.textFaint
+                              : AppColors.away),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                      width: 84,
+                      child: Text(when(j["finished"] as num?),
+                          style: AppText.label.copyWith(fontSize: 11))),
+                  Expanded(
+                    child: Text(
+                        "${j["video"] ?? j["match_id"] ?? ""} — "
+                        "${j["message"] ?? j["status"]}",
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                        style: AppText.label.copyWith(
+                            fontSize: 11.5, color: AppColors.textPrimary)),
+                  ),
+                ]),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _jobsCard() {
     final active = _jobs.where(_isActiveJob).toList();
     return Container(

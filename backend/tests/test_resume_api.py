@@ -140,3 +140,34 @@ def test_degenerate_calibration_rejected(tmp_path):
     r = client.post("/matches/process",
                     json={"path": str(video), "calib": ok_corners})
     assert r.status_code == 200 and "job_id" in r.json()
+
+
+def test_job_history_logged_and_survives_restart(tmp_path):
+    """A lezárt job a naplóba kerül, és a /jobs/history új szerver-
+    példányból (újraindítás után) is visszaadja."""
+    import tempfile
+
+    video = tmp_path / "h.mp4"
+    _tiny_video(video, frames=8)
+    tmp = tempfile.mkdtemp(prefix="hb_hist_")
+    client = _partial_setup(tmp, video, partial=False)
+
+    r = client.post("/matches/process",
+                    json={"path": str(video), "match_id": "napló1"})
+    _wait_done(client, r.json()["job_id"])
+
+    h = client.get("/jobs/history").json()["jobs"]
+    assert len(h) >= 1
+    assert h[0]["match_id"] == "napló1"
+    assert h[0]["status"] == "done"
+    assert h[0]["finished"] > 0
+
+    # "Újraindítás": friss app-példány ugyanarra az adatmappára.
+    import os as _os
+
+    from handball.api.app import create_app
+    _os.environ["HANDBALL_DATA_DIR"] = tmp
+    from fastapi.testclient import TestClient as _TC
+    client2 = _TC(create_app())
+    h2 = client2.get("/jobs/history").json()["jobs"]
+    assert any(j["match_id"] == "napló1" for j in h2)
