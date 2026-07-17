@@ -204,3 +204,68 @@ def annotate_runs(match: Match, runs: Optional[list[dict]] = None,
 
         r["context"] = ctx
     return runs
+
+
+def score_progression(match: Match, config=None) -> dict:
+    """Vezetés-alakulás: az állás menete a felismert gólokból.
+
+    A meccs izgalmát nem az összpontszám, hanem az ÁLLÁS MENETE adja: ki
+    vezetett, mennyivel, hányszor fordult a meccs. Ezt számoljuk a
+    gólokból (időrend):
+
+    - biggest_lead: {"home", "away"} — a legnagyobb előny csapatonként;
+    - lead_changes: hányszor váltott a vezetés (döntetlenből valakihez
+      vagy egyik csapattól a másikhoz);
+    - lead_time_s: {"home","away","tie"} — mennyi ideig vezetett k(a
+      gólok közti idő az akkori állás szerint), a meccs végéig.
+
+    Kevés/nincs gólnál nulla/üres értékek."""
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    goals = sorted((e.t, e.team) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    end_t = match.frames[-1].t if match.frames else 0
+
+    score = {Team.HOME: 0, Team.AWAY: 0}
+    biggest = {"home": 0, "away": 0}
+    lead_time = {"home": 0.0, "away": 0.0, "tie": 0.0}
+    lead_changes = 0
+    prev_leader = "tie"
+    last_real_leader = None  # az utolsó tényleges vezető (nem döntetlen)
+    prev_t = match.frames[0].t if match.frames else 0
+
+    def leader() -> str:
+        if score[Team.HOME] > score[Team.AWAY]:
+            return "home"
+        if score[Team.AWAY] > score[Team.HOME]:
+            return "away"
+        return "tie"
+
+    for (t, team) in goals:
+        # A gólig eltelt időt az EDDIGI állás vezetőjéhez írjuk.
+        lead_time[prev_leader] += max(0, t - prev_t) / fps
+        prev_t = t
+        score[team] += 1
+        lead = score[Team.HOME] - score[Team.AWAY]
+        biggest["home"] = max(biggest["home"], lead)
+        biggest["away"] = max(biggest["away"], -lead)
+        cur = leader()
+        # Vezetés-VÁLTÁS csak a két csapat közti fordulás (a nyitógól,
+        # döntetlenből vezetéshez, nem az) — döntetleneken átnézve.
+        if cur != "tie":
+            if last_real_leader is not None and cur != last_real_leader:
+                lead_changes += 1
+            last_real_leader = cur
+        prev_leader = cur
+    # A meccs végéig tartó utolsó szakasz.
+    lead_time[prev_leader] += max(0, end_t - prev_t) / fps
+
+    return {
+        "biggest_lead": biggest,
+        "lead_changes": lead_changes,
+        "lead_time_s": {k: round(v, 1) for k, v in lead_time.items()},
+        "final": [score[Team.HOME], score[Team.AWAY]],
+    }

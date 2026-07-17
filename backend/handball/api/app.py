@@ -1589,11 +1589,12 @@ def create_app():
         sorozat vagy nincs felismert gól. Minden sorozathoz "context"
         címkelista: a sorozat LEHETSÉGES OKAI (emberelőny, 7 a 6,
         az ellenfél védekezés-váltása / tempó-esése)."""
-        from ..pipeline.momentum import annotate_runs
+        from ..pipeline.momentum import annotate_runs, score_progression
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {"runs": annotate_runs(match)}
+        return {"runs": annotate_runs(match),
+                "progression": score_progression(match)}
 
     @app.get("/matches/{match_id}/xg")
     def get_xg(match_id: str):

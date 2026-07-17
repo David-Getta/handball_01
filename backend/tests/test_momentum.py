@@ -236,3 +236,30 @@ def test_run_after_substitution_wave():
     runs = annotate_runs(Match(_meta(), frames))
     assert len(runs) == 1 and runs[0]["team"] == "home"
     assert "cserehullám után" in runs[0]["context"]
+
+
+# ---- Vezetés-alakulás (score_progression) ------------------------------------
+
+from handball.pipeline.momentum import score_progression  # noqa: E402
+
+
+def test_score_progression_lead_changes_and_biggest():
+    """H, H, A, A, A → a hazai 2-0-ra vezet, majd a vendég fordít 2-3-ra:
+    egy vezetés-váltás, a legnagyobb hazai előny 2, a vendégé 1."""
+    m = _match_from_goals("HHAAA")
+    p = score_progression(m)
+    assert p["final"] == [2, 3]
+    assert p["biggest_lead"]["home"] == 2
+    assert p["biggest_lead"]["away"] == 1
+    assert p["lead_changes"] == 1  # döntetlenen át a vendéghez fordult
+    # A vezetés-idők összege a meccs hossza körüli (kerekítéssel).
+    tot = sum(p["lead_time_s"].values())
+    assert tot > 0
+
+
+def test_score_progression_no_goals():
+    m = Match(_meta(), [Frame(t=i, players=[], ball=None) for i in range(10)])
+    p = score_progression(m)
+    assert p["final"] == [0, 0]
+    assert p["lead_changes"] == 0
+    assert p["biggest_lead"] == {"home": 0, "away": 0}
