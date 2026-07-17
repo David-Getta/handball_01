@@ -1342,9 +1342,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   "Indítsd el a lokális szervert (uvicorn), majd frissíts. Addig a demó megnyitható.",
                   action: _demoButton())
             else if (_matches.isEmpty)
-              _notice(Icons.video_library_outlined, "Még nincs elemzett meccs",
-                  "Tölts fel és dolgozz fel egy videót az Új elemzés menüben — itt fog megjelenni.",
-                  action: _demoButton())
+              _firstStepsCard()
             else if (_filteredMatches.isEmpty)
               _notice(Icons.search_off, "Nincs találat",
                   "Nincs a keresésre (\"$_query\") illő meccs a könyvtárban.")
@@ -1355,6 +1353,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// Első lépések: üres könyvtárnál lépésenkénti vezetés a videótól a
+  /// kész elemzésig — plusz a demó, hogy feldolgozás nélkül is
+  /// kipróbálható legyen minden nézet.
+  Widget _firstStepsCard() {
+    const steps = [
+      (Icons.video_file_outlined, "Videó",
+       "Válaszd ki a meccsvideót az Új elemzés varázslóban (a teljes "
+           "félidő is mehet — a feldolgozás a háttérben fut)."),
+      (Icons.grid_on, "Kalibráció",
+       "Jelöld be a pálya 4 sarkát — ettől lesznek méter-pontosak a "
+           "pozíciók. A varázsló élő modell-előnézettel segít."),
+      (Icons.play_circle_outline, "Indítás",
+       "A detektálás-próbán ellenőrizd, hogy a rendszer jól látja-e a "
+           "pályát, majd indítsd a feldolgozást."),
+      (Icons.insights, "Elemzés",
+       "A kész meccs itt jelenik meg — lejátszó, statisztikák, edzői "
+           "összefoglaló, jelentés és klipek."),
+    ];
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("ELSŐ LÉPÉSEK",
+              style: AppText.label.copyWith(fontSize: 11, letterSpacing: 0.6)),
+          const SizedBox(height: AppSpacing.lg),
+          for (var i = 0; i < steps.length; i++) ...[
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(
+                width: 26,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.accent),
+                ),
+                child: Text("${i + 1}",
+                    style: AppText.value.copyWith(
+                        fontSize: 12, color: AppColors.accent)),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Icon(steps[i].$1, size: 18, color: AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(steps[i].$2,
+                          style: AppText.value.copyWith(fontSize: 13.5)),
+                      Text(steps[i].$3,
+                          style: AppText.label.copyWith(
+                              fontSize: 12, color: AppColors.textPrimary)),
+                    ]),
+              ),
+            ]),
+            if (i < steps.length - 1) const SizedBox(height: AppSpacing.md),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          Row(children: [
+            FilledButton.icon(
+              onPressed: () => navTo(context, NavId.upload),
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              icon: const Icon(Icons.add_circle_outline, size: 18),
+              label: const Text("Új elemzés indítása"),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: _createDemo,
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.borderStrong)),
+              icon: const Icon(Icons.auto_awesome, size: 18),
+              label: const Text("Vagy nézd meg a demó meccset"),
+            ),
+          ]),
+        ],
       ),
     );
   }
