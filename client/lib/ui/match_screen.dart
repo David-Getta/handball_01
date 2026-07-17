@@ -64,6 +64,8 @@ class _MatchScreenState extends State<MatchScreen> {
   List<Map<String, dynamic>> _attacks = [];
   // Gól-sorozatok (GET /matches/{id}/momentum) — az eredmény-grafikonon.
   List<Map<String, dynamic>> _momentum = [];
+  // Lövőnkénti helyzetminőség (player_id → {shots, goals, xg, diff}).
+  Map<int, Map<String, dynamic>> _xgShooters = {};
   // Szabály-réteg (GET /matches/{id}/rules): 7m, emberhátrány, passzív.
   Map<String, dynamic> _rules = {};
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
@@ -128,6 +130,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> momentum = [];
     Map<String, dynamic> rules = {};
     Map<int, double> xgByT = {};
+    Map<int, Map<String, dynamic>> xgShooters = {};
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -165,8 +168,14 @@ class _MatchScreenState extends State<MatchScreen> {
             final v = (sh["xg"] as num?)?.toDouble();
             if (t != null && v != null) xgByT[t] = v;
           }
+          for (final r
+              in ((xg["shooters"] as List?) ?? const []).cast<Map<String, dynamic>>()) {
+            final pid = (r["player_id"] as num?)?.toInt();
+            if (pid != null) xgShooters[pid] = r;
+          }
         } catch (_) {
           xgByT = {}; // helyzetminőség nélkül is teljes a nézet
+          xgShooters = {};
         }
         try {
           quality = await _api.fetchQuality(widget.matchId);
@@ -194,6 +203,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _formations = computeFormationTimeline(match);
       _events = events;
       _shots = _computeShotMarkers(match, events, xgByT);
+      _xgShooters = xgShooters;
       _passNetwork = computePassNetwork(match, events, _passTeam);
       _quality = quality;
       _notes = notes;
@@ -1706,11 +1716,20 @@ class _MatchScreenState extends State<MatchScreen> {
     final teamName = st == null
         ? ""
         : (st.team == Team.home ? match.meta.homeTeam : match.meta.awayTeam);
-    final label = st == null
+    var label = st == null
         ? "Játékos #$id"
         : "Játékos #$id · $teamName · ${st.distanceM.toStringAsFixed(0)} m · "
             "max ${(st.topSpeedMs * 3.6).toStringAsFixed(1)} km/h · "
             "${st.sprintCount} sprint";
+    // Lövő-adatok (ha lőtt): gól/lövés + várható gól — a diff előjele
+    // mutatja, hogy a helyzetei felett (+) vagy alatt (−) teljesít.
+    final sh = _xgShooters[id];
+    if (sh != null) {
+      final diff = (sh["diff"] as num?)?.toDouble() ?? 0.0;
+      label += " · ${sh["goals"]}/${sh["shots"]} lövés · "
+          "xG ${((sh["xg"] as num?) ?? 0).toStringAsFixed(1)}"
+          "${diff.abs() >= 0.5 ? " (${diff > 0 ? "+" : ""}${diff.toStringAsFixed(1)})" : ""}";
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(

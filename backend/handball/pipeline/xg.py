@@ -58,8 +58,10 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     A lövés helye: a lövő pozíciója az esemény képkockáján; ha a lövő nem
     azonosítható, a labda helye. Visszatérés:
     {"shots": [{"t", "team", "player_id", "x", "y", "xg", "outcome"}],
-     "teams": {"home"/"away": {"xg", "goals", "shots", "diff"}}}
-    — diff = gól − várható gól (pozitív: hatékony befejezés)."""
+     "teams": {"home"/"away": {"xg", "goals", "shots", "diff"}},
+     "shooters": [{"player_id", "team", "shots", "goals", "xg", "diff"}]}
+    — diff = gól − várható gól (pozitív: a helyzetei FELETT teljesít,
+    negatív: kihagyott nagy helyzetek). A shooters xG szerint csökkenő."""
     from .event_detection import EventType, detect_shots
 
     config = config or TacticsConfig()
@@ -100,4 +102,24 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     for side in ("home", "away"):
         teams[side]["xg"] = round(teams[side]["xg"], 2)
         teams[side]["diff"] = round(teams[side]["goals"] - teams[side]["xg"], 2)
-    return {"shots": shots, "teams": teams}
+
+    # Lövőnkénti bontás: ki teljesít a helyzetei felett/alatt. (A lövő
+    # nélküli — azonosíthatatlan — lövések csak a csapat-összegben vannak.)
+    by_shooter: dict[int, dict] = {}
+    for sh in shots:
+        pid = sh["player_id"]
+        if pid is None:
+            continue
+        rec = by_shooter.setdefault(pid, {"player_id": pid, "team": sh["team"],
+                                          "shots": 0, "goals": 0, "xg": 0.0})
+        rec["shots"] += 1
+        rec["xg"] += sh["xg"]
+        if sh["outcome"] == "goal":
+            rec["goals"] += 1
+    shooters = []
+    for rec in by_shooter.values():
+        rec["xg"] = round(rec["xg"], 2)
+        rec["diff"] = round(rec["goals"] - rec["xg"], 2)
+        shooters.append(rec)
+    shooters.sort(key=lambda r: -r["xg"])
+    return {"shots": shots, "teams": teams, "shooters": shooters}

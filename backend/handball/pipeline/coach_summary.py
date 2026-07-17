@@ -98,8 +98,8 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
 def _xg_section(match: Match, home: str, away: str) -> dict | None:
     """Helyzetminőség: várható gól (xG) vs tényleges — befejezés-hatékonyság."""
     from .xg import match_xg
-    r = match_xg(match)
-    th, ta = r["teams"]["home"], r["teams"]["away"]
+    r_all = match_xg(match)
+    th, ta = r_all["teams"]["home"], r_all["teams"]["away"]
     if th["shots"] + ta["shots"] < 4:  # kevés lövésből nincs értelmes kép
         return None
     body = (f"A kidolgozott helyzetek értéke (várható gól) {home} "
@@ -114,6 +114,23 @@ def _xg_section(match: Match, home: str, away: str) -> dict | None:
         elif rec["diff"] <= -0.8:
             body += (f" A(z) {name} elpuskázott helyzeteket "
                      f"({rec['diff']:.1f}) — a befejezésen érdemes dolgozni.")
+    # Lövőnkénti kép: a helyzetei felett/alatt teljesítő játékosok
+    # (legalább 3 lövéssel — egy-egy lövésből nincs értelmes kép).
+    pool = [r for r in r_all.get("shooters", []) if r["shots"] >= 3]
+    if pool:
+        team_of, jersey_of = _team_of_track(match), _jersey_of_track(match)
+
+        def lab(rec):
+            return _player_label(rec["player_id"], team_of, jersey_of,
+                                 home, away)
+        best = max(pool, key=lambda r: r["diff"])
+        worst = min(pool, key=lambda r: r["diff"])
+        if best["diff"] >= 0.5:
+            body += (f" A helyzetei felett teljesített: {lab(best)} "
+                     f"({best['goals']} gól, várható {best['xg']:.1f}).")
+        if worst is not best and worst["diff"] <= -0.5:
+            body += (f" A legtöbb kihagyott nagy helyzet: {lab(worst)} "
+                     f"({worst['goals']} gól, várható {worst['xg']:.1f}).")
     return {"title": "Helyzetminőség", "body": body}
 
 
