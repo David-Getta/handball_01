@@ -208,6 +208,66 @@ def compute_intensity_timeline(match: Match, window_s: float = 300.0) -> list[di
     ]
 
 
+def intensity_trend(match: Match, config=None) -> dict:
+    """Kondíció-mutató: a felvétel ELSŐ és MÁSODIK felében mért átlagos
+    csapat-mozgássebesség (m/s), és a kettő közti esés százalékban.
+
+    Ha a második félidőben számottevően lassabb a csapat, az fáradásra /
+    kondíció-hiányra utal. Csak MÉRT, hihető (<= MAX_PLAUSIBLE_MS)
+    szakaszokból számol, legfeljebb 3 kockányi lyukat áthidalva — a
+    speed_windows / intensity_timeline mintájára, hogy a becslés ne
+    torzítson.
+
+    Visszatérés csapatonként (home/away):
+    {"first_ms", "second_ms", "drop_pct"} — a drop_pct pozitív, ha a
+    második fél lassabb; a "midpoint_frame" a felezőpont kockaszáma.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dt = 1.0 / fps
+    total = len(match.frames)
+    out = {
+        "midpoint_frame": total // 2,
+        "home": {"first_ms": 0.0, "second_ms": 0.0, "drop_pct": 0.0},
+        "away": {"first_ms": 0.0, "second_ms": 0.0, "drop_pct": 0.0},
+    }
+    if total < 4:
+        return out
+    mid = total // 2
+
+    # táv/idő félidőnként, csapatonként: [half][team] -> (dist, time)
+    dist = [[0.0, 0.0], [0.0, 0.0]]
+    time_ = [[0.0, 0.0], [0.0, 0.0]]
+    by_player: dict[int, list] = {}
+    for frame in match.frames:
+        for p in frame.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            by_player.setdefault(p.track_id, []).append(
+                (frame.t, p.x, p.y, p.team))
+    for samples in by_player.values():
+        samples.sort(key=lambda s: s[0])
+        for (a, b) in zip(samples, samples[1:]):
+            gap = b[0] - a[0]
+            if gap <= 0 or gap > 3:
+                continue
+            seconds = gap * dt
+            d = math.hypot(b[1] - a[1], b[2] - a[2])
+            if d / seconds > MAX_PLAUSIBLE_MS:
+                continue
+            half = 0 if a[0] < mid else 1
+            ti = 0 if b[3] == Team.HOME else 1
+            dist[half][ti] += d
+            time_[half][ti] += seconds
+
+    for ti, side in ((0, "home"), (1, "away")):
+        first = dist[0][ti] / time_[0][ti] if time_[0][ti] > 0 else 0.0
+        second = dist[1][ti] / time_[1][ti] if time_[1][ti] > 0 else 0.0
+        drop = round((first - second) / first * 100.0, 1) if first > 0 else 0.0
+        out[side] = {"first_ms": round(first, 3),
+                     "second_ms": round(second, 3), "drop_pct": drop}
+    return out
+
+
 def aggregate_by_jersey(stats: dict, team_of: dict, jersey_of: dict,
                         fps: float = 25.0) -> list[dict]:
     """Játékos-statisztikák MEZSZÁM szerint összevonva.
