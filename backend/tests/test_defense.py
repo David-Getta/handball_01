@@ -116,3 +116,23 @@ def test_transition_defense_counts_fast_goals():
     assert td["home"]["pct"] > 0
     # A vendég nem vesztett labdát ebben a jelenetben.
     assert td["away"]["transition_goals_against"] == 0
+
+
+def test_defensive_pressure_tight_vs_loose():
+    """Szoros védő (1 m) kisebb nyomás-átlagot ad, mint a laza (6 m)."""
+    from handball.pipeline.defense import defensive_pressure
+
+    def scene(def_y):
+        frames = []
+        for t in range(30):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 25.0, 10.0),          # labdás támadó
+                _pl(20, Team.AWAY, 25.0, def_y)],       # a védő
+                ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        return Match(_meta(), frames)
+
+    tight = defensive_pressure(scene(11.0))["away"]["avg_pressure_m"]
+    loose = defensive_pressure(scene(16.0))["away"]["avg_pressure_m"]
+    assert tight is not None and loose is not None
+    assert tight < loose
+    assert abs(tight - 1.0) < 0.2  # ~1 m-re állt a védő
