@@ -89,6 +89,9 @@ class ScoutingReport:
     transition_goals_against: int = 0
     # Labdabirtoklás-arány (a felderített csapaté, %).
     possession_pct: float = 0.0
+    # Gólpassz-vezér: a legtöbb gólpasszt adó játékos (track_id, db).
+    top_assist_id: int | None = None
+    top_assist_count: int = 0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
     # lövésig jutásuk, ha ő nincs a labdánál ("fogd meg" kulcs).
     playmaker_id: int | None = None
@@ -573,6 +576,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.transition_goals_against = trec["transition_goals_against"]
         from .stats import possession_share
         rep.possession_pct = possession_share(match, config)[team.value]["pct"]
+        from .event_detection import assist_network
+        leaders = assist_network(match, config)[team.value]["leaders"]
+        if leaders:
+            rep.top_assist_id = leaders[0]["player_id"]
+            rep.top_assist_count = leaders[0]["assists"]
     except Exception:
         pass
     try:
