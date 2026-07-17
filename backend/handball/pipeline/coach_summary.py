@@ -298,9 +298,14 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
     """Gól-sorozatok: válasz nélküli szériák, játékóra-idővel, állással és
     a felismert LEHETSÉGES OKOKKAL (emberelőny, 7 a 6, védekezés-váltás,
     tempó-esés)."""
-    from .momentum import annotate_runs
+    from .momentum import annotate_runs, score_progression
     runs = annotate_runs(match)
-    if not runs:
+    prog = None
+    try:
+        prog = score_progression(match)
+    except Exception:
+        prog = None
+    if not runs and not (prog and prog["lead_changes"]):
         return None, []
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     names = {"home": home, "away": away}
@@ -324,7 +329,14 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
         f"{tname} {top['length']} gólos sorozatot futott — nézd vissza, mi "
         "működött, és a másik oldalon hol akadt el a játék (időkérés, "
         "védekezés-váltás).")
-    return {"title": "Sorozatok", "body": "; ".join(parts).capitalize() + "."}, highlights
+    body = "; ".join(parts).capitalize() + "." if parts else ""
+    if prog and prog["lead_changes"] >= 1:
+        names = {"home": home, "away": away}
+        bl = prog["biggest_lead"]
+        top_side = "home" if bl["home"] >= bl["away"] else "away"
+        body += (f" A meccs {prog['lead_changes']}-szor fordult; a legnagyobb "
+                 f"előny {names[top_side]} javára {bl[top_side]} gól.")
+    return {"title": "Sorozatok", "body": body.strip()}, highlights
 
 
 def coach_summary(match: Match) -> dict:
