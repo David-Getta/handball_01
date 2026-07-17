@@ -112,3 +112,47 @@ def defense_analysis(match: Match,
             rec["zones"] = dict(sorted(rec["zones"].items(),
                                        key=lambda kv: -kv[1]["shots"]))
     return out
+
+
+# A labdaeladás után ennyi másodpercen belüli kapott gól "átmenet-gól".
+TRANSITION_WINDOW_S = 8.0
+
+
+def transition_defense(match, config=None) -> dict:
+    """Átmenet-védekezés: a labdavesztés utáni gyors kapott gólok.
+
+    A modern kézilabda egyik kulcsa a VISSZAZÁRÁS: egy labdaeladás után
+    az ellenfél gyors indítással könnyű gólt szerezhet. Csapatonként
+    megszámoljuk, hány labdaeladást követett az ellenfél gólja
+    TRANSITION_WINDOW_S-en belül — ez a rossz visszazárás mérőszáma.
+
+    Visszatérés csapatonként (a labdát VESZTŐ csapat szemszögéből):
+    {"turnovers", "transition_goals_against", "pct"} — pct: a
+    labdaeladások hány százaléka végződött gyors kapott góllal."""
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(TRANSITION_WINDOW_S * fps)
+
+    events = detect_events(match, config)
+    goals = [(e.t, e.team) for e in events if e.type == EventType.GOAL]
+    out = {side: {"turnovers": 0, "transition_goals_against": 0, "pct": 0.0}
+           for side in ("home", "away")}
+
+    for e in events:
+        if e.type != EventType.TURNOVER:
+            continue
+        loser = e.team
+        rec = out[loser.value]
+        rec["turnovers"] += 1
+        # Az ELLENFÉL gólja a labdaeladás utáni ablakban?
+        if any(e.t < gt <= e.t + win and gteam != loser for (gt, gteam) in goals):
+            rec["transition_goals_against"] += 1
+
+    for rec in out.values():
+        if rec["turnovers"]:
+            rec["pct"] = round(
+                100.0 * rec["transition_goals_against"] / rec["turnovers"], 1)
+    return out

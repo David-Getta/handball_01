@@ -160,6 +160,22 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                 sent += (f"; a legtöbb kapott gól innen: {rec['worst_zone']} "
                          f"({wz['goals']})")
         parts.append(sent)
+    # Átmenet-védekezés: gyors kapott gólok labdavesztés után (visszazárás).
+    try:
+        from .defense import transition_defense
+        td = transition_defense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec = td[side]
+            if rec["turnovers"] >= 4 and rec["transition_goals_against"] >= 2:
+                parts.append(
+                    f"a(z) {name} {rec['transition_goals_against']} gyors gólt "
+                    f"kapott labdavesztés után ({rec['pct']:.0f}%) — "
+                    "a visszazárás gyenge pontja")
+                highlights.append(
+                    f"{name}: {rec['transition_goals_against']} átmenet-gólt "
+                    "kapott labdaeladás után — gyorsabb visszazárás kell.")
+    except Exception:
+        pass
     if not parts:
         return None, highlights
     return {"title": "Védekezés",
