@@ -313,18 +313,16 @@ def create_app():
                 sys.path.insert(0, backend_dir)
             from scripts.process_video import process
 
-            # Megszakítás: a haladás-visszahívás minden hívásnál megnézi a
-            # job "cancel" jelzőjét — ha be van állítva, kivétellel kilépünk
-            # a feldolgozásból (a detektáló ciklus kockánként hívja, így a
-            # leállás másodperceken belül megtörténik).
-            class _Cancelled(Exception):
-                pass
-
+            # Megszakítás: SZELÍD leállítás. A detektáló ciklus a stop_check
+            # jelzésére megáll, de az addig feldolgozott kockákra az utómunka
+            # lefut, és a részleges eredmény ELMENTŐDIK — órákig tartó
+            # feldolgozásnál a Megszakítás nem dobja el az elvégzett munkát.
             def cb(stage, prog, msg):
-                if job.get("cancel"):
-                    raise _Cancelled()
                 job["stage"] = stage
                 job["progress"] = round(float(prog), 3)
+                # Leállítás-kérés közben jelezzük, hogy a befejezés fut.
+                if job.get("cancel"):
+                    msg = f"leállítás — az eddigi rész mentése… ({msg})"
                 job["message"] = msg
 
             try:
@@ -352,14 +350,23 @@ def create_app():
                     away_team=body.get("away_team") or "Csapat B",
                     # KÍSÉRLETI: mezszám-OCR a feldolgozás alatt.
                     jersey_ocr=bool(body.get("jersey_ocr", False)),
+                    # Szelíd megszakítás: a Megszakítás gombra a detektálás
+                    # megáll, az eddigi rész feldolgozva elmentődik.
+                    stop_check=lambda: bool(job.get("cancel")),
                 )
-                app.state.put_match(match)
-                job["status"] = "done"
-                job["progress"] = 1.0
-                job["message"] = f"kész ({len(match.frames)} frame)"
-            except _Cancelled:
-                job["status"] = "cancelled"
-                job["message"] = "megszakítva"
+                cancelled = bool(job.pop("cancel", False))
+                if cancelled and not match.frames:
+                    # Annyira korán állították le, hogy nincs mit menteni.
+                    job["status"] = "cancelled"
+                    job["message"] = "megszakítva (nem készült feldolgozott kocka)"
+                else:
+                    app.state.put_match(match)
+                    job["status"] = "done"
+                    job["progress"] = 1.0
+                    job["message"] = (
+                        f"megszakítva — az addig feldolgozott rész elmentve "
+                        f"({len(match.frames)} kocka)" if cancelled
+                        else f"kész ({len(match.frames)} frame)")
             except Exception as e:  # a hibát a kliensnek is megmutatjuk
                 msg = str(e)
                 # A nyers zlib-hiba ("Error -3 ... incorrect header check")
@@ -394,8 +401,9 @@ def create_app():
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel_job(job_id: str):
-        """Egy futó feldolgozás megszakítása. A leállítás nem azonnali: a
-        feldolgozó a következő képkockánál veszi észre a jelzőt (másodpercek)."""
+        """Egy futó feldolgozás megszakítása. A leállítás SZELÍD: a
+        detektálás a következő képkockánál megáll, és az addig feldolgozott
+        rész teljes utómunkával elmentődik (a job "done"-nal zárul)."""
         job = _jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
@@ -405,7 +413,7 @@ def create_app():
             job["message"] = "megszakítva (a sorból)"
         elif job["status"] == "running":
             job["cancel"] = True
-            job["message"] = "megszakítás folyamatban…"
+            job["message"] = "leállítás — az eddigi rész mentése…"
         return job
 
     @app.get("/matches")

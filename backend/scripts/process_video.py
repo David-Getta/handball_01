@@ -207,7 +207,7 @@ def _normalize_max_frames(max_frames):
 def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None,
                   pan=False, jersey_voter=None, ocr_every=5,
-                  ball_recover=True):
+                  ball_recover=True, stop_check=None):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -276,6 +276,12 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     kept = 0
     skipped_dark = 0
     for fi, r in enumerate(results):
+        # Szelíd leállítás: a hívó (pl. a Megszakítás gomb) jelzésére a
+        # detektálás megáll, de az ADDIG feldolgozott kockák megmaradnak —
+        # az utómunka lefut rájuk, és az eredmény elmentődik.
+        if stop_check is not None and stop_check():
+            print(f"leállítás-kérés: a detektálás megáll ({kept} kocka kész)")
+            break
         if fi * stride < start:  # a bevezető rész átugrása (kép-index alapján)
             continue
         if kept >= max_frames:
@@ -385,7 +391,7 @@ class _SimpleTracker:
         return assigned
 
 
-def _process_hog(video_path, stride, max_frames):
+def _process_hog(video_path, stride, max_frames, stop_check=None):
     import cv2
     cap = cv2.VideoCapture(video_path)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
@@ -401,6 +407,8 @@ def _process_hog(video_path, stride, max_frames):
     raw, all_colors = [], []
     fi = out_i = 0
     while out_i < max_frames:
+        if stop_check is not None and stop_check():
+            break  # szelíd leállítás — az eddigi kockák megmaradnak
         ok, frame = cap.read()
         if not ok:
             break
@@ -432,12 +440,17 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             progress_cb=None, match_id="video-1", estimate=True,
             home_team="Csapat A", away_team="Csapat B", ball_smooth=True,
             track_smooth=True, calib_region="full", calib_rotate=False,
-            calibs=None, jersey_ocr=False):
+            calibs=None, jersey_ocr=False, stop_check=None):
     """A videót Tracking-gé dolgozza fel; visszaadja a Match objektumot.
 
     Ha `out_path` meg van adva, a JSON-t fájlba is írja (CLI-hez). A `progress_cb`
     a feldolgozás állapotát jelzi a hívónak (a szerver ezt továbbítja a kliensnek):
     progress_cb(stage, progress, message) — stage a [A..H] lépéskód, progress 0..1.
+
+    `stop_check` (opcionális, () -> bool): ha igazat ad, a detektálás
+    SZELÍDEN leáll — az addig feldolgozott kockákra az utómunka lefut, és
+    a (részleges) Match visszaadódik. Órákig tartó feldolgozásnál ez azt
+    jelenti, hogy a Megszakítás nem dobja el az elvégzett munkát.
     """
     import cv2
     import numpy as np
@@ -505,9 +518,11 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         raw, all_colors = _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                                         court_poly, start=start, skip_dark=skip_dark,
                                         on_frame=on_frame, pan=bool(calib_list),
-                                        jersey_voter=jersey_voter)
+                                        jersey_voter=jersey_voter,
+                                        stop_check=stop_check)
     else:
-        raw, all_colors = _process_hog(video_path, stride, max_frames)
+        raw, all_colors = _process_hog(video_path, stride, max_frames,
+                                       stop_check=stop_check)
     print(f"feldolgozott frame: {len(raw)}, észlelt személy: {len(all_colors)}")
     report("C", 0.78, "követés kész")
 
