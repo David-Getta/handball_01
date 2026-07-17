@@ -107,3 +107,36 @@ def test_resume_missing_video_fails_cleanly(tmp_path):
     r = client.post("/matches/felido1/resume")
     assert r.status_code == 400
     assert "nem található" in r.json()["detail"]
+
+
+def test_degenerate_calibration_rejected(tmp_path):
+    """Önmetsző vagy elfajzott kalibrációval a feldolgozás el sem indul —
+    érthető magyar hibaüzenettel (a többórás futás előtt szólunk)."""
+    import tempfile
+
+    video = tmp_path / "cal.mp4"
+    _tiny_video(video, frames=5)
+    client = _partial_setup(tempfile.mkdtemp(prefix="hb_cal_"), video,
+                            partial=False)
+
+    ok_corners = [[100, 100], [900, 120], [880, 600], [90, 580]]
+    crossed = [[100, 100], [880, 600], [900, 120], [90, 580]]  # önmetsző
+    tiny = [[10, 10], [12, 10], [12, 12], [10, 12]]            # elfajzott
+
+    r = client.post("/matches/process",
+                    json={"path": str(video), "calib": crossed})
+    assert r.status_code == 400 and "sorrend" in r.json()["detail"]
+
+    r = client.post("/matches/process",
+                    json={"path": str(video), "calib": tiny})
+    assert r.status_code == 400 and "elfajzott" in r.json()["detail"]
+
+    r = client.post("/matches/process",
+                    json={"path": str(video),
+                          "calibs": [{"corners": crossed, "region": "left"}]})
+    assert r.status_code == 400
+
+    # Ép kalibrációval a job elindul (a feldolgozás maga háttérben fut).
+    r = client.post("/matches/process",
+                    json={"path": str(video), "calib": ok_corners})
+    assert r.status_code == 200 and "job_id" in r.json()
