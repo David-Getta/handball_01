@@ -263,3 +263,20 @@ def test_score_progression_no_goals():
     assert p["final"] == [0, 0]
     assert p["lead_changes"] == 0
     assert p["biggest_lead"] == {"home": 0, "away": 0}
+
+
+def test_scoring_timeline_buckets_goals():
+    """A gólok a megfelelő idő-vödörbe kerülnek."""
+    from handball.pipeline.momentum import scoring_timeline
+    m = _match_from_goals("HHAAA")
+    tl = scoring_timeline(m, bucket_s=1.0)
+    total_home = sum(b["home"] for b in tl["buckets"])
+    total_away = sum(b["away"] for b in tl["buckets"])
+    assert total_home == 2 and total_away == 3
+    assert len(tl["buckets"]) >= 2
+
+
+def test_scoring_timeline_empty():
+    from handball.pipeline.momentum import scoring_timeline
+    m = Match(_meta(), [])
+    assert scoring_timeline(m)["buckets"] == []
