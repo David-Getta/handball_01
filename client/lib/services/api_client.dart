@@ -542,6 +542,19 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Visszatérő edzés-fókuszok a teljes könyvtárból
+  /// (GET /library/training-focus): ami legalább két meccsen előjött.
+  Future<Map<String, dynamic>> fetchLibraryTrainingFocus() async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/library/training-focus"))
+        .timeout(const Duration(seconds: 20));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni a szezon-fókuszt: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Edzés-fókusz javaslatok (GET /matches/{id}/training): csapatonként
   /// rangsorolt gyakorlás-fókuszok (terület, fókusz, indok, gyakorlat).
   Future<Map<String, dynamic>> fetchTraining(String matchId) async {

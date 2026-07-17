@@ -39,6 +39,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // helyi számokra esnek vissza. Meccsenkénti kivonat id szerint.
   Map<String, dynamic>? _summary;
   Map<String, Map<String, dynamic>> _perMatch = {};
+  // Visszatérő edzés-fókuszok csapatonként (a könyvtár-összesítésből).
+  Map<String, dynamic> _seasonFocus = {};
 
   // Könyvtár-kereső: csapatnévre / meccs-azonosítóra szűr.
   final TextEditingController _searchCtrl = TextEditingController();
@@ -435,6 +437,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() {
         _summary = s;
+        // Szezon-fókusz külön, nem blokkolóan (nagy könyvtárnál lassabb).
+        _api.fetchLibraryTrainingFocus().then((r) {
+          if (mounted) {
+            setState(() =>
+                _seasonFocus = (r["teams"] as Map?)?.cast<String, dynamic>() ?? {});
+          }
+        }).catchError((_) {});
         _perMatch = {
           for (final d
               in (s["per_match"] as List).cast<Map<String, dynamic>>())
@@ -930,6 +939,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Szezon-trend: helyzetminőség (xG) meccsről meccsre — látszik,
             // merre tart a csapat (legalább 2 xG-s meccsből rajzolódik ki).
             ..._seasonTrend(),
+            // Visszatérő gyengeségek: ami több meccsen is előjött.
+            ..._seasonFocusCard(),
             // Folyamatban lévő feldolgozások (sor): élő állapot + megszakítás.
             if (_jobs.any(_isActiveJob)) ...[
               const SizedBox(height: AppSpacing.xl),
@@ -1276,6 +1287,56 @@ szabad lövőt enged: "
           Text(
               "oszloppár = a két csapat várható gólja (kék: hazai, piros: "
               "vendég) · vidd az egeret fölé a részletekért",
+              style: AppText.label.copyWith(
+                  fontSize: 10, color: AppColors.textFaint)),
+        ]),
+      ),
+    ];
+  }
+
+  /// Visszatérő edzés-fókusz kártya: csapatonként azok a gyengeségek,
+  /// amik legalább két meccsen előjöttek — az edzéstervezés első jelöltjei.
+  List<Widget> _seasonFocusCard() {
+    if (_seasonFocus.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.xl),
+      Container(
+        decoration: AppTheme.card(),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text("VISSZATÉRŐ EDZÉS-FÓKUSZ · TÖBB MECCS ALAPJÁN",
+              style: AppText.label.copyWith(fontSize: 11, letterSpacing: 0.6)),
+          const SizedBox(height: AppSpacing.md),
+          for (final entry in _seasonFocus.entries) ...[
+            Text(entry.key,
+                style: AppText.value.copyWith(
+                    fontSize: 12.5, color: AppColors.accent)),
+            const SizedBox(height: 4),
+            Wrap(spacing: 8, runSpacing: 6, children: [
+              for (final it in (entry.value as List)
+                  .cast<Map<String, dynamic>>())
+                Tooltip(
+                  message: "miért: ${it["why"]}\ngyakorlat: ${it["drill"]}",
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border:
+                          Border.all(color: AppColors.gold.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                        "${it["title"]} · ${it["count"]} meccsen",
+                        style: AppText.label.copyWith(
+                            fontSize: 11, color: AppColors.gold)),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          Text("vidd az egeret a címke fölé az indokért és a javasolt "
+              "gyakorlatért",
               style: AppText.label.copyWith(
                   fontSize: 10, color: AppColors.textFaint)),
         ]),
