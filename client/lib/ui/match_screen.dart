@@ -75,6 +75,7 @@ class _MatchScreenState extends State<MatchScreen> {
   List<Map<String, dynamic>> _subs = [];
   List<Map<String, dynamic>> _stoppages = [];
   Map<String, dynamic>? _training;
+  Map<String, dynamic> _progression = {};
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -144,6 +145,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> subs = [];
     List<Map<String, dynamic>> stoppages = [];
     Map<String, dynamic>? training;
+    Map<String, dynamic> progression = {};
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
     Map<int, bool> freeByT = {};
@@ -194,6 +196,11 @@ class _MatchScreenState extends State<MatchScreen> {
           training = await _api.fetchTraining(widget.matchId);
         } catch (_) {
           training = null; // edzés-fókusz nélkül is teljes a nézet
+        }
+        try {
+          progression = await _api.fetchProgression(widget.matchId);
+        } catch (_) {
+          progression = {}; // állás-menet nélkül is teljes a nézet
         }
         try {
           momentum = await _api.fetchMomentum(widget.matchId);
@@ -268,6 +275,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _subs = subs;
       _stoppages = stoppages;
       _training = training;
+      _progression = progression;
       _sourceLabel = label;
       _frameIndex = 0;
       _heatmap = computeTeamHeatmap(match, _heatmapTeam);
@@ -2372,6 +2380,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           coach: _coach,
                           runs: _momentum,
                           training: _training,
+                          progression: _progression,
                         ),
                   DecisionsPanel(key: ValueKey(match.meta.matchId), match: match),
                   _eventsPanel(match),
