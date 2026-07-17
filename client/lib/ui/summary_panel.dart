@@ -36,6 +36,10 @@ class SummaryPanel extends StatelessWidget {
   /// Gól-sorozatok az eredmény-grafikon kiemeléséhez (üresnél nincs sáv).
   final List<Map<String, dynamic>> runs;
 
+  /// Edzés-fókusz javaslatok a backendtől: {"home": [...], "away": [...]}
+  /// — elemenként {"area","title","why","drill"}. Null/üresnél nincs kártya.
+  final Map<String, dynamic>? training;
+
   const SummaryPanel({
     super.key,
     required this.summary,
@@ -49,7 +53,73 @@ class SummaryPanel extends StatelessWidget {
     this.formations = const [],
     this.coach,
     this.runs = const [],
+    this.training,
   });
+
+  /// Edzés-fókusz kártya: csapatonként a javasolt gyakorlás-fókuszok,
+  /// indoklással (a meccs-adat) és gyakorlat-típussal.
+  List<Widget> _trainingCard() {
+    final t = training;
+    if (t == null) return const [];
+    final sides = [
+      ("home", homeName, AppColors.home),
+      ("away", awayName, AppColors.away),
+    ];
+    final hasAny = sides.any(
+        (s) => ((t[s.$1] as List?) ?? const []).isNotEmpty);
+    if (!hasAny) return const [];
+    return [
+      Text("EDZÉS-FÓKUSZ A MECCS ALAPJÁN", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (key, name, color) in sides)
+              if (((t[key] as List?) ?? const []).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(name,
+                      style: AppText.value.copyWith(
+                          fontSize: 12.5, color: color)),
+                ),
+                for (final it in ((t[key] as List).cast<Map<String, dynamic>>()))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text.rich(TextSpan(children: [
+                          TextSpan(
+                              text: "${it["title"]}",
+                              style: AppText.value.copyWith(fontSize: 12)),
+                          TextSpan(
+                              text: "  ·  ${it["area"]}",
+                              style: AppText.label.copyWith(
+                                  fontSize: 11, color: AppColors.textFaint)),
+                        ])),
+                        Text("miért: ${it["why"]}",
+                            style: AppText.label.copyWith(
+                                fontSize: 11.5, color: AppColors.textPrimary)),
+                        Text("gyakorlat: ${it["drill"]}",
+                            style: AppText.label.copyWith(
+                                fontSize: 11.5, color: AppColors.accent)),
+                      ],
+                    ),
+                  ),
+              ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +176,7 @@ class SummaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
         ],
+        ..._trainingCard(),
         if (goals.isNotEmpty) ...[
           Text("EREDMÉNY-ALAKULÁS", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),

@@ -815,6 +815,31 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass
 
+    # Edzés-fókusz: a meccs gyengeségeiből következő gyakorlás-javaslatok.
+    training_html = ""
+    try:
+        from .training import training_focus
+        tf = training_focus(match)
+        tparts = []
+        for side, name in (("home", home), ("away", away)):
+            items = tf.get(side) or []
+            if not items:
+                continue
+            lis = "".join(
+                f"<li><b>{escape(it['title'])}</b> ({escape(it['area'])}) — "
+                f"{escape(it['why'])}.<br>"
+                f"<span class='note'>Gyakorlat: {escape(it['drill'])}.</span></li>"
+                for it in items)
+            tparts.append(f"<h3>{escape(name)}</h3><ul>{lis}</ul>")
+        if tparts:
+            training_html = ("<h2>Edzés-fókusz a meccs alapján</h2>"
+                             + "".join(tparts)
+                             + '<p class="note">Szabály-alapú javaslatok — '
+                               'minden pont mögött a meccs kiszámolt adata '
+                               'áll.</p>')
+    except Exception:
+        pass  # a jelentés e blokk nélkül is teljes
+
     # Minőség-önellenőrzés (ha van): pontszám + figyelmeztetések.
     q_html = ""
     if quality:
@@ -904,6 +929,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   {xg_html}
 
   {defense_html}
+
+  {training_html}
 
   {gk_html}
 
