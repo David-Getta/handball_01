@@ -668,6 +668,28 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             parts_html.append('<h2>Támadás-mix (típus szerint)</h2>'
                               '<div class="cols">' + "".join(cols) + "</div>")
 
+        # Támadás-hatékonyság: típusonként lövésig/gólig jutás.
+        from .attack_types import attack_efficiency
+        eff = attack_efficiency(match)
+        erows = []
+        for key, name in (("home", home), ("away", away)):
+            for typ, rec in (eff.get(key) or {}).items():
+                if rec["attacks"] < 2:
+                    continue
+                erows.append(
+                    f"<tr><td>{escape(name)}</td><td>{escape(typ)}</td>"
+                    f'<td class="num">{rec["attacks"]}</td>'
+                    f'<td class="num">{rec["shots"]}</td>'
+                    f'<td class="num">{rec["goals"]}</td>'
+                    f'<td class="num"><b>{rec["goal_pct"]:.0f}%</b></td></tr>')
+        if erows:
+            parts_html.append(
+                "<h2>Támadás-hatékonyság (típusonként)</h2>"
+                "<table><tr><th>Csapat</th><th>Típus</th>"
+                '<th class="num">Támadás</th><th class="num">Lövés</th>'
+                '<th class="num">Gól</th><th class="num">Gól%</th></tr>'
+                + "".join(erows) + "</table>")
+
         from .goalkeeper import detect_empty_net
         empty = detect_empty_net(match)
         if empty:
