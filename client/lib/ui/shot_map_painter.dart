@@ -6,6 +6,8 @@
 /// fehér gyűrűs jelölőt kap.
 library;
 
+import "dart:math" as math;
+
 import "package:flutter/material.dart";
 
 import "../models/tracking.dart";
@@ -23,7 +25,12 @@ class ShotMarker {
 
   /// Helyzetminőség (0..~0,9) a backendtől — a jelölő mérete mutatja.
   final double? xg;
-  const ShotMarker(this.t, this.team, this.goal, this.x, this.y, {this.xg});
+
+  /// SZABAD lövés volt-e (nem volt védő a lövő 2 m-es körzetében) —
+  /// szaggatott fehér gyűrű jelzi; null: nem mérhető.
+  final bool? free;
+  const ShotMarker(this.t, this.team, this.goal, this.x, this.y,
+      {this.xg, this.free});
 }
 
 class ShotMapPainter extends CustomPainter {
@@ -52,6 +59,18 @@ class ShotMapPainter extends CustomPainter {
           ..color = AppColors.gold
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.5);
+      }
+      // Szabad lövés: pontozott fehér gyűrű — a fedezés-hibák ránézésre
+      // kirajzolódnak (hol maradt őrizetlenül a lövő).
+      if (s.free == true) {
+        const dots = 10;
+        for (var i = 0; i < dots; i++) {
+          final a = i * 2 * 3.14159265 / dots;
+          canvas.drawCircle(
+              p + Offset((r + 3.5) * math.cos(a), (r + 3.5) * math.sin(a)),
+              0.9,
+              Paint()..color = Colors.white.withOpacity(0.85));
+        }
       }
       if (active) {
         canvas.drawCircle(p, r + 3, Paint()

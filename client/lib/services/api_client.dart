@@ -529,6 +529,19 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Védekezés-elemzés (GET /matches/{id}/defense): kapott lövések —
+  /// szabadon hagyott lövők, zóna-lyukak, kapott xG.
+  Future<Map<String, dynamic>> fetchDefense(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/defense"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni a védekezés-elemzést: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http

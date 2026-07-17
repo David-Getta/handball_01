@@ -1257,6 +1257,16 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return match_xg(match)
 
+    @app.get("/matches/{match_id}/defense")
+    def get_defense(match_id: str):
+        """Védekezés-elemzés: kapott lövések — szabadon hagyott lövők,
+        zóna-lyukak, kapott xG (csapatonként, a védekező szemszögéből)."""
+        from ..pipeline.defense import defense_analysis
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return defense_analysis(match)
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
