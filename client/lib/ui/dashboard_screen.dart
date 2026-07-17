@@ -762,6 +762,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Részleges meccs + a folytatásai egy gombbal, időrendben összefűzve —
+  /// mivel ugyanabból a videóból jöttek, a lejátszás is megmarad.
+  Future<void> _mergeWithContinuation(String id, List<String> contIds) async {
+    try {
+      final newId = await _api
+          .mergeMatches([id, ...contIds], matchId: "$id-teljes");
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Teljes meccs létrehozva: $newId — az "
+              "eredeti részek megmaradtak")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Nem sikerült az összefűzés: $e")));
+    }
+  }
+
   /// Részleges meccs feldolgozásának folytatása: a backend a mentett
   /// beállításokkal új jobot indít onnan, ahol a feldolgozás megszakadt.
   /// Az eredmény külön meccsként jelenik meg ("<id>-folyt").
@@ -1250,6 +1268,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final date = (sum?["date"] as String?) ?? "";
     // Részleges feldolgozás (megszakítva / összeomlás után mentve).
     final partial = (m["partial"] as bool?) ?? false;
+    // A hozzá tartozó folytatás-meccsek ("<id>-folyt", "-folyt2", ...) —
+    // ha vannak, egy gombbal összefűzhető velük egy teljes meccsé.
+    final contIds = _matches
+        .map((x) => x["match_id"] as String)
+        .where((x) => x.startsWith("$id-folyt"))
+        .toList()
+      ..sort();
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -1322,6 +1347,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.play_circle_outline,
                     color: AppColors.gold),
                 tooltip: "Feldolgozás folytatása onnan, ahol megszakadt",
+              ),
+            if (partial && contIds.isNotEmpty)
+              IconButton(
+                onPressed: () => _mergeWithContinuation(id, contIds),
+                icon: const Icon(Icons.merge_type, color: AppColors.gold),
+                tooltip: "Összefűzés a folytatással egy teljes meccsé "
+                    "(${contIds.join(", ")})",
               ),
             IconButton(
               onPressed: () => _rename(m),
