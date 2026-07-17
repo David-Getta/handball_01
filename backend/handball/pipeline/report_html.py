@@ -817,6 +817,35 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
+    # Fejléc-összkép: dátum + xG + szabad lövő-arány egy sávban — a
+    # jelentés első pillantásra elmondja a meccs lényegét.
+    header_bits = []
+    if meta.date:
+        header_bits.append(escape(str(meta.date)))
+    try:
+        from .xg import match_xg
+        _tx = match_xg(match)["teams"]
+        if _tx["home"]["shots"] + _tx["away"]["shots"] >= 4:
+            header_bits.append(
+                f'várható gól (xG): {_tx["home"]["xg"]:.1f} – '
+                f'{_tx["away"]["xg"]:.1f}')
+    except Exception:
+        pass
+    try:
+        from .defense import defense_analysis
+        _d = defense_analysis(match)
+        if any(_d[s_]["free_pct"] is not None for s_ in ("home", "away")):
+            def _fp(side):
+                v = _d[side]["free_pct"]
+                return f"{v:.0f}%" if v is not None else "—"
+            header_bits.append(
+                f'szabad lövőt enged: {_fp("home")} / {_fp("away")}')
+    except Exception:
+        pass
+    header_extra = (
+        f'<div class="sub">{" · ".join(header_bits)}</div>'
+        if header_bits else "")
+
     # Kapus-teljesítmény (ha van kapus-jelölés a meccsen).
     gk_html = ""
     try:
@@ -936,6 +965,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     <div class="brand">Sport Machine · Meccsjelentés</div>
     <h1>{home} <span style="color:#8492A6">vs</span> {away}</h1>
     <div class="sub">Elemzett szakasz: {dur_s / 60:.1f} perc · felismert gólok: {goals_h}–{goals_a}</div>
+    {header_extra}
   </header>
 
   {summary_html}
