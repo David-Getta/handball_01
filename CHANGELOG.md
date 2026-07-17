@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#158)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#170)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -69,6 +69,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Gólpassz-hálózat**: ki kinek készíti elő a gólokat (gól-párosok,
   gólpassz-vezérek) — összefoglalóban és a csomag-exportban. (#156,
   #157, #158)
+- **Védekezési nyomás**: a labdás játékosra kilépő legközelebbi védő
+  átlagos távolsága (szorosabb/lazább védekezés) — összefoglalóban,
+  jelentésben, felderítésben, edzés-fókuszban. (#163, #164, #165)
+- **Lövés-választás minősége**: átlagos xG lövésenként (nem csak az
+  összeg) — csapat-mutató a jelentésben, a felderítésben és a
+  lövéstérkép chipjén. (#166, #167, #168)
+- **Kondíció-mutató**: első vs második félidő tempó-esése csapatonként
+  (fáradás-jel a cserék időzítéséhez) — a /team-stats végponton, a
+  csomag-exportban és a jelentés Csapat-mutatók táblájában. (#169,
+  #170)
+
+### Új bemenetek felé (útiterv + alapok)
+- **TV-közvetítés előfeldolgozás**: vágás-felismerés (szín-hisztogram)
+  és totál/premier-plán osztályozás (él-energia szórása) — a használható
+  totálképes szakaszok kiszűrésére; /broadcast/segments végpont és
+  kliens-gomb. Alap a jövőbeli élő-elemzéshez. (#134, #135)
+- **Bemenet-roadmap**: a telepített több-kamerás + lidar arénarendszer és
+  a közvetítés-elemzés útiterve dokumentálva (docs/BROADCAST_AND_SENSORS).
+  Az elemzési rétegek méteres pozíciókon dolgoznak → szenzor-függetlenek,
+  csak a bemenet cserélődik. (#134)
 
 ### Kliens-élmény
 - **Meccs-sztori idővonal**: gólok, sorozatok, emberelőnyök, 7 a 6,
