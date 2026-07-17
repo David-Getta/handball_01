@@ -502,6 +502,20 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// TV-közvetítés elő-elemzése (GET /broadcast/segments): vágások +
+  /// totál/közeli szakaszok, és hogy "közvetítésnek látszik-e".
+  Future<Map<String, dynamic>> fetchBroadcastSegments(String path,
+      {int stride = 5}) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/broadcast/segments").replace(
+            queryParameters: {"path": path, "stride": "$stride"}))
+        .timeout(const Duration(seconds: 120));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a közvetítés-elemzés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Egy-képkockás detektálás-próba (GET /detect-preview): a YOLO által
   /// talált játékosok/labda berajzolva + darabszámok — az indítás előtti
   /// gyors ellenőrzéshez. Az első hívás lassabb (modell-betöltés).

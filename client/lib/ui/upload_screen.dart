@@ -401,9 +401,86 @@ class _UploadScreenState extends State<UploadScreen> {
 
   // Detektálás-próba folyamatban?
   bool _previewing = false;
+  // Közvetítés-ellenőrzés folyamatban?
+  bool _checkingBroadcast = false;
 
   /// Egy-képkockás detektálási próba: a backend berajzolja a találatokat,
   /// az eredmény párbeszédablakban jelenik meg darabszámokkal.
+  /// Közvetítés-ellenőrzés: a videó vágás-szerkezetét nézi meg. TV-s
+  /// felvételnél (sok vágás) figyelmeztet, és megmutatja a használható
+  /// totálkép-szakaszokat — a hosszú feldolgozás ELŐTT.
+  Future<void> _runBroadcastCheck() async {
+    setState(() => _checkingBroadcast = true);
+    try {
+      final r = await _api.fetchBroadcastSegments(_pathCtrl.text.trim());
+      if (!mounted) return;
+      final looksBroadcast = (r["looks_like_broadcast"] as bool?) ?? false;
+      final cuts = ((r["cuts"] as List?) ?? const []).length;
+      final usable = ((r["usable"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>();
+      final fps = (r["fps"] as num?)?.toDouble() ?? 25.0;
+      final stride = (r["stride"] as num?)?.toInt() ?? 5;
+      final effFps = fps > 0 ? fps / stride : 5.0;
+      double usableS = 0;
+      for (final u in usable) {
+        usableS += (((u["end"] as num) - (u["start"] as num) + 1) / effFps);
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: Row(children: [
+            Icon(looksBroadcast ? Icons.live_tv : Icons.videocam,
+                color: looksBroadcast ? AppColors.gold : AppColors.accent,
+                size: 20),
+            const SizedBox(width: 8),
+            const Text("Közvetítés-ellenőrzés"),
+          ]),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  looksBroadcast
+                      ? "Ez tévés/vágott közvetítésnek tűnik ($cuts vágás)."
+                      : "Ez folyamatos, vágatlan felvételnek tűnik "
+                          "($cuts vágás) — a saját kamerás elemzésre ideális.",
+                  style: AppText.value.copyWith(fontSize: 13.5),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  looksBroadcast
+                      ? "Vágott anyagnál csak a hosszabb totálkép-szakaszok "
+                          "elemezhetők megbízhatóan. Talált használható "
+                          "szakasz: ${usable.length} "
+                          "(összesen ${usableS.toStringAsFixed(0)} mp). A "
+                          "vágások közti totálképre a vonal-alapú auto-"
+                          "kalibráció még fejlesztés alatt."
+                      : "Nincs teendő — indítható a szokásos feldolgozás.",
+                  style: AppText.label.copyWith(
+                      fontSize: 12, color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("Rendben")),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Közvetítés-ellenőrzés hiba: $e")));
+    } finally {
+      if (mounted) setState(() => _checkingBroadcast = false);
+    }
+  }
+
   Future<void> _runDetectPreview() async {
     setState(() => _previewing = true);
     try {
@@ -844,6 +921,22 @@ class _UploadScreenState extends State<UploadScreen> {
           label: Text(_previewing
               ? "Próba fut… (első alkalommal lassabb)"
               : "Detektálás-próba (1 képkocka)"),
+        ),
+      ),
+      const SizedBox(height: 6),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: !_hasVideo || _checkingBroadcast
+              ? null
+              : _runBroadcastCheck,
+          icon: _checkingBroadcast
+              ? const SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.live_tv_outlined, size: 18),
+          label: Text(_checkingBroadcast
+              ? "Közvetítés-ellenőrzés fut…"
+              : "Közvetítés-ellenőrzés (vágott-e a felvétel?)"),
         ),
       ),
       const SizedBox(height: AppSpacing.md),
