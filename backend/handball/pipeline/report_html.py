@@ -864,6 +864,18 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 f'szabad lövőt enged: {_fp("home")} / {_fp("away")}')
     except Exception:
         pass
+    # Labdabirtoklás-sor az esemény-táblához (ha számolható).
+    poss_row = ""
+    try:
+        from .stats import possession_share
+        _ps = possession_share(match)
+        if _ps["home"]["pct"] or _ps["away"]["pct"]:
+            poss_row = (f'<tr><td>Labdabirtoklás</td>'
+                        f'<td class="num">{_ps["home"]["pct"]:.0f}%</td>'
+                        f'<td class="num">{_ps["away"]["pct"]:.0f}%</td></tr>')
+    except Exception:
+        pass
+
     # A meccs íve: fordulatok + legnagyobb előny (ha volt vezetés-váltás).
     prog_line = ""
     try:
@@ -1015,6 +1027,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     <tr><td>Gól</td><td class="num"><b>{goals_h}</b></td><td class="num"><b>{goals_a}</b></td></tr>
     <tr><td>Lövés</td><td class="num">{shots_h}</td><td class="num">{shots_a}</td></tr>
     <tr><td>Labdaeladás</td><td class="num">{to_h}</td><td class="num">{to_a}</td></tr>
+    {poss_row}
   </table>
 
   <h2>Játékfázisok</h2>
