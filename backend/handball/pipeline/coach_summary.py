@@ -174,6 +174,20 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                 sent += (f"; a legtöbb kapott gól innen: {rec['worst_zone']} "
                          f"({wz['goals']})")
         parts.append(sent)
+    # Védekezési nyomás: szoros vagy laza fal (ha mérhető).
+    try:
+        from .defense import defensive_pressure
+        dp = defensive_pressure(match)
+        for side, name in (("home", home), ("away", away)):
+            pr = dp[side]["avg_pressure_m"]
+            if pr is not None and dp[side]["frames"] >= 50:
+                how = ("szorosan, előretolva" if pr <= 1.3
+                       else "lazán, mélyen" if pr >= 2.5 else "közepesen")
+                parts.append(f"a(z) {name} {how} védekezett (a labdásra átlag "
+                             f"{pr:.1f} m-re lépett ki)")
+    except Exception:
+        pass
+
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (visszazárás).
     try:
         from .defense import transition_defense
