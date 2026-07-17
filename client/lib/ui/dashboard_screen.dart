@@ -927,6 +927,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: AppSpacing.xl),
             _seasonCards(),
+            // Szezon-trend: helyzetminőség (xG) meccsről meccsre — látszik,
+            // merre tart a csapat (legalább 2 xG-s meccsből rajzolódik ki).
+            ..._seasonTrend(),
             // Folyamatban lévő feldolgozások (sor): élő állapot + megszakítás.
             if (_jobs.any(_isActiveJob)) ...[
               const SizedBox(height: AppSpacing.xl),
@@ -1196,6 +1199,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ],
     );
+  }
+
+  /// Szezon-trend kártya: meccsenkénti xG-oszloppár (hazai/vendég) idő-
+  /// rendben, az eredménnyel — a részletek buborékban. Csak akkor látszik,
+  /// ha legalább két meccsen számolható volt helyzetminőség.
+  List<Widget> _seasonTrend() {
+    final pts = _perMatch.values
+        .where((m) => m["xg_home"] != null && m["xg_away"] != null)
+        .toList()
+      ..sort((a, b) => ((a["date"] as String?) ?? "")
+          .compareTo((b["date"] as String?) ?? ""));
+    if (pts.length < 2) return const [];
+    var maxXg = 0.1;
+    for (final m in pts) {
+      for (final k in ["xg_home", "xg_away"]) {
+        final v = (m[k] as num).toDouble();
+        if (v > maxXg) maxXg = v;
+      }
+    }
+    return [
+      const SizedBox(height: AppSpacing.xl),
+      Container(
+        decoration: AppTheme.card(),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text("SZEZON-TREND · HELYZETMINŐSÉG (xG)",
+              style: AppText.label.copyWith(fontSize: 11, letterSpacing: 0.6)),
+          const SizedBox(height: AppSpacing.md),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (final m in pts) ...[
+                  Tooltip(
+                    message: "${m["home_team"]} ${m["goals_home"]} : "
+                        "${m["goals_away"]} ${m["away_team"]}"
+                        "${(m["date"] as String?)?.isNotEmpty == true ? " · ${m["date"]}" : ""}
+"
+                        "xG: ${(m["xg_home"] as num).toStringAsFixed(1)} – "
+                        "${(m["xg_away"] as num).toStringAsFixed(1)}"
+                        "${m["free_pct_home"] != null ? "
+szabad lövőt enged: "
+                            "H ${(m["free_pct_home"] as num).toStringAsFixed(0)}% · "
+                            "V ${((m["free_pct_away"] as num?) ?? 0).toStringAsFixed(0)}%" : ""}",
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Container(
+                            width: 7,
+                            height: 8 +
+                                40 * (m["xg_home"] as num).toDouble() / maxXg,
+                            decoration: BoxDecoration(
+                                color: AppColors.home,
+                                borderRadius: BorderRadius.circular(2))),
+                        const SizedBox(width: 2),
+                        Container(
+                            width: 7,
+                            height: 8 +
+                                40 * (m["xg_away"] as num).toDouble() / maxXg,
+                            decoration: BoxDecoration(
+                                color: AppColors.away,
+                                borderRadius: BorderRadius.circular(2))),
+                      ]),
+                      const SizedBox(height: 3),
+                      Text("${m["goals_home"]}:${m["goals_away"]}",
+                          style: AppText.label.copyWith(fontSize: 10)),
+                    ]),
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+              "oszloppár = a két csapat várható gólja (kék: hazai, piros: "
+              "vendég) · vidd az egeret fölé a részletekért",
+              style: AppText.label.copyWith(
+                  fontSize: 10, color: AppColors.textFaint)),
+        ]),
+      ),
+    ];
   }
 
   /// A gól-kártya kis jegyzete: lövések + szezon-gólarány (+ védések).

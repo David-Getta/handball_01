@@ -1149,6 +1149,24 @@ def create_app():
             suspensions = len(detect_powerplay(m))
         except Exception:
             pass
+        # Szezon-trendhez: helyzetminőség (xG) és a védekezés szabad lövés-
+        # aránya csapatonként — a dashboard trend-sávjai ezekből épülnek.
+        xg_home = xg_away = None
+        free_home = free_away = None
+        try:
+            from ..pipeline.xg import match_xg
+            tx = match_xg(m)["teams"]
+            if tx["home"]["shots"] + tx["away"]["shots"] > 0:
+                xg_home, xg_away = tx["home"]["xg"], tx["away"]["xg"]
+        except Exception:
+            pass
+        try:
+            from ..pipeline.defense import defense_analysis
+            d = defense_analysis(m)
+            free_home = d["home"]["free_pct"]
+            free_away = d["away"]["free_pct"]
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -1163,6 +1181,10 @@ def create_app():
             "sprints": sprints,
             "seven_meters": seven_meters,
             "suspensions": suspensions,
+            "xg_home": xg_home,
+            "xg_away": xg_away,
+            "free_pct_home": free_home,
+            "free_pct_away": free_away,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out

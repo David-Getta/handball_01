@@ -91,3 +91,14 @@ def test_summary_empty_library():
     assert s["matches"] == 0
     assert s["per_match"] == []
     assert s["goals"] == 0 and s["distance_km"] == 0.0
+
+
+def test_summary_includes_trend_fields():
+    """A meccsenkénti kivonatban ott vannak a szezon-trend mezők (xG és
+    szabad lövés-arány) — None is érvényes, ha nem számolható."""
+    client, ids = _client_with_matches(1)
+    d = client.get("/library/summary").json()["per_match"][0]
+    for k in ("xg_home", "xg_away", "free_pct_home", "free_pct_away"):
+        assert k in d
+    if d["xg_home"] is not None:
+        assert d["xg_home"] >= 0 and d["xg_away"] >= 0
