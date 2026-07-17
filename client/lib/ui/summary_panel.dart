@@ -40,6 +40,10 @@ class SummaryPanel extends StatelessWidget {
   /// — elemenként {"area","title","why","drill"}. Null/üresnél nincs kártya.
   final Map<String, dynamic>? training;
 
+  /// Vezetés-alakulás a backendtől: {biggest_lead, lead_changes,
+  /// lead_time_s, final}. Üresnél nincs felirat.
+  final Map<String, dynamic>? progression;
+
   const SummaryPanel({
     super.key,
     required this.summary,
@@ -54,7 +58,29 @@ class SummaryPanel extends StatelessWidget {
     this.coach,
     this.runs = const [],
     this.training,
+    this.progression,
   });
+
+  /// Vezetés-alakulás felirat az eredmény-grafikon alatt: fordulatok +
+  /// legnagyobb előny (ha a backend adott ilyet és volt fordulat).
+  List<Widget> _progressionCaption() {
+    final p = progression;
+    if (p == null || p.isEmpty) return const [];
+    final changes = (p["lead_changes"] as num?)?.toInt() ?? 0;
+    final bl = (p["biggest_lead"] as Map?)?.cast<String, dynamic>() ?? {};
+    final hLead = (bl["home"] as num?)?.toInt() ?? 0;
+    final aLead = (bl["away"] as num?)?.toInt() ?? 0;
+    if (changes < 1 && hLead == 0 && aLead == 0) return const [];
+    final topName = hLead >= aLead ? homeName : awayName;
+    final topLead = hLead >= aLead ? hLead : aLead;
+    return [
+      const SizedBox(height: 4),
+      Text(
+          "A meccs ${changes}-szor fordult · legnagyobb előny: "
+          "$topName +$topLead",
+          style: AppText.label.copyWith(fontSize: 11, color: AppColors.textFaint)),
+    ];
+  }
 
   /// Edzés-fókusz kártya: csapatonként a javasolt gyakorlás-fókuszok,
   /// indoklással (a meccs-adat) és gyakorlat-típussal.
@@ -189,6 +215,7 @@ class SummaryPanel extends StatelessWidget {
             onSeekFrame: onSeekFrame,
             runs: runs,
           ),
+          ..._progressionCaption(),
           const SizedBox(height: AppSpacing.xl),
         ],
         if (intensity.length >= 2) ...[
