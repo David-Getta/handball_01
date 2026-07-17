@@ -647,6 +647,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     : (m["free_pct_away"] as num).toStringAsFixed(0),
                 "%")
           ],
+          [
+            "Labdabirtoklás (H–V)",
+            m["possession_home"] == null
+                ? "—"
+                : "${(m["possession_home"] as num).toStringAsFixed(0)}% – "
+                    "${((m["possession_away"] as num?) ?? 0).toStringAsFixed(0)}%"
+          ],
           ["Hétméteres", fmt(m["seven_meters"])],
           ["Kiállítás", fmt(m["suspensions"])],
           [
