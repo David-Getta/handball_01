@@ -62,6 +62,16 @@ def test_package_without_video_contains_report_and_csv():
     z = zipfile.ZipFile(io.BytesIO(pkg.content))
     names = z.namelist()
     assert "jelentes.html" in names and "statisztika.csv" in names
+    # Az összes elemzés-réteg géppel olvasható JSON-ban is benne van.
+    assert "elemzesek.json" in names
+    import json as _json
+    analyses = _json.loads(z.read("elemzesek.json").decode("utf-8"))
+    for key in ("coach_summary", "xg", "defense", "rules", "training"):
+        assert key in analyses, key
+    # Az edzői összefoglaló sima szövegként is (osszefoglalo.txt).
+    assert "osszefoglalo.txt" in names
+    txt = z.read("osszefoglalo.txt").decode("utf-8")
+    assert "vs" in txt
     assert "klipek.zip" not in names  # nincs videó → nincs klip
     html = z.read("jelentes.html").decode("utf-8")
     assert "Meccsjelentés" in html
