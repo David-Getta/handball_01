@@ -20,7 +20,10 @@ class ShotMarker {
   final bool goal;
   final double x;
   final double y;
-  const ShotMarker(this.t, this.team, this.goal, this.x, this.y);
+
+  /// Helyzetminőség (0..~0,9) a backendtől — a jelölő mérete mutatja.
+  final double? xg;
+  const ShotMarker(this.t, this.team, this.goal, this.x, this.y, {this.xg});
 }
 
 class ShotMapPainter extends CustomPainter {
@@ -36,7 +39,11 @@ class ShotMapPainter extends CustomPainter {
       final p = Offset(origin.dx + s.x * scale, origin.dy + s.y * scale);
       final teamColor = s.team == Team.home ? AppColors.home : AppColors.away;
       final active = s.t == currentFrame;
-      final r = active ? 8.0 : 6.0;
+      // A jelölő mérete a helyzet értéke (xG): a nagy körök a nagy
+      // helyzetek — ránézésre látszik, hol puskáztunk el ziccert.
+      final base =
+          s.xg == null ? 6.0 : 4.0 + 5.0 * (s.xg!.clamp(0.0, 0.9) / 0.9);
+      final r = active ? base + 2.5 : base;
       // Felület-színű alap: sűrű helyeken is elválnak a jelölők.
       canvas.drawCircle(p, r + 2, Paint()..color = AppColors.surface);
       canvas.drawCircle(p, r, Paint()..color = teamColor.withOpacity(s.goal ? 1.0 : 0.55));

@@ -516,6 +516,19 @@ class ApiClient {
     return (json["runs"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Helyzetminőség (GET /matches/{id}/xg): lövésenkénti xG + csapat-
+  /// összegzés (várható gól vs tényleges).
+  Future<Map<String, dynamic>> fetchXg(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/xg"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült lekérni a helyzetminőséget: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// 7 a 6 elleni (üres kapus) szakaszok (GET /matches/{id}/empty-net).
   Future<List<Map<String, dynamic>>> fetchEmptyNet(String matchId) async {
     final resp = await http

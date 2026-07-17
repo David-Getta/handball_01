@@ -95,6 +95,28 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
     return {"title": "Gólok és lövések", "body": body}
 
 
+def _xg_section(match: Match, home: str, away: str) -> dict | None:
+    """Helyzetminőség: várható gól (xG) vs tényleges — befejezés-hatékonyság."""
+    from .xg import match_xg
+    r = match_xg(match)
+    th, ta = r["teams"]["home"], r["teams"]["away"]
+    if th["shots"] + ta["shots"] < 4:  # kevés lövésből nincs értelmes kép
+        return None
+    body = (f"A kidolgozott helyzetek értéke (várható gól) {home} "
+            f"{th['xg']:.1f} – {ta['xg']:.1f} {away}, a tényleges gólok: "
+            f"{th['goals']} : {ta['goals']}.")
+    for rec, name in ((th, home), (ta, away)):
+        if rec["shots"] < 3:
+            continue
+        if rec["diff"] >= 0.8:
+            body += (f" A(z) {name} a helyzeteinél többet ért el "
+                     f"(+{rec['diff']:.1f}) — pontos befejezés.")
+        elif rec["diff"] <= -0.8:
+            body += (f" A(z) {name} elpuskázott helyzeteket "
+                     f"({rec['diff']:.1f}) — a befejezésen érdemes dolgozni.")
+    return {"title": "Helyzetminőség", "body": body}
+
+
 def _style_section(match: Match, home: str, away: str) -> dict | None:
     prof = team_style_profile(match)
     tempo = prof.get("tempo", {})
@@ -247,7 +269,7 @@ def coach_summary(match: Match) -> dict:
     sections: list[dict] = []
     highlights: list[str] = []
 
-    for build in (_events_section, _style_section):
+    for build in (_events_section, _xg_section, _style_section):
         try:
             s = build(match, home, away)
             if s:
