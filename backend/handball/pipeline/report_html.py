@@ -651,6 +651,36 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass
 
+    # Gólpassz-hálózat: a legerősebb gól-párosok (passzoló → lövő).
+    try:
+        from .event_detection import assist_network
+        net = assist_network(match)
+        jof = {}
+        for fr in match.frames:
+            for pp in fr.players:
+                if pp.jersey_number is not None:
+                    jof.setdefault(pp.track_id, pp.jersey_number)
+
+        def _lab(pid):
+            j = jof.get(pid)
+            return f"#{j}" if j is not None else f"{pid}."
+
+        gcols = []
+        for side, name in (("home", home), ("away", away)):
+            pairs = net[side]["pairs"][:6]
+            if not pairs:
+                continue
+            rows = "".join(
+                f'<tr><td>{escape(_lab(pr["from"]))} → {escape(_lab(pr["to"]))}</td>'
+                f'<td class="num">{pr["goals"]} gól</td></tr>' for pr in pairs)
+            gcols.append(f'<div class="col"><b>{escape(name)}</b>'
+                         f'<table>{rows}</table></div>')
+        if gcols:
+            passes_html += ('<h2>Legerősebb gól-párosok</h2>'
+                            '<div class="cols">' + "".join(gcols) + "</div>")
+    except Exception:
+        pass
+
     # Edzői jegyzetek (ha vannak): időbélyeggel, idő szerint rendezve.
     notes_html = ""
     if notes:
