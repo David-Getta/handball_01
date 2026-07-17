@@ -76,3 +76,42 @@ def test_focus_list_is_capped():
     """A lista rangsorolt és legfeljebb 5 elemű (a fókusz kevés elem)."""
     tf = training_focus(_shots_match(goal=True, defender_far=True))
     assert len(tf["away"]) <= 5 and len(tf["home"]) <= 5
+
+
+def test_library_recurring_focus_endpoint(tmp_path):
+    """A könyvtár-szintű összesítés: az azonos csapatnévvel két meccsen is
+    előjövő gyengeség "visszatérő"-ként, darabszámmal jelenik meg."""
+    import json
+    import os
+    import tempfile
+
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
+
+    tmp = tempfile.mkdtemp(prefix="hb_focus_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp
+    from pathlib import Path as _P
+
+    from handball.api.app import create_app
+
+    mdir = _P(tmp) / "data" / "matches"
+    mdir.mkdir(parents=True, exist_ok=True)
+    for i in (1, 2):
+        m = _shots_match(goal=True, defender_far=True)
+        m.meta.match_id = f"m{i}"
+        m.meta.home_team = "Veszprém"
+        m.meta.away_team = "Szeged"  # ők kapják a szabad lövéseket
+        (mdir / f"m{i}.json").write_text(m.to_json(), encoding="utf-8")
+
+    client = TestClient(create_app())
+    r = client.get("/library/training-focus").json()
+    assert r["matches"]["Szeged"] == 2
+    szeged = r["teams"]["Szeged"]
+    fed = next(it for it in szeged if it["title"] == "Fedezés-fegyelem")
+    assert fed["count"] == 2
+    assert fed["why"] and fed["drill"]
+    # A hazai (Veszprém) oldalon nincs visszatérő gyengeség ebből a jelből.
+    assert "Veszprém" not in r["teams"] or all(
+        it["title"] != "Fedezés-fegyelem" for it in r["teams"]["Veszprém"])

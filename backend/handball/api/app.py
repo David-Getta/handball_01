@@ -1242,6 +1242,53 @@ def create_app():
             "per_match": per,
         }
 
+    # Edzés-fókusz kivonat-gyorsítótár (match_id → (kulcs, eredmény)) — a
+    # könyvtár-szintű összesítés ne számolja újra a változatlan meccseket.
+    _training_cache: dict = {}
+
+    @app.get("/library/training-focus")
+    def library_training_focus():
+        """VISSZATÉRŐ edzés-fókuszok csapatonként, a teljes könyvtárból.
+
+        Minden tárolt meccsre lefut az edzés-fókusz elemzés, és a csapat-
+        nevek mentén összesítjük: ami legalább KÉT meccsen előjött, az nem
+        egyszeri kisiklás, hanem visszatérő gyengeség — az edzéstervezés
+        első számú jelöltje. Visszatérés:
+        {"teams": {csapatnév: [{"title","area","count","why","drill"}]},
+         "matches": {csapatnév: meccsek száma}}."""
+        from ..pipeline.training import training_focus
+        agg: dict = {}
+        counts: dict = {}
+        for m in _store.values():
+            key = (len(m.frames), m.meta.home_team, m.meta.away_team)
+            cached = _training_cache.get(m.meta.match_id)
+            if cached is not None and cached[0] == key:
+                tf = cached[1]
+            else:
+                try:
+                    tf = training_focus(m)
+                except Exception:
+                    tf = {"home": [], "away": []}
+                _training_cache[m.meta.match_id] = (key, tf)
+            for side, name in (("home", m.meta.home_team),
+                               ("away", m.meta.away_team)):
+                if not name:
+                    continue
+                counts[name] = counts.get(name, 0) + 1
+                for it in tf.get(side) or []:
+                    rec = agg.setdefault(name, {}).setdefault(it["title"], {
+                        "title": it["title"], "area": it["area"],
+                        "count": 0, "why": it["why"], "drill": it["drill"]})
+                    rec["count"] += 1
+                    rec["why"] = it["why"]  # a legutóbbi meccs indoka
+        teams = {}
+        for name, items in agg.items():
+            recurring = sorted((r for r in items.values() if r["count"] >= 2),
+                               key=lambda r: -r["count"])
+            if recurring:
+                teams[name] = recurring
+        return {"teams": teams, "matches": counts}
+
     @app.get("/matches/{match_id}/goalkeepers")
     def get_goalkeeper_stats(match_id: str):
         """Kapus-teljesítmény: kapott kapura tartó lövések, védések,
