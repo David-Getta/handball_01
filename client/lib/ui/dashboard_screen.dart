@@ -625,6 +625,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         (h == null && aVal == null)
             ? "—"
             : "${fmt(h, unit)} – ${fmt(aVal, unit)}";
+    // Tempó-esés: pozitív érték = lassulás a 2. félidőre (−X%),
+    // negatív = felpörgés (+X%).
+    String _dropStr(dynamic v) {
+      if (v == null) return "—";
+      final d = (v as num).toDouble();
+      return d > 0 ? "−${d.toStringAsFixed(0)}%" : "+${(-d).toStringAsFixed(0)}%";
+    }
     List<List<String>> rows(Map<String, dynamic> m) => [
           ["Eredmény", "${m["goals_home"]} : ${m["goals_away"]}"],
           ["További lövések", fmt(m["shots"])],
@@ -653,6 +660,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ? "—"
                 : "${(m["possession_home"] as num).toStringAsFixed(0)}% – "
                     "${((m["possession_away"] as num?) ?? 0).toStringAsFixed(0)}%"
+          ],
+          [
+            "Tempó-esés 2. félidő (H–V)",
+            m["cond_drop_home"] == null && m["cond_drop_away"] == null
+                ? "—"
+                : "${_dropStr(m["cond_drop_home"])} – "
+                    "${_dropStr(m["cond_drop_away"])}"
           ],
           ["Hétméteres", fmt(m["seven_meters"])],
           ["Kiállítás", fmt(m["suspensions"])],
