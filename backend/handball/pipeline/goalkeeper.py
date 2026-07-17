@@ -118,7 +118,8 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
     for team, tid in gk_of_team.items():
         out[team.value] = {"track_id": tid, "on_target": 0, "saves": 0,
                            "conceded": 0, "save_pct": 0.0,
-                           "conceded_zones": {},
+                           "conceded_zones": {}, "on_target_zones": {},
+                           "zone_save_pct": {},
                            "seven_faced": 0, "seven_saved": 0}
 
     for e in detect_shots(match, config):
@@ -130,15 +131,20 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
         if outcome not in ("goal", "save"):
             continue  # a mellé menő lövés nem a kapus dolga
         rec["on_target"] += 1
+        # Honnan jött a kapura tartó lövés (a lövés pillanatának labda-
+        # pozíciójából) — minden kapura tartó lövésnél, hogy a zóna-
+        # bontásból védés-hatékonyságot is tudjunk számolni.
+        z = None
+        frame = frames_by_t.get(e.t)
+        if frame is not None and frame.ball is not None:
+            goal_x = config.attacks_toward_x(e.team)
+            z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)
+            rec["on_target_zones"][z] = rec["on_target_zones"].get(z, 0) + 1
         if outcome == "save":
             rec["saves"] += 1
         else:
             rec["conceded"] += 1
-            # Honnan kapta: a lövés pillanatának labda-pozíciójából.
-            frame = frames_by_t.get(e.t)
-            if frame is not None and frame.ball is not None:
-                goal_x = config.attacks_toward_x(e.team)
-                z = _shot_zone(frame.ball.x, frame.ball.y, goal_x)
+            if z is not None:
                 rec["conceded_zones"][z] = rec["conceded_zones"].get(z, 0) + 1
 
     # Hétméteresek a kapus szemszögéből: a VÉDEKEZŐ (kapus-) csapathoz
@@ -159,6 +165,14 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
     for rec in out.values():
         if rec["on_target"]:
             rec["save_pct"] = round(100.0 * rec["saves"] / rec["on_target"], 1)
+        # Zóna szerinti védés-hatékonyság: (kapura tartó − kapott) / kapura
+        # tartó az adott zónában — melyik sarok a kapus gyenge/erős pontja.
+        for zone, faced in rec["on_target_zones"].items():
+            if not faced:
+                continue
+            conceded = rec["conceded_zones"].get(zone, 0)
+            rec["zone_save_pct"][zone] = round(
+                100.0 * (faced - conceded) / faced, 1)
     return out
 
 # 7 a 6 elleni (üres kapus) játék felismerése:

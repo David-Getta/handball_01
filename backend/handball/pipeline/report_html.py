@@ -1014,20 +1014,31 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                                      key=lambda kv: -kv[1])) or "—"
             seven = (f"{rec.get('seven_saved', 0)}/{rec.get('seven_faced', 0)}"
                      if rec.get("seven_faced") else "—")
+            # Leggyengébb zóna: a legalacsonyabb védés%-ú, legalább 2 lövést
+            # kapott zóna — ide üt a legjobban a kapus ellen.
+            weak = "—"
+            zsp = rec.get("zone_save_pct", {})
+            otz = rec.get("on_target_zones", {})
+            cand = [(z, p) for z, p in zsp.items() if otz.get(z, 0) >= 2]
+            if cand:
+                z, p = min(cand, key=lambda kv: kv[1])
+                weak = f"{z} ({p:.0f}%)"
             rows.append(f"<tr><td>{name}</td>"
                         f"<td class='num'>{rec['on_target']}</td>"
                         f"<td class='num'>{rec['saves']}</td>"
                         f"<td class='num'>{rec['conceded']}</td>"
                         f"<td class='num'><b>{rec['save_pct']:.0f}%</b></td>"
                         f"<td class='num'>{seven}</td>"
-                        f"<td>{escape(zones)}</td></tr>")
+                        f"<td>{escape(zones)}</td>"
+                        f"<td>{escape(weak)}</td></tr>")
         if rows:
             gk_html = ("<h2>Kapus-teljesítmény</h2><table>"
                        "<tr><th>Csapat</th><th class='num'>Kapura</th>"
                        "<th class='num'>Védés</th><th class='num'>Kapott</th>"
                        "<th class='num'>Védés%</th>"
                        "<th class='num'>7 m-es (fogott/kapott)</th>"
-                       "<th>Kapott gólok zónái</th></tr>"
+                       "<th>Kapott gólok zónái</th>"
+                       "<th>Leggyengébb zóna</th></tr>"
                        + "".join(rows) + "</table>")
     except Exception:
         pass
