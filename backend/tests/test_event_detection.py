@@ -146,3 +146,69 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+# ---- Gólpassz (assist) -------------------------------------------------------
+
+def _goal_with_pass(passer_present=True, receiver_id=2):
+    """Passz (1 → receiver_id), majd a 2-es játékos gólja a +x kapura."""
+    pls = lambda *ps: list(ps)  # noqa: E731
+    frames = [
+        Frame(t=0, players=pls(_pl(1, Team.HOME, 25.0, 10.0),
+                               _pl(2, Team.HOME, 30.0, 10.0)),
+              ball=Ball(x=25.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=pls(_pl(1, Team.HOME, 25.0, 10.0),
+                               _pl(receiver_id, Team.HOME, 30.0, 10.0)),
+              ball=Ball(x=30.0, y=10.0, confidence=1.0)),
+        Frame(t=2, players=pls(_pl(1, Team.HOME, 25.0, 10.0),
+                               _pl(2, Team.HOME, 33.0, 10.0)),
+              ball=Ball(x=33.0, y=10.0, confidence=1.0)),
+    ]
+    if not passer_present:  # csak a lövő: nincs passz-esemény a gól előtt
+        frames = [Frame(t=f.t, players=[p for p in f.players if p.track_id == 2],
+                        ball=f.ball) for f in frames]
+    for i in range(7):  # a lövés: 34..40, y=10 → gól a kapufák között
+        frames.append(Frame(t=3 + i,
+                            players=pls(_pl(2, Team.HOME, 33.0, 10.0)),
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_assist_attached_to_goal():
+    """Passz a lövőnek, majd gól → a gól detail-jében assist_id a passzoló."""
+    evs = detect_events(_goal_with_pass())
+    goals = [e for e in evs if e.type == EventType.GOAL]
+    assert len(goals) == 1
+    assert goals[0].player_id == 2               # a lövő
+    assert goals[0].detail.get("assist_id") == 1  # a gólpassz adója
+
+
+def test_no_assist_without_prior_pass():
+    """Egyéni akció (nincs passz a gól előtt) → nincs assist_id."""
+    evs = detect_events(_goal_with_pass(passer_present=False))
+    goals = [e for e in evs if e.type == EventType.GOAL]
+    assert len(goals) == 1
+    assert "assist_id" not in (goals[0].detail or {})
+
+
+def test_old_pass_outside_window_is_not_assist():
+    """A lövő rég (több mint ASSIST_WINDOW_S) kapta a labdát → nem gólpassz
+    (egyéni akciónak számít, hiába volt korábban passz)."""
+    frames = [
+        Frame(t=0, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                            _pl(2, Team.HOME, 30.0, 10.0)],
+              ball=Ball(x=25.0, y=10.0, confidence=1.0)),
+        Frame(t=1, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                            _pl(2, Team.HOME, 30.0, 10.0)],
+              ball=Ball(x=30.0, y=10.0, confidence=1.0)),  # passz 1→2
+    ]
+    for t in range(2, 111):  # a lövő ~4,4 mp-ig vezeti a labdát
+        frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+    for i in range(7):  # lövés: 34..40, y=10 → gól
+        frames.append(Frame(t=111 + i, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+    evs = detect_events(Match(_meta(), frames))
+    goals = [e for e in evs if e.type == EventType.GOAL]
+    assert len(goals) == 1 and goals[0].player_id == 2
+    assert "assist_id" not in (goals[0].detail or {})

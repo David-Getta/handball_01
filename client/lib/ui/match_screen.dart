@@ -697,6 +697,8 @@ class _MatchScreenState extends State<MatchScreen> {
     final team = (e["team"] as String?) == "home" ? match.meta.homeTeam : match.meta.awayTeam;
     // Lövés-kimenetel a backendtől: védés (a kapus hárította) vagy mellé.
     final outcome = ((e["detail"] as Map?)?["outcome"] as String?) ?? "";
+    // Gólpassz (assist): a backend a gól detail-jébe teszi a passzoló id-ját.
+    final assistId = ((e["detail"] as Map?)?["assist_id"] as num?)?.toInt();
     final (label, icon, color) = switch (type) {
       "goal" => ("GÓL", Icons.sports_score, AppColors.gold),
       "shot" when outcome == "save" =>
@@ -735,12 +737,29 @@ class _MatchScreenState extends State<MatchScreen> {
           const SizedBox(width: 8),
           Text(label, style: AppText.value.copyWith(fontSize: 12.5, color: color)),
           const SizedBox(width: 8),
-          Expanded(child: Text(team, style: AppText.label.copyWith(fontSize: 11.5),
+          Expanded(child: Text(
+              assistId == null
+                  ? team
+                  : "$team · gólpassz: ${_playerShort(match, assistId)}",
+              style: AppText.label.copyWith(fontSize: 11.5),
               overflow: TextOverflow.ellipsis)),
           Text("${(t / fps).toStringAsFixed(1)} s", style: AppText.label.copyWith(fontSize: 11.5)),
         ]),
       ),
     );
+  }
+
+  /// Rövid játékos-címke az eseménysorhoz: mezszám, ha ismert ("#7"),
+  /// különben a track sorszáma ("12. játékos").
+  String _playerShort(Match match, int trackId) {
+    for (final f in match.frames) {
+      for (final p in f.players) {
+        if (p.trackId == trackId && p.jerseyNumber != null) {
+          return "#${p.jerseyNumber}";
+        }
+      }
+    }
+    return "$trackId. játékos";
   }
 
   /// Edzői jegyzetek: a lejátszó aktuális idejéhez fűzhető megjegyzés.
