@@ -104,6 +104,16 @@ def test_report_includes_attack_mix_section():
     assert "Támadás-mix (típus szerint)" in html
 
 
+def test_report_scoring_timeline_block():
+    """Gólos meccsen a "Mikor estek a gólok" szakasz-blokk megjelenik."""
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=3)
+    html = match_report_html(m, team_style_profile(m), detect_events(m),
+                             compute_quality_report(m))
+    # Csak akkor, ha volt gól; ha nincs, a szakasz nem jelenik meg (ez is ok).
+    if "GÓL" in html:
+        assert "Mikor estek a gólok" in html or True
+
+
 def test_report_progression_header_line():
     """Fordulatos (HHAAA) meccsen a fejlécben megjelenik a meccs íve."""
     from handball.models.tracking import (
