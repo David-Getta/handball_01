@@ -83,3 +83,29 @@ def test_empty_match_gives_zero():
     r = match_xg(m)
     assert r["shots"] == []
     assert r["teams"]["home"]["xg"] == 0.0
+
+
+def test_shooter_breakdown():
+    """Lövőnkénti bontás: két lövés ugyanattól a játékostól összegződik,
+    a diff a gól − xG; az azonosítatlan lövő nem szerepel a listában."""
+    frames = _shot_frames(0, 33.0, 10.0, goal=True)     # 1-es: gól közelről
+    frames.append(Frame(t=8, players=[], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _shot_frames(40, 28.0, 3.0, goal=False)   # 1-es: kihagyva
+    m = Match(_meta(), frames)
+    r = match_xg(m)
+    assert len(r["shooters"]) == 1
+    rec = r["shooters"][0]
+    assert rec["player_id"] == 1 and rec["team"] == "home"
+    assert rec["shots"] == 2 and rec["goals"] == 1
+    assert abs(rec["xg"] - r["teams"]["home"]["xg"]) < 0.02
+    assert abs(rec["diff"] - (1 - rec["xg"])) < 0.02
+
+
+def test_shooterless_shot_not_in_breakdown():
+    """Lövő nélküli (labda-alapú) lövés: a csapat-összegben igen, a
+    lövő-listában nem."""
+    frames = [Frame(t=i, players=[], ball=Ball(x=34.0 + i, y=10.0, confidence=1.0))
+              for i in range(7)]
+    r = match_xg(Match(_meta(), frames))
+    assert r["teams"]["home"]["shots"] == 1
+    assert r["shooters"] == []
