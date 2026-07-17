@@ -186,6 +186,11 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         0, (s, p) => s + ((p["shots"] as num?)?.toInt() ?? 0));
     final totalGoals = _points.fold(
         0, (s, p) => s + ((p["goals"] as num?)?.toInt() ?? 0));
+    // Szezon-szintű helyzetminőség: összes xG + befejezés-eltérés.
+    final totalXg = _points.fold(
+        0.0, (s, p) => s + ((p["xg"] as num?)?.toDouble() ?? 0.0));
+    final totalXgDiff = _points.fold(
+        0.0, (s, p) => s + ((p["xg_diff"] as num?)?.toDouble() ?? 0.0));
     return [
       // Szezon-összkép.
       Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
@@ -195,6 +200,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         if (totalShots > 0)
           _chip("gól/lövés: $totalGoals/$totalShots "
               "(${(100.0 * totalGoals / totalShots).toStringAsFixed(0)}%)"),
+        if (totalXg > 0)
+          _chip("várható gól: ${totalXg.toStringAsFixed(1)} · befejezés: "
+              "${totalXgDiff >= 0 ? "+" : ""}${totalXgDiff.toStringAsFixed(1)}"),
       ]),
       const SizedBox(height: AppSpacing.lg),
       // Fejléc + meccsenkénti sorok (táv-csíkkal — a forma ránézésre látszik).
@@ -207,6 +215,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           _cell("max km/h", 66),
           _cell("sprint", 48),
           _cell("gól/löv", 56),
+          _cell("xG ±", 52),
           _cell("perc", 44),
         ]),
       ),
@@ -284,6 +293,22 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                 textAlign: TextAlign.right,
                 style: AppText.label.copyWith(
                     fontSize: 13, color: AppColors.textPrimary))),
+        // Befejezés-eltérés a meccsen (gól − xG): zöldes = a helyzetei
+        // felett, piros = kihagyott helyzetek, — = nem lőtt.
+        SizedBox(
+            width: 52,
+            child: Builder(builder: (_) {
+              final d = (p["xg_diff"] as num?)?.toDouble();
+              final color = d == null || d.abs() < 0.3
+                  ? AppColors.textFaint
+                  : (d > 0 ? AppColors.accent : AppColors.away);
+              return Text(
+                  d == null
+                      ? "—"
+                      : "${d >= 0 ? "+" : ""}${d.toStringAsFixed(1)}",
+                  textAlign: TextAlign.right,
+                  style: AppText.label.copyWith(fontSize: 13, color: color));
+            })),
         SizedBox(
             width: 44,
             child: Text("${p["minutes"] ?? "-"}",
