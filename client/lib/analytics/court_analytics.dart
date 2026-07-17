@@ -371,11 +371,18 @@ class Heatmap {
 
 /// Egy csapat hőtérképe (alapból csak a mért pozíciók) — az analytics.py tükre.
 Heatmap computeTeamHeatmap(Match match, Team team,
-    {int binsX = 20, int binsY = 10, bool includeEstimated = false}) {
+    {int binsX = 20,
+    int binsY = 10,
+    bool includeEstimated = false,
+    // Opcionális idő-ablak (frame t-értékben): pl. csak az 1. félidő.
+    int? fromT,
+    int? toT}) {
   final grid = List.generate(binsY, (_) => List<double>.filled(binsX, 0.0));
   double total = 0.0, maxCell = 0.0;
 
   for (final f in match.frames) {
+    if (fromT != null && f.t < fromT) continue;
+    if (toT != null && f.t > toT) continue;
     for (final p in f.players) {
       if (p.team != team) continue;
       if (!includeEstimated && p.isEstimated) continue;

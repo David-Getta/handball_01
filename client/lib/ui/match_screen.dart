@@ -99,6 +99,9 @@ class _MatchScreenState extends State<MatchScreen> {
   // annak híján a labdáéból). Koppintásra a lejátszó a jelenetre ugrik.
   List<ShotMarker> _shots = [];
   String _shotTeam = "all"; // all | home | away — szűrő a lövéstérképen
+  // Idő-ablak a lövés- és hőtérképhez: all | h1 | h2 (a felezőpont a
+  // feldolgozott szakasz időbeli közepe — külön félidő-jel híján).
+  String _period = "all";
   // Passzháló: melyik csapatét mutatjuk (a két háló egymáson olvashatatlan).
   Team _passTeam = Team.home;
   PassNetwork? _passNetwork; // a kiválasztott csapat hálója (cache)
@@ -309,7 +312,8 @@ class _MatchScreenState extends State<MatchScreen> {
     if (match == null) return;
     setState(() {
       _heatmapTeam = team;
-      _heatmap = computeTeamHeatmap(match, team);
+      final (fromT, toT) = _periodRange();
+      _heatmap = computeTeamHeatmap(match, team, fromT: fromT, toT: toT);
     });
   }
 
@@ -1546,6 +1550,41 @@ class _MatchScreenState extends State<MatchScreen> {
               onChanged: (t) => t == null ? null : _setHeatmapTeam(t),
             ),
           ),
+        // Idő-ablak: az 1. és 2. félidő külön nézete — a fáradás és a
+        // félidei taktikai váltás a térképeken így válik láthatóvá.
+        if (_viewMode == ViewMode.shots || _viewMode == ViewMode.heatmap) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButton<String>(
+              value: _period,
+              underline: const SizedBox(),
+              dropdownColor: AppColors.surfaceAlt,
+              items: const [
+                DropdownMenuItem(value: "all", child: Text("Teljes meccs")),
+                DropdownMenuItem(value: "h1", child: Text("1. félidő")),
+                DropdownMenuItem(value: "h2", child: Text("2. félidő")),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() {
+                  _period = v;
+                  final m = _match;
+                  if (m != null) {
+                    final (fromT, toT) = _periodRange();
+                    _heatmap = computeTeamHeatmap(m, _heatmapTeam,
+                        fromT: fromT, toT: toT);
+                  }
+                });
+              },
+            ),
+          ),
+        ],
         const Spacer(),
         _legend(),
       ],
@@ -1615,11 +1654,25 @@ class _MatchScreenState extends State<MatchScreen> {
     });
   }
 
-  /// A csapat-szűrőnek megfelelő lövés-jelölők.
+  /// Az aktuális idő-ablak [tól, ig] frame-ben (null = nincs korlát).
+  (int?, int?) _periodRange() {
+    final m = _match;
+    if (m == null || _period == "all") return (null, null);
+    final half = m.frames.isEmpty ? 0 : m.frames[m.frames.length ~/ 2].t;
+    return _period == "h1" ? (null, half) : (half + 1, null);
+  }
+
+  /// A csapat- és idő-szűrőnek megfelelő lövés-jelölők.
   List<ShotMarker> _filteredShots() {
-    if (_shotTeam == "all") return _shots;
-    final team = _shotTeam == "home" ? Team.home : Team.away;
-    return _shots.where((s) => s.team == team).toList();
+    final (fromT, toT) = _periodRange();
+    Iterable<ShotMarker> out = _shots;
+    if (_shotTeam != "all") {
+      final team = _shotTeam == "home" ? Team.home : Team.away;
+      out = out.where((s) => s.team == team);
+    }
+    if (fromT != null) out = out.where((s) => s.t >= fromT);
+    if (toT != null) out = out.where((s) => s.t <= toT);
+    return out.toList();
   }
 
   /// A lövéstérkép összegző kártyája (bal-felső sarok): lövések, gólok,
