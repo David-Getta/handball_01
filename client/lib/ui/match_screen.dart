@@ -127,6 +127,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> attacks = [];
     List<Map<String, dynamic>> momentum = [];
     Map<String, dynamic> rules = {};
+    Map<int, double> xgByT = {};
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -158,6 +159,16 @@ class _MatchScreenState extends State<MatchScreen> {
           momentum = []; // sorozatok nélkül is teljes a nézet
         }
         try {
+          final xg = await _api.fetchXg(widget.matchId);
+          for (final sh in (xg["shots"] as List).cast<Map<String, dynamic>>()) {
+            final t = (sh["t"] as num?)?.toInt();
+            final v = (sh["xg"] as num?)?.toDouble();
+            if (t != null && v != null) xgByT[t] = v;
+          }
+        } catch (_) {
+          xgByT = {}; // helyzetminőség nélkül is teljes a nézet
+        }
+        try {
           quality = await _api.fetchQuality(widget.matchId);
         } catch (_) {
           quality = null; // minőség-jelentés nélkül is teljes a nézet
@@ -182,7 +193,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _intensity = computeIntensityTimeline(match);
       _formations = computeFormationTimeline(match);
       _events = events;
-      _shots = _computeShotMarkers(match, events);
+      _shots = _computeShotMarkers(match, events, xgByT);
       _passNetwork = computePassNetwork(match, events, _passTeam);
       _quality = quality;
       _notes = notes;
@@ -200,7 +211,7 @@ class _MatchScreenState extends State<MatchScreen> {
   /// használjuk az esemény képkockájából; ha a lövő nem azonosítható, a
   /// labda helyét; ha az sincs, az eseményt kihagyjuk a térképről.
   List<ShotMarker> _computeShotMarkers(
-      Match match, List<Map<String, dynamic>> events) {
+      Match match, List<Map<String, dynamic>> events, Map<int, double> xgByT) {
     // frame.t → frame index (a t nem feltétlenül a lista-index).
     final byT = <int, Frame>{for (final f in match.frames) f.t: f};
     final out = <ShotMarker>[];
@@ -227,7 +238,7 @@ class _MatchScreenState extends State<MatchScreen> {
         y = frame.ball!.y;
       }
       if (x == null || y == null) continue;
-      out.add(ShotMarker(t, team, type == "goal", x, y));
+      out.add(ShotMarker(t, team, type == "goal", x, y, xg: xgByT[t]));
     }
     return out;
   }
@@ -1531,6 +1542,17 @@ class _MatchScreenState extends State<MatchScreen> {
               const ["bal szél", "közép", "jobb szél"])),
           _zoneLine("táv", _zoneBreakdown(shots, _distanceZone,
               const ["6 m-es", "9 m-es", "távoli"])),
+          // Várható gól (xG): a helyzetek összesített értéke — a tényleges
+          // gólszámmal összevetve látszik a befejezés hatékonysága.
+          if (shots.any((s) => s.xg != null))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  "várható gól (xG): "
+                  "${shots.fold(0.0, (a, s) => a + (s.xg ?? 0)).toStringAsFixed(1)}"
+                  " · a jelölő mérete = a helyzet értéke",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ),
         ],
       ]),
     );

@@ -1234,6 +1234,16 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"runs": annotate_runs(match)}
 
+    @app.get("/matches/{match_id}/xg")
+    def get_xg(match_id: str):
+        """Helyzetminőség (xG): lövésenkénti érték + csapat-összegzés
+        (várható gól vs tényleges — befejezés-hatékonyság)."""
+        from ..pipeline.xg import match_xg
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return match_xg(match)
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
