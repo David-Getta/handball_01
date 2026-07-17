@@ -104,6 +104,16 @@ def test_report_includes_attack_mix_section():
     assert "Támadás-mix (típus szerint)" in html
 
 
+def test_report_team_metrics_table():
+    """A csapat-mutatók tábla megjelenik (birtoklás/nyomás/átmenet)."""
+    m = simulate_ground_truth(duration_s=20, fps=25.0, seed=3)
+    html = match_report_html(m, team_style_profile(m), detect_events(m),
+                             compute_quality_report(m))
+    assert "Csapat-mutatók" in html
+    assert "Labdabirtoklás" in html
+    assert "Védekezési nyomás" in html
+
+
 def test_report_scoring_timeline_block():
     """Gólos meccsen a "Mikor estek a gólok" szakasz-blokk megjelenik."""
     m = simulate_ground_truth(duration_s=30, fps=25.0, seed=3)
