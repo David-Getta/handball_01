@@ -186,9 +186,11 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
 
 
 def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, list[str]]:
-    """Gól-sorozatok: válasz nélküli szériák, játékóra-idővel és állással."""
-    from .momentum import scoring_runs
-    runs = scoring_runs(match)
+    """Gól-sorozatok: válasz nélküli szériák, játékóra-idővel, állással és
+    a felismert LEHETSÉGES OKOKKAL (emberelőny, 7 a 6, védekezés-váltás,
+    tempó-esés)."""
+    from .momentum import annotate_runs
+    runs = annotate_runs(match)
     if not runs:
         return None, []
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
@@ -203,8 +205,9 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
     for r in runs:
         name = names.get(r["team"], r["team"])
         h, a = r["score_after"]
+        why = f" — {', '.join(r['context'])}" if r.get("context") else ""
         parts.append(f"{name} {r['length']} gólos sorozata a {clock(r['start_frame'])}"
-                     f"–{clock(r['end_frame'])} között (állás utána {h}–{a})")
+                     f"–{clock(r['end_frame'])} között (állás utána {h}–{a}){why}")
     # A leghosszabb sorozat külön "mire nézz rá" jelzést kap.
     top = max(runs, key=lambda r: r["length"])
     tname = names.get(top["team"], top["team"])

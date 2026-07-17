@@ -159,10 +159,13 @@ class _ScoreChartPainter extends CustomPainter {
       final xb = geom.x(s1.clamp(0, totalFrames - 1));
       final rect = Rect.fromLTRB(xa, topY, xb <= xa ? xa + 2 : xb, botY);
       canvas.drawRect(rect, Paint()..color = color.withOpacity(0.13));
-      // A sorozat hossza a sáv tetején (pl. "4-0").
+      // A sorozat hossza a sáv tetején (pl. "4-0"), mellette a felismert
+      // LEHETSÉGES OK (pl. "emberelőnyben") — ha a backend adott ilyet.
       final len = (r["length"] as num?)?.toInt() ?? 0;
       if (len > 0) {
-        _text(canvas, "$len-0",
+        final ctx = (r["context"] as List?)?.cast<String>() ?? const [];
+        final label = ctx.isEmpty ? "$len-0" : "$len-0 · ${ctx.first}";
+        _text(canvas, label,
             Offset(xa + 2, topY - 1),
             TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color));
       }

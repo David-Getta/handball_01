@@ -90,3 +90,54 @@ def test_min_len_parameter():
 def test_no_goals_no_runs():
     m = Match(_meta(), [Frame(t=t, players=[], ball=None) for t in range(20)])
     assert scoring_runs(m) == []
+
+
+# ---- annotate_runs: a sorozatok LEHETSÉGES OKAI ------------------------------
+
+from handball.pipeline.momentum import annotate_runs  # noqa: E402
+
+
+def _pl(track_id, team, x, y):
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0)
+
+
+def test_annotate_no_signals_gives_empty_context():
+    """Jelek nélküli sorozat: a context üres lista (nem hiányzó kulcs)."""
+    m = _match_from_goals("HHHH")
+    runs = annotate_runs(m)
+    assert len(runs) == 1
+    assert runs[0]["context"] == []
+    # A meglévő mezők változatlanok maradnak.
+    assert runs[0]["team"] == "home" and runs[0]["length"] == 4
+
+
+def test_annotate_powerplay_overlap_labeled():
+    """A vendég 3 gólos sorozata HAZAI emberhátrány alatt → "emberelőnyben"."""
+    fps = 25.0
+    # 100 mp folyamatos felvétel: 5 hazai vs 6 vendég mezőnyjátékos
+    # (kiállítás-lenyomat), közben a vendég 3 gólt dob a -x (x=0) kapura.
+    goal_starts = {1000, 1400, 1800}
+    frames = []
+    for t in range(int(100 * fps)):
+        players = [_pl(100 + k, Team.HOME, 12.0 + k, 4.0 + k) for k in range(5)]
+        players += [_pl(200 + k, Team.AWAY, 24.0 + k, 4.0 + k) for k in range(6)]
+        gs = next((g for g in goal_starts if g <= t < g + 8), None)
+        if gs is not None:
+            ball = Ball(x=max(6.4 - (t - gs), 0.0), y=10.0, confidence=1.0)
+        else:
+            ball = Ball(x=20.0, y=10.0, confidence=1.0)
+        frames.append(Frame(t=t, players=players, ball=ball))
+    m = Match(_meta(fps), frames)
+    runs = annotate_runs(m)
+    assert len(runs) == 1
+    assert runs[0]["team"] == "away" and runs[0]["length"] == 3
+    assert "emberelőnyben" in runs[0]["context"]
+
+
+def test_annotate_accepts_precomputed_runs():
+    """Előre kiszámolt sorozat-listát is elfogad (nem számol duplán)."""
+    m = _match_from_goals("AAA")
+    runs = scoring_runs(m)
+    out = annotate_runs(m, runs=runs)
+    assert out is runs and all("context" in r for r in out)
