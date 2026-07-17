@@ -1505,7 +1505,9 @@ class _MatchScreenState extends State<MatchScreen> {
                 if (t == null) return;
                 setState(() {
                   _passTeam = t;
-                  _passNetwork = computePassNetwork(_match!, _events, t);
+                  final (fromT, toT) = _periodRange();
+                  _passNetwork = computePassNetwork(_match!, _events, t,
+                      fromT: fromT, toT: toT);
                 });
               },
             ),
@@ -1551,8 +1553,11 @@ class _MatchScreenState extends State<MatchScreen> {
             ),
           ),
         // Idő-ablak: az 1. és 2. félidő külön nézete — a fáradás és a
-        // félidei taktikai váltás a térképeken így válik láthatóvá.
-        if (_viewMode == ViewMode.shots || _viewMode == ViewMode.heatmap) ...[
+        // félidei taktikai váltás a térképeken és a passz-hálón így válik
+        // láthatóvá.
+        if (_viewMode == ViewMode.shots ||
+            _viewMode == ViewMode.heatmap ||
+            _viewMode == ViewMode.passes) ...[
           const SizedBox(width: AppSpacing.sm),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -1578,6 +1583,8 @@ class _MatchScreenState extends State<MatchScreen> {
                   if (m != null) {
                     final (fromT, toT) = _periodRange();
                     _heatmap = computeTeamHeatmap(m, _heatmapTeam,
+                        fromT: fromT, toT: toT);
+                    _passNetwork = computePassNetwork(m, _events, _passTeam,
                         fromT: fromT, toT: toT);
                   }
                 });
