@@ -407,13 +407,19 @@ class _UploadScreenState extends State<UploadScreen> {
   Future<void> _runDetectPreview() async {
     setState(() => _previewing = true);
     try {
+      final first =
+          (_calib != null && _calib!.items.isNotEmpty) ? _calib!.items.first : null;
       final r = await _api.fetchDetectPreview(_pathCtrl.text.trim(),
-          t: _calib?.startFrame ?? 100);
+          t: _calib?.startFrame ?? 100,
+          calib: first?.corners,
+          region: first?.region ?? "full",
+          rotate: first?.rotate ?? false);
       if (!mounted) return;
       final bytes = base64Decode(r["image_b64"] as String);
       final persons = (r["persons"] as num?)?.toInt() ?? 0;
       final balls = (r["balls"] as num?)?.toInt() ?? 0;
       final refs = (r["referees"] as num?)?.toInt() ?? 0;
+      final onCourt = (r["on_court"] as num?)?.toInt();
       final ok = persons >= 8;
       await showDialog<void>(
         context: context,
@@ -432,9 +438,19 @@ class _UploadScreenState extends State<UploadScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  "$persons játékos · $balls labda · $refs bíró a próbakockán",
+                  "$persons játékos · $balls labda · $refs bíró a próbakockán"
+                  "${onCourt != null ? " · ebből $onCourt a pályán" : ""}",
                   style: AppText.value.copyWith(fontSize: 13.5),
                 ),
+                if (onCourt != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    "Az arany vonalak a kalibrált pálya-modell — ha nem "
+                    "illeszkednek a valódi vonalakra, kalibrálj újra.",
+                    style: AppText.label.copyWith(
+                        fontSize: 12, color: AppColors.gold),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   ok

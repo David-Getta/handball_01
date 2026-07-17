@@ -152,14 +152,24 @@ def create_app():
         return Response(content=buf.tobytes(), media_type="image/png")
 
     @app.get("/detect-preview")
-    def detect_preview(path: str, t: int = 100, imgsz: int = 1280):
+    def detect_preview(path: str, t: int = 100, imgsz: int = 1280,
+                       calib: str | None = None, region: str = "full",
+                       rotate: bool = False):
         """Egy-képkockás detektálási PRÓBA a hosszú feldolgozás előtt.
 
         Lefuttatja a YOLO-t a kért kockán, berajzolja a talált játékosokat
         (a két mezszín-klaszter szerint színezve), a bírót és a labdát —
         az edző az indítás ELŐTT látja, jól látja-e a rendszer a pályát.
 
-        Visszatérés: {"persons", "balls", "referees", "image_b64" (JPEG)}.
+        KALIBRÁCIÓVAL (calib: 4 sarok JSON-ban + region/rotate) a képre
+        rávetítjük a kalibrált pálya-modellt (arany vonalak: keret, felező,
+        kapuk, 6 m-es ívek) — ha nem illeszkednek a valódi vonalakra, a
+        kalibráció rossz. Emellett megszámoljuk, hány talált játékos esik
+        a játéktérre méterben ("on_court") — az indítás előtti utolsó
+        ellenőrzés.
+
+        Visszatérés: {"persons", "balls", "referees", "on_court" (kalibrá-
+        cióval, különben None), "image_b64" (JPEG)}.
         404: a videó/kocka nem olvasható; 503: a detektor nem elérhető.
         """
         import base64
@@ -235,12 +245,25 @@ def create_app():
             cv2.putText(frame, "labda", (x1, max(0, y1 - 6)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (107, 179, 216), 2)
 
+        # Kalibráció-ellenőrzés: a pálya-modell rávetítése + méter-számolás
+        # (a geometria a pipeline.preview modulban — ott tesztelt).
+        on_court = None
+        if calib:
+            try:
+                from ..pipeline.preview import draw_calibration_overlay
+                on_court = draw_calibration_overlay(
+                    frame, persons, json.loads(calib), region=region,
+                    rotate=bool(rotate))
+            except Exception:
+                on_court = None  # rossz calib-paraméter: a próba enélkül él
+
         ok, buf = cv2.imencode(".jpg", frame,
                                [int(cv2.IMWRITE_JPEG_QUALITY), 82])
         return {
             "persons": len(persons),
             "referees": referees,
             "balls": len(balls),
+            "on_court": on_court,
             "image_b64": base64.b64encode(buf.tobytes()).decode("ascii"),
         }
 

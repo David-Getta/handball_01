@@ -489,11 +489,19 @@ class ApiClient {
   /// talált játékosok/labda berajzolva + darabszámok — az indítás előtti
   /// gyors ellenőrzéshez. Az első hívás lassabb (modell-betöltés).
   Future<Map<String, dynamic>> fetchDetectPreview(String path,
-      {int t = 100}) async {
+      {int t = 100,
+      List<List<int>>? calib,
+      String region = "full",
+      bool rotate = false}) async {
     final resp = await http
         .get(Uri.parse("$baseUrl/detect-preview").replace(queryParameters: {
       "path": path,
       "t": "$t",
+      // Kalibrációval a backend a pálya-modellt is a képre rajzolja,
+      // és megszámolja, hány játékos esik a játéktérre méterben.
+      if (calib != null) "calib": jsonEncode(calib),
+      if (calib != null) "region": region,
+      if (calib != null) "rotate": "$rotate",
     }))
         .timeout(const Duration(seconds: 90));
     if (resp.statusCode != 200) {
