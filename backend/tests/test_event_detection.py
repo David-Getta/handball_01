@@ -212,3 +212,33 @@ def test_old_pass_outside_window_is_not_assist():
     goals = [e for e in evs if e.type == EventType.GOAL]
     assert len(goals) == 1 and goals[0].player_id == 2
     assert "assist_id" not in (goals[0].detail or {})
+
+
+def test_assist_network_pairs_and_leaders():
+    """Két gól, mindkettőt az 1-es passzolja a 2-esnek → egy pár (2 gól),
+    az 1-es a gólpassz-vezér."""
+    from handball.pipeline.event_detection import assist_network
+    frames = []
+    t = 0
+    for _ in range(2):
+        # passz 1→2, majd a 2-es gólja a +x kapura
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[], ball=Ball(x=20.0, y=10.0,
+                                                          confidence=1.0)))
+            t += 1
+    net = assist_network(Match(_meta(), frames))["home"]
+    assert net["pairs"] and net["pairs"][0]["from"] == 1
+    assert net["pairs"][0]["to"] == 2 and net["pairs"][0]["goals"] == 2
+    assert net["leaders"][0]["player_id"] == 1 and net["leaders"][0]["assists"] == 2

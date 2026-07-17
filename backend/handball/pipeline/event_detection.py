@@ -252,3 +252,37 @@ def event_counts(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     for e in events:
         by_type[e.type.value] += 1
     return {"total": len(events), "by_type": by_type}
+
+
+def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-hálózat: ki kinek készíti elő a gólokat.
+
+    A gólokhoz rendelt assist_id-ból (lásd annotate_assists) építjük a
+    (gólpasszoló → lövő) párokat. Visszatérés csapatonként:
+    {"pairs": [{"from","to","goals"}] (gólszám szerint), "leaders":
+    [{"player_id","assists"}]} — a leaders a legtöbb gólpasszt adók."""
+    config = config or TacticsConfig()
+    events = detect_events(match, config)
+    out = {"home": {"pairs": {}, "leaders": {}},
+           "away": {"pairs": {}, "leaders": {}}}
+    for e in events:
+        if e.type != EventType.GOAL:
+            continue
+        aid = (e.detail or {}).get("assist_id")
+        if aid is None or e.player_id is None:
+            continue
+        side = e.team.value
+        key = (aid, e.player_id)
+        out[side]["pairs"][key] = out[side]["pairs"].get(key, 0) + 1
+        out[side]["leaders"][aid] = out[side]["leaders"].get(aid, 0) + 1
+
+    result = {}
+    for side in ("home", "away"):
+        pairs = [{"from": a, "to": b, "goals": n}
+                 for (a, b), n in sorted(out[side]["pairs"].items(),
+                                         key=lambda kv: -kv[1])]
+        leaders = [{"player_id": p, "assists": n}
+                   for p, n in sorted(out[side]["leaders"].items(),
+                                      key=lambda kv: -kv[1])]
+        result[side] = {"pairs": pairs, "leaders": leaders}
+    return result

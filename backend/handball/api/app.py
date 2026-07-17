@@ -2065,8 +2065,10 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         events = detect_events(match)
+        from ..pipeline.event_detection import assist_network
         return {
             "counts": event_counts(match),
+            "assist_network": assist_network(match),
             "events": [
                 {"t": e.t, "type": e.type.value, "team": e.team.value,
                  "player_id": e.player_id, "detail": e.detail}
