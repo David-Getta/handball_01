@@ -14,6 +14,7 @@ együtt. Tiszta adatfeldolgozás, videó nélkül tesztelhető.
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from ..models.tracking import Match, Team
@@ -269,3 +270,33 @@ def score_progression(match: Match, config=None) -> dict:
         "lead_time_s": {k: round(v, 1) for k, v in lead_time.items()},
         "final": [score[Team.HOME], score[Team.AWAY]],
     }
+
+
+def scoring_timeline(match: Match, bucket_s: float = 300.0, config=None) -> dict:
+    """Gólok idő-eloszlása idő-vödrökben (alapból 5 perc).
+
+    Mikor esnek a gólok? A vödrönkénti dobott/kapott gól csapatonként
+    megmutatja, mikor erős/gyenge egy csapat — a hajrában elfogy-e, vagy
+    épp a végén erős. Visszatérés:
+    {"bucket_s", "buckets": [{"start_s","end_s","home","away"}]}."""
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dur_s = (match.frames[-1].t / fps) if match.frames else 0.0
+    if dur_s <= 0:
+        return {"bucket_s": bucket_s, "buckets": []}
+
+    # Rövid felvételnél a vödör zsugorodik, hogy legyen legalább 2 vödör.
+    n = max(2, int(math.ceil(dur_s / bucket_s)))
+    step = dur_s / n
+    buckets = [{"start_s": round(i * step, 1),
+                "end_s": round((i + 1) * step, 1),
+                "home": 0, "away": 0} for i in range(n)]
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        idx = min(n - 1, int((e.t / fps) / step))
+        buckets[idx]["home" if e.team == Team.HOME else "away"] += 1
+    return {"bucket_s": round(step, 1), "buckets": buckets}
