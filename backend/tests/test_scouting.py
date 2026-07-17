@@ -349,3 +349,37 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def _shots_match(n_shots=4):
+    """n_shots hazai lövés a +x kapura (mind gól), az 1-es játékostól."""
+    frames = []
+    t = 0
+    for _ in range(n_shots):
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    return Match(_meta(), frames)
+
+
+def test_scout_team_includes_xg():
+    """A felderítő jelentésben ott a várható gól és a befejezés-eltérés."""
+    rep = scout_team(_shots_match(), Team.HOME)
+    assert rep.shots >= 4 and rep.goals >= 4
+    assert rep.xg > 0
+    assert abs(rep.xg_diff - (rep.goals - rep.xg)) < 0.05
+    # Minden gól bement → a helyzeteik felett teljesítenek (pozitív diff).
+    assert rep.xg_diff > 0
+
+
+def test_combine_reports_sums_xg():
+    """Több meccs: az xG összegződik, a diff az összképből számolódik újra."""
+    r1 = scout_team(_shots_match(), Team.HOME)
+    r2 = scout_team(_shots_match(), Team.HOME)
+    comb = combine_reports([r1, r2])
+    assert abs(comb.xg - (r1.xg + r2.xg)) < 0.05
+    assert abs(comb.xg_diff - (comb.goals - comb.xg)) < 0.05

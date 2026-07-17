@@ -121,6 +121,10 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
         _metric("Labda átlagsebesség", f"{rep.avg_ball_speed_ms:.1f} m/s"),
         _metric("Lövés / gól", f"{rep.shots} / {rep.goals}"),
         _metric("Gólarány", f"{rep.shot_efficiency_pct:.0f}%"),
+        # Helyzetminőség: várható gól + befejezés-eltérés (ha számolható).
+        *([_metric("Várható gól (xG)", f"{rep.xg:.1f}"),
+           _metric("Befejezés (gól−xG)", f"{rep.xg_diff:+.1f}")]
+          if getattr(rep, "xg", 0.0) > 0 else []),
         _metric("Labdaeladás", str(rep.turnovers)),
         _metric("Figurák", str(rep.num_figures)),
     ]
