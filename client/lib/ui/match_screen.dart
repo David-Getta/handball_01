@@ -1853,14 +1853,19 @@ class _MatchScreenState extends State<MatchScreen> {
                   style: AppText.label.copyWith(fontSize: 11)),
             ),
           if (shots.any((s) => s.xg != null))
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                  "várható gól (xG): "
-                  "${shots.fold(0.0, (a, s) => a + (s.xg ?? 0)).toStringAsFixed(1)}"
-                  " · a jelölő mérete = a helyzet értéke",
-                  style: AppText.label.copyWith(fontSize: 11)),
-            ),
+            Builder(builder: (_) {
+              final withXg = shots.where((s) => s.xg != null).toList();
+              final sumXg = withXg.fold(0.0, (a, s) => a + (s.xg ?? 0));
+              final avgXg = withXg.isEmpty ? 0.0 : sumXg / withXg.length;
+              return Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                    "várható gól (xG): ${sumXg.toStringAsFixed(1)}"
+                    " · átl. ${avgXg.toStringAsFixed(2)} xG/lövés"
+                    " · a jelölő mérete = a helyzet értéke",
+                    style: AppText.label.copyWith(fontSize: 11)),
+              );
+            }),
         ],
       ]),
     );
