@@ -57,6 +57,9 @@ def test_stop_check_yields_partial_match(tmp_path):
     # és az utómunka is lefutott (érvényes meta, fps).
     assert 0 < len(m.frames) <= 6
     assert m.meta.fps > 0
+    # A meta jelzi a részlegességet, és megmondja, honnan folytatható.
+    assert m.meta.partial is True
+    assert m.meta.next_start_frame == len(m.frames)  # stride=1, start=0
 
 
 def test_without_stop_check_processes_all(tmp_path):
@@ -64,6 +67,7 @@ def test_without_stop_check_processes_all(tmp_path):
     _tiny_video(video, frames=20)
     m = process(str(video), None, weights=None, stride=1, max_frames=100)
     assert len(m.frames) == 20  # a teljes videó feldolgozva
+    assert m.meta.partial is False  # végigért — nem részleges
 
 
 def test_checkpoint_saves_partial_then_full(tmp_path):
@@ -84,6 +88,7 @@ def test_checkpoint_saves_partial_then_full(tmp_path):
         assert isinstance(cp, Match)
         assert 0 < len(cp.frames) <= 30
         assert cp.meta.fps > 0
+        assert cp.meta.partial is True  # a checkpoint mindig részleges
     assert len(saved[0].frames) < 30
 
 

@@ -77,6 +77,11 @@ def create_app():
         safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
         return _data_dir / f"{safe}.json"
 
+    def _params_path(match_id: str) -> Path:
+        import re
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", match_id) or "match"
+        return _data_dir / f"{safe}.params.json"
+
     def _load_store_from_disk() -> int:
         """A lemezen lévő meccsek betöltése a memóriába (indulás + könyvtár-
         visszaállítás után). A jegyzet/mezszám/roster kísérőfájlokat a nevük
@@ -84,7 +89,8 @@ def create_app():
         loaded = 0
         for f in sorted(_data_dir.glob("*.json")):
             if any(f.name.endswith(s) for s in
-                   (".notes.json", ".jerseys.json", ".roster.json")):
+                   (".notes.json", ".jerseys.json", ".roster.json",
+                    ".params.json")):
                 continue
             try:
                 m = Match.from_json(f.read_text(encoding="utf-8"))
@@ -264,6 +270,13 @@ def create_app():
 
         job_id = uuid.uuid4().hex[:12]
         match_id = body.get("match_id") or f"video-{job_id}"
+        # A feldolgozási beállítások lemezre mentése: részleges eredménynél
+        # (megszakítás/összeomlás) ebből tud a Folytatás ugyanígy elindulni.
+        try:
+            _params_path(match_id).write_text(
+                json.dumps(body, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
         job = {"job_id": job_id, "match_id": match_id, "status": "queued",
                "stage": "A", "progress": 0.0, "message": "sorban áll",
                "error": None, "created": time.time(),
@@ -437,6 +450,8 @@ def create_app():
                 "num_frames": len(m.frames),
                 "fps": m.meta.fps,
                 "duration_s": len(m.frames) / fps,
+                # Részleges feldolgozás (megszakítva/összeomlás után mentve).
+                "partial": bool(m.meta.partial),
             })
         out.sort(key=lambda d: d["match_id"])
         return {"matches": out}
@@ -642,9 +657,50 @@ def create_app():
         try:
             _match_path(match_id).unlink(missing_ok=True)
             _roster_path(match_id).unlink(missing_ok=True)
+            _params_path(match_id).unlink(missing_ok=True)
         except Exception:
             pass
         return {"deleted": match_id}
+
+    @app.post("/matches/{match_id}/resume")
+    def resume_processing(match_id: str):
+        """RÉSZLEGES meccs feldolgozásának folytatása onnan, ahol megszakadt.
+
+        A megszakított/összeomlás után mentett meccs (meta.partial) mellé a
+        job indításakor elmentett beállításokkal (params-sidecar) új
+        feldolgozás indul a meta.next_start_frame képkockától. KÜLÖN
+        meccsként ("<id>-folyt"), mert a track-azonosítók és a csapatszín-
+        klaszterezés nem folytonos a megszakításon át — a két részt a
+        meglévő POST /matches/merge tudja utólag összefűzni."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        if not match.meta.partial:
+            raise HTTPException(status_code=400,
+                                detail="a meccs nem részleges — nincs mit folytatni")
+        video = match.meta.video_path
+        if not video or not Path(video).exists():
+            raise HTTPException(status_code=400,
+                                detail=f"az eredeti videó nem található: {video}")
+        body: dict = {}
+        pp = _params_path(match_id)
+        if pp.exists():
+            try:
+                body = json.loads(pp.read_text(encoding="utf-8"))
+            except Exception:
+                body = {}
+        body["path"] = video
+        body["start"] = int(match.meta.next_start_frame)
+        body["stride"] = int(body.get("stride", match.meta.stride))
+        body["home_team"] = match.meta.home_team
+        body["away_team"] = match.meta.away_team
+        # Új, ütközésmentes azonosító: <eredeti>-folyt, -folyt2, ...
+        base = f"{match_id}-folyt"
+        mid, n = base, 2
+        while mid in _store:
+            mid, n = f"{base}{n}", n + 1
+        body["match_id"] = mid
+        return start_processing(body)
 
     def _notes_path(match_id: str) -> Path:
         import re
