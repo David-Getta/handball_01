@@ -762,6 +762,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Részleges meccs feldolgozásának folytatása: a backend a mentett
+  /// beállításokkal új jobot indít onnan, ahol a feldolgozás megszakadt.
+  /// Az eredmény külön meccsként jelenik meg ("<id>-folyt").
+  Future<void> _resume(String matchId) async {
+    try {
+      final r = await _api.resumeMatch(matchId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Folytatás elindítva — új meccs: "
+              "${r["match_id"]} (lásd a feldolgozási sort)")));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("$e")));
+    }
+  }
+
   /// A kereső-szűrésnek megfelelő meccsek (üres keresésnél mind).
   List<Map<String, dynamic>> get _filteredMatches {
     if (_query.isEmpty) return _matches;
@@ -1230,6 +1248,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Az összkép-kivonat kiegészítése, ha már megjött: eredmény + dátum.
     final sum = _perMatch[id];
     final date = (sum?["date"] as String?) ?? "";
+    // Részleges feldolgozás (megszakítva / összeomlás után mentve).
+    final partial = (m["partial"] as bool?) ?? false;
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -1262,6 +1282,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(width: AppSpacing.md),
                       Text(date, style: AppText.label.copyWith(fontSize: 12)),
                     ],
+                    if (partial) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.gold.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: AppColors.gold.withOpacity(0.5)),
+                        ),
+                        child: Text("részleges",
+                            style: AppText.label.copyWith(
+                                fontSize: 10.5, color: AppColors.gold)),
+                      ),
+                    ],
                   ]),
                   const SizedBox(height: 6),
                   Text(meta, style: AppText.label.copyWith(fontSize: 12)),
@@ -1280,6 +1316,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
+            if (partial)
+              IconButton(
+                onPressed: () => _resume(id),
+                icon: const Icon(Icons.play_circle_outline,
+                    color: AppColors.gold),
+                tooltip: "Feldolgozás folytatása onnan, ahol megszakadt",
+              ),
             IconButton(
               onPressed: () => _rename(m),
               icon: const Icon(Icons.edit_outlined, color: AppColors.textFaint),

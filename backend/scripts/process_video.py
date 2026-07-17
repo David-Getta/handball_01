@@ -396,7 +396,7 @@ class _SimpleTracker:
 
 
 def _process_hog(video_path, stride, max_frames, stop_check=None,
-                 raw_out=None, colors_out=None, on_frame=None):
+                 raw_out=None, colors_out=None, on_frame=None, start=0):
     import cv2
     cap = cv2.VideoCapture(video_path)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
@@ -409,6 +409,8 @@ def _process_hog(video_path, stride, max_frames, stop_check=None,
     except AttributeError:
         hog = None
     tracker = _SimpleTracker()
+    if start > 0:  # folytatás/bevezető-átugrás: innen olvasunk
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(start))
     raw = raw_out if raw_out is not None else []
     all_colors = colors_out if colors_out is not None else []
     fi = out_i = 0
@@ -507,7 +509,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     raw: list = []
     all_colors: list = []
 
-    def _finalize(raw, all_colors, quiet=False):
+    def _finalize(raw, all_colors, quiet=False, partial=False):
         """A detektálás utáni TELJES utómunka: csapatszín, kalibráció,
         összefűzés, félidő, kapus, simítás, becslés → kész Match.
 
@@ -611,7 +613,10 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                          fps=fps / stride, frame_width=W, frame_height=H,
                          # A videó-visszajátszáshoz: honnan játszható le a jelenet.
                          video_path=str(video_path), start_frame=int(start),
-                         stride=int(stride), date=rec_date)
+                         stride=int(stride), date=rec_date,
+                         # Részleges eredménynél innen folytatható a feldolgozás.
+                         partial=bool(partial),
+                         next_start_frame=int(start) + len(raw) * int(stride))
         if rec_date:
             say(f"meccs-dátum a videóból: {rec_date}")
         frames = []
@@ -754,7 +759,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                 and _time.time() - _cp["last"] >= checkpoint_every_s):
             _cp["last"] = _time.time()
             try:
-                checkpoint_save(_finalize(raw, all_colors, quiet=True))
+                checkpoint_save(_finalize(raw, all_colors, quiet=True, partial=True))
                 print(f"checkpoint: részeredmény mentve ({kept} kocka)")
             except Exception as e:  # a mentés hibája nem állíthatja le a futást
                 print(f"FIGYELEM: részeredmény-mentés nem sikerült: {e}")
@@ -768,8 +773,10 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
                       raw_out=raw, colors_out=all_colors)
     else:
         _process_hog(video_path, stride, max_frames, stop_check=stop_check,
-                     raw_out=raw, colors_out=all_colors, on_frame=on_frame)
-    match = _finalize(raw, all_colors)
+                     raw_out=raw, colors_out=all_colors, on_frame=on_frame,
+                     start=start)
+    stopped = bool(stop_check is not None and stop_check())
+    match = _finalize(raw, all_colors, partial=stopped)
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:

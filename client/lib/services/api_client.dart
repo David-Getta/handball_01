@@ -467,6 +467,24 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// RÉSZLEGES meccs feldolgozásának folytatása (POST /matches/{id}/resume):
+  /// a mentett beállításokkal új feldolgozás indul onnan, ahol megszakadt.
+  /// Visszatérés: {"job_id", "match_id"} — az új (folytatás-) meccsé.
+  Future<Map<String, dynamic>> resumeMatch(String matchId) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/matches/$matchId/resume"))
+        .timeout(const Duration(seconds: 10));
+    if (resp.statusCode != 200) {
+      String msg = "HTTP ${resp.statusCode}";
+      try {
+        msg = (jsonDecode(utf8.decode(resp.bodyBytes))
+                as Map<String, dynamic>)["detail"] as String? ?? msg;
+      } catch (_) {}
+      throw Exception("Nem sikerült a folytatás: $msg");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Egy-képkockás detektálás-próba (GET /detect-preview): a YOLO által
   /// talált játékosok/labda berajzolva + darabszámok — az indítás előtti
   /// gyors ellenőrzéshez. Az első hívás lassabb (modell-betöltés).

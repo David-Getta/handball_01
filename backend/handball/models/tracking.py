@@ -127,6 +127,11 @@ class MatchMeta:
     video_path: Optional[str] = None
     start_frame: int = 0
     stride: int = 1
+    # RÉSZLEGES feldolgozás: a detektálás nem ért a videó végére (megszakítás
+    # vagy összeomlás utáni checkpoint). A next_start_frame az a forrás-
+    # videóbeli kép-index, ahonnan a feldolgozás FOLYTATHATÓ.
+    partial: bool = False
+    next_start_frame: int = 0
 
 
 @dataclass
