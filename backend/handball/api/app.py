@@ -1790,6 +1790,8 @@ def create_app():
                 _layer("assist_network", lambda: assist_network(match))
                 from ..pipeline.stats import possession_share
                 _layer("possession", lambda: possession_share(match))
+                from ..pipeline.stats import intensity_trend
+                _layer("intensity_trend", lambda: intensity_trend(match))
                 _layer("playmaker", lambda: playmaker_dependency(match))
                 _layer("substitutions", lambda: substitution_impact(match))
                 _layer("stoppages", lambda: timeout_effects(match))
@@ -1898,6 +1900,11 @@ def create_app():
         try:
             from ..pipeline.stats import possession_share
             out["possession"] = possession_share(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import intensity_trend
+            out["intensity_trend"] = intensity_trend(match)
         except Exception:
             pass
         return out
