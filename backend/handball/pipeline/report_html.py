@@ -530,6 +530,32 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             f"<li><b>{_fmt_clock(e.t / fps)}</b> — GÓL · {escape(name)}</li>")
     goals_html = ("<ul>" + "".join(goal_rows) + "</ul>") if goal_rows else \
         '<p class="empty">Nincs felismert gól az elemzett szakaszban.</p>'
+    # Szakaszonkénti gól-eloszlás (mikor esnek a gólok) — sáv-táblaként.
+    try:
+        from .momentum import scoring_timeline
+        tl = scoring_timeline(match)["buckets"]
+        maxg = max((max(b["home"], b["away"]) for b in tl), default=0)
+        if maxg > 0:
+            rows = []
+            for b in tl:
+                lab = f"{int(b['start_s'] // 60)}\u2013{int(b['end_s'] // 60)}'"
+                hw = 100.0 * b["home"] / maxg
+                aw = 100.0 * b["away"] / maxg
+                rows.append(
+                    f'<div class="bar-row"><span class="bar-label">{lab}</span>'
+                    f'<span class="bar"><span class="bar-fill" '
+                    f'style="width:{hw:.0f}%;background:#5AA0FF"></span></span>'
+                    f'<span class="bar-pct">{b["home"]}\u2013{b["away"]}</span></div>'
+                    f'<div class="bar-row"><span class="bar-label"></span>'
+                    f'<span class="bar"><span class="bar-fill" '
+                    f'style="width:{aw:.0f}%;background:#FF6B6B"></span></span>'
+                    f'<span class="bar-pct"></span></div>')
+            goals_html += ('<h3>Mikor estek a g\u00f3lok</h3>'
+                           + "".join(rows)
+                           + f'<p class="note">fels\u0151 s\u00e1v (k\u00e9k): {escape(home)}'
+                             f' \u00b7 als\u00f3 (piros): {escape(away)}</p>')
+    except Exception:
+        pass
 
     # Csapat-hőtérképek (ha vannak): hol tartózkodtak a játékosok.
     hm_html = ""
