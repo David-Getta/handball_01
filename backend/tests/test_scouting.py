@@ -232,13 +232,30 @@ def test_coach_keys_flag_weak_goalkeeper_and_zone():
 
 def test_combine_reports_merges_goalkeeper_stats():
     a = ScoutingReport(team="away", team_name="X", gk_on_target=4,
-                       gk_saves=2, gk_conceded_zones={"átlövés bal": 2})
+                       gk_saves=2, gk_conceded_zones={"átlövés bal": 2},
+                       gk_on_target_zones={"átlövés bal": 3})
     b = ScoutingReport(team="away", team_name="X", gk_on_target=6,
                        gk_saves=1, gk_conceded_zones={"átlövés bal": 1,
-                                                      "jobbszél": 2})
+                                                      "jobbszél": 2},
+                       gk_on_target_zones={"átlövés bal": 2, "jobbszél": 4})
     merged = combine_reports([a, b])
     assert merged.gk_on_target == 10 and merged.gk_saves == 3
     assert merged.gk_conceded_zones == {"átlövés bal": 3, "jobbszél": 2}
+    assert merged.gk_on_target_zones == {"átlövés bal": 5, "jobbszél": 4}
+
+
+def test_coach_keys_flag_goalkeeper_weak_zone():
+    """A zónánkénti védés-hatékonyságból a leggyengébb sarok külön kulcs:
+    a 'jobbszél' 4 lövésből 3-at kapott (25% védés) → 'ide lőjetek'."""
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél KC",
+        gk_on_target=8, gk_saves=4,
+        gk_on_target_zones={"átlövés bal": 4, "jobbszél": 4},
+        gk_conceded_zones={"átlövés bal": 1, "jobbszél": 3},
+    )
+    from handball.pipeline.scouting import _coach_keys
+    _, _, keys = _coach_keys(rep)
+    assert any("leggyengébb sarka" in k and "jobbszél" in k for k in keys)
 
 
 def test_narrative_multi_match_prefix_and_gk_section():
