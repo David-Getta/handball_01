@@ -84,6 +84,12 @@ class ScoutingReport:
     def_goals_against: int = 0
     def_free_shots: int = 0
     def_zones: dict = field(default_factory=dict)
+    # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
+    # lövésig jutásuk, ha ő nincs a labdánál ("fogd meg" kulcs).
+    playmaker_id: int | None = None
+    playmaker_involvement_pct: float = 0.0
+    playmaker_drop: float | None = None
+    playmaker_dependency: str | None = None
     # Lövési zónák: zóna -> {"shots": n, "goals": n} — HONNAN lőnek és honnan
     # eredményesek (balszél / beálló / átlövés bal-közép-jobb / jobbszél).
     shot_zones: dict = field(default_factory=dict)
@@ -346,6 +352,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append("Sok kis esélyű (távoli/szélső) lövést vállalnak — "
                         "belső zónában maradhat szoros a fal.")
 
+    # Irányító-függés: ha a fő szervező nélkül leáll a játékuk, a
+    # legjobb védekezési terv Ő maga.
+    if rep.playmaker_dependency == "magas" and rep.playmaker_drop is not None:
+        weaknesses.append(
+            f"Erősen az irányítóra épülnek — nélküle a támadásaik "
+            f"lövésig jutása {100 * rep.playmaker_drop:.0f} százalékponttal esik.")
+        keys.append("Fogd meg az irányítót (emberfogás/korai kontakt) — "
+                    "nélküle leáll a támadásépítésük.")
+
     # A VÉDEKEZÉSÜK gyengéi: szabad lövések és lyukas zóna — "hova játssz".
     if rep.def_shots_against >= 4:
         free_pct = 100.0 * rep.def_free_shots / rep.def_shots_against
@@ -513,6 +528,15 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.def_goals_against = drec["goals_against"]
         rep.def_free_shots = drec["free_shots"]
         rep.def_zones = {z: dict(v) for z, v in drec["zones"].items()}
+    except Exception:
+        pass
+    try:
+        from .playmaker import playmaker_dependency
+        prec = playmaker_dependency(match, config)[team.value]
+        rep.playmaker_id = prec["playmaker"]
+        rep.playmaker_involvement_pct = prec["involvement_pct"]
+        rep.playmaker_drop = prec["shot_rate_drop"]
+        rep.playmaker_dependency = prec["dependency"]
     except Exception:
         pass
     try:

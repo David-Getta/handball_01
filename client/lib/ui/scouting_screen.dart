@@ -356,6 +356,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ["Átl. támadáshossz", fmt(r["avg_attack_duration_s"], " s")],
       ["Lövés / gól", "${fmt(r["shots"])} / ${fmt(r["goals"])}"],
       ["Gólarány", fmt(r["shot_efficiency_pct"], "%")],
+      // Irányító-függés: mennyire épül minden a fő szervezőre.
+      if (r["playmaker_dependency"] != null) ...[
+        [
+          "Irányító-függés",
+          "${r["playmaker_dependency"]}"
+              "${r["playmaker_drop"] != null ? " (−${(100 * (r["playmaker_drop"] as num)).toStringAsFixed(0)} pont nélküle)" : ""}"
+        ],
+      ],
       // A védekezésük gyengéi: szabad lövés-arány + leglyukasabb zóna.
       if (((r["def_shots_against"] as num?) ?? 0) >= 4) ...[
         [
