@@ -114,6 +114,10 @@ class ScoutingReport:
     gk_on_target: int = 0
     gk_saves: int = 0
     gk_conceded_zones: dict = field(default_factory=dict)
+    # Minden kapura tartó lövés zóna-bontása (védés is) — ebből és a
+    # kapott gólok zónáiból zónánkénti védés-hatékonyság, így a kapus
+    # LEGGYENGÉBB sarka is látszik (nemcsak hova esett a legtöbb gól).
+    gk_on_target_zones: dict = field(default_factory=dict)
     # 7 a 6 elleni (lehozott kapusos) játék összideje másodpercben.
     empty_net_s: float = 0.0
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
@@ -458,6 +462,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         if n >= 2:
             keys.append(f"Kapusuk innen kapta a legtöbb gólt: {zone} "
                         f"({n} gól) — támadd onnan.")
+    # Zóna szerinti védés-hatékonyság: a legalacsonyabb védés%-ú, legalább
+    # 3 lövést kapott sarok — konkrét célpont a lövőknek.
+    if rep.gk_on_target_zones:
+        cand = []
+        for z, faced in rep.gk_on_target_zones.items():
+            if faced >= 3:
+                conc = rep.gk_conceded_zones.get(z, 0)
+                cand.append((z, 100.0 * (faced - conc) / faced, faced))
+        if cand:
+            z, pct, faced = min(cand, key=lambda t: t[1])
+            if pct <= 50.0:
+                keys.append(f"Kapusuk leggyengébb sarka: {z} "
+                            f"({pct:.0f}% védés, {faced} lövésből) — "
+                            "ide lőjetek.")
 
     # Emberelőny: ha jól váltják gólra, a kiállítás ellenük duplán fáj.
     if rep.pp_shots >= 3:
@@ -557,6 +575,7 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.gk_on_target = gk["on_target"]
             rep.gk_saves = gk["saves"]
             rep.gk_conceded_zones = dict(gk["conceded_zones"])
+            rep.gk_on_target_zones = dict(gk.get("on_target_zones", {}))
         rep.empty_net_s = round(sum(
             w["duration_s"] for w in detect_empty_net(match, config)
             if w["team"] == team.value), 1)
@@ -731,10 +750,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sub_after_against=sum(r.sub_after_against for r in reports),
         defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
-    # Kapott-gól zónák egyesítése.
+    # Kapott-gól és kapura tartó lövés zónák egyesítése.
     for r in reports:
         for z, n in r.gk_conceded_zones.items():
             rep.gk_conceded_zones[z] = rep.gk_conceded_zones.get(z, 0) + n
+        for z, n in r.gk_on_target_zones.items():
+            rep.gk_on_target_zones[z] = rep.gk_on_target_zones.get(z, 0) + n
     # Védekezési zónák egyesítése (kapott lövés/gól/szabad zónánként).
     for r in reports:
         for z, v in r.def_zones.items():

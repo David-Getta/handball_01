@@ -333,6 +333,14 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
         if rec.get("seven_faced"):
             sent += (f"; hétméteresből {rec['seven_saved']}/"
                      f"{rec['seven_faced']}-t fogott meg")
+        # Leggyengébb sarok: a legalacsonyabb védés%-ú, min. 2 lövést
+        # kapott zóna — konkrét támadási irány az ellenfélnek.
+        zsp = rec.get("zone_save_pct", {})
+        otz = rec.get("on_target_zones", {})
+        cand = [(z, p) for z, p in zsp.items() if otz.get(z, 0) >= 2]
+        if cand:
+            z, p = min(cand, key=lambda kv: kv[1])
+            sent += f"; leggyengébb zónája: {z} ({p:.0f}% védés)"
         parts.append(sent)
     if not parts:
         return None
