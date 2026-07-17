@@ -525,10 +525,69 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     );
   }
 
+  /// A bejelölt négyszög épség-ellenőrzése MENTÉS előtt. A leggyakoribb
+  /// hiba a sarok-sorrend felcserélése (a vonalak keresztezik egymást)
+  /// vagy egy duplán kattintott sarok (elfajzott, apró terület) — az
+  /// ilyen kalibrációból használhatatlan homográfia lenne, és a hibát
+  /// csak órákkal később, a kész elemzésen venné észre a felhasználó.
+  String? _cornerWarning() {
+    if (_corners.length < 4) return null;
+    final p = _corners;
+    // Előjeles terület (saru-képlet) — elfajzott négyszög szűrése.
+    double area2 = 0;
+    for (var i = 0; i < 4; i++) {
+      final a = p[i], b = p[(i + 1) % 4];
+      area2 += a.dx * b.dy - b.dx * a.dy;
+    }
+    if (area2.abs() < 0.02) {
+      return "A bejelölt terület nagyon kicsi vagy elfajzott — nézd meg, "
+          "nem kattintottál-e kétszer ugyanoda.";
+    }
+    // Konvexitás: a fordulás-irány nem válthat előjelet — ha vált, a
+    // sarkok sorrendje rossz (a négyszög \"nyolcasba\" csavarodik).
+    var pos = false, neg = false;
+    for (var i = 0; i < 4; i++) {
+      final a = p[i], b = p[(i + 1) % 4], c = p[(i + 2) % 4];
+      final cross =
+          (b.dx - a.dx) * (c.dy - b.dy) - (b.dy - a.dy) * (c.dx - b.dx);
+      if (cross > 0) pos = true;
+      if (cross < 0) neg = true;
+    }
+    if (pos && neg) {
+      return "A sarkok sorrendje hibásnak tűnik: a vonalak keresztezik "
+          "egymást. A helyes sorrend: bal-fent → jobb-fent → jobb-lent → "
+          "bal-lent.";
+    }
+    return null;
+  }
+
   /// Mentés: teljes pályánál azonnal visszatér; térfélnél a bal/jobb HELYRE
   /// menti el (így KÜLÖN kalibrálható a két térfél, akár külön képkockán),
   /// és a Kész gombbal együtt kerülnek vissza a feltöltő képernyőre.
   Future<void> _save() async {
+    // Épség-ellenőrzés: gyanús négyszögnél rákérdezünk, mielőtt egy
+    // többórás feldolgozás rossz kalibrációval indulna el.
+    final warn = _cornerWarning();
+    if (warn != null) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Gyanús kalibráció"),
+          content: Text(warn, style: AppText.label),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Javítom")),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text("Mentés így is",
+                    style: TextStyle(color: AppColors.gold))),
+          ],
+        ),
+      );
+      if (go != true || !mounted) return;
+    }
     final res = _currentResult();
     // A vágólapra is (CLI-hez / hibakereséshez).
     final json =

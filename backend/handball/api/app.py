@@ -268,6 +268,41 @@ def create_app():
             raise HTTPException(status_code=400,
                                 detail=f"a videó nem található: {path}")
 
+        # Kalibráció-épség: elfajzott (apró/önmetsző) négyszöggel a teljes
+        # feldolgozás rossz koordinátákat adna — inkább itt utasítjuk el.
+        def _calib_error(corners) -> str | None:
+            try:
+                pts = [(float(p_[0]), float(p_[1])) for p_ in corners]
+            except Exception:
+                return "a kalibráció formátuma hibás (4 [x,y] pont kell)"
+            if len(pts) != 4:
+                return "a kalibrációhoz pontosan 4 sarok kell"
+            # Előbb a keresztezés (az önmetsző négyszög saru-területe
+            # félrevezetően kicsi lenne), utána a terület-nagyságrend.
+            pos = neg = False
+            for i in range(4):
+                a, b, c = pts[i], pts[(i + 1) % 4], pts[(i + 2) % 4]
+                cr = ((b[0] - a[0]) * (c[1] - b[1])
+                      - (b[1] - a[1]) * (c[0] - b[0]))
+                pos |= cr > 0
+                neg |= cr < 0
+            if pos and neg:
+                return ("a kalibrációs sarkok sorrendje hibás (a vonalak "
+                        "keresztezik egymást) — a helyes sorrend: bal-fent, "
+                        "jobb-fent, jobb-lent, bal-lent")
+            area2 = sum(pts[i][0] * pts[(i + 1) % 4][1]
+                        - pts[(i + 1) % 4][0] * pts[i][1] for i in range(4))
+            if abs(area2) < 1000.0:  # px² nagyságrend: ~22x22 px alatti terület
+                return ("a bejelölt kalibrációs terület elfajzott/túl kicsi "
+                        "— jelöld újra a 4 sarkot")
+            return None
+
+        for c in ([body.get("calib")] if body.get("calib") else []) +                 [cc.get("corners") for cc in (body.get("calibs") or [])
+                 if isinstance(cc, dict)]:
+            err = _calib_error(c)
+            if err:
+                raise HTTPException(status_code=400, detail=err)
+
         job_id = uuid.uuid4().hex[:12]
         match_id = body.get("match_id") or f"video-{job_id}"
         # A feldolgozási beállítások lemezre mentése: részleges eredménynél
