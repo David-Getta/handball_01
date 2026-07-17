@@ -471,6 +471,8 @@ class _MatchScreenState extends State<MatchScreen> {
                 _filterChip("rule:pp", "Emberhátrány"),
               if ((_rules["passive_risk"] as List?)?.isNotEmpty ?? false)
                 _filterChip("rule:passive", "Passzív-kockázat"),
+              if (_stoppages.any((s) => s["kind"] == "időkérés"))
+                _filterChip("rule:timeout", "Időkérés"),
             ]),
           ),
           // Klip-export: a SZŰRT eseménytípusok jelenetei MP4-ekben, zip-ben.
@@ -556,6 +558,21 @@ class _MatchScreenState extends State<MatchScreen> {
             {"label": "Passzív-kockázat", "team": a["team"],
              "frame": a["start_frame"], "duration_s": a["duration_s"]},
         ];
+      case "rule:timeout":
+        return [
+          for (final st in _stoppages)
+            if (st["kind"] == "időkérés")
+              {
+                // Ha a backend ítéletet is adott (megtörte-e a sorozatot),
+                // a címkében is látszik.
+                "label": (st["verdict"] as String?) != null
+                    ? "Időkérés — ${st["verdict"]}"
+                    : "Időkérés",
+                "team": st["likely_team"],
+                "frame": st["start_frame"],
+                "duration_s": st["duration_s"],
+              },
+        ];
     }
     return const [];
   }
@@ -564,13 +581,20 @@ class _MatchScreenState extends State<MatchScreen> {
   Widget _ruleRow(Map<String, dynamic> r, double fps, Match match) {
     final frame = (r["frame"] as num?)?.toInt() ?? 0;
     final durS = (r["duration_s"] as num?)?.toDouble();
-    final team = (r["team"] as String?) == "home"
-        ? match.meta.homeTeam
-        : match.meta.awayTeam;
+    // Az időkérésnél a "csapat" csak valószínűsítés — lehet ismeretlen is.
+    final team = switch (r["team"] as String?) {
+      "home" => match.meta.homeTeam,
+      "away" => match.meta.awayTeam,
+      _ => "",
+    };
     final label = (r["label"] as String?) ?? "";
     final (icon, color) = switch (label) {
-      "Hétméteres" => (Icons.sports_score, AppColors.gold),
+      // A hétméteres címke kimenetellel is jöhet ("Hétméteres — védés").
+      _ when label.startsWith("Hétméteres") =>
+        (Icons.sports_score, AppColors.gold),
       "Emberhátrány" => (Icons.person_remove, AppColors.away),
+      _ when label.startsWith("Időkérés") =>
+        (Icons.pause_circle_outline, AppColors.textSecondary),
       _ => (Icons.hourglass_bottom, AppColors.textSecondary),
     };
     return InkWell(

@@ -25,6 +25,7 @@ from ..models.tracking import Match
 from .tactics import TacticsConfig
 
 STOP_SPEED_MS = 0.4     # ez alatt "állnak" a játékosok
+EFFECT_WINDOW_S = 120.0  # az időkérés hatás-ablaka (előtte/utána kapott gólok)
 MIN_VISIBLE = 6         # ennyi látható játékos kell a megbízható jelhez
 TIMEOUT_MIN_S = 15.0    # legalább ennyi állás = megszakítás
 TIMEOUT_LONG_S = 120.0  # e felett már nem időkérés (sérülés/félidő)
@@ -100,4 +101,47 @@ def detect_stoppages(match: Match,
                      else "hosszú megszakítás"),
             "likely_team": likely,
         })
+    return out
+
+
+def timeout_effects(match: Match,
+                    config: Optional[TacticsConfig] = None) -> list[dict]:
+    """MŰKÖDÖTT-E az időkérés? — a kérő csapat kapott góljai előtte/utána.
+
+    Az időkérést jellemzően a szorongatott (sorozatot kapó) csapat kéri.
+    Minden felismert időkéréshez összevetjük a kérő csapat KAPOTT góljait
+    az EFFECT_WINDOW_S ablakban a megszakítás előtt és után:
+
+    - előtte ≥2 kapott gól és utána kevesebb → "megtörte a sorozatot";
+    - előtte ≥2 és utána nem kevesebb → "nem hozott fordulatot";
+    - előtte <2 kapott gól → nincs ítélet (nem lendület-törő időkérés).
+
+    Visszatérés: a detect_stoppages elemei kiegészítve
+    ("conceded_before", "conceded_after", "verdict")."""
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(EFFECT_WINDOW_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out = []
+    for st in detect_stoppages(match, config):
+        rec = dict(st)
+        rec["conceded_before"] = rec["conceded_after"] = None
+        rec["verdict"] = None
+        team = st["likely_team"]
+        if st["kind"] == "időkérés" and team is not None:
+            a, b = st["start_frame"], st["end_frame"]
+            before = sum(1 for (t, tm) in goals
+                         if a - win <= t < a and tm != team)
+            after = sum(1 for (t, tm) in goals
+                        if b < t <= b + win and tm != team)
+            rec["conceded_before"] = before
+            rec["conceded_after"] = after
+            if before >= 2:
+                rec["verdict"] = ("megtörte a sorozatot" if after < before
+                                  else "nem hozott fordulatot")
+        out.append(rec)
     return out
