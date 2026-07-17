@@ -1169,12 +1169,14 @@ def create_app():
     def get_momentum(match_id: str):
         """Gól-sorozatok (momentum): válasz nélküli szériák a felismert
         gólokból, a pillanatnyi állással. Üres lista, ha nincs érdemi
-        sorozat vagy nincs felismert gól."""
-        from ..pipeline.momentum import scoring_runs
+        sorozat vagy nincs felismert gól. Minden sorozathoz "context"
+        címkelista: a sorozat LEHETSÉGES OKAI (emberelőny, 7 a 6,
+        az ellenfél védekezés-váltása / tempó-esése)."""
+        from ..pipeline.momentum import annotate_runs
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {"runs": scoring_runs(match)}
+        return {"runs": annotate_runs(match)}
 
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):

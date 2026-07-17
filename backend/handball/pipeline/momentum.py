@@ -72,3 +72,113 @@ def scoring_runs(match: Match, config=None,
         score[team] += 1
     flush()
     return runs
+
+
+# A sorozat ELŐTTI ennyi másodpercet is nézzük az okok kereséséhez (egy
+# védekezés-váltás vagy kiállítás hatása kis késéssel csapódik le gólokban).
+CONTEXT_LEAD_S = 20.0
+# Az ellenfél tempója akkor számít "esésnek", ha a sorozat alatt a meccs-
+# átlagának ennyi-szerese ALÁ süllyed.
+TEMPO_DROP_RATIO = 0.9
+
+
+def annotate_runs(match: Match, runs: Optional[list[dict]] = None,
+                  config=None) -> list[dict]:
+    """A gól-sorozatok LEHETSÉGES OKAI — az edzői "miért" réteg.
+
+    Egy 4-0-s szériánál a legfontosabb kérdés nem a "mikor", hanem a
+    "miért történt". A már meglévő elemző rétegeket vetjük össze a sorozat
+    idősávjával ([start-CONTEXT_LEAD_S, end]), és minden sorozathoz
+    "context" címkelistát adunk:
+
+    - "emberelőnyben" — az ellenfél emberhátrányban volt (kiállítás);
+    - "7 a 6-tal" — a sorozatot futó csapat üres kapuval, plusz mezőny-
+      játékossal támadott;
+    - "az ellenfél védekezés-váltása után" — az ellenfél épp formát
+      váltott (az új felállás még nem ült össze);
+    - "az ellenfél tempó-esése mellett" — az ellenfél mozgás-sebessége a
+      sorozat alatt a saját meccs-átlaga alá esett (fáradás jele).
+
+    A jelek egymástól függetlenek, több is állhat egy sorozat mellett;
+    jel nélkül a context üres lista. Minden részelemzés hibatűrő: egy
+    elromló réteg nem viszi el a többit."""
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    if runs is None:
+        runs = scoring_runs(match, config)
+    if not runs:
+        return runs
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    lead = round(CONTEXT_LEAD_S * fps)
+
+    # Az elemző rétegek egyszer futnak le (nem sorozatonként) — hibatűrően.
+    def _safe(fn, *a, **kw):
+        try:
+            return fn(*a, **kw)
+        except Exception:
+            return []
+
+    from .goalkeeper import detect_empty_net
+    from .rules import detect_powerplay
+    from .scouting import formation_switch_profile
+    from .stats import compute_intensity_timeline
+
+    powerplays = _safe(detect_powerplay, match)
+    empty_nets = _safe(detect_empty_net, match, config)
+    switches = {t: _safe(formation_switch_profile, match, t, config)
+                for t in (Team.HOME, Team.AWAY)}
+    intensity = _safe(compute_intensity_timeline, match)
+
+    # Az ellenfél tempó-viszonyításához a meccs-átlag (ablakok átlaga).
+    avg_ms = {"home": 0.0, "away": 0.0}
+    for side in ("home", "away"):
+        vals = [w[f"{side}_avg_ms"] for w in intensity
+                if w.get(f"{side}_avg_ms", 0) > 0]
+        if vals:
+            avg_ms[side] = sum(vals) / len(vals)
+
+    def overlaps(a0, a1, b0, b1):
+        return a0 <= b1 and b0 <= a1
+
+    total = match.frames[-1].t if match.frames else 0
+    for r in runs:
+        team = r["team"]                       # "home" / "away"
+        opp = "away" if team == "home" else "home"
+        opp_team = Team.AWAY if team == "home" else Team.HOME
+        w0 = max(0, r["start_frame"] - lead)   # a sorozat + felvezetése
+        w1 = r["end_frame"]
+        ctx: list[str] = []
+
+        # Kiállítás: az ELLENFÉL volt emberhátrányban a sorozat idején.
+        if any(p["team_down"] == opp and
+               overlaps(w0, w1, p["start_frame"], p["end_frame"])
+               for p in powerplays):
+            ctx.append("emberelőnyben")
+
+        # 7 a 6: a sorozatot futó csapat üres kapuval támadott.
+        if any(e["team"] == team and
+               overlaps(w0, w1, e["start_frame"], e["end_frame"])
+               for e in empty_nets):
+            ctx.append("7 a 6-tal")
+
+        # Az ellenfél védekezés-váltása közvetlenül a sorozat előtt/alatt.
+        if any(w0 <= s["t"] <= w1 for s in switches.get(opp_team, [])):
+            ctx.append("az ellenfél védekezés-váltása után")
+
+        # Az ellenfél tempó-esése: a sorozattal átfedő intenzitás-ablakokban
+        # az átlagsebessége érezhetően a meccs-átlaga alatt volt.
+        if intensity and avg_ms[opp] > 0:
+            n_win = len(intensity)
+            win_frames = max(1, (total + 1) // n_win) if n_win else 1
+            in_run = [w[f"{opp}_avg_ms"] for i, w in enumerate(intensity)
+                      if w.get(f"{opp}_avg_ms", 0) > 0 and
+                      overlaps(w0, w1, w["start_frame"],
+                               w["start_frame"] + win_frames - 1)]
+            if in_run and (sum(in_run) / len(in_run)
+                           < TEMPO_DROP_RATIO * avg_ms[opp]):
+                ctx.append("az ellenfél tempó-esése mellett")
+
+        r["context"] = ctx
+    return runs
