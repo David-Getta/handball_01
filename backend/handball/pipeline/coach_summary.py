@@ -188,6 +188,16 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     poss = tempo.get("possessions", 0)
     if not poss:
         return None
+    # Labdabirtoklás-arány (ha érdemben eltér az 50-50-től).
+    poss_line = ""
+    try:
+        from .stats import possession_share
+        ps = possession_share(match)
+        if ps["home"]["pct"] and abs(ps["home"]["pct"] - 50.0) >= 5.0:
+            poss_line = (f" Labdabirtoklás: {home} {ps['home']['pct']:.0f}% – "
+                         f"{ps['away']['pct']:.0f}% {away}.")
+    except Exception:
+        pass
     avg_atk = tempo.get("avg_attack_duration_s", 0.0)
     trans = tempo.get("transition_pct", 0.0)
     body = (f"A felvételen {poss} labdabirtoklási szakasz látszik, egy támadás "
@@ -204,7 +214,7 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     if known:
         body += (" Leggyakoribb védekezési forma — "
                  + ", ".join(f"{n}: {f}" for n, f in known) + ".")
-    return {"title": "Játékkép és tempó", "body": body}
+    return {"title": "Játékkép és tempó", "body": body + poss_line}
 
 
 def _intensity_section(match: Match, home: str, away: str) -> tuple[dict | None, list[str]]:

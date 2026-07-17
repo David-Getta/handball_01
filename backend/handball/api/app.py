@@ -1872,8 +1872,14 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {team.value: vars(compute_team_summary(match, team))
-                for team in (Team.HOME, Team.AWAY)}
+        out = {team.value: vars(compute_team_summary(match, team))
+               for team in (Team.HOME, Team.AWAY)}
+        try:
+            from ..pipeline.stats import possession_share
+            out["possession"] = possession_share(match)
+        except Exception:
+            pass
+        return out
 
     @app.get("/matches/{match_id}/tactics")
     def get_tactics(match_id: str):
