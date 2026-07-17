@@ -7,7 +7,11 @@ felderítés. Az összefűzés:
  - a track-azonosítókat is eltolja (a követő mindkét szakaszban 1-től számoz,
    de a "7-es" az első félidőben NEM biztos, hogy ugyanaz, mint a másodikban
    — az összemosás hamis statisztikát adna),
- - a videó-hivatkozást elengedi (két külön fájlból nem lehet egyben lejátszani).
+ - a videó-hivatkozást elengedi (két külön fájlból nem lehet egyben
+   lejátszani) — KIVÉVE, ha minden szakasz UGYANABBÓL a videóból jött
+   (megszakadt feldolgozás folytatása): akkor a lejátszás megmarad,
+ - ha az utolsó szakasz maga is részleges, az összefűzött meccs is az
+   (partial + next_start_frame öröklődik) — tovább folytatható.
 """
 
 from __future__ import annotations
@@ -29,6 +33,12 @@ def merge_matches(parts: list[Match], match_id: str,
     if not parts:
         raise ValueError("legalább egy szakasz kell az összefűzéshez")
     first = parts[0]
+    # Ha minden szakasz ugyanabból a videófájlból jött (azonos stride-dal) —
+    # tipikusan egy megszakadt feldolgozás folytatása —, a lejátszás-
+    # hivatkozás megtartható; különben két külön fájl, és elengedjük.
+    same_video = first.meta.video_path is not None and all(
+        p.meta.video_path == first.meta.video_path
+        and p.meta.stride == first.meta.stride for p in parts)
     meta = MatchMeta(
         match_id=match_id,
         home_team=home_team or first.meta.home_team,
@@ -37,9 +47,13 @@ def merge_matches(parts: list[Match], match_id: str,
         frame_width=first.meta.frame_width,
         frame_height=first.meta.frame_height,
         date=first.meta.date,
-        video_path=None,  # két külön fájl — nincs egyben lejátszható videó
-        start_frame=0,
+        video_path=first.meta.video_path if same_video else None,
+        start_frame=first.meta.start_frame if same_video else 0,
         stride=first.meta.stride,
+        # Az utolsó szakasz részlegessége öröklődik: ha a folytatás is
+        # megszakadt, az összefűzött meccs is folytatható marad.
+        partial=parts[-1].meta.partial,
+        next_start_frame=parts[-1].meta.next_start_frame,
     )
 
     frames: list[Frame] = []

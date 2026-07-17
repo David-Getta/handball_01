@@ -45,3 +45,29 @@ def test_merge_meta_and_video():
     assert m.meta.home_team == "Deac" and m.meta.away_team == "Szike"
     assert m.meta.video_path is None  # nincs egyben lejátszható videó
     assert m.meta.fps == 8.0
+
+
+def test_merge_same_video_keeps_playback():
+    """Ha minden szakasz UGYANABBÓL a videóból jött (megszakadt feldolgozás
+    folytatása), a lejátszás-hivatkozás és a kezdőkocka megmarad."""
+    a = _part("resz", 3, track_id=1)
+    b = _part("resz-folyt", 2, track_id=1)
+    b.meta.video_path = a.meta.video_path  # ugyanaz a fájl
+    b.meta.start_frame = 3
+    m = merge_matches([a, b], "resz-teljes")
+    assert m.meta.video_path == a.meta.video_path
+    assert m.meta.start_frame == a.meta.start_frame
+    assert m.meta.partial is False
+
+
+def test_merge_inherits_partial_from_last_part():
+    """Ha az utolsó szakasz maga is részleges (újra megszakadt), az
+    összefűzött meccs is folytatható marad."""
+    a = _part("resz", 3, track_id=1)
+    b = _part("resz-folyt", 2, track_id=1)
+    b.meta.video_path = a.meta.video_path
+    b.meta.partial = True
+    b.meta.next_start_frame = 5
+    m = merge_matches([a, b], "resz-teljes")
+    assert m.meta.partial is True
+    assert m.meta.next_start_frame == 5
