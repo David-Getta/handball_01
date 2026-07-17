@@ -1444,6 +1444,14 @@ def create_app():
             free_away = d["away"]["free_pct"]
         except Exception:
             pass
+        poss_home = poss_away = None
+        try:
+            from ..pipeline.stats import possession_share
+            ps = possession_share(m)
+            if ps["home"]["pct"] or ps["away"]["pct"]:
+                poss_home, poss_away = ps["home"]["pct"], ps["away"]["pct"]
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -1462,6 +1470,8 @@ def create_app():
             "xg_away": xg_away,
             "free_pct_home": free_home,
             "free_pct_away": free_away,
+            "possession_home": poss_home,
+            "possession_away": poss_away,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out
