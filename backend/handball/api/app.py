@@ -1781,6 +1781,10 @@ def create_app():
                 _layer("progression", lambda: score_progression(match))
                 from ..pipeline.attack_types import attack_efficiency
                 _layer("attack_efficiency", lambda: attack_efficiency(match))
+                from ..pipeline.event_detection import assist_network
+                _layer("assist_network", lambda: assist_network(match))
+                from ..pipeline.stats import possession_share
+                _layer("possession", lambda: possession_share(match))
                 _layer("playmaker", lambda: playmaker_dependency(match))
                 _layer("substitutions", lambda: substitution_impact(match))
                 _layer("stoppages", lambda: timeout_effects(match))
