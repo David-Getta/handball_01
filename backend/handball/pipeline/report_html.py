@@ -676,6 +676,63 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass
 
+    # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
+    xg_html = ""
+    try:
+        from .xg import match_xg
+        r = match_xg(match)
+        th, ta = r["teams"]["home"], r["teams"]["away"]
+        if th["shots"] + ta["shots"] >= 4:
+            jersey_of: dict = {}
+            team_val: dict = {}
+            for fr in match.frames:
+                for pp in fr.players:
+                    team_val.setdefault(pp.track_id,
+                                        getattr(pp.team, "value", pp.team))
+                    if pp.jersey_number is not None:
+                        jersey_of.setdefault(pp.track_id, pp.jersey_number)
+
+            def _lab(pid):
+                j = jersey_of.get(pid)
+                return f"#{j}" if j is not None else f"{pid}. játékos"
+
+            srows = []
+            for rec in r["shooters"][:8]:
+                name = home if rec["team"] == "home" else away
+                d = rec["diff"]
+                srows.append(
+                    f"<tr><td>{escape(_lab(rec['player_id']))}</td>"
+                    f"<td>{escape(name)}</td>"
+                    f'<td class="num">{rec["shots"]}</td>'
+                    f'<td class="num">{rec["goals"]}</td>'
+                    f'<td class="num">{rec["xg"]:.1f}</td>'
+                    f'<td class="num"><b>{"+" if d > 0 else ""}{d:.1f}</b></td>'
+                    "</tr>")
+            xg_html = (
+                "<h2>Helyzetminőség (várható gól)</h2>"
+                "<table><tr><th></th>"
+                f'<th class="num">{escape(home)}</th>'
+                f'<th class="num">{escape(away)}</th></tr>'
+                f'<tr><td>Várható gól (xG)</td>'
+                f'<td class="num"><b>{th["xg"]:.1f}</b></td>'
+                f'<td class="num"><b>{ta["xg"]:.1f}</b></td></tr>'
+                f'<tr><td>Tényleges gól</td>'
+                f'<td class="num">{th["goals"]}</td>'
+                f'<td class="num">{ta["goals"]}</td></tr>'
+                f'<tr><td>Befejezés (gól − xG)</td>'
+                f'<td class="num">{th["diff"]:+.1f}</td>'
+                f'<td class="num">{ta["diff"]:+.1f}</td></tr></table>'
+                + ("<table><tr><th>Lövő</th><th>Csapat</th>"
+                   '<th class="num">Lövés</th><th class="num">Gól</th>'
+                   '<th class="num">xG</th><th class="num">+/−</th></tr>'
+                   + "".join(srows) + "</table>" if srows else "")
+                + '<p class="note">Az xG a lövés helyéből számolt '
+                  'helyzetérték (kapu-távolság + látott kapuszög). Pozitív '
+                  'befejezés-érték: a csapat/játékos a helyzetei felett '
+                  'teljesített.</p>')
+    except Exception:
+        pass  # a jelentés e blokk nélkül is teljes
+
     # Kapus-teljesítmény (ha van kapus-jelölés a meccsen).
     gk_html = ""
     try:
@@ -789,6 +846,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     <tr><td>{home}</td><td><b>{escape(str(defense.get('home', '—')))}</b></td></tr>
     <tr><td>{away}</td><td><b>{escape(str(defense.get('away', '—')))}</b></td></tr>
   </table>
+
+  {xg_html}
 
   {gk_html}
 
