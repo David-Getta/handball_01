@@ -187,4 +187,19 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 8) Átmenet-védekezés: sok gyors kapott gól labdavesztés után.
+    try:
+        from .defense import transition_defense
+        td = transition_defense(match, config)
+        for side in ("home", "away"):
+            rec = td[side]
+            if rec["turnovers"] >= 4 and rec["transition_goals_against"] >= 2:
+                add(side, "védekezés", "Visszazárás labdavesztés után",
+                    f"{rec['transition_goals_against']} gyors gólt kaptak "
+                    f"labdaeladás után ({rec['pct']:.0f}%)",
+                    "átmenet-védekezés: azonnali visszafutás és a labdás "
+                    "megállítása, 5v6 rendezetlen helyzetek gyakorlása")
+    except Exception:
+        pass
+
     return out
