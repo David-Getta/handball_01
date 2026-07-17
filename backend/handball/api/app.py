@@ -2078,7 +2078,8 @@ def create_app():
         felhasználó a teljes appot (elemzés, felderítés, export) azonnal
         kipróbálhatja, mielőtt videót töltene fel."""
         import uuid
-        from ..sim import simulate_ground_truth, simulate_with_panning_camera
+        from ..sim import (append_demo_episodes, simulate_ground_truth,
+                           simulate_with_panning_camera)
 
         body = body or {}
         seconds = float(body.get("seconds", 30.0))
@@ -2087,6 +2088,9 @@ def create_app():
 
         ground = simulate_ground_truth(duration_s=seconds, fps=25.0, seed=seed)
         match = simulate_with_panning_camera(ground)
+        # Forgatókönyv-epizódok a végére: gól-sorozat, hetes, csere,
+        # időkérés — így a demóban az ÖSSZES elemző réteg mutat valamit.
+        append_demo_episodes(match)
         match.meta.match_id = f"demo-{uuid.uuid4().hex[:8]}"
         match.meta.home_team = "Demó Hazai"
         match.meta.away_team = "Demó Vendég"

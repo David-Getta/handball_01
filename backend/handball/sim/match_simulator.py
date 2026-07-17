@@ -184,3 +184,94 @@ def simulate_with_panning_camera(ground_truth: Match, fov_width_m: float = 18.0,
 
         out.frames.append(Frame(t=frame.t, players=visible + estimated, ball=ball))
     return out
+
+
+def append_demo_episodes(match: Match) -> None:
+    """FORGATÓKÖNYV-epizódok a demó meccs végére — hogy az elemző rétegek
+    (gól-sorozat, hétméteres, cserehullám, időkérés) a demóban is éledjenek.
+
+    Az epizódok az utolsó képkocka játékosaiból építkeznek (kis, élethű
+    mozgással), és sorban fűződnek a meccs végére:
+      1. hazai 3 gólos sorozat (momentum + xG),
+      2. hétméteres, majd értékesítés (szabály-réteg + kimenetel),
+      3. hazai cserehullám a cserezónán át,
+      4. vendég időkérés (rövid birtoklás után 18 mp állás).
+    A meccset HELYBEN bővíti."""
+    if not match.frames:
+        return
+    base = match.frames[-1]
+    t = base.t + 1
+    gone: set[int] = set()
+
+    def clones(phase: float, frozen: bool = False, extra=None):
+        players = []
+        for p in base.players:
+            if p.track_id in gone:
+                continue
+            dx = 0.0 if frozen else 0.4 * math.sin(phase + p.track_id)
+            dy = 0.0 if frozen else 0.3 * math.cos(0.8 * phase + p.track_id)
+            players.append(PlayerPosition(
+                track_id=p.track_id, team=p.team,
+                x=min(39.5, max(0.5, p.x + dx)),
+                y=min(19.5, max(0.5, p.y + dy)),
+                source=PositionSource.MEASURED, confidence=1.0,
+                jersey_number=p.jersey_number, role=p.role))
+        if extra:
+            players.extend(extra)
+        return players
+
+    def emit(ball, frozen=False, extra=None):
+        nonlocal t
+        match.frames.append(Frame(t=t, players=clones(t / 6.0, frozen=frozen,
+                                                      extra=extra),
+                                  ball=ball))
+        t += 1
+
+    def goal_to_plus_x():
+        for i in range(7):
+            emit(Ball(x=min(40.0, 34.0 + i), y=10.0, confidence=1.0))
+        for _ in range(50):  # visszaállás (debounce a következő gólig)
+            emit(Ball(x=20.0, y=10.0, confidence=1.0))
+
+    # 1) Hazai 3 gólos sorozat.
+    for _ in range(3):
+        goal_to_plus_x()
+
+    # 2) Hétméteres: álló labda a 7 m-es ponton, majd értékesítés.
+    for _ in range(30):
+        emit(Ball(x=33.0, y=10.0, confidence=1.0))
+    goal_to_plus_x()
+
+    # 3) Cserehullám: egy hazai mezőnyjátékos a cserezónába megy és lemegy,
+    #    a 90-es ott jön be, és beáll a helyére.
+    out_p = next(p for p in base.players
+                 if p.team == Team.HOME and p.role != "kapus")
+    gone.add(out_p.track_id)
+    for k in range(100):  # 4 mp: kifelé sétál
+        frac = k / 99.0
+        walker = PlayerPosition(
+            track_id=out_p.track_id, team=Team.HOME,
+            x=out_p.x + (20.0 - out_p.x) * frac,
+            y=out_p.y + (1.0 - out_p.y) * frac,
+            source=PositionSource.MEASURED, confidence=1.0,
+            jersey_number=out_p.jersey_number)
+        emit(Ball(x=20.0, y=10.0, confidence=1.0), extra=[walker])
+    for k in range(100):  # a csere befut
+        frac = k / 99.0
+        sub_in = PlayerPosition(
+            track_id=90, team=Team.HOME,
+            x=20.0 + 10.0 * frac, y=1.0 + 11.0 * frac,
+            source=PositionSource.MEASURED, confidence=1.0)
+        emit(Ball(x=20.0, y=10.0, confidence=1.0), extra=[sub_in])
+
+    # 4) Időkérés: a vendég birtokol pár mp-ig, majd mindenki megáll.
+    holder = next(p for p in base.players
+                  if p.team == Team.AWAY and p.role != "kapus")
+    for _ in range(75):
+        hp = next(pp for pp in match.frames[-1].players
+                  if pp.track_id == holder.track_id)
+        emit(Ball(x=hp.x, y=hp.y, confidence=1.0))
+    for _ in range(int(18 * 25)):
+        emit(None, frozen=True)
+    for _ in range(75):  # újraindulás
+        emit(Ball(x=20.0, y=10.0, confidence=1.0))

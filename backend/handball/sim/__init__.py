@@ -2,7 +2,9 @@
 teszteléshez, a kliens fejlesztéséhez, a becslő demonstrálásához)."""
 
 from .match_simulator import (
-    simulate_ground_truth, simulate_with_panning_camera,
+    append_demo_episodes, simulate_ground_truth,
+    simulate_with_panning_camera,
 )
 
-__all__ = ["simulate_ground_truth", "simulate_with_panning_camera"]
+__all__ = ["append_demo_episodes", "simulate_ground_truth",
+           "simulate_with_panning_camera"]
