@@ -544,6 +544,181 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Gyors összevetés: két meccs kulcs-mutatói egymás mellett — jó két
+  /// egymást követő meccs ("fejlődtünk-e?") vagy két ellenfél gyors
+  /// összehasonlítására. A számok a szezon-kivonatból jönnek.
+  Future<void> _compareFlow() async {
+    String? aId;
+    String? bId;
+    final picked = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        DropdownButtonFormField<String> picker(
+            String label, String? value, void Function(String?) onChanged,
+            {String? exclude}) {
+          return DropdownButtonFormField<String>(
+            initialValue: value,
+            decoration: InputDecoration(labelText: label),
+            dropdownColor: AppColors.surfaceAlt,
+            items: [
+              for (final m in _matches)
+                if (m["match_id"] != exclude)
+                  DropdownMenuItem(
+                    value: m["match_id"] as String,
+                    child: Text(
+                      "${m["home_team"] ?? "Hazai"} vs ${m["away_team"] ?? "Vendég"}"
+                      " · ${m["match_id"]}",
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.value.copyWith(fontSize: 13),
+                    ),
+                  ),
+            ],
+            onChanged: (v) => setDlg(() => onChanged(v)),
+          );
+        }
+
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Két meccs összevetése"),
+          content: SizedBox(
+            width: 460,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              picker("Első meccs", aId, (v) => aId = v, exclude: bId),
+              const SizedBox(height: AppSpacing.md),
+              picker("Második meccs", bId, (v) => bId = v, exclude: aId),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: (aId == null || bId == null)
+                  ? null
+                  : () => Navigator.pop(ctx, true),
+              child: const Text("Összevetés"),
+            ),
+          ],
+        );
+      }),
+    );
+    if (picked != true || aId == null || bId == null || !mounted) return;
+    final a = _perMatch[aId!];
+    final b = _perMatch[bId!];
+    if (a == null || b == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("A szezon-kivonat még töltődik — próbáld újra pár "
+              "másodperc múlva.")));
+      return;
+    }
+
+    String fmt(dynamic v, [String unit = ""]) =>
+        v == null ? "—" : "$v$unit";
+    String pair(dynamic h, dynamic aVal, [String unit = ""]) =>
+        (h == null && aVal == null)
+            ? "—"
+            : "${fmt(h, unit)} – ${fmt(aVal, unit)}";
+    List<List<String>> rows(Map<String, dynamic> m) => [
+          ["Eredmény", "${m["goals_home"]} : ${m["goals_away"]}"],
+          ["További lövések", fmt(m["shots"])],
+          ["Védések", fmt(m["saves"])],
+          [
+            "Várható gól (xG, H–V)",
+            m["xg_home"] == null
+                ? "—"
+                : "${(m["xg_home"] as num).toStringAsFixed(1)} – "
+                    "${(m["xg_away"] as num).toStringAsFixed(1)}"
+          ],
+          [
+            "Szabad lövőt enged (H–V)",
+            pair(
+                m["free_pct_home"] == null
+                    ? null
+                    : (m["free_pct_home"] as num).toStringAsFixed(0),
+                m["free_pct_away"] == null
+                    ? null
+                    : (m["free_pct_away"] as num).toStringAsFixed(0),
+                "%")
+          ],
+          ["Hétméteres", fmt(m["seven_meters"])],
+          ["Kiállítás", fmt(m["suspensions"])],
+          [
+            "Futott táv",
+            "${(((m["distance_m"] as num?) ?? 0) / 1000).toStringAsFixed(1)} km"
+          ],
+          ["Sprintek", fmt(m["sprints"])],
+          [
+            "Játékidő",
+            "${(((m["duration_s"] as num?) ?? 0) / 60).toStringAsFixed(1)} perc"
+          ],
+        ];
+    final ra = rows(a);
+    final rb = rows(b);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Összevetés"),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Table(
+              columnWidths: const {0: FlexColumnWidth(1.4)},
+              children: [
+                TableRow(children: [
+                  const SizedBox(),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                        "${a["home_team"]} vs ${a["away_team"]}"
+                        "${(a["date"] as String?)?.isNotEmpty == true ? "\n${a["date"]}" : ""}",
+                        style: AppText.value.copyWith(
+                            fontSize: 12, color: AppColors.accent)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text(
+                        "${b["home_team"]} vs ${b["away_team"]}"
+                        "${(b["date"] as String?)?.isNotEmpty == true ? "\n${b["date"]}" : ""}",
+                        style: AppText.value.copyWith(
+                            fontSize: 12, color: AppColors.gold)),
+                  ),
+                ]),
+                for (var i = 0; i < ra.length; i++)
+                  TableRow(children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(ra[i][0],
+                          style: AppText.label.copyWith(fontSize: 12)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(ra[i][1],
+                          style: AppText.value.copyWith(fontSize: 12.5)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(rb[i][1],
+                          style: AppText.value.copyWith(fontSize: 12.5)),
+                    ),
+                  ]),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Bezárás")),
+        ],
+      ),
+    );
+  }
+
   /// Félidők összefűzése: a két (külön feldolgozott) félidőből EGY teljes
   /// meccs készül — a statisztikák, események és a felderítés így a teljes
   /// mérkőzésre számolódnak. A sorrend számít: 1. félidő → 2. félidő.
@@ -996,6 +1171,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               const Spacer(),
               // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
+              OutlinedButton.icon(
+                onPressed: _matches.length < 2 ? null : _compareFlow,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: BorderSide(
+                      color: _matches.length < 2
+                          ? AppColors.border
+                          : AppColors.borderStrong),
+                ),
+                icon: const Icon(Icons.compare_arrows, size: 18),
+                label: const Text("Összevetés"),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(
                 onPressed: _matches.length < 2 ? null : _trendFlow,
                 style: OutlinedButton.styleFrom(
