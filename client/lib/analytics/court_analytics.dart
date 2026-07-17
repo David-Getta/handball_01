@@ -245,7 +245,9 @@ class PassNetwork {
 /// a játékosok átlagos MÉRT helyén ülnek (ez a posztjukat közelíti), az élek
 /// vastagsága a passzok számával nő — a csapatjáték szerkezete egy képen.
 PassNetwork computePassNetwork(Match match,
-    List<Map<String, dynamic>> events, Team team) {
+    List<Map<String, dynamic>> events, Team team,
+    // Opcionális idő-ablak (frame t-értékben): pl. csak az 1. félidő.
+    {int? fromT, int? toT}) {
   final teamValue = team == Team.home ? "home" : "away";
   // Él-számláló: rendezetlen pár → passzok száma.
   final edgeCount = <String, int>{};
@@ -253,6 +255,9 @@ PassNetwork computePassNetwork(Match match,
   var total = 0;
   for (final e in events) {
     if (e["type"] != "pass" || e["team"] != teamValue) continue;
+    final et = (e["t"] as num?)?.toInt();
+    if (fromT != null && (et == null || et < fromT)) continue;
+    if (toT != null && (et == null || et > toT)) continue;
     final from = (e["player_id"] as num?)?.toInt();
     final to = ((e["detail"] as Map?)?["receiver_id"] as num?)?.toInt();
     if (from == null || to == null || from == to) continue;
