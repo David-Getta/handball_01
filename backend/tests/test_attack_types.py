@@ -93,3 +93,43 @@ def test_attack_mix_percentages():
     assert set(mix) == {AttackType.FAST_BREAK.value,
                         AttackType.POSITIONAL.value}
     assert abs(sum(mix.values()) - 100.0) < 0.2
+
+
+def _fast_break_goal(t0):
+    """Lerohanás (22→33) majd lövés-gól a +x kapura."""
+    frames = _attack_frames(t0, 4.0, 22.0, 33.0)
+    t = t0 + len(frames)
+    for i in range(7):
+        frames.append(Frame(t=t + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_attack_efficiency_pairs_shots_and_goals():
+    """A lerohanás lövésig és gólig jut → 100% shot_pct/goal_pct rá."""
+    from handball.pipeline.attack_types import attack_efficiency
+
+    frames = _fast_break_goal(0)
+    # Szünet (a debounce miatt), majd egy felállt támadás lövés nélkül.
+    t0 = len(frames)
+    for i in range(30):
+        frames.append(Frame(t=t0 + i, players=[], ball=None))
+    frames += _attack_frames(t0 + 30, 20.0, 30.0, 31.0)
+    m = Match(_meta(), frames)
+
+    eff = attack_efficiency(m)["home"]
+    fb = eff.get(AttackType.FAST_BREAK.value)
+    assert fb and fb["attacks"] >= 1
+    assert fb["shots"] == fb["attacks"] and fb["goals"] == fb["attacks"]
+    assert fb["goal_pct"] == 100.0
+    # A felállt támadás lövés nélkül maradt.
+    pos = eff.get(AttackType.POSITIONAL.value)
+    if pos:
+        assert pos["shots"] == 0 and pos["goal_pct"] == 0.0
+
+
+def test_attack_efficiency_no_attacks_empty():
+    from handball.pipeline.attack_types import attack_efficiency
+    m = Match(_meta(), [Frame(t=i, players=[], ball=None) for i in range(10)])
+    eff = attack_efficiency(m)
+    assert eff == {"home": {}, "away": {}}

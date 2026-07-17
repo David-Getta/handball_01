@@ -103,6 +103,56 @@ def classify_attacks(match: Match,
     return out
 
 
+# A támadás végét követő lövést is a szakaszhoz vesszük (a befejezés a
+# birtoklás lezárulta után pár tizedmásodperccel csapódik le lövésként).
+ATTACK_TAIL_S = 2.0
+
+
+def attack_efficiency(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-típusonkénti befejezés-hatékonyság csapatonként.
+
+    Minden felismert támadás-szakaszhoz (classify_attacks) hozzápárosítjuk
+    a szakasz idején (+ ATTACK_TAIL_S) az adott csapattól ugyanarra a
+    kapura leadott ELSŐ lövést, és megnézzük, gól lett-e. Így látszik,
+    melyik támadás-típus mennyire eredményes — pl. "a lerohanásaik 80%-a
+    gól, de a felállt támadásuk csak 30%".
+
+    Visszatérés csapatonként:
+    {típus: {"attacks", "shots", "goals", "shot_pct", "goal_pct"}}
+    — shot_pct: lövésig jutott támadások aránya; goal_pct: gólig jutottak.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    shots = [(e.t, e.team.value, e.type == EventType.GOAL)
+             for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {"home": {}, "away": {}}
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        rec = out[side].setdefault(a["type"],
+                                   {"attacks": 0, "shots": 0, "goals": 0})
+        rec["attacks"] += 1
+        hit = next(((t, goal) for (t, tm, goal) in shots
+                    if tm == side
+                    and a["start_frame"] <= t <= a["end_frame"] + tail),
+                   None)
+        if hit is not None:
+            rec["shots"] += 1
+            if hit[1]:
+                rec["goals"] += 1
+    for side in ("home", "away"):
+        for rec in out[side].values():
+            n = max(1, rec["attacks"])
+            rec["shot_pct"] = round(100.0 * rec["shots"] / n, 1)
+            rec["goal_pct"] = round(100.0 * rec["goals"] / n, 1)
+    return out
+
+
 def attack_mix(match: Match,
                config: Optional[TacticsConfig] = None) -> dict:
     """Csapatonkénti támadás-mix: {csapat: {típus: százalék}}.
