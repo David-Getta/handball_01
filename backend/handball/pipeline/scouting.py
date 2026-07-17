@@ -92,6 +92,8 @@ class ScoutingReport:
     # Gólpassz-vezér: a legtöbb gólpasszt adó játékos (track_id, db).
     top_assist_id: int | None = None
     top_assist_count: int = 0
+    # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
+    defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
     # lövésig jutásuk, ha ő nincs a labdánál ("fogd meg" kulcs).
     playmaker_id: int | None = None
@@ -393,6 +395,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                               f"utáni mérlegük {diff} gól — a forgatásuk "
                               "utáni percekben érdemes rájuk ijeszteni.")
 
+    # Védekezési nyomás: szoros vagy laza fal — így támadd.
+    if rep.defensive_pressure_m and rep.def_shots_against >= 4:
+        if rep.defensive_pressure_m <= 1.3:
+            keys.append("Szorosan, előretolva védekeznek (a labdásra "
+                        f"átlag {rep.defensive_pressure_m:.1f} m-re lépnek ki) "
+                        "— keresd a lecsúszást, a beállót és a betörést.")
+        elif rep.defensive_pressure_m >= 2.5:
+            keys.append("Lazán, mélyen védekeznek (a labdásra átlag "
+                        f"{rep.defensive_pressure_m:.1f} m-re állnak) — "
+                        "vállald a 9 m-es lövést, van rá tér.")
+
     # Gyenge visszazárásuk: futtass rájuk labdaszerzés után.
     if (rep.transition_turnovers >= 4
             and rep.transition_goals_against >= 2):
@@ -581,6 +594,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         if leaders:
             rep.top_assist_id = leaders[0]["player_id"]
             rep.top_assist_count = leaders[0]["assists"]
+        from .defense import defensive_pressure
+        pr = defensive_pressure(match, config)[team.value]["avg_pressure_m"]
+        if pr is not None:
+            rep.defensive_pressure_m = pr
     except Exception:
         pass
     try:
@@ -705,6 +722,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),
+        defensive_pressure_m=round(
+            sum(r.defensive_pressure_m for r in reports if r.defensive_pressure_m)
+            / max(1, sum(1 for r in reports if r.defensive_pressure_m)), 2),
         sub_rotations=sum(r.sub_rotations for r in reports),
         sub_trailing=sum(r.sub_trailing for r in reports),
         sub_after_for=sum(r.sub_after_for for r in reports),
