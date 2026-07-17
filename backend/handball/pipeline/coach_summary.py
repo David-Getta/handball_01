@@ -330,6 +330,27 @@ def coach_summary(match: Match) -> dict:
         except Exception:
             pass  # egy hiányzó elemzés ne vigye el az egész összefoglalót
 
+    # Támadás-hatékonyság: melyik támadás-típus mennyire eredményes.
+    try:
+        from .attack_types import attack_efficiency
+        eff = attack_efficiency(match)
+        bits = []
+        for side, name in (("home", home), ("away", away)):
+            best = None
+            for typ, rec in eff[side].items():
+                if rec["attacks"] >= 3 and (best is None
+                                            or rec["goal_pct"] > best[1]["goal_pct"]):
+                    best = (typ, rec)
+            if best:
+                bits.append(f"{name} leghatékonyabb támadás-típusa a "
+                            f"{best[0]} ({best[1]['goals']}/{best[1]['attacks']} "
+                            f"gól, {best[1]['goal_pct']:.0f}%)")
+        if bits:
+            sections.append({"title": "Támadás-hatékonyság",
+                             "body": ("; ".join(bits) + ".").capitalize()})
+    except Exception:
+        pass
+
     try:
         s, hl = _defense_section(match, home, away)
         if s:
