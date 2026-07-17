@@ -44,6 +44,9 @@ class SummaryPanel extends StatelessWidget {
   /// lead_time_s, final}. Üresnél nincs felirat.
   final Map<String, dynamic>? progression;
 
+  /// Gól-idővonal: idő-vödrönkénti dobott/kapott gólok. Üresnél nincs blokk.
+  final List<Map<String, dynamic>> goalTimeline;
+
   const SummaryPanel({
     super.key,
     required this.summary,
@@ -59,7 +62,63 @@ class SummaryPanel extends StatelessWidget {
     this.runs = const [],
     this.training,
     this.progression,
+    this.goalTimeline = const [],
   });
+
+  /// Gól-idővonal mini oszlopdiagram: idő-vödrönként a dobott (hazai/vendég)
+  /// gólok — látszik, melyik szakaszban erős egy csapat.
+  List<Widget> _goalTimelineBlock() {
+    final b = goalTimeline;
+    if (b.length < 2) return const [];
+    var maxG = 1;
+    for (final x in b) {
+      final h = (x["home"] as num?)?.toInt() ?? 0;
+      final a = (x["away"] as num?)?.toInt() ?? 0;
+      if (h > maxG) maxG = h;
+      if (a > maxG) maxG = a;
+    }
+    if (maxG == 0) return const [];
+    return [
+      const SizedBox(height: AppSpacing.md),
+      Text("GÓLOK IDŐBEN (szakaszonként)", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      SizedBox(
+        height: 56,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (final x in b) ...[
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _bar(((x["home"] as num?)?.toInt() ?? 0) / maxG,
+                        AppColors.home),
+                    const SizedBox(height: 1),
+                    _bar(((x["away"] as num?)?.toInt() ?? 0) / maxG,
+                        AppColors.away),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 3),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text("felső sáv: ${homeName} · alsó: ${awayName}",
+          style: AppText.label.copyWith(
+              fontSize: 10, color: AppColors.textFaint)),
+    ];
+  }
+
+  Widget _bar(double frac, Color color) => Container(
+        height: (2 + 22 * frac.clamp(0.0, 1.0)),
+        decoration: BoxDecoration(
+          color: color.withOpacity(frac > 0 ? 0.9 : 0.15),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      );
 
   /// Vezetés-alakulás felirat az eredmény-grafikon alatt: fordulatok +
   /// legnagyobb előny (ha a backend adott ilyet és volt fordulat).
@@ -216,6 +275,7 @@ class SummaryPanel extends StatelessWidget {
             runs: runs,
           ),
           ..._progressionCaption(),
+          ..._goalTimelineBlock(),
           const SizedBox(height: AppSpacing.xl),
         ],
         if (intensity.length >= 2) ...[
