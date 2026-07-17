@@ -1438,6 +1438,49 @@ def create_app():
                 job["progress"] = 0.2
                 job["message"] = "statisztika (CSV)"
                 csv = _stats_csv(match)
+                # 2/b) Minden elemzés-réteg egyetlen, géppel olvasható
+                # JSON-ban (archívumhoz / a klub saját eszközeihez), és az
+                # edzői összefoglaló sima szövegként — rétegenként hibatűrően.
+                job["message"] = "elemzések (JSON)"
+                analyses: dict = {}
+
+                def _layer(name, fn):
+                    try:
+                        analyses[name] = fn()
+                    except Exception:
+                        pass
+
+                from ..pipeline.coach_summary import coach_summary
+                from ..pipeline.defense import defense_analysis
+                from ..pipeline.momentum import annotate_runs
+                from ..pipeline.playmaker import playmaker_dependency
+                from ..pipeline.rules import rules_report
+                from ..pipeline.stoppages import timeout_effects
+                from ..pipeline.substitutions import substitution_impact
+                from ..pipeline.training import training_focus
+                from ..pipeline.xg import match_xg
+                _layer("coach_summary", lambda: coach_summary(match))
+                _layer("xg", lambda: match_xg(match))
+                _layer("defense", lambda: defense_analysis(match))
+                _layer("rules", lambda: rules_report(match))
+                _layer("momentum", lambda: annotate_runs(match))
+                _layer("playmaker", lambda: playmaker_dependency(match))
+                _layer("substitutions", lambda: substitution_impact(match))
+                _layer("stoppages", lambda: timeout_effects(match))
+                _layer("training", lambda: training_focus(match))
+                analyses_json = json.dumps(analyses, ensure_ascii=False,
+                                           indent=2)
+                summary_txt = ""
+                cs = analyses.get("coach_summary") or {}
+                lines = [f"{match.meta.home_team} vs {match.meta.away_team}"
+                         + (f" · {match.meta.date}" if match.meta.date else ""),
+                         ""]
+                for sec in cs.get("sections", []):
+                    lines += [sec.get("title", ""), sec.get("body", ""), ""]
+                if cs.get("highlights"):
+                    lines += ["Mire nézz rá:"]
+                    lines += [f"- {h}" for h in cs["highlights"]]
+                summary_txt = "\n".join(lines)
                 # 3) Klipek (ha kérték és van videó) — a hiba nem végzetes.
                 clips_zip = None
                 if types:
@@ -1459,6 +1502,11 @@ def create_app():
                 with zipfile.ZipFile(pkg, "w", zipfile.ZIP_STORED) as z:
                     z.writestr("jelentes.html", html)
                     z.writestr("statisztika.csv", csv.encode("utf-8"))
+                    z.writestr("elemzesek.json",
+                               analyses_json.encode("utf-8"))
+                    if summary_txt:
+                        z.writestr("osszefoglalo.txt",
+                                   summary_txt.encode("utf-8"))
                     if clips_zip is not None and clips_zip.exists():
                         z.write(clips_zip, "klipek.zip")
                 job["status"] = "done"
