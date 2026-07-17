@@ -467,6 +467,23 @@ class ApiClient {
     return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// ÚJRA-feldolgozás a mentett beállításokkal
+  /// (POST /matches/{id}/reprocess) — hibás futás után egy kattintás.
+  Future<Map<String, dynamic>> reprocessMatch(String matchId) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/matches/$matchId/reprocess"))
+        .timeout(const Duration(seconds: 10));
+    if (resp.statusCode != 200) {
+      String msg = "HTTP ${resp.statusCode}";
+      try {
+        msg = (jsonDecode(utf8.decode(resp.bodyBytes))
+                as Map<String, dynamic>)["detail"] as String? ?? msg;
+      } catch (_) {}
+      throw Exception("Nem sikerült az újra-feldolgozás: $msg");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// RÉSZLEGES meccs feldolgozásának folytatása (POST /matches/{id}/resume):
   /// a mentett beállításokkal új feldolgozás indul onnan, ahol megszakadt.
   /// Visszatérés: {"job_id", "match_id"} — az új (folytatás-) meccsé.

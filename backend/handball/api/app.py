@@ -757,6 +757,34 @@ def create_app():
             pass
         return {"deleted": match_id}
 
+    @app.post("/matches/{match_id}/reprocess")
+    def reprocess_match(match_id: str):
+        """ÚJRA-feldolgozás a job indításakor elmentett beállításokkal.
+
+        Hibára futott (vagy gyanús eredményű) feldolgozásnál egy hívással
+        újraindítható ugyanaz a munka — a params-sidecar őrzi az eredeti
+        beállításokat (kalibráció, stride, modell), a kész eredmény a
+        régi meccs HELYÉRE kerül. Ha nincs mentett beállítás vagy a videó
+        már nem érhető el, érthető hibát adunk."""
+        pp = _params_path(match_id)
+        if not pp.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="ehhez a meccshez nincsenek mentett feldolgozási "
+                       "beállítások — indítsd a feldolgozást a varázslóból")
+        try:
+            body = json.loads(pp.read_text(encoding="utf-8"))
+        except Exception:
+            raise HTTPException(status_code=500,
+                                detail="a mentett beállítások nem olvashatók")
+        path = body.get("path")
+        if not path or not Path(path).exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"az eredeti videó nem található: {path}")
+        body["match_id"] = match_id  # ugyanarra a helyre dolgozunk
+        return start_processing(body)
+
     @app.post("/matches/{match_id}/resume")
     def resume_processing(match_id: str):
         """RÉSZLEGES meccs feldolgozásának folytatása onnan, ahol megszakadt.
