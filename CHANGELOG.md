@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#150)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#158)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -62,7 +62,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   meddig vezetett — összefoglalóban, jelentés-fejlécben, appban. (#144,
   #145, #146)
 - **Labdabirtoklás-arány**: melyik csapat birtokolta többet a labdát —
-  összefoglalóban, jelentésben, felderítésben. (#148, #149, #150)
+  összefoglalóban, jelentésben, felderítésben, szezon-összevetésben.
+  (#148, #149, #150, #152)
+- **Gólok idő-eloszlása**: mikor esnek a gólok (5 perces bontásban) —
+  app-diagram és jelentés-blokk. (#153, #154, #155)
+- **Gólpassz-hálózat**: ki kinek készíti elő a gólokat (gól-párosok,
+  gólpassz-vezérek) — összefoglalóban és a csomag-exportban. (#156,
+  #157, #158)
 
 ### Kliens-élmény
 - **Meccs-sztori idővonal**: gólok, sorozatok, emberelőnyök, 7 a 6,
