@@ -74,6 +74,24 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
     if attempts >= 5:
         eff = 100.0 * (goals_h + goals_a) / attempts
         body += f" A felismert kísérletek {eff:.0f}%-a végződött gólban."
+    # Gólpasszok: a detect_events a gólokhoz assist_id-t rendel (ha van) —
+    # a legtöbb gólpasszt adó játékos külön említést kap.
+    try:
+        from .event_detection import detect_events
+        assists: dict[int, int] = {}
+        for e in detect_events(match):
+            aid = (e.detail or {}).get("assist_id")
+            if e.type == EventType.GOAL and aid is not None:
+                assists[aid] = assists.get(aid, 0) + 1
+        if assists:
+            top_id, top_n = max(assists.items(), key=lambda kv: kv[1])
+            label = _player_label(top_id, _team_of_track(match),
+                                  _jersey_of_track(match), home, away)
+            total = sum(assists.values())
+            body += (f" {total} gól előtt gólpassz is azonosítható; "
+                     f"a legtöbbet {label} adta ({top_n}).")
+    except Exception:
+        pass
     return {"title": "Gólok és lövések", "body": body}
 
 

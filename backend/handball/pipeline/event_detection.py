@@ -35,6 +35,7 @@ _GOAL_Y_LOW = COURT_WIDTH_M / 2.0 - 1.5   # 8.5 — alsó kapufa
 _GOAL_Y_HIGH = COURT_WIDTH_M / 2.0 + 1.5  # 11.5 — felső kapufa
 
 SHOOTER_LOOKBACK_S = 0.8  # a lövés előtt ennyi időn belülről keressük a lövőt
+ASSIST_WINDOW_S = 4.0     # a gól előtt ennyi időn belüli utolsó passz = gólpassz
 SAVE_RADIUS_M = 1.6       # a labda ennyire a kapushoz érve = védés
 _GK_NEAR_GOAL_M = 9.0     # a kapus csak a SAJÁT kapujánál "véd"
 
@@ -192,12 +193,42 @@ def detect_possession_changes(match: Match,
     return events
 
 
+def annotate_assists(match: Match, events: list[MatchEvent],
+                     config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
+    """Gólpassz (assist) hozzárendelése a gólokhoz.
+
+    Gólpassz: a gól előtti ASSIST_WINDOW_S időablakban az UTOLSÓ olyan
+    saját-csapatbeli passz, amelynek a fogadója a gól lövője. A gól
+    detail-jébe kerül ("assist_id": a passzoló track_id-ja) — az esemény-
+    lista, a jelentés és az edzői összefoglaló innen olvassa."""
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = ASSIST_WINDOW_S * fps
+    passes = [e for e in events if e.type == EventType.PASS]
+    for g in events:
+        if g.type != EventType.GOAL or g.player_id is None:
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= g.t - p.t <= win) or p.team != g.team:
+                continue
+            if (p.detail or {}).get("receiver_id") != g.player_id:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        # Önmagának adott "passz" (track-zaj) nem gólpassz.
+        if best is not None and best.player_id is not None \
+                and best.player_id != g.player_id:
+            g.detail = {**(g.detail or {}), "assist_id": best.player_id}
+    return events
+
+
 def detect_events(match: Match, config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
     """Az összes esemény időrendben, a lövés utáni labdaeladást elnyomva.
 
     A lövés után az ellenfél szinte mindig megszerzi a labdát (kapus/blokk) — ezt
     nem akarjuk külön "labdaeladásként" is jelölni, ezért a lövés/gól közelében
-    lévő labdaeladásokat kihagyjuk.
+    lévő labdaeladásokat kihagyjuk. A gólokhoz a gólpasszt is hozzárendeljük
+    (annotate_assists) — a passz-lista itt már együtt van a gólokkal.
     """
     config = config or TacticsConfig()
     shots = detect_shots(match, config)
@@ -210,7 +241,8 @@ def detect_events(match: Match, config: Optional[TacticsConfig] = None) -> list[
             continue  # lövés után — nem külön labdaeladás
         filtered_changes.append(e)
 
-    return sorted(shots + filtered_changes, key=lambda e: e.t)
+    return annotate_assists(match, sorted(shots + filtered_changes, key=lambda e: e.t),
+                            config)
 
 
 def event_counts(match: Match, config: Optional[TacticsConfig] = None) -> dict:
