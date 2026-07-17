@@ -134,6 +134,38 @@ def _xg_section(match: Match, home: str, away: str) -> dict | None:
     return {"title": "Helyzetminőség", "body": body}
 
 
+def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, list[str]]:
+    """Védekezés: szabadon hagyott lövők + a leglyukasabb zóna."""
+    from .defense import defense_analysis
+    d = defense_analysis(match)
+    parts: list[str] = []
+    highlights: list[str] = []
+    for side, name in (("home", home), ("away", away)):
+        rec = d[side]
+        if rec["shots_against"] < 4:
+            continue
+        sent = (f"a(z) {name} {rec['shots_against']} lövést kapott "
+                f"({rec['goals_against']} gól, engedett helyzet-érték "
+                f"{rec['xg_against']:.1f})")
+        if rec["free_pct"] is not None and rec["free_pct"] >= 40.0:
+            sent += (f"; a lövők {rec['free_pct']:.0f}%-a SZABADON állt "
+                     "a lövésnél")
+            highlights.append(
+                f"{name}: a kapott lövések {rec['free_pct']:.0f}%-ánál nem "
+                "volt védő a lövő 2 m-es körzetében — a fedezés-hibákat "
+                "érdemes visszanézni.")
+        if rec["worst_zone"]:
+            wz = rec["zones"][rec["worst_zone"]]
+            if wz["goals"] >= 2:
+                sent += (f"; a legtöbb kapott gól innen: {rec['worst_zone']} "
+                         f"({wz['goals']})")
+        parts.append(sent)
+    if not parts:
+        return None, highlights
+    return {"title": "Védekezés",
+            "body": ("; ".join(parts) + ".").capitalize()}, highlights
+
+
 def _style_section(match: Match, home: str, away: str) -> dict | None:
     prof = team_style_profile(match)
     tempo = prof.get("tempo", {})
@@ -293,6 +325,14 @@ def coach_summary(match: Match) -> dict:
                 sections.append(s)
         except Exception:
             pass  # egy hiányzó elemzés ne vigye el az egész összefoglalót
+
+    try:
+        s, hl = _defense_section(match, home, away)
+        if s:
+            sections.append(s)
+        highlights.extend(hl)
+    except Exception:
+        pass
 
     try:
         s, hl = _intensity_section(match, home, away)

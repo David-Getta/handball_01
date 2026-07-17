@@ -1,0 +1,83 @@
+"""
+Tesztek a védekezés-elemzésre (defense.py): szabad lövés, zóna, kapott xG.
+
+A pálya 40x20 m; a HAZAI a +x (x=40) kapu felé támad — tehát a hazai
+lövéseket a VENDÉG védekezése "kapja".
+
+Futtatás:
+    python -m pytest tests/test_defense.py
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from handball.models.tracking import (
+    Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+)
+from handball.pipeline.defense import defense_analysis
+
+
+def _meta(fps=25.0):
+    return MatchMeta(match_id="d", home_team="H", away_team="A", fps=fps)
+
+
+def _pl(track_id, team, x, y, role=None):
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0,
+                          role=role)
+
+
+def _shot(t0, defenders, goal=True):
+    """Hazai lövés a +x kapura az 1-es játékostól (x=33, y=10) — a megadott
+    védőkkel a lövés-képkockákon."""
+    frames = []
+    for i in range(7):
+        players = [_pl(1, Team.HOME, 33.0, 10.0)] + defenders
+        y = 10.0 if goal else 5.0
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=34.0 + i, y=y, confidence=1.0)))
+    frames.append(Frame(t=t0 + 7, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_free_vs_covered_shot():
+    """Védő 1 m-re → fedezett; a legközelebbi védő 5 m-re → szabad lövés."""
+    # A védő a lövő mellett (0,7 m), de NEM a labda röppályáján — különben
+    # őt találná meg a birtokos-keresés, és a lövő azonosíthatatlan lenne.
+    covered = _shot(0, [_pl(20, Team.AWAY, 32.5, 10.5)])          # 0,7 m
+    free = _shot(40, [_pl(21, Team.AWAY, 33.0, 15.0)])            # 5 m
+    m = Match(_meta(), covered + free)
+    d = defense_analysis(m)["away"]  # a vendég védekezett
+    assert d["shots_against"] == 2 and d["goals_against"] == 2
+    assert d["free_shots"] == 1
+    assert d["free_pct"] == 50.0
+    flags = [s["free"] for s in d["shots"]]
+    assert flags == [False, True]
+    # A hazai védekezés nem kapott lövést.
+    assert defense_analysis(m)["home"]["shots_against"] == 0
+
+
+def test_goalkeeper_does_not_count_as_cover():
+    """A kapus közelsége NEM fedezés — mezőnyvédő nélkül a lövés szabad."""
+    gk_only = _shot(0, [_pl(30, Team.AWAY, 34.0, 10.0, role="kapus")])
+    d = defense_analysis(Match(_meta(), gk_only))["away"]
+    assert d["shots_against"] == 1
+    # Egyetlen mezőnyvédő sincs → nincs táv-minta → free None (nem mérhető).
+    assert d["shots"][0]["free"] is None
+    assert d["free_shots"] == 0
+
+
+def test_zones_and_worst_zone():
+    """A zóna-bontás a lövés helyéből jön; a legtöbb gólt hozó zóna a
+    worst_zone."""
+    beallo = _shot(0, [_pl(20, Team.AWAY, 38.0, 10.0)])           # beálló (6 m)
+    m = Match(_meta(), beallo)
+    d = defense_analysis(m)["away"]
+    assert "beálló (6 m)" in d["zones"]
+    assert d["worst_zone"] == "beálló (6 m)"
+    assert d["xg_against"] > 0

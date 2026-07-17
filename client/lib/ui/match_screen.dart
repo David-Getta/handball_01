@@ -131,6 +131,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic> rules = {};
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
+    Map<int, bool> freeByT = {};
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -178,6 +179,19 @@ class _MatchScreenState extends State<MatchScreen> {
           xgShooters = {};
         }
         try {
+          final d = await _api.fetchDefense(widget.matchId);
+          for (final side in ["home", "away"]) {
+            for (final sh in (((d[side] as Map?)?["shots"] as List?) ?? const [])
+                .cast<Map<String, dynamic>>()) {
+              final t = (sh["t"] as num?)?.toInt();
+              final fr = sh["free"] as bool?;
+              if (t != null && fr != null) freeByT[t] = fr;
+            }
+          }
+        } catch (_) {
+          freeByT = {}; // védekezés-réteg nélkül is teljes a nézet
+        }
+        try {
           quality = await _api.fetchQuality(widget.matchId);
         } catch (_) {
           quality = null; // minőség-jelentés nélkül is teljes a nézet
@@ -202,7 +216,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _intensity = computeIntensityTimeline(match);
       _formations = computeFormationTimeline(match);
       _events = events;
-      _shots = _computeShotMarkers(match, events, xgByT);
+      _shots = _computeShotMarkers(match, events, xgByT, freeByT);
       _xgShooters = xgShooters;
       _passNetwork = computePassNetwork(match, events, _passTeam);
       _quality = quality;
@@ -221,7 +235,8 @@ class _MatchScreenState extends State<MatchScreen> {
   /// használjuk az esemény képkockájából; ha a lövő nem azonosítható, a
   /// labda helyét; ha az sincs, az eseményt kihagyjuk a térképről.
   List<ShotMarker> _computeShotMarkers(
-      Match match, List<Map<String, dynamic>> events, Map<int, double> xgByT) {
+      Match match, List<Map<String, dynamic>> events, Map<int, double> xgByT,
+      Map<int, bool> freeByT) {
     // frame.t → frame index (a t nem feltétlenül a lista-index).
     final byT = <int, Frame>{for (final f in match.frames) f.t: f};
     final out = <ShotMarker>[];
@@ -248,7 +263,8 @@ class _MatchScreenState extends State<MatchScreen> {
         y = frame.ball!.y;
       }
       if (x == null || y == null) continue;
-      out.add(ShotMarker(t, team, type == "goal", x, y, xg: xgByT[t]));
+      out.add(ShotMarker(t, team, type == "goal", x, y,
+          xg: xgByT[t], free: freeByT[t]));
     }
     return out;
   }
@@ -1554,6 +1570,16 @@ class _MatchScreenState extends State<MatchScreen> {
               const ["6 m-es", "9 m-es", "távoli"])),
           // Várható gól (xG): a helyzetek összesített értéke — a tényleges
           // gólszámmal összevetve látszik a befejezés hatékonysága.
+          // Szabad lövések a szűrt lövések közt (fedezés-hiba a védőnél).
+          if (shots.any((s) => s.free == true))
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                  "szabad lövés (pontozott gyűrű): "
+                  "${shots.where((s) => s.free == true).length} — a lövőnél "
+                  "nem volt védő 2 m-en belül",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ),
           if (shots.any((s) => s.xg != null))
             Padding(
               padding: const EdgeInsets.only(top: 4),
