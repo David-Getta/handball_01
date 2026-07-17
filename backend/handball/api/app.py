@@ -1349,6 +1349,16 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"stoppages": timeout_effects(match)}
 
+    @app.get("/matches/{match_id}/training")
+    def get_training(match_id: str):
+        """Edzés-fókusz javaslatok a meccs gyengeségeiből, csapatonként
+        rangsorolva (terület, fókusz, indoklás, gyakorlat-típus)."""
+        from ..pipeline.training import training_focus
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return training_focus(match)
+
     @app.get("/matches/{match_id}/coach-summary")
     def get_coach_summary(match_id: str):
         """Automatikus edzői összefoglaló magyarul: mi történt a meccsen,
