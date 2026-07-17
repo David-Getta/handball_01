@@ -114,6 +114,9 @@ class ScoutingReport:
     sh_seconds: float = 0.0
     # Támadás-mix: {típus: százalék} — lerohanás / gyors indítás / felállt / 7a6.
     attack_mix: dict = field(default_factory=dict)
+    # Támadás-hatékonyság típusonként: {típus: {attacks, shots, goals,
+    # shot_pct, goal_pct}} — melyik támadásmódjuk mennyire eredményes.
+    attack_efficiency: dict = field(default_factory=dict)
     # Védekezés-váltások: [{"t","from","to","margin"}] — mikor és milyen
     # állásnál váltottak formát (margin < 0: hátrányban voltak).
     defense_switches: list = field(default_factory=list)
@@ -531,8 +534,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     except Exception:
         pass
     try:
-        from .attack_types import attack_mix
+        from .attack_types import attack_efficiency, attack_mix
         rep.attack_mix = attack_mix(match, config).get(team.value, {})
+        rep.attack_efficiency = attack_efficiency(match, config).get(
+            team.value, {})
     except Exception:
         pass
     try:
@@ -696,6 +701,18 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             mix[t] = mix.get(t, 0.0) + pct * w
     rep.attack_mix = {t: round(v, 1) for t, v in
                       sorted(mix.items(), key=lambda kv: -kv[1])}
+    # Támadás-hatékonyság egyesítése: típusonként a darabszámok összege.
+    eff: dict[str, dict] = {}
+    for r in reports:
+        for typ, rec in (r.attack_efficiency or {}).items():
+            m = eff.setdefault(typ, {"attacks": 0, "shots": 0, "goals": 0})
+            for key in ("attacks", "shots", "goals"):
+                m[key] += rec.get(key, 0)
+    for rec in eff.values():
+        n = max(1, rec["attacks"])
+        rec["shot_pct"] = round(100.0 * rec["shots"] / n, 1)
+        rec["goal_pct"] = round(100.0 * rec["goals"] / n, 1)
+    rep.attack_efficiency = eff
     s, w, k = _coach_keys(rep)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
@@ -737,6 +754,16 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             if top_pct >= 40.0:
                 body += (f" Támadásaik {top_pct:.0f}%-a {top_type} — "
                          "erre készülj elsőként.")
+        # Hatékonyság: a legeredményesebb támadás-típusuk külön figyelmeztetés.
+        best = None
+        for typ, rec in (rep.attack_efficiency or {}).items():
+            if rec.get("attacks", 0) >= 3 and (
+                    best is None or rec["goal_pct"] > best[1]["goal_pct"]):
+                best = (typ, rec)
+        if best and best[1]["goal_pct"] >= 50.0:
+            body += (f" A legeredményesebb támadásmódjuk a {best[0]} "
+                     f"({best[1]['goal_pct']:.0f}% gól) — ezt kell "
+                     "elsőként megfognod.")
         out.append({"title": "Így támadnak", "body": body})
 
     # Védekezésük: fő forma + váltogatás.

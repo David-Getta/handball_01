@@ -467,3 +467,35 @@ def test_scout_team_substitution_patterns():
     comb = combine_reports([rep, scout_team(_sub_pattern_match(), Team.HOME)])
     assert comb.sub_rotations == 2 and comb.sub_trailing == 2
     assert comb.sub_after_for == 2
+
+
+def _fast_break_goal_match():
+    """Hazai lerohanás lövésig+gólig, majd egy lövés nélküli felállt támadás."""
+    frames = []
+    # Lerohanás: a labdás játékos 22→33 gyorsan, majd gól a +x kapura.
+    for i in range(100):  # 4 mp
+        x = 22.0 + (33.0 - 22.0) * i / 99.0
+        frames.append(Frame(t=i, players=[
+            _pl(1, Team.HOME, x, 10.0),
+            _pl(9, Team.HOME, 1.5, 10.0),
+            _pl(21, Team.AWAY, 37.0, 8.0),
+            _pl(22, Team.AWAY, 37.0, 12.0)],
+            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    t = len(frames)
+    for i in range(7):
+        frames.append(Frame(t=t + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_scout_team_attack_efficiency():
+    """A felderítés a támadás-hatékonyságot is méri, és a nagyon eredményes
+    típus edzői kulcsot kap."""
+    rep = scout_team(_fast_break_goal_match(), Team.HOME)
+    assert rep.attack_efficiency  # van hatékonyság-adat
+    fb = rep.attack_efficiency.get("lerohanás")
+    assert fb and fb["goals"] >= 1 and fb["goal_pct"] >= 50.0
+    # Összevonásnál a darabszámok összeadódnak.
+    comb = combine_reports([rep, scout_team(_fast_break_goal_match(), Team.HOME)])
+    cfb = comb.attack_efficiency.get("lerohanás")
+    assert cfb["attacks"] == fb["attacks"] * 2
