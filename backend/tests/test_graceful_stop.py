@@ -66,6 +66,48 @@ def test_without_stop_check_processes_all(tmp_path):
     assert len(m.frames) == 20  # a teljes videó feldolgozva
 
 
+def test_checkpoint_saves_partial_then_full(tmp_path):
+    """Időszakos checkpoint: checkpoint_every_s=0 mellett a detektálás közben
+    is elmentődik legalább egy RÉSZLEGES (de érvényes) Match, a végeredmény
+    pedig a teljes videó — a checkpoint nem rontja el a végső feldolgozást."""
+    video = tmp_path / "mini4.mp4"
+    _tiny_video(video, frames=30)
+
+    saved: list[Match] = []
+    m = process(str(video), None, weights=None, stride=1, max_frames=100,
+                checkpoint_save=saved.append, checkpoint_every_s=0.0)
+    assert len(m.frames) == 30  # a végeredmény teljes
+    assert saved, "legalább egy checkpoint-mentésnek történnie kellett"
+    # A checkpoint-példányok érvényes, nem üres részeredmények; az első
+    # biztosan rövidebb a teljesnél (a 10. kocka környékén készül).
+    for cp in saved:
+        assert isinstance(cp, Match)
+        assert 0 < len(cp.frames) <= 30
+        assert cp.meta.fps > 0
+    assert len(saved[0].frames) < 30
+
+
+def test_checkpoint_save_error_does_not_kill_run(tmp_path):
+    """A checkpoint-mentés hibája NEM állíthatja le a feldolgozást."""
+    video = tmp_path / "mini5.mp4"
+    _tiny_video(video, frames=20)
+
+    def boom(_m):
+        raise RuntimeError("lemez tele")
+
+    m = process(str(video), None, weights=None, stride=1, max_frames=100,
+                checkpoint_save=boom, checkpoint_every_s=0.0)
+    assert len(m.frames) == 20  # a hibás mentés ellenére végigfutott
+
+
+def test_no_checkpoint_by_default(tmp_path):
+    """checkpoint_save nélkül (alapértelmezés) nincs időszakos mentés."""
+    video = tmp_path / "mini6.mp4"
+    _tiny_video(video, frames=15)
+    m = process(str(video), None, weights=None, stride=1, max_frames=100)
+    assert len(m.frames) == 15
+
+
 def test_immediate_stop_gives_empty_match(tmp_path):
     """Azonnali leállítás: üres (0 kockás) Match — a hívó dönt a sorsáról
     (a szerver ilyenkor nem menti el, "cancelled" státusszal zár)."""
