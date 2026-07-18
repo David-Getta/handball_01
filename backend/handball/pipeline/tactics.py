@@ -287,6 +287,57 @@ def attack_sides(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Forma elleni hatékonyság: pár kockával a lövés ELŐTT nézzük a védő-
+# formát (a lövés pillanatában a fal már felbomlóban lehet).
+FORMATION_LOOKBACK = 12
+
+
+def efficiency_vs_formation(match: Match,
+                            config: Optional[TacticsConfig] = None) -> dict:
+    """Támadó-hatékonyság a VÉDŐFORMA szerint: melyik fal ellen megy.
+
+    Minden lövésnél/gólnál a védekező csapat formáját a lövés előtti
+    kockán (FORMATION_LOOKBACK-kel korábban) olvassuk le, és formánként
+    számoljuk a támadó csapat lövéseit/góljait. Ebből látszik, melyik
+    védekezési forma fogja meg az adott csapatot — közvetlen "miben
+    állj fel ellenük" adat.
+
+    Visszatérés TÁMADÓ csapatonként: {forma: {"shots", "goals",
+    "goal_pct"}} — csak a felismert (nem "?") formák.
+    """
+    from .calibration import COURT_LENGTH_M as _L  # noqa: F401 (doksi)
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    frames_by_t = {f.t: f for f in match.frames}
+    out: dict = {"home": {}, "away": {}}
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        fr = frames_by_t.get(max(0, e.t - FORMATION_LOOKBACK))
+        if fr is None:
+            continue
+        defending = Team.AWAY if e.team == Team.HOME else Team.HOME
+        form = detect_formation(fr, defending, config)
+        label = form.label
+        if not label or label == "?" or form.defenders < 4:
+            continue  # kevés látott védő — a forma-címke nem megbízható
+        rec = out[e.team.value].setdefault(label,
+                                           {"shots": 0, "goals": 0,
+                                            "goal_pct": 0.0})
+        rec["shots"] += 1
+        if e.type == EventType.GOAL:
+            rec["goals"] += 1
+
+    for side in ("home", "away"):
+        for rec in out[side].values():
+            rec["goal_pct"] = round(100.0 * rec["goals"] / rec["shots"], 1)
+        out[side] = dict(sorted(out[side].items(),
+                                key=lambda kv: -kv[1]["shots"]))
+    return out
+
+
 def _avg_ball_speed_ms(match: Match) -> float:
     """A labda átlagos sebessége (m/s) az egymást követő, labdás frame-ekből."""
     fps = match.meta.fps if match.meta.fps > 0 else 25.0

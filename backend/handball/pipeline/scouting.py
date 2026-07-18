@@ -133,6 +133,9 @@ class ScoutingReport:
     # (mp) — az átlag darabszámból pontosan visszaszámolható.
     response_n: int = 0
     response_sum_s: float = 0.0
+    # Védőforma elleni hatékonyságuk: {forma: {"shots","goals"}} —
+    # formánként összegződik meccsek közt.
+    vs_formation: dict = field(default_factory=dict)
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -435,6 +438,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A játékuk tengelye a {pr['from']}. és {pr['to']}. játékos "
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
+
+    # Melyik fal fogja meg őket: ha egy forma ellen (4+ lövésből) jóval
+    # rosszabbul konvertálnak, mint máshol, az a javasolt felállás.
+    if rep.vs_formation:
+        pools = [(f_, v) for f_, v in rep.vs_formation.items()
+                 if v["shots"] >= 4]
+        if len(pools) >= 2:
+            def pct(v):
+                return 100.0 * v["goals"] / v["shots"]
+            worst = min(pools, key=lambda kv: pct(kv[1]))
+            best = max(pools, key=lambda kv: pct(kv[1]))
+            if pct(best[1]) - pct(worst[1]) >= 25.0:
+                keys.append(
+                    f"A {worst[0]} fal ellen elakadnak "
+                    f"({pct(worst[1]):.0f}% gólarány, a {best[0]} ellen "
+                    f"{pct(best[1]):.0f}%) — ellenük {worst[0]}-ban állj fel.")
 
     # Válasz-idő: gyorsan rendezik-e a sorokat kapott gól után.
     if rep.response_n >= 4:
@@ -805,6 +824,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
         rep.slow_attacks_slow = sarec["slow"]
+        from .tactics import efficiency_vs_formation
+        efrec = efficiency_vs_formation(match, config)[team.value]
+        rep.vs_formation = {k: {"shots": v["shots"], "goals": v["goals"]}
+                            for k, v in efrec.items()}
         from .momentum import goal_responses
         grec = goal_responses(match, config)[team.value]
         rep.response_n = grec["responses"]
@@ -1001,6 +1024,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sub_after_against=sum(r.sub_after_against for r in reports),
         defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
+    # Védőforma elleni hatékonyság egyesítése (formánként összegezve).
+    for r in reports:
+        for form, v in r.vs_formation.items():
+            m = rep.vs_formation.setdefault(form, {"shots": 0, "goals": 0})
+            m["shots"] += v["shots"]
+            m["goals"] += v["goals"]
     # Passz-hálózat egyesítése: azonos (from,to) párok passzai összeadódnak.
     rep.pass_total = sum(r.pass_total for r in reports)
     merged_pairs: dict = {}

@@ -21,7 +21,7 @@ from handball.pipeline.tactics import (
     TacticsConfig, possession_team, classify_phase, Phase,
     phase_percentages, detect_formation,
     count_possession_segments, compute_tempo, team_style_profile,
-    slow_attacks, attack_sides,
+    slow_attacks, attack_sides, efficiency_vs_formation,
 )
 
 
@@ -247,3 +247,32 @@ def test_attack_sides_direction_normalized():
     assert sides["home"]["frames"] == 50
     assert sides["away"]["jobb"] == 100.0
     assert sides["away"]["frames"] == 50
+
+
+def test_efficiency_vs_formation_buckets_by_defense():
+    """A 6-0 fal ellen leadott hazai gól a '6-0' vödörbe kerül."""
+    meta = MatchMeta(match_id="ef", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    # 6-0-s vendég fal a +x kapunál (mint az _attack_60-ban), a lövés
+    # előtti szakaszban is látszik.
+    def wall():
+        return [_pl(20 + j, Team.AWAY, 35.0, float(y))
+                for j, y in enumerate([2, 6, 8, 12, 14, 18])]
+    for _ in range(20):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 28.0, 10.0)]
+                            + wall(),
+                            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Hazai gól a +x kapura.
+    for i in range(7):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)]
+                            + wall(),
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+        t += 1
+    ef = efficiency_vs_formation(Match(meta, frames))
+    assert "6-0" in ef["home"]
+    assert ef["home"]["6-0"]["shots"] == 1
+    assert ef["home"]["6-0"]["goals"] == 1
+    assert ef["home"]["6-0"]["goal_pct"] == 100.0
+    assert ef["away"] == {}

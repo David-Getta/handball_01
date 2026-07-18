@@ -316,6 +316,32 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_formation_weakness():
+    """A 6-0 ellen 20%, az 5-1 ellen 60% → 'ellenük 6-0-ban állj fel'."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         vs_formation={"6-0": {"shots": 5, "goals": 1},
+                                       "5-1": {"shots": 5, "goals": 3}})
+    _, _, keys = _coach_keys(rep)
+    assert any("6-0 fal ellen elakadnak" in k for k in keys)
+    even = ScoutingReport(team="away", team_name="X",
+                          vs_formation={"6-0": {"shots": 5, "goals": 2},
+                                        "5-1": {"shots": 5, "goals": 2}})
+    _, _, k2 = _coach_keys(even)
+    assert not any("fal ellen elakadnak" in k for k in k2)
+
+
+def test_combine_reports_merges_vs_formation():
+    a = ScoutingReport(team="away", team_name="X",
+                       vs_formation={"6-0": {"shots": 3, "goals": 1}})
+    b = ScoutingReport(team="away", team_name="X",
+                       vs_formation={"6-0": {"shots": 2, "goals": 2},
+                                     "5-1": {"shots": 4, "goals": 3}})
+    m = combine_reports([a, b])
+    assert m.vs_formation["6-0"] == {"shots": 5, "goals": 3}
+    assert m.vs_formation["5-1"] == {"shots": 4, "goals": 3}
+
+
 def test_coach_keys_flag_response_time():
     """Gyors válasz (átlag 45 mp) → erősség; lassú (180 mp) → gyengeség."""
     from handball.pipeline.scouting import _coach_keys
