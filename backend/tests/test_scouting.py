@@ -316,6 +316,32 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_powerful_shooters():
+    """85+ km/h átlag (5+ mért lövésből) → 'nagy erejű lövők' erősség."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         shot_speed_n=6, shot_speed_sum_kmh=540.0,
+                         shot_speed_max_kmh=104.0)
+    strengths, _, _ = _coach_keys(rep)
+    assert any("Nagy erejű lövőik" in s_ for s_ in strengths)
+    weakarm = ScoutingReport(team="away", team_name="X",
+                             shot_speed_n=6, shot_speed_sum_kmh=420.0,
+                             shot_speed_max_kmh=80.0)
+    s2, _, _ = _coach_keys(weakarm)
+    assert not any("Nagy erejű" in s_ for s_ in s2)
+
+
+def test_combine_reports_merges_shot_speed():
+    a = ScoutingReport(team="away", team_name="X", shot_speed_n=4,
+                       shot_speed_sum_kmh=360.0, shot_speed_max_kmh=98.0)
+    b = ScoutingReport(team="away", team_name="X", shot_speed_n=2,
+                       shot_speed_sum_kmh=170.0, shot_speed_max_kmh=91.0)
+    m = combine_reports([a, b])
+    assert m.shot_speed_n == 6
+    assert abs(m.shot_speed_sum_kmh - 530.0) < 0.01
+    assert m.shot_speed_max_kmh == 98.0
+
+
 def test_coach_keys_flag_half_pattern():
     """1. félidő −2, 2. félidő +3 → 'a 2. félidőben feljavulnak' kulcs;
     fordítva 'elfogynak'. Kevés gólnál nincs jelzés."""

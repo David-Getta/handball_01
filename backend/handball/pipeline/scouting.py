@@ -117,6 +117,11 @@ class ScoutingReport:
     fh_goals_against: int = 0
     sh_goals_for: int = 0
     sh_goals_against: int = 0
+    # Lövés-erő: mért lövéseik száma és sebesség-összege (km/h) — az átlag
+    # a darabszámokból mindig pontosan visszaszámolható több meccsre is.
+    shot_speed_n: int = 0
+    shot_speed_sum_kmh: float = 0.0
+    shot_speed_max_kmh: float = 0.0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -419,6 +424,16 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A játékuk tengelye a {pr['from']}. és {pr['to']}. játékos "
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
+
+    # Lövés-erő: nagy átlagsebességű lövések — a blokk és a korai zavarás
+    # felértékelődik ellenük; lassú lövéseknél a kapus-munka a kulcs.
+    if rep.shot_speed_n >= 5:
+        avg = rep.shot_speed_sum_kmh / rep.shot_speed_n
+        if avg >= 85.0:
+            strengths.append(
+                f"Nagy erejű lövőik vannak (átlag {avg:.0f} km/h, "
+                f"csúcs {rep.shot_speed_max_kmh:.0f}) — a kapus reakcióra "
+                "nem építhetsz: blokk és korai zavarás kell.")
 
     # Félidő-minta: melyik félidőben erősebbek (halmozott mérlegből).
     fh_diff = rep.fh_goals_for - rep.fh_goals_against
@@ -737,6 +752,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
         rep.slow_attacks_slow = sarec["slow"]
+        from .event_detection import shot_speeds
+        sprec = shot_speeds(match, config)["teams"][team.value]
+        rep.shot_speed_n = sprec["n"]
+        rep.shot_speed_sum_kmh = round(sprec["avg_kmh"] * sprec["n"], 1)
+        rep.shot_speed_max_kmh = sprec["max_kmh"]
         from .momentum import halftime_score, score_progression
         hs = halftime_score(match, config)
         if hs is not None:
@@ -887,6 +907,11 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         fh_goals_against=sum(r.fh_goals_against for r in reports),
         sh_goals_for=sum(r.sh_goals_for for r in reports),
         sh_goals_against=sum(r.sh_goals_against for r in reports),
+        shot_speed_n=sum(r.shot_speed_n for r in reports),
+        shot_speed_sum_kmh=round(sum(r.shot_speed_sum_kmh
+                                     for r in reports), 1),
+        shot_speed_max_kmh=max((r.shot_speed_max_kmh for r in reports),
+                               default=0.0),
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),
