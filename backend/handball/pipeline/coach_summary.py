@@ -431,6 +431,15 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
         if rec.get("seven_faced"):
             sent += (f"; hétméteresből {rec['seven_saved']}/"
                      f"{rec['seven_faced']}-t fogott meg")
+        # Bravúr-védések: hány ziccert fogott a kapus (ha volt ilyen).
+        try:
+            from .xg import big_saves
+            n_big = sum(1 for bs in big_saves(match)
+                        if bs["team"] != key)  # a lövő az ellenfél
+            if n_big >= 2:
+                sent += f"; ebből {n_big} ziccert fogott (bravúr-védés)"
+        except Exception:
+            pass
         # Kapus-csere: ha volt, a két kapus mérlegével együtt mondjuk el.
         try:
             from .goalkeeper import goalkeeper_timeline

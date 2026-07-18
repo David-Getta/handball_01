@@ -32,7 +32,7 @@ MAX_CLIPS = 60  # ésszerű plafon — ennél több klip zip-je már kezelhetetl
 _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "seven_meter": "hetmeteres", "timeout": "idokeres",
             "substitution": "csere", "note": "jegyzet",
-            "missed_chance": "kihagyott-ziccer"}
+            "missed_chance": "kihagyott-ziccer", "big_save": "nagy-vedes"}
 
 
 @dataclass
