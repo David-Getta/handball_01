@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#211)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#221)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -113,6 +113,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   jelentés-fejlécben és az appban; félidő-minta felderítési kulcs
   ("a 2. félidőben feljavulnak/elfogynak"), narratíva-szekció, kliens-
   csempe és 2. félidei visszaesés edzés-fókusz. (#204–#211)
+- **Lövés-erő a felderítésben**: átlag/csúcs km/h meccsek közt
+  összegezve — "nagy erejű lövők" erősség, csempék. (#214, #215)
+- **Nyomás alatti befejezés**: szabad vs fedezett lövések gólaránya —
+  "elég a fegyelmezett fal" / "hidegvérű lövők" felderítési jelzések.
+  (#216)
+- **Játékos-fáradás**: első vs második félidei tempó játékosonként —
+  összefoglaló-mondat, jelentés-oszlop, kliens-buborék; a csere-
+  döntések nyers adata. (#217, #218, #219)
+- **Támadás-oldal**: melyik szárnyra épül a játék (irány-normalizált
+  bal/közép/jobb) — "told oda a falat" kulcs, narratíva, csempék.
+  (#220, #221)
 
 ### Új bemenetek felé (útiterv + alapok)
 - **TV-közvetítés előfeldolgozás**: vágás-felismerés (szín-hisztogram)
