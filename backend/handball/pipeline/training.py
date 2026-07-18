@@ -267,4 +267,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 13) Második félidei gól-visszaesés: a mérleg félidők közt romlik
+    # (gól-alapú jel, a tempó-alapú fáradás-szabály kiegészítője).
+    try:
+        from .momentum import halftime_score, score_progression
+        hs = halftime_score(match, config)
+        if hs is not None:
+            fin = score_progression(match, config)["final"]
+            for side, i in (("home", 0), ("away", 1)):
+                opp = "away" if side == "home" else "home"
+                fh_d = hs[side] - hs[opp]
+                sh_d = (fin[i] - hs[side]) - (fin[1 - i] - hs[opp])
+                if fh_d - sh_d >= 3 and (fin[0] + fin[1]) >= 8:
+                    add(side, "kondíció", "Második félidei visszaesés",
+                        f"a félidő-mérleg {fh_d:+d}-ról {sh_d:+d}-ra "
+                        "romlott",
+                        "forgatás-terv (tervezett cserék a 40. perc körül), "
+                        "magas intenzitású intervall-blokk az edzésen, "
+                        "a 2. félidei kezdő öt percre külön figura")
+    except Exception:
+        pass
+
     return out
