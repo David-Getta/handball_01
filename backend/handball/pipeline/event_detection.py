@@ -288,6 +288,58 @@ def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict
     return result
 
 
+# Lövés-sebesség: hihetőségi plafon (követési hiba fölötte) és a
+# sebesség-méréshez nézett ablak a lövés-esemény után (kockában).
+SHOT_SPEED_MAX_MS = 45.0     # ~160 km/h fölött mérési hiba
+SHOT_SPEED_WINDOW = 8
+
+
+def shot_speeds(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Lövés-sebességek a labda-kinematikából.
+
+    Minden felismert lövésnél a lövést követő pár kockában mért
+    leggyorsabb labda-elmozdulás adja a lövés sebességét (m/s → km/h).
+    A hihetetlen (SHOT_SPEED_MAX_MS feletti) értékeket eldobjuk.
+
+    Visszatérés: {"shots": [{"t","team","player_id","speed_kmh"}],
+    "teams": {"home"/"away": {"avg_kmh", "max_kmh", "n"}},
+    "fastest": {"t","team","player_id","speed_kmh"} | None}
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+
+    out_shots = []
+    for e in detect_shots(match, config):
+        peak = 0.0
+        prev = None
+        for dt in range(SHOT_SPEED_WINDOW + 1):
+            fr = frames_by_t.get(e.t + dt)
+            if fr is None or fr.ball is None:
+                prev = None
+                continue
+            if prev is not None:
+                v = math.hypot(fr.ball.x - prev[0], fr.ball.y - prev[1]) * fps
+                if v <= SHOT_SPEED_MAX_MS:
+                    peak = max(peak, v)
+            prev = (fr.ball.x, fr.ball.y)
+        if peak > 0:
+            out_shots.append({"t": e.t, "team": e.team.value,
+                              "player_id": e.player_id,
+                              "speed_kmh": round(peak * 3.6, 1)})
+
+    teams = {}
+    for side in ("home", "away"):
+        vals = [s_["speed_kmh"] for s_ in out_shots if s_["team"] == side]
+        teams[side] = {
+            "avg_kmh": round(sum(vals) / len(vals), 1) if vals else 0.0,
+            "max_kmh": max(vals) if vals else 0.0,
+            "n": len(vals),
+        }
+    fastest = max(out_shots, key=lambda s_: s_["speed_kmh"], default=None)
+    return {"shots": out_shots, "teams": teams, "fastest": fastest}
+
+
 def pass_network(match: Match, config: Optional[TacticsConfig] = None,
                  top: int = 5) -> dict:
     """Passz-hálózat: ki kinek adogat — a játékszervezés fő tengelye.
