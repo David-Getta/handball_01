@@ -373,6 +373,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${d(fhF - fhA)} → ${d(shF - shA)}";
   }
 
+  /// Lövés-erő: átlag + csúcs km/h — csak elég mért lövésnél (5+).
+  String? _shotPower(Map<String, dynamic> r) {
+    final n = ((r["shot_speed_n"] as num?) ?? 0).toInt();
+    if (n < 5) return null;
+    final sum = ((r["shot_speed_sum_kmh"] as num?) ?? 0).toDouble();
+    final peak = ((r["shot_speed_max_kmh"] as num?) ?? 0).toDouble();
+    final avg = (sum / n).toStringAsFixed(0);
+    return "átl. $avg · csúcs ${peak.toStringAsFixed(0)} km/h";
+  }
+
   String? _worstZone(Map<String, dynamic> r) {
     final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
     if (zones == null || zones.isEmpty) return null;
@@ -456,6 +466,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (((r["blocks"] as num?) ?? 0) >= 3)
         ["Blokkolt lövés", "${r["blocks"]}"],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
+      if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
       if (((r["clutch_matches"] as num?) ?? 0) >= 1)
         [
           "Hajrá-mérleg",
