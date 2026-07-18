@@ -201,3 +201,20 @@ def test_analysis_confidence_rows():
     clutch = next(r for r in rows if r["layer"] == "clutch")
     assert clutch["available"] is False
     assert "rövidebb" in clutch["reason"]
+
+
+def test_simulated_halftime_break_is_detected():
+    """A szimulátor félidei szünetével a szünet-felismerés működik, és a
+    félidő-rétegek elérhetővé válnak a réteg-megbízhatóságban."""
+    from handball.pipeline.halftime import detect_halftime
+    from handball.pipeline.quality import analysis_confidence
+    from handball.sim.match_simulator import simulate_ground_truth
+    m = simulate_ground_truth(duration_s=240, fps=25.0, seed=3,
+                              halftime_break_s=90.0)
+    half_t = detect_halftime(m)
+    assert half_t is not None
+    # A szünet a játékidő közepe táján van.
+    assert 0.3 * len(m.frames) < half_t < 0.7 * len(m.frames)
+    rows = analysis_confidence(m)
+    ht = next(r for r in rows if r["layer"] == "halftime")
+    assert ht["available"] is True
