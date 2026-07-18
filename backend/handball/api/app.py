@@ -1812,6 +1812,8 @@ def create_app():
                 _layer("assist_network", lambda: assist_network(match))
                 from ..pipeline.event_detection import pass_network
                 _layer("pass_network", lambda: pass_network(match))
+                from ..pipeline.event_detection import shot_speeds
+                _layer("shot_speeds", lambda: shot_speeds(match))
                 from ..pipeline.stats import possession_share
                 _layer("possession", lambda: possession_share(match))
                 from ..pipeline.stats import intensity_trend
@@ -2105,11 +2107,13 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         events = detect_events(match)
-        from ..pipeline.event_detection import assist_network, pass_network
+        from ..pipeline.event_detection import (assist_network, pass_network,
+                                                shot_speeds)
         return {
             "counts": event_counts(match),
             "assist_network": assist_network(match),
             "pass_network": pass_network(match),
+            "shot_speeds": shot_speeds(match),
             "events": [
                 {"t": e.t, "type": e.type.value, "team": e.team.value,
                  "player_id": e.player_id, "detail": e.detail}

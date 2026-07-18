@@ -106,6 +106,22 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
                          f"({best['goals']} gól).")
     except Exception:
         pass
+    # Leggyorsabb lövés: látványos, könnyen kommunikálható adat (ha mérhető
+    # és reális tartományban van).
+    try:
+        from .event_detection import shot_speeds
+        sp = shot_speeds(match)
+        fastest = sp.get("fastest")
+        if fastest and fastest["speed_kmh"] >= 60.0:
+            label = _player_label(fastest["player_id"],
+                                  _team_of_track(match),
+                                  _jersey_of_track(match), home, away) \
+                if fastest.get("player_id") is not None else None
+            who = f" ({label})" if label else ""
+            body += (f" A leggyorsabb lövés {fastest['speed_kmh']:.0f} "
+                     f"km/h volt{who}.")
+    except Exception:
+        pass
     return {"title": "Gólok és lövések", "body": body}
 
 

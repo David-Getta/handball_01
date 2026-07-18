@@ -244,6 +244,22 @@ def test_assist_network_pairs_and_leaders():
     assert net["leaders"][0]["player_id"] == 1 and net["leaders"][0]["assists"] == 2
 
 
+def test_shot_speeds_measures_ball_velocity():
+    """1 m/kocka a kapu felé 25 fps-en = 25 m/s = 90 km/h."""
+    from handball.pipeline.event_detection import shot_speeds
+    frames = []
+    for i in range(8):
+        frames.append(Frame(t=i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+    r = shot_speeds(Match(_meta(), frames))
+    assert len(r["shots"]) == 1
+    assert abs(r["shots"][0]["speed_kmh"] - 90.0) < 2.0
+    assert r["teams"]["home"]["n"] == 1
+    assert abs(r["teams"]["home"]["max_kmh"] - 90.0) < 2.0
+    assert r["fastest"]["team"] == "home"
+    assert r["teams"]["away"]["n"] == 0
+
+
 def test_pass_network_pairs_and_hubs():
     """3 passz 1→2 és 1 passz 2→3: a fő pár az 1→2, a hub az 1-es vagy
     a 2-es (mindkettő 4 passzban érintett — a 2-esé: 3 kapott + 1 adott)."""
