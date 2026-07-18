@@ -142,6 +142,33 @@ def test_turnover_zones_classifies_front_loss():
     assert tz["away"]["total"] == 0
 
 
+def test_pressure_finishing_free_vs_covered():
+    """A fedezett lövés mellé megy, a szabad gól → a hazai támadók
+    szabadon 100%, fedezve 0%."""
+    from handball.pipeline.defense import pressure_finishing
+
+    # Fedezett "mellé": a labda a lövőtől indul (ott azonosítható a lövő),
+    # majd fokozatosan elhajlik a kapufák mellé.
+    covered_miss = []
+    for i in range(7):
+        covered_miss.append(Frame(
+            t=i,
+            players=[_pl(1, Team.HOME, 33.0, 10.0),
+                     _pl(20, Team.AWAY, 32.5, 10.5)],
+            ball=Ball(x=34.0 + i, y=10.0 - i * 1.0, confidence=1.0)))
+    covered_miss.append(Frame(t=7, players=[],
+                              ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    free_goal = _shot(40, [_pl(21, Team.AWAY, 33.0, 15.0)], goal=True)
+    pf = pressure_finishing(Match(_meta(), covered_miss + free_goal))
+    home = pf["home"]
+    assert home["free"] == {"shots": 1, "goals": 1, "pct": 100.0}
+    assert home["covered"]["shots"] == 1
+    assert home["covered"]["goals"] == 0
+    assert home["covered"]["pct"] == 0.0
+    # A vendég nem lőtt → mindkét vödör üres, pct None.
+    assert pf["away"]["free"]["pct"] is None
+
+
 def test_detect_blocks_credits_defender():
     """A lövés a 32,5 m-nél álló védőn pattan vissza (a kaputól ~7,5 m,
     nem a kapusnál) → a vendég védekezés blokkja."""

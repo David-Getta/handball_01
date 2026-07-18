@@ -114,6 +114,39 @@ def defense_analysis(match: Match,
     return out
 
 
+def pressure_finishing(match, config=None) -> dict:
+    """Nyomás alatti befejezés: szabad vs fedezett lövések gólaránya.
+
+    A defense_analysis lövésenkénti free-jelét a TÁMADÓ oldalról
+    összegezzük: hogyan konvertál a csapat, amikor a lövőt fedezik,
+    ahhoz képest, amikor szabadon lő. Nagy különbség = a csapat csak
+    szabadon veszélyes (jó hír a fegyelmezett falnak); kis különbség =
+    nyomás alatt is hidegvérű lövőik vannak.
+
+    Visszatérés TÁMADÓ csapatonként: {"free": {"shots","goals","pct"},
+    "covered": {"shots","goals","pct"}} — pct None kevés mintánál (0
+    lövés)."""
+    config = config or TacticsConfig()
+    d = defense_analysis(match, config)
+    out = {}
+    for atk, defn in (("home", "away"), ("away", "home")):
+        rec = {"free": {"shots": 0, "goals": 0, "pct": None},
+               "covered": {"shots": 0, "goals": 0, "pct": None}}
+        for sh in d[defn]["shots"]:
+            if sh["free"] is None:
+                continue
+            bucket = rec["free" if sh["free"] else "covered"]
+            bucket["shots"] += 1
+            if sh["goal"]:
+                bucket["goals"] += 1
+        for bucket in rec.values():
+            if bucket["shots"]:
+                bucket["pct"] = round(
+                    100.0 * bucket["goals"] / bucket["shots"], 1)
+        out[atk] = rec
+    return out
+
+
 # A labdaeladás után ennyi másodpercen belüli kapott gól "átmenet-gól".
 TRANSITION_WINDOW_S = 8.0
 

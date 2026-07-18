@@ -122,6 +122,11 @@ class ScoutingReport:
     shot_speed_n: int = 0
     shot_speed_sum_kmh: float = 0.0
     shot_speed_max_kmh: float = 0.0
+    # Nyomás alatti befejezés: szabad/fedezett lövéseik és góljaik.
+    fin_free_shots: int = 0
+    fin_free_goals: int = 0
+    fin_cov_shots: int = 0
+    fin_cov_goals: int = 0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -424,6 +429,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A játékuk tengelye a {pr['from']}. és {pr['to']}. játékos "
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
+
+    # Nyomás alatti befejezés: ha fedezve alig, szabadon jól konvertálnak,
+    # a fegyelmezett (szabálytalanság nélküli) szoros fal önmagában elég.
+    if rep.fin_free_shots >= 3 and rep.fin_cov_shots >= 3:
+        free_pct = 100.0 * rep.fin_free_goals / rep.fin_free_shots
+        cov_pct = 100.0 * rep.fin_cov_goals / rep.fin_cov_shots
+        if free_pct - cov_pct >= 30.0:
+            keys.append(
+                f"Fedezett helyzetben alig veszélyesek ({cov_pct:.0f}% vs "
+                f"{free_pct:.0f}% szabadon) — a szoros, fegyelmezett fal "
+                "önmagában megfogja őket, ne szabálytalankodj feleslegesen.")
+        elif cov_pct >= 45.0:
+            strengths.append(
+                f"Nyomás alatt is hidegvérű lövőik vannak (fedezve is "
+                f"{cov_pct:.0f}%-ot konvertálnak) — a fal önmagában kevés, "
+                "korai zavarás és blokk kell.")
 
     # Lövés-erő: nagy átlagsebességű lövések — a blokk és a korai zavarás
     # felértékelődik ellenük; lassú lövéseknél a kapus-munka a kulcs.
@@ -752,6 +773,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
         rep.slow_attacks_slow = sarec["slow"]
+        from .defense import pressure_finishing
+        pf = pressure_finishing(match, config)[team.value]
+        rep.fin_free_shots = pf["free"]["shots"]
+        rep.fin_free_goals = pf["free"]["goals"]
+        rep.fin_cov_shots = pf["covered"]["shots"]
+        rep.fin_cov_goals = pf["covered"]["goals"]
         from .event_detection import shot_speeds
         sprec = shot_speeds(match, config)["teams"][team.value]
         rep.shot_speed_n = sprec["n"]
@@ -908,6 +935,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sh_goals_for=sum(r.sh_goals_for for r in reports),
         sh_goals_against=sum(r.sh_goals_against for r in reports),
         shot_speed_n=sum(r.shot_speed_n for r in reports),
+        fin_free_shots=sum(r.fin_free_shots for r in reports),
+        fin_free_goals=sum(r.fin_free_goals for r in reports),
+        fin_cov_shots=sum(r.fin_cov_shots for r in reports),
+        fin_cov_goals=sum(r.fin_cov_goals for r in reports),
         shot_speed_sum_kmh=round(sum(r.shot_speed_sum_kmh
                                      for r in reports), 1),
         shot_speed_max_kmh=max((r.shot_speed_max_kmh for r in reports),

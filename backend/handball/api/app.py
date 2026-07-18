@@ -1660,6 +1660,11 @@ def create_app():
             res["blocks"] = detect_blocks(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.defense import pressure_finishing
+            res["pressure_finishing"] = pressure_finishing(match)
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/playmaker")
@@ -1812,6 +1817,9 @@ def create_app():
                 _layer("blocks", lambda: detect_blocks(match))
                 from ..pipeline.tactics import slow_attacks
                 _layer("slow_attacks", lambda: slow_attacks(match))
+                from ..pipeline.defense import pressure_finishing
+                _layer("pressure_finishing",
+                       lambda: pressure_finishing(match))
                 _layer("rules", lambda: rules_report(match))
                 _layer("momentum", lambda: annotate_runs(match))
                 from ..pipeline.momentum import score_progression
