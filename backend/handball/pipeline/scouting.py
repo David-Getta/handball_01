@@ -937,6 +937,22 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             body += " Ragaszkodnak hozzá — egy begyakorolt ellenszer sokat ér."
         out.append({"title": "Védekezésük", "body": body})
 
+    # Végjáték: a szoros hajrák halmozott mérlege (ha volt ilyen hajrá).
+    if rep.clutch_matches >= 1:
+        diff = rep.clutch_goals_for - rep.clutch_goals_against
+        n = rep.clutch_matches
+        base = (f"{n} szoros hajrát" if n > 1 else "Egy szoros hajrát"
+                ) + " látott a felderítés"
+        if diff >= 2:
+            body = (f"{base}: a mérlegük +{diff} gól — a végjátékban "
+                    "hidegvérűek, ne hagyd a döntést a hajrára.")
+        elif diff <= -2:
+            body = (f"{base}: a mérlegük {diff} gól — a végjátékban "
+                    "rendre alulmaradnak, a szoros meccs neked kedvez.")
+        else:
+            body = (f"{base}: kiegyenlített hajrá-mérleg ({diff:+d} gól).")
+        out.append({"title": "Végjáték", "body": body})
+
     # Befejezésük: hatékonyság + kedvenc zóna. Több meccsnél az összegek
     # félrevezetők lennének jelzés nélkül — kiírjuk a meccs-számot.
     if rep.shots:

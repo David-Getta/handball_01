@@ -316,6 +316,17 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_narrative_mentions_clutch():
+    """Negatív hajrá-mérleg → Végjáték szekció a gyengeség-üzenettel."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         clutch_matches=2, clutch_goals_for=2,
+                         clutch_goals_against=6)
+    sections = scouting_narrative(rep)
+    endg = next(s_ for s_ in sections if s_["title"] == "Végjáték")
+    assert "-4" in endg["body"] or "−4" in endg["body"]
+    assert "alulmaradnak" in endg["body"]
+
+
 def test_combine_reports_sums_clutch():
     a = ScoutingReport(team="away", team_name="X", clutch_matches=1,
                        clutch_goals_for=3, clutch_goals_against=1)
