@@ -122,11 +122,18 @@ def _ball_xy(positions: dict[int, tuple[float, float]], t: int, fps: float) -> t
 
 
 def simulate_ground_truth(duration_s: float = 8.0, fps: float = 25.0,
-                          seed: int = 0) -> Match:
+                          seed: int = 0,
+                          halftime_break_s: float = 0.0) -> Match:
     """A "földi igazság": mind a 14 játékos + labda valósághű mozgása.
 
     Minden játékos MÉRT (a kamera-korlát nélkül). Ez a referencia, amiből a
     pásztázó-kamerás változatot származtatjuk.
+
+    halftime_break_s > 0 esetén a felvétel közepére félidei szünet kerül:
+    üres (játékos és labda nélküli) kockák — így a szünet-felismerésre
+    épülő rétegek (félidei állás, kondíció-mutató, félidő-minta) is
+    demózhatók/tesztelhetők szimulált meccsen. A szünet a duration_s-en
+    FELÜL adódik hozzá.
     """
     rng = random.Random(seed)
     specs = _roster_specs()
@@ -136,7 +143,15 @@ def simulate_ground_truth(duration_s: float = 8.0, fps: float = 25.0,
     )
     match = Match(meta=meta, frames=[])
     n_frames = int(duration_s * fps)
+    break_frames = int(halftime_break_s * fps)
+    half_at = n_frames // 2 if break_frames else n_frames + 1
+
+    out_t = 0
     for t in range(n_frames):
+        if t == half_at:
+            for _ in range(break_frames):
+                match.frames.append(Frame(t=out_t, players=[], ball=None))
+                out_t += 1
         positions = {s.track_id: _player_xy(s, t, fps, rng) for s in specs}
         players = [
             PlayerPosition(
@@ -148,7 +163,9 @@ def simulate_ground_truth(duration_s: float = 8.0, fps: float = 25.0,
             for s in specs
         ]
         bx, by = _ball_xy(positions, t, fps)
-        match.frames.append(Frame(t=t, players=players, ball=Ball(x=bx, y=by)))
+        match.frames.append(Frame(t=out_t, players=players,
+                                  ball=Ball(x=bx, y=by)))
+        out_t += 1
     return match
 
 
