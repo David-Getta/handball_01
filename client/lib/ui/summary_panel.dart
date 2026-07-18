@@ -112,6 +112,63 @@ class SummaryPanel extends StatelessWidget {
     ];
   }
 
+  /// Meccs-esély sáv: P(hazai) lépcsős kirajzolása a gólok mentén —
+  /// kék (hazai) fölény felfelé, piros lefelé, 50% a középvonal.
+  List<Widget> _winProbBlock() {
+    final wp = (progression?["win_prob"] as Map?)?.cast<String, dynamic>();
+    final tl = ((wp?["timeline"] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+    if (tl.length < 3) return const []; // legalább 2 gól kell
+    return [
+      const SizedBox(height: AppSpacing.md),
+      Text("MECCS-ESÉLY (gólok mentén)", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      SizedBox(
+        height: 44,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            for (final x in tl) ...[
+              Expanded(child: Builder(builder: (_) {
+                final p = ((x["p_home"] as num?) ?? 0.5).toDouble();
+                final up = p >= 0.5;
+                final frac = (p - 0.5).abs() * 2;
+                return Column(children: [
+                  Expanded(
+                      child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: up ? _probBar(frac, AppColors.home) : null)),
+                  Container(height: 1, color: AppColors.border),
+                  Expanded(
+                      child: Align(
+                          alignment: Alignment.topCenter,
+                          child: up ? null : _probBar(frac, AppColors.away))),
+                ]);
+              })),
+              const SizedBox(width: 3),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text(
+          "középvonal = 50% · felfelé: $homeName esélye · lefelé: $awayName",
+          style: AppText.label.copyWith(
+              fontSize: 10, color: AppColors.textFaint)),
+    ];
+  }
+
+  Widget _probBar(double frac, Color color) => FractionallySizedBox(
+        heightFactor: frac.clamp(0.06, 1.0),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      );
+
   Widget _bar(double frac, Color color) => Container(
         height: (2 + 22 * frac.clamp(0.0, 1.0)),
         decoration: BoxDecoration(
@@ -325,6 +382,7 @@ class SummaryPanel extends StatelessWidget {
           ),
           ..._progressionCaption(),
           ..._goalTimelineBlock(),
+          ..._winProbBlock(),
           const SizedBox(height: AppSpacing.xl),
         ],
         if (intensity.length >= 2) ...[
