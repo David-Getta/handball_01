@@ -198,6 +198,15 @@ def test_trend_includes_new_layers_and_skips_unmeasured():
     assert "possession_pct" not in [m["metric"] for m in r2["metrics"]]
 
 
+def test_trend_includes_blocks_per_match():
+    """A blokk darabszám meccsenként normálódik, és több = jobb."""
+    r = trend_report(_rep_for_trend(matches=2, blocks=4),
+                     _rep_for_trend(matches=4, blocks=16))
+    bl = next(m for m in r["metrics"] if m["metric"] == "blocks")
+    assert bl["older"] == 2.0 and bl["newer"] == 4.0
+    assert bl["better"] is True
+
+
 def test_trend_no_change_summary():
     """Változatlan időszakok: "nincs jelentős változás" összegzés."""
     r = trend_report(_rep_for_trend(), _rep_for_trend())

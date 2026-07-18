@@ -1314,6 +1314,7 @@ _TREND_METRICS = [
     ("possession_pct", "Labdabirtoklás", "%", True, False),
     ("defensive_pressure_m", "Védekezési nyomás", " m", False, False),
     ("turnover_front", "Elöl vesztett labda / meccs", "", False, True),
+    ("blocks", "Blokk / meccs", "", True, True),
 ]
 
 
