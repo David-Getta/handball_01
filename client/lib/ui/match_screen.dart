@@ -1556,6 +1556,36 @@ class _MatchScreenState extends State<MatchScreen> {
                   ]),
                 ),
             ],
+            // Réteg-megbízhatóság: mely elemzésekhez nincs elég minta
+            // ezen a meccsen (és miért) — csak a hiányzókat soroljuk.
+            ...(() {
+              final conf = ((q["confidence"] as List?) ?? const [])
+                  .cast<Map<String, dynamic>>()
+                  .where((r) => r["available"] == false)
+                  .toList();
+              if (conf.isEmpty) return const <Widget>[];
+              return <Widget>[
+                const SizedBox(height: AppSpacing.md),
+                Text("KEVÉS MINTÁJÚ RÉTEGEK", style: AppText.sectionLabel),
+                for (final r in conf)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.visibility_off_outlined,
+                              size: 15, color: AppColors.textFaint),
+                          const SizedBox(width: 6),
+                          Expanded(
+                              child: Text(
+                                  "${r["label"]}: ${r["reason"]}",
+                                  style: AppText.label.copyWith(
+                                      fontSize: 12,
+                                      color: AppColors.textFaint))),
+                        ]),
+                  ),
+              ];
+            })(),
           ],
         ),
         actions: [
