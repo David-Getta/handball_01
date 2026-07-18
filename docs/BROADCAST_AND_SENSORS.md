@@ -45,7 +45,10 @@ legközelebb — de a közvetítés négy saját nehézséget hoz:
    *(kész: `usable_segments`)*
 3. **Vonal-alapú auto-kalibráció** — a pályavonalakból, vágásonként újra
    (a kézi 4-sarok helyett, mert a nézőpont és a zoom folyton változik).
-   *(következő lépcső — ehhez valódi közvetítés-felvétel kell)*
+   *(első fele kész: `pipeline/broadcast_lines.py` — vonal-jelöltek
+   felismerése tiszta numpy Hough-transzformációval, szintetikus képen
+   tesztelve; a hátralévő fele a vonalak megfeleltetése a pálya-modellnek
+   → homográfia, ehhez már valódi közvetítés-felvétel kell)*
 4. **Eredményjelző-OCR** — az állás és a játékóra leolvasva: hitelesített
    eredmény + időszinkron (a felismert gólok validálása, pontos
    félidő-határ).
