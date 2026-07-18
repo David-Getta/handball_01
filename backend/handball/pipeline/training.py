@@ -219,4 +219,21 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 10) Sok elöl (támadó harmadban) elvesztett labda: a befejezés
+    # kapkodó/kockázatos — az ellenfél kontrája ezekből indul.
+    try:
+        from .defense import turnover_zones
+        tz = turnover_zones(match, config)
+        for side in ("home", "away"):
+            rec = tz[side]
+            if rec["total"] >= 5 and rec["front_pct"] >= 50.0:
+                add(side, "támadás", "Biztonságos befejezés",
+                    f"a labdaeladásaik {rec['front_pct']:.0f}%-a a támadó "
+                    "harmadban történt — ezekből indul az ellenfél kontrája",
+                    "befejezés-döntés gyakorlása nyomás alatt (lövés vagy "
+                    "visszajátszás), passz a szélső-beálló kapcsolatban, "
+                    "labdavesztés utáni azonnali letámadás")
+    except Exception:
+        pass
+
     return out

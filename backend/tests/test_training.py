@@ -117,6 +117,27 @@ def test_library_recurring_focus_endpoint(tmp_path):
         it["title"] != "Fedezés-fegyelem" for it in r["teams"]["Veszprém"])
 
 
+def test_front_turnovers_trigger_safe_finishing_focus():
+    """6 hazai labdaeladás a támadó harmadban (x=35, a +x kapu előtt) →
+    'Biztonságos befejezés' fókusz a hazaiaknak."""
+    frames = []
+    t = 0
+    for _ in range(6):
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 35.0, 10.0)],
+                                ball=Ball(x=35.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 35.0, 10.0)],
+                                ball=Ball(x=35.0, y=10.0, confidence=1.0)))
+            t += 1
+    focus = training_focus(Match(_meta(), frames))
+    assert any("Biztonságos befejezés" in f_["title"] for f_ in focus["home"])
+    # A vendég ugyanitt a SAJÁT harmadában veszít labdát → nála nem szól.
+    assert not any("Biztonságos befejezés" in f_["title"]
+                   for f_ in focus["away"])
+
+
 def test_weak_attack_type_triggers_focus():
     """Sok felállt támadás gól nélkül → befejezés-fókusz az adott típusra."""
     frames = []
