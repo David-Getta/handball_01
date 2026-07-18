@@ -21,7 +21,7 @@ from handball.pipeline.tactics import (
     TacticsConfig, possession_team, classify_phase, Phase,
     phase_percentages, detect_formation,
     count_possession_segments, compute_tempo, team_style_profile,
-    slow_attacks,
+    slow_attacks, attack_sides,
 )
 
 
@@ -224,3 +224,26 @@ def test_slow_attacks_flags_long_possession():
     assert sa["home"]["slow_pct"] == 50.0
     assert sa["home"]["longest_s"] >= 39.0
     assert sa["away"]["attacks"] == 0
+
+
+def test_attack_sides_direction_normalized():
+    """A hazai (a +x kapura támadva) y=3-nál játszik → 'bal'; a vendég
+    (a -x kapura) ugyanennél az y-nál a SAJÁT jobbján játszik."""
+    meta = MatchMeta(match_id="as", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    # Hazai támadás a +x térfélen, a labda y=3 (alacsony y) sávban.
+    for _ in range(50):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 3.0)],
+                            ball=Ball(x=30.0, y=3.0, confidence=1.0)))
+        t += 1
+    # Vendég támadás a -x térfélen, a labda szintén y=3-nál.
+    for _ in range(50):
+        frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 10.0, 3.0)],
+                            ball=Ball(x=10.0, y=3.0, confidence=1.0)))
+        t += 1
+    sides = attack_sides(Match(meta, frames))
+    assert sides["home"]["bal"] == 100.0
+    assert sides["home"]["frames"] == 50
+    assert sides["away"]["jobb"] == 100.0
+    assert sides["away"]["frames"] == 50

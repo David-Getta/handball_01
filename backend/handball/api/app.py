@@ -1820,6 +1820,8 @@ def create_app():
                 from ..pipeline.defense import pressure_finishing
                 _layer("pressure_finishing",
                        lambda: pressure_finishing(match))
+                from ..pipeline.tactics import attack_sides
+                _layer("attack_sides", lambda: attack_sides(match))
                 _layer("rules", lambda: rules_report(match))
                 _layer("momentum", lambda: annotate_runs(match))
                 from ..pipeline.momentum import score_progression
@@ -1977,6 +1979,11 @@ def create_app():
         try:
             from ..pipeline.tactics import slow_attacks
             res["slow_attacks"] = slow_attacks(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.tactics import attack_sides
+            res["attack_sides"] = attack_sides(match)
         except Exception:
             pass
         return res

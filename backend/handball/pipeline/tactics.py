@@ -245,6 +245,48 @@ def slow_attacks(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Támadás-oldal megoszlás: ekkora többség számít "súlypontnak".
+def attack_sides(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Melyik oldalon folyik a támadójáték — bal/közép/jobb sáv szerint.
+
+    A támadó-fázisú kockákon a labda KERESZTIRÁNYÚ (y) helyét soroljuk
+    harmadokba, a TÁMADÁS IRÁNYA szerint normálva (a "bal" a támadó
+    csapat bal keze felőli oldal, mindkét kapunál ugyanazt jelenti).
+    Ebből látszik, melyik szárnyra épül a játék.
+
+    Visszatérés csapatonként: {"bal", "közép", "jobb": %, "frames": n}.
+    """
+    from .calibration import COURT_WIDTH_M
+
+    config = config or TacticsConfig()
+    counts = {side: {"bal": 0, "közép": 0, "jobb": 0}
+              for side in ("home", "away")}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph not in (Phase.HOME_ATTACK, Phase.AWAY_ATTACK) or f.ball is None:
+            continue
+        team = Team.HOME if ph == Phase.HOME_ATTACK else Team.AWAY
+        third = (0 if f.ball.y < COURT_WIDTH_M / 3 else
+                 1 if f.ball.y < 2 * COURT_WIDTH_M / 3 else 2)
+        # A +x kapura támadva az alacsony y a támadó BAL keze; a -x
+        # kapunál tükrözve (mint a lövés-zónáknál).
+        attacks_positive = config.attacks_toward_x(team) > COURT_LENGTH_M / 2
+        if not attacks_positive:
+            third = 2 - third
+        key = ("bal", "közép", "jobb")[third]
+        counts[team.value][key] += 1
+
+    out = {}
+    for side in ("home", "away"):
+        total = sum(counts[side].values())
+        out[side] = {
+            k: (round(100.0 * v / total, 1) if total else 0.0)
+            for k, v in counts[side].items()
+        }
+        out[side]["frames"] = total
+    return out
+
+
 def _avg_ball_speed_ms(match: Match) -> float:
     """A labda átlagos sebessége (m/s) az egymást követő, labdás frame-ekből."""
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
