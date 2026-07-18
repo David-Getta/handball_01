@@ -288,4 +288,44 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 14) Lassú válasz a kapott gólra: az újraindulást kell gyakorolni.
+    try:
+        from .momentum import goal_responses
+        gr = goal_responses(match, config)
+        for side in ("home", "away"):
+            rec = gr[side]
+            if rec["responses"] >= 3 and (rec["avg_s"] or 0) >= 150.0:
+                add(side, "mentális", "Újraindulás kapott gól után",
+                    f"átlag {rec['avg_s']:.0f} mp telt el a válaszgólig",
+                    "kapott gól utáni azonnali gyors középkezdés "
+                    "begyakorlása, 'következő labda' rutin, pozitív "
+                    "kommunikáció a falban")
+    except Exception:
+        pass
+
+    # 15) Egy védőforma ellen elakadnak: fal elleni figurákat kell
+    # gyakorolni (a felderítés tükör-szabálya a SAJÁT csapatra).
+    try:
+        from .tactics import efficiency_vs_formation
+        ef = efficiency_vs_formation(match, config)
+        for side in ("home", "away"):
+            pools = [(f_, v) for f_, v in ef[side].items()
+                     if v["shots"] >= 4]
+            if len(pools) < 2:
+                continue
+
+            def _pct(v):
+                return 100.0 * v["goals"] / v["shots"]
+            worst = min(pools, key=lambda kv: _pct(kv[1]))
+            best = max(pools, key=lambda kv: _pct(kv[1]))
+            if _pct(best[1]) - _pct(worst[1]) >= 25.0:
+                add(side, "támadás", f"Játék a {worst[0]} fal ellen",
+                    f"a {worst[0]} ellen csak {_pct(worst[1]):.0f}%-ot "
+                    "konvertáltak",
+                    f"{worst[0]} elleni figurák (beálló-elzárások, "
+                    "átlövő-keresztek, szélső-befutás), türelmes "
+                    "körbejátszás a fal megbontásáig")
+    except Exception:
+        pass
+
     return out
