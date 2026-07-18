@@ -156,7 +156,10 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
                    + (f" (−{100 * rep.playmaker_drop:.0f} pont nélküle)"
                       if rep.playmaker_drop is not None else ""))]
           if getattr(rep, "playmaker_dependency", None) else []),
-        _metric("Labdaeladás", str(rep.turnovers)),
+        _metric("Labdaeladás", str(rep.turnovers)
+                + (f" ({100.0 * rep.turnover_front / rep.turnover_total:.0f}"
+                   "% elöl)"
+                   if getattr(rep, "turnover_total", 0) >= 5 else "")),
         *([_metric("Labdabirtoklás", f"{rep.possession_pct:.0f}%")]
           if getattr(rep, "possession_pct", 0) else []),
         *([_metric("Gólpassz-vezér", f"{rep.top_assist_count} gólpassz")]
