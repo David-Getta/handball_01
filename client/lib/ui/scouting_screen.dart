@@ -374,6 +374,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   /// Lövés-erő: átlag + csúcs km/h — csak elég mért lövésnél (5+).
+  // Ziccer-mérleg: nagy helyzeteikből (xG >= 0,5) hány lett gól.
+  String? _bigChances(Map<String, dynamic> r) {
+    final total = ((r["big_total"] as num?) ?? 0).toInt();
+    if (total < 4) return null;
+    final missed = ((r["big_missed"] as num?) ?? 0).toInt();
+    return "${total - missed}/$total gól";
+  }
+
   String? _shotPower(Map<String, dynamic> r) {
     final n = ((r["shot_speed_n"] as num?) ?? 0).toInt();
     if (n < 5) return null;
@@ -515,6 +523,10 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Véd. nyomás", "${(r["defensive_pressure_m"] as num).toStringAsFixed(1)} m"],
       if (((r["blocks"] as num?) ?? 0) >= 3)
         ["Blokkolt lövés", "${r["blocks"]}"],
+      // Kapusuk fogott ziccerei — ugyanaz a küszöb (2+), mint a kulcsokban.
+      if (((r["gk_big_saves"] as num?) ?? 0) >= 2)
+        ["Bravúr-védés", "${r["gk_big_saves"]}"],
+      if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
       if (_attackSides(r) != null) ["Támadás-oldal", _attackSides(r)!],
