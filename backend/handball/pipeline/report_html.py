@@ -1005,9 +1005,16 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             bl = prog["biggest_lead"]
             top = home if bl["home"] >= bl["away"] else away
             top_v = max(bl["home"], bl["away"])
+            cb_txt = ""
+            cb = prog.get("comeback", {})
+            cb_side = max(("home", "away"), key=lambda k: cb.get(k, 0))
+            if cb.get(cb_side, 0) >= 3:
+                cb_name = home if cb_side == "home" else away
+                cb_txt = (f' · {escape(cb_name)} {cb[cb_side]} gólos '
+                          'hátrányból fordított')
             prog_line = (f'<div class="sub">A meccs {prog["lead_changes"]}-szor '
                          f'fordult · legnagyobb előny: {escape(top)} +{top_v}'
-                         '</div>')
+                         f'{cb_txt}</div>')
     except Exception:
         pass
     header_extra = (
