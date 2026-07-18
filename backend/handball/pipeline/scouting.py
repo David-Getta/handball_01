@@ -87,6 +87,10 @@ class ScoutingReport:
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (%).
     transition_turnovers: int = 0
     transition_goals_against: int = 0
+    # Labdaeladások helye: összes eladás és ebből a TÁMADÓ harmadban
+    # elkövetettek (darabszámok, hogy meccsek közt összegezhetők legyenek).
+    turnover_total: int = 0
+    turnover_front: int = 0
     # Labdabirtoklás-arány (a felderített csapaté, %).
     possession_pct: float = 0.0
     # Gólpassz-vezér: a legtöbb gólpasszt adó játékos (track_id, db).
@@ -418,6 +422,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                     f"{pct:.0f}%-a gyors kapott gól) — labdaszerzés után "
                     "azonnal indíts, keresd a lerohanást.")
 
+    # Elöl (támadó harmadban) sok elvesztett labda: felkészült védekezésből
+    # azonnali indítás — kontrára építhető gyengeség.
+    if rep.turnover_total >= 5:
+        front_pct = 100.0 * rep.turnover_front / rep.turnover_total
+        if front_pct >= 50.0:
+            weaknesses.append(
+                f"A labdaeladásaik {front_pct:.0f}%-a a támadó harmadban "
+                "történik — labdaszerzéskor a védelmük még előretolva áll.")
+            keys.append("Sok labdát adnak el elöl — szervezett labdaszerzés "
+                        "után azonnali hosszú indítással büntethető.")
+
     # A VÉDEKEZÉSÜK gyengéi: szabad lövések és lyukas zóna — "hova játssz".
     if rep.def_shots_against >= 4:
         free_pct = 100.0 * rep.def_free_shots / rep.def_shots_against
@@ -606,6 +621,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         trec = transition_defense(match, config)[team.value]
         rep.transition_turnovers = trec["turnovers"]
         rep.transition_goals_against = trec["transition_goals_against"]
+        from .defense import turnover_zones
+        tzrec = turnover_zones(match, config)[team.value]
+        rep.turnover_total = tzrec["total"]
+        rep.turnover_front = tzrec["zones"].get("támadó", 0)
         from .stats import possession_share
         rep.possession_pct = possession_share(match, config)[team.value]["pct"]
         from .event_detection import assist_network
@@ -738,6 +757,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         def_free_shots=sum(r.def_free_shots for r in reports),
         transition_turnovers=sum(r.transition_turnovers for r in reports),
         transition_goals_against=sum(r.transition_goals_against for r in reports),
+        turnover_total=sum(r.turnover_total for r in reports),
+        turnover_front=sum(r.turnover_front for r in reports),
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),

@@ -244,6 +244,30 @@ def test_combine_reports_merges_goalkeeper_stats():
     assert merged.gk_on_target_zones == {"átlövés bal": 5, "jobbszél": 4}
 
 
+def test_coach_keys_flag_front_turnovers():
+    """Sok támadó-harmadbeli labdaeladás → gyengeség + 'indíts hosszút'
+    kulcs; kevés eladásnál nincs jelzés."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         turnover_total=8, turnover_front=5)
+    _, weaknesses, keys = _coach_keys(rep)
+    assert any("támadó harmadban" in w for w in weaknesses)
+    assert any("elöl" in k for k in keys)
+    quiet = ScoutingReport(team="away", team_name="X",
+                           turnover_total=3, turnover_front=3)
+    _, w2, k2 = _coach_keys(quiet)
+    assert not any("támadó harmadban" in w for w in w2)
+
+
+def test_combine_reports_sums_turnover_zones():
+    a = ScoutingReport(team="away", team_name="X",
+                       turnover_total=6, turnover_front=2)
+    b = ScoutingReport(team="away", team_name="X",
+                       turnover_total=4, turnover_front=3)
+    merged = combine_reports([a, b])
+    assert merged.turnover_total == 10 and merged.turnover_front == 5
+
+
 def test_coach_keys_flag_goalkeeper_weak_zone():
     """A zónánkénti védés-hatékonyságból a leggyengébb sarok külön kulcs:
     a 'jobbszél' 4 lövésből 3-at kapott (25% védés) → 'ide lőjetek'."""
