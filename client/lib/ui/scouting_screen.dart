@@ -361,6 +361,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${p["from"]} → ${p["to"]} ($n passz)";
   }
 
+  /// Félidőnkénti gólmérleg-váltás: "+2 → −1" — csak elég mintánál
+  /// (8+ gól a felismert szünetű meccsekből).
+  String? _halfPattern(Map<String, dynamic> r) {
+    final fhF = ((r["fh_goals_for"] as num?) ?? 0).toInt();
+    final fhA = ((r["fh_goals_against"] as num?) ?? 0).toInt();
+    final shF = ((r["sh_goals_for"] as num?) ?? 0).toInt();
+    final shA = ((r["sh_goals_against"] as num?) ?? 0).toInt();
+    if (fhF + fhA + shF + shA < 8) return null;
+    String d(int v) => v >= 0 ? "+$v" : "−${-v}";
+    return "${d(fhF - fhA)} → ${d(shF - shA)}";
+  }
+
   String? _worstZone(Map<String, dynamic> r) {
     final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
     if (zones == null || zones.isEmpty) return null;
@@ -443,6 +455,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Véd. nyomás", "${(r["defensive_pressure_m"] as num).toStringAsFixed(1)} m"],
       if (((r["blocks"] as num?) ?? 0) >= 3)
         ["Blokkolt lövés", "${r["blocks"]}"],
+      if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (((r["clutch_matches"] as num?) ?? 0) >= 1)
         [
           "Hajrá-mérleg",
