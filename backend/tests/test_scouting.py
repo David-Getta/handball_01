@@ -268,6 +268,32 @@ def test_combine_reports_sums_turnover_zones():
     assert merged.turnover_total == 10 and merged.turnover_front == 5
 
 
+def test_coach_keys_flag_pass_axis():
+    """Bejáratott passz-páros (7→9, 6 passz, 15+ összpassz) → 'vágd el' kulcs."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         pass_total=18,
+                         pass_pairs=[{"from": 7, "to": 9, "passes": 6}])
+    _, _, keys = _coach_keys(rep)
+    assert any("tengelye" in k and "7." in k and "9." in k for k in keys)
+    quiet = ScoutingReport(team="away", team_name="X", pass_total=8,
+                           pass_pairs=[{"from": 7, "to": 9, "passes": 3}])
+    _, _, k2 = _coach_keys(quiet)
+    assert not any("tengelye" in k for k in k2)
+
+
+def test_combine_reports_merges_pass_pairs():
+    a = ScoutingReport(team="away", team_name="X", pass_total=10,
+                       pass_pairs=[{"from": 7, "to": 9, "passes": 4},
+                                   {"from": 3, "to": 5, "passes": 2}])
+    b = ScoutingReport(team="away", team_name="X", pass_total=12,
+                       pass_pairs=[{"from": 7, "to": 9, "passes": 5}])
+    merged = combine_reports([a, b])
+    assert merged.pass_total == 22
+    assert merged.pass_pairs[0] == {"from": 7, "to": 9, "passes": 9}
+    assert {"from": 3, "to": 5, "passes": 2} in merged.pass_pairs
+
+
 def test_coach_keys_flag_goalkeeper_weak_zone():
     """A zónánkénti védés-hatékonyságból a leggyengébb sarok külön kulcs:
     a 'jobbszél' 4 lövésből 3-at kapott (25% védés) → 'ide lőjetek'."""
