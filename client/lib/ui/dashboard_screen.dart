@@ -752,6 +752,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     "${((m["possession_away"] as num?) ?? 0).toStringAsFixed(0)}%"
           ],
           [
+            "Blokkolt lövés (H–V)",
+            pair(m["blocks_home"], m["blocks_away"])
+          ],
+          [
+            "Leggyorsabb lövés",
+            m["fastest_kmh"] == null
+                ? "—"
+                : "${(m["fastest_kmh"] as num).toStringAsFixed(0)} km/h"
+          ],
+          [
             "Tempó-esés 2. félidő (H–V)",
             m["cond_drop_home"] == null && m["cond_drop_away"] == null
                 ? "—"
