@@ -596,6 +596,16 @@ class _MatchScreenState extends State<MatchScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.movie_outlined, color: AppColors.accent),
           ),
+          // Kihagyott ziccerek (xG >= 0,5, gól nélkül) — a leginkább
+          // visszanézendő jelenetek egy kattintással.
+          IconButton(
+            tooltip: "Kihagyott ziccer klipek (nagy xG, gól nélkül)",
+            onPressed: _exportingClips
+                ? null
+                : () => _exportClips(match,
+                    typesOverride: ["missed_chance"]),
+            icon: const Icon(Icons.priority_high, color: AppColors.gold),
+          ),
         ]),
       ),
       Expanded(

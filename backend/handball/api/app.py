@@ -1184,6 +1184,16 @@ def create_app():
                                for sw in detect_substitutions(match)]
                     except Exception:
                         pass
+                if "missed_chance" in types:
+                    # Kihagyott ziccer: nagy értékű (xG >= 0,5) helyzet,
+                    # ami nem lett gól — a leginkább visszanézendő jelenetek.
+                    try:
+                        from ..pipeline.xg import missed_big_chances
+                        ev += [{"t": mc["t"], "type": "missed_chance",
+                                "team": mc["team"]}
+                               for mc in missed_big_chances(match)]
+                    except Exception:
+                        pass
                 if "note" in types:
                     # Az edző saját jegyzetei — a megjelölt pillanat
                     # jelenete, a jegyzet szövegével a fájlnévben.

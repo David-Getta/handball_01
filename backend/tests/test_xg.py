@@ -120,3 +120,32 @@ def test_avg_xg_per_shot_reported():
     r = match_xg(Match(_meta(), frames))["teams"]["home"]
     assert r["shots"] == 2
     assert abs(r["avg_xg_per_shot"] - r["xg"] / 2) < 0.02
+
+
+def test_missed_big_chances_filters_by_xg_and_outcome():
+    """A közeli-középső kihagyott helyzet ziccer; a gól és a távoli
+    kihagyás nem kerül a listába."""
+    from handball.pipeline.xg import missed_big_chances
+
+    # Nagy xG-s kihagyás: a labda a lövőtől (37, 10) indul — így a lövő
+    # azonosítható —, majd a kapufák mellé hajlik el.
+    frames = []
+    for i in range(7):
+        frames.append(Frame(
+            t=i,
+            players=[_pl(1, Team.HOME, 37.0, 10.0)],
+            ball=Ball(x=min(37.4 + 0.6 * i, 40.0), y=10.0 - i * 1.0,
+                      confidence=1.0)))
+    frames.append(Frame(t=8, players=[], ball=Ball(x=20.0, y=10.0,
+                                                   confidence=1.0)))
+    frames += _shot_frames(40, 37.0, 10.0, goal=True)    # nagy xG, de GÓL
+    frames.append(Frame(t=48, players=[], ball=Ball(x=20.0, y=10.0,
+                                                    confidence=1.0)))
+    frames += _shot_frames(80, 27.0, 3.0, goal=False)    # kis xG, kihagyva
+    m = Match(_meta(), frames)
+
+    chances = missed_big_chances(m)
+    assert len(chances) == 1
+    assert chances[0]["t"] < 10          # az első (kihagyott) helyzet
+    assert chances[0]["xg"] >= 0.5
+    assert chances[0]["team"] == "home"

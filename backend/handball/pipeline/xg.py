@@ -128,3 +128,23 @@ def match_xg(match: Match, config: Optional[TacticsConfig] = None) -> dict:
         shooters.append(rec)
     shooters.sort(key=lambda r: -r["xg"])
     return {"shots": shots, "teams": teams, "shooters": shooters}
+
+
+# Kihagyott ziccer: legalább ekkora helyzet-érték, gól nélkül.
+BIG_CHANCE_XG = 0.5
+
+
+def missed_big_chances(match: Match,
+                       config: Optional[TacticsConfig] = None) -> list[dict]:
+    """A kihagyott nagy helyzetek: xG >= BIG_CHANCE_XG, de nem gól.
+
+    A leginkább visszanézendő jelenetek — a klip-export "kihagyott
+    ziccer" típusa erre épül. Visszatérés: [{"t","team","player_id",
+    "xg"}], idő szerint."""
+    out = []
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("xg", 0.0) >= BIG_CHANCE_XG and sh.get("outcome") != "goal":
+            out.append({"t": sh["t"], "team": sh["team"],
+                        "player_id": sh.get("player_id"), "xg": sh["xg"]})
+    out.sort(key=lambda r: r["t"])
+    return out
