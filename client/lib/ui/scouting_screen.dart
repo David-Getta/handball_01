@@ -441,6 +441,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_passAxis(r) != null) ["Passz-tengely", _passAxis(r)!],
       if (((r["defensive_pressure_m"] as num?) ?? 0) > 0)
         ["Véd. nyomás", "${(r["defensive_pressure_m"] as num).toStringAsFixed(1)} m"],
+      if (((r["blocks"] as num?) ?? 0) >= 3)
+        ["Blokkolt lövés", "${r["blocks"]}"],
       if (((r["clutch_matches"] as num?) ?? 0) >= 1)
         [
           "Hajrá-mérleg",
