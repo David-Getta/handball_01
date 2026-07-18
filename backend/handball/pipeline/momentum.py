@@ -237,6 +237,10 @@ def score_progression(match: Match, config=None) -> dict:
     prev_leader = "tie"
     last_real_leader = None  # az utolsó tényleges vezető (nem döntetlen)
     prev_t = match.frames[0].t if match.frames else 0
+    # Fordítás: a legnagyobb hátrány, amiből a csapat később VEZETÉSBE
+    # került (a hátrány-számláló a vezetés megszerzésekor nullázódik).
+    comeback = {"home": 0, "away": 0}
+    cur_deficit = {"home": 0, "away": 0}
 
     def leader() -> str:
         if score[Team.HOME] > score[Team.AWAY]:
@@ -261,6 +265,17 @@ def score_progression(match: Match, config=None) -> dict:
                 lead_changes += 1
             last_real_leader = cur
         prev_leader = cur
+        # Fordítás-követés: vezetéskor az addigi hátrány "teljesítve".
+        if lead > 0:
+            comeback["home"] = max(comeback["home"], cur_deficit["home"])
+            cur_deficit["home"] = 0
+        elif lead < 0:
+            comeback["away"] = max(comeback["away"], cur_deficit["away"])
+            cur_deficit["away"] = 0
+        if lead < 0:
+            cur_deficit["home"] = max(cur_deficit["home"], -lead)
+        elif lead > 0:
+            cur_deficit["away"] = max(cur_deficit["away"], lead)
     # A meccs végéig tartó utolsó szakasz.
     lead_time[prev_leader] += max(0, end_t - prev_t) / fps
 
@@ -268,6 +283,7 @@ def score_progression(match: Match, config=None) -> dict:
         "biggest_lead": biggest,
         "lead_changes": lead_changes,
         "lead_time_s": {k: round(v, 1) for k, v in lead_time.items()},
+        "comeback": comeback,
         "final": [score[Team.HOME], score[Team.AWAY]],
     }
 
