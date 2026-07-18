@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#170)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#202)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -79,6 +79,35 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (fáradás-jel a cserék időzítéséhez) — a /team-stats végponton, a
   csomag-exportban és a jelentés Csapat-mutatók táblájában. (#169,
   #170)
+- **Kapus leggyengébb sarka**: zóna szerinti védés-hatékonyság — a
+  jelentésben, a felderítési kulcsban ("ide lőjetek") és az
+  összefoglalóban. (#174, #175)
+- **Labdaeladás-térkép**: hol veszik el a labdát (saját/közép/támadó
+  harmad) — kontra-kulcs a felderítésben, edzés-fókusz és jelentés-sor.
+  (#176, #177, #178, #179)
+- **Passz-hálózat**: ki kinek adogat (párok, hubok) — a játékszervezés
+  tengelye a "vágd el" felderítési kulccsal, narratívával, csempékkel.
+  (#180, #181, #182)
+- **Fordítás-felismerés**: a legnagyobb ledolgozott hátrány —
+  összefoglalóban, jelentés-fejlécben, appban. (#183, #184)
+- **Hajrá-elemzés (clutch)**: az utolsó 5 perc gólmérlege szoros
+  állásnál — felderítési kulcsok ("ne hagyd a végjátékra" / "tartsd
+  szorosan"), edzés-fókusz, kliens- és jelentés-megjelenítés. (#185,
+  #186, #187, #189, #190)
+- **Fejlődés-követés bővítés**: birtoklás, védekezési nyomás és elöl
+  vesztett labdák a trend-összevetésben. (#188)
+- **Lövés-sebesség**: km/h a labda-kinematikából — leggyorsabb lövés az
+  összefoglalóban, sebesség-sorok a jelentésben, kliens-chip. (#191,
+  #192, #193)
+- **Gólcsend-elemzés**: a leghosszabb gól nélküli időszak — "ilyenkor
+  kell ellépni" felderítési kulcs, összefoglaló és kliens-felirat.
+  (#194, #195, #196)
+- **Blokk-felismerés**: a mezőnyvédőn elakadó lövések — "aktív fal"
+  erősség, "kerüld a falat" kulcs, edzés-fókusz, csempék. (#197, #198,
+  #199, #200)
+- **Passzív-veszély**: 35 mp fölé húzódó támadások aránya —
+  figyelmeztetés az összefoglalóban, "maradj fegyelmezett" felderítési
+  kulcs. (#201, #202)
 
 ### Új bemenetek felé (útiterv + alapok)
 - **TV-közvetítés előfeldolgozás**: vágás-felismerés (szín-hisztogram)
