@@ -236,4 +236,20 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 11) Elvesztett szoros hajrá: a végjáték-helyzeteket gyakorolni kell.
+    try:
+        from .momentum import clutch_performance
+        cp = clutch_performance(match, config)
+        if cp.get("available") and cp.get("close"):
+            gh, ga = cp["home"]["goals"], cp["away"]["goals"]
+            for side, own, opp in (("home", gh, ga), ("away", ga, gh)):
+                if opp - own >= 2:
+                    add(side, "végjáték", "Szoros végjáték gyakorlása",
+                        f"a szoros hajrát {opp}–{own}-ra elvesztették",
+                        "szituációs játék: utolsó 5 perc szimulálása "
+                        "(1-2 gólos állásról), támadás-befejezés nyomás "
+                        "alatt, időkérés utáni figura begyakorlása")
+    except Exception:
+        pass
+
     return out

@@ -138,6 +138,36 @@ def test_front_turnovers_trigger_safe_finishing_focus():
                    for f_ in focus["away"])
 
 
+def test_lost_clutch_triggers_endgame_focus():
+    """20 perces meccs, szoros állásról a hajrában 0-2 → a hazai
+    'Szoros végjáték gyakorlása' fókuszt kap."""
+    from handball.models.tracking import Ball
+    fps = 25.0
+    total = int(1200 * fps)
+    win_start = total - int(300 * fps)
+
+    def goal_frames(t0, toward_home_goal):
+        out = []
+        for i in range(8):
+            x = max(6.4 - i, 0.0) if toward_home_goal else min(33.6 + i, 40.0)
+            out.append(Frame(t=t0 + i, players=[],
+                             ball=Ball(x=x, y=10.0, confidence=1.0)))
+        return out
+
+    frames = {}
+    for fr in (goal_frames(100, False) + goal_frames(400, True)
+               + goal_frames(win_start + 200, True)
+               + goal_frames(win_start + 1500, True)):
+        frames[fr.t] = fr
+    all_frames = [frames.get(t, Frame(t=t, players=[],
+                                      ball=Ball(x=20.0, y=10.0,
+                                                confidence=1.0)))
+                  for t in range(total)]
+    focus = training_focus(Match(_meta(), all_frames))
+    assert any("végjáték" in f_["title"].lower() for f_ in focus["home"])
+    assert not any("végjáték" in f_["title"].lower() for f_ in focus["away"])
+
+
 def test_weak_attack_type_triggers_focus():
     """Sok felállt támadás gól nélkül → befejezés-fókusz az adott típusra."""
     frames = []
