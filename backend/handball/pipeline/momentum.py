@@ -366,6 +366,46 @@ def halftime_score(match: Match, config=None,
     return {"half_t": half_t, "home": score["home"], "away": score["away"]}
 
 
+def goal_responses(match: Match, config=None) -> dict:
+    """Válasz-gólok: milyen gyorsan felel egy csapat a kapott gólra.
+
+    Minden kapott gól után megnézzük, mennyi idő telt el a csapat KÖVETKEZŐ
+    saját góljáig (ha közben az ellenfél újra betalál, az új kapott gól
+    számít a kiindulásnak). A gyors válasz a mentális stabilitás jele; a
+    lassú (vagy hiányzó) válasz sorozat-veszély.
+
+    Visszatérés csapatonként: {"responses", "avg_s", "fastest_s"} —
+    avg_s/fastest_s None, ha nincs megválaszolt kapott gól.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    waits = {"home": [], "away": []}
+    pending: dict = {}  # side -> az utolsó MEGVÁLASZOLATLAN kapott gól ideje
+    for (t, side) in goals:
+        other = "away" if side == "home" else "home"
+        # A gólt szerző csapat megválaszolja a függő kapott gólját.
+        if side in pending:
+            waits[side].append((t - pending.pop(side)) / fps)
+        # Az ellenfélnél ez a gól új (felülíró) kapott gól.
+        pending[other] = t
+
+    out = {}
+    for side in ("home", "away"):
+        w = waits[side]
+        out[side] = {
+            "responses": len(w),
+            "avg_s": round(sum(w) / len(w), 1) if w else None,
+            "fastest_s": round(min(w), 1) if w else None,
+        }
+    return out
+
+
 def goal_droughts(match: Match, config=None) -> dict:
     """Gólcsend: a leghosszabb saját gól nélküli időszak csapatonként.
 

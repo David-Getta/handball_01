@@ -129,6 +129,10 @@ class ScoutingReport:
     fin_cov_goals: int = 0
     # Támadás-oldal megoszlás: kockaszámok sávonként (összegződik).
     side_frames: dict = field(default_factory=dict)
+    # Válasz-gólok: megválaszolt kapott gólok száma és összes válasz-idő
+    # (mp) — az átlag darabszámból pontosan visszaszámolható.
+    response_n: int = 0
+    response_sum_s: float = 0.0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -431,6 +435,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A játékuk tengelye a {pr['from']}. és {pr['to']}. játékos "
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
+
+    # Válasz-idő: gyorsan rendezik-e a sorokat kapott gól után.
+    if rep.response_n >= 4:
+        avg_resp = rep.response_sum_s / rep.response_n
+        if avg_resp <= 60.0:
+            strengths.append(
+                f"Kapott gól után gyorsan rendezik a sorokat (átlag "
+                f"{avg_resp:.0f} mp a válaszgólig) — egy-egy góllal nem "
+                "törhetők meg, sorozat kell.")
+        elif avg_resp >= 150.0:
+            weaknesses.append(
+                f"Kapott gól után megtorpannak (átlag {avg_resp:.0f} mp a "
+                "válaszgólig) — betalálás után azonnal emelj tempót, "
+                "ilyenkor építhető sorozat.")
 
     # Támadás-oldal súlypont: ha egy szárnyra épül a játék, a fal
     # súlypontja is oda tolható.
@@ -787,6 +805,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
         rep.slow_attacks_slow = sarec["slow"]
+        from .momentum import goal_responses
+        grec = goal_responses(match, config)[team.value]
+        rep.response_n = grec["responses"]
+        rep.response_sum_s = round(
+            (grec["avg_s"] or 0.0) * grec["responses"], 1)
         from .tactics import attack_sides
         asrec = attack_sides(match, config)[team.value]
         n_side = asrec["frames"]
@@ -960,6 +983,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         fin_cov_goals=sum(r.fin_cov_goals for r in reports),
         side_frames={k: sum(r.side_frames.get(k, 0) for r in reports)
                      for k in ("bal", "közép", "jobb")},
+        response_n=sum(r.response_n for r in reports),
+        response_sum_s=round(sum(r.response_sum_s for r in reports), 1),
         shot_speed_sum_kmh=round(sum(r.shot_speed_sum_kmh
                                      for r in reports), 1),
         shot_speed_max_kmh=max((r.shot_speed_max_kmh for r in reports),
