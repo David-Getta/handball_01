@@ -19,6 +19,11 @@ Cél: a takarás és a labdakövetés megoldása, a pásztázás megszüntetése
 4. **+1–2 lidar** — fénytől független, cm-pontos 3D: valódi sebesség,
    ugrás-magasság, lövés-magasság (felső sarok). A kamera adja az
    AZONOSSÁGOT (mezszín, mezszám), a lidar a GEOMETRIÁT — szenzorfúzió.
+   *(szoftver-oldal kész: `pipeline/lidar.py` — pontfelhő-klaszterezés
+   játékos-jelöltekké + a kamerás pozíciók lidar-ra igazítása
+   (`refine_with_lidar`), szintetikus pontfelhőn tesztelve. A valódi
+   szenzor-illesztés — pontfelhő-formátum, talaj-sík szűrés — eszközt
+   igényel.)*
 
 Kulcskérdések a hardver-tervezéshez:
 - **Órajel-szinkron**: a szenzoroknak közös időalapon kell futniuk
