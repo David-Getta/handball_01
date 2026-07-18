@@ -907,12 +907,14 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     # Csapat-mutatók összefoglaló tábla (birtoklás, véd. nyomás, átmenet).
     team_metrics_html = ""
     try:
-        from .defense import defensive_pressure, transition_defense
+        from .defense import (defensive_pressure, transition_defense,
+                              turnover_zones)
         from .stats import possession_share, intensity_trend
         ps = possession_share(match)
         dp = defensive_pressure(match)
         td = transition_defense(match)
         it = intensity_trend(match)
+        tz = turnover_zones(match)
 
         def _cell(v, suf=""):
             return f"{v}{suf}" if v is not None else "—"
@@ -935,6 +937,11 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
              _cell(td["away"]["transition_goals_against"])),
             ("Tempó-esés a 2. félidőre",
              _drop("home"), _drop("away")),
+            ("Labdaeladás a támadó harmadban",
+             (f"{tz['home']['front_pct']:.0f}%"
+              if tz["home"]["total"] >= 3 else "—"),
+             (f"{tz['away']['front_pct']:.0f}%"
+              if tz["away"]["total"] >= 3 else "—")),
         ]
         body = "".join(
             f"<tr><td>{escape(lab)}</td>"
