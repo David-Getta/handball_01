@@ -1110,9 +1110,19 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                                   f'{max(gh, ga)}–{min(gh, ga)}-ra')
             except Exception:
                 pass
+            tp_txt = ""
+            try:
+                from .momentum import win_probability
+                tp = win_probability(match).get("turning_point")
+                if tp is not None and abs(tp["to_p"] - tp["from_p"]) >= 0.2:
+                    tp_txt = (f' · fordulópont: {int(tp["t_s"] // 60)}. perc '
+                              f'({100 * tp["from_p"]:.0f}% → '
+                              f'{100 * tp["to_p"]:.0f}%)')
+            except Exception:
+                pass
             prog_line = (f'<div class="sub">A meccs {prog["lead_changes"]}-szor '
                          f'fordult · legnagyobb előny: {escape(top)} +{top_v}'
-                         f'{cb_txt}{cl_txt}</div>')
+                         f'{cb_txt}{cl_txt}{tp_txt}</div>')
     except Exception:
         pass
     header_extra = (
