@@ -192,6 +192,61 @@ def test_blocked_shots_trigger_shot_prep_focus():
     assert not any("blokk" in f_["title"].lower() for f_ in focus["away"])
 
 
+def test_second_half_fade_triggers_conditioning_focus():
+    """Félidőben 5-1, végén 5-6 (a hazai a 2. félidőt 0-5-re bukja) →
+    'Második félidei visszaesés' fókusz a hazainak. A half_t-t nem
+    mockoljuk: a fixture 70 mp üres-játékos szünetet tartalmaz középen,
+    amit a detect_halftime felismer."""
+    from handball.models.tracking import Ball
+
+    def goal_frames(t0, toward_home_goal):
+        out = []
+        for i in range(8):
+            x = max(6.4 - i, 0.0) if toward_home_goal else min(33.6 + i, 40.0)
+            out.append(Frame(t=t0 + i, players=[],
+                             ball=Ball(x=x, y=10.0, confidence=1.0)))
+        return out
+
+    fps = 25.0
+    total = int(400 * fps)  # 400 mp
+    half = total // 2
+    frames = {}
+    # 1. félidő: 5 hazai + 1 vendég gól (30 kockánként, hogy ne olvadjanak
+    # össze a debounce-ban).
+    t = 0
+    for _ in range(5):
+        for fr in goal_frames(t, False):
+            frames[fr.t] = fr
+        t += 40
+    for fr in goal_frames(t, True):
+        frames[fr.t] = fr
+    # 2. félidő: 5 vendég gól.
+    t = half + int(36 * fps)  # rögtön a szünet-ablak után kezdve
+    for _ in range(5):
+        for fr in goal_frames(t, True):
+            frames[fr.t] = fr
+        t += 40
+
+    all_frames = []
+    for i in range(total):
+        if i in frames:
+            all_frames.append(frames[i])
+            continue
+        # A szünet (a felezőpont körüli 70 mp) üres; máskor 6 mért játékos
+        # van a pályán, hogy az aktivitás magas legyen.
+        in_break = abs(i - half) <= int(35 * fps)
+        players = [] if in_break else [
+            _pl(k, Team.HOME if k < 4 else Team.AWAY, 10.0 + k, 5.0)
+            for k in range(1, 8)]
+        all_frames.append(Frame(t=i, players=players,
+                                ball=None if in_break
+                                else Ball(x=20.0, y=10.0, confidence=1.0)))
+    focus = training_focus(Match(_meta(), all_frames))
+    assert any("visszaesés" in f_["title"].lower() for f_ in focus["home"])
+    assert not any("visszaesés" in f_["title"].lower()
+                   for f_ in focus["away"])
+
+
 def test_weak_attack_type_triggers_focus():
     """Sok felállt támadás gól nélkül → befejezés-fókusz az adott típusra."""
     frames = []
