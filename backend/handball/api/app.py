@@ -1612,8 +1612,8 @@ def create_app():
         címkelista: a sorozat LEHETSÉGES OKAI (emberelőny, 7 a 6,
         az ellenfél védekezés-váltása / tempó-esése)."""
         from ..pipeline.momentum import (annotate_runs, clutch_performance,
-                                         goal_droughts, score_progression,
-                                         scoring_timeline)
+                                         goal_droughts, halftime_score,
+                                         score_progression, scoring_timeline)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -1621,7 +1621,8 @@ def create_app():
                 "progression": score_progression(match),
                 "timeline": scoring_timeline(match),
                 "clutch": clutch_performance(match),
-                "droughts": goal_droughts(match)}
+                "droughts": goal_droughts(match),
+                "halftime": halftime_score(match)}
 
     @app.get("/matches/{match_id}/xg")
     def get_xg(match_id: str):
@@ -1819,6 +1820,8 @@ def create_app():
                 _layer("clutch", lambda: clutch_performance(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
+                from ..pipeline.momentum import halftime_score
+                _layer("halftime", lambda: halftime_score(match))
                 from ..pipeline.attack_types import attack_efficiency
                 _layer("attack_efficiency", lambda: attack_efficiency(match))
                 from ..pipeline.event_detection import assist_network

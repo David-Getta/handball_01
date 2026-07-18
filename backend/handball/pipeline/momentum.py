@@ -337,6 +337,35 @@ def clutch_performance(match: Match, config=None) -> dict:
     }
 
 
+def halftime_score(match: Match, config=None,
+                   half_t: int | None = None) -> dict | None:
+    """Félidei állás a felismert gólokból és a félidő-határból.
+
+    A határ a felismert félidei szünet (halftime.detect_halftime) vagy a
+    half_t paraméter. Ha egyik sincs, None — inkább nincs adat, mint
+    hamis "félidei eredmény" a felezőpontból.
+
+    Visszatérés: {"half_t", "home", "away"} vagy None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    if half_t is None:
+        try:
+            from .halftime import detect_halftime
+            half_t = detect_halftime(match)
+        except Exception:
+            half_t = None
+    if half_t is None:
+        return None
+    score = {"home": 0, "away": 0}
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL and e.t < half_t:
+            score[e.team.value] += 1
+    return {"half_t": half_t, "home": score["home"], "away": score["away"]}
+
+
 def goal_droughts(match: Match, config=None) -> dict:
     """Gólcsend: a leghosszabb saját gól nélküli időszak csapatonként.
 

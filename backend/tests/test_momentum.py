@@ -315,6 +315,23 @@ def test_clutch_unavailable_on_short_clip():
     assert clutch_performance(m) == {"available": False}
 
 
+def test_halftime_score_counts_first_half_goals():
+    """H, A az 500. kocka előtt, H utána; half_t=500 → félidei állás 1-1."""
+    from handball.pipeline.momentum import halftime_score
+    frames = {}
+    for fr in _goal(0) + _goal(100, toward_home_goal=True) + _goal(600):
+        frames[fr.t] = fr
+    total = 800
+    all_frames = [frames.get(t, Frame(t=t, players=[],
+                                      ball=Ball(x=20.0, y=10.0,
+                                                confidence=1.0)))
+                  for t in range(total)]
+    hs = halftime_score(Match(_meta(), all_frames), half_t=500)
+    assert hs == {"half_t": 500, "home": 1, "away": 1}
+    # Felismert szünet nélkül (és half_t nélkül) nincs félidei állás.
+    assert halftime_score(Match(_meta(), all_frames[:50])) is None
+
+
 def test_goal_droughts_longest_gap():
     """HH...H mintában a hazai leghosszabb gólcsendje a 2. és 3. hazai
     gól közti szakasz; a gól nélküli vendégé a teljes felvétel."""
