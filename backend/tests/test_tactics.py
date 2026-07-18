@@ -21,6 +21,7 @@ from handball.pipeline.tactics import (
     TacticsConfig, possession_team, classify_phase, Phase,
     phase_percentages, detect_formation,
     count_possession_segments, compute_tempo, team_style_profile,
+    slow_attacks,
 )
 
 
@@ -195,3 +196,31 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_slow_attacks_flags_long_possession():
+    """40 mp-es hazai támadó-szakasz → elhúzódó; a 10 mp-es nem az."""
+    meta = MatchMeta(match_id="sa", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    # 40 mp hazai támadás a támadó térfélen (x=30), birtoklással.
+    for _ in range(int(40 * 25)):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Megszakítás (szabad labda a felezőnél, senki a közelben) — új szakasz.
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[], ball=Ball(x=20.0, y=10.0,
+                                                       confidence=1.0)))
+        t += 1
+    # 10 mp-es második hazai támadás.
+    for _ in range(int(10 * 25)):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+    sa = slow_attacks(Match(meta, frames))
+    assert sa["home"]["attacks"] == 2
+    assert sa["home"]["slow"] == 1
+    assert sa["home"]["slow_pct"] == 50.0
+    assert sa["home"]["longest_s"] >= 39.0
+    assert sa["away"]["attacks"] == 0

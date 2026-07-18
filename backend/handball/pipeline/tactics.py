@@ -188,6 +188,63 @@ def _avg_attack_duration_s(match: Match, config: TacticsConfig) -> float:
     return (sum(runs) / len(runs)) / fps
 
 
+# Passzív-veszély: ennél hosszabb támadás már a passzív játék (üres
+# figyelmeztetés / elvett labda) kockázatát hordozza.
+SLOW_ATTACK_S = 35.0
+
+
+def slow_attacks(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Elhúzódó (passzív-veszélyes) támadások csapatonként.
+
+    Az egybefüggő támadó-fázis szakaszokat mérjük; a SLOW_ATTACK_S-nél
+    hosszabb szakasz "elhúzódó". Ezek aránya a türelmes (vagy ötlettelen)
+    játék jele — a passzív játék felé sodródás kockázata.
+
+    Visszatérés csapatonként: {"attacks", "slow", "slow_pct",
+    "longest_s"}.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out = {side: {"attacks": 0, "slow": 0, "slow_pct": 0.0, "longest_s": 0.0}
+           for side in ("home", "away")}
+
+    current = 0
+    current_phase: Optional[Phase] = None
+
+    def close_run():
+        nonlocal current, current_phase
+        if current > 0 and current_phase is not None:
+            side = ("home" if current_phase == Phase.HOME_ATTACK else "away")
+            rec = out[side]
+            dur = current / fps
+            rec["attacks"] += 1
+            rec["longest_s"] = max(rec["longest_s"], dur)
+            if dur > SLOW_ATTACK_S:
+                rec["slow"] += 1
+        current = 0
+        current_phase = None
+
+    attack_phases = {Phase.HOME_ATTACK, Phase.AWAY_ATTACK}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph in attack_phases:
+            if ph == current_phase:
+                current += 1
+            else:
+                close_run()
+                current = 1
+                current_phase = ph
+        else:
+            close_run()
+    close_run()
+
+    for rec in out.values():
+        rec["longest_s"] = round(rec["longest_s"], 1)
+        if rec["attacks"]:
+            rec["slow_pct"] = round(100.0 * rec["slow"] / rec["attacks"], 1)
+    return out
+
+
 def _avg_ball_speed_ms(match: Match) -> float:
     """A labda átlagos sebessége (m/s) az egymást követő, labdás frame-ekből."""
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
