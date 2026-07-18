@@ -252,4 +252,19 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 12) Sok lövésüket blokkolják: a lövés-előkészítésen kell dolgozni.
+    try:
+        from .defense import detect_blocks
+        bl = detect_blocks(match, config)
+        for side in ("home", "away"):
+            other = "away" if side == "home" else "home"
+            against = bl[other]["blocks"]  # az ellenfél blokkjai = ellenünk
+            if against >= 3:
+                add(side, "támadás", "Lövés a blokk ellen",
+                    f"{against} lövésüket blokkolta az ellenfél fala",
+                    "elmozgás lövés előtt (át- és kilépés), lövőcsel után "
+                    "váltott ritmus, emelt/pattintott lövés a blokk mellett")
+    except Exception:
+        pass
+
     return out

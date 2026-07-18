@@ -168,6 +168,30 @@ def test_lost_clutch_triggers_endgame_focus():
     assert not any("végjáték" in f_["title"].lower() for f_ in focus["away"])
 
 
+def test_blocked_shots_trigger_shot_prep_focus():
+    """3 hazai lövést blokkol a vendég fal → a hazai 'Lövés a blokk
+    ellen' fókuszt kap."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+    blocker = _pl(20, Team.AWAY, 32.5, 10.0)
+    shooter = _pl(1, Team.HOME, 28.0, 10.0)
+    for _ in range(3):
+        # Lövés-tempójú repülés a +x kapu felé, ami a védőn visszapattan.
+        for x in [29.0, 30.2, 31.4, 32.4, 31.0, 29.5, 28.0]:
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(15):  # szünet a blokk-debounce miatt
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+            t += 1
+    focus = training_focus(Match(_meta(), frames))
+    assert any("blokk" in f_["title"].lower() for f_ in focus["home"])
+    assert not any("blokk" in f_["title"].lower() for f_ in focus["away"])
+
+
 def test_weak_attack_type_triggers_focus():
     """Sok felállt támadás gól nélkül → befejezés-fókusz az adott típusra."""
     frames = []
