@@ -14,8 +14,9 @@ elemzési rétegek mind a Match-en dolgoznak, a kimenet azonnal a teljes
 elemző-láncba köthető. Szintetikus nézetekkel, valódi több-kamerás
 felvétel nélkül tesztelhető.
 
-Korlát (későbbi kör): az órajel-szinkront (frame-eltolás a nézetek közt)
-itt adottnak vesszük — a bemeneti Match-ek t-tengelye közös.
+Az órajel-eltolás (frame-eltolás a nézetek közt) a labda-pálya
+keresztkorrelációjából becsülhető (estimate_clock_offset) — a fúzió
+előtt az apply_offset igazítja össze a nézeteket.
 """
 
 from __future__ import annotations
@@ -114,3 +115,59 @@ def fuse_matches(views: list[Match]) -> Match:
         out_frames.append(Frame(t=i, players=players, ball=ball))
 
     return Match(meta=views[0].meta, frames=out_frames)
+
+
+# Az eltolás-kereséshez legalább ennyi közös labda-mintás kocka kell.
+SYNC_MIN_OVERLAP = 25
+
+
+def estimate_clock_offset(a: Match, b: Match,
+                          max_offset: int = 250) -> int | None:
+    """A b nézet órajel-eltolása az a nézethez képest (kockában).
+
+    A két nézet UGYANAZT a labdát látja — a labda-pálya a legjobb közös
+    jel. Minden jelölt eltolásra a mindkét nézetben látott labda-pozíciók
+    átlagos távolságát számoljuk; a legkisebb átlagú eltolás nyer.
+    Pozitív érték: a b nézet KÉSIK (b[t] az a[t - offset]-tel esik egybe).
+
+    None, ha nincs elég közös labda-minta egyik eltolásnál sem.
+    """
+    balls_a = {f.t: f.ball for f in a.frames if f.ball is not None}
+    balls_b = {f.t: f.ball for f in b.frames if f.ball is not None}
+    if not balls_a or not balls_b:
+        return None
+
+    best_offset = None
+    best_score = None
+    for off in range(-max_offset, max_offset + 1):
+        dists = []
+        for t_b, ball_b in balls_b.items():
+            ball_a = balls_a.get(t_b - off)
+            if ball_a is None:
+                continue
+            dists.append(math.hypot(ball_a.x - ball_b.x,
+                                    ball_a.y - ball_b.y))
+        if len(dists) < SYNC_MIN_OVERLAP:
+            continue
+        score = sum(dists) / len(dists)
+        if best_score is None or score < best_score:
+            best_score = score
+            best_offset = off
+    return best_offset
+
+
+def apply_offset(match: Match, offset: int) -> Match:
+    """A nézet kockáinak eltolása -offset-tel (az összeigazításhoz).
+
+    Az estimate_clock_offset(a, b) eredményével: apply_offset(b, offset)
+    után a b nézet t-tengelye az a nézetével közös. A negatív időre
+    csúszó kockák kiesnek.
+    """
+    frames = []
+    for f in match.frames:
+        t = f.t - offset
+        if t < 0:
+            continue
+        frames.append(Frame(t=t, players=f.players, ball=f.ball))
+    frames.sort(key=lambda f: f.t)
+    return Match(meta=match.meta, frames=frames)

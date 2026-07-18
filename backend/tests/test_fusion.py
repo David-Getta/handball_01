@@ -76,3 +76,43 @@ def test_fusion_picks_highest_confidence_ball():
                               ball=Ball(x=10.1, y=5.0, confidence=0.9))])
     fused = fuse_matches([a, b])
     assert abs(fused.frames[0].ball.x - 10.1) < 1e-6
+
+
+def test_clock_offset_estimated_from_ball_path():
+    """A b nézet 7 kockával késik → az eltolás-becslés 7-et ad, és az
+    apply_offset után a fúzió a helyes (átlagolt) pályát adja."""
+    import math as _m
+    from handball.pipeline.fusion import apply_offset, estimate_clock_offset
+
+    def view(shift, noise):
+        frames = []
+        for t in range(120):
+            src = t - shift
+            if src < 0:
+                frames.append(Frame(t=t, players=[], ball=None))
+                continue
+            x = 20.0 + 10.0 * _m.sin(src / 8.0)
+            y = 10.0 + 3.0 * _m.cos(src / 5.0)
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=x + noise, y=y,
+                                          confidence=1.0)))
+        return Match(_meta(), frames)
+
+    a = view(0, 0.0)
+    b = view(7, 0.05)
+    off = estimate_clock_offset(a, b, max_offset=20)
+    assert off == 7
+    b_synced = apply_offset(b, off)
+    # Összeigazítás után a két nézet labdája (majdnem) egybeesik.
+    fused = fuse_matches([a, b_synced])
+    ball0 = fused.frames[50].ball
+    x_true = 20.0 + 10.0 * _m.sin(50 / 8.0)
+    assert ball0 is not None and abs(ball0.x - x_true) < 0.1
+
+
+def test_clock_offset_none_without_overlap():
+    from handball.pipeline.fusion import estimate_clock_offset
+    a = Match(_meta(), [Frame(t=0, players=[], ball=None)])
+    b = Match(_meta(), [Frame(t=0, players=[],
+                              ball=Ball(x=1.0, y=1.0, confidence=1.0))])
+    assert estimate_clock_offset(a, b) is None

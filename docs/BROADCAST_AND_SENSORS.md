@@ -32,8 +32,9 @@ Kulcskérdések a hardver-tervezéshez:
   követi. *(első változat kész: `pipeline/fusion.py` — nézetenkénti
   Match-ek egyesítése pozíció-átlaggal, takarás-kitöltéssel és
   folytonos fúziós track-azonosítókkal; szintetikus két-kamerás
-  nézeteken tesztelve. Az órajel-szinkront adottnak veszi — az eltolás-
-  becslés külön lépcső.)*
+  nézeteken tesztelve. Az órajel-eltolást a labda-pálya
+  keresztkorrelációja becsüli — `estimate_clock_offset` + `apply_offset`
+  —, így a nézetek szoftveresen is összeigazíthatók.)*
 
 ## B. TV-közvetítés (ellenfél-felderítés)
 
