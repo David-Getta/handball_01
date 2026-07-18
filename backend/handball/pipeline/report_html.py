@@ -609,20 +609,38 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                     jersey_of.setdefault(p.track_id, p.jersey_number)
         ranked = aggregate_by_jersey(player_stats, team_of, jersey_of,
                                      fps=fps)[:10]
+        # Játékos-fáradás: 2. félidei tempó-esés trackenként (ha mérhető) —
+        # a mezszám-csoport esése a trackek közül a legnagyobb.
+        fatigue_of: dict = {}
+        try:
+            from .stats import player_fatigue
+            for r_ in player_fatigue(match):
+                fatigue_of[r_["track_id"]] = r_["drop_pct"]
+        except Exception:
+            pass
         rows = []
         for g in ranked:
             name = meta.home_team if g["team"] == "home" else meta.away_team
+            drops = [fatigue_of[t] for t in g["track_ids"]
+                     if t in fatigue_of]
+            if drops:
+                d = max(drops)
+                fade = (f"−{d:.0f}%" if d > 0 else f"+{-d:.0f}%")
+            else:
+                fade = "—"
             rows.append(
                 f"<tr><td>{escape(g['label'])}</td><td>{escape(name)}</td>"
                 f'<td class="num">{g["distance_m"]:.0f} m</td>'
                 f'<td class="num">{g["top_speed_ms"] * 3.6:.1f}</td>'
-                f'<td class="num">{g["sprint_count"]}</td></tr>')
+                f'<td class="num">{g["sprint_count"]}</td>'
+                f'<td class="num">{fade}</td></tr>')
         if rows:
             load_html = ('<h2>Játékos-terhelés (top 10 táv szerint)</h2>'
                          '<table><tr><th>Játékos</th><th>Csapat</th>'
                          '<th class="num">Táv</th><th class="num">Max km/h</th>'
-                         '<th class="num">Sprint</th></tr>' + "".join(rows)
-                         + "</table>")
+                         '<th class="num">Sprint</th>'
+                         '<th class="num">2. félidei tempó</th></tr>'
+                         + "".join(rows) + "</table>")
 
     # Lövéstérkép (ha van lövés/gól esemény): honnan lőttek és mi lett belőle.
     shots_html = ""
