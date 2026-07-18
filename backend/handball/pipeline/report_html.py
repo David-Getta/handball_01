@@ -951,6 +951,20 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
              (f"{tz['away']['front_pct']:.0f}%"
               if tz["away"]["total"] >= 3 else "—")),
         ]
+        # Lövés-sebesség sorok (ha van mért lövés).
+        try:
+            from .event_detection import shot_speeds
+            sp = shot_speeds(match)["teams"]
+
+            def _spd(side, key):
+                rec = sp[side]
+                return f"{rec[key]:.0f} km/h" if rec["n"] else "—"
+            rows.append(("Átl. lövés-sebesség",
+                         _spd("home", "avg_kmh"), _spd("away", "avg_kmh")))
+            rows.append(("Leggyorsabb lövés",
+                         _spd("home", "max_kmh"), _spd("away", "max_kmh")))
+        except Exception:
+            pass
         body = "".join(
             f"<tr><td>{escape(lab)}</td>"
             f'<td class="num">{h}</td><td class="num">{a}</td></tr>'

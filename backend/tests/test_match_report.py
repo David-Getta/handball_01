@@ -104,6 +104,14 @@ def test_report_includes_attack_mix_section():
     assert "Támadás-mix (típus szerint)" in html
 
 
+def test_report_team_metrics_has_shot_speed_rows():
+    """A Csapat-mutatók tábla tartalmazza a lövés-sebesség sorokat."""
+    m = simulate_ground_truth(duration_s=30, fps=25.0, seed=5)
+    html = match_report_html(m, {}, [], None)
+    assert "Átl. lövés-sebesség" in html
+    assert "Leggyorsabb lövés" in html
+
+
 def test_report_team_metrics_has_conditioning_row():
     """A Csapat-mutatók tábla tartalmazza a 2. félidei tempó-esés sort."""
     m = simulate_ground_truth(duration_s=30, fps=25.0, seed=4)
