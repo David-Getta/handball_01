@@ -576,10 +576,12 @@ class ApiClient {
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
     final prog = (json["progression"] as Map?)?.cast<String, dynamic>() ?? {};
-    // A hajrá-mérleg ugyanennek a válasznak a "clutch" mezője — az
+    // A hajrá-mérleg és a gólcsend ugyanennek a válasznak a mezői — az
     // összefoglaló felirata együtt jeleníti meg az állás-menettel.
     final clutch = (json["clutch"] as Map?)?.cast<String, dynamic>();
     if (clutch != null) prog["clutch"] = clutch;
+    final droughts = (json["droughts"] as Map?)?.cast<String, dynamic>();
+    if (droughts != null) prog["droughts"] = droughts;
     return prog;
   }
 
