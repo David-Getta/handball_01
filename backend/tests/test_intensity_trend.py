@@ -57,6 +57,17 @@ def test_trend_flat_when_constant_speed():
     assert abs(tr["home"]["drop_pct"]) < 5.0
 
 
+def test_trend_uses_explicit_half_boundary():
+    """Aszimmetrikus félidők: a határ a 300. kockánál van (nem a
+    felezőponton) — a half_t paraméterrel a mérés pontos marad."""
+    m = _match(_fast_then_slow(n1=300, n2=700, v1=4.0, v2=1.0))
+    tr = intensity_trend(m, half_t=300)
+    assert tr["midpoint_frame"] == 300
+    assert abs(tr["home"]["first_ms"] - 4.0) < 0.3
+    assert abs(tr["home"]["second_ms"] - 1.0) < 0.3
+    assert tr["home"]["drop_pct"] > 60.0
+
+
 def test_trend_empty_or_short_match_is_zero():
     tr = intensity_trend(_match([]))
     assert tr["home"]["drop_pct"] == 0.0

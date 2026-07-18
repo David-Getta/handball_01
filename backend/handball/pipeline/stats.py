@@ -208,9 +208,14 @@ def compute_intensity_timeline(match: Match, window_s: float = 300.0) -> list[di
     ]
 
 
-def intensity_trend(match: Match, config=None) -> dict:
-    """Kondíció-mutató: a felvétel ELSŐ és MÁSODIK felében mért átlagos
+def intensity_trend(match: Match, config=None,
+                    half_t: int | None = None) -> dict:
+    """Kondíció-mutató: az ELSŐ és MÁSODIK félidőben mért átlagos
     csapat-mozgássebesség (m/s), és a kettő közti esés százalékban.
+
+    A félidő-határ a FELISMERT félidei szünet (halftime.detect_halftime),
+    ha van; enélkül a felvétel felezőpontja. A half_t paraméterrel a
+    határ kívülről is megadható (teszthez / kézi korrekcióhoz).
 
     Ha a második félidőben számottevően lassabb a csapat, az fáradásra /
     kondíció-hiányra utal. Csak MÉRT, hihető (<= MAX_PLAUSIBLE_MS)
@@ -220,19 +225,25 @@ def intensity_trend(match: Match, config=None) -> dict:
 
     Visszatérés csapatonként (home/away):
     {"first_ms", "second_ms", "drop_pct"} — a drop_pct pozitív, ha a
-    második fél lassabb; a "midpoint_frame" a felezőpont kockaszáma.
+    második fél lassabb; a "midpoint_frame" a használt félidő-határ.
     """
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     dt = 1.0 / fps
     total = len(match.frames)
+    if half_t is None:
+        try:
+            from .halftime import detect_halftime
+            half_t = detect_halftime(match)
+        except Exception:
+            half_t = None
+    mid = half_t if half_t is not None else total // 2
     out = {
-        "midpoint_frame": total // 2,
+        "midpoint_frame": mid,
         "home": {"first_ms": 0.0, "second_ms": 0.0, "drop_pct": 0.0},
         "away": {"first_ms": 0.0, "second_ms": 0.0, "drop_pct": 0.0},
     }
     if total < 4:
         return out
-    mid = total // 2
 
     # táv/idő félidőnként, csapatonként: [half][team] -> (dist, time)
     dist = [[0.0, 0.0], [0.0, 0.0]]
