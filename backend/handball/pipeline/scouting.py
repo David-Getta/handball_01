@@ -127,6 +127,8 @@ class ScoutingReport:
     fin_free_goals: int = 0
     fin_cov_shots: int = 0
     fin_cov_goals: int = 0
+    # Támadás-oldal megoszlás: kockaszámok sávonként (összegződik).
+    side_frames: dict = field(default_factory=dict)
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -429,6 +431,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A játékuk tengelye a {pr['from']}. és {pr['to']}. játékos "
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
+
+    # Támadás-oldal súlypont: ha egy szárnyra épül a játék, a fal
+    # súlypontja is oda tolható.
+    side_total = sum(rep.side_frames.values()) if rep.side_frames else 0
+    if side_total >= 250:  # ~10 mp támadójáték minimum
+        top_side, top_n = max(rep.side_frames.items(), key=lambda kv: kv[1])
+        pct = 100.0 * top_n / side_total
+        if top_side != "közép" and pct >= 45.0:
+            keys.append(
+                f"A támadójátékuk súlypontja a {top_side} oldal "
+                f"({pct:.0f}%) — told oda a fal súlypontját, és a "
+                "másik szárnyon hagyj teret a kontrának.")
 
     # Nyomás alatti befejezés: ha fedezve alig, szabadon jól konvertálnak,
     # a fegyelmezett (szabálytalanság nélküli) szoros fal önmagában elég.
@@ -773,6 +787,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
         rep.slow_attacks_slow = sarec["slow"]
+        from .tactics import attack_sides
+        asrec = attack_sides(match, config)[team.value]
+        n_side = asrec["frames"]
+        rep.side_frames = {k: round(asrec[k] * n_side / 100.0)
+                           for k in ("bal", "közép", "jobb")}
         from .defense import pressure_finishing
         pf = pressure_finishing(match, config)[team.value]
         rep.fin_free_shots = pf["free"]["shots"]
@@ -939,6 +958,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         fin_free_goals=sum(r.fin_free_goals for r in reports),
         fin_cov_shots=sum(r.fin_cov_shots for r in reports),
         fin_cov_goals=sum(r.fin_cov_goals for r in reports),
+        side_frames={k: sum(r.side_frames.get(k, 0) for r in reports)
+                     for k in ("bal", "közép", "jobb")},
         shot_speed_sum_kmh=round(sum(r.shot_speed_sum_kmh
                                      for r in reports), 1),
         shot_speed_max_kmh=max((r.shot_speed_max_kmh for r in reports),

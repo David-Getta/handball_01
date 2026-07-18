@@ -316,6 +316,31 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_attack_side_bias():
+    """A támadókockák 60%-a a bal sávban → 'told oda a falat' kulcs;
+    kiegyenlített oldalaknál nincs."""
+    from handball.pipeline.scouting import _coach_keys
+    biased = ScoutingReport(team="away", team_name="Ellenfél KC",
+                            side_frames={"bal": 300, "közép": 150,
+                                         "jobb": 50})
+    _, _, keys = _coach_keys(biased)
+    assert any("súlypontja a bal oldal" in k for k in keys)
+    balanced = ScoutingReport(team="away", team_name="X",
+                              side_frames={"bal": 170, "közép": 170,
+                                           "jobb": 160})
+    _, _, k2 = _coach_keys(balanced)
+    assert not any("súlypontja" in k for k in k2)
+
+
+def test_combine_reports_sums_side_frames():
+    a = ScoutingReport(team="away", team_name="X",
+                       side_frames={"bal": 100, "közép": 50, "jobb": 30})
+    b = ScoutingReport(team="away", team_name="X",
+                       side_frames={"bal": 60, "közép": 90, "jobb": 20})
+    m = combine_reports([a, b])
+    assert m.side_frames == {"bal": 160, "közép": 140, "jobb": 50}
+
+
 def test_coach_keys_flag_pressure_finishing():
     """Szabadon 80%, fedezve 20% → 'elég a fegyelmezett fal' kulcs;
     fedezve is 50% → 'hidegvérű lövők' erősség."""
