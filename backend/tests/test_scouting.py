@@ -316,6 +316,18 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_active_block_wall():
+    """3+ blokk → erősség + 'kerüld a falat' kulcs; kevés blokknál nincs."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC", blocks=4)
+    strengths, _, keys = _coach_keys(rep)
+    assert any("blokkoltak" in s_ for s_ in strengths)
+    assert any("blokkolnak" in k for k in keys)
+    quiet = ScoutingReport(team="away", team_name="X", blocks=1)
+    s2, _, k2 = _coach_keys(quiet)
+    assert not any("blokkol" in x for x in s2 + k2)
+
+
 def test_coach_keys_flag_long_drought():
     """10 perces leghosszabb gólcsend → 'ilyenkor kell ellépni' kulcs;
     rövid csendnél nincs."""

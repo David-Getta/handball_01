@@ -951,6 +951,16 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
              (f"{tz['away']['front_pct']:.0f}%"
               if tz["away"]["total"] >= 3 else "—")),
         ]
+        # Blokkolt lövések sora (ha volt blokk).
+        try:
+            from .defense import detect_blocks
+            bl = detect_blocks(match)
+            if bl["home"]["blocks"] or bl["away"]["blocks"]:
+                rows.append(("Blokkolt lövés",
+                             str(bl["home"]["blocks"]),
+                             str(bl["away"]["blocks"])))
+        except Exception:
+            pass
         # Lövés-sebesség sorok (ha van mért lövés).
         try:
             from .event_detection import shot_speeds
