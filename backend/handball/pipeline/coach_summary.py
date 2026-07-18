@@ -437,6 +437,23 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
         top_side = "home" if bl["home"] >= bl["away"] else "away"
         body += (f" A meccs {prog['lead_changes']}-szor fordult; a legnagyobb "
                  f"előny {names[top_side]} javára {bl[top_side]} gól.")
+    # Gólcsend: 8+ perces saját gól nélküli szakasz külön említést kap —
+    # ott állt le a támadójáték, azt kell visszanézni.
+    try:
+        from .momentum import goal_droughts
+        dr = goal_droughts(match)
+        names = {"home": home, "away": away}
+        for side in ("home", "away"):
+            rec = dr[side]
+            if rec["longest_s"] >= 480.0:
+                m0 = int(rec["start_s"] // 60)
+                m1 = int(rec["end_s"] // 60)
+                body += (f" A(z) {names[side]} leghosszabb gólcsendje "
+                         f"{rec['longest_s'] / 60:.0f} perc volt "
+                         f"({m0}.–{m1}. perc) — érdemes visszanézni, mi "
+                         "fogta meg a támadójátékot.")
+    except Exception:
+        pass
     # Hajrá-mérleg: szoros állásról induló hajrában ki bírta jobban.
     try:
         from .momentum import clutch_performance
