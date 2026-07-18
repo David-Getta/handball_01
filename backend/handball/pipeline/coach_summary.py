@@ -71,6 +71,14 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
             f"kapura tartó lövést ismert fel ({home} {goals_h} : {goals_a} {away}).")
     if saves:
         body += f" Ebből {saves} lövést a kapusok hárítottak."
+    # Félidei állás (csak ha a szünet ténylegesen felismerhető).
+    try:
+        from .momentum import halftime_score
+        hs = halftime_score(match)
+        if hs is not None and (goals_h + goals_a):
+            body += f" Félidőben {hs['home']} – {hs['away']} volt az állás."
+    except Exception:
+        pass
     if attempts >= 5:
         eff = 100.0 * (goals_h + goals_a) / attempts
         body += f" A felismert kísérletek {eff:.0f}%-a végződött gólban."

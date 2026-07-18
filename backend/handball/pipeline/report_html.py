@@ -1013,6 +1013,15 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 f'szabad lövőt enged: {_fp("home")} / {_fp("away")}')
     except Exception:
         pass
+    # Félidei állás a fejlécbe (ha felismerhető a szünet).
+    try:
+        from .momentum import halftime_score
+        _hs = halftime_score(match)
+        if _hs is not None:
+            header_bits.append(
+                f'félidőben: {_hs["home"]} – {_hs["away"]}')
+    except Exception:
+        pass
     # Labdabirtoklás-sor az esemény-táblához (ha számolható).
     poss_row = ""
     try:
