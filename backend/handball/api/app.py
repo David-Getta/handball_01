@@ -1654,6 +1654,11 @@ def create_app():
             res["turnover_zones"] = turnover_zones(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.defense import detect_blocks
+            res["blocks"] = detect_blocks(match)
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/playmaker")
@@ -1802,6 +1807,8 @@ def create_app():
                 _layer("defense", lambda: defense_analysis(match))
                 from ..pipeline.defense import turnover_zones
                 _layer("turnover_zones", lambda: turnover_zones(match))
+                from ..pipeline.defense import detect_blocks
+                _layer("blocks", lambda: detect_blocks(match))
                 _layer("rules", lambda: rules_report(match))
                 _layer("momentum", lambda: annotate_runs(match))
                 from ..pipeline.momentum import score_progression

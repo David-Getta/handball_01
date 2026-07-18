@@ -142,6 +142,25 @@ def test_turnover_zones_classifies_front_loss():
     assert tz["away"]["total"] == 0
 
 
+def test_detect_blocks_credits_defender():
+    """A lövés a 32,5 m-nél álló védőn pattan vissza (a kaputól ~7,5 m,
+    nem a kapusnál) → a vendég védekezés blokkja."""
+    from handball.pipeline.defense import detect_blocks
+
+    frames = []
+    shooter = _pl(1, Team.HOME, 28.0, 10.0)
+    blocker = _pl(20, Team.AWAY, 32.5, 10.0)
+    # A labda gyorsan a +x kapu felé: 29→32,4 (lövés-jel), majd visszapattan.
+    xs = [29.0, 30.2, 31.4, 32.4, 31.0, 29.5, 28.0]
+    for i, x in enumerate(xs):
+        frames.append(Frame(t=i, players=[shooter, blocker],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    b = detect_blocks(Match(_meta(), frames))
+    assert b["away"]["blocks"] == 1
+    assert b["away"]["blockers"][0]["player_id"] == 20
+    assert b["home"]["blocks"] == 0
+
+
 def test_defensive_pressure_tight_vs_loose():
     """Szoros védő (1 m) kisebb nyomás-átlagot ad, mint a laza (6 m)."""
     from handball.pipeline.defense import defensive_pressure
