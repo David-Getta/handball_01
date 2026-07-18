@@ -332,6 +332,29 @@ def test_halftime_score_counts_first_half_goals():
     assert halftime_score(Match(_meta(), all_frames[:50])) is None
 
 
+def test_goal_responses_measures_answer_time():
+    """H A H A: a hazai az 'A' gólokra válaszol egyszer (a másodikra már
+    nem jön H), a vendég a H gólokra kétszer."""
+    from handball.pipeline.momentum import goal_responses
+    frames = {}
+    # H a 0-nál, A a 100-nál, H a 250-nél, A a 400-nál (25 fps).
+    for fr in (_goal(0) + _goal(100, toward_home_goal=True) + _goal(250)
+               + _goal(400, toward_home_goal=True)):
+        frames[fr.t] = fr
+    total = 600
+    all_frames = [frames.get(t, Frame(t=t, players=[],
+                                      ball=Ball(x=20.0, y=10.0,
+                                                confidence=1.0)))
+                  for t in range(total)]
+    r = goal_responses(Match(_meta(), all_frames))
+    # A hazai a 100-as kapott gólra a 250-es góllal válaszolt (~6 mp).
+    assert r["home"]["responses"] == 1
+    assert abs(r["home"]["avg_s"] - 6.0) < 1.0
+    # A vendég a 0-s és a 250-es hazai gólra válaszolt (100, 400).
+    assert r["away"]["responses"] == 2
+    assert r["away"]["fastest_s"] is not None
+
+
 def test_goal_droughts_longest_gap():
     """HH...H mintában a hazai leghosszabb gólcsendje a 2. és 3. hazai
     gól közti szakasz; a gól nélküli vendégé a teljes felvétel."""

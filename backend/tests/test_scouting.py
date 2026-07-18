@@ -316,6 +316,29 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_response_time():
+    """Gyors válasz (átlag 45 mp) → erősség; lassú (180 mp) → gyengeség."""
+    from handball.pipeline.scouting import _coach_keys
+    fast = ScoutingReport(team="away", team_name="Ellenfél KC",
+                          response_n=5, response_sum_s=225.0)
+    strengths, _, _ = _coach_keys(fast)
+    assert any("gyorsan rendezik a sorokat" in s_ for s_ in strengths)
+    slow = ScoutingReport(team="away", team_name="X",
+                          response_n=4, response_sum_s=720.0)
+    _, weaknesses, _ = _coach_keys(slow)
+    assert any("megtorpannak" in w for w in weaknesses)
+
+
+def test_combine_reports_sums_responses():
+    a = ScoutingReport(team="away", team_name="X",
+                       response_n=3, response_sum_s=200.0)
+    b = ScoutingReport(team="away", team_name="X",
+                       response_n=2, response_sum_s=150.0)
+    m = combine_reports([a, b])
+    assert m.response_n == 5
+    assert abs(m.response_sum_s - 350.0) < 0.01
+
+
 def test_coach_keys_flag_attack_side_bias():
     """A támadókockák 60%-a a bal sávban → 'told oda a falat' kulcs;
     kiegyenlített oldalaknál nincs."""

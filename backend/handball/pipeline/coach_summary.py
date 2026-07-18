@@ -487,6 +487,24 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
         top_side = "home" if bl["home"] >= bl["away"] else "away"
         body += (f" A meccs {prog['lead_changes']}-szor fordult; a legnagyobb "
                  f"előny {names[top_side]} javára {bl[top_side]} gól.")
+    # Válasz-idő: milyen gyorsan felelnek a kapott gólra (3+ válasznál).
+    try:
+        from .momentum import goal_responses
+        gr = goal_responses(match)
+        names = {"home": home, "away": away}
+        for side in ("home", "away"):
+            rec = gr[side]
+            if rec["responses"] >= 3 and rec["avg_s"] is not None:
+                if rec["avg_s"] <= 60.0:
+                    body += (f" A(z) {names[side]} átlag "
+                             f"{rec['avg_s']:.0f} mp alatt válaszolt a "
+                             "kapott gólokra — stabil fejben.")
+                elif rec["avg_s"] >= 150.0:
+                    body += (f" A(z) {names[side]} lassan válaszol a "
+                             f"kapott gólokra (átlag {rec['avg_s']:.0f} mp) "
+                             "— egy-egy kapott gól után megtorpannak.")
+    except Exception:
+        pass
     # Gólcsend: 8+ perces saját gól nélküli szakasz külön említést kap —
     # ott állt le a támadójáték, azt kell visszanézni.
     try:
