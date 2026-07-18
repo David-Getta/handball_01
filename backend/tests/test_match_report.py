@@ -104,6 +104,18 @@ def test_report_includes_attack_mix_section():
     assert "Támadás-mix (típus szerint)" in html
 
 
+def test_report_team_metrics_has_slow_attack_row():
+    """Elég támadásnál megjelenik az elhúzódó-támadás sor."""
+    m = simulate_ground_truth(duration_s=60, fps=25.0, seed=7)
+    html = match_report_html(m, {}, [], None)
+    from handball.pipeline.tactics import slow_attacks
+    sa = slow_attacks(m)
+    if sa["home"]["attacks"] >= 4 or sa["away"]["attacks"] >= 4:
+        assert "Elhúzódó támadás (35 mp+)" in html
+    else:
+        assert "Elhúzódó támadás (35 mp+)" not in html
+
+
 def test_report_team_metrics_has_shot_speed_rows():
     """A Csapat-mutatók tábla tartalmazza a lövés-sebesség sorokat."""
     m = simulate_ground_truth(duration_s=30, fps=25.0, seed=5)

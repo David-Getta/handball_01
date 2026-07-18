@@ -953,6 +953,19 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
              (f"{tz['away']['front_pct']:.0f}%"
               if tz["away"]["total"] >= 3 else "—")),
         ]
+        # Elhúzódó (35 mp+) támadások aránya (ha van elég támadás).
+        try:
+            from .tactics import slow_attacks
+            sa = slow_attacks(match)
+            if sa["home"]["attacks"] >= 4 or sa["away"]["attacks"] >= 4:
+                def _sa(side):
+                    rec = sa[side]
+                    return (f"{rec['slow_pct']:.0f}%"
+                            if rec["attacks"] >= 4 else "—")
+                rows.append(("Elhúzódó támadás (35 mp+)",
+                             _sa("home"), _sa("away")))
+        except Exception:
+            pass
         # Blokkolt lövések sora (ha volt blokk).
         try:
             from .defense import detect_blocks
