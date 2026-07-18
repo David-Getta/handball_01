@@ -263,7 +263,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     if known:
         body += (" Leggyakoribb védekezési forma — "
                  + ", ".join(f"{n}: {f}" for n, f in known) + ".")
-    return {"title": "Játékkép és tempó", "body": body + poss_line}
+    # A játékszervezés tengelye: a leggyakoribb passz-páros (ha bejáratott).
+    pass_line = ""
+    try:
+        from .event_detection import pass_network
+        pn = pass_network(match)
+        tof, jof = _team_of_track(match), _jersey_of_track(match)
+        for side, name in (("home", home), ("away", away)):
+            rec = pn[side]
+            if rec["total_passes"] >= 10 and rec["pairs"]:
+                pr = rec["pairs"][0]
+                if pr["passes"] >= 4:
+                    lf = _player_label(pr["from"], tof, jof, home, away)
+                    lt = _player_label(pr["to"], tof, jof, home, away)
+                    pass_line += (f" A(z) {name} játékának tengelye a "
+                                  f"{lf} – {lt} kapcsolat "
+                                  f"({pr['passes']} passz).")
+    except Exception:
+        pass
+    return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 
 def _intensity_section(match: Match, home: str, away: str) -> tuple[dict | None, list[str]]:

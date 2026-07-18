@@ -242,3 +242,34 @@ def test_assist_network_pairs_and_leaders():
     assert net["pairs"] and net["pairs"][0]["from"] == 1
     assert net["pairs"][0]["to"] == 2 and net["pairs"][0]["goals"] == 2
     assert net["leaders"][0]["player_id"] == 1 and net["leaders"][0]["assists"] == 2
+
+
+def test_pass_network_pairs_and_hubs():
+    """3 passz 1→2 és 1 passz 2→3: a fő pár az 1→2, a hub az 1-es vagy
+    a 2-es (mindkettő 4 passzban érintett — a 2-esé: 3 kapott + 1 adott)."""
+    from handball.pipeline.event_detection import pass_network
+    frames = []
+    t = 0
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        # vissza az 1-eshez (2→1 passz), hogy újra indulhasson a kör
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+    net = pass_network(Match(_meta(), frames))["home"]
+    assert net["total_passes"] >= 4
+    assert net["pairs"][0]["from"] == 1 and net["pairs"][0]["to"] == 2
+    assert net["pairs"][0]["passes"] == 3
+    hub_ids = [h["player_id"] for h in net["hubs"]]
+    assert 1 in hub_ids and 2 in hub_ids
+    # A vendégnek nincs passza.
+    away = pass_network(Match(_meta(), frames))["away"]
+    assert away["total_passes"] == 0 and away["pairs"] == []

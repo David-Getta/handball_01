@@ -286,3 +286,48 @@ def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict
                                       key=lambda kv: -kv[1])]
         result[side] = {"pairs": pairs, "leaders": leaders}
     return result
+
+
+def pass_network(match: Match, config: Optional[TacticsConfig] = None,
+                 top: int = 5) -> dict:
+    """Passz-hálózat: ki kinek adogat — a játékszervezés fő tengelye.
+
+    A PASS eseményekből (adó → fogadó) építjük a leggyakoribb párokat és
+    a legtöbb passzban részt vevő játékosokat. A gólpassz-hálózattal
+    (assist_network) szemben itt MINDEN passz számít, nem csak a gólt
+    előkészítő — így a csapat játékának szerkezete látszik: kin megy át
+    a labda, melyik kapcsolat a "motor".
+
+    Visszatérés csapatonként: {"total_passes", "pairs":
+    [{"from","to","passes"}] (top szerint), "hubs":
+    [{"player_id","passes"}] — adott VAGY kapott passzok összege}."""
+    config = config or TacticsConfig()
+    events = detect_events(match, config)
+    out = {"home": {"pairs": {}, "hubs": {}, "total": 0},
+           "away": {"pairs": {}, "hubs": {}, "total": 0}}
+    for e in events:
+        if e.type != EventType.PASS:
+            continue
+        rid = (e.detail or {}).get("receiver_id")
+        if rid is None or e.player_id is None:
+            continue
+        side = e.team.value
+        rec = out[side]
+        rec["total"] += 1
+        key = (e.player_id, rid)
+        rec["pairs"][key] = rec["pairs"].get(key, 0) + 1
+        for pid in (e.player_id, rid):
+            rec["hubs"][pid] = rec["hubs"].get(pid, 0) + 1
+
+    result = {}
+    for side in ("home", "away"):
+        rec = out[side]
+        pairs = [{"from": a, "to": b, "passes": n}
+                 for (a, b), n in sorted(rec["pairs"].items(),
+                                         key=lambda kv: -kv[1])[:top]]
+        hubs = [{"player_id": p, "passes": n}
+                for p, n in sorted(rec["hubs"].items(),
+                                   key=lambda kv: -kv[1])[:top]]
+        result[side] = {"total_passes": rec["total"], "pairs": pairs,
+                        "hubs": hubs}
+    return result
