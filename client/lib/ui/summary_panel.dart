@@ -142,11 +142,24 @@ class SummaryPanel extends StatelessWidget {
       final cbVal = cbHome >= cbAway ? cbHome : cbAway;
       cbText = " · $cbName $cbVal gólos hátrányból fordított";
     }
+    // Hajrá-mérleg: szoros végjátéknál, legalább 2 gólos különbséggel.
+    var clText = "";
+    final cl = (p["clutch"] as Map?)?.cast<String, dynamic>();
+    if (cl != null && cl["available"] == true && cl["close"] == true) {
+      final gh = ((cl["home"] as Map?)?["goals"] as num?)?.toInt() ?? 0;
+      final ga = ((cl["away"] as Map?)?["goals"] as num?)?.toInt() ?? 0;
+      if ((gh - ga).abs() >= 2) {
+        final wName = gh > ga ? homeName : awayName;
+        final hi = gh > ga ? gh : ga;
+        final lo = gh > ga ? ga : gh;
+        clText = " · a hajrát $wName nyerte $hi–$lo-ra";
+      }
+    }
     return [
       const SizedBox(height: 4),
       Text(
           "A meccs ${changes}-szor fordult · legnagyobb előny: "
-          "$topName +$topLead$cbText",
+          "$topName +$topLead$cbText$clText",
           style: AppText.label.copyWith(fontSize: 11, color: AppColors.textFaint)),
     ];
   }

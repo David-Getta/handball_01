@@ -1012,9 +1012,22 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 cb_name = home if cb_side == "home" else away
                 cb_txt = (f' · {escape(cb_name)} {cb[cb_side]} gólos '
                           'hátrányból fordított')
+            cl_txt = ""
+            try:
+                from .momentum import clutch_performance
+                cp = clutch_performance(match)
+                if cp.get("available") and cp.get("close"):
+                    gh = cp["home"]["goals"]
+                    ga = cp["away"]["goals"]
+                    if abs(gh - ga) >= 2:
+                        wname = home if gh > ga else away
+                        cl_txt = (f' · a hajrát {escape(wname)} nyerte '
+                                  f'{max(gh, ga)}–{min(gh, ga)}-ra')
+            except Exception:
+                pass
             prog_line = (f'<div class="sub">A meccs {prog["lead_changes"]}-szor '
                          f'fordult · legnagyobb előny: {escape(top)} +{top_v}'
-                         f'{cb_txt}</div>')
+                         f'{cb_txt}{cl_txt}</div>')
     except Exception:
         pass
     header_extra = (

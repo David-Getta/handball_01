@@ -566,7 +566,12 @@ class ApiClient {
           "HTTP ${resp.statusCode}");
     }
     final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
-    return (json["progression"] as Map?)?.cast<String, dynamic>() ?? {};
+    final prog = (json["progression"] as Map?)?.cast<String, dynamic>() ?? {};
+    // A hajrá-mérleg ugyanennek a válasznak a "clutch" mezője — az
+    // összefoglaló felirata együtt jeleníti meg az állás-menettel.
+    final clutch = (json["clutch"] as Map?)?.cast<String, dynamic>();
+    if (clutch != null) prog["clutch"] = clutch;
+    return prog;
   }
 
   /// Gól-idővonal (GET /matches/{id}/momentum → "timeline"): dobott/kapott
