@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#228)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#237)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -143,6 +143,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   a közvetítés-elemzés útiterve dokumentálva (docs/BROADCAST_AND_SENSORS).
   Az elemzési rétegek méteres pozíciókon dolgoznak → szenzor-függetlenek,
   csak a bemenet cserélődik. (#134)
+- **Pályavonal-felismerés (tévés út)**: fehér vonalak tiszta numpy
+  Hough-transzformációval, sarok-jelöltek, kalibrációs négyszög-javaslat
+  — /broadcast/lines végpont és a közvetítés-ellenőrzés kiegészítése.
+  A vágásonkénti auto-kalibráció minden felvétel nélkül építhető része
+  kész. (#230, #231, #232, #233)
+- **Nézet-fúzió (arénarendszer)**: több kamera pozíció-folyamának
+  egyesítése a közös méter-térben — pozíció-átlag, takarás-kitöltés,
+  folytonos fúziós trackek; órajel-eltolás becslése a labda-pályából;
+  POST /matches/fuse végpont + "Nézet-egyesítés" gomb a könyvtárban.
+  Két sima kamerával már ma kipróbálható. (#234, #235, #236, #237)
 
 ### Kliens-élmény
 - **Meccs-sztori idővonal**: gólok, sorozatok, emberelőnyök, 7 a 6,
