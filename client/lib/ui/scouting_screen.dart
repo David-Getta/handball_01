@@ -327,6 +327,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   /// A felderített csapat leglyukasabb védekezési zónája (legtöbb kapott
   /// gól, döntetlennél lövés) — a "hova játssz" gyors jele.
+  /// A kapus leggyengébb sarka: a legalacsonyabb védés%-ú, legalább 3
+  /// kapura tartó lövést kapott zóna (csak ha tényleg gyenge, <=50%).
+  String? _gkWeakZone(Map<String, dynamic> r) {
+    final faced = (r["gk_on_target_zones"] as Map?)?.cast<String, dynamic>();
+    final conc = (r["gk_conceded_zones"] as Map?)?.cast<String, dynamic>();
+    if (faced == null || faced.isEmpty) return null;
+    String? worst;
+    double worstPct = 101.0;
+    faced.forEach((z, v) {
+      final n = ((v as num?) ?? 0).toInt();
+      if (n < 3) return;
+      final c = ((conc?[z] as num?) ?? 0).toInt();
+      final pct = 100.0 * (n - c) / n;
+      if (pct < worstPct) {
+        worstPct = pct;
+        worst = z;
+      }
+    });
+    if (worst == null || worstPct > 50.0) return null;
+    return "$worst (${worstPct.toStringAsFixed(0)}% védés)";
+  }
+
   String? _worstZone(Map<String, dynamic> r) {
     final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
     if (zones == null || zones.isEmpty) return null;
@@ -392,7 +414,14 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
               "${((r["xg_diff"] as num?) ?? 0).toStringAsFixed(1)}"
         ],
       ],
-      ["Labdaeladás", fmt(r["turnovers"])],
+      [
+        "Labdaeladás",
+        fmt(r["turnovers"]) +
+            (((r["turnover_total"] as num?) ?? 0) >= 5
+                ? " (${(100.0 * ((r["turnover_front"] as num?) ?? 0) / (r["turnover_total"] as num)).toStringAsFixed(0)}% elöl)"
+                : "")
+      ],
+      if (_gkWeakZone(r) != null) ["Kapus gyenge sarka", _gkWeakZone(r)!],
       if (((r["possession_pct"] as num?) ?? 0) > 0)
         ["Labdabirtoklás", "${(r["possession_pct"] as num).toStringAsFixed(0)}%"],
       if (((r["top_assist_count"] as num?) ?? 0) >= 2)
