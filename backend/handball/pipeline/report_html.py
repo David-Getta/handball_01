@@ -186,6 +186,12 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
                        for k, v in rep.side_frames.items()))]
           if sum(getattr(rep, "side_frames", {}).values() or [0]) >= 250
           else []),
+        *([_metric("Leggyengébb forma ellenük",
+                   min(((f_, v) for f_, v in rep.vs_formation.items()
+                        if v["shots"] >= 4),
+                       key=lambda kv: kv[1]["goals"] / kv[1]["shots"])[0])]
+          if sum(1 for v in getattr(rep, "vs_formation", {}).values()
+                 if v["shots"] >= 4) >= 2 else []),
         _metric("Figurák", str(rep.num_figures)),
     ]
     # Az új felismerő-rétegek mutatói — csak ha van mögöttük adat.

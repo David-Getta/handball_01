@@ -1133,6 +1133,18 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             if int(pr["passes"]) >= 5:
                 body += (f" A játékuk a {pr['from']}. és {pr['to']}. játékos "
                          f"tengelyén megy ({pr['passes']} passz).")
+        # Melyik fal fogja meg őket (ha van elég formánkénti minta).
+        pools = [(f_, v) for f_, v in (rep.vs_formation or {}).items()
+                 if v["shots"] >= 4]
+        if len(pools) >= 2:
+            def _pct(v):
+                return 100.0 * v["goals"] / v["shots"]
+            worst = min(pools, key=lambda kv: _pct(kv[1]))
+            best = max(pools, key=lambda kv: _pct(kv[1]))
+            if _pct(best[1]) - _pct(worst[1]) >= 25.0:
+                body += (f" A {worst[0]} fal ellen csak "
+                         f"{_pct(worst[1]):.0f}%-ot konvertálnak "
+                         f"(a {best[0]} ellen {_pct(best[1]):.0f}%-ot).")
         # Oldal-súlypont: melyik szárnyra épül a támadásépítés.
         side_total = sum(rep.side_frames.values()) if rep.side_frames else 0
         if side_total >= 250:

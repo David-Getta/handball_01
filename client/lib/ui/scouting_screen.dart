@@ -399,6 +399,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return parts.join(" · ");
   }
 
+  /// Melyik védőforma ellen konvertálnak a legrosszabbul — csak elég
+  /// mintánál (2+ forma, formánként 4+ lövés).
+  String? _weakFormation(Map<String, dynamic> r) {
+    final vf = (r["vs_formation"] as Map?)?.cast<String, dynamic>();
+    if (vf == null) return null;
+    String? worst;
+    double worstPct = 200.0;
+    var pools = 0;
+    vf.forEach((form, v) {
+      final m = (v as Map).cast<String, dynamic>();
+      final shots = ((m["shots"] as num?) ?? 0).toInt();
+      if (shots < 4) return;
+      pools += 1;
+      final pct = 100.0 * ((m["goals"] as num?) ?? 0).toInt() / shots;
+      if (pct < worstPct) {
+        worstPct = pct;
+        worst = form;
+      }
+    });
+    if (pools < 2 || worst == null) return null;
+    return "$worst (${worstPct.toStringAsFixed(0)}% gólarány)";
+  }
+
   String? _worstZone(Map<String, dynamic> r) {
     final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
     if (zones == null || zones.isEmpty) return null;
@@ -484,6 +507,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
       if (_attackSides(r) != null) ["Támadás-oldal", _attackSides(r)!],
+      if (_weakFormation(r) != null)
+        ["Ez a fal fogja meg őket", _weakFormation(r)!],
       if (((r["clutch_matches"] as num?) ?? 0) >= 1)
         [
           "Hajrá-mérleg",
