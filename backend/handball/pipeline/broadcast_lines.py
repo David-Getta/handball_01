@@ -190,3 +190,73 @@ def line_intersections(lines: list[dict], width: int,
                 out.append({"x": round(float(x), 1),
                             "y": round(float(y), 1), "lines": (i, j)})
     return out
+
+
+# A javasolt kalibrációs négyszög minimális területe a képhez képest.
+QUAD_MIN_AREA_FRAC = 0.15
+
+
+def suggest_calibration_quad(corners: list[dict], width: int,
+                             height: int) -> list[tuple] | None:
+    """Kalibrációs négyszög-javaslat a sarok-jelöltekből.
+
+    A meglévő (kézi) kalibráció 4 sarokpontot vár — ez a függvény a
+    felismert sarok-jelöltekből választja ki a legnagyobb területű,
+    KONVEX négyszöget, és a kézi folyamat sorrendjében adja vissza
+    (bal-felső, jobb-felső, jobb-alsó, bal-alsó). A kliens ezt
+    előtöltheti a kalibrációs képernyőre: az edző csak igazít rajta,
+    nem nulláról jelöl.
+
+    None, ha nincs 4 jelölt, vagy a legjobb négyszög is túl kicsi
+    (QUAD_MIN_AREA_FRAC alatt) — ilyenkor marad a kézi kijelölés.
+    """
+    from itertools import combinations
+
+    if len(corners) < 4:
+        return None
+
+    def order_quad(pts):
+        # Óramutató szerint a súlypont körül, bal-felsőtől indítva.
+        import math
+        cx = sum(p[0] for p in pts) / 4.0
+        cy = sum(p[1] for p in pts) / 4.0
+        ordered = sorted(pts, key=lambda p: math.atan2(p[1] - cy,
+                                                       p[0] - cx))
+        # Kezdés a bal-felsőhöz legközelebbi ponttól.
+        start = min(range(4), key=lambda i: ordered[i][0] + ordered[i][1])
+        return ordered[start:] + ordered[:start]
+
+    def shoelace(pts):
+        area = 0.0
+        for i in range(4):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % 4]
+            area += x1 * y2 - x2 * y1
+        return abs(area) / 2.0
+
+    def convex(pts):
+        # Az egymást követő élek keresztszorzatai azonos előjelűek.
+        signs = []
+        for i in range(4):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % 4]
+            x3, y3 = pts[(i + 2) % 4]
+            cross = (x2 - x1) * (y3 - y2) - (y2 - y1) * (x3 - x2)
+            if abs(cross) > 1e-9:
+                signs.append(cross > 0)
+        return len(set(signs)) <= 1 and bool(signs)
+
+    pts_all = [(c["x"], c["y"]) for c in corners]
+    best = None
+    best_area = 0.0
+    for combo in combinations(pts_all, 4):
+        quad = order_quad(list(combo))
+        if not convex(quad):
+            continue
+        area = shoelace(quad)
+        if area > best_area:
+            best_area = area
+            best = quad
+    if best is None or best_area < QUAD_MIN_AREA_FRAC * width * height:
+        return None
+    return [(round(x, 1), round(y, 1)) for (x, y) in best]

@@ -289,13 +289,16 @@ def create_app():
                 raise HTTPException(status_code=404,
                                     detail="frame not readable")
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            from ..pipeline.broadcast_lines import (detect_court_lines,
-                                                    line_intersections)
+            from ..pipeline.broadcast_lines import (
+                detect_court_lines, line_intersections,
+                suggest_calibration_quad)
             lines = detect_court_lines(gray)
             h, w = gray.shape[:2]
+            corners = line_intersections(lines, w, h)
             return {"frame": int(frame), "width": w, "height": h,
-                    "lines": lines,
-                    "corners": line_intersections(lines, w, h)}
+                    "lines": lines, "corners": corners,
+                    "suggested_quad": suggest_calibration_quad(corners,
+                                                               w, h)}
         except HTTPException:
             raise
         except Exception as e:

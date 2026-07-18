@@ -86,3 +86,34 @@ def test_line_intersections_finds_corner():
     _draw_hline(img2, 80)
     lines2 = detect_court_lines(img2)
     assert line_intersections(lines2, width=200, height=120) == []
+
+
+def test_suggest_calibration_quad_from_rectangle():
+    """Két vízszintes + két függőleges vonal → a 4 metszéspont adja a
+    javasolt négyszöget, bal-felsőtől óramutató szerint."""
+    from handball.pipeline.broadcast_lines import (
+        line_intersections, suggest_calibration_quad,
+    )
+    img = _canvas(h=160, w=240)
+    _draw_hline(img, 30)
+    _draw_hline(img, 130)
+    _draw_vline(img, 40)
+    _draw_vline(img, 200)
+    lines = detect_court_lines(img)
+    corners = line_intersections(lines, width=240, height=160)
+    quad = suggest_calibration_quad(corners, width=240, height=160)
+    assert quad is not None and len(quad) == 4
+    (tl, tr, br, bl) = quad
+    assert tl[0] < tr[0] and tl[1] < bl[1]
+    assert abs(tl[0] - 40.5) < 4 and abs(tl[1] - 30.5) < 4
+    assert abs(br[0] - 200.5) < 4 and abs(br[1] - 130.5) < 4
+
+
+def test_suggest_calibration_quad_rejects_small():
+    """Apró négyszögre (a kép <15%-a) nincs javaslat — marad a kézi."""
+    from handball.pipeline.broadcast_lines import suggest_calibration_quad
+    tiny = [{"x": 10, "y": 10, "lines": (0, 1)},
+            {"x": 20, "y": 10, "lines": (0, 2)},
+            {"x": 20, "y": 20, "lines": (3, 1)},
+            {"x": 10, "y": 20, "lines": (3, 2)}]
+    assert suggest_calibration_quad(tiny, width=240, height=160) is None
