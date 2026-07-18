@@ -284,6 +284,37 @@ def test_score_progression_no_goals():
     assert p["biggest_lead"] == {"home": 0, "away": 0}
 
 
+def test_clutch_performance_last_window():
+    """20 perces felvétel: 1-1 gól az elején, a hajrában (utolsó 5 perc)
+    2 hazai gól → close hajrá, hazai 2-0 hajrá-mérleg."""
+    from handball.pipeline.momentum import clutch_performance
+    fps = 25.0
+    total = int(1200 * fps)  # 20 perc
+    frames = {}
+    def put(seq):
+        for fr in seq:
+            frames[fr.t] = fr
+    put(_goal(100))                          # hazai gól az elején
+    put(_goal(400, toward_home_goal=True))   # vendég gól
+    win_start = total - int(300 * fps)
+    put(_goal(win_start + 200))              # hajrá: hazai
+    put(_goal(win_start + 1000))             # hajrá: hazai
+    all_frames = [frames.get(t, Frame(t=t, players=[],
+                                      ball=Ball(x=20.0, y=10.0,
+                                                confidence=1.0)))
+                  for t in range(total)]
+    cp = clutch_performance(Match(_meta(), all_frames))
+    assert cp["available"] is True
+    assert cp["start_score"] == [1, 1] and cp["close"] is True
+    assert cp["home"]["goals"] == 2 and cp["away"]["goals"] == 0
+
+
+def test_clutch_unavailable_on_short_clip():
+    from handball.pipeline.momentum import clutch_performance
+    m = _match_from_goals("HHA")  # pár másodperces klip
+    assert clutch_performance(m) == {"available": False}
+
+
 def test_scoring_timeline_buckets_goals():
     """A gólok a megfelelő idő-vödörbe kerülnek."""
     from handball.pipeline.momentum import scoring_timeline

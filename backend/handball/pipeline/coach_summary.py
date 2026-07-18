@@ -421,6 +421,21 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
         top_side = "home" if bl["home"] >= bl["away"] else "away"
         body += (f" A meccs {prog['lead_changes']}-szor fordult; a legnagyobb "
                  f"előny {names[top_side]} javára {bl[top_side]} gól.")
+    # Hajrá-mérleg: szoros állásról induló hajrában ki bírta jobban.
+    try:
+        from .momentum import clutch_performance
+        cp = clutch_performance(match)
+        if cp.get("available") and cp.get("close"):
+            names = {"home": home, "away": away}
+            gh, ga = cp["home"]["goals"], cp["away"]["goals"]
+            if abs(gh - ga) >= 2:
+                winner = "home" if gh > ga else "away"
+                mins = int(cp["window_s"] // 60)
+                body += (f" A szoros hajrát (utolsó {mins} perc) a(z) "
+                         f"{names[winner]} nyerte {max(gh, ga)}–"
+                         f"{min(gh, ga)}-ra.")
+    except Exception:
+        pass
     # Nagy fordítás: 3+ gólos hátrányból vezetésbe — külön említés és
     # kiemelés (mentális erő / a másik oldalon elengedett előny).
     if prog:
