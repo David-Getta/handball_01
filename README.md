@@ -28,6 +28,9 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
 - [`docs/FOOTAGE_NOTES.md`](docs/FOOTAGE_NOTES.md) — a valódi felvétel megfigyelései
   és azok hatása a tervre (pásztázó kamera, sárga 6 m, több-vonal, kosárpalánk,
   sárga bírók, GoPro-torzítás).
+- [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md) — a jövőbeli
+  bemenetek útiterve: telepített több-kamerás + lidar arénarendszer és
+  TV-közvetítés-elemzés (ellenfél-felderítéshez).
 
 ## Kód
 - [`backend/`](backend/) — szerveroldali Python csomag: a központi `Tracking`
@@ -38,10 +41,25 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
   demóval is fut). Lásd [`client/README.md`](client/README.md).
 
 ## Hol tartunk
-**0. fázis (alapok)** kész — repó-struktúra és tervek.
-**1. fázis (MVP)** folyamatban — a backend **váza** kész (Tracking modell + JSON +
-pipeline-csontváz + tesztek); a valódi modellek (YOLO, követés) behelyettesítése
-következik. A kliens **Flutter** lesz (Win/Mac/iPad/Android).
+A rendszer **működő, telepíthető alkalmazás** (v0.1.17 kiadva; a v0.1.18
+tartalma a CHANGELOG-ban):
+
+- **Feldolgozás**: YOLO + ByteTrack követés, kézi 4-sarkos kalibráció
+  méter-térbe, pásztázás-kompenzáció, csapat-szétválasztás, kapus- és
+  mezszám-felismerés; megszakítás-biztos (checkpoint, folytatás).
+- **AI-elemzés**: 30+ magyarázható réteg — események (gól/lövés/passz/
+  labdaeladás), xG, védekezés-kép, blokkok, momentum (sorozatok, fordítás,
+  hajrá, gólcsend, válasz-idő), kondíció és játékos-fáradás, passz- és
+  gólpassz-hálózat, támadás-oldal, forma elleni hatékonyság, hetesek,
+  cserék, időkérések. Minden réteg magyar edzői nyelven indokol.
+- **Kimenetek**: edzői összefoglaló, nyomtatható meccs- és felderítő
+  jelentés, edzés-fókusz javaslatok, klip-export, meccs-csomag (JSON).
+- **Új bemenetek (előkészítve)**: TV-közvetítés előfeldolgozás
+  (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
+  (`POST /matches/fuse`) és lidar-finomítás — részletek a
+  [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
+- **Minőség**: ~490 automata teszt; réteg-megbízhatósági önjelentés
+  (mihez van elég minta az adott meccsen).
 
 ## Elv
 Alulról építkezünk. A megbízható 2D követés a rendszer gerince; minden további
