@@ -495,6 +495,16 @@ def test_narrative_mentions_half_pattern():
                    for s_ in scouting_narrative(quiet))
 
 
+def test_narrative_mentions_attack_side():
+    """Bal-súlypontú támadásépítés → az 'Így támadnak' megemlíti."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         avg_attack_duration_s=8.0, fast_break_pct=5.0,
+                         side_frames={"bal": 300, "közép": 150, "jobb": 50})
+    sections = scouting_narrative(rep)
+    attack = next(s_ for s_ in sections if s_["title"] == "Így támadnak")
+    assert "súlypontja a bal" in attack["body"]
+
+
 def test_narrative_mentions_clutch():
     """Negatív hajrá-mérleg → Végjáték szekció a gyengeség-üzenettel."""
     rep = ScoutingReport(team="away", team_name="Ellenfél KC",

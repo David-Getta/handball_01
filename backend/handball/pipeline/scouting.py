@@ -1079,6 +1079,15 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             if int(pr["passes"]) >= 5:
                 body += (f" A játékuk a {pr['from']}. és {pr['to']}. játékos "
                          f"tengelyén megy ({pr['passes']} passz).")
+        # Oldal-súlypont: melyik szárnyra épül a támadásépítés.
+        side_total = sum(rep.side_frames.values()) if rep.side_frames else 0
+        if side_total >= 250:
+            top_side, top_n = max(rep.side_frames.items(),
+                                  key=lambda kv: kv[1])
+            pct = 100.0 * top_n / side_total
+            if top_side != "közép" and pct >= 45.0:
+                body += (f" A támadásépítésük súlypontja a {top_side} "
+                         f"oldal ({pct:.0f}%).")
         out.append({"title": "Így támadnak", "body": body})
 
     # Védekezésük: fő forma + váltogatás.
