@@ -265,6 +265,43 @@ def create_app():
             raise HTTPException(status_code=500,
                                 detail=f"a közvetítés-elemzés nem sikerült: {e}")
 
+    @app.get("/broadcast/lines")
+    def broadcast_lines(path: str, frame: int = 0):
+        """Pályavonal-jelöltek egy közvetítés-képkockából.
+
+        A vonal-alapú auto-kalibráció első fele: a megadott képkockán
+        felismert hosszú, egyenes vonalak (végpontokkal) és a nem-
+        párhuzamos párjaik képen belüli metszéspontjai (sarok-jelöltek).
+        A kliens ezt rárajzolhatja a képre — így ellenőrizhető, mit lát
+        a rendszer, mielőtt a pálya-modell megfeleltetés elkészül.
+
+        404: a videó nem olvasható / nincs ilyen képkocka."""
+        import os
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="video not found")
+        try:
+            import cv2
+            cap = cv2.VideoCapture(path)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame))
+            ok, img = cap.read()
+            cap.release()
+            if not ok or img is None:
+                raise HTTPException(status_code=404,
+                                    detail="frame not readable")
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            from ..pipeline.broadcast_lines import (detect_court_lines,
+                                                    line_intersections)
+            lines = detect_court_lines(gray)
+            h, w = gray.shape[:2]
+            return {"frame": int(frame), "width": w, "height": h,
+                    "lines": lines,
+                    "corners": line_intersections(lines, w, h)}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500,
+                                detail=f"a vonal-felismerés nem sikerült: {e}")
+
     @app.get("/detect-preview")
     def detect_preview(path: str, t: int = 100, imgsz: int = 1280,
                        calib: str | None = None, region: str = "full",

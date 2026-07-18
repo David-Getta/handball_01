@@ -149,3 +149,44 @@ def detect_court_lines(gray, max_lines: int = HOUGH_MAX_LINES) -> list[dict]:
         out.append({"theta_deg": round(theta_deg, 1), "rho": round(rho, 1),
                     "votes": votes, "p1": uniq[0], "p2": uniq[1]})
     return out
+
+
+# Metszéspont-számításnál ennél párhuzamosabb vonalpárt nem metszünk.
+MIN_INTERSECT_ANGLE_DEG = 25.0
+
+
+def line_intersections(lines: list[dict], width: int,
+                       height: int) -> list[dict]:
+    """Sarok-jelöltek: a nem-párhuzamos vonalpárok képen belüli
+    metszéspontjai.
+
+    A jövőbeli pálya-modell megfeleltetés (homográfia) sarokpontokat
+    keres — az oldalvonal x alapvonal metszés a pálya sarka. A közel
+    párhuzamos párokat (MIN_INTERSECT_ANGLE_DEG alatt) kihagyjuk, mert
+    a metszéspontjuk numerikusan instabil.
+
+    Visszatérés: [{"x", "y", "lines": (i, j)}] — az i/j a bemeneti lista
+    indexei."""
+    import numpy as np
+
+    out = []
+    for i in range(len(lines)):
+        for j in range(i + 1, len(lines)):
+            t1, r1 = lines[i]["theta_deg"], lines[i]["rho"]
+            t2, r2 = lines[j]["theta_deg"], lines[j]["rho"]
+            d_ang = abs(t1 - t2)
+            d_ang = min(d_ang, 180.0 - d_ang)
+            if d_ang < MIN_INTERSECT_ANGLE_DEG:
+                continue
+            a1, a2 = np.deg2rad(t1), np.deg2rad(t2)
+            A = np.array([[np.cos(a1), np.sin(a1)],
+                          [np.cos(a2), np.sin(a2)]])
+            b = np.array([r1, r2])
+            try:
+                x, y = np.linalg.solve(A, b)
+            except np.linalg.LinAlgError:
+                continue
+            if 0.0 <= x <= width - 1 and 0.0 <= y <= height - 1:
+                out.append({"x": round(float(x), 1),
+                            "y": round(float(y), 1), "lines": (i, j)})
+    return out
