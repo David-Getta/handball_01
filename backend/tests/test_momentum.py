@@ -332,6 +332,39 @@ def test_halftime_score_counts_first_half_goals():
     assert halftime_score(Match(_meta(), all_frames[:50])) is None
 
 
+def test_win_probability_favors_leader_and_late_goals():
+    """A vezető csapat esélye 0,5 fölött; UGYANAZ az 1 gólos előny a
+    hajrában többet ér, mint az elején (két külön meccsen összevetve)."""
+    from handball.pipeline.momentum import win_probability
+
+    def one_goal_match(goal_t, total=6000):
+        frames = {fr.t: fr for fr in _goal(goal_t)}
+        return Match(_meta(), [
+            frames.get(t, Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            for t in range(total)
+        ])
+
+    early = win_probability(one_goal_match(100))     # gól a 4. mp-ben
+    late = win_probability(one_goal_match(5800))     # gól a hajrában
+    assert early["timeline"][0]["p_home"] == 0.5
+    assert early["final_p_home"] > 0.5
+    assert late["final_p_home"] > early["final_p_home"]
+
+    # Fordulópont: két gól közül a nagyobb esély-ugrás pillanata.
+    frames = {}
+    for fr in _goal(100) + _goal(5800):
+        frames[fr.t] = fr
+    m = Match(_meta(), [
+        frames.get(t, Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        for t in range(6000)
+    ])
+    wp = win_probability(m)
+    assert wp["turning_point"] is not None
+    assert len(wp["timeline"]) == 3
+
+
 def test_goal_responses_measures_answer_time():
     """H A H A: a hazai az 'A' gólokra válaszol egyszer (a másodikra már
     nem jön H), a vendég a H gólokra kétszer."""

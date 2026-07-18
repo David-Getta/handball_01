@@ -1660,7 +1660,7 @@ def create_app():
         from ..pipeline.momentum import (annotate_runs, clutch_performance,
                                          goal_droughts, goal_responses,
                                          halftime_score, score_progression,
-                                         scoring_timeline)
+                                         scoring_timeline, win_probability)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -1670,7 +1670,8 @@ def create_app():
                 "clutch": clutch_performance(match),
                 "droughts": goal_droughts(match),
                 "halftime": halftime_score(match),
-                "responses": goal_responses(match)}
+                "responses": goal_responses(match),
+                "win_prob": win_probability(match)}
 
     @app.get("/matches/{match_id}/xg")
     def get_xg(match_id: str):
@@ -1885,6 +1886,8 @@ def create_app():
                 _layer("halftime", lambda: halftime_score(match))
                 from ..pipeline.momentum import goal_responses
                 _layer("responses", lambda: goal_responses(match))
+                from ..pipeline.momentum import win_probability
+                _layer("win_prob", lambda: win_probability(match))
                 from ..pipeline.quality import analysis_confidence
                 _layer("confidence", lambda: analysis_confidence(match))
                 from ..pipeline.attack_types import attack_efficiency
