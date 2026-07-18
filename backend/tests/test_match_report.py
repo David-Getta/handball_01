@@ -53,6 +53,7 @@ def test_report_includes_player_load_when_given():
                              player_stats=compute_player_stats(m))
     assert "Játékos-terhelés" in html
     assert "Max km/h" in html and "Sprint" in html
+    assert "2. félidei tempó" in html
     # nélküle a szakasz sem jelenik meg
     assert "Játékos-terhelés" not in match_report_html(m, {}, [], None)
 
