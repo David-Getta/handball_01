@@ -279,6 +279,76 @@ def intensity_trend(match: Match, config=None,
     return out
 
 
+# Játékos-fáradás: legalább ennyi MÉRT másodperc kell mindkét félidőben,
+# és ekkora esés számít említésre méltónak.
+FATIGUE_MIN_S = 30.0
+
+
+def player_fatigue(match: Match, config=None,
+                   half_t: int | None = None) -> list[dict]:
+    """Játékosonkénti tempó-visszaesés: első vs második félidő átlag-
+    sebessége (m/s) és az esés százalékban.
+
+    A csapat-szintű kondíció-mutató (intensity_trend) játékos-szintű
+    párja: kit visel meg leginkább a meccs — a csere-döntések nyers
+    adata. A félidő-határ a felismert szünet (vagy half_t); csak MÉRT,
+    hihető szakaszokból számol, és csak azok a játékosok szerepelnek,
+    akiknek mindkét félidőben van legalább FATIGUE_MIN_S mért idejük.
+
+    Visszatérés: [{"track_id", "team", "first_ms", "second_ms",
+    "drop_pct"}], esés szerint csökkenő sorrendben.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dt = 1.0 / fps
+    total = len(match.frames)
+    if total < 4:
+        return []
+    if half_t is None:
+        try:
+            from .halftime import detect_halftime
+            half_t = detect_halftime(match)
+        except Exception:
+            half_t = None
+    mid = half_t if half_t is not None else total // 2
+
+    by_player: dict[int, list] = {}
+    team_of: dict[int, str] = {}
+    for frame in match.frames:
+        for p in frame.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            by_player.setdefault(p.track_id, []).append(
+                (frame.t, p.x, p.y))
+            team_of.setdefault(p.track_id, p.team.value)
+
+    out = []
+    for tid, samples in by_player.items():
+        samples.sort(key=lambda s_: s_[0])
+        dist = [0.0, 0.0]
+        time_ = [0.0, 0.0]
+        for (a, b) in zip(samples, samples[1:]):
+            gap = b[0] - a[0]
+            if gap <= 0 or gap > 3:
+                continue
+            seconds = gap * dt
+            d = math.hypot(b[1] - a[1], b[2] - a[2])
+            if d / seconds > MAX_PLAUSIBLE_MS:
+                continue
+            half = 0 if a[0] < mid else 1
+            dist[half] += d
+            time_[half] += seconds
+        if time_[0] < FATIGUE_MIN_S or time_[1] < FATIGUE_MIN_S:
+            continue
+        first = dist[0] / time_[0]
+        second = dist[1] / time_[1]
+        drop = round((first - second) / first * 100.0, 1) if first > 0 else 0.0
+        out.append({"track_id": tid, "team": team_of.get(tid, "?"),
+                    "first_ms": round(first, 2),
+                    "second_ms": round(second, 2), "drop_pct": drop})
+    out.sort(key=lambda r: -r["drop_pct"])
+    return out
+
+
 def aggregate_by_jersey(stats: dict, team_of: dict, jersey_of: dict,
                         fps: float = 25.0) -> list[dict]:
     """Játékos-statisztikák MEZSZÁM szerint összevonva.

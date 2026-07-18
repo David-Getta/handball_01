@@ -1842,6 +1842,8 @@ def create_app():
                 _layer("possession", lambda: possession_share(match))
                 from ..pipeline.stats import intensity_trend
                 _layer("intensity_trend", lambda: intensity_trend(match))
+                from ..pipeline.stats import player_fatigue
+                _layer("player_fatigue", lambda: player_fatigue(match))
                 _layer("playmaker", lambda: playmaker_dependency(match))
                 _layer("substitutions", lambda: substitution_impact(match))
                 _layer("stoppages", lambda: timeout_effects(match))
@@ -1955,6 +1957,11 @@ def create_app():
         try:
             from ..pipeline.stats import intensity_trend
             out["intensity_trend"] = intensity_trend(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import player_fatigue
+            out["player_fatigue"] = player_fatigue(match)
         except Exception:
             pass
         return out

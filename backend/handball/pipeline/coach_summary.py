@@ -401,6 +401,19 @@ def _players_section(match: Match, home: str, away: str) -> dict | None:
         sentences.append(
             f"Legtöbb sprint: {label(top_sprint[0])} "
             f"({top_sprint[1].sprint_count}×).")
+    # Játékos-szintű fáradás: a legnagyobb 2. félidei tempó-visszaesés.
+    try:
+        from .stats import player_fatigue
+        rows = [r for r in player_fatigue(match) if r["drop_pct"] >= 20.0]
+        if rows:
+            top = rows[0]
+            sentences.append(
+                f"A legnagyobb tempó-visszaesés: {label(top['track_id'])} "
+                f"({top['first_ms']:.1f} → {top['second_ms']:.1f} m/s, "
+                f"−{top['drop_pct']:.0f}%) — hasonló meccsnél korábbi "
+                "csere segíthet.")
+    except Exception:
+        pass
     return {"title": "Kiugró játékosok", "body": " ".join(sentences)}
 
 
