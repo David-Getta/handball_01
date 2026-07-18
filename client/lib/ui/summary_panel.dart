@@ -173,10 +173,18 @@ class SummaryPanel extends StatelessWidget {
         drText = " · $nm leghosszabb gólcsendje ${(best / 60).round()} perc";
       }
     }
+    // Félidei állás (csak ha a szünet ténylegesen felismerhető volt).
+    var htText = "";
+    final ht = (p["halftime"] as Map?)?.cast<String, dynamic>();
+    if (ht != null) {
+      final h = ((ht["home"] as num?) ?? 0).toInt();
+      final a = ((ht["away"] as num?) ?? 0).toInt();
+      htText = "félidőben $h–$a · ";
+    }
     return [
       const SizedBox(height: 4),
       Text(
-          "A meccs ${changes}-szor fordult · legnagyobb előny: "
+          "${htText}A meccs ${changes}-szor fordult · legnagyobb előny: "
           "$topName +$topLead$cbText$clText$drText",
           style: AppText.label.copyWith(fontSize: 11, color: AppColors.textFaint)),
     ];
