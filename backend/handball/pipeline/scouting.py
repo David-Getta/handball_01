@@ -1016,6 +1016,22 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             body += " Ragaszkodnak hozzá — egy begyakorolt ellenszer sokat ér."
         out.append({"title": "Védekezésük", "body": body})
 
+    # Félidő-minta: a felismert szünetű meccsek félidőnkénti mérlegéből.
+    fh_d = rep.fh_goals_for - rep.fh_goals_against
+    sh_d = rep.sh_goals_for - rep.sh_goals_against
+    if (rep.fh_goals_for + rep.fh_goals_against
+            + rep.sh_goals_for + rep.sh_goals_against) >= 8:
+        if sh_d - fh_d >= 3:
+            out.append({"title": "Félidő-minta", "body": (
+                f"A második félidőben rendre feljavulnak: a félidő-mérlegük "
+                f"{fh_d:+d}-ról {sh_d:+d}-ra vált — az első félidőben kell "
+                "előnyt építeni ellenük.")})
+        elif fh_d - sh_d >= 3:
+            out.append({"title": "Félidő-minta", "body": (
+                f"A második félidőben rendre elfogynak: a félidő-mérlegük "
+                f"{fh_d:+d}-ról {sh_d:+d}-ra romlik — a meccs második fele "
+                "ellenük dolgozik.")})
+
     # Végjáték: a szoros hajrák halmozott mérlege (ha volt ilyen hajrá).
     if rep.clutch_matches >= 1:
         diff = rep.clutch_goals_for - rep.clutch_goals_against
