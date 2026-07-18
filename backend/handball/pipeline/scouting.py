@@ -112,6 +112,11 @@ class ScoutingReport:
     # Elhúzódó (35 mp+) támadásaik darabszámai — meccsek közt összegződik.
     slow_attacks_total: int = 0
     slow_attacks_slow: int = 0
+    # Félidőnkénti gólmérleg (csak felismert szünetű meccsekből, összegződik).
+    fh_goals_for: int = 0
+    fh_goals_against: int = 0
+    sh_goals_for: int = 0
+    sh_goals_against: int = 0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -415,6 +420,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
 
+    # Félidő-minta: melyik félidőben erősebbek (halmozott mérlegből).
+    fh_diff = rep.fh_goals_for - rep.fh_goals_against
+    sh_diff = rep.sh_goals_for - rep.sh_goals_against
+    fh_total = rep.fh_goals_for + rep.fh_goals_against
+    if fh_total + rep.sh_goals_for + rep.sh_goals_against >= 8:
+        if sh_diff - fh_diff >= 3:
+            keys.append(
+                f"A 2. félidőben rendre feljavulnak (félidő-mérleg "
+                f"{fh_diff:+d} → {sh_diff:+d}) — az elején szerezz olyan "
+                "előnyt, amit a hajrájuk sem fordít meg.")
+        elif fh_diff - sh_diff >= 3:
+            keys.append(
+                f"A 2. félidőben rendre elfogynak (félidő-mérleg "
+                f"{fh_diff:+d} → {sh_diff:+d}) — türelem: a meccs második "
+                "fele neked dolgozik.")
+
     # Hosszan járatják a labdát: fegyelmezett fal + passzív-jel kivárása.
     if rep.slow_attacks_total >= 6:
         slow_pct = 100.0 * rep.slow_attacks_slow / rep.slow_attacks_total
@@ -716,6 +737,17 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
         rep.slow_attacks_slow = sarec["slow"]
+        from .momentum import halftime_score, score_progression
+        hs = halftime_score(match, config)
+        if hs is not None:
+            fin = score_progression(match, config)["final"]
+            own_i = 0 if team == Team.HOME else 1
+            own_key = "home" if team == Team.HOME else "away"
+            opp_key = "away" if team == Team.HOME else "home"
+            rep.fh_goals_for = hs[own_key]
+            rep.fh_goals_against = hs[opp_key]
+            rep.sh_goals_for = fin[own_i] - hs[own_key]
+            rep.sh_goals_against = fin[1 - own_i] - hs[opp_key]
         from .defense import defensive_pressure
         pr = defensive_pressure(match, config)[team.value]["avg_pressure_m"]
         if pr is not None:
@@ -851,6 +883,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         blocks=sum(r.blocks for r in reports),
         slow_attacks_total=sum(r.slow_attacks_total for r in reports),
         slow_attacks_slow=sum(r.slow_attacks_slow for r in reports),
+        fh_goals_for=sum(r.fh_goals_for for r in reports),
+        fh_goals_against=sum(r.fh_goals_against for r in reports),
+        sh_goals_for=sum(r.sh_goals_for for r in reports),
+        sh_goals_against=sum(r.sh_goals_against for r in reports),
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),
