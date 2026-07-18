@@ -1004,11 +1004,17 @@ def create_app():
     def get_quality(match_id: str):
         """A feldolgozás minőség-jelentése: mennyire megbízható az elemzés
         (lefedettség, becsült-arány, labda-hézagok, figyelmeztetések teendővel)."""
-        from ..pipeline.quality import compute_quality_report
+        from ..pipeline.quality import (analysis_confidence,
+                                        compute_quality_report)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return compute_quality_report(match)
+        res = compute_quality_report(match)
+        try:
+            res["confidence"] = analysis_confidence(match)
+        except Exception:
+            pass
+        return res
 
     @app.get("/matches/{match_id}/stats")
     def get_stats(match_id: str):
@@ -1836,6 +1842,8 @@ def create_app():
                 _layer("halftime", lambda: halftime_score(match))
                 from ..pipeline.momentum import goal_responses
                 _layer("responses", lambda: goal_responses(match))
+                from ..pipeline.quality import analysis_confidence
+                _layer("confidence", lambda: analysis_confidence(match))
                 from ..pipeline.attack_types import attack_efficiency
                 _layer("attack_efficiency", lambda: attack_efficiency(match))
                 from ..pipeline.event_detection import assist_network
