@@ -282,6 +282,33 @@ def test_coach_keys_flag_pass_axis():
     assert not any("tengelye" in k for k in k2)
 
 
+def test_coach_keys_flag_clutch_weakness_and_strength():
+    """Hajrá-mérleg −3 → gyengeség + 'tartsd szorosan' kulcs; +3 → erősség."""
+    from handball.pipeline.scouting import _coach_keys
+    weak = ScoutingReport(team="away", team_name="Ellenfél KC",
+                          clutch_matches=2, clutch_goals_for=2,
+                          clutch_goals_against=5)
+    _, weaknesses, keys = _coach_keys(weak)
+    assert any("hajrában elfogynak" in w for w in weaknesses)
+    assert any("végjátékban" in k for k in keys)
+    strong = ScoutingReport(team="away", team_name="X",
+                            clutch_matches=2, clutch_goals_for=6,
+                            clutch_goals_against=3)
+    strengths, _, _ = _coach_keys(strong)
+    assert any("hajrában erősek" in s_ for s_ in strengths)
+
+
+def test_combine_reports_sums_clutch():
+    a = ScoutingReport(team="away", team_name="X", clutch_matches=1,
+                       clutch_goals_for=3, clutch_goals_against=1)
+    b = ScoutingReport(team="away", team_name="X", clutch_matches=1,
+                       clutch_goals_for=2, clutch_goals_against=4)
+    merged = combine_reports([a, b])
+    assert merged.clutch_matches == 2
+    assert merged.clutch_goals_for == 5
+    assert merged.clutch_goals_against == 5
+
+
 def test_narrative_mentions_pass_axis():
     """Bejáratott passz-tengely → az 'Így támadnak' szekció megemlíti."""
     rep = ScoutingReport(team="away", team_name="Ellenfél KC",

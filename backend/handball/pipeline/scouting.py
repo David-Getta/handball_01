@@ -100,6 +100,11 @@ class ScoutingReport:
     # (meccsek közt párokként összegezhető) és az összes passz.
     pass_pairs: list = field(default_factory=list)
     pass_total: int = 0
+    # Hajrá-mérleg: szoros állásról induló hajrákban (utolsó 5 perc)
+    # dobott/kapott gólok és az ilyen hajrák száma (meccsek közt összegződik).
+    clutch_goals_for: int = 0
+    clutch_goals_against: int = 0
+    clutch_matches: int = 0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -403,6 +408,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
 
+    # Hajrá-mérleg: szoros végjátékban nyújtott teljesítményük.
+    if rep.clutch_matches >= 1:
+        diff = rep.clutch_goals_for - rep.clutch_goals_against
+        if diff >= 2:
+            strengths.append(
+                f"Szoros hajrában erősek (+{diff} gól a hajrákban) — ne "
+                "hagyd a végjátékra a döntést.")
+        elif diff <= -2:
+            weaknesses.append(
+                f"Szoros hajrában elfogynak ({diff} gól a hajrákban) — "
+                "kiegyenlített meccsen a türelem nekik fáj.")
+            keys.append("Tartsd szorosan a meccset a hajráig — a végjátékban "
+                        "rendre alulmaradnak.")
+
     # Csere-mintáik: mikor forgatnak, és mit hoznak a cseréik.
     if rep.sub_rotations >= 2:
         trail_pct = 100.0 * rep.sub_trailing / rep.sub_rotations
@@ -651,6 +670,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         pnet = pass_network(match, config)[team.value]
         rep.pass_pairs = list(pnet["pairs"])
         rep.pass_total = pnet["total_passes"]
+        from .momentum import clutch_performance
+        cp = clutch_performance(match, config)
+        if cp.get("available") and cp.get("close"):
+            own = cp[team.value]["goals"]
+            opp = cp["away" if team == Team.HOME else "home"]["goals"]
+            rep.clutch_goals_for = own
+            rep.clutch_goals_against = opp
+            rep.clutch_matches = 1
         from .defense import defensive_pressure
         pr = defensive_pressure(match, config)[team.value]["avg_pressure_m"]
         if pr is not None:
@@ -778,6 +805,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         transition_goals_against=sum(r.transition_goals_against for r in reports),
         turnover_total=sum(r.turnover_total for r in reports),
         turnover_front=sum(r.turnover_front for r in reports),
+        clutch_goals_for=sum(r.clutch_goals_for for r in reports),
+        clutch_goals_against=sum(r.clutch_goals_against for r in reports),
+        clutch_matches=sum(r.clutch_matches for r in reports),
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),
