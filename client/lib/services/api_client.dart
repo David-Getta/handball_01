@@ -543,6 +543,20 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Pályavonal-jelöltek egy képkockából (GET /broadcast/lines):
+  /// vonalak + sarok-jelöltek + javasolt kalibrációs négyszög.
+  Future<Map<String, dynamic>> fetchBroadcastLines(String path,
+      {int frame = 0}) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/broadcast/lines").replace(
+            queryParameters: {"path": path, "frame": "$frame"}))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a vonal-felismerés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Egy-képkockás detektálás-próba (GET /detect-preview): a YOLO által
   /// talált játékosok/labda berajzolva + darabszámok — az indítás előtti
   /// gyors ellenőrzéshez. Az első hívás lassabb (modell-betöltés).

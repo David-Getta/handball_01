@@ -425,6 +425,25 @@ class _UploadScreenState extends State<UploadScreen> {
       for (final u in usable) {
         usableS += (((u["end"] as num) - (u["start"] as num) + 1) / effFps);
       }
+      // Vonal-felismerés az első használható szakasz elején: hány vonal/
+      // sarok látszik, és van-e kalibrációs négyszög-javaslat.
+      String? lineInfo;
+      if (usable.isNotEmpty) {
+        try {
+          final firstFrame =
+              ((usable.first["start"] as num?) ?? 0).toInt() * stride;
+          final lr = await _api.fetchBroadcastLines(_pathCtrl.text.trim(),
+              frame: firstFrame);
+          final nLines = ((lr["lines"] as List?) ?? const []).length;
+          final nCorners = ((lr["corners"] as List?) ?? const []).length;
+          final hasQuad = lr["suggested_quad"] != null;
+          lineInfo = "Vonal-felismerés az első totálképen: $nLines vonal, "
+              "$nCorners sarok-jelölt"
+              "${hasQuad ? " — van kalibrációs négyszög-javaslat." : "."}";
+        } catch (_) {
+          lineInfo = null; // vonal-infó nélkül is teljes az ellenőrzés
+        }
+      }
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -456,12 +475,17 @@ class _UploadScreenState extends State<UploadScreen> {
                           "elemezhetők megbízhatóan. Talált használható "
                           "szakasz: ${usable.length} "
                           "(összesen ${usableS.toStringAsFixed(0)} mp). A "
-                          "vágások közti totálképre a vonal-alapú auto-"
-                          "kalibráció még fejlesztés alatt."
+                          "vágások közti totálképen a rendszer vonal- és "
+                          "sarok-jelölteket keres a kalibrációhoz."
                       : "Nincs teendő — indítható a szokásos feldolgozás.",
                   style: AppText.label.copyWith(
                       fontSize: 12, color: AppColors.textPrimary),
                 ),
+                if (lineInfo != null) ...[
+                  const SizedBox(height: 8),
+                  Text(lineInfo,
+                      style: AppText.label.copyWith(fontSize: 12)),
+                ],
               ],
             ),
           ),
