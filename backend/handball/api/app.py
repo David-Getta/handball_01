@@ -1508,6 +1508,22 @@ def create_app():
                 cond_away = it["away"]["drop_pct"]
         except Exception:
             pass
+        blocks_home = blocks_away = None
+        fastest_kmh = None
+        try:
+            from ..pipeline.defense import detect_blocks
+            bl = detect_blocks(m)
+            blocks_home = bl["home"]["blocks"]
+            blocks_away = bl["away"]["blocks"]
+        except Exception:
+            pass
+        try:
+            from ..pipeline.event_detection import shot_speeds
+            fastest = shot_speeds(m).get("fastest")
+            if fastest:
+                fastest_kmh = fastest["speed_kmh"]
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -1530,6 +1546,9 @@ def create_app():
             "possession_away": poss_away,
             "cond_drop_home": cond_home,
             "cond_drop_away": cond_away,
+            "blocks_home": blocks_home,
+            "blocks_away": blocks_away,
+            "fastest_kmh": fastest_kmh,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out
