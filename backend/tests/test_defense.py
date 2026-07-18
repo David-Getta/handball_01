@@ -118,6 +118,30 @@ def test_transition_defense_counts_fast_goals():
     assert td["away"]["transition_goals_against"] == 0
 
 
+def test_turnover_zones_classifies_front_loss():
+    """A támadó harmadban (a megtámadott kapu közelében) elvesztett labda a
+    'támadó' zónába kerül, és emeli a front_pct-t."""
+    from handball.pipeline.defense import turnover_zones
+
+    frames = []
+    t = 0
+    # A hazai birtokolja a labdát a vendég kapuja közelében (x=35, a +x
+    # kapu felé támad), majd a vendég szerzi meg → labdaeladás itt.
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 35.0, 10.0)],
+                            ball=Ball(x=35.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[_pl(11, Team.AWAY, 35.0, 10.0)],
+                            ball=Ball(x=35.0, y=10.0, confidence=1.0)))
+        t += 1
+    tz = turnover_zones(Match(_meta(), frames))
+    assert tz["home"]["total"] == 1
+    assert tz["home"]["zones"].get("támadó") == 1
+    assert tz["home"]["front_pct"] == 100.0
+    assert tz["away"]["total"] == 0
+
+
 def test_defensive_pressure_tight_vs_loose():
     """Szoros védő (1 m) kisebb nyomás-átlagot ad, mint a laza (6 m)."""
     from handball.pipeline.defense import defensive_pressure

@@ -1646,6 +1646,11 @@ def create_app():
             res["pressure"] = defensive_pressure(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.defense import turnover_zones
+            res["turnover_zones"] = turnover_zones(match)
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/playmaker")
@@ -1792,6 +1797,8 @@ def create_app():
                 _layer("coach_summary", lambda: coach_summary(match))
                 _layer("xg", lambda: match_xg(match))
                 _layer("defense", lambda: defense_analysis(match))
+                from ..pipeline.defense import turnover_zones
+                _layer("turnover_zones", lambda: turnover_zones(match))
                 _layer("rules", lambda: rules_report(match))
                 _layer("momentum", lambda: annotate_runs(match))
                 from ..pipeline.momentum import score_progression

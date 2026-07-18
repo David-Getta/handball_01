@@ -158,6 +158,50 @@ def transition_defense(match, config=None) -> dict:
     return out
 
 
+def turnover_zones(match, config=None) -> dict:
+    """Hol veszíti el a labdát egy csapat — pálya-harmad szerint.
+
+    Minden labdaeladást a labda helyéből a TÁMADÁSI irány szerinti
+    harmadhoz sorolunk: "saját" (védekező harmad), "közép" (középpálya),
+    "támadó" (befejező harmad). A támadó harmadban elvesztett labda a
+    legveszélyesebb (üresen hagyja a védelmet a gyors indításnak).
+
+    Visszatérés csapatonként: {"total", "zones": {zóna: db},
+    "front_pct"} — a front_pct a TÁMADÓ harmadban elvesztett labdák
+    aránya (magas érték = kockázatos befejezés / könnyű kontra ellen)."""
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_events
+    from .tactics import COURT_LENGTH_M
+
+    config = config or TacticsConfig()
+    length = COURT_LENGTH_M
+    frames_by_t = {f.t: f for f in match.frames}
+    out = {side: {"total": 0, "zones": {}, "front_pct": 0.0}
+           for side in ("home", "away")}
+
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER:
+            continue
+        frame = frames_by_t.get(e.t)
+        if frame is None or frame.ball is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        # A labda-pozíció a megtámadott kaputól mért, hossz-normált táv:
+        # 0 = saját kapu környéke, 1 = a megtámadott kapu.
+        frac = 1.0 - abs(frame.ball.x - goal_x) / length
+        zone = ("saját" if frac < 1 / 3 else
+                "közép" if frac < 2 / 3 else "támadó")
+        rec = out[e.team.value]
+        rec["total"] += 1
+        rec["zones"][zone] = rec["zones"].get(zone, 0) + 1
+
+    for rec in out.values():
+        if rec["total"]:
+            rec["front_pct"] = round(
+                100.0 * rec["zones"].get("támadó", 0) / rec["total"], 1)
+    return out
+
+
 def defensive_pressure(match, config=None) -> dict:
     """Védekezési nyomás: mennyire szorosan védekezik egy csapat.
 
