@@ -316,6 +316,32 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_pressure_finishing():
+    """Szabadon 80%, fedezve 20% → 'elég a fegyelmezett fal' kulcs;
+    fedezve is 50% → 'hidegvérű lövők' erősség."""
+    from handball.pipeline.scouting import _coach_keys
+    soft = ScoutingReport(team="away", team_name="Ellenfél KC",
+                          fin_free_shots=5, fin_free_goals=4,
+                          fin_cov_shots=5, fin_cov_goals=1)
+    _, _, keys = _coach_keys(soft)
+    assert any("Fedezett helyzetben alig" in k for k in keys)
+    cold = ScoutingReport(team="away", team_name="X",
+                          fin_free_shots=5, fin_free_goals=3,
+                          fin_cov_shots=6, fin_cov_goals=3)
+    strengths, _, _ = _coach_keys(cold)
+    assert any("hidegvérű" in s_ for s_ in strengths)
+
+
+def test_combine_reports_sums_pressure_finishing():
+    a = ScoutingReport(team="away", team_name="X", fin_free_shots=3,
+                       fin_free_goals=2, fin_cov_shots=4, fin_cov_goals=1)
+    b = ScoutingReport(team="away", team_name="X", fin_free_shots=2,
+                       fin_free_goals=2, fin_cov_shots=3, fin_cov_goals=2)
+    m = combine_reports([a, b])
+    assert (m.fin_free_shots, m.fin_free_goals) == (5, 4)
+    assert (m.fin_cov_shots, m.fin_cov_goals) == (7, 3)
+
+
 def test_coach_keys_flag_powerful_shooters():
     """85+ km/h átlag (5+ mért lövésből) → 'nagy erejű lövők' erősség."""
     from handball.pipeline.scouting import _coach_keys
