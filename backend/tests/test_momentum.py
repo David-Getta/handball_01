@@ -257,6 +257,25 @@ def test_score_progression_lead_changes_and_biggest():
     assert tot > 0
 
 
+def test_score_progression_comeback():
+    """A A A H H H H → a hazai 0-3-ról fordít 4-3-ra: comeback home=3.
+    A vendég sosem fordított hátrányból (a végén hátrányban áll)."""
+    m = _match_from_goals("AAAHHHH")
+    p = score_progression(m)
+    assert p["final"] == [4, 3]
+    assert p["comeback"]["home"] == 3
+    assert p["comeback"]["away"] == 0
+
+
+def test_score_progression_no_comeback_when_never_led():
+    """H A A A → a vendég döntetlenről vezet, a hazai hátrányból csak
+    egyenlítésig sem jut: nincs fordítás egyik oldalon sem... a vendégnél
+    az 1 gólos hátrányból (0-1) vezetésbe fordulás 1-es comeback."""
+    p = score_progression(_match_from_goals("HAAA"))
+    assert p["comeback"]["home"] == 0
+    assert p["comeback"]["away"] == 1
+
+
 def test_score_progression_no_goals():
     m = Match(_meta(), [Frame(t=i, players=[], ball=None) for i in range(10)])
     p = score_progression(m)

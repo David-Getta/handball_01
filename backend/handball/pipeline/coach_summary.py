@@ -421,6 +421,19 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
         top_side = "home" if bl["home"] >= bl["away"] else "away"
         body += (f" A meccs {prog['lead_changes']}-szor fordult; a legnagyobb "
                  f"előny {names[top_side]} javára {bl[top_side]} gól.")
+    # Nagy fordítás: 3+ gólos hátrányból vezetésbe — külön említés és
+    # kiemelés (mentális erő / a másik oldalon elengedett előny).
+    if prog:
+        names = {"home": home, "away": away}
+        for side in ("home", "away"):
+            cb = prog.get("comeback", {}).get(side, 0)
+            if cb >= 3:
+                other = names["away" if side == "home" else "home"]
+                body += (f" A(z) {names[side]} {cb} gólos hátrányból "
+                         "fordított.")
+                highlights.append(
+                    f"{other}: {cb} gólos előny ment el — nézd vissza, hol "
+                    "fordult a meccs (időkérés, cserék, védekezés-váltás).")
     return {"title": "Sorozatok", "body": body.strip()}, highlights
 
 
