@@ -107,6 +107,8 @@ class ScoutingReport:
     clutch_matches: int = 0
     # A leghosszabb gólcsendjük (mp) — meccsek közt a maximum marad.
     drought_longest_s: float = 0.0
+    # Blokkolt lövéseik (a felderített csapat védőinek blokkjai) — összegződik.
+    blocks: int = 0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -410,6 +412,12 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
 
+    # Aktív blokkoló fal: az átlövés ellenük drága — kerülő utak kellenek.
+    if rep.blocks >= 3:
+        strengths.append(f"Aktív a faluk: {rep.blocks} lövést blokkoltak.")
+        keys.append("Sokat blokkolnak — átlövés helyett beálló-játékkal és "
+                    "szélső-befutásokkal kerüld a falat.")
+
     # Hosszú gólcsendre hajlamosak: ha leállnak, akkor kell ellépni.
     if rep.drought_longest_s >= 480.0:
         keys.append(
@@ -690,6 +698,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         from .momentum import goal_droughts
         rep.drought_longest_s = goal_droughts(match, config)[
             team.value]["longest_s"]
+        from .defense import detect_blocks
+        rep.blocks = detect_blocks(match, config)[team.value]["blocks"]
         from .defense import defensive_pressure
         pr = defensive_pressure(match, config)[team.value]["avg_pressure_m"]
         if pr is not None:
@@ -822,6 +832,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         clutch_matches=sum(r.clutch_matches for r in reports),
         drought_longest_s=max((r.drought_longest_s for r in reports),
                               default=0.0),
+        blocks=sum(r.blocks for r in reports),
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),
