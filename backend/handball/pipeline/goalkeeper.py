@@ -175,6 +175,110 @@ def goalkeeper_stats(match: Match, config=None) -> dict:
                 100.0 * (faced - conceded) / faced, 1)
     return out
 
+# Kapus-csere: legalább ennyi ideig kell a kapuban lennie, hogy
+# "szolgálatnak" számítson (a pillanatnyi track-villanás nem csere).
+GK_STINT_MIN_S = 10.0
+
+
+def goalkeeper_timeline(match: Match, config=None) -> dict:
+    """Ki védett mikor — kapus-szolgálatok és cserék csapatonként.
+
+    Kockánként megnézzük, melyik kapus-jelölésű track van a pályán az
+    adott csapatból (ha több, a saját kapuhoz legközelebbi), és ebből
+    összefüggő szolgálat-szakaszokat építünk (GK_STINT_MIN_S alatti
+    szakasz zaj). Minden kapura tartó lövést az AKKOR szolgálatban lévő
+    kapushoz írunk — így kapus-cserénél külön mérleg készül.
+
+    Visszatérés csapatonként: {"stints": [{"track_id","from_s","to_s"}],
+    "changes": [mp], "per_keeper": {tid: {"on_target","saves",
+    "save_pct"}}} — üres, ha nincs kapus-jelölés.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    min_frames = round(GK_STINT_MIN_S * fps)
+
+    # Kockánkénti ügyeletes kapus csapatonként.
+    duty: dict[str, list] = {"home": [], "away": []}  # (t, tid)
+    for f in match.frames:
+        for team in (Team.HOME, Team.AWAY):
+            own_x = config.own_goal_x(team)
+            gks = [p for p in f.players
+                   if p.team == team and p.role == ROLE_GOALKEEPER]
+            if not gks:
+                continue
+            gk = min(gks, key=lambda p: abs(p.x - own_x))
+            duty[team.value].append((f.t, gk.track_id))
+
+    out: dict = {}
+    for side in ("home", "away"):
+        seq = duty[side]
+        stints = []
+        for (t, tid) in seq:
+            if stints and stints[-1]["tid"] == tid:
+                stints[-1]["end"] = t
+            else:
+                stints.append({"tid": tid, "start": t, "end": t})
+        # Zaj-szűrés: a rövid villanásokat eldobjuk, a szomszédos azonos
+        # kapusú szakaszokat összevonjuk.
+        stints = [st for st in stints
+                  if st["end"] - st["start"] + 1 >= min_frames]
+        merged = []
+        for st in stints:
+            if merged and merged[-1]["tid"] == st["tid"]:
+                merged[-1]["end"] = st["end"]
+            else:
+                merged.append(dict(st))
+        changes = [round(st["start"] / fps, 1) for st in merged[1:]]
+
+        per_keeper: dict = {}
+        if merged:
+            def on_duty(t: int):
+                for st in merged:
+                    if st["start"] <= t <= st["end"]:
+                        return st["tid"]
+                # A szakaszok közti lyukban a legutóbbi szolgálat él.
+                last = None
+                for st in merged:
+                    if st["start"] <= t:
+                        last = st["tid"]
+                return last
+
+            defending = Team.HOME if side == "home" else Team.AWAY
+            for e in detect_shots(match, config):
+                if e.team == defending:
+                    continue  # a saját lövésük nem a kapusuk dolga
+                outcome = (e.detail or {}).get("outcome")
+                if outcome not in ("goal", "save"):
+                    continue
+                tid = on_duty(e.t)
+                if tid is None:
+                    continue
+                rec = per_keeper.setdefault(tid, {"on_target": 0,
+                                                  "saves": 0,
+                                                  "save_pct": 0.0})
+                rec["on_target"] += 1
+                if outcome == "save":
+                    rec["saves"] += 1
+            for rec in per_keeper.values():
+                if rec["on_target"]:
+                    rec["save_pct"] = round(
+                        100.0 * rec["saves"] / rec["on_target"], 1)
+
+        out[side] = {
+            "stints": [{"track_id": st["tid"],
+                        "from_s": round(st["start"] / fps, 1),
+                        "to_s": round(st["end"] / fps, 1)}
+                       for st in merged],
+            "changes": changes,
+            "per_keeper": per_keeper,
+        }
+    return out
+
+
 # 7 a 6 elleni (üres kapus) játék felismerése:
 EMPTY_NET_FAR_M = 12.0   # a kapus ennyire elhagyta a saját kapuját
 EMPTY_NET_MIN_S = 3.0    # legalább ennyi ideig tartó szakasz számít

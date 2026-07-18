@@ -1633,7 +1633,13 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {"goalkeepers": goalkeeper_stats(match)}
+        res = {"goalkeepers": goalkeeper_stats(match)}
+        try:
+            from ..pipeline.goalkeeper import goalkeeper_timeline
+            res["timeline"] = goalkeeper_timeline(match)
+        except Exception:
+            pass
+        return res
 
     @app.get("/matches/{match_id}/rules")
     def get_rules(match_id: str):
@@ -1909,6 +1915,8 @@ def create_app():
                 _layer("responses", lambda: goal_responses(match))
                 from ..pipeline.momentum import win_probability
                 _layer("win_prob", lambda: win_probability(match))
+                from ..pipeline.goalkeeper import goalkeeper_timeline
+                _layer("gk_timeline", lambda: goalkeeper_timeline(match))
                 from ..pipeline.quality import analysis_confidence
                 _layer("confidence", lambda: analysis_confidence(match))
                 from ..pipeline.attack_types import attack_efficiency

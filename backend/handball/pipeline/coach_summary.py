@@ -431,6 +431,26 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
         if rec.get("seven_faced"):
             sent += (f"; hétméteresből {rec['seven_saved']}/"
                      f"{rec['seven_faced']}-t fogott meg")
+        # Kapus-csere: ha volt, a két kapus mérlegével együtt mondjuk el.
+        try:
+            from .goalkeeper import goalkeeper_timeline
+            tl = goalkeeper_timeline(match)[key]
+            if tl["changes"] and len(tl["stints"]) >= 2:
+                mins = int(tl["changes"][0] // 60)
+                pk = tl["per_keeper"]
+                parts_gk = []
+                for st in tl["stints"][:2]:
+                    r = pk.get(st["track_id"])
+                    if r and r["on_target"]:
+                        parts_gk.append(
+                            f"{st['track_id']}. játékos "
+                            f"{r['saves']}/{r['on_target']} védés")
+                sent += (f"; a(z) {name} a {mins}. perc körül kapust "
+                         "cserélt")
+                if parts_gk:
+                    sent += " (" + ", ".join(parts_gk) + ")"
+        except Exception:
+            pass
         # Leggyengébb sarok: a legalacsonyabb védés%-ú, min. 2 lövést
         # kapott zóna — konkrét támadási irány az ellenfélnek.
         zsp = rec.get("zone_save_pct", {})
