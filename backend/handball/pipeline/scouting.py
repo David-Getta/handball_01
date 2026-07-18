@@ -136,6 +136,8 @@ class ScoutingReport:
     # Védőforma elleni hatékonyságuk: {forma: {"shots","goals"}} —
     # formánként összegződik meccsek közt.
     vs_formation: dict = field(default_factory=dict)
+    # Támadás-hossz szerinti hatékonyságuk: {vödör: {"attacks","goals"}}.
+    duration_eff: dict = field(default_factory=dict)
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -438,6 +440,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A játékuk tengelye a {pr['from']}. és {pr['to']}. játékos "
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
+
+    # Hosszú támadásaik terméketlenek? Ha a hosszú (35 mp+) vödör (4+
+    # támadásból) 20+ ponttal rosszabb a rövidnél, a türelem nekik nem
+    # barát — a fegyelmezett fal kivárhatja őket.
+    long_rec = rep.duration_eff.get("hosszú (35 mp+)")
+    short_rec = rep.duration_eff.get("rövid (<15 mp)")
+    if (long_rec and short_rec and long_rec["attacks"] >= 4
+            and short_rec["attacks"] >= 4):
+        long_pct = 100.0 * long_rec["goals"] / long_rec["attacks"]
+        short_pct = 100.0 * short_rec["goals"] / short_rec["attacks"]
+        if short_pct - long_pct >= 20.0:
+            keys.append(
+                f"A hosszú támadásaik terméketlenek ({long_pct:.0f}% vs "
+                f"{short_pct:.0f}% a rövideknél) — kivárható őket: a "
+                "fegyelmezett fal ellen elfogy az ötletük.")
 
     # Melyik fal fogja meg őket: ha egy forma ellen (4+ lövésből) jóval
     # rosszabbul konvertálnak, mint máshol, az a javasolt felállás.
@@ -824,6 +841,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
         rep.slow_attacks_slow = sarec["slow"]
+        from .attack_types import attack_duration_efficiency
+        de = attack_duration_efficiency(match, config)[team.value]
+        rep.duration_eff = {k: {"attacks": v["attacks"],
+                                "goals": v["goals"]} for k, v in de.items()}
         from .tactics import efficiency_vs_formation
         efrec = efficiency_vs_formation(match, config)[team.value]
         rep.vs_formation = {k: {"shots": v["shots"], "goals": v["goals"]}
@@ -1024,6 +1045,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sub_after_against=sum(r.sub_after_against for r in reports),
         defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
+    # Támadás-hossz szerinti hatékonyság egyesítése (vödrönként).
+    for r in reports:
+        for k, v in r.duration_eff.items():
+            m = rep.duration_eff.setdefault(k, {"attacks": 0, "goals": 0})
+            m["attacks"] += v["attacks"]
+            m["goals"] += v["goals"]
     # Védőforma elleni hatékonyság egyesítése (formánként összegezve).
     for r in reports:
         for form, v in r.vs_formation.items():

@@ -133,3 +133,20 @@ def test_attack_efficiency_no_attacks_empty():
     m = Match(_meta(), [Frame(t=i, players=[], ball=None) for i in range(10)])
     eff = attack_efficiency(m)
     assert eff == {"home": {}, "away": {}}
+
+
+def test_attack_duration_efficiency_buckets():
+    """A gyors (pár mp-es) gólos támadás a 'rövid' vödörbe kerül 100%
+    gólaránnyal; üres meccsen üres a kimenet."""
+    from handball.pipeline.attack_types import attack_duration_efficiency
+
+    m = Match(_meta(), _fast_break_goal(0))
+    eff = attack_duration_efficiency(m)["home"]
+    assert "rövid (<15 mp)" in eff
+    rec = eff["rövid (<15 mp)"]
+    assert rec["attacks"] >= 1 and rec["goals"] >= 1
+    assert rec["goal_pct"] == 100.0
+
+    empty = Match(_meta(), [Frame(t=i, players=[], ball=None)
+                            for i in range(10)])
+    assert attack_duration_efficiency(empty) == {"home": {}, "away": {}}

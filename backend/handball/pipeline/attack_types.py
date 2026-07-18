@@ -153,6 +153,60 @@ def attack_efficiency(match: Match,
     return out
 
 
+# Támadás-hossz vödrök (mp): rövid / közepes / hosszú.
+DURATION_BUCKETS = ((15.0, "rövid (<15 mp)"), (35.0, "közepes (15–35 mp)"))
+DURATION_LONG_LABEL = "hosszú (35 mp+)"
+
+
+def attack_duration_efficiency(match: Match,
+                               config: Optional[TacticsConfig] = None) -> dict:
+    """Befejezés-hatékonyság a támadás HOSSZA szerint.
+
+    Ugyanaz a lövés-párosítás, mint az attack_efficiency-nél, de a
+    vödrök a támadás időtartama szerint (rövid/közepes/hosszú). Ebből
+    látszik, megéri-e a csapatnak a hosszú, türelmes játék — vagy épp a
+    gyors befejezés hozza a góljait.
+
+    Visszatérés csapatonként:
+    {vödör: {"attacks", "shots", "goals", "goal_pct"}}.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    shots = [(e.t, e.team.value, e.type == EventType.GOAL)
+             for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    def bucket(duration_s: float) -> str:
+        for edge, label in DURATION_BUCKETS:
+            if duration_s < edge:
+                return label
+        return DURATION_LONG_LABEL
+
+    out: dict = {"home": {}, "away": {}}
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        dur_s = (a["end_frame"] - a["start_frame"] + 1) / fps
+        rec = out[side].setdefault(bucket(dur_s),
+                                   {"attacks": 0, "shots": 0, "goals": 0})
+        rec["attacks"] += 1
+        hit = next(((t, goal) for (t, tm, goal) in shots
+                    if tm == side
+                    and a["start_frame"] <= t <= a["end_frame"] + tail),
+                   None)
+        if hit is not None:
+            rec["shots"] += 1
+            if hit[1]:
+                rec["goals"] += 1
+    for side in ("home", "away"):
+        for rec in out[side].values():
+            rec["goal_pct"] = round(
+                100.0 * rec["goals"] / max(1, rec["attacks"]), 1)
+    return out
+
+
 def attack_mix(match: Match,
                config: Optional[TacticsConfig] = None) -> dict:
     """Csapatonkénti támadás-mix: {csapat: {típus: százalék}}.
