@@ -543,6 +543,26 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Több nézet egyesítése (POST /matches/fuse): két külön feldolgozott,
+  /// közös pályára kalibrált meccsből egy fúziós meccs. Az órajel-
+  /// eltolást a backend a labda-pályából becsüli (auto_sync).
+  Future<Map<String, dynamic>> fuseMatches(List<String> matchIds,
+      {String? newId, bool autoSync = true}) async {
+    final resp = await http
+        .post(Uri.parse("$baseUrl/matches/fuse"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "match_ids": matchIds,
+              if (newId != null) "match_id": newId,
+              "auto_sync": autoSync,
+            }))
+        .timeout(const Duration(seconds: 60));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a nézet-egyesítés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Pályavonal-jelöltek egy képkockából (GET /broadcast/lines):
   /// vonalak + sarok-jelöltek + javasolt kalibrációs négyszög.
   Future<Map<String, dynamic>> fetchBroadcastLines(String path,

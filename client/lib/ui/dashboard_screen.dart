@@ -548,6 +548,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Nézet-egyesítés: két külön feldolgozott (közös pályára kalibrált)
+  /// meccs fúziója egy új meccsé — a két-kamerás felállás első lépése.
+  Future<void> _fuseFlow() async {
+    String? aId;
+    String? bId;
+    final picked = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        DropdownButtonFormField<String> picker(
+            String label, String? value, void Function(String?) onChanged,
+            {String? exclude}) {
+          return DropdownButtonFormField<String>(
+            initialValue: value,
+            decoration: InputDecoration(labelText: label),
+            dropdownColor: AppColors.surfaceAlt,
+            items: [
+              for (final m in _matches)
+                if (m["match_id"] != exclude)
+                  DropdownMenuItem(
+                    value: m["match_id"] as String,
+                    child: Text(
+                      "${m["home_team"] ?? "Hazai"} vs ${m["away_team"] ?? "Vendég"}"
+                      " · ${m["match_id"]}",
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.value.copyWith(fontSize: 13),
+                    ),
+                  ),
+            ],
+            onChanged: (v) => setDlg(() => onChanged(v)),
+          );
+        }
+
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Nézetek egyesítése (két kamera)"),
+          content: SizedBox(
+            width: 460,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                "Ugyanarról a meccsről két kamerával készült, KÜLÖN "
+                "feldolgozott felvétel egyesítése: a takarások kitöltődnek, "
+                "a pozíciók pontosabbak. A két nézetnek ugyanarra a pályára "
+                "kell kalibrálva lennie; az órajel-eltolást a rendszer a "
+                "labda mozgásából igazítja össze.",
+                style: AppText.label.copyWith(fontSize: 12),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              picker("Első nézet", aId, (v) => aId = v, exclude: bId),
+              const SizedBox(height: AppSpacing.md),
+              picker("Második nézet", bId, (v) => bId = v, exclude: aId),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: (aId == null || bId == null)
+                  ? null
+                  : () => Navigator.pop(ctx, true),
+              child: const Text("Egyesítés"),
+            ),
+          ],
+        );
+      }),
+    );
+    if (picked != true || aId == null || bId == null || !mounted) return;
+    try {
+      final r = await _api.fuseMatches([aId!, bId!]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Nézetek egyesítve: ${r["match_id"]} "
+              "(${r["frames"]} kocka) — megnyitható a könyvtárból.")));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Nézet-egyesítés hiba: $e")));
+    }
+  }
+
   /// Gyors összevetés: két meccs kulcs-mutatói egymás mellett — jó két
   /// egymást követő meccs ("fejlődtünk-e?") vagy két ellenfél gyors
   /// összehasonlítására. A számok a szezon-kivonatból jönnek.
@@ -1312,6 +1396,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 icon: const Icon(Icons.compare_arrows, size: 18),
                 label: const Text("Összevetés"),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _matches.length < 2 ? null : _fuseFlow,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: BorderSide(
+                      color: _matches.length < 2
+                          ? AppColors.border
+                          : AppColors.borderStrong),
+                ),
+                icon: const Icon(Icons.merge_type, size: 18),
+                label: const Text("Nézet-egyesítés"),
               ),
               const SizedBox(width: AppSpacing.sm),
               OutlinedButton.icon(
