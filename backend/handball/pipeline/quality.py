@@ -195,3 +195,62 @@ def compute_quality_report(match: Match) -> dict:
         "seven_meters": seven_meters,
         "warnings": warnings,
     }
+
+
+def analysis_confidence(match: Match) -> list[dict]:
+    """Réteg-megbízhatóság: mely elemzési rétegeknek van elég mintája
+    EZEN a meccsen — a kliens ebből tudja szürkíteni/megjelölni a kevés
+    adatból számolt szekciókat.
+
+    Minden réteghez: {"layer", "label", "available", "reason"} — a
+    reason magyarul mondja el, mi hiányzik (vagy hogy rendben van).
+    A küszöbök a rétegek saját minimum-követelményeinek tükrei.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dur_s = len(match.frames) / fps if match.frames else 0.0
+
+    shots = goals = 0
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL:
+            goals += 1
+        elif e.type == EventType.SHOT:
+            shots += 1
+    attempts = shots + goals
+
+    gk_marked = any(p.role == "kapus" for f in match.frames
+                    for p in f.players)
+    half_t = None
+    try:
+        from .halftime import detect_halftime
+        half_t = detect_halftime(match)
+    except Exception:
+        pass
+
+    def row(layer, label, ok, ok_reason, fail_reason):
+        return {"layer": layer, "label": label, "available": bool(ok),
+                "reason": ok_reason if ok else fail_reason}
+
+    return [
+        row("xg", "Helyzetminőség (xG)", attempts >= 4,
+            f"{attempts} lövés-minta",
+            f"kevés lövés ({attempts} < 4) — az xG-kép nem megbízható"),
+        row("goalkeeper", "Kapus-teljesítmény", gk_marked,
+            "van kapus-jelölés",
+            "nincs kapus-jelölés — jelöld meg a kapusokat"),
+        row("halftime", "Félidő-alapú rétegek", half_t is not None,
+            "a félidei szünet felismerhető",
+            "a szünet nem ismerhető fel — félidei állás/minta nincs"),
+        row("clutch", "Hajrá-elemzés", dur_s >= 600.0,
+            f"{dur_s / 60:.0f} perces felvétel",
+            "10 percnél rövidebb felvétel — hajrá nem értelmezhető"),
+        row("momentum", "Sorozatok / válasz-idő", goals >= 4,
+            f"{goals} felismert gól",
+            f"kevés gól ({goals} < 4) — a momentum-kép hiányos"),
+        row("conditioning", "Kondíció / fáradás", dur_s >= 300.0,
+            f"{dur_s / 60:.0f} perces felvétel",
+            "5 percnél rövidebb felvétel — tempó-trend nem mérhető"),
+    ]

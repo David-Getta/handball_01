@@ -183,3 +183,21 @@ def test_one_sided_team_share_warning():
     q = compute_quality_report(m)
     assert q["home_share_pct"] > 90.0
     assert any("egyoldalú" in w for w in q["warnings"])
+
+
+def test_analysis_confidence_rows():
+    """A réteg-megbízhatóság minden sora teljes; rövid, gól nélküli
+    klipnél az xG/momentum/hajrá nem elérhető, magyar indoklással."""
+    from handball.pipeline.quality import analysis_confidence
+    from handball.sim.match_simulator import simulate_ground_truth
+    rows = analysis_confidence(simulate_ground_truth(duration_s=20,
+                                                     fps=25.0, seed=2))
+    assert {r["layer"] for r in rows} >= {"xg", "goalkeeper", "halftime",
+                                          "clutch", "momentum",
+                                          "conditioning"}
+    for r in rows:
+        assert r["label"] and r["reason"]
+        assert isinstance(r["available"], bool)
+    clutch = next(r for r in rows if r["layer"] == "clutch")
+    assert clutch["available"] is False
+    assert "rövidebb" in clutch["reason"]
