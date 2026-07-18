@@ -247,6 +247,15 @@ class ApiClient {
     return (json["events"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Lövés-sebességek (GET /matches/{id}/events → "shot_speeds"):
+  /// csapatonkénti átlag/max km/h + a meccs leggyorsabb lövése.
+  Future<Map<String, dynamic>> fetchShotSpeeds(String matchId) async {
+    final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/events"));
+    if (resp.statusCode != 200) return const {};
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["shot_speeds"] as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
   /// Videóklip-export indítása (POST /matches/{id}/clips/export) — job_id-t ad.
   Future<String> startClipExport(String matchId, List<String> types) async {
     final resp = await http.post(

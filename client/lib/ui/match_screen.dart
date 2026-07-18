@@ -77,6 +77,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic>? _training;
   Map<String, dynamic> _progression = {};
   List<Map<String, dynamic>> _goalTimeline = [];
+  Map<String, dynamic> _shotSpeeds = {};
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -147,6 +148,7 @@ class _MatchScreenState extends State<MatchScreen> {
     List<Map<String, dynamic>> stoppages = [];
     Map<String, dynamic>? training;
     Map<String, dynamic> progression = {};
+    Map<String, dynamic> shotSpeeds = {};
     List<Map<String, dynamic>> goalTimeline = [];
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
@@ -159,6 +161,11 @@ class _MatchScreenState extends State<MatchScreen> {
           events = await _api.fetchEvents(widget.matchId);
         } catch (_) {
           events = []; // esemény nélkül is működik a nézet
+        }
+        try {
+          shotSpeeds = await _api.fetchShotSpeeds(widget.matchId);
+        } catch (_) {
+          shotSpeeds = {}; // sebesség nélkül is teljes a nézet
         }
         try {
           coach = await _api.fetchCoachSummary(widget.matchId);
@@ -283,6 +290,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _stoppages = stoppages;
       _training = training;
       _progression = progression;
+      _shotSpeeds = shotSpeeds;
       _goalTimeline = goalTimeline;
       _sourceLabel = label;
       _frameIndex = 0;
@@ -1852,6 +1860,18 @@ class _MatchScreenState extends State<MatchScreen> {
                   "nem volt védő 2 m-en belül",
                   style: AppText.label.copyWith(fontSize: 11)),
             ),
+          Builder(builder: (_) {
+            final fastest =
+                (_shotSpeeds["fastest"] as Map?)?.cast<String, dynamic>();
+            final kmh = ((fastest?["speed_kmh"] as num?) ?? 0).toDouble();
+            if (kmh < 60) return const SizedBox.shrink();
+            final txt = kmh.toStringAsFixed(0);
+            return Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text("leggyorsabb lövés: $txt km/h",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            );
+          }),
           if (shots.any((s) => s.xg != null))
             Builder(builder: (_) {
               final withXg = shots.where((s) => s.xg != null).toList();
