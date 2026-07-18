@@ -29,7 +29,11 @@ Kulcskérdések a hardver-tervezéshez:
 - **Fúziós modul**: az egyetlen új szoftver-komponens — több forrás
   detektálásait egy játékos-listává egyesíti a közös méter-térben. A
   meglévő több-kalibrációs alap (`calibs`, külön térfél) már ezt a mintát
-  követi.
+  követi. *(első változat kész: `pipeline/fusion.py` — nézetenkénti
+  Match-ek egyesítése pozíció-átlaggal, takarás-kitöltéssel és
+  folytonos fúziós track-azonosítókkal; szintetikus két-kamerás
+  nézeteken tesztelve. Az órajel-szinkront adottnak veszi — az eltolás-
+  becslés külön lépcső.)*
 
 ## B. TV-közvetítés (ellenfél-felderítés)
 
