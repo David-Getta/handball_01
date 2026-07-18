@@ -422,6 +422,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "$worst (${worstPct.toStringAsFixed(0)}% gólarány)";
   }
 
+  /// A hosszú (35 mp+) támadások gólaránya — csak elég mintánál (4+).
+  String? _longAttackYield(Map<String, dynamic> r) {
+    final de = (r["duration_eff"] as Map?)?.cast<String, dynamic>();
+    final rec = (de?["hosszú (35 mp+)"] as Map?)?.cast<String, dynamic>();
+    if (rec == null) return null;
+    final n = ((rec["attacks"] as num?) ?? 0).toInt();
+    if (n < 4) return null;
+    final g = ((rec["goals"] as num?) ?? 0).toInt();
+    return "${(100.0 * g / n).toStringAsFixed(0)}% gól ($n támadásból)";
+  }
+
   String? _worstZone(Map<String, dynamic> r) {
     final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
     if (zones == null || zones.isEmpty) return null;
@@ -509,6 +520,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_attackSides(r) != null) ["Támadás-oldal", _attackSides(r)!],
       if (_weakFormation(r) != null)
         ["Ez a fal fogja meg őket", _weakFormation(r)!],
+      if (_longAttackYield(r) != null)
+        ["Hosszú támadás hozama", _longAttackYield(r)!],
       if (((r["clutch_matches"] as num?) ?? 0) >= 1)
         [
           "Hajrá-mérleg",

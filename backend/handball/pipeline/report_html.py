@@ -186,6 +186,11 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
                        for k, v in rep.side_frames.items()))]
           if sum(getattr(rep, "side_frames", {}).values() or [0]) >= 250
           else []),
+        *([_metric("Hosszú támadás hozama",
+                   f"{100.0 * rep.duration_eff['hosszú (35 mp+)']['goals'] / rep.duration_eff['hosszú (35 mp+)']['attacks']:.0f}% gól")]
+          if (getattr(rep, "duration_eff", {}).get("hosszú (35 mp+)",
+                                                   {}).get("attacks", 0) >= 4)
+          else []),
         *([_metric("Leggyengébb forma ellenük",
                    min(((f_, v) for f_, v in rep.vs_formation.items()
                         if v["shots"] >= 4),
