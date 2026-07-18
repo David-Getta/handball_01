@@ -316,6 +316,40 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_barren_long_attacks():
+    """Rövid 60% vs hosszú 20% → 'kivárható őket' kulcs; kiegyenlítettnél
+    nincs."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         duration_eff={
+                             "rövid (<15 mp)": {"attacks": 5, "goals": 3},
+                             "hosszú (35 mp+)": {"attacks": 5, "goals": 1},
+                         })
+    _, _, keys = _coach_keys(rep)
+    assert any("terméketlenek" in k for k in keys)
+    even = ScoutingReport(team="away", team_name="X",
+                          duration_eff={
+                              "rövid (<15 mp)": {"attacks": 5, "goals": 2},
+                              "hosszú (35 mp+)": {"attacks": 5, "goals": 2},
+                          })
+    _, _, k2 = _coach_keys(even)
+    assert not any("terméketlenek" in k for k in k2)
+
+
+def test_combine_reports_merges_duration_eff():
+    a = ScoutingReport(team="away", team_name="X",
+                       duration_eff={"rövid (<15 mp)": {"attacks": 3,
+                                                        "goals": 2}})
+    b = ScoutingReport(team="away", team_name="X",
+                       duration_eff={"rövid (<15 mp)": {"attacks": 2,
+                                                        "goals": 1},
+                                     "hosszú (35 mp+)": {"attacks": 4,
+                                                         "goals": 1}})
+    m = combine_reports([a, b])
+    assert m.duration_eff["rövid (<15 mp)"] == {"attacks": 5, "goals": 3}
+    assert m.duration_eff["hosszú (35 mp+)"] == {"attacks": 4, "goals": 1}
+
+
 def test_coach_keys_flag_formation_weakness():
     """A 6-0 ellen 20%, az 5-1 ellen 60% → 'ellenük 6-0-ban állj fel'."""
     from handball.pipeline.scouting import _coach_keys

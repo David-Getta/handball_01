@@ -1630,14 +1630,16 @@ def create_app():
     def get_attacks(match_id: str):
         """Támadás-szakaszok típus-címkével (lerohanás / gyors indítás /
         felállt / 7 a 6) + csapatonkénti támadás-mix százalékban."""
-        from ..pipeline.attack_types import (attack_efficiency, attack_mix,
+        from ..pipeline.attack_types import (attack_duration_efficiency,
+                                             attack_efficiency, attack_mix,
                                              classify_attacks)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         return {"attacks": classify_attacks(match),
                 "mix": attack_mix(match),
-                "efficiency": attack_efficiency(match)}
+                "efficiency": attack_efficiency(match),
+                "duration_efficiency": attack_duration_efficiency(match)}
 
     @app.get("/matches/{match_id}/empty-net")
     def get_empty_net(match_id: str):
@@ -1892,6 +1894,9 @@ def create_app():
                 _layer("confidence", lambda: analysis_confidence(match))
                 from ..pipeline.attack_types import attack_efficiency
                 _layer("attack_efficiency", lambda: attack_efficiency(match))
+                from ..pipeline.attack_types import attack_duration_efficiency
+                _layer("attack_duration_efficiency",
+                       lambda: attack_duration_efficiency(match))
                 from ..pipeline.event_detection import assist_network
                 _layer("assist_network", lambda: assist_network(match))
                 from ..pipeline.event_detection import pass_network
