@@ -96,6 +96,10 @@ class ScoutingReport:
     # Gólpassz-vezér: a legtöbb gólpasszt adó játékos (track_id, db).
     top_assist_id: int | None = None
     top_assist_count: int = 0
+    # Passz-hálózat: a leggyakoribb passz-párok [{"from","to","passes"}]
+    # (meccsek közt párokként összegezhető) és az összes passz.
+    pass_pairs: list = field(default_factory=list)
+    pass_total: int = 0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -388,6 +392,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         keys.append("Fogd meg az irányítót (emberfogás/korai kontakt) — "
                     "nélküle leáll a támadásépítésük.")
 
+    # A játékszervezésük tengelye: a leggyakoribb passz-kapcsolat. Ha egy
+    # páros viszi a játékot, annak elvágása (sávzárás, letámadás) töri meg
+    # a ritmusukat.
+    if rep.pass_total >= 15 and rep.pass_pairs:
+        pr = rep.pass_pairs[0]
+        if int(pr["passes"]) >= 5:
+            keys.append(
+                f"A játékuk tengelye a {pr['from']}. és {pr['to']}. játékos "
+                f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
+                "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
+
     # Csere-mintáik: mikor forgatnak, és mit hoznak a cseréik.
     if rep.sub_rotations >= 2:
         trail_pct = 100.0 * rep.sub_trailing / rep.sub_rotations
@@ -632,6 +647,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         if leaders:
             rep.top_assist_id = leaders[0]["player_id"]
             rep.top_assist_count = leaders[0]["assists"]
+        from .event_detection import pass_network
+        pnet = pass_network(match, config)[team.value]
+        rep.pass_pairs = list(pnet["pairs"])
+        rep.pass_total = pnet["total_passes"]
         from .defense import defensive_pressure
         pr = defensive_pressure(match, config)[team.value]["avg_pressure_m"]
         if pr is not None:
@@ -771,6 +790,16 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sub_after_against=sum(r.sub_after_against for r in reports),
         defense_switches=[s_ for r in reports for s_ in r.defense_switches],
     )
+    # Passz-hálózat egyesítése: azonos (from,to) párok passzai összeadódnak.
+    rep.pass_total = sum(r.pass_total for r in reports)
+    merged_pairs: dict = {}
+    for r in reports:
+        for pr in r.pass_pairs:
+            key = (pr["from"], pr["to"])
+            merged_pairs[key] = merged_pairs.get(key, 0) + int(pr["passes"])
+    rep.pass_pairs = [{"from": a, "to": b, "passes": n}
+                      for (a, b), n in sorted(merged_pairs.items(),
+                                              key=lambda kv: -kv[1])[:5]]
     # Kapott-gól és kapura tartó lövés zónák egyesítése.
     for r in reports:
         for z, n in r.gk_conceded_zones.items():
