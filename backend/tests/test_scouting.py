@@ -402,6 +402,22 @@ def test_combine_reports_takes_max_drought():
     assert combine_reports([a, b]).drought_longest_s == 540.0
 
 
+def test_narrative_mentions_half_pattern():
+    """Jelentős félidő-mérleg váltás → 'Félidő-minta' narratíva-szekció."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         fh_goals_for=4, fh_goals_against=6,
+                         sh_goals_for=8, sh_goals_against=5)
+    sections = scouting_narrative(rep)
+    hp = next(s_ for s_ in sections if s_["title"] == "Félidő-minta")
+    assert "feljavulnak" in hp["body"]
+    # Kevés gólnál nincs ilyen szekció.
+    quiet = ScoutingReport(team="away", team_name="X",
+                           fh_goals_for=2, fh_goals_against=1,
+                           sh_goals_for=1, sh_goals_against=2)
+    assert not any(s_["title"] == "Félidő-minta"
+                   for s_ in scouting_narrative(quiet))
+
+
 def test_narrative_mentions_clutch():
     """Negatív hajrá-mérleg → Végjáték szekció a gyengeség-üzenettel."""
     rep = ScoutingReport(team="away", team_name="Ellenfél KC",
