@@ -1809,6 +1809,8 @@ def create_app():
                 _layer("turnover_zones", lambda: turnover_zones(match))
                 from ..pipeline.defense import detect_blocks
                 _layer("blocks", lambda: detect_blocks(match))
+                from ..pipeline.tactics import slow_attacks
+                _layer("slow_attacks", lambda: slow_attacks(match))
                 _layer("rules", lambda: rules_report(match))
                 _layer("momentum", lambda: annotate_runs(match))
                 from ..pipeline.momentum import score_progression
@@ -1953,7 +1955,13 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return team_style_profile(match)
+        res = team_style_profile(match)
+        try:
+            from ..pipeline.tactics import slow_attacks
+            res["slow_attacks"] = slow_attacks(match)
+        except Exception:
+            pass
+        return res
 
     @app.get("/matches/{match_id}/report/export")
     def export_match_report(match_id: str):

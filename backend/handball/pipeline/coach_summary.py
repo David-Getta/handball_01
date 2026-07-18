@@ -295,6 +295,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     if known:
         body += (" Leggyakoribb védekezési forma — "
                  + ", ".join(f"{n}: {f}" for n, f in known) + ".")
+    # Passzív-veszély: a támadások jelentős része húzódik 35 mp fölé.
+    try:
+        from .tactics import slow_attacks
+        sa = slow_attacks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec = sa[side]
+            if rec["attacks"] >= 4 and rec["slow_pct"] >= 30.0:
+                body += (f" A(z) {name} támadásainak {rec['slow_pct']:.0f}%-a "
+                         f"35 mp fölé húzódott (leghosszabb: "
+                         f"{rec['longest_s']:.0f} mp) — passzív-veszély, "
+                         "korábbi befejezés kell.")
+    except Exception:
+        pass
     # A játékszervezés tengelye: a leggyakoribb passz-páros (ha bejáratott).
     pass_line = ""
     try:
