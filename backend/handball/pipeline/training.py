@@ -328,4 +328,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 16) Terméketlen hosszú támadások: időkorlátos befejezés-gyakorlás.
+    try:
+        from .attack_types import attack_duration_efficiency
+        de = attack_duration_efficiency(match, config)
+        for side in ("home", "away"):
+            lr = de[side].get("hosszú (35 mp+)")
+            sr = de[side].get("rövid (<15 mp)")
+            if not (lr and sr and lr["attacks"] >= 4
+                    and sr["attacks"] >= 4):
+                continue
+            lp = 100.0 * lr["goals"] / lr["attacks"]
+            sp_ = 100.0 * sr["goals"] / sr["attacks"]
+            if sp_ - lp >= 20.0:
+                add(side, "támadás", "Befejezés időkorláttal",
+                    f"a hosszú támadásaik csak {lp:.0f}%-ban hoztak gólt "
+                    f"(a rövidek {sp_:.0f}%-ban)",
+                    "25 mp-es belső óra a felállt támadásra edzésen, "
+                    "korai lövés-döntés gyakorlása, második hullám "
+                    "(visszatámadás lepattanóra)")
+    except Exception:
+        pass
+
     return out

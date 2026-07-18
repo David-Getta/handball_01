@@ -281,6 +281,54 @@ def test_slow_response_triggers_mental_focus():
     assert not any("jraindul" in f_["title"] for f_ in focus["away"])
 
 
+def test_barren_long_attacks_trigger_shot_clock_focus():
+    """4 rövid gólos + 4 hosszú gól nélküli hazai támadás → 'Befejezés
+    időkorláttal' fókusz."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+    # 4 rövid (gyors, gólos) támadás: lerohanás + lövés-gól.
+    for _ in range(4):
+        seg = _attack_frames_local(t, 4.0, 22.0, 33.0)
+        frames += seg
+        t += len(seg)
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(25):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    # 4 hosszú (40 mp-es), lövés nélküli felállt támadás.
+    for _ in range(4):
+        seg = _attack_frames_local(t, 40.0, 30.0, 31.0)
+        frames += seg
+        t += len(seg)
+        for _ in range(25):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    focus = training_focus(Match(_meta(), frames))
+    assert any("időkorlát" in f_["title"].lower() for f_ in focus["home"])
+    assert not any("időkorlát" in f_["title"].lower()
+                   for f_ in focus["away"])
+
+
+def _attack_frames_local(t0, duration_s, x_from, x_to, fps=25.0):
+    """Hazai birtoklás a +x térfélen: a labdás játékos x_from→x_to közt
+    mozog duration_s ideig (támadó-fázisú szakasz)."""
+    from handball.models.tracking import Ball
+    n = int(duration_s * fps)
+    out = []
+    for i in range(n):
+        x = x_from + (x_to - x_from) * (i / max(1, n - 1))
+        out.append(Frame(t=t0 + i,
+                         players=[_pl(1, Team.HOME, x, 10.0)],
+                         ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return out
+
+
 def test_weak_attack_type_triggers_focus():
     """Sok felállt támadás gól nélkül → befejezés-fókusz az adott típusra."""
     frames = []
