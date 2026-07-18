@@ -247,6 +247,24 @@ class ApiClient {
     return (json["events"] as List).cast<Map<String, dynamic>>();
   }
 
+  /// Játékos-fáradás (GET /matches/{id}/team-stats → "player_fatigue"):
+  /// track_id → 2. félidei tempó-esés (%). Üres, ha nem mérhető.
+  Future<Map<int, double>> fetchPlayerFatigue(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/team-stats"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) return const {};
+    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    final rows = (json["player_fatigue"] as List?) ?? const [];
+    final out = <int, double>{};
+    for (final r in rows.cast<Map<String, dynamic>>()) {
+      final id = (r["track_id"] as num?)?.toInt();
+      final drop = (r["drop_pct"] as num?)?.toDouble();
+      if (id != null && drop != null) out[id] = drop;
+    }
+    return out;
+  }
+
   /// Lövés-sebességek (GET /matches/{id}/events → "shot_speeds"):
   /// csapatonkénti átlag/max km/h + a meccs leggyorsabb lövése.
   Future<Map<String, dynamic>> fetchShotSpeeds(String matchId) async {
