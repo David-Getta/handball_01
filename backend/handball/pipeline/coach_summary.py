@@ -211,6 +211,20 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                     "kapott labdaeladás után — gyorsabb visszazárás kell.")
     except Exception:
         pass
+    # Labdaeladás helye: sok elöl (támadó harmadban) vesztett labda könnyű
+    # kontrát ad az ellenfélnek.
+    try:
+        from .defense import turnover_zones
+        tz = turnover_zones(match)
+        for side, name in (("home", home), ("away", away)):
+            rec = tz[side]
+            if rec["total"] >= 5 and rec["front_pct"] >= 50.0:
+                parts.append(
+                    f"a(z) {name} a labdaeladásainak {rec['front_pct']:.0f}%-át "
+                    "a támadó harmadban követte el — ez üresen hagyja a "
+                    "védelmet a kontra ellen")
+    except Exception:
+        pass
     if not parts:
         return None, highlights
     return {"title": "Védekezés",
