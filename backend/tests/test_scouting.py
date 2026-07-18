@@ -316,6 +316,37 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_half_pattern():
+    """1. félidő −2, 2. félidő +3 → 'a 2. félidőben feljavulnak' kulcs;
+    fordítva 'elfogynak'. Kevés gólnál nincs jelzés."""
+    from handball.pipeline.scouting import _coach_keys
+    improving = ScoutingReport(team="away", team_name="Ellenfél KC",
+                               fh_goals_for=4, fh_goals_against=6,
+                               sh_goals_for=8, sh_goals_against=5)
+    _, _, keys = _coach_keys(improving)
+    assert any("feljavulnak" in k for k in keys)
+    fading = ScoutingReport(team="away", team_name="X",
+                            fh_goals_for=8, fh_goals_against=5,
+                            sh_goals_for=4, sh_goals_against=6)
+    _, _, k2 = _coach_keys(fading)
+    assert any("elfogynak" in k for k in k2)
+    quiet = ScoutingReport(team="away", team_name="Y",
+                           fh_goals_for=2, fh_goals_against=1,
+                           sh_goals_for=1, sh_goals_against=2)
+    _, _, k3 = _coach_keys(quiet)
+    assert not any("félidő-mérleg" in k for k in k3)
+
+
+def test_combine_reports_sums_half_goals():
+    a = ScoutingReport(team="away", team_name="X", fh_goals_for=3,
+                       fh_goals_against=2, sh_goals_for=4, sh_goals_against=5)
+    b = ScoutingReport(team="away", team_name="X", fh_goals_for=2,
+                       fh_goals_against=4, sh_goals_for=6, sh_goals_against=1)
+    m = combine_reports([a, b])
+    assert (m.fh_goals_for, m.fh_goals_against) == (5, 6)
+    assert (m.sh_goals_for, m.sh_goals_against) == (10, 6)
+
+
 def test_coach_keys_flag_slow_attacks():
     """A támadások 40%-a elhúzódó (10-ből 4) → 'maradj fegyelmezett' kulcs."""
     from handball.pipeline.scouting import _coach_keys
