@@ -350,4 +350,22 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 17) Kihagyott ziccerek: nagy xG-jű helyzetek gól nélkül —
+    # a helyzetkihasználást célzottan kell gyakorolni.
+    try:
+        from .xg import missed_big_chances
+        miss: dict[str, int] = {"home": 0, "away": 0}
+        for m in missed_big_chances(match, config):
+            miss[m["team"]] += 1
+        for side in ("home", "away"):
+            if miss[side] >= 3:
+                add(side, "támadás", "Ziccer-befejezés",
+                    f"{miss[side]} nagy helyzetük (xG >= 0,5) maradt "
+                    "gól nélkül",
+                    "ziccer-sorozatok fáradtan (sprint után befejezés), "
+                    "kapus elleni 1 az 1 döntésgyakorlás, sarokra "
+                    "helyezés jelre")
+    except Exception:
+        pass
+
     return out
