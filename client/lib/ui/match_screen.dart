@@ -606,6 +606,15 @@ class _MatchScreenState extends State<MatchScreen> {
                     typesOverride: ["missed_chance"]),
             icon: const Icon(Icons.priority_high, color: AppColors.gold),
           ),
+          // Nagy védések: a kapus által fogott ziccerek (xG >= 0,5, save)
+          // — a kapusteljesítmény kiemelt pillanatai.
+          IconButton(
+            tooltip: "Nagy védés klipek (fogott ziccerek)",
+            onPressed: _exportingClips
+                ? null
+                : () => _exportClips(match, typesOverride: ["big_save"]),
+            icon: const Icon(Icons.back_hand, color: AppColors.accent),
+          ),
         ]),
       ),
       Expanded(

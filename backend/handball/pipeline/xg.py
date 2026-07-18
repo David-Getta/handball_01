@@ -148,3 +148,18 @@ def missed_big_chances(match: Match,
                         "player_id": sh.get("player_id"), "xg": sh["xg"]})
     out.sort(key=lambda r: r["t"])
     return out
+
+
+def big_saves(match: Match,
+              config: Optional[TacticsConfig] = None) -> list[dict]:
+    """Bravúr-védések: nagy értékű (xG >= BIG_CHANCE_XG) helyzet, amit a
+    kapus fogott. A kihagyott ziccer tükörképe — a kapus-kiemelések és a
+    "nagy védés" klipek alapja. Visszatérés: [{"t","team","player_id",
+    "xg"}] — a team a LÖVŐ csapata (a védő kapus az ellenfélé)."""
+    out = []
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("xg", 0.0) >= BIG_CHANCE_XG and sh.get("outcome") == "save":
+            out.append({"t": sh["t"], "team": sh["team"],
+                        "player_id": sh.get("player_id"), "xg": sh["xg"]})
+    out.sort(key=lambda r: r["t"])
+    return out

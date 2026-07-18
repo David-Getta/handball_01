@@ -1194,6 +1194,17 @@ def create_app():
                                for mc in missed_big_chances(match)]
                     except Exception:
                         pass
+                if "big_save" in types:
+                    # Bravúr-védés: ziccert fogott a kapus — a védő
+                    # csapathoz írjuk (az ő kapusának jelenete).
+                    try:
+                        from ..pipeline.xg import big_saves
+                        ev += [{"t": bs["t"], "type": "big_save",
+                                "team": ("away" if bs["team"] == "home"
+                                         else "home")}
+                               for bs in big_saves(match)]
+                    except Exception:
+                        pass
                 if "note" in types:
                     # Az edző saját jegyzetei — a megjelölt pillanat
                     # jelenete, a jegyzet szövegével a fájlnévben.

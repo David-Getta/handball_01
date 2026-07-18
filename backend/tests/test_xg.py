@@ -149,3 +149,34 @@ def test_missed_big_chances_filters_by_xg_and_outcome():
     assert chances[0]["t"] < 10          # az első (kihagyott) helyzet
     assert chances[0]["xg"] >= 0.5
     assert chances[0]["team"] == "home"
+
+
+def test_big_saves_requires_save_outcome():
+    """A kapus által fogott ziccer bekerül; a mellé menő nagy helyzet nem
+    (az kihagyott ziccer, nem védés)."""
+    from handball.pipeline.xg import big_saves
+
+    # Fogott ziccer: közeli-középső lövés, a kapusnál megáll a labda.
+    frames = []
+    gk = _pl(30, Team.AWAY, 39.0, 10.0)
+    gk.role = "kapus"
+    for i in range(8):
+        frames.append(Frame(
+            t=i,
+            players=[_pl(1, Team.HOME, 37.0, 10.0), gk],
+            ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                      confidence=1.0)))
+    m = Match(_meta(), frames)
+    saves = big_saves(m)
+    assert len(saves) == 1
+    assert saves[0]["xg"] >= 0.5
+    assert saves[0]["team"] == "home"     # a LÖVŐ csapata
+    # Ugyanez kapus nélkül (mellé): nem bravúr-védés.
+    frames2 = []
+    for i in range(7):
+        frames2.append(Frame(
+            t=i,
+            players=[_pl(1, Team.HOME, 37.0, 10.0)],
+            ball=Ball(x=min(37.4 + 0.6 * i, 40.0), y=10.0 - i * 1.0,
+                      confidence=1.0)))
+    assert big_saves(Match(_meta(), frames2)) == []
