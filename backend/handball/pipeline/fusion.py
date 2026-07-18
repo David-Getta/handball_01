@@ -171,3 +171,25 @@ def apply_offset(match: Match, offset: int) -> Match:
         frames.append(Frame(t=t, players=f.players, ball=f.ball))
     frames.sort(key=lambda f: f.t)
     return Match(meta=match.meta, frames=frames)
+
+
+def fusion_gain(views: list[Match], fused: Match) -> dict:
+    """Mennyit adott a fúzió: lefedettség nézetenként vs egyesítve.
+
+    Kockánkénti átlagos játékos-szám nézetenként és a fúziós kimenetben,
+    plusz a nyereség százalékban a LEGJOBB egyedi nézethez képest. Ebből
+    látszik, megérte-e a második kamera (takarás-kitöltés).
+
+    Visszatérés: {"per_view": [átlag/nézet], "fused_avg",
+    "gain_pct"}."""
+    def avg_players(m: Match) -> float:
+        if not m.frames:
+            return 0.0
+        return sum(len(f.players) for f in m.frames) / len(m.frames)
+
+    per_view = [round(avg_players(v), 2) for v in views]
+    fused_avg = round(avg_players(fused), 2)
+    best = max(per_view) if per_view else 0.0
+    gain = round(100.0 * (fused_avg - best) / best, 1) if best > 0 else 0.0
+    return {"per_view": per_view, "fused_avg": fused_avg,
+            "gain_pct": gain}

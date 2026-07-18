@@ -153,3 +153,23 @@ def test_fuse_endpoint_creates_new_match(tmp_path):
                     json={"match_ids": ["fu"]}).status_code == 400
     assert app.post("/matches/fuse",
                     json={"match_ids": ["fu", "nincs"]}).status_code == 404
+
+
+def test_fusion_gain_reports_coverage_lift():
+    """Az A nézet a kockák felében nem látja a játékost, a B mindig — a
+    fúzió átlaga a legjobb nézetét is eléri (nyereség >= 0)."""
+    from handball.pipeline.fusion import fuse_matches, fusion_gain
+    a = Match(_meta(), [
+        Frame(t=t, players=([_pl(1, Team.HOME, 20.0, 10.0)]
+                            if t % 2 == 0 else []))
+        for t in range(20)
+    ])
+    b = Match(_meta(), [
+        Frame(t=t, players=[_pl(9, Team.HOME, 20.0, 10.1)])
+        for t in range(20)
+    ])
+    fused = fuse_matches([a, b])
+    g = fusion_gain([a, b], fused)
+    assert g["per_view"] == [0.5, 1.0]
+    assert g["fused_avg"] >= 1.0
+    assert g["gain_pct"] >= 0.0

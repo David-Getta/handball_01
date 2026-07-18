@@ -2440,8 +2440,10 @@ def create_app():
                                            encoding="utf-8")
         except Exception:
             pass
+        from ..pipeline.fusion import fusion_gain
         return {"match_id": new_id, "n_views": len(ids),
-                "offsets": offsets, "frames": len(fused.frames)}
+                "offsets": offsets, "frames": len(fused.frames),
+                "gain": fusion_gain(views, fused)}
 
     # Segéd a feltöltéshez/teszteléshez: memóriába tesz ÉS lemezre tükröz.
     def _put_match(match: Match) -> None:

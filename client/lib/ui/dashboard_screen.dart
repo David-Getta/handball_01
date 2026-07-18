@@ -621,9 +621,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final r = await _api.fuseMatches([aId!, bId!]);
       if (!mounted) return;
+      final gain =
+          ((r["gain"] as Map?)?["gain_pct"] as num?)?.toDouble() ?? 0.0;
+      final gainTxt = gain > 0
+          ? " A fúzió ${gain.toStringAsFixed(0)}%-kal több játékost lát "
+              "kockánként, mint a legjobb egyedi nézet."
+          : "";
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Nézetek egyesítve: ${r["match_id"]} "
-              "(${r["frames"]} kocka) — megnyitható a könyvtárból.")));
+              "(${r["frames"]} kocka) — megnyitható a könyvtárból.$gainTxt")));
       await _load();
     } catch (e) {
       if (!mounted) return;
