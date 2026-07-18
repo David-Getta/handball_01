@@ -105,6 +105,8 @@ class ScoutingReport:
     clutch_goals_for: int = 0
     clutch_goals_against: int = 0
     clutch_matches: int = 0
+    # A leghosszabb gólcsendjük (mp) — meccsek közt a maximum marad.
+    drought_longest_s: float = 0.0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -408,6 +410,13 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
 
+    # Hosszú gólcsendre hajlamosak: ha leállnak, akkor kell ellépni.
+    if rep.drought_longest_s >= 480.0:
+        keys.append(
+            f"Hajlamosak hosszú gólcsendre (leghosszabb: "
+            f"{rep.drought_longest_s / 60:.0f} perc) — ha leáll a "
+            "támadójátékuk, tempót fel: ilyenkor kell ellépni.")
+
     # Hajrá-mérleg: szoros végjátékban nyújtott teljesítményük.
     if rep.clutch_matches >= 1:
         diff = rep.clutch_goals_for - rep.clutch_goals_against
@@ -678,6 +687,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.clutch_goals_for = own
             rep.clutch_goals_against = opp
             rep.clutch_matches = 1
+        from .momentum import goal_droughts
+        rep.drought_longest_s = goal_droughts(match, config)[
+            team.value]["longest_s"]
         from .defense import defensive_pressure
         pr = defensive_pressure(match, config)[team.value]["avg_pressure_m"]
         if pr is not None:
@@ -808,6 +820,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         clutch_goals_for=sum(r.clutch_goals_for for r in reports),
         clutch_goals_against=sum(r.clutch_goals_against for r in reports),
         clutch_matches=sum(r.clutch_matches for r in reports),
+        drought_longest_s=max((r.drought_longest_s for r in reports),
+                              default=0.0),
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),

@@ -316,6 +316,26 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_long_drought():
+    """10 perces leghosszabb gólcsend → 'ilyenkor kell ellépni' kulcs;
+    rövid csendnél nincs."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         drought_longest_s=600.0)
+    _, _, keys = _coach_keys(rep)
+    assert any("gólcsend" in k for k in keys)
+    quiet = ScoutingReport(team="away", team_name="X",
+                           drought_longest_s=200.0)
+    _, _, k2 = _coach_keys(quiet)
+    assert not any("gólcsend" in k for k in k2)
+
+
+def test_combine_reports_takes_max_drought():
+    a = ScoutingReport(team="away", team_name="X", drought_longest_s=300.0)
+    b = ScoutingReport(team="away", team_name="X", drought_longest_s=540.0)
+    assert combine_reports([a, b]).drought_longest_s == 540.0
+
+
 def test_narrative_mentions_clutch():
     """Negatív hajrá-mérleg → Végjáték szekció a gyengeség-üzenettel."""
     rep = ScoutingReport(team="away", team_name="Ellenfél KC",
