@@ -109,6 +109,9 @@ class ScoutingReport:
     drought_longest_s: float = 0.0
     # Blokkolt lövéseik (a felderített csapat védőinek blokkjai) — összegződik.
     blocks: int = 0
+    # Elhúzódó (35 mp+) támadásaik darabszámai — meccsek közt összegződik.
+    slow_attacks_total: int = 0
+    slow_attacks_slow: int = 0
     # Védekezési nyomás: a labdáshoz legközelebbi védő átlag-távolsága (m).
     defensive_pressure_m: float = 0.0
     # Irányító-függés (playmaker.py): a fő szervezőjük, és mennyit esik a
@@ -412,6 +415,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"kapcsolata ({pr['passes']} passz) — ennek elvágása "
                 "(sávzárás, agresszív letámadás) megtöri a ritmusukat.")
 
+    # Hosszan járatják a labdát: fegyelmezett fal + passzív-jel kivárása.
+    if rep.slow_attacks_total >= 6:
+        slow_pct = 100.0 * rep.slow_attacks_slow / rep.slow_attacks_total
+        if slow_pct >= 30.0:
+            keys.append(
+                f"A támadásaik {slow_pct:.0f}%-a 35 mp fölé húzódik — "
+                "maradj fegyelmezett a falban, ne ugorj ki: a passzív-jel "
+                "és a kapkodó befejezés nekik fáj.")
+
     # Aktív blokkoló fal: az átlövés ellenük drága — kerülő utak kellenek.
     if rep.blocks >= 3:
         strengths.append(f"Aktív a faluk: {rep.blocks} lövést blokkoltak.")
@@ -700,6 +712,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             team.value]["longest_s"]
         from .defense import detect_blocks
         rep.blocks = detect_blocks(match, config)[team.value]["blocks"]
+        from .tactics import slow_attacks
+        sarec = slow_attacks(match, config)[team.value]
+        rep.slow_attacks_total = sarec["attacks"]
+        rep.slow_attacks_slow = sarec["slow"]
         from .defense import defensive_pressure
         pr = defensive_pressure(match, config)[team.value]["avg_pressure_m"]
         if pr is not None:
@@ -833,6 +849,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         drought_longest_s=max((r.drought_longest_s for r in reports),
                               default=0.0),
         blocks=sum(r.blocks for r in reports),
+        slow_attacks_total=sum(r.slow_attacks_total for r in reports),
+        slow_attacks_slow=sum(r.slow_attacks_slow for r in reports),
         possession_pct=round(
             sum(r.possession_pct for r in reports if r.possession_pct)
             / max(1, sum(1 for r in reports if r.possession_pct)), 1),

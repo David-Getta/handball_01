@@ -316,6 +316,29 @@ def test_coach_keys_flag_clutch_weakness_and_strength():
     assert any("hajrában erősek" in s_ for s_ in strengths)
 
 
+def test_coach_keys_flag_slow_attacks():
+    """A támadások 40%-a elhúzódó (10-ből 4) → 'maradj fegyelmezett' kulcs."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         slow_attacks_total=10, slow_attacks_slow=4)
+    _, _, keys = _coach_keys(rep)
+    assert any("35 mp" in k for k in keys)
+    quiet = ScoutingReport(team="away", team_name="X",
+                           slow_attacks_total=10, slow_attacks_slow=1)
+    _, _, k2 = _coach_keys(quiet)
+    assert not any("35 mp" in k for k in k2)
+
+
+def test_combine_reports_sums_slow_attacks():
+    a = ScoutingReport(team="away", team_name="X",
+                       slow_attacks_total=6, slow_attacks_slow=2)
+    b = ScoutingReport(team="away", team_name="X",
+                       slow_attacks_total=4, slow_attacks_slow=3)
+    merged = combine_reports([a, b])
+    assert merged.slow_attacks_total == 10
+    assert merged.slow_attacks_slow == 5
+
+
 def test_coach_keys_flag_active_block_wall():
     """3+ blokk → erősség + 'kerüld a falat' kulcs; kevés blokknál nincs."""
     from handball.pipeline.scouting import _coach_keys
