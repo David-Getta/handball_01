@@ -578,6 +578,19 @@ def test_narrative_mentions_half_pattern():
                    for s_ in scouting_narrative(quiet))
 
 
+def test_narrative_mentions_barren_long_attacks():
+    """Terméketlen hosszú támadások → az 'Így támadnak' megemlíti."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         avg_attack_duration_s=8.0, fast_break_pct=5.0,
+                         duration_eff={
+                             "rövid (<15 mp)": {"attacks": 5, "goals": 3},
+                             "hosszú (35 mp+)": {"attacks": 5, "goals": 1},
+                         })
+    sections = scouting_narrative(rep)
+    attack = next(s_ for s_ in sections if s_["title"] == "Így támadnak")
+    assert "terméketlenek" in attack["body"]
+
+
 def test_narrative_mentions_weak_formation():
     """Nagy formánkénti különbség → az 'Így támadnak' megemlíti."""
     rep = ScoutingReport(team="away", team_name="Ellenfél KC",

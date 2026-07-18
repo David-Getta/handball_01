@@ -1172,6 +1172,18 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
                 body += (f" A {worst[0]} fal ellen csak "
                          f"{_pct(worst[1]):.0f}%-ot konvertálnak "
                          f"(a {best[0]} ellen {_pct(best[1]):.0f}%-ot).")
+        # Hosszú vs rövid támadások hozama (ha van elég minta).
+        lr = rep.duration_eff.get("hosszú (35 mp+)")
+        sr = rep.duration_eff.get("rövid (<15 mp)")
+        if (lr and sr and lr["attacks"] >= 4 and sr["attacks"] >= 4):
+            lp = 100.0 * lr["goals"] / lr["attacks"]
+            sp_ = 100.0 * sr["goals"] / sr["attacks"]
+            if sp_ - lp >= 20.0:
+                body += (f" A hosszú támadásaik terméketlenek "
+                         f"({lp:.0f}% vs {sp_:.0f}% a rövideknél).")
+            elif lp - sp_ >= 20.0:
+                body += (f" A türelmes, hosszú támadásaik kifejezetten "
+                         f"eredményesek ({lp:.0f}%).")
         # Oldal-súlypont: melyik szárnyra épül a támadásépítés.
         side_total = sum(rep.side_frames.values()) if rep.side_frames else 0
         if side_total >= 250:
