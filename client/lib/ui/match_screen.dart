@@ -78,6 +78,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic> _progression = {};
   List<Map<String, dynamic>> _goalTimeline = [];
   Map<String, dynamic> _shotSpeeds = {};
+  Map<int, double> _playerFatigue = {};
   // Esemény-szűrő az Események fülön (all/goal/shot/turnover/pass) — az
   // előző/következő esemény léptetés is a szűrt listán belül ugrál.
   String _eventFilter = "all";
@@ -149,6 +150,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic>? training;
     Map<String, dynamic> progression = {};
     Map<String, dynamic> shotSpeeds = {};
+    Map<int, double> playerFatigue = {};
     List<Map<String, dynamic>> goalTimeline = [];
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
@@ -166,6 +168,11 @@ class _MatchScreenState extends State<MatchScreen> {
           shotSpeeds = await _api.fetchShotSpeeds(widget.matchId);
         } catch (_) {
           shotSpeeds = {}; // sebesség nélkül is teljes a nézet
+        }
+        try {
+          playerFatigue = await _api.fetchPlayerFatigue(widget.matchId);
+        } catch (_) {
+          playerFatigue = {}; // fáradás-adat nélkül is teljes a nézet
         }
         try {
           coach = await _api.fetchCoachSummary(widget.matchId);
@@ -291,6 +298,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _training = training;
       _progression = progression;
       _shotSpeeds = shotSpeeds;
+      _playerFatigue = playerFatigue;
       _goalTimeline = goalTimeline;
       _sourceLabel = label;
       _frameIndex = 0;
@@ -2046,6 +2054,12 @@ class _MatchScreenState extends State<MatchScreen> {
             "${st.sprintCount} sprint";
     // Lövő-adatok (ha lőtt): gól/lövés + várható gól — a diff előjele
     // mutatja, hogy a helyzetei felett (+) vagy alatt (−) teljesít.
+    // 2. félidei tempó-esés (ha mérhető): a fáradás jele a buborékban.
+    final fade = _playerFatigue[id];
+    if (fade != null && fade.abs() >= 10) {
+      final pfx = fade > 0 ? "−" : "+";
+      label += " · 2. félidő: $pfx${fade.abs().toStringAsFixed(0)}% tempó";
+    }
     final sh = _xgShooters[id];
     if (sh != null) {
       final diff = (sh["diff"] as num?)?.toDouble() ?? 0.0;
