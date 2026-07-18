@@ -537,6 +537,19 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
                          f"{min(gh, ga)}-ra.")
     except Exception:
         pass
+    # A meccs fordulópontja: a legnagyobb esély-ugrás pillanata (csak
+    # érdemi ugrásnál — a sima gólváltásokat nem nevezzük fordulópontnak).
+    try:
+        from .momentum import win_probability
+        wp = win_probability(match)
+        tp = wp.get("turning_point")
+        if tp is not None and abs(tp["to_p"] - tp["from_p"]) >= 0.2:
+            mins = int(tp["t_s"] // 60)
+            body += (f" A meccs fordulópontja a {mins}. perc körül volt "
+                     f"(a hazai esély {100 * tp['from_p']:.0f}%-ról "
+                     f"{100 * tp['to_p']:.0f}%-ra ugrott).")
+    except Exception:
+        pass
     # Nagy fordítás: 3+ gólos hátrányból vezetésbe — külön említés és
     # kiemelés (mentális erő / a másik oldalon elengedett előny).
     if prog:

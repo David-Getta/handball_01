@@ -366,6 +366,60 @@ def halftime_score(match: Match, config=None,
     return {"half_t": half_t, "home": score["home"], "away": score["away"]}
 
 
+# Meccs-esély: a gólkülönbség súlya a hátralévő idő gyökével nő (egy
+# késői gól többet ér) — az érzékenységet a WP_K állítja.
+WP_K = 2.2
+WP_MIN_REMAINING_S = 30.0
+
+
+def win_probability(match: Match, config=None) -> dict:
+    """Meccs-esély görbe: P(hazai győzelem) a felismert gólok mentén.
+
+    Egyszerű, MAGYARÁZHATÓ modell (nem tanult): az esély a gólkülönbség
+    és a hátralévő idő függvénye — ugyanakkora előny a hajrában sokkal
+    többet ér, mint az elején. Képlet: szigmoid(WP_K * diff /
+    sqrt(hátralévő perc)). A felvétel hosszát vesszük meccs-hossznak.
+
+    Visszatérés: {"timeline": [{"t_s", "diff", "p_home"}],
+    "final_p_home", "turning_point": {"t_s", "from_p", "to_p"} | None}
+    — a fordulópont a legnagyobb esély-ugrás pillanata (min. 2 gólnál).
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total_s = len(match.frames) / fps if match.frames else 0.0
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    def p_home(diff: int, t_s: float) -> float:
+        remaining_min = max(WP_MIN_REMAINING_S, total_s - t_s) / 60.0
+        z = WP_K * diff / math.sqrt(remaining_min)
+        return round(1.0 / (1.0 + math.exp(-z)), 3)
+
+    timeline = [{"t_s": 0.0, "diff": 0, "p_home": 0.5}]
+    diff = 0
+    for (t, side) in goals:
+        diff += 1 if side == "home" else -1
+        t_s = t / fps
+        timeline.append({"t_s": round(t_s, 1), "diff": diff,
+                         "p_home": p_home(diff, t_s)})
+
+    turning = None
+    for prev, cur in zip(timeline, timeline[1:]):
+        swing = abs(cur["p_home"] - prev["p_home"])
+        if turning is None or swing > turning[0]:
+            turning = (swing, {"t_s": cur["t_s"], "from_p": prev["p_home"],
+                               "to_p": cur["p_home"]})
+    return {
+        "timeline": timeline,
+        "final_p_home": timeline[-1]["p_home"],
+        "turning_point": (turning[1]
+                          if turning and len(goals) >= 2 else None),
+    }
+
+
 def goal_responses(match: Match, config=None) -> dict:
     """Válasz-gólok: milyen gyorsan felel egy csapat a kapott gólra.
 
