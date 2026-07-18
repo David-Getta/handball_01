@@ -315,6 +315,27 @@ def test_clutch_unavailable_on_short_clip():
     assert clutch_performance(m) == {"available": False}
 
 
+def test_goal_droughts_longest_gap():
+    """HH...H mintában a hazai leghosszabb gólcsendje a 2. és 3. hazai
+    gól közti szakasz; a gól nélküli vendégé a teljes felvétel."""
+    from handball.pipeline.momentum import goal_droughts
+    frames = {}
+    for fr in _goal(0) + _goal(28) + _goal(500):
+        frames[fr.t] = fr
+    total = 700
+    all_frames = [frames.get(t, Frame(t=t, players=[],
+                                      ball=Ball(x=20.0, y=10.0,
+                                                confidence=1.0)))
+                  for t in range(total)]
+    d = goal_droughts(Match(_meta(), all_frames))
+    home = d["home"]
+    # A 2. gól (~35. kocka) és az 500. kocka köze ~18-19 mp — ez a leghosszabb.
+    assert home["longest_s"] > 15.0
+    assert home["start_s"] < home["end_s"]
+    # A vendég gól nélkül: a teljes felvétel a gólcsendje.
+    assert abs(d["away"]["longest_s"] - total / 25.0) < 0.5
+
+
 def test_scoring_timeline_buckets_goals():
     """A gólok a megfelelő idő-vödörbe kerülnek."""
     from handball.pipeline.momentum import scoring_timeline

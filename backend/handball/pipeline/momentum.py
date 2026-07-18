@@ -337,6 +337,42 @@ def clutch_performance(match: Match, config=None) -> dict:
     }
 
 
+def goal_droughts(match: Match, config=None) -> dict:
+    """Gólcsend: a leghosszabb saját gól nélküli időszak csapatonként.
+
+    A felvétel elejétől az első gólig, a gólok közti szakaszokon át az
+    utolsó góltól a felvétel végéig nézzük a leghosszabb szakaszt. Ebből
+    látszik, mikor "állt le" a támadójáték — a visszanézés kiindulópontja.
+
+    Visszatérés csapatonként: {"longest_s", "start_s", "end_s"} — a
+    leghosszabb gólcsend hossza és helye másodpercben; gól nélküli
+    csapatnál a teljes felvétel.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total_s = (len(match.frames) / fps) if match.frames else 0.0
+    goals = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL:
+            goals[e.team.value].append(e.t / fps)
+
+    out = {}
+    for side in ("home", "away"):
+        ts = sorted(goals[side])
+        # Szakasz-határok: felvétel eleje, gólok, felvétel vége.
+        bounds = [0.0] + ts + [total_s]
+        longest, s0, s1 = 0.0, 0.0, total_s
+        for a, b in zip(bounds, bounds[1:]):
+            if b - a > longest:
+                longest, s0, s1 = b - a, a, b
+        out[side] = {"longest_s": round(longest, 1),
+                     "start_s": round(s0, 1), "end_s": round(s1, 1)}
+    return out
+
+
 def scoring_timeline(match: Match, bucket_s: float = 300.0, config=None) -> dict:
     """Gólok idő-eloszlása idő-vödrökben (alapból 5 perc).
 
