@@ -222,3 +222,39 @@ def test_goalkeeper_seven_meter_balance():
     assert rec["seven_faced"] == 1
     assert rec["seven_saved"] == 1
     assert rec["saves"] >= 1  # a normál védés-statisztikában is benne van
+
+
+def test_goalkeeper_timeline_detects_change_and_splits_stats():
+    """A vendég kapuban az első felében a 9-es, a másodikban a 8-as áll;
+    egy-egy hazai lövés jut mindkettőre → csere + külön mérleg."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import goalkeeper_timeline
+
+    def gk(tid):
+        return PlayerPosition(track_id=tid, team=Team.AWAY, x=39.0, y=10.0,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    frames = []
+    # 1. szakasz: 9-es kapus (600 kocka), közben egy hazai VÉDETT lövés.
+    for t in range(600):
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _shot_sequence(600, gk_track=9, save=True)
+    t0 = 600 + 8
+    frames.append(Frame(t=t0, players=[], ball=Ball(x=20.0, y=10.0,
+                                                    confidence=1.0)))
+    # 2. szakasz: 8-as kapus (600 kocka), közben egy hazai GÓL.
+    for i in range(600):
+        frames.append(Frame(t=t0 + 1 + i, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _shot_sequence(t0 + 601, gk_track=8, save=False)
+
+    tl = goalkeeper_timeline(_match(frames))["away"]
+    tids = [st["track_id"] for st in tl["stints"]]
+    assert tids == [9, 8]
+    assert len(tl["changes"]) == 1
+    assert tl["per_keeper"][9]["saves"] == 1
+    assert tl["per_keeper"][9]["save_pct"] == 100.0
+    assert tl["per_keeper"][8]["on_target"] == 1
+    assert tl["per_keeper"][8]["saves"] == 0
