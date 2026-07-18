@@ -66,3 +66,23 @@ def test_detect_court_lines_returns_endpoints():
 
 def test_empty_image_gives_no_lines():
     assert detect_court_lines(_canvas()) == []
+
+
+def test_line_intersections_finds_corner():
+    """Vízszintes + függőleges vonal metszése a (150, 40) sarok-jelölt;
+    két párhuzamos vonal nem ad metszést."""
+    from handball.pipeline.broadcast_lines import line_intersections
+    img = _canvas()
+    _draw_hline(img, 40)
+    _draw_vline(img, 150)
+    lines = detect_court_lines(img)
+    pts = line_intersections(lines, width=200, height=120)
+    assert pts, "kell metszéspont"
+    p = pts[0]
+    assert abs(p["x"] - 150.5) < 4 and abs(p["y"] - 40.5) < 4
+    # Két párhuzamos vízszintes vonal: nincs (képen belüli) metszés.
+    img2 = _canvas()
+    _draw_hline(img2, 30)
+    _draw_hline(img2, 80)
+    lines2 = detect_court_lines(img2)
+    assert line_intersections(lines2, width=200, height=120) == []
