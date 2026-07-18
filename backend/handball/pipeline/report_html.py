@@ -176,6 +176,10 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
           if getattr(rep, "clutch_matches", 0) >= 1 else []),
         *([_metric("Blokkolt lövés", str(rep.blocks))]
           if getattr(rep, "blocks", 0) >= 3 else []),
+        *([_metric("Lövés-erő",
+                   f"átl. {rep.shot_speed_sum_kmh / rep.shot_speed_n:.0f}"
+                   f" · csúcs {rep.shot_speed_max_kmh:.0f} km/h")]
+          if getattr(rep, "shot_speed_n", 0) >= 5 else []),
         _metric("Figurák", str(rep.num_figures)),
     ]
     # Az új felismerő-rétegek mutatói — csak ha van mögöttük adat.
