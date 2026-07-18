@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#221)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#228)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -124,6 +124,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Támadás-oldal**: melyik szárnyra épül a játék (irány-normalizált
   bal/közép/jobb) — "told oda a falat" kulcs, narratíva, csempék.
   (#220, #221)
+- **Válasz-gólok**: milyen gyorsan felel a csapat a kapott gólra —
+  "stabil fejben" / "megtorpannak" jelzések, felderítési kulcsok és
+  "Újraindulás" edzés-fókusz. (#223, #228)
+- **Réteg-megbízhatóság**: mely elemzésekhez van elég minta ezen a
+  meccsen, magyar indoklással — /quality mező és kliens-lista.
+  (#224, #225)
+- **Forma elleni hatékonyság**: melyik védekezési fal fogja meg az
+  ellenfelet — "ellenük 6-0-ban állj fel" kulcs, narratíva, csempék és
+  fal elleni figura edzés-fókusz. (#226, #227, #228)
 
 ### Új bemenetek felé (útiterv + alapok)
 - **TV-közvetítés előfeldolgozás**: vágás-felismerés (szín-hisztogram)
