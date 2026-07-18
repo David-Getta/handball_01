@@ -180,6 +180,24 @@ def test_trend_neutral_metric_not_judged():
     assert not any("támadáshossz" in s.lower() for s in r["summary"])
 
 
+def test_trend_includes_new_layers_and_skips_unmeasured():
+    """A birtoklás/nyomás mutató benne van a trendben, ha mindkét
+    időszakban mért; 0 (nincs mérés) esetén kimarad."""
+    r = trend_report(
+        _rep_for_trend(possession_pct=48.0, defensive_pressure_m=2.0),
+        _rep_for_trend(possession_pct=55.0, defensive_pressure_m=1.5))
+    names = [m["metric"] for m in r["metrics"]]
+    assert "possession_pct" in names and "defensive_pressure_m" in names
+    poss = next(m for m in r["metrics"] if m["metric"] == "possession_pct")
+    press = next(m for m in r["metrics"] if m["metric"] == "defensive_pressure_m")
+    assert poss["better"] is True     # több birtoklás = jobb
+    assert press["better"] is True    # kisebb távolság = szorosabb = jobb
+    # Nincs mérés (0) → kimarad, nem hamis romlás.
+    r2 = trend_report(_rep_for_trend(possession_pct=0.0),
+                      _rep_for_trend(possession_pct=55.0))
+    assert "possession_pct" not in [m["metric"] for m in r2["metrics"]]
+
+
 def test_trend_no_change_summary():
     """Változatlan időszakok: "nincs jelentős változás" összegzés."""
     r = trend_report(_rep_for_trend(), _rep_for_trend())

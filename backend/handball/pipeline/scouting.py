@@ -1007,6 +1007,11 @@ _TREND_METRICS = [
     ("shots", "Lövés / meccs", "", True, True),
     ("goals", "Gól / meccs", "", True, True),
     ("turnovers", "Labdaeladás / meccs", "", False, True),
+    # Új rétegek: birtoklás (több = jobb), védekezési nyomás (kevesebb
+    # méter = szorosabb = jobb), elöl vesztett labdák (kevesebb = jobb).
+    ("possession_pct", "Labdabirtoklás", "%", True, False),
+    ("defensive_pressure_m", "Védekezési nyomás", " m", False, False),
+    ("turnover_front", "Elöl vesztett labda / meccs", "", False, True),
 ]
 
 
@@ -1020,9 +1025,14 @@ def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
     """
     metrics = []
     summary = []
+    # Az új, opcionális rétegek 0-ja "nincs mérés"-t jelent — ilyenkor a
+    # mutatót kihagyjuk, hogy ne látsszon hamis javulásnak/romlásnak.
+    optional = {"possession_pct", "defensive_pressure_m"}
     for field_name, label, unit, up_is_better, per_match in _TREND_METRICS:
         a = float(getattr(older, field_name))
         b = float(getattr(newer, field_name))
+        if field_name in optional and (a == 0.0 or b == 0.0):
+            continue
         if per_match:
             a = a / max(1, older.matches)
             b = b / max(1, newer.matches)
