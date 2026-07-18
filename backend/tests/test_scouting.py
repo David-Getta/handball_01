@@ -282,6 +282,18 @@ def test_coach_keys_flag_pass_axis():
     assert not any("tengelye" in k for k in k2)
 
 
+def test_narrative_mentions_pass_axis():
+    """Bejáratott passz-tengely → az 'Így támadnak' szekció megemlíti."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         avg_attack_duration_s=8.0, fast_break_pct=5.0,
+                         pass_total=20,
+                         pass_pairs=[{"from": 7, "to": 9, "passes": 8}])
+    sections = scouting_narrative(rep)
+    attack = next(s_ for s_ in sections if s_["title"] == "Így támadnak")
+    assert "tengely" in attack["body"]
+    assert "7." in attack["body"] and "9." in attack["body"]
+
+
 def test_combine_reports_merges_pass_pairs():
     a = ScoutingReport(team="away", team_name="X", pass_total=10,
                        pass_pairs=[{"from": 7, "to": 9, "passes": 4},

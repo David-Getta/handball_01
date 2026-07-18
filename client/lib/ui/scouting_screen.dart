@@ -349,6 +349,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "$worst (${worstPct.toStringAsFixed(0)}% védés)";
   }
 
+  /// A játékszervezés tengelye: a leggyakoribb passz-páros — csak
+  /// bejáratott kapcsolatnál (min. 15 csapatpassz és 5 páros-passz).
+  String? _passAxis(Map<String, dynamic> r) {
+    final total = ((r["pass_total"] as num?) ?? 0).toInt();
+    final pairs = (r["pass_pairs"] as List?)?.cast<Map<String, dynamic>>();
+    if (total < 15 || pairs == null || pairs.isEmpty) return null;
+    final p = pairs.first;
+    final n = ((p["passes"] as num?) ?? 0).toInt();
+    if (n < 5) return null;
+    return "${p["from"]} → ${p["to"]} ($n passz)";
+  }
+
   String? _worstZone(Map<String, dynamic> r) {
     final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
     if (zones == null || zones.isEmpty) return null;
@@ -426,6 +438,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Labdabirtoklás", "${(r["possession_pct"] as num).toStringAsFixed(0)}%"],
       if (((r["top_assist_count"] as num?) ?? 0) >= 2)
         ["Gólpassz-vezér", "${r["top_assist_count"]} gólpassz"],
+      if (_passAxis(r) != null) ["Passz-tengely", _passAxis(r)!],
       if (((r["defensive_pressure_m"] as num?) ?? 0) > 0)
         ["Véd. nyomás", "${(r["defensive_pressure_m"] as num).toStringAsFixed(1)} m"],
       ["Figurák", fmt(r["num_figures"])],

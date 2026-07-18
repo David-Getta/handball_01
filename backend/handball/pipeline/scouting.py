@@ -887,6 +887,12 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             body += (f" A legeredményesebb támadásmódjuk a {best[0]} "
                      f"({best[1]['goal_pct']:.0f}% gól) — ezt kell "
                      "elsőként megfognod.")
+        # A játékszervezés tengelye: a leggyakoribb passz-kapcsolat.
+        if rep.pass_total >= 15 and rep.pass_pairs:
+            pr = rep.pass_pairs[0]
+            if int(pr["passes"]) >= 5:
+                body += (f" A játékuk a {pr['from']}. és {pr['to']}. játékos "
+                         f"tengelyén megy ({pr['passes']} passz).")
         out.append({"title": "Így támadnak", "body": body})
 
     # Védekezésük: fő forma + váltogatás.
