@@ -544,6 +544,17 @@ def test_narrative_mentions_half_pattern():
                    for s_ in scouting_narrative(quiet))
 
 
+def test_narrative_mentions_weak_formation():
+    """Nagy formánkénti különbség → az 'Így támadnak' megemlíti."""
+    rep = ScoutingReport(team="away", team_name="Ellenfél KC",
+                         avg_attack_duration_s=8.0, fast_break_pct=5.0,
+                         vs_formation={"6-0": {"shots": 5, "goals": 1},
+                                       "5-1": {"shots": 5, "goals": 3}})
+    sections = scouting_narrative(rep)
+    attack = next(s_ for s_ in sections if s_["title"] == "Így támadnak")
+    assert "6-0 fal ellen" in attack["body"]
+
+
 def test_narrative_mentions_attack_side():
     """Bal-súlypontú támadásépítés → az 'Így támadnak' megemlíti."""
     rep = ScoutingReport(team="away", team_name="Ellenfél KC",
