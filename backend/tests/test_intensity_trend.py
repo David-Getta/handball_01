@@ -74,6 +74,37 @@ def test_trend_empty_or_short_match_is_zero():
     assert tr["away"]["second_ms"] == 0.0
 
 
+def test_player_fatigue_ranks_faders():
+    """Két játékos: az 1-es a 2. félidőre lelassul (4→1 m/s), a 2-es
+    végig egyenletes — az 1-es vezeti a fáradás-listát."""
+    from handball.pipeline.stats import player_fatigue
+    frames = []
+    x1, d1 = 5.0, 1.0
+    x2, d2 = 5.0, 1.0
+    n = 2000  # 80 mp @ 25 fps
+    for i in range(n):
+        v1 = 4.0 if i < n // 2 else 1.0
+        x1 += d1 * v1 / 25.0
+        if x1 >= 35.0:
+            x1, d1 = 35.0, -1.0
+        elif x1 <= 5.0:
+            x1, d1 = 5.0, 1.0
+        x2 += d2 * 3.0 / 25.0
+        if x2 >= 35.0:
+            x2, d2 = 35.0, -1.0
+        elif x2 <= 5.0:
+            x2, d2 = 5.0, 1.0
+        frames.append(Frame(t=i, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=x1, y=5.0),
+            PlayerPosition(track_id=2, team=Team.HOME, x=x2, y=10.0),
+        ]))
+    rows = player_fatigue(_match(frames), half_t=n // 2)
+    assert rows and rows[0]["track_id"] == 1
+    assert rows[0]["drop_pct"] > 60.0
+    steady = next(r for r in rows if r["track_id"] == 2)
+    assert abs(steady["drop_pct"]) < 5.0
+
+
 if __name__ == "__main__":
     test_trend_detects_second_half_drop()
     test_trend_flat_when_constant_speed()
