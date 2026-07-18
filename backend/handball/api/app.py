@@ -1807,6 +1807,8 @@ def create_app():
                 _layer("attack_efficiency", lambda: attack_efficiency(match))
                 from ..pipeline.event_detection import assist_network
                 _layer("assist_network", lambda: assist_network(match))
+                from ..pipeline.event_detection import pass_network
+                _layer("pass_network", lambda: pass_network(match))
                 from ..pipeline.stats import possession_share
                 _layer("possession", lambda: possession_share(match))
                 from ..pipeline.stats import intensity_trend
@@ -2100,10 +2102,11 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         events = detect_events(match)
-        from ..pipeline.event_detection import assist_network
+        from ..pipeline.event_detection import assist_network, pass_network
         return {
             "counts": event_counts(match),
             "assist_network": assist_network(match),
+            "pass_network": pass_network(match),
             "events": [
                 {"t": e.t, "type": e.type.value, "team": e.team.value,
                  "player_id": e.player_id, "detail": e.detail}
