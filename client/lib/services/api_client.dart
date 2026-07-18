@@ -582,6 +582,8 @@ class ApiClient {
     if (clutch != null) prog["clutch"] = clutch;
     final droughts = (json["droughts"] as Map?)?.cast<String, dynamic>();
     if (droughts != null) prog["droughts"] = droughts;
+    final halftime = (json["halftime"] as Map?)?.cast<String, dynamic>();
+    if (halftime != null) prog["halftime"] = halftime;
     return prog;
   }
 
