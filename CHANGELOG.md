@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#207)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#211)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -111,7 +111,8 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Valódi félidő-határ + félidei állás**: a kondíció-mutató a felismert
   félidei szünetet használja; a félidei eredmény az összefoglalóban, a
   jelentés-fejlécben és az appban; félidő-minta felderítési kulcs
-  ("a 2. félidőben feljavulnak/elfogynak"). (#204, #205, #206, #207)
+  ("a 2. félidőben feljavulnak/elfogynak"), narratíva-szekció, kliens-
+  csempe és 2. félidei visszaesés edzés-fókusz. (#204–#211)
 
 ### Új bemenetek felé (útiterv + alapok)
 - **TV-közvetítés előfeldolgozás**: vágás-felismerés (szín-hisztogram)
