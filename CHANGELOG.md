@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#237)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#251)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -133,6 +133,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Forma elleni hatékonyság**: melyik védekezési fal fogja meg az
   ellenfelet — "ellenük 6-0-ban állj fel" kulcs, narratíva, csempék és
   fal elleni figura edzés-fókusz. (#226, #227, #228)
+- **Meccs-esély görbe + fordulópont**: P(hazai győzelem) a gólok mentén
+  magyarázható modellel; a legnagyobb esély-ugrás a fordulópont —
+  összefoglaló-mondat, jelentés-fejléc, kliens esély-sáv. (#243, #244,
+  #245)
+- **Támadás-hossz vs eredményesség**: rövid/közepes/hosszú támadások
+  gólaránya — "kivárható őket" felderítési kulcs, narratíva, csempék és
+  "Befejezés időkorláttal" edzés-fókusz. (#246, #247, #248)
+- **Trend + szezon bővítés**: blokk/meccs a fejlődés-követésben;
+  blokkok, leggyorsabb lövés a szezon-összevetésben; zóna-védés%
+  oszlop a kapus-táblában; szimulátor félidei szünet opció. (#242,
+  #249, #250, #251)
 
 ### Új bemenetek felé (útiterv + alapok)
 - **TV-közvetítés előfeldolgozás**: vágás-felismerés (szín-hisztogram)
@@ -151,8 +162,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Nézet-fúzió (arénarendszer)**: több kamera pozíció-folyamának
   egyesítése a közös méter-térben — pozíció-átlag, takarás-kitöltés,
   folytonos fúziós trackek; órajel-eltolás becslése a labda-pályából;
-  POST /matches/fuse végpont + "Nézet-egyesítés" gomb a könyvtárban.
-  Két sima kamerával már ma kipróbálható. (#234, #235, #236, #237)
+  POST /matches/fuse végpont + "Nézet-egyesítés" gomb a könyvtárban;
+  fúziós nyereség-mutató. Két sima kamerával már ma kipróbálható.
+  (#234, #235, #236, #237, #239)
+- **Lidar-előkészítés**: pontfelhő-klaszterezés játékos-jelöltekké és a
+  kamerás pozíciók lidar-ra igazítása (kamera = azonosság, lidar =
+  geometria). (#240)
 
 ### Kliens-élmény
 - **Meccs-sztori idővonal**: gólok, sorozatok, emberelőnyök, 7 a 6,
