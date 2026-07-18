@@ -383,6 +383,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átl. $avg · csúcs ${peak.toStringAsFixed(0)} km/h";
   }
 
+  /// Támadás-oldal megoszlás: "bal 55% · közép 30% · jobb 15%" — csak
+  /// elég támadó-kockánál (250+, ~10 mp).
+  String? _attackSides(Map<String, dynamic> r) {
+    final sf = (r["side_frames"] as Map?)?.cast<String, dynamic>();
+    if (sf == null || sf.isEmpty) return null;
+    var total = 0;
+    sf.forEach((_, v) => total += ((v as num?) ?? 0).toInt());
+    if (total < 250) return null;
+    final parts = <String>[];
+    for (final k in ["bal", "közép", "jobb"]) {
+      final n = ((sf[k] as num?) ?? 0).toInt();
+      parts.add("$k ${(100.0 * n / total).toStringAsFixed(0)}%");
+    }
+    return parts.join(" · ");
+  }
+
   String? _worstZone(Map<String, dynamic> r) {
     final zones = (r["def_zones"] as Map?)?.cast<String, dynamic>();
     if (zones == null || zones.isEmpty) return null;
@@ -467,6 +483,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Blokkolt lövés", "${r["blocks"]}"],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
+      if (_attackSides(r) != null) ["Támadás-oldal", _attackSides(r)!],
       if (((r["clutch_matches"] as num?) ?? 0) >= 1)
         [
           "Hajrá-mérleg",

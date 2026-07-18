@@ -180,6 +180,12 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
                    f"átl. {rep.shot_speed_sum_kmh / rep.shot_speed_n:.0f}"
                    f" · csúcs {rep.shot_speed_max_kmh:.0f} km/h")]
           if getattr(rep, "shot_speed_n", 0) >= 5 else []),
+        *([_metric("Támadás-oldal",
+                   " · ".join(
+                       f"{k} {100.0 * v / max(1, sum(rep.side_frames.values())):.0f}%"
+                       for k, v in rep.side_frames.items()))]
+          if sum(getattr(rep, "side_frames", {}).values() or [0]) >= 250
+          else []),
         _metric("Figurák", str(rep.num_figures)),
     ]
     # Az új felismerő-rétegek mutatói — csak ha van mögöttük adat.
