@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#251)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#256)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -82,6 +82,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Kapus leggyengébb sarka**: zóna szerinti védés-hatékonyság — a
   jelentésben, a felderítési kulcsban ("ide lőjetek") és az
   összefoglalóban. (#174, #175)
+- **Kapus-csere felismerés**: ki védett mikor (váltások időpontja),
+  kapusonkénti külön kapott/védett mérleggel — az összefoglalóban és a
+  jelentés kapus-táblája alatti jegyzetben. (#253, #254)
+- **Ziccer-klipek**: kihagyott ziccerek (nagy xG, gól nélkül) és nagy
+  védések (fogott ziccerek) egy-egy gombbal exportálhatók; a bravúr-
+  védések száma az edzői összefoglaló kapus-sorába is bekerül.
+  (#255, #256)
 - **Labdaeladás-térkép**: hol veszik el a labdát (saját/közép/támadó
   harmad) — kontra-kulcs a felderítésben, edzés-fókusz és jelentés-sor.
   (#176, #177, #178, #179)

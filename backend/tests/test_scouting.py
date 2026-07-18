@@ -939,3 +939,21 @@ def test_scout_team_attack_efficiency():
     comb = combine_reports([rep, scout_team(_fast_break_goal_match(), Team.HOME)])
     cfb = comb.attack_efficiency.get("lerohanás")
     assert cfb["attacks"] == fb["attacks"] * 2
+
+
+def test_big_chance_metrics_keys_and_combine():
+    """Ziccer-mérleg: bravúr-kapus erősség, kihagyós befejezés gyengeség,
+    a narratíva kapus-szekciója bővül, a számok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys, scouting_narrative
+    rep = ScoutingReport(team="away", team_name="X",
+                         gk_on_target=5, gk_saves=3,
+                         gk_big_saves=3, big_total=6, big_missed=4)
+    strengths, weaknesses, keys = _coach_keys(rep)
+    assert any("bravúr" in x for x in strengths)
+    assert any("Ziccereket hagynak ki" in x for x in weaknesses)
+    sec = next(x for x in scouting_narrative(rep) if x["title"] == "Kapusuk")
+    assert "Ziccert is fog" in sec["body"]
+    comb = combine_reports([rep, rep])
+    assert comb.gk_big_saves == 6
+    assert comb.big_total == 12
+    assert comb.big_missed == 8

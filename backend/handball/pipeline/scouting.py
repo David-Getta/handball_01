@@ -159,6 +159,12 @@ class ScoutingReport:
     # kapott kapura tartó lövések / védések / kapott gólok zóna-bontással.
     gk_on_target: int = 0
     gk_saves: int = 0
+    # A kapusuk bravúr-védései: fogott nagy helyzetek (xG >= 0,5, save).
+    gk_big_saves: int = 0
+    # Ziccer-mérlegük: nagy xG-jű helyzeteik száma és a gól nélkül maradtak
+    # — meccsek közt összegződik, az arány mindig visszaszámolható.
+    big_total: int = 0
+    big_missed: int = 0
     gk_conceded_zones: dict = field(default_factory=dict)
     # Minden kapura tartó lövés zóna-bontása (védés is) — ebből és a
     # kapott gólok zónáiból zónánkénti védés-hatékonyság, így a kapus
@@ -660,6 +666,16 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         elif save_pct <= 20.0:
             weaknesses.append(f"Bizonytalan kapus ({save_pct:.0f}% védés) — "
                               "érdemes kapura menni.")
+    # Ziccer-mérleg: bravúros kapus / kihagyós befejezés.
+    if rep.gk_big_saves >= 2:
+        strengths.append(f"Kapusuk ziccert is fog ({rep.gk_big_saves} "
+                         "bravúr-védés) — a tiszta helyzetet is pontosan, "
+                         "sarokra kell befejezni.")
+    if rep.big_total >= 4 and rep.big_missed / rep.big_total >= 0.5:
+        weaknesses.append(
+            f"Ziccereket hagynak ki: {rep.big_total} nagy helyzetükből "
+            f"{rep.big_missed} kimaradt — szoros fal mellett a nagy "
+            "helyzet sem garantált gól náluk.")
     if rep.gk_conceded_zones:
         zone, n = max(rep.gk_conceded_zones.items(), key=lambda kv: kv[1])
         if n >= 2:
@@ -796,6 +812,16 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         trec = match_xg(match, config)["teams"][team.value]
         rep.xg = trec["xg"]
         rep.xg_diff = trec["diff"]
+        from .xg import BIG_CHANCE_XG, big_saves, missed_big_chances
+        rep.big_total = sum(
+            1 for sh in match_xg(match, config).get("shots", [])
+            if sh["team"] == team.value
+            and sh.get("xg", 0.0) >= BIG_CHANCE_XG)
+        rep.big_missed = sum(1 for m in missed_big_chances(match, config)
+                             if m["team"] == team.value)
+        # A lövő az ellenfél — a védés a felderített csapat kapusáé.
+        rep.gk_big_saves = sum(1 for b in big_saves(match, config)
+                               if b["team"] != team.value)
     except Exception:
         pass
     try:
@@ -994,6 +1020,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         key_players=[],  # játékos-azonosítók meccsenként eltérők; összevonás nem triviális
         gk_on_target=sum(r.gk_on_target for r in reports),
         gk_saves=sum(r.gk_saves for r in reports),
+        gk_big_saves=sum(r.gk_big_saves for r in reports),
+        big_total=sum(r.big_total for r in reports),
+        big_missed=sum(r.big_missed for r in reports),
         empty_net_s=round(sum(r.empty_net_s for r in reports), 1),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
@@ -1268,6 +1297,9 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
         else:
             body = (f"Kapusuk átlagos: {rep.gk_saves} védés "
                     f"{rep.gk_on_target} kapura tartó lövésből ({pct:.0f}%).")
+        if rep.gk_big_saves >= 2:
+            body += (f" Ziccert is fog: {rep.gk_big_saves} nagy helyzetet "
+                     "(xG ≥ 0,5) hárított.")
         out.append({"title": "Kapusuk", "body": body})
 
     # Kulcsjátékos: akinél a legtöbb labda megfordul — a kapust átugorjuk
