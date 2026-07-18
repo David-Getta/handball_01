@@ -350,3 +350,29 @@ def test_weak_attack_type_triggers_focus():
     tf = training_focus(Match(_meta(), frames))
     home = tf["home"]
     assert any(it["title"].startswith("Befejezés: felállt") for it in home)
+
+
+def test_missed_big_chances_trigger_ziccer_focus():
+    """3+ kihagyott ziccer (nagy xG, gól nélkül) → Ziccer-befejezés fókusz
+    a támadó csapatnak."""
+    frames = []
+    t0 = 0.0
+    for _ in range(3):
+        # A labda a lövőtől (37, 10) indul — így a lövő azonosítható —,
+        # majd a kapu mellé hajlik el (nincs gól, nincs kapus).
+        for i in range(7):
+            frames.append(Frame(
+                t=t0 + i,
+                players=[_pl(1, Team.HOME, 37.0, 10.0)],
+                ball=Ball(x=min(37.4 + 0.6 * i, 40.0), y=10.0 - i * 1.0,
+                          confidence=1.0)))
+        frames.append(Frame(t=t0 + 8, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t0 += 40.0
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["home"]
+                 if it["title"] == "Ziccer-befejezés"), None)
+    assert item is not None
+    assert "3 nagy helyzet" in item["why"]
+    assert tf["away"] == [] or all(
+        it["title"] != "Ziccer-befejezés" for it in tf["away"])
