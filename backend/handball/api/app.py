@@ -2396,6 +2396,53 @@ def create_app():
         return match_attacks_to_playbook(match, plays, TacticsConfig(),
                                          team=t, threshold=threshold)
 
+    @app.post("/matches/fuse")
+    def fuse_views(payload: dict):
+        """Több nézet (külön feldolgozott meccs) egyesítése egy meccsé.
+
+        Kérés: {"match_ids": [id1, id2, ...], "match_id": "opcionális-új-id",
+        "auto_sync": true}. A nézeteknek KÖZÖS méter-térre kalibráltnak
+        kell lenniük (ugyanaz a pálya). auto_sync esetén az első nézethez
+        képest a többi órajel-eltolását a labda-pályából becsüljük és
+        kiigazítjuk. Az eredmény új meccsként kerül a könyvtárba, és a
+        teljes elemző-lánc fut rajta.
+
+        404: ismeretlen meccs-azonosító; 400: kevesebb mint két nézet."""
+        from ..pipeline.fusion import (apply_offset, estimate_clock_offset,
+                                       fuse_matches)
+        ids = payload.get("match_ids") or []
+        if len(ids) < 2:
+            raise HTTPException(status_code=400,
+                                detail="legalább két nézet kell")
+        views = []
+        for mid in ids:
+            m = _store.get(mid)
+            if m is None:
+                raise HTTPException(status_code=404,
+                                    detail=f"match not found: {mid}")
+            views.append(m)
+        offsets = [0]
+        if payload.get("auto_sync", True):
+            synced = [views[0]]
+            for v in views[1:]:
+                off = estimate_clock_offset(views[0], v)
+                offsets.append(off if off is not None else 0)
+                synced.append(apply_offset(v, off) if off else v)
+            views = synced
+        else:
+            offsets = [0] * len(views)
+        fused = fuse_matches(views)
+        new_id = payload.get("match_id") or ("fuzio-" + "-".join(ids)[:40])
+        fused.meta.match_id = new_id
+        _store[new_id] = fused
+        try:
+            _match_path(new_id).write_text(fused.to_json(indent=2),
+                                           encoding="utf-8")
+        except Exception:
+            pass
+        return {"match_id": new_id, "n_views": len(ids),
+                "offsets": offsets, "frames": len(fused.frames)}
+
     # Segéd a feltöltéshez/teszteléshez: memóriába tesz ÉS lemezre tükröz.
     def _put_match(match: Match) -> None:
         _store[match.meta.match_id] = match

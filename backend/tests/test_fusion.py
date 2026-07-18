@@ -116,3 +116,40 @@ def test_clock_offset_none_without_overlap():
     b = Match(_meta(), [Frame(t=0, players=[],
                               ball=Ball(x=1.0, y=1.0, confidence=1.0))])
     assert estimate_clock_offset(a, b) is None
+
+
+def test_fuse_endpoint_creates_new_match(tmp_path):
+    """A POST /matches/fuse két nézetből új meccset tesz a könyvtárba,
+    amin a szokásos végpontok futnak."""
+    import os
+    os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
+    from fastapi.testclient import TestClient
+    from handball.api.app import create_app
+
+    app = TestClient(create_app())
+    a = Match(_meta(), [Frame(t=t, players=[_pl(1, Team.HOME,
+                                                20.0 + 0.1 * t, 10.0)])
+                        for t in range(30)])
+    b_meta = MatchMeta(match_id="fu-b", home_team="H", away_team="A",
+                       fps=25.0)
+    b = Match(b_meta, [Frame(t=t, players=[_pl(5, Team.HOME,
+                                               20.0 + 0.1 * t, 10.2)])
+                       for t in range(30)])
+    app.app.state.put_match(a)
+    app.app.state.put_match(b)
+
+    r = app.post("/matches/fuse", json={
+        "match_ids": ["fu", "fu-b"], "match_id": "fuzio-teszt",
+        "auto_sync": False})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["match_id"] == "fuzio-teszt"
+    assert body["n_views"] == 2 and body["frames"] == 30
+    # Az új meccs lekérhető, és a fúziós pozíció a két nézet átlaga.
+    got = app.get("/matches/fuzio-teszt")
+    assert got.status_code == 200
+    # Kevés nézet → 400; ismeretlen id → 404.
+    assert app.post("/matches/fuse",
+                    json={"match_ids": ["fu"]}).status_code == 400
+    assert app.post("/matches/fuse",
+                    json={"match_ids": ["fu", "nincs"]}).status_code == 404
