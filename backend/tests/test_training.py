@@ -247,6 +247,40 @@ def test_second_half_fade_triggers_conditioning_focus():
                    for f_ in focus["away"])
 
 
+def test_slow_response_triggers_mental_focus():
+    """3 lassan (200+ mp) megválaszolt kapott gól → 'Újraindulás' fókusz."""
+    from handball.models.tracking import Ball
+
+    def goal_frames(t0, toward_home_goal):
+        out = []
+        for i in range(8):
+            x = max(6.4 - i, 0.0) if toward_home_goal else min(33.6 + i, 40.0)
+            out.append(Frame(t=t0 + i, players=[],
+                             ball=Ball(x=x, y=10.0, confidence=1.0)))
+        return out
+
+    frames = {}
+    t = 0
+    # 3 kör: vendég gól, majd a hazai ~200 mp múlva válaszol.
+    for _ in range(3):
+        for fr in goal_frames(t, True):
+            frames[fr.t] = fr
+        t += int(200 * 25)
+        for fr in goal_frames(t, False):
+            frames[fr.t] = fr
+        t += 40
+    total = t + 50
+    all_frames = [frames.get(i, Frame(t=i, players=[],
+                                      ball=Ball(x=20.0, y=10.0,
+                                                confidence=1.0)))
+                  for i in range(total)]
+    focus = training_focus(Match(_meta(), all_frames))
+    assert any("jraindul" in f_["title"] for f_ in focus["home"])
+    # A vendég gyorsan "válaszolt" (a hazai gólok után ~40 kockával) —
+    # nála nem szólal meg a szabály.
+    assert not any("jraindul" in f_["title"] for f_ in focus["away"])
+
+
 def test_weak_attack_type_triggers_focus():
     """Sok felállt támadás gól nélkül → befejezés-fókusz az adott típusra."""
     frames = []
