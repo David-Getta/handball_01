@@ -1184,6 +1184,33 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                        "<th>Zóna-védés%</th>"
                        "<th>Leggyengébb zóna</th></tr>"
                        + "".join(rows) + "</table>")
+            # Kapus-csere jegyzet (ha volt): mikor és milyen mérleggel.
+            try:
+                from .goalkeeper import goalkeeper_timeline
+                tl_all = goalkeeper_timeline(match)
+                notes_gk = []
+                for key, name in (("home", home), ("away", away)):
+                    tl = tl_all.get(key) or {}
+                    if not tl.get("changes"):
+                        continue
+                    mins = int(tl["changes"][0] // 60)
+                    pk = tl.get("per_keeper", {})
+                    per = " · ".join(
+                        f"{st['track_id']}. játékos "
+                        f"{pk[st['track_id']]['saves']}/"
+                        f"{pk[st['track_id']]['on_target']} védés"
+                        for st in tl.get("stints", [])[:2]
+                        if st["track_id"] in pk
+                        and pk[st["track_id"]]["on_target"])
+                    note = f"{name}: kapus-csere a {mins}. perc körül"
+                    if per:
+                        note += f" ({per})"
+                    notes_gk.append(note)
+                if notes_gk:
+                    gk_html += ('<p class="note">'
+                                + escape(" — ".join(notes_gk)) + "</p>")
+            except Exception:
+                pass
     except Exception:
         pass
 
