@@ -227,6 +227,22 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                     "kapott labdaeladás után — gyorsabb visszazárás kell.")
     except Exception:
         pass
+    # Blokkok: az aktív fal jele — dicséret a védekezésnek.
+    try:
+        from .defense import detect_blocks
+        bl = detect_blocks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec = bl[side]
+            if rec["blocks"] >= 2:
+                sent = (f"a(z) {name} védői {rec['blocks']} lövést "
+                        "blokkoltak — aktív a fal")
+                top = rec["blockers"][0] if rec["blockers"] else None
+                if top and top["blocks"] >= 2:
+                    sent += (f" (a legtöbbet a(z) {top['player_id']}. "
+                             f"játékos: {top['blocks']})")
+                parts.append(sent)
+    except Exception:
+        pass
     # Labdaeladás helye: sok elöl (támadó harmadban) vesztett labda könnyű
     # kontrát ad az ellenfélnek.
     try:

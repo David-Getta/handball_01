@@ -202,6 +202,75 @@ def turnover_zones(match, config=None) -> dict:
     return out
 
 
+# Blokk-felismerés: lövés-szerű labdarepülés (gyors, kapu felé), ami a
+# mezőnyben egy védőnél hirtelen visszafordul — mielőtt a kapu-zónába érne
+# (ott már kapus-védés lenne). A lövés-detektor ezt nem látja, mert a
+# labda nem közelíti meg a kaput.
+BLOCK_SPEED_MS = 8.0          # lövés-szerű tempó (mint a lövés-detektorban)
+BLOCK_MAX_GOAL_DIST_M = 14.0  # a repülés a kapu előtti térben történik
+BLOCK_MIN_GOAL_DIST_M = 5.5   # a visszafordulás nem a kapusnál van
+BLOCK_RADIUS_M = 1.5          # a blokkoló legfeljebb ennyire a labdától
+BLOCK_COOLDOWN = 12           # két blokk közt legalább ennyi kocka
+
+
+def detect_blocks(match, config=None) -> dict:
+    """Blokkolt lövések: a mezőnyvédőn elakadó lövés felismerése.
+
+    Mintázat: a labda lövés-tempóban (BLOCK_SPEED_MS) repül a kapu felé a
+    kapu előtti térben, majd a következő kockán a kapu felőli irányba
+    fordul vissza — és a fordulópontnál egy VÉDŐ (nem kapus) áll a labda
+    mellett. Ezt a védekező csapat blokkjának számoljuk, a blokkolóval.
+
+    Visszatérés: {"home"/"away": {"blocks", "blockers":
+    [{"player_id","blocks"}]}} — a kulcs a BLOKKOLÓ (védekező) csapat.
+    """
+    from ..models.tracking import Team
+    from .event_detection import _attacking_team_for_goal
+    from .tactics import COURT_LENGTH_M
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    out = {side: {"blocks": 0, "blockers": {}} for side in ("home", "away")}
+    last_block_t = -10**9
+
+    for i in range(1, len(frames) - 1):
+        f0, f1, f2 = frames[i - 1], frames[i], frames[i + 1]
+        if any(fr.ball is None for fr in (f0, f1, f2)):
+            continue
+        vx_in = (f1.ball.x - f0.ball.x) * fps
+        vx_out = (f2.ball.x - f1.ball.x) * fps
+        for goal_x in (0.0, COURT_LENGTH_M):
+            toward_in = (vx_in < -BLOCK_SPEED_MS if goal_x == 0.0
+                         else vx_in > BLOCK_SPEED_MS)
+            reversed_out = (vx_out > 0 if goal_x == 0.0 else vx_out < 0)
+            dist = abs(f1.ball.x - goal_x)
+            if not (toward_in and reversed_out
+                    and BLOCK_MIN_GOAL_DIST_M <= dist <= BLOCK_MAX_GOAL_DIST_M
+                    and f1.t - last_block_t >= BLOCK_COOLDOWN):
+                continue
+            attacking = _attacking_team_for_goal(goal_x, config)
+            defending = Team.AWAY if attacking == Team.HOME else Team.HOME
+            best = None
+            for p in f1.players:
+                if p.team != defending or p.role == "kapus":
+                    continue
+                d = ((p.x - f1.ball.x) ** 2 + (p.y - f1.ball.y) ** 2) ** 0.5
+                if d <= BLOCK_RADIUS_M and (best is None or d < best[1]):
+                    best = (p.track_id, d)
+            if best is not None:
+                rec = out[defending.value]
+                rec["blocks"] += 1
+                rec["blockers"][best[0]] = rec["blockers"].get(best[0], 0) + 1
+                last_block_t = f1.t
+
+    for rec in out.values():
+        rec["blockers"] = [{"player_id": pid, "blocks": n}
+                           for pid, n in sorted(rec["blockers"].items(),
+                                                key=lambda kv: -kv[1])]
+    return out
+
+
 def defensive_pressure(match, config=None) -> dict:
     """Védekezési nyomás: mennyire szorosan védekezik egy csapat.
 
