@@ -288,6 +288,55 @@ def score_progression(match: Match, config=None) -> dict:
     }
 
 
+# Hajrá-elemzés: az utolsó ennyi másodperc számít "hajrának", és csak
+# ennél hosszabb felvételen értelmezzük (rövid klipnél az egész a "hajrá").
+CLUTCH_WINDOW_S = 300.0
+CLUTCH_MIN_DURATION_S = 600.0
+
+
+def clutch_performance(match: Match, config=None) -> dict:
+    """Hajrá-teljesítmény: ki bírja jobban a meccs végét.
+
+    Az utolsó CLUTCH_WINDOW_S másodperc gólmérlege csapatonként, a
+    hajrá kezdetén álló eredménnyel. A "close" jelzi, hogy a hajrá
+    szoros állásról indult (legfeljebb 3 gól különbség) — ilyenkor a
+    hajrá-mérleg a nyomás alatti teljesítményről szól.
+
+    Rövid felvételen (CLUTCH_MIN_DURATION_S alatt) nem értelmezzük:
+    {"available": False}. Egyébként: {"available": True, "window_s",
+    "close", "start_score": [h, a], "home": {"goals"}, "away": {"goals"}}.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total = len(match.frames)
+    if total / fps < CLUTCH_MIN_DURATION_S:
+        return {"available": False}
+    end_t = match.frames[-1].t
+    win_start = end_t - CLUTCH_WINDOW_S * fps
+
+    goals = sorted((e.t, e.team) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    start_score = [0, 0]
+    clutch = {"home": 0, "away": 0}
+    for (t, team) in goals:
+        side = 0 if team == Team.HOME else 1
+        if t < win_start:
+            start_score[side] += 1
+        else:
+            clutch["home" if side == 0 else "away"] += 1
+    return {
+        "available": True,
+        "window_s": CLUTCH_WINDOW_S,
+        "close": abs(start_score[0] - start_score[1]) <= 3,
+        "start_score": start_score,
+        "home": {"goals": clutch["home"]},
+        "away": {"goals": clutch["away"]},
+    }
+
+
 def scoring_timeline(match: Match, bucket_s: float = 300.0, config=None) -> dict:
     """Gólok idő-eloszlása idő-vödrökben (alapból 5 perc).
 
