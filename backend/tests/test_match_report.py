@@ -619,3 +619,33 @@ def test_report_keeper_change_note_shows_gsax():
     html = match_report_html(m, {}, [], None)
     assert "kapus-csere" in html
     assert " xG" in html  # a kapusonkénti mérleg kiírva
+
+
+def test_report_seven_meter_summary_row():
+    """Ha volt hétméteres, a Csapat-mutatók tábla hozza a mérleget
+    (gól/kísérlet) csapatonként."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+
+    frames = []
+    t = 0
+    for _ in range(30):  # álló labda a 7 m-es ponton (33, 10)
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=32.0, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0)],
+            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(7):  # a lövés gólba megy
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=32.0, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0)],
+            ball=Ball(x=min(34.0 + i, 40.0), y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="svr", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Hétméteres (gól/kísérlet)" in html
+    assert "1/1" in html
