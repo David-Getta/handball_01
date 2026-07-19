@@ -877,6 +877,25 @@ def coach_summary(match: Match) -> dict:
             parts.append("emberhátrány: " + "; ".join(
                 f"a(z) {names.get(t, t)} összesen {s_:.0f} mp-et játszott "
                 "kevesebb emberrel" for t, s_ in per.items()))
+            # Ki ült ki és ki harcolta ki — ha a trackekből kiolvasható.
+            from .rules import suspended_players, suspension_earners
+            sp = suspended_players(match)
+            for t in ("home", "away"):
+                who = [f"{e['player_id']}. játékos"
+                       + (f" ({e['suspensions']}×)"
+                          if e["suspensions"] > 1 else "")
+                       for e in (sp.get(t) or [])]
+                if who:
+                    parts.append(f"a(z) {names[t]} kiülői: "
+                                 + ", ".join(who))
+            se = suspension_earners(match)
+            for t in ("home", "away"):
+                el = se.get(t) or []
+                if el and el[0]["earned"] >= 2:
+                    parts.append(
+                        f"a(z) {names[t]} kiállításait a(z) "
+                        f"{el[0]['player_id']}. játékos harcolta ki "
+                        f"({el[0]['earned']}×)")
         if sevens:
             from .rules import seven_meter_summary
             summ7 = seven_meter_summary(match)
