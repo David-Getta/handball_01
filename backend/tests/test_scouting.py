@@ -1207,3 +1207,20 @@ def test_match_key_players_top_shooter():
     assert roles["Fő lövő"]["player_id"] == 1
     assert "lövés" in roles["Fő lövő"]["detail"]
     assert kp["away"] == []
+
+
+def test_en_timing_key_and_combine():
+    """Ha a 7 a 6 szakaszok 70%+-a hátrányban indul (2+ szakasz),
+    időzítés-kulcs születik; vegyes mintánál nem."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="X",
+                         en_windows=3, en_trailing=3)
+    _, _, keys = _coach_keys(rep)
+    assert any("hátrányban húzzák elő" in k for k in keys)
+    mixed = ScoutingReport(team="away", team_name="X",
+                           en_windows=4, en_trailing=2)
+    _, _, k2 = _coach_keys(mixed)
+    assert not any("hátrányban húzzák elő" in k for k in k2)
+    comb = combine_reports([rep, mixed])
+    assert comb.en_windows == 7
+    assert comb.en_trailing == 5

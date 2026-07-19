@@ -179,6 +179,11 @@ class ScoutingReport:
     empty_net_s: float = 0.0
     # Üres kapura kapott góljaik (7 a 6 közben) — meccsek közt összegződik.
     empty_net_conceded: int = 0
+    # A 7 a 6 időzítése: szakaszaik száma és ebből hány indult
+    # hátrányban / a hajrában — meccsek közt összegződik.
+    en_windows: int = 0
+    en_trailing: int = 0
+    en_endgame: int = 0
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
@@ -843,6 +848,12 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                          f"(~{rep.empty_net_s / rep.matches:.0f} mp/meccs).")
         keys.append("Lehozott kapussal támadnak — labdaszerzés után az "
                     "ÜRES KAPURA azonnal dobhatsz, gyakorold a hosszú indítást.")
+    # A 7 a 6 időzítése: ha mintázata van, előre lehet rá készülni.
+    if rep.en_windows >= 2 and rep.en_trailing / rep.en_windows >= 0.7:
+        keys.append(
+            f"A 7 a 6-ot hátrányban húzzák elő ({rep.en_trailing}/"
+            f"{rep.en_windows} szakasz) — ha vezetsz ellenük, számíts a "
+            "lehozott kapusra: beszéld meg előre a hosszú dobás jogát.")
     # Ha ez már gólokba is került nekik, az gyengeség: büntethető szokás.
     if rep.empty_net_conceded >= 2:
         weaknesses.append(
@@ -917,6 +928,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         from .goalkeeper import empty_net_goals
         rep.empty_net_conceded = empty_net_goals(
             match, config)[team.value]["conceded_empty"]
+        from .goalkeeper import empty_net_context
+        enc = empty_net_context(match, config)[team.value]
+        rep.en_windows = enc["windows"]
+        rep.en_trailing = enc["trailing"]
+        rep.en_endgame = enc["endgame"]
     except Exception:
         pass
     try:
@@ -1370,6 +1386,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         big_missed=sum(r.big_missed for r in reports),
         empty_net_s=round(sum(r.empty_net_s for r in reports), 1),
         empty_net_conceded=sum(r.empty_net_conceded for r in reports),
+        en_windows=sum(r.en_windows for r in reports),
+        en_trailing=sum(r.en_trailing for r in reports),
+        en_endgame=sum(r.en_endgame for r in reports),
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),

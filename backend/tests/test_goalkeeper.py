@@ -401,3 +401,38 @@ def test_outlet_target_identified():
     rec = outlet_speed(_match(frames))["away"]
     assert rec["outlets"] == 1
     assert rec["targets"] == [{"player_id": 12, "n": 1}]
+
+
+def test_empty_net_context_trailing():
+    """A kapott gól utáni 7 a 6 szakasz "hátrányban indított"-nak
+    számít; rövid felvételen hajrá-jelölés nincs."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import empty_net_context
+
+    def pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    # A vendég gólt dob a hazai kapuba (x=0) — hazai hátrány.
+    for i in range(7):
+        frames.append(Frame(
+            t=i,
+            players=[pl(4, Team.AWAY, 3.0, 10.0)],
+            ball=Ball(x=max(2.6 - 0.6 * i, 0.0), y=10.0,
+                      confidence=1.0)))
+    frames.append(Frame(t=8, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    # Ezután a hazai 7 a 6-ot játszik 5 mp-ig.
+    for t in range(10, 135):
+        frames.append(Frame(
+            t=t,
+            players=[pl(1, Team.HOME, 20.0, 10.0, role="kapus"),
+                     pl(2, Team.HOME, 30.0, 10.0)],
+            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+    rec = empty_net_context(_match(frames))["home"]
+    assert rec["windows"] == 1
+    assert rec["trailing"] == 1
+    assert rec["endgame"] == 0   # rövid felvétel: nincs hajrá-jelölés
