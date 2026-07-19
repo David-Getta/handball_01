@@ -565,3 +565,57 @@ def test_report_lineups_section():
     assert "Felállások (becsült posztok)" in html
     assert "beálló: 1." in html
     assert "szélső: 2." in html
+
+
+def test_report_keeper_change_note_shows_gsax():
+    """Kapuscserénél a jegyzet a kapusonkénti GSAx-mérleget is hozza
+    (3+ kapott lövésnél), nem csak a védés-számot."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+
+    def gk(tid):
+        return PlayerPosition(track_id=tid, team=Team.AWAY, x=39.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    def shooter():
+        return PlayerPosition(track_id=4, team=Team.HOME, x=33.5,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):  # három védés a 9-esre
+        for i in range(8):
+            players = [gk(9)] + ([shooter()] if i == 0 else [])
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(33.6 + i, 38.8), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(600):  # csere: jön a 8-as
+        frames.append(Frame(t=t, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):  # három kapott gól a 8-asra
+        for i in range(8):
+            players = [gk(8)] + ([shooter()] if i == 0 else [])
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=33.6 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="gkr", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "kapus-csere" in html
+    assert " xG" in html  # a kapusonkénti mérleg kiírva

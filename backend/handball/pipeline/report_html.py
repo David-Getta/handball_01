@@ -1461,10 +1461,18 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                         continue
                     mins = int(tl["changes"][0] // 60)
                     pk = tl.get("per_keeper", {})
+                    def _gk_bal(r) -> str:
+                        # GSAx kapusonként, ha mérhető (3+ lövésnél).
+                        if r.get("on_target", 0) >= 3 and \
+                                "prevented" in r:
+                            return f", {r['prevented']:+.1f} xG"
+                        return ""
+
                     per = " · ".join(
                         f"{st['track_id']}. játékos "
                         f"{pk[st['track_id']]['saves']}/"
                         f"{pk[st['track_id']]['on_target']} védés"
+                        f"{_gk_bal(pk[st['track_id']])}"
                         for st in tl.get("stints", [])[:2]
                         if st["track_id"] in pk
                         and pk[st["track_id"]]["on_target"])
