@@ -781,6 +781,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 and top_s["goals"] / top_s["attempts"] <= 0.5):
             sent7 += " A mérlege gyenge: a kapus bátran vállalhat mozgást."
         keys.append(sent7)
+    # A beállójuk: ha egyértelmű, ki az, célzott utasítás jár hozzá.
+    pivots = [tid for tid, p_ in (rep.positions or {}).items()
+              if p_ == "beálló"]
+    if len(pivots) == 1:
+        keys.append(
+            f"A beállójuk a(z) {pivots[0]}. játékos — az elzárásaira "
+            "lépj ki korán, és tartsd folyamatos fizikai kontaktban: "
+            "ha ő labdát kap 6 méteren, az már késő.")
     # Visszarendeződés: lassú védelem ellen a gyors indítás a fegyver.
     if rep.rec_transitions >= 4:
         rec_avg = rep.rec_sum_s / rep.rec_transitions

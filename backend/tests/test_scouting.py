@@ -1625,3 +1625,16 @@ def test_positions_narrative_and_merge():
     comb = combine_reports([rep, newer])
     assert comb.positions[1] == "beálló"   # az első becslés marad
     assert comb.positions[2] == "szélső"
+
+
+def test_pivot_key_from_positions():
+    """Egyértelmű beállónál célzott kulcs születik; két beállónál nem."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="X",
+                         positions={1: "beálló", 2: "szélső"})
+    _, _, keys = _coach_keys(rep)
+    assert any("beállójuk a(z) 1. játékos" in k for k in keys)
+    two = ScoutingReport(team="away", team_name="X",
+                         positions={1: "beálló", 5: "beálló"})
+    _, _, k2 = _coach_keys(two)
+    assert not any("beállójuk" in k for k in k2)
