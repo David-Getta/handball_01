@@ -1089,10 +1089,40 @@ def create_app():
         fps = match.meta.fps if match.meta.fps > 0 else 25.0
         rows = aggregate_by_jersey(stats, team_of, jersey_of, fps=fps)
 
+        # Játék-statisztika oszlopok (gól/lövés/xG/blokk/poszt) — ha a
+        # rétegek számolhatók; hibánál üresen maradnak, a CSV nem törik.
+        shooter_of: dict = {}
+        try:
+            from ..pipeline.xg import match_xg
+            for rec_sh in match_xg(match).get("shooters", []):
+                shooter_of[rec_sh["player_id"]] = rec_sh
+        except Exception:
+            pass
+        blocks_of: dict = {}
+        try:
+            from ..pipeline.defense import detect_blocks
+            blk_csv = detect_blocks(match)
+            for side_ in ("home", "away"):
+                for e_ in blk_csv[side_].get("events", []):
+                    pid_ = e_.get("player_id")
+                    if pid_ is not None:
+                        blocks_of[pid_] = blocks_of.get(pid_, 0) + 1
+        except Exception:
+            pass
+        poszt_of: dict = {}
+        try:
+            from ..pipeline.roles import estimate_positions
+            est_csv = estimate_positions(match)
+            for side_ in ("home", "away"):
+                for tid_, r_ in est_csv.get(side_, {}).items():
+                    poszt_of[tid_] = r_["poszt"]
+        except Exception:
+            pass
+
         lines = ["Játékos;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
                  "Max sebesség (km/h);Sprintek;Sprint táv (m);"
                  "Séta (mp);Kocogás (mp);Futás (mp);Sprint (mp);"
-                 "Mért kocka;Becsült kocka"]
+                 "Mért kocka;Becsült kocka;Gól;Lövés;xG;Blokk;Poszt"]
         for g in rows:
             team = (match.meta.home_team if g["team"] == "home"
                     else match.meta.away_team)
@@ -1106,6 +1136,15 @@ def create_app():
                 num(zones.get("seta", 0.0)), num(zones.get("kocogas", 0.0)),
                 num(zones.get("futas", 0.0)), num(zones.get("sprint", 0.0)),
                 str(g["measured_frames"]), str(g["estimated_frames"]),
+                str(sum(shooter_of.get(t, {}).get("goals", 0)
+                        for t in g["track_ids"])),
+                str(sum(shooter_of.get(t, {}).get("shots", 0)
+                        for t in g["track_ids"])),
+                num(sum(shooter_of.get(t, {}).get("xg", 0.0)
+                        for t in g["track_ids"])),
+                str(sum(blocks_of.get(t, 0) for t in g["track_ids"])),
+                next((poszt_of[t] for t in g["track_ids"]
+                      if t in poszt_of), ""),
             ]))
         return "\ufeff" + "\r\n".join(lines) + "\r\n"  # BOM: Excel
 
