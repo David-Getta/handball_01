@@ -1673,3 +1673,20 @@ def test_post_goal_distribution_narrative_and_combine():
                            post_goals={"szélső": 1, "beálló": 2})
     comb = combine_reports([rep, other])
     assert comb.post_goals == {"szélső": 5, "átlövő": 4, "beálló": 2}
+
+
+def test_seven_earner_key_and_merge():
+    """2+ kiharcolt hetes ugyanattól a játékostól → fegyelem-kulcs;
+    a darabszámok összegződnek."""
+    from handball.pipeline.scouting import (_coach_keys,
+                                            _merge_seven_earners)
+    rep = ScoutingReport(team="away", team_name="X",
+                         seven_earners=[{"player_id": 9, "earned": 2}])
+    _, _, keys = _coach_keys(rep)
+    assert any("harcolja ki" in k and "9. játékos" in k for k in keys)
+    one = ScoutingReport(team="away", team_name="X",
+                         seven_earners=[{"player_id": 9, "earned": 1}])
+    _, _, k2 = _coach_keys(one)
+    assert not any("harcolja ki" in k for k in k2)
+    merged = _merge_seven_earners([rep, one])
+    assert merged[0] == {"player_id": 9, "earned": 3}

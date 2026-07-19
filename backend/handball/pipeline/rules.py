@@ -327,3 +327,47 @@ def powerplay_efficiency(match: Match,
         rec["pp_seconds"] = round(rec["pp_seconds"], 1)
         rec["sh_seconds"] = round(rec["sh_seconds"], 1)
     return out
+
+
+# Hetes-kiharcoló: ennyi másodperccel a hetes-jel előtt nézzük, ki volt
+# a kapuhoz legközelebbi támadó (a szabálytalanság áldozata jellemzően ő).
+SEVEN_EARNER_LOOKBACK_S = 2.0
+
+
+def seven_meter_earners(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Ki harcolja ki a hétméterseket: a hetes-jel előtt a támadott
+    kapuhoz legközelebb járó (nem kapus) támadó kapja a jóváírást.
+
+    Heurisztika, de magyarázható: a befejezésbe érkező embert rántják
+    le. A felderítésben ebből lesz a "vele szemben kéz nélkül" kulcs.
+
+    Visszatérés: {"home"/"away": [{"player_id", "earned"}]}.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+    tally: dict = {"home": {}, "away": {}}
+    for sm in detect_seven_meters(match, config):
+        t_prev = sm["t"] - round(SEVEN_EARNER_LOOKBACK_S * fps)
+        fr = None
+        for dt in range(0, round(fps)):
+            fr = frames_by_t.get(t_prev - dt) or frames_by_t.get(t_prev + dt)
+            if fr is not None and fr.players:
+                break
+        if fr is None or not fr.players:
+            continue
+        best = None
+        for p in fr.players:
+            if p.team.value != sm["team"] or p.role == "kapus":
+                continue
+            d = abs(p.x - sm["goal_x"])
+            if best is None or d < best[1]:
+                best = (p.track_id, d)
+        if best is not None:
+            side = tally[sm["team"]]
+            side[best[0]] = side.get(best[0], 0) + 1
+    return {side: [{"player_id": pid, "earned": n}
+                   for pid, n in sorted(rec.items(),
+                                        key=lambda kv: -kv[1])]
+            for side, rec in tally.items()}
