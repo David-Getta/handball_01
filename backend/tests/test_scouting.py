@@ -1819,3 +1819,22 @@ def test_matchup_plan_extended_rules():
                               gk_xg_saved=0.2)
     plan2 = matchup_plan(weak_own, opp)
     assert not any("párbaj nektek áll" in p_ for p_ in plan2)
+
+
+def test_matchup_plan_discipline_rule():
+    """9. szabály: az ő fegyelmezetlen védőjük × a mi kiharcolónk —
+    mindkét oldal küszöbe kell hozzá."""
+    from handball.pipeline.scouting import matchup_plan
+    own = ScoutingReport(team="home", team_name="Mi",
+                         susp_earners=[{"player_id": 7, "earned": 2}])
+    opp = ScoutingReport(team="away", team_name="Ok",
+                         susp_players=[{"player_id": 105,
+                                        "suspensions": 2}])
+    plan = matchup_plan(own, opp)
+    joined = " ".join(plan)
+    assert "105. játékosuk fegyelmezetlen" in joined
+    assert "7. játékos harcolja ki" in joined
+    # Kiharcoló nélkül a mondat elmarad.
+    plan2 = matchup_plan(ScoutingReport(team="home", team_name="Mi"),
+                         opp)
+    assert not any("fegyelmezetlen" in p_ for p_ in plan2)
