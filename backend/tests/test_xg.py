@@ -180,3 +180,28 @@ def test_big_saves_requires_save_outcome():
             ball=Ball(x=min(37.4 + 0.6 * i, 40.0), y=10.0 - i * 1.0,
                       confidence=1.0)))
     assert big_saves(Match(_meta(), frames2)) == []
+
+
+def test_xg_saved_credits_defending_side():
+    """A fogott ziccer helyzet-értéke a VÉDŐ oldal hárított xG-jébe
+    számít; gólnál semmi nem íródik jóvá."""
+    from handball.pipeline.xg import xg_saved
+
+    # Fogott ziccer: közeli-középső lövés, a kapusnál megáll a labda.
+    frames = []
+    gk = _pl(30, Team.AWAY, 39.0, 10.0)
+    gk.role = "kapus"
+    for i in range(8):
+        frames.append(Frame(
+            t=i,
+            players=[_pl(1, Team.HOME, 37.0, 10.0), gk],
+            ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                      confidence=1.0)))
+    xs = xg_saved(Match(_meta(), frames))
+    assert xs["away"] >= 0.5     # a nagy helyzet értéke a védőé
+    assert xs["home"] == 0.0
+
+    # Gólnál nincs hárított xG.
+    frames2 = _shot_frames(0, 37.0, 10.0, goal=True)
+    xs2 = xg_saved(Match(_meta(), frames2))
+    assert xs2["home"] == 0.0 and xs2["away"] == 0.0
