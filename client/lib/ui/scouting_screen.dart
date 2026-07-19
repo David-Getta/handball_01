@@ -567,6 +567,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return txt;
   }
 
+  // Szünet-kezdés: a 2. félidő első 5 percének mérlege (3+ gól
+  // különbségnél mutatjuk — azonos küszöb a felderítési kulccsal).
+  String? _restart(Map<String, dynamic> r) {
+    final n = ((r["restart_matches"] as num?) ?? 0).toInt();
+    if (n < 1) return null;
+    final f = ((r["restart_for"] as num?) ?? 0).toInt();
+    final a = ((r["restart_against"] as num?) ?? 0).toInt();
+    if ((f - a).abs() < 3) return null;
+    final verdict = f > a ? "ők ütnek először" : "rosszul jönnek ki";
+    return "$f–$a · $verdict";
+  }
+
   // Fegyelem: aki rendre kiül (2+ kiállítás) — támadható egy-egyben.
   String? _discipline(Map<String, dynamic> r) {
     final list = (r["susp_players"] as List?) ?? const [];
@@ -795,6 +807,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_topBlocker(r) != null) ["Fal kulcsa", _topBlocker(r)!],
       if (_sevenTaker(r) != null) ["Hetes-dobó", _sevenTaker(r)!],
       if (_discipline(r) != null) ["Fegyelem", _discipline(r)!],
+      if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_fbFinisher(r) != null) ["Kontra-befejező", _fbFinisher(r)!],
       if (_outletTarget(r) != null)
         ["Indítás-célpont", _outletTarget(r)!],
