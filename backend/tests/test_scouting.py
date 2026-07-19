@@ -1411,3 +1411,21 @@ def test_trend_includes_gk_xg_metrics():
     assert m["gk_xg_saved"]["newer"] == 1.5
     assert m["gk_xg_saved"]["better"] is True
     assert m["gk_xg_prevented"]["better"] is True
+
+
+def test_shooter_overperf_key_and_merge():
+    """+1,0 fölötti összesített befejezés-többlet kulcsot ad; kisebbnél
+    nem. A többlet játékosonként összegződik."""
+    from handball.pipeline.scouting import (_coach_keys,
+                                            _merge_shooter_overperf)
+    rep = ScoutingReport(team="away", team_name="X",
+                         shooter_overperf=[{"player_id": 7, "diff": 1.2}])
+    _, _, keys = _coach_keys(rep)
+    assert any("FELETT" in k and "7. játékos" in k for k in keys)
+    small = ScoutingReport(team="away", team_name="X",
+                           shooter_overperf=[{"player_id": 7,
+                                              "diff": 0.6}])
+    _, _, k2 = _coach_keys(small)
+    assert not any("FELETT" in k for k in k2)
+    merged = _merge_shooter_overperf([rep, small])
+    assert merged[0] == {"player_id": 7, "diff": 1.8}
