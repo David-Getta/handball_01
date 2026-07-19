@@ -202,6 +202,9 @@ class ScoutingReport:
     rec_transitions: int = 0
     rec_sum_s: float = 0.0
     rec_slow: int = 0
+    # Becsült posztok: {track_id: poszt} — meccsek közt az első érdemi
+    # becslés marad (a felállás ritkán változik).
+    positions: dict = field(default_factory=dict)
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
@@ -1048,6 +1051,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.rec_transitions = trr["transitions"]
         rep.rec_sum_s = trr["sum_s"]
         rep.rec_slow = trr["slow"]
+        from .roles import estimate_positions
+        rep.positions = {tid: r["poszt"] for tid, r in
+                         estimate_positions(match, config)
+                         .get(team.value, {}).items()}
     except Exception:
         pass
     try:
@@ -1617,6 +1624,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rec_transitions=sum(r.rec_transitions for r in reports),
         rec_sum_s=round(sum(r.rec_sum_s for r in reports), 1),
         rec_slow=sum(r.rec_slow for r in reports),
+        positions={tid: poszt for r in reversed(reports)
+                   for tid, poszt in (r.positions or {}).items()},
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),
@@ -1936,6 +1945,21 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
                      f"({100.0 * n / total:.0f}%) ugyanonnan jött: {z} — "
                      "a fal és a kapus erre a helyzetre készülhet."),
         })
+
+    # Felállásuk: a becsült posztok egy mondatban.
+    if rep.positions:
+        by_post: dict = {}
+        for tid, poszt in sorted(rep.positions.items()):
+            by_post.setdefault(poszt, []).append(str(tid))
+        order = ["irányító", "átlövő", "beálló", "szélső"]
+        parts_p = [f"{p_}: {', '.join(by_post[p_])}."
+                   for p_ in order if p_ in by_post]
+        if parts_p:
+            out.append({
+                "title": "Felállásuk",
+                "body": ("Becsült posztok a mozgásképből — "
+                         + " ".join(parts_p)),
+            })
 
     # Kulcsjátékos: akinél a legtöbb labda megfordul — a kapust átugorjuk
     # (nála kidobásoknál jár a labda, nem ő szervezi a támadást).

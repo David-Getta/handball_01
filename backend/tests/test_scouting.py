@@ -1606,3 +1606,22 @@ def test_key_players_get_estimated_positions():
     assert roles[3] == "irányító"       # birtoklásból, mint eddig
     assert roles[1] == "beálló"
     assert roles[2] == "szélső"
+
+
+def test_positions_narrative_and_merge():
+    """A becsült posztok "Felállásuk" szekcióként jelennek meg; a
+    combine az első érdemi becslést tartja meg."""
+    from handball.pipeline.scouting import scouting_narrative
+    rep = ScoutingReport(team="away", team_name="X",
+                         positions={1: "beálló", 2: "szélső",
+                                    3: "irányító"})
+    sec = next((x for x in scouting_narrative(rep)
+                if x["title"] == "Felállásuk"), None)
+    assert sec is not None
+    assert "beálló: 1." in sec["body"]
+    assert "szélső: 2." in sec["body"]
+    newer = ScoutingReport(team="away", team_name="X",
+                           positions={1: "átlövő"})
+    comb = combine_reports([rep, newer])
+    assert comb.positions[1] == "beálló"   # az első becslés marad
+    assert comb.positions[2] == "szélső"
