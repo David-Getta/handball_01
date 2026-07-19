@@ -194,6 +194,9 @@ class ScoutingReport:
     # A kapus-indításaik célpontjai: [{"player_id", "n"}] — kinek megy
     # az első hosszú passz; játékosonként meccsek közt összegezhető.
     gk_outlet_targets: list = field(default_factory=list)
+    # A lerohanásaik befejezői: [{"player_id", "goals"}] — ki futja ki a
+    # kontrákat; játékosonként meccsek közt összegezhető.
+    fb_finishers: list = field(default_factory=list)
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -714,6 +717,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"Kapusuk gyorsan indít (átlag {avg:.0f} mp alatt a felezőn) "
             "— minden lövés után AZONNAL vissza: a lassú visszafutást "
             "kontrával büntetik.")
+    # A kontra befejezője: ha a lerohanás-gólok zömét ugyanaz a játékos
+    # szerzi, a visszafutásnál ő az első számú felvevendő ember.
+    if rep.fb_finishers and rep.fb_finishers[0]["goals"] >= 2:
+        top_f = rep.fb_finishers[0]
+        keys.append(
+            f"A lerohanásaikat a(z) {top_f['player_id']}. játékos fejezi "
+            f"be ({top_f['goals']} kontra-gól) — labdavesztés után őt "
+            "keresd meg először a visszafutásnál.")
     # Az indítás célpontja: ha a hosszú passzok zöme ugyanahhoz a
     # játékoshoz megy, az ő megelőzése öli meg a kontrát.
     if rep.gk_outlets >= 2 and rep.gk_outlet_targets:
@@ -899,6 +910,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.attack_mix = attack_mix(match, config).get(team.value, {})
         rep.attack_efficiency = attack_efficiency(match, config).get(
             team.value, {})
+        from .attack_types import fast_break_finishers
+        rep.fb_finishers = [
+            dict(f) for f in
+            fast_break_finishers(match, config)[team.value]]
     except Exception:
         pass
     try:
@@ -1112,6 +1127,17 @@ def _top_shooter_habit(rep) -> tuple | None:
     return best
 
 
+def _merge_fb_finishers(reports) -> list:
+    """Kontra-befejezők gólszámainak pontos összegzése meccsek közt."""
+    tally: dict = {}
+    for r in reports:
+        for f in (r.fb_finishers or []):
+            tally[f["player_id"]] = (tally.get(f["player_id"], 0)
+                                     + int(f["goals"]))
+    return [{"player_id": pid, "goals": n}
+            for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_outlet_targets(reports) -> list:
     """Indítás-célpontok darabszámainak pontos összegzése meccsek közt."""
     tally: dict = {}
@@ -1234,6 +1260,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         assist_pairs=_merge_assist_pairs(reports),
         blockers=_merge_blockers(reports),
         gk_outlet_targets=_merge_outlet_targets(reports),
+        fb_finishers=_merge_fb_finishers(reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),

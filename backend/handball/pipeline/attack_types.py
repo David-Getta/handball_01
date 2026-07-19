@@ -224,3 +224,34 @@ def attack_mix(match: Match,
         out[team] = {t: round(100.0 * n / total, 1)
                      for t, n in sorted(by_type.items(), key=lambda kv: -kv[1])}
     return out
+
+
+def fast_break_finishers(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Ki fejezi be a lerohanásokat: a lerohanás-szakaszokra eső gólok
+    lövőnkénti darabszáma. A kontra-védekezés kulcs-adata — ha mindig
+    ugyanaz a játékos fut ki, őt kell először felvenni.
+
+    Visszatérés csapatonként: [{"player_id", "goals"}] gólszám szerint.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    goals = [(e.t, e.team.value, e.player_id)
+             for e in detect_shots(match, config)
+             if e.type == EventType.GOAL and e.player_id is not None]
+
+    tally: dict = {"home": {}, "away": {}}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        for (t, tm, pid) in goals:
+            if tm == side and a["start_frame"] <= t <= a["end_frame"] + tail:
+                tally[side][pid] = tally[side].get(pid, 0) + 1
+                break
+    return {side: [{"player_id": pid, "goals": n}
+                   for pid, n in sorted(rec.items(), key=lambda kv: -kv[1])]
+            for side, rec in tally.items()}

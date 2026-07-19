@@ -1130,3 +1130,20 @@ def test_outlet_target_key_and_merge():
     assert not any("célpontja" in k for k in k2)
     merged = _merge_outlet_targets([rep, spread])
     assert merged[0] == {"player_id": 12, "n": 4}
+
+
+def test_fb_finisher_key_and_merge():
+    """2+ kontra-gólos befejező → kulcs a visszafutásról; egy gólnál
+    nincs. A gólszámok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys, _merge_fb_finishers
+    rep = ScoutingReport(team="away", team_name="X",
+                         fb_finishers=[{"player_id": 9, "goals": 2},
+                                       {"player_id": 4, "goals": 1}])
+    _, _, keys = _coach_keys(rep)
+    assert any("lerohanásaikat" in k and "9. játékos" in k for k in keys)
+    one = ScoutingReport(team="away", team_name="X",
+                         fb_finishers=[{"player_id": 9, "goals": 1}])
+    _, _, k2 = _coach_keys(one)
+    assert not any("lerohanásaikat" in k for k in k2)
+    merged = _merge_fb_finishers([rep, one])
+    assert merged[0] == {"player_id": 9, "goals": 3}
