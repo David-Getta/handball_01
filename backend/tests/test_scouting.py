@@ -1034,3 +1034,23 @@ def test_shooter_habit_narrative_section():
                        {"player_id": 7, "zone": "beálló (6 m)", "shots": 2}])
     assert not any(x["title"] == "Fő lövőjük"
                    for x in scouting_narrative(flat))
+
+
+def test_top_shooter_fade_key_and_merge():
+    """Ha a fő lövő a 2. félidőben érdemben (15%+) lelassul, hajrá-kulcs
+    születik; kis esésnél nem. A fáradás-adat meccsek közt összegződik."""
+    from handball.pipeline.scouting import _coach_keys, _merge_shooter_fades
+    rep = ScoutingReport(
+        team="away", team_name="X",
+        shooter_zones=[{"player_id": 7, "zone": "átlövés bal", "shots": 5}],
+        shooter_fades=[{"player_id": 7, "drop_sum_pct": 22.0, "n": 1}])
+    _, _, keys = _coach_keys(rep)
+    assert any("elfárad" in k and "7. játékos" in k for k in keys)
+    mild = ScoutingReport(
+        team="away", team_name="X",
+        shooter_zones=[{"player_id": 7, "zone": "átlövés bal", "shots": 5}],
+        shooter_fades=[{"player_id": 7, "drop_sum_pct": 6.0, "n": 1}])
+    _, _, k2 = _coach_keys(mild)
+    assert not any("elfárad" in k for k in k2)
+    merged = _merge_shooter_fades([rep, mild])
+    assert merged == [{"player_id": 7, "drop_sum_pct": 28.0, "n": 2}]
