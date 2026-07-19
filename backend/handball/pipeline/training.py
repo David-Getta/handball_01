@@ -429,6 +429,24 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 22) Kapus-forma: ha a kapus a helyzetekhez képest sokat kap
+    # (negatív GSAx), célzott kapus-edzés kell — nem a fal a hibás.
+    try:
+        from .xg import xg_prevented
+        xp = xg_prevented(match, config)
+        for side in ("home", "away"):
+            rec = xp[side]
+            if rec["conceded"] >= 3 and rec["prevented"] <= -2.0:
+                add(side, "kapus", "Kapus-forma",
+                    f"a kapott gólok {abs(rec['prevented']):.1f}-gyel "
+                    "haladják meg a helyzetekből várhatót (GSAx "
+                    f"{rec['prevented']:+.1f})",
+                    "helyezkedés-videózás a kapott gólokból, "
+                    "reakció-gyakorlatok közeli lövésekre, sarok-védés "
+                    "ismétlő sorozatok")
+    except Exception:
+        pass
+
     # 21) Rotáció-tervezés: ha többen is nagyot esnek a tempóból és
     # cserét sem kapnak, a pad használatát kell megtervezni.
     try:
