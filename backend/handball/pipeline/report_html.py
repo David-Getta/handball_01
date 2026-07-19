@@ -1074,6 +1074,17 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              str(bl["away"]["blocks"])))
         except Exception:
             pass
+        # Csapatonkénti tempó: támadás/perc (elég hosszú felvételen).
+        try:
+            from .attack_types import match_pace
+            _pcr = match_pace(match)
+            if _pcr.get("available") and _pcr["duration_min"] > 0:
+                dm = _pcr["duration_min"]
+                rows.append(("Támadás / perc",
+                             f"{_pcr['home_attacks'] / dm:.1f}",
+                             f"{_pcr['away_attacks'] / dm:.1f}"))
+        except Exception:
+            pass
         # Lövés-sebesség sorok (ha van mért lövés).
         try:
             from .event_detection import shot_speeds
