@@ -2100,6 +2100,9 @@ def create_app():
                 from ..pipeline.rules import seven_meter_earners
                 _layer("seven_earners",
                        lambda: seven_meter_earners(match))
+                from ..pipeline.rules import suspension_earners
+                _layer("susp_earners",
+                       lambda: suspension_earners(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
