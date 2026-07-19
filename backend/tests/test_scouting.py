@@ -1172,7 +1172,28 @@ def test_seven_taker_key_and_merge():
     _, _, k3 = _coach_keys(one)
     assert not any("heteseiket" in k for k in k3)
     merged = _merge_seven_takers([rep, strong])
-    assert merged[0] == {"player_id": 11, "attempts": 6, "goals": 4}
+    assert merged[0] == {"player_id": 11, "attempts": 6, "goals": 4,
+                         "dirs": {}}
+
+
+def test_seven_taker_direction_key():
+    """Ha a dobó hetesei 70%+ egy sávba mennek (3+ mért irány), a
+    kulcs konkrét utasítást ad a kapusnak; szórt iránynál nem."""
+    from handball.pipeline.scouting import _coach_keys
+    pred = ScoutingReport(
+        team="away", team_name="X",
+        seven_takers=[{"player_id": 7, "attempts": 4, "goals": 3,
+                       "dirs": {"bal": 3, "közép": 1}}])
+    _, _, keys = _coach_keys(pred)
+    key = next((k for k in keys if "heteseiket" in k), None)
+    assert key is not None and "induljon balra" in key
+    spread = ScoutingReport(
+        team="away", team_name="X",
+        seven_takers=[{"player_id": 7, "attempts": 4, "goals": 3,
+                       "dirs": {"bal": 2, "jobb": 2}}])
+    _, _, k2 = _coach_keys(spread)
+    key2 = next((k for k in k2 if "heteseiket" in k), None)
+    assert key2 is not None and "induljon" not in key2
 
 
 def test_match_key_players_top_shooter():

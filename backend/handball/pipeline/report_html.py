@@ -980,6 +980,9 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                     bits.append(f"dobó: {sm['shooter_id']}.")
                 if sm.get("outcome") and sm["outcome"] != "ismeretlen":
                     bits.append(sm["outcome"])
+                if sm.get("irany"):
+                    bits.append({"bal": "balra", "jobb": "jobbra",
+                                 "közép": "középre"}[sm["irany"]])
                 return f" ({', '.join(bits)})" if bits else ""
             lis = "".join(
                 f"<li><b>{_fmt_clock(e['t'] / fps_)}</b> — "

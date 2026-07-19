@@ -197,6 +197,44 @@ def passive_play_risks(match: Match,
 SEVEN_OUTCOME_WINDOW_S = 6.0
 
 
+# A hetes iránya: a labda kapu-síkbeli y-eltérése ennél nagyobb → szélső sáv.
+SEVEN_DIR_SIDE_M = 0.5
+# Csak akkor mondunk irányt, ha a labda ennyire megközelítette a kapu síkját.
+SEVEN_DIR_MAX_PLANE_M = 1.5
+
+
+def _seven_direction(match: Match, t0: int, goal_x: float,
+                     fps: float) -> Optional[str]:
+    """Merre ment a hetes a kapuban (bal/közép/jobb) a DOBÓ szemszögéből.
+
+    A lövés utáni ~1 mp-ben azt a kockát keressük, ahol a labda a
+    legközelebb járt a kapu síkjához, és az ottani oldal-eltérésből
+    (y a kapu közepéhez képest) mondjuk meg a sávot. None, ha a labda
+    nem került a sík közelébe (pl. eltakarták).
+    """
+    cy = COURT_WIDTH_M / 2.0
+    horizon = t0 + round(1.0 * fps)
+    best = None  # (kapu-sík távolság, y)
+    for f in match.frames:
+        if f.t < t0 or f.t > horizon or f.ball is None:
+            continue
+        d = abs(f.ball.x - goal_x)
+        if best is None or d < best[0]:
+            best = (d, f.ball.y)
+    if best is None or best[0] > SEVEN_DIR_MAX_PLANE_M:
+        return None
+    off = best[1] - cy
+    # A dobó szemszögéből: a +x kapura nézve az alacsony y a BAL oldal;
+    # a -x kapura dobva tükrözünk.
+    if goal_x < COURT_LENGTH_M / 2.0:
+        off = -off
+    if off <= -SEVEN_DIR_SIDE_M:
+        return "bal"
+    if off >= SEVEN_DIR_SIDE_M:
+        return "jobb"
+    return "közép"
+
+
 def seven_meter_outcomes(match: Match,
                          config: Optional[TacticsConfig] = None) -> list[dict]:
     """A felismert hétméteresek KIMENETELLEL: gól / védés / kihagyva.
@@ -207,7 +245,9 @@ def seven_meter_outcomes(match: Match,
     Ha az ablakban nincs lövés, az outcome "ismeretlen" (pl. újra
     lefújták, vagy a labda nem látszott).
 
-    Visszatérés: [{"t", "team", "goal_x", "outcome", "shooter_id"}]."""
+    Visszatérés: [{"t", "team", "goal_x", "outcome", "shooter_id",
+    "irany"}] — az irany a kapun belüli sáv (bal/közép/jobb) a dobó
+    szemszögéből, None, ha nem mérhető."""
     from .event_detection import EventType, detect_shots
 
     config = config or TacticsConfig()
@@ -221,6 +261,7 @@ def seven_meter_outcomes(match: Match,
         rec = dict(sm)
         rec["outcome"] = "ismeretlen"
         rec["shooter_id"] = None
+        rec["irany"] = None
         for e in shots:
             if not (sm["t"] <= e.t <= sm["t"] + win):
                 continue
@@ -230,6 +271,8 @@ def seven_meter_outcomes(match: Match,
                               "védés" if (e.detail or {}).get("outcome") == "save"
                               else "kihagyva")
             rec["shooter_id"] = e.player_id
+            rec["irany"] = _seven_direction(match, e.t, sm["goal_x"],
+                                            fps)
             break
         out.append(rec)
     return out
