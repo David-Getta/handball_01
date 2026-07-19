@@ -1657,3 +1657,19 @@ def test_wing_dependency_keys_and_combine():
     comb = combine_reports([heavy, light])
     assert comb.wing_goals == 4
     assert comb.wing_total_goals == 16
+
+
+def test_post_goal_distribution_narrative_and_combine():
+    """A posztonkénti gól-eloszlás megjelenik a Befejezésük szekcióban,
+    és meccsek közt pontosan összegződik."""
+    from handball.pipeline.scouting import scouting_narrative
+    rep = ScoutingReport(team="away", team_name="X", shots=12, goals=8,
+                         post_goals={"szélső": 4, "átlövő": 4})
+    sec = next(x for x in scouting_narrative(rep)
+               if x["title"] == "Befejezésük")
+    assert "Gól-eloszlás posztok szerint" in sec["body"]
+    assert "szélső 50%" in sec["body"]
+    other = ScoutingReport(team="away", team_name="X",
+                           post_goals={"szélső": 1, "beálló": 2})
+    comb = combine_reports([rep, other])
+    assert comb.post_goals == {"szélső": 5, "átlövő": 4, "beálló": 2}

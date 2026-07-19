@@ -209,6 +209,8 @@ class ScoutingReport:
     # jött összes gól — meccsek közt összegződik.
     wing_goals: int = 0
     wing_total_goals: int = 0
+    # Gól-eloszlás posztonként: {poszt: gól} — meccsek közt összegződik.
+    post_goals: dict = field(default_factory=dict)
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
@@ -1088,6 +1090,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.wing_total_goals += rec_sh["goals"]
             if rec_sh["player_id"] in wings:
                 rep.wing_goals += rec_sh["goals"]
+            poszt_sh = rep.positions.get(rec_sh["player_id"])
+            if poszt_sh and rec_sh["goals"]:
+                rep.post_goals[poszt_sh] = (
+                    rep.post_goals.get(poszt_sh, 0) + rec_sh["goals"])
     except Exception:
         pass
     try:
@@ -1661,6 +1667,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
                    for tid, poszt in (r.positions or {}).items()},
         wing_goals=sum(r.wing_goals for r in reports),
         wing_total_goals=sum(r.wing_total_goals for r in reports),
+        post_goals={
+            p_: sum((r.post_goals or {}).get(p_, 0) for r in reports)
+            for p_ in {k for r in reports
+                       for k in (r.post_goals or {})}},
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),
@@ -1936,6 +1946,14 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
                      f"(a lövéseik {100.0 * rec['shots'] / total:.0f}%-a).")
         if rep.turnovers:
             body += f" Labdaeladásuk: {rep.turnovers}."
+        # Gól-eloszlás posztok szerint (ha van becsült poszt-adat).
+        pg = rep.post_goals or {}
+        pg_total = sum(pg.values())
+        if pg_total >= 6:
+            parts_pg = ", ".join(
+                f"{p_} {100.0 * n / pg_total:.0f}%"
+                for p_, n in sorted(pg.items(), key=lambda kv: -kv[1]))
+            body += f" Gól-eloszlás posztok szerint: {parts_pg}."
         # Lövés-választás: válogatósak vagy távolról is vállalkoznak.
         if rep.shots >= 10 and rep.xg > 0:
             avg_xg = rep.xg / rep.shots
