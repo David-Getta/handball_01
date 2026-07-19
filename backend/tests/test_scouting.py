@@ -1054,3 +1054,22 @@ def test_top_shooter_fade_key_and_merge():
     assert not any("elfárad" in k for k in k2)
     merged = _merge_shooter_fades([rep, mild])
     assert merged == [{"player_id": 7, "drop_sum_pct": 28.0, "n": 2}]
+
+
+def test_assist_pair_axis_key_and_merge():
+    """3+ gólos (gólpasszoló -> lövő) páros → "tengely"-kulcs; kevesebb
+    gólnál nincs. A párok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys, _merge_assist_pairs
+    rep = ScoutingReport(
+        team="away", team_name="X",
+        assist_pairs=[{"from": 4, "to": 7, "goals": 3},
+                      {"from": 2, "to": 7, "goals": 1}])
+    _, _, keys = _coach_keys(rep)
+    assert any("4. → 7." in k and "tengelye" in k for k in keys)
+    few = ScoutingReport(
+        team="away", team_name="X",
+        assist_pairs=[{"from": 4, "to": 7, "goals": 2}])
+    _, _, k2 = _coach_keys(few)
+    assert not any("tengelye" in k for k in k2)
+    merged = _merge_assist_pairs([few, few])
+    assert merged == [{"from": 4, "to": 7, "goals": 4}]
