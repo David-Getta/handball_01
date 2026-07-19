@@ -1380,3 +1380,19 @@ def test_gk_xg_saved_in_narrative():
                if x["title"] == "Kapusuk")
     assert "hárított" in sec["body"]
     assert "1.3" in sec["body"] or "1,3" in sec["body"]
+
+
+def test_gk_xg_prevented_weakness_and_combine():
+    """Meccsenként −1,0 alatti megmentett gól gyengeség; jobb mérlegnél
+    nincs. Az összeg pontosan adódik."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="X", matches=2,
+                         gk_xg_prevented=-2.4)
+    _, weaknesses, _ = _coach_keys(rep)
+    assert any("helyzetekhez képest sokat kap" in w for w in weaknesses)
+    ok_rep = ScoutingReport(team="away", team_name="X", matches=2,
+                            gk_xg_prevented=-0.8)
+    _, w2, _ = _coach_keys(ok_rep)
+    assert not any("helyzetekhez képest" in w for w in w2)
+    comb = combine_reports([rep, ok_rep])
+    assert abs(comb.gk_xg_prevented - (-3.2)) < 1e-6

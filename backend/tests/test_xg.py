@@ -205,3 +205,19 @@ def test_xg_saved_credits_defending_side():
     frames2 = _shot_frames(0, 37.0, 10.0, goal=True)
     xs2 = xg_saved(Match(_meta(), frames2))
     assert xs2["home"] == 0.0 and xs2["away"] == 0.0
+
+
+def test_xg_prevented_balances_faced_and_conceded():
+    """A megmentett gól = kapura tartó xG − kapott gól; a mellé menő
+    lövés nem számít bele."""
+    from handball.pipeline.xg import xg_prevented
+
+    # Egy gól a vendég kapuba (a hazai lövő nagy helyzetből).
+    frames = _shot_frames(0, 37.0, 10.0, goal=True)
+    rec = xg_prevented(Match(_meta(), frames))["away"]
+    assert rec["conceded"] == 1
+    assert rec["faced_xg"] >= 0.5
+    # prevented = faced − 1: nagy helyzetnél kis negatív szám.
+    assert abs(rec["prevented"] - (rec["faced_xg"] - 1)) < 1e-6
+    # A hazai oldalon nem történt semmi.
+    assert xg_prevented(Match(_meta(), frames))["home"]["faced_xg"] == 0.0
