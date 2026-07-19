@@ -193,3 +193,60 @@ def test_story_mentions_run_at_turning_point():
     assert first["title"] == "A meccs története"
     if "fordulópont" in first["body"]:
         assert "sorozat hozta" in first["body"]
+
+
+def test_goalkeeper_change_verdict_sentence():
+    """Kapuscserénél a szekció megmondja, bejött-e a csere: a két kapus
+    GSAx-mérlege (helyzet-értékkel súlyozva) alapján ítél."""
+    from handball.models.tracking import (Ball, Frame, PlayerPosition,
+                                          PositionSource, Team)
+    from handball.pipeline.coach_summary import _goalkeepers_section
+
+    def gk(tid):
+        return PlayerPosition(track_id=tid, team=Team.AWAY, x=39.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    def shooter():
+        return PlayerPosition(track_id=4, team=Team.HOME, x=33.5,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Három védés a 9-es kapusra...
+    for _ in range(3):
+        for i in range(8):
+            x = min(33.6 + i, 38.8)
+            players = [gk(9)] + ([shooter()] if i == 0 else [])
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # ...csere után három kapott gól a 8-asra.
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):
+        for i in range(8):
+            players = [gk(8)] + ([shooter()] if i == 0 else [])
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=33.6 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="gkv", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    sec = _goalkeepers_section(m, "H", "A")
+    assert sec is not None
+    assert "kapust cserélt" in sec["body"]
+    assert "nem hozott javulást" in sec["body"]

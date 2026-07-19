@@ -191,11 +191,15 @@ def goalkeeper_timeline(match: Match, config=None) -> dict:
 
     Visszatérés csapatonként: {"stints": [{"track_id","from_s","to_s"}],
     "changes": [mp], "per_keeper": {tid: {"on_target","saves",
-    "save_pct"}}} — üres, ha nincs kapus-jelölés.
+    "save_pct","faced_xg","conceded","prevented"}}} — üres, ha nincs
+    kapus-jelölés. A prevented (GSAx) kapusonként: a kapott lövések
+    helyzet-értéke mínusz a kapott gólok — cserénél így a két kapus
+    a helyzetek nehézségén át is összemérhető.
     """
     from ..models.tracking import Team
     from .event_detection import EventType, detect_shots
     from .tactics import TacticsConfig
+    from .xg import match_xg
 
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
@@ -212,6 +216,14 @@ def goalkeeper_timeline(match: Match, config=None) -> dict:
                 continue
             gk = min(gks, key=lambda p: abs(p.x - own_x))
             duty[team.value].append((f.t, gk.track_id))
+
+    # A lövések helyzet-értéke időbélyeg szerint — a kapusonkénti
+    # xG-mérleghez (a nehéz és a könnyű lövés nem ugyanannyit ér).
+    try:
+        xg_by_t = {sh["t"]: sh["xg"]
+                   for sh in match_xg(match, config)["shots"]}
+    except Exception:
+        xg_by_t = {}
 
     out: dict = {}
     for side in ("home", "away"):
@@ -257,16 +269,23 @@ def goalkeeper_timeline(match: Match, config=None) -> dict:
                 tid = on_duty(e.t)
                 if tid is None:
                     continue
-                rec = per_keeper.setdefault(tid, {"on_target": 0,
-                                                  "saves": 0,
-                                                  "save_pct": 0.0})
+                rec = per_keeper.setdefault(
+                    tid, {"on_target": 0, "saves": 0, "save_pct": 0.0,
+                          "faced_xg": 0.0, "conceded": 0,
+                          "prevented": 0.0})
                 rec["on_target"] += 1
+                rec["faced_xg"] += xg_by_t.get(e.t, 0.0)
                 if outcome == "save":
                     rec["saves"] += 1
+                else:
+                    rec["conceded"] += 1
             for rec in per_keeper.values():
                 if rec["on_target"]:
                     rec["save_pct"] = round(
                         100.0 * rec["saves"] / rec["on_target"], 1)
+                rec["faced_xg"] = round(rec["faced_xg"], 2)
+                rec["prevented"] = round(
+                    rec["faced_xg"] - rec["conceded"], 2)
 
         out[side] = {
             "stints": [{"track_id": st["tid"],
