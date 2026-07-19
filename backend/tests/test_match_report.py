@@ -427,3 +427,17 @@ def test_report_key_players_block():
     assert "Kulcsemberek" in html
     assert "Fő lövő" in html
     assert "1. játékos" in html
+
+
+def test_report_team_pace_row():
+    """Elég hosszú felvételen a Csapat-mutatók tábla Támadás / perc
+    sort kap (üres meccsen 0.0 / 0.0)."""
+    from handball.models.tracking import Frame, Match, MatchMeta
+
+    n = int(12 * 60 * 25)
+    m = Match(MatchMeta(match_id="pcr", home_team="H", away_team="A",
+                        fps=25.0),
+              [Frame(t=i, players=[], ball=None) for i in range(n)])
+    html = match_report_html(m, {}, [], None)
+    assert "Támadás / perc" in html
+    assert "0.0" in html
