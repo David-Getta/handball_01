@@ -1848,6 +1848,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import transition_recovery
+            res["recovery"] = transition_recovery(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import pressure_finishing
             res["pressure_finishing"] = pressure_finishing(match)
         except Exception:
