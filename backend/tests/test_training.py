@@ -536,3 +536,28 @@ def test_negative_gsax_triggers_keeper_focus():
     assert item is not None
     assert "GSAx" in item["why"]
     assert item["area"] == "kapus"
+
+
+def test_slow_recovery_triggers_transition_focus():
+    """Méréssel lassú visszarendeződés → Visszarendeződés-tempó fókusz
+    a védekező oldalon."""
+    frames = []
+    t = 0
+    for _ in range(4):  # négy támadás, mindegyiknél késve érnek vissza
+        for i in range(250):
+            bx = 22.0 + 0.05 * i
+            players = [_pl(1, Team.HOME, bx, 10.0)]
+            dx = 10.0 if i < 150 else 35.0
+            for k in range(4):
+                players.append(_pl(10 + k, Team.AWAY, dx, 4.0 + 4 * k))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):  # birtoklás-szünet: külön szakaszok
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["away"]
+                 if it["title"] == "Visszarendeződés-tempó"), None)
+    assert item is not None
+    assert "felálló védelemig" in item["why"]

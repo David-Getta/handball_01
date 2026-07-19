@@ -429,6 +429,24 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 23) Visszarendeződés-tempó: ha méréssel is lassú a visszaérés,
+    # nem kell kontra-gólt várni a jelzéshez — korai figyelmeztetés.
+    try:
+        from .defense import RECOVERY_SLOW_S, transition_recovery
+        trr = transition_recovery(match, config)
+        for side in ("home", "away"):
+            rec = trr[side]
+            if (rec["transitions"] >= 4 and rec["avg_s"] is not None
+                    and rec["avg_s"] >= RECOVERY_SLOW_S):
+                add(side, "védekezés", "Visszarendeződés-tempó",
+                    f"átlag {rec['avg_s']:.1f} mp a felálló védelemig "
+                    f"({rec['slow']}/{rec['transitions']} lassú átmenet)",
+                    "visszafutás-versenyek 3 mp-es célidővel, az első "
+                    "visszaérő oszt-szerepének begyakorlása, védő-"
+                    "átvételi kommunikáció")
+    except Exception:
+        pass
+
     # 22) Kapus-forma: ha a kapus a helyzetekhez képest sokat kap
     # (negatív GSAx), célzott kapus-edzés kell — nem a fal a hibás.
     try:
