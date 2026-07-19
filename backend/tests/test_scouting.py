@@ -1013,3 +1013,24 @@ def test_shooter_zone_habit_key_and_merge():
     assert not any("innen jön" in k for k in k2)
     merged = _merge_shooter_zones([rep, rep])
     assert merged[0] == {"player_id": 7, "zone": "átlövés bal", "shots": 10}
+
+
+def test_shooter_habit_narrative_section():
+    """A koncentrált fő lövő a narratívában is megjelenik ("Fő lövőjük"),
+    kiegyenlített eloszlásnál nem."""
+    from handball.pipeline.scouting import scouting_narrative
+    rep = ScoutingReport(
+        team="away", team_name="X",
+        shooter_zones=[{"player_id": 7, "zone": "átlövés bal", "shots": 5},
+                       {"player_id": 7, "zone": "beálló (6 m)", "shots": 1}])
+    secs = scouting_narrative(rep)
+    sec = next((x for x in secs if x["title"] == "Fő lövőjük"), None)
+    assert sec is not None
+    assert "átlövés bal" in sec["body"]
+    assert "83%" in sec["body"]
+    flat = ScoutingReport(
+        team="away", team_name="X",
+        shooter_zones=[{"player_id": 7, "zone": "átlövés bal", "shots": 2},
+                       {"player_id": 7, "zone": "beálló (6 m)", "shots": 2}])
+    assert not any(x["title"] == "Fő lövőjük"
+                   for x in scouting_narrative(flat))

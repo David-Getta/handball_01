@@ -384,6 +384,45 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átlag ${avg.toStringAsFixed(0)} mp";
   }
 
+  // Fő lövő szokása: a legkoncentráltabb lövő (4+ lövés, 60%+ egy
+  // zónából) — a backend-kulcsokkal azonos küszöb.
+  String? _shooterHabit(Map<String, dynamic> r) {
+    final list = (r["shooter_zones"] as List?) ?? const [];
+    final per = <int, Map<String, int>>{};
+    for (final e in list) {
+      final m = e as Map<String, dynamic>;
+      final pid = (m["player_id"] as num).toInt();
+      final zone = m["zone"] as String;
+      final byZone = per.putIfAbsent(pid, () => <String, int>{});
+      byZone[zone] = (byZone[zone] ?? 0) + (m["shots"] as num).toInt();
+    }
+    int? bestPid;
+    String? bestZone;
+    var bestN = 0;
+    var bestTotal = 0;
+    per.forEach((pid, zones) {
+      var total = 0;
+      zones.forEach((_, n) => total += n);
+      String? z;
+      var n = 0;
+      zones.forEach((zone, cnt) {
+        if (cnt > n) {
+          n = cnt;
+          z = zone;
+        }
+      });
+      if (total >= 4 && n / total >= 0.6 && n > bestN) {
+        bestPid = pid;
+        bestZone = z;
+        bestN = n;
+        bestTotal = total;
+      }
+    });
+    if (bestPid == null) return null;
+    final pct = (100.0 * bestN / bestTotal).round();
+    return "$bestPid. · $bestZone $pct%";
+  }
+
   // Ziccer-mérleg: nagy helyzeteikből (xG >= 0,5) hány lett gól.
   String? _bigChances(Map<String, dynamic> r) {
     final total = ((r["big_total"] as num?) ?? 0).toInt();
@@ -537,6 +576,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (((r["gk_big_saves"] as num?) ?? 0) >= 2)
         ["Bravúr-védés", "${r["gk_big_saves"]}"],
       if (_gkOutlet(r) != null) ["Kapus-indítás", _gkOutlet(r)!],
+      if (_shooterHabit(r) != null) ["Fő lövő", _shooterHabit(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
