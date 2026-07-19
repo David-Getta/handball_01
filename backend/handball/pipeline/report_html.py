@@ -618,8 +618,15 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             continue
         team = getattr(e.team, "value", e.team)
         name = meta.home_team if team == "home" else meta.away_team
+        scorer = ""
+        pid = getattr(e, "player_id", None)
+        if pid is None and isinstance(e, dict):
+            pid = e.get("player_id")
+        if pid is not None:
+            scorer = f" · {pid}. játékos"
         goal_rows.append(
-            f"<li><b>{_fmt_clock(e.t / fps)}</b> — GÓL · {escape(name)}</li>")
+            f"<li><b>{_fmt_clock(e.t / fps)}</b> — GÓL · {escape(name)}"
+            f"{scorer}</li>")
     goals_html = ("<ul>" + "".join(goal_rows) + "</ul>") if goal_rows else \
         '<p class="empty">Nincs felismert gól az elemzett szakaszban.</p>'
     # Szakaszonkénti gól-eloszlás (mikor esnek a gólok) — sáv-táblaként.
