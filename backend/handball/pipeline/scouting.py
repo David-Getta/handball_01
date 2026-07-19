@@ -1265,6 +1265,19 @@ def match_key_players(match: Match, config=None) -> dict:
                     f"{tg[0]['n']} indítás")
     except Exception:
         pass
+    try:
+        from .event_detection import assist_network
+        net = assist_network(match, config)
+        for side in ("home", "away"):
+            pairs = net[side]["pairs"]
+            if pairs and pairs[0]["goals"] >= 2:
+                top = pairs[0]
+                # A tengely két emberből áll — a lövő a "játékos", az
+                # előkészítő a mérlegben szerepel.
+                add(side, "Gól-tengely", top["to"],
+                    f"a(z) {top['from']}. játékostól, {top['goals']} gól")
+    except Exception:
+        pass
     return out
 
 

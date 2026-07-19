@@ -1245,3 +1245,48 @@ def test_pace_profile_keys_and_combine():
     comb = combine_reports([fast, slow])
     assert comb.pace_attacks == 80
     assert abs(comb.pace_minutes - 100.0) < 1e-6
+
+
+def test_match_key_players_goal_axis():
+    """A 2+ gólos (gólpasszoló -> lövő) páros Gól-tengely szerepként
+    jelenik meg a kulcsember-listában."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource)
+    from handball.pipeline.scouting import match_key_players
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(2):
+        # passz 1→2, majd a 2-es gólja a +x kapura
+        frames.append(Frame(t=t, players=[pl(1, 25.0, 10.0),
+                                          pl(2, 30.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=[pl(1, 25.0, 10.0),
+                                          pl(2, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(2, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(MatchMeta(match_id="ax", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    kp = match_key_players(m)
+    axis = next((it for it in kp["home"] if it["role"] == "Gól-tengely"),
+                None)
+    assert axis is not None
+    assert axis["player_id"] == 2
+    assert "1. játékostól" in axis["detail"]
+    assert "2 gól" in axis["detail"]
