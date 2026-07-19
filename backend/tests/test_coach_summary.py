@@ -250,3 +250,37 @@ def test_goalkeeper_change_verdict_sentence():
     assert sec is not None
     assert "kapust cserélt" in sec["body"]
     assert "nem hozott javulást" in sec["body"]
+
+
+def test_suspension_offender_named_in_summary():
+    """A Kiállítások szekció megnevezi a kiülőt (a hátrány alatt eltűnő
+    tracket)."""
+    from handball.models.tracking import (Ball, Frame, PlayerPosition,
+                                          PositionSource, Team)
+
+    def mk(t, home_tracks):
+        players = [PlayerPosition(track_id=tid, team=Team.HOME,
+                                  x=15.0 + (tid % 10), y=4.0 + (tid % 6),
+                                  source=PositionSource.MEASURED,
+                                  confidence=1.0)
+                   for tid in home_tracks]
+        players += [PlayerPosition(track_id=200 + k, team=Team.AWAY,
+                                   x=25.0 + k, y=4.0 + k,
+                                   source=PositionSource.MEASURED,
+                                   confidence=1.0)
+                    for k in range(6)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=20.0, y=10.0, confidence=1.0))
+
+    full = [100, 101, 102, 103, 104, 105]
+    down = [100, 101, 102, 103, 104]
+    frames = [mk(t, full) for t in range(750)]
+    frames += [mk(t, down) for t in range(750, 2250)]
+    frames += [mk(t, full) for t in range(2250, 3000)]
+    m = Match(MatchMeta(match_id="sus", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    data = coach_summary(m)
+    sec = next((s_ for s_ in data["sections"]
+                if s_["title"] == "Kiállítások és hétméteresek"), None)
+    assert sec is not None
+    assert "kiülői: 105. játékos" in sec["body"]
