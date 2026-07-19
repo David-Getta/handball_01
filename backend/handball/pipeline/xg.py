@@ -163,3 +163,18 @@ def big_saves(match: Match,
                         "player_id": sh.get("player_id"), "xg": sh["xg"]})
     out.sort(key=lambda r: r["t"])
     return out
+
+
+def xg_saved(match: Match, config: Optional[XGConfig] = None) -> dict:
+    """Hárított xG: a fogott lövések helyzet-értékének összege a VÉDŐ
+    csapat oldalán. A sima védés% minden védést egyformán számol — ez a
+    mutató a NEHÉZ védéseket díjazza: a 0,6 xG-s ziccer megfogása többet
+    ér, mint egy 0,05-ös távoli pötty.
+
+    Visszatérés: {"home": xg, "away": xg} — a védést jegyző oldal.
+    """
+    out = {"home": 0.0, "away": 0.0}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") == "save":
+            out["away" if sh["team"] == "home" else "home"] += sh["xg"]
+    return {k: round(v, 2) for k, v in out.items()}

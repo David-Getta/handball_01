@@ -1266,6 +1266,11 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         from .goalkeeper import OUTLET_FAST_S, goalkeeper_stats, outlet_speed
         gstats = goalkeeper_stats(match)
         try:
+            from .xg import xg_saved
+            xsaved = xg_saved(match)
+        except Exception:
+            xsaved = {}
+        try:
             outlets = outlet_speed(match)
         except Exception:
             outlets = {}
@@ -1311,7 +1316,9 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                         f"<td>{escape(zones)}</td>"
                         f"<td>{escape(zsp_txt)}</td>"
                         f"<td>{escape(weak)}</td>"
-                        f"<td>{escape(o_txt)}</td></tr>")
+                        f"<td>{escape(o_txt)}</td>"
+                        f"<td class='num'>{xsaved.get(key, 0.0):.1f}</td>"
+                        "</tr>")
         if rows:
             gk_html = ("<h2>Kapus-teljesítmény</h2><table>"
                        "<tr><th>Csapat</th><th class='num'>Kapura</th>"
@@ -1321,11 +1328,14 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                        "<th>Kapott gólok zónái</th>"
                        "<th>Zóna-védés%</th>"
                        "<th>Leggyengébb zóna</th>"
-                       "<th>Indítás (felezőig)</th></tr>"
+                       "<th>Indítás (felezőig)</th>"
+                       "<th class='num'>Hárított xG</th></tr>"
                        + "".join(rows) + "</table>"
                        + '<p class="note">Indítás: védés után ennyi idő '
                          "alatt ért át a labda a felezőn; gyors = "
-                         f"{OUTLET_FAST_S:.0f} mp-en belül.</p>")
+                         f"{OUTLET_FAST_S:.0f} mp-en belül. Hárított xG: "
+                         "a fogott lövések helyzet-értékének összege — a "
+                         "nehéz védéseket díjazza.</p>")
             # Kapus-csere jegyzet (ha volt): mikor és milyen mérleggel.
             try:
                 from .goalkeeper import goalkeeper_timeline
