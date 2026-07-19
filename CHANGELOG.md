@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#310)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#342)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -113,6 +113,29 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   összefoglalóban és a jelentés fejléc-sávjában. (#280)
 - **Fejlődés-követés bővítés**: bravúr-védés és gyors indítás
   meccsenkénti trendje (a nem mért időszak kimarad). (#272)
+- **Poszt-becslés**: ki a beálló / szélső / átlövő / irányító a
+  támadó-fázis mozgásképéből — Felállások szekció a jelentésben és az
+  összefoglalóban, poszt-címkék a Kulcsemberekben és a terhelés-
+  táblában, beálló- és szélső-függés kulcsok, gól-eloszlás posztok
+  szerint, edzés-szabály a kimaradó szélsőkre, megbízhatósági jelzés.
+  (#324–#332, #336, #340, #341, #342, #329, #330, #331)
+- **A meccs története**: az összefoglaló és a jelentés folyó
+  bekezdéssel nyit — eredmény, félidő, legnagyobb különbség,
+  vezetés-váltások, fordulópont. (#338, #339)
+- **Visszarendeződés-idő**: labdavesztés után mikor áll fel a védelem
+  — kulcsok, jelentés-sor, csempe és edzés-szabály. (#320–#323)
+- **Támadás-eredet**: középkezdés / kidobás / labdaszerzés címkék
+  gól-hozzárendeléssel — kulcs, narratíva, jelentés-tábla, csempe.
+  (#316–#318)
+- **Hetes-kiharcoló**: kit rántanak le — kulcs és Kulcsember-szerep.
+  (#333, #334)
+- **Lövés-választás és hidegvér**: átlag xG/lövés kulcsok, gól − xG
+  többlet játékosonként, Ágyú és Hidegvérű befejező szerepek.
+  (#307, #308, #312, #313, #298)
+- **Csomag-bővítés**: edzesterv.txt + új rétegek az elemzesek.json-ban.
+  (#319, #323, #327, #335, #337)
+- **7 a 6 időzítés-jegyzet a jelentésben** (#314) és **kapus-xG
+  csempék/sorok** (#309, #315, #305, #306).
 - **Kapus-xG páros**: hárított xG (a nehéz védéseket díjazó mutató) és
   megmentett gólok (GSAx: kapott gól a helyzet-minőséghez mérve) —
   jelentés-oszlop és -sor, edzői mondat, felderítési erősség/gyengeség,
