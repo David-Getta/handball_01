@@ -386,4 +386,21 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 19) A 7 a 6 ára: ha többször kaptak gólt az üresen hagyott kapuba,
+    # a lehozott kapusos játék labdabiztonságát kell gyakorolni.
+    try:
+        from .goalkeeper import empty_net_goals
+        eng = empty_net_goals(match, config)
+        for side in ("home", "away"):
+            rec = eng[side]
+            if rec["conceded_empty"] >= 2:
+                add(side, "támadás", "7 a 6 labdabiztonság",
+                    f"{rec['conceded_empty']} gólt kaptak üres kapura "
+                    "a lehozott kapusos játék kockázataként",
+                    "emberelőnyös figurák labdabiztos befejezéssel, "
+                    "labdavesztés utáni azonnali letámadás, a kapus "
+                    "gyors visszaérkezésének gyakorlása")
+    except Exception:
+        pass
+
     return out
