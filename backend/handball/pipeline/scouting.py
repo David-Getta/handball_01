@@ -1193,6 +1193,11 @@ def _top_shooter_habit(rep) -> tuple | None:
     return best
 
 
+# "Ágyú" szerep: e lövés-sebesség (km/h) fölött a lövő külön említést
+# érdemel a kulcsember-listában — a kapusnak reakció-terv kell rá.
+CANNON_KMH = 85.0
+
+
 def match_key_players(match: Match, config=None) -> dict:
     """Kulcsemberek egy meccsből: kinél dől el a játék — szereponként a
     legjellemzőbb játékos, csak érdemi mintánál. A jelentés Kulcsemberek
@@ -1276,6 +1281,21 @@ def match_key_players(match: Match, config=None) -> dict:
                 # előkészítő a mérlegben szerepel.
                 add(side, "Gól-tengely", top["to"],
                     f"a(z) {top['from']}. játékostól, {top['goals']} gól")
+    except Exception:
+        pass
+    try:
+        from .event_detection import shot_speeds
+        sp = shot_speeds(match, config)
+        for side in ("home", "away"):
+            best = None
+            for sh in sp.get("shots", []):
+                if sh["team"] != side or sh.get("player_id") is None:
+                    continue
+                if best is None or sh["speed_kmh"] > best["speed_kmh"]:
+                    best = sh
+            if best is not None and best["speed_kmh"] >= CANNON_KMH:
+                add(side, "Ágyú", best["player_id"],
+                    f"{best['speed_kmh']:.0f} km/h lövés")
     except Exception:
         pass
     return out
