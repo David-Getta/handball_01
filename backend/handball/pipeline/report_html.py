@@ -681,9 +681,21 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 fatigue_of[r_["track_id"]] = r_["drop_pct"]
         except Exception:
             pass
+        # Poszt-becslés a track-ekhez (ha van elég minta).
+        post_of: dict = {}
+        try:
+            from .roles import estimate_positions
+            est_all = estimate_positions(match)
+            for side_ in ("home", "away"):
+                for tid_, r_ in est_all.get(side_, {}).items():
+                    post_of[tid_] = r_["poszt"]
+        except Exception:
+            pass
         rows = []
         for g in ranked:
             name = meta.home_team if g["team"] == "home" else meta.away_team
+            poszt = next((post_of[t] for t in g["track_ids"]
+                          if t in post_of), "—")
             drops = [fatigue_of[t] for t in g["track_ids"]
                      if t in fatigue_of]
             if drops:
@@ -693,6 +705,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 fade = "—"
             rows.append(
                 f"<tr><td>{escape(g['label'])}</td><td>{escape(name)}</td>"
+                f"<td>{escape(poszt)}</td>"
                 f'<td class="num">{g["distance_m"]:.0f} m</td>'
                 f'<td class="num">{g["top_speed_ms"] * 3.6:.1f}</td>'
                 f'<td class="num">{g["sprint_count"]}</td>'
@@ -700,6 +713,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         if rows:
             load_html = ('<h2>Játékos-terhelés (top 10 táv szerint)</h2>'
                          '<table><tr><th>Játékos</th><th>Csapat</th>'
+                         '<th>Poszt</th>'
                          '<th class="num">Táv</th><th class="num">Max km/h</th>'
                          '<th class="num">Sprint</th>'
                          '<th class="num">2. félidei tempó</th></tr>'
