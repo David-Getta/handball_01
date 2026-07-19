@@ -488,3 +488,47 @@ def empty_net_goals(match: Match, config=None) -> dict:
     for rec in out.values():
         rec["empty_s"] = round(rec["empty_s"], 1)
     return out
+
+
+# A 7 a 6 időzítés-elemzésben a "hajrá" a felvétel utolsó ennyi perce —
+# és csak elég hosszú (20+ perces) felvételen értelmezzük.
+EN_ENDGAME_WINDOW_MIN = 10.0
+EN_ENDGAME_MIN_DURATION_MIN = 20.0
+
+
+def empty_net_context(match: Match, config=None) -> dict:
+    """A 7 a 6 szakaszok játékhelyzete: állásból és időből mikor húzzák
+    elő a lehozott kapust. A felderítés ebből mondja meg, mikor kell rá
+    készülni ("ha vezetsz ellenük, jön a 7 a 6").
+
+    Visszatérés csapatonként: {"windows", "trailing", "endgame"} —
+    trailing: hátrányban indított szakaszok; endgame: a hajrában
+    (utolsó 10 perc) indítottak, csak 20+ perces felvételen.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total = len(match.frames)
+    duration_min = total / fps / 60.0
+    goals = sorted((e.t, getattr(e.team, "value", e.team))
+                   for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    out = {side: {"windows": 0, "trailing": 0, "endgame": 0}
+           for side in ("home", "away")}
+    for w in detect_empty_net(match, config):
+        side = w["team"]
+        rec = out[side]
+        rec["windows"] += 1
+        own = sum(1 for (t, tm) in goals
+                  if tm == side and t < w["start_frame"])
+        opp = sum(1 for (t, tm) in goals
+                  if tm != side and t < w["start_frame"])
+        if own < opp:
+            rec["trailing"] += 1
+        if (duration_min >= EN_ENDGAME_MIN_DURATION_MIN
+                and w["start_frame"] >= total
+                - EN_ENDGAME_WINDOW_MIN * 60.0 * fps):
+            rec["endgame"] += 1
+    return out
