@@ -429,4 +429,21 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 21) Rotáció-tervezés: ha többen is nagyot esnek a tempóból és
+    # cserét sem kapnak, a pad használatát kell megtervezni.
+    try:
+        from .substitutions import late_sub_flags
+        per_side: dict[str, int] = {"home": 0, "away": 0}
+        for f_ in late_sub_flags(match, config):
+            per_side[f_["team"]] += 1
+        for side in ("home", "away"):
+            if per_side[side] >= 2:
+                add(side, "kondíció", "Rotáció-tervezés",
+                    f"{per_side[side]} játékos 20%+ tempót esett a 2. "
+                    "félidőben, és végig a pályán maradt",
+                    "tervezett csere-ablakok a 40–50. percre, a kulcs-"
+                    "posztokon kettős szereposztás begyakorlása")
+    except Exception:
+        pass
+
     return out
