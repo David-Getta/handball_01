@@ -1835,6 +1835,8 @@ _TREND_METRICS = [
     # Kapus-rétegek: fogott ziccerek és gyors indítások (több = jobb).
     ("gk_big_saves", "Bravúr-védés / meccs", "", True, True),
     ("gk_outlet_fast", "Gyors indítás védés után / meccs", "", True, True),
+    ("gk_xg_saved", "Hárított xG / meccs", "", True, True),
+    ("gk_xg_prevented", "Megmentett gól (GSAx) / meccs", "", True, True),
 ]
 
 
@@ -1851,7 +1853,8 @@ def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
     # Az új, opcionális rétegek 0-ja "nincs mérés"-t jelent — ilyenkor a
     # mutatót kihagyjuk, hogy ne látsszon hamis javulásnak/romlásnak.
     optional = {"possession_pct", "defensive_pressure_m",
-                "gk_big_saves", "gk_outlet_fast"}
+                "gk_big_saves", "gk_outlet_fast", "gk_xg_saved",
+                "gk_xg_prevented"}
     for field_name, label, unit, up_is_better, per_match in _TREND_METRICS:
         a = float(getattr(older, field_name))
         b = float(getattr(newer, field_name))

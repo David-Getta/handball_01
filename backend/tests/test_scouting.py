@@ -1396,3 +1396,18 @@ def test_gk_xg_prevented_weakness_and_combine():
     assert not any("helyzetekhez képest" in w for w in w2)
     comb = combine_reports([rep, ok_rep])
     assert abs(comb.gk_xg_prevented - (-3.2)) < 1e-6
+
+
+def test_trend_includes_gk_xg_metrics():
+    """A hárított xG és a GSAx trendje meccsenkénti átlagra normálva
+    jelenik meg, mért adatnál."""
+    older = ScoutingReport(team="away", team_name="X", matches=2,
+                           gk_xg_saved=1.0, gk_xg_prevented=-2.0)
+    newer = ScoutingReport(team="away", team_name="X", matches=2,
+                           gk_xg_saved=3.0, gk_xg_prevented=2.0)
+    tr = trend_report(older, newer)
+    m = {x["metric"]: x for x in tr["metrics"]}
+    assert m["gk_xg_saved"]["older"] == 0.5
+    assert m["gk_xg_saved"]["newer"] == 1.5
+    assert m["gk_xg_saved"]["better"] is True
+    assert m["gk_xg_prevented"]["better"] is True
