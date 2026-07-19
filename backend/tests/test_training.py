@@ -412,3 +412,39 @@ def test_slow_outlets_trigger_restart_focus():
     assert item is not None
     assert "3 mért indításból" in item["why"]
     assert item["area"] == "kapus"
+
+
+def test_empty_net_costs_trigger_7v6_focus():
+    """2 üres kapura kapott gól → "7 a 6 labdabiztonság" fókusz a kaput
+    elhagyó (hazai) csapatnak."""
+    def gk_home():
+        gk = _pl(1, Team.HOME, 20.0, 10.0)
+        gk.role = "kapus"
+        return gk
+
+    frames = []
+    # 5 mp 7 a 6: a hazai kapus elöl, a hazai csapat birtokol.
+    for t in range(125):
+        frames.append(Frame(
+            t=t,
+            players=[gk_home(), _pl(2, Team.HOME, 30.0, 10.0)],
+            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+    # Két gyors büntető gól az üres hazai kapuba (a türelmi ablakon belül).
+    t = 125
+    for start in (125, 140):
+        t = start
+        for i in range(7):
+            frames.append(Frame(
+                t=t,
+                players=[gk_home(),
+                         _pl(4, Team.AWAY, 3.0, 10.0)],
+                ball=Ball(x=max(2.6 - 0.6 * i, 0.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[gk_home()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["home"]
+                 if it["title"] == "7 a 6 labdabiztonság"), None)
+    assert item is not None
+    assert "2 gólt kaptak üres kapura" in item["why"]
