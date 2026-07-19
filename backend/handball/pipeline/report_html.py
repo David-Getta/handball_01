@@ -1193,6 +1193,19 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _sa("home"), _sa("away")))
         except Exception:
             pass
+        # Hétméteres-mérleg sora (ha volt büntető).
+        try:
+            from .rules import seven_meter_summary
+            _sm = seven_meter_summary(match)
+            if any(_sm[s_]["attempts"] for s_ in ("home", "away")):
+                def _sm_txt(side):
+                    r = _sm[side]
+                    return (f"{r['goals']}/{r['attempts']}"
+                            if r["attempts"] else "—")
+                rows.append(("Hétméteres (gól/kísérlet)",
+                             _sm_txt("home"), _sm_txt("away")))
+        except Exception:
+            pass
         # Blokkolt lövések sora (ha volt blokk).
         try:
             from .defense import detect_blocks
