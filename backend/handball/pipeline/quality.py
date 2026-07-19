@@ -230,6 +230,14 @@ def analysis_confidence(match: Match) -> list[dict]:
     except Exception:
         pass
 
+    n_positions = 0
+    try:
+        from .roles import estimate_positions
+        est_q = estimate_positions(match, config)
+        n_positions = sum(len(v) for v in est_q.values())
+    except Exception:
+        pass
+
     def row(layer, label, ok, ok_reason, fail_reason):
         return {"layer": layer, "label": label, "available": bool(ok),
                 "reason": ok_reason if ok else fail_reason}
@@ -253,4 +261,8 @@ def analysis_confidence(match: Match) -> list[dict]:
         row("conditioning", "Kondíció / fáradás", dur_s >= 300.0,
             f"{dur_s / 60:.0f} perces felvétel",
             "5 percnél rövidebb felvétel — tempó-trend nem mérhető"),
+        row("positions", "Poszt-becslés", n_positions >= 6,
+            f"{n_positions} játékos posztja becsülhető",
+            f"kevés poszt-minta ({n_positions} < 6 játékos) — a "
+            "felállás-kép hiányos"),
     ]
