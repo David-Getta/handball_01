@@ -481,3 +481,26 @@ def test_single_axis_goals_trigger_variety_focus():
                  if it["title"] == "Támadás-változatosság"), None)
     assert item is not None
     assert "1. → 2. tengelyről" in item["why"]
+
+
+def test_multiple_fading_players_trigger_rotation_focus():
+    """Két 20%+ tempót eső, le nem cserélt játékos → Rotáció-tervezés
+    fókusz a csapatnak."""
+    frames = []
+    n_half = 1000  # 40 mp félidőnként (25 fps)
+    xs = {1: 5.0, 2: 5.0}
+    for t in range(2 * n_half):
+        players = []
+        for tid in (1, 2):
+            v = 0.08 if t < n_half else 0.04  # 2 m/s -> 1 m/s (esés 50%)
+            xs[tid] += v
+            if xs[tid] > 35.0:
+                xs[tid] = 5.0
+            players.append(_pl(tid, Team.HOME, xs[tid], 6.0 + 4 * tid))
+        frames.append(Frame(t=t, players=players))
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["home"]
+                 if it["title"] == "Rotáció-tervezés"), None)
+    assert item is not None
+    assert "2 játékos" in item["why"]
+    assert item["area"] == "kondíció"
