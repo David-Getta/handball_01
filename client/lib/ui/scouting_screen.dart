@@ -567,6 +567,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return txt;
   }
 
+  // Fegyelem: aki rendre kiül (2+ kiállítás) — támadható egy-egyben.
+  String? _discipline(Map<String, dynamic> r) {
+    final list = (r["susp_players"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    final top = list.first as Map<String, dynamic>;
+    final n = ((top["suspensions"] as num?) ?? 0).toInt();
+    if (n < 2) return null;
+    return "${top["player_id"]}. · $n kiállítás";
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -784,6 +794,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_shooterHabit(r) != null) ["Fő lövő", _shooterHabit(r)!],
       if (_topBlocker(r) != null) ["Fal kulcsa", _topBlocker(r)!],
       if (_sevenTaker(r) != null) ["Hetes-dobó", _sevenTaker(r)!],
+      if (_discipline(r) != null) ["Fegyelem", _discipline(r)!],
       if (_fbFinisher(r) != null) ["Kontra-befejező", _fbFinisher(r)!],
       if (_outletTarget(r) != null)
         ["Indítás-célpont", _outletTarget(r)!],
