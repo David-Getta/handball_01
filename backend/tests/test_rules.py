@@ -205,3 +205,26 @@ def test_seven_meter_no_shot_is_unknown():
     out = seven_meter_outcomes(Match(_meta(), frames))
     assert len(out) == 1
     assert out[0]["outcome"] == "ismeretlen" and out[0]["shooter_id"] is None
+
+
+def test_seven_meter_earner_identified():
+    """A hetes előtt a kapuhoz legközelebb járó támadó a kiharcoló."""
+    from handball.pipeline.rules import seven_meter_earners
+
+    frames = []
+    # 2 mp játék: a 9-es betör a kapu elé, az 1-es hátul áll.
+    for t in range(50):
+        frames.append(Frame(
+            t=t,
+            players=[_pl(9, Team.HOME, 37.5, 10.0),
+                     _pl(1, Team.HOME, 28.0, 10.0)],
+            ball=Ball(x=36.0, y=10.0, confidence=1.0)))
+    # Majd a labda megáll a 7 m-es ponton (hetes-jel).
+    for t in range(50, 100):
+        frames.append(Frame(
+            t=t,
+            players=[_pl(9, Team.HOME, 34.0, 10.0),
+                     _pl(1, Team.HOME, 30.0, 10.0)],
+            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+    earners = seven_meter_earners(Match(_meta(), frames))["home"]
+    assert earners and earners[0]["player_id"] == 9
