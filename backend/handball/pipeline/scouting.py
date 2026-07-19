@@ -1571,6 +1571,66 @@ def _merge_blockers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def matchup_plan(own: "ScoutingReport",
+                 opp: "ScoutingReport") -> list[str]:
+    """Meccsterv-illesztés: a SAJÁT és az ELLENFÉL profiljának
+    keresztezése — nem általános kulcsok, hanem erre a párosításra
+    szabott mondatok. Minden mondat mögött mindkét oldal számai állnak.
+    """
+    plan: list[str] = []
+
+    # 1) A lassú visszarendeződésük × a mi lerohanásunk.
+    if (opp.rec_transitions >= 4
+            and opp.rec_sum_s / opp.rec_transitions >= 5.0
+            and own.fast_break_pct >= 8.0):
+        plan.append(
+            "A visszarendeződésük lassú "
+            f"({opp.rec_sum_s / opp.rec_transitions:.1f} mp), a ti "
+            f"lerohanás-arányotok {own.fast_break_pct:.0f}% — a kontra "
+            "ebben a párosításban az első számú fegyveretek.")
+
+    # 2) A gyenge kapusuk × a ti lövés-kedvetek.
+    if (opp.matches and opp.gk_xg_prevented / opp.matches <= -1.0
+            and own.shots >= 10):
+        plan.append(
+            "Kapusuk a helyzetekhez képest sokat kap "
+            f"({opp.gk_xg_prevented / opp.matches:+.1f}/meccs) — "
+            "vállaljátok bátran a kapura lövést, a ti lövés-mennyiségetek "
+            f"({own.shots} lövés) itt kifizetődik.")
+
+    # 3) A blokkoló faluk × a ti átlövés-függésetek.
+    own_back_goals = (own.post_goals or {}).get("átlövő", 0)
+    own_total_pg = sum((own.post_goals or {}).values())
+    if (opp.blocks >= 3 and own_total_pg >= 6
+            and own_back_goals / own_total_pg >= 0.5):
+        plan.append(
+            f"Sokat blokkolnak ({opp.blocks} blokk), és a ti góljaitok "
+            f"{100.0 * own_back_goals / own_total_pg:.0f}%-a átlövésből "
+            "jön — erre a meccsre kellenek a beálló- és szélső-megoldások.")
+
+    # 4) A labdaszerzésből élő támadásuk × a ti elöl vesztett labdáitok.
+    opp_ao = opp.attack_origins or {}
+    opp_steal_goals = (opp_ao.get("labdaszerzés") or {}).get("goals", 0)
+    if opp_steal_goals >= 4 and own.turnover_front >= 5:
+        plan.append(
+            f"A góljaik nagy része labdaszerzésből jön ({opp_steal_goals} "
+            f"gól), ti pedig sokat hibáztok elöl ({own.turnover_front} "
+            "elöl vesztett labda) — a labdabiztonság ezen a meccsen "
+            "duplán számít.")
+
+    # 5) A gyors kapus-indításuk × a ti lassú visszaérésetek.
+    if (opp.gk_outlets >= 2
+            and opp.gk_outlet_fast / opp.gk_outlets >= 0.5
+            and own.rec_transitions >= 4
+            and own.rec_sum_s / own.rec_transitions >= 5.0):
+        plan.append(
+            "Kapusuk gyorsan indít, ti pedig lassan értek vissza "
+            f"(átlag {own.rec_sum_s / own.rec_transitions:.1f} mp) — "
+            "lövés után az azonnali visszafutás legyen az első parancs.")
+
+    return plan
+
+
 def _merge_attack_origins(reports) -> dict:
     """Eredet szerinti támadás/gól számok pontos összegzése."""
     tally: dict = {}
