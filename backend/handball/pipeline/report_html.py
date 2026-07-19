@@ -1165,8 +1165,12 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     # Kapus-teljesítmény (ha van kapus-jelölés a meccsen).
     gk_html = ""
     try:
-        from .goalkeeper import goalkeeper_stats
+        from .goalkeeper import OUTLET_FAST_S, goalkeeper_stats, outlet_speed
         gstats = goalkeeper_stats(match)
+        try:
+            outlets = outlet_speed(match)
+        except Exception:
+            outlets = {}
         rows = []
         for key, name in (("home", home), ("away", away)):
             rec = gstats.get(key)
@@ -1193,6 +1197,13 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 for z, _n in sorted(otz.items(), key=lambda kv: -kv[1])
                 if otz.get(z, 0) >= 2 and z in rec.get("zone_save_pct", {})
             ) or "—"
+            # Indítás: védés utáni felhozatal a felezőig (ha mérhető).
+            orec = outlets.get(key) or {}
+            if orec.get("outlets"):
+                o_txt = (f"{orec['avg_s']:.0f} mp átlag "
+                         f"({orec['fast']}/{orec['outlets']} gyors)")
+            else:
+                o_txt = "—"
             rows.append(f"<tr><td>{name}</td>"
                         f"<td class='num'>{rec['on_target']}</td>"
                         f"<td class='num'>{rec['saves']}</td>"
@@ -1201,7 +1212,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                         f"<td class='num'>{seven}</td>"
                         f"<td>{escape(zones)}</td>"
                         f"<td>{escape(zsp_txt)}</td>"
-                        f"<td>{escape(weak)}</td></tr>")
+                        f"<td>{escape(weak)}</td>"
+                        f"<td>{escape(o_txt)}</td></tr>")
         if rows:
             gk_html = ("<h2>Kapus-teljesítmény</h2><table>"
                        "<tr><th>Csapat</th><th class='num'>Kapura</th>"
@@ -1210,8 +1222,12 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                        "<th class='num'>7 m-es (fogott/kapott)</th>"
                        "<th>Kapott gólok zónái</th>"
                        "<th>Zóna-védés%</th>"
-                       "<th>Leggyengébb zóna</th></tr>"
-                       + "".join(rows) + "</table>")
+                       "<th>Leggyengébb zóna</th>"
+                       "<th>Indítás (felezőig)</th></tr>"
+                       + "".join(rows) + "</table>"
+                       + '<p class="note">Indítás: védés után ennyi idő '
+                         "alatt ért át a labda a felezőn; gyors = "
+                         f"{OUTLET_FAST_S:.0f} mp-en belül.</p>")
             # Kapus-csere jegyzet (ha volt): mikor és milyen mérleggel.
             try:
                 from .goalkeeper import goalkeeper_timeline
