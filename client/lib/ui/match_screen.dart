@@ -615,6 +615,16 @@ class _MatchScreenState extends State<MatchScreen> {
                 : () => _exportClips(match, typesOverride: ["big_save"]),
             icon: const Icon(Icons.back_hand, color: AppColors.accent),
           ),
+          // Fő lövő: a legtöbbet lövő játékos lövései — felderítési
+          // videó-csomag a következő ellenfél elleni készüléshez.
+          IconButton(
+            tooltip: "Fő lövő klipek (a legtöbbet lövő játékos lövései)",
+            onPressed: _exportingClips
+                ? null
+                : () =>
+                    _exportClips(match, typesOverride: ["top_shooter"]),
+            icon: const Icon(Icons.person_search, color: AppColors.gold),
+          ),
         ]),
       ),
       Expanded(
