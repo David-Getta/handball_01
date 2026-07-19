@@ -810,9 +810,25 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             per_en: dict = {}
             for w in empty:
                 per_en[w["team"]] = per_en.get(w["team"], 0.0) + w["duration_s"]
+            # Mérleg: dobott vs üres kapura kapott gólok a 7 a 6 alatt.
+            try:
+                from .goalkeeper import empty_net_goals
+                eng = empty_net_goals(match)
+            except Exception:
+                eng = {}
+
+            def _en_bal(t):
+                r = eng.get(t) or {}
+                sc = r.get("scored_7v6", 0)
+                co = r.get("conceded_empty", 0)
+                if sc or co:
+                    return (f" (mérleg: +{sc} dobott, "
+                            f"\u2212{co} kapott üres kapura)")
+                return ""
             lis = "".join(
                 f"<li>{team_names.get(t, t)}: összesen {s_:.0f} mp "
-                "lehozott kapussal</li>" for t, s_ in per_en.items())
+                f"lehozott kapussal{_en_bal(t)}</li>"
+                for t, s_ in per_en.items())
             parts_html.append("<h2>Hetedik mezőnyjátékos (7 a 6)</h2><ul>"
                               + lis + "</ul>")
 

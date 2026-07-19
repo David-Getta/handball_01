@@ -425,7 +425,8 @@ def empty_net_goals(match: Match, config=None) -> dict:
     elhagyó csapat épp felismert üres-kapus szakaszban volt. Ez mutatja
     meg, megérte-e a plusz mezőnyjátékos.
 
-    Visszatérés csapatonként: {"windows", "empty_s", "conceded_empty"}.
+    Visszatérés csapatonként: {"windows", "empty_s", "conceded_empty",
+    "scored_7v6"} — a kapott ÉS a dobott gólok a 7 a 6 alatt (mérleg).
     """
     from .event_detection import EventType, detect_shots
     from .tactics import TacticsConfig
@@ -434,7 +435,8 @@ def empty_net_goals(match: Match, config=None) -> dict:
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     margin = EMPTY_NET_GOAL_MARGIN_S * fps
     windows = detect_empty_net(match, config)
-    out = {side: {"windows": 0, "empty_s": 0.0, "conceded_empty": 0}
+    out = {side: {"windows": 0, "empty_s": 0.0, "conceded_empty": 0,
+                  "scored_7v6": 0}
            for side in ("home", "away")}
     for w in windows:
         rec = out[w["team"]]
@@ -452,6 +454,12 @@ def empty_net_goals(match: Match, config=None) -> dict:
             if (w["team"] == conceding
                     and w["start_frame"] <= e.t <= w["end_frame"] + margin):
                 out[conceding]["conceded_empty"] += 1
+                break
+        # A haszon-oldal: a dobó csapat épp 7 a 6-ban játszott-e.
+        for w in windows:
+            if (w["team"] == scorer
+                    and w["start_frame"] <= e.t <= w["end_frame"] + margin):
+                out[scorer]["scored_7v6"] += 1
                 break
     for rec in out.values():
         rec["empty_s"] = round(rec["empty_s"], 1)

@@ -332,3 +332,39 @@ def test_empty_net_goals_counts_punish_goal():
     assert rec["home"]["windows"] == 1
     assert rec["home"]["conceded_empty"] == 1
     assert rec["away"]["conceded_empty"] == 0
+
+
+def test_empty_net_goals_counts_scored_7v6():
+    """A 7 a 6 alatt (vagy közvetlenül utána) dobott gól a haszon-oldalra
+    kerül: scored_7v6."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import empty_net_goals
+
+    frames = []
+    # 5 mp 7 a 6: a hazai kapus elöl, a hazai csapat birtokol.
+    for t in range(125):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME, x=30.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+    # A támadás vége: a hazai a vendég kapuba (x=40) dob.
+    for i in range(7):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME, x=37.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        frames.append(Frame(t=125 + i, players=players,
+                            ball=Ball(x=min(37.4 + 0.6 * i, 40.0), y=10.0,
+                                      confidence=1.0)))
+    rec = empty_net_goals(_match(frames))
+    assert rec["home"]["windows"] == 1
+    assert rec["home"]["scored_7v6"] == 1
+    assert rec["home"]["conceded_empty"] == 0

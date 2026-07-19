@@ -825,6 +825,11 @@ def coach_summary(match: Match) -> dict:
             try:
                 from .goalkeeper import empty_net_goals
                 eng = empty_net_goals(match)
+                gains = [f"a(z) {names.get(t, t)} {r['scored_7v6']} "
+                         "gólt dobott 7 a 6-ban"
+                         for t, r in eng.items() if r.get("scored_7v6")]
+                if gains:
+                    body += " Hozama: " + "; ".join(gains) + "."
                 costs = [f"a(z) {names.get(t, t)} {r['conceded_empty']} "
                          "gólt kapott üres kapura"
                          for t, r in eng.items() if r["conceded_empty"]]

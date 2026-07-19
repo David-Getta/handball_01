@@ -362,3 +362,38 @@ def test_report_gk_outlet_column():
     assert "Indítás (felezőig)" in html
     assert "1/1 gyors" in html
     assert "Indítás: védés után" in html
+
+
+def test_report_7v6_balance_line():
+    """A Hetedik mezőnyjátékos szekció mérleg-jegyzete: dobott és üres
+    kapura kapott gólok a 7 a 6 alatt."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                           source=PositionSource.MEASURED, confidence=1.0)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    for t in range(125):  # 5 mp 7 a 6 a hazaiaknál
+        frames.append(Frame(
+            t=t,
+            players=[pl(1, Team.HOME, 20.0, 10.0, role="kapus"),
+                     pl(2, Team.HOME, 30.0, 10.0)],
+            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+    for i in range(7):  # a végén gól a vendég kapuba
+        frames.append(Frame(
+            t=125 + i,
+            players=[pl(1, Team.HOME, 20.0, 10.0, role="kapus"),
+                     pl(2, Team.HOME, 37.0, 10.0)],
+            ball=Ball(x=min(37.4 + 0.6 * i, 40.0), y=10.0,
+                      confidence=1.0)))
+    m = Match(MatchMeta(match_id="en", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Hetedik mezőnyjátékos (7 a 6)" in html
+    assert "mérleg: +1 dobott" in html
