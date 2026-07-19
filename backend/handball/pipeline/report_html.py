@@ -1120,6 +1120,16 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              str(bl["away"]["blocks"])))
         except Exception:
             pass
+        # Megmentett gólok (GSAx): kapott gól a helyzet-minőséghez mérve.
+        try:
+            from .xg import xg_prevented
+            _xp = xg_prevented(match)
+            if (_xp["home"]["faced_xg"] + _xp["away"]["faced_xg"]) > 0:
+                rows.append(("Megmentett gól (GSAx)",
+                             f'{_xp["home"]["prevented"]:+.1f}',
+                             f'{_xp["away"]["prevented"]:+.1f}'))
+        except Exception:
+            pass
         # Csapatonkénti tempó: támadás/perc (elég hosszú felvételen).
         try:
             from .attack_types import match_pace

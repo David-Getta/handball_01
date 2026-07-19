@@ -450,6 +450,15 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
                 sent += f"; hárított xG: {xs:.1f}"
         except Exception:
             pass
+        # Megmentett gólok: a kapott gólok a helyzet-minőséghez mérve.
+        try:
+            from .xg import xg_prevented
+            xp = xg_prevented(match)[key]["prevented"]
+            if abs(xp) >= 1.0:
+                sent += (f"; a helyzetekhez képest {xp:+.1f} gól a "
+                         "mérlege (GSAx)")
+        except Exception:
+            pass
         # Bravúr-védések: hány ziccert fogott a kapus (ha volt ilyen).
         try:
             from .xg import big_saves
