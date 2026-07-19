@@ -1080,6 +1080,19 @@ def coach_summary(match: Match) -> dict:
                          for t, r in eng.items() if r["conceded_empty"]]
                 if costs:
                     body += " Az ára: " + "; ".join(costs) + "."
+                # Ítélet: megérte-e a vállalás (hozam − ár csapatonként).
+                for t, r in eng.items():
+                    net = r.get("scored_7v6", 0) - r["conceded_empty"]
+                    if not (r.get("scored_7v6") or r["conceded_empty"]):
+                        continue
+                    if net >= 2:
+                        body += (f" A(z) {names.get(t, t)} vállalása "
+                                 f"összességében megérte ({net:+d} gól).")
+                    elif net <= -2:
+                        body += (f" A(z) {names.get(t, t)} vállalása "
+                                 f"ráfizetés volt ({net:+d} gól) — "
+                                 "érdemes újragondolni, mikor jön a "
+                                 "hetedik mezőnyjátékos.")
             except Exception:
                 pass
             sections.append({
