@@ -1735,6 +1735,8 @@ def create_app():
             from ..pipeline.goalkeeper import goalkeeper_timeline, outlet_speed
             res["timeline"] = goalkeeper_timeline(match)
             res["outlets"] = outlet_speed(match)
+            from ..pipeline.xg import xg_saved
+            res["xg_saved"] = xg_saved(match)
         except Exception:
             pass
         return res
