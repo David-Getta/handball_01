@@ -157,3 +157,21 @@ def test_scouting_report_matchup_section():
     assert "Meccsterv (a kettőnk párosítása)" in html
     assert "első számú fegyveretek" in html
     assert "Meccsterv" not in scouting_report_html(rep)
+
+
+def test_scouting_report_seven_direction_table():
+    """A felderítő jelentés hozza a hetes-dobók irány-tábláját (2+
+    kísérletnél), irány-adat nélkül "—" jellel."""
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél",
+        seven_takers=[
+            {"player_id": 7, "attempts": 4, "goals": 3,
+             "dirs": {"bal": 3, "közép": 1}},
+            {"player_id": 9, "attempts": 2, "goals": 2, "dirs": {}},
+            {"player_id": 4, "attempts": 1, "goals": 0, "dirs": {}},
+        ])
+    html = scouting_report_html(rep)
+    assert "Hetes-dobóik (irányokkal)" in html
+    assert "balra 3×" in html and "középre 1×" in html
+    assert "7. játékos" in html and "9. játékos" in html
+    assert "4. játékos" not in html  # 1 kísérlet a küszöb alatt
