@@ -384,6 +384,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átlag ${avg.toStringAsFixed(0)} mp";
   }
 
+  // Kapus-xG: hárított xG és GSAx meccsenkénti átlaga — csak mért
+  // védéseknél mutatjuk.
+  String? _gkXg(Map<String, dynamic> r) {
+    final saved = ((r["gk_xg_saved"] as num?) ?? 0).toDouble();
+    final prevented = ((r["gk_xg_prevented"] as num?) ?? 0).toDouble();
+    final matches = ((r["matches"] as num?) ?? 1).toInt().clamp(1, 999);
+    if (saved == 0 && prevented == 0) return null;
+    final s = (saved / matches).toStringAsFixed(1);
+    final p = (prevented / matches);
+    final ps = "${p >= 0 ? "+" : ""}${p.toStringAsFixed(1)}";
+    return "$s hárított · $ps GSAx";
+  }
+
   // Tempó-profil: támadás/perc (20+ mért percnél; a kulcsokkal azonos
   // 1,1 / 0,7 küszöbök adnak címkét).
   String? _pace(Map<String, dynamic> r) {
@@ -642,6 +655,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_outletTarget(r) != null)
         ["Indítás-célpont", _outletTarget(r)!],
       if (_pace(r) != null) ["Tempó", _pace(r)!],
+      if (_gkXg(r) != null) ["Kapus-xG", _gkXg(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
