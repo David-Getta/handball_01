@@ -187,3 +187,29 @@ def test_match_pace_halves_split():
     # Túl rövid második fél: nincs bontás.
     pc2 = match_pace(m, half_t=n - 100)
     assert pc2["halves"] is None
+
+
+def test_attack_origins_classifies_kickoff():
+    """A kapott gól utáni támadás középkezdésként címkéződik."""
+    from handball.pipeline.attack_types import attack_origins
+
+    frames = []
+    t = 0
+    # A hazai gólt dob (a vendég kapuba)...
+    for i in range(7):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    # ...majd a vendég azonnal támadást vezet (középkezdés).
+    for i in range(80):
+        frames.append(Frame(
+            t=t,
+            players=[_pl(9, Team.AWAY, max(30.0 - 0.3 * i, 5.0), 10.0)],
+            ball=Ball(x=max(30.0 - 0.3 * i, 5.0), y=10.0,
+                      confidence=1.0)))
+        t += 1
+    ao = attack_origins(Match(_meta(), frames))
+    away = ao["away"]
+    assert "középkezdés" in away
+    assert away["középkezdés"]["attacks"] >= 1

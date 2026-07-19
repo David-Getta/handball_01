@@ -194,6 +194,9 @@ class ScoutingReport:
     # átlagos támadás/perc több meccsre pontosan visszaszámolható.
     pace_attacks: int = 0
     pace_minutes: float = 0.0
+    # Támadás-eredet: {eredet: {"attacks", "goals"}} — honnan indulnak
+    # (középkezdés/kidobás/labdaszerzés); eredetenként összegződik.
+    attack_origins: dict = field(default_factory=dict)
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
@@ -761,6 +764,16 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 and top_s["goals"] / top_s["attempts"] <= 0.5):
             sent7 += " A mérlege gyenge: a kapus bátran vállalhat mozgást."
         keys.append(sent7)
+    # Támadás-eredet: ha a góljaik jelentős része labdaszerzésből jön,
+    # a labdabiztonság ellenük duplán számít.
+    ao = rep.attack_origins or {}
+    total_goals_ao = sum(v.get("goals", 0) for v in ao.values())
+    steal_goals = (ao.get("labdaszerzés") or {}).get("goals", 0)
+    if total_goals_ao >= 5 and steal_goals / total_goals_ao >= 0.5:
+        keys.append(
+            f"A góljaik {100.0 * steal_goals / total_goals_ao:.0f}%-a "
+            "labdaszerzésből indul — a labdabiztonság ellenük duplán "
+            "számít: kevesebb kényszerített passz, biztos befejezés.")
     # Lövés-választás: átlagos helyzet-érték lövésenként — megmutatja,
     # válogatósak-e vagy távolról is vállalkoznak.
     if rep.shots >= 10 and rep.xg > 0:
@@ -999,6 +1012,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         if pc.get("available"):
             rep.pace_attacks = pc[f"{team.value}_attacks"]
             rep.pace_minutes = pc["duration_min"]
+        from .attack_types import attack_origins
+        rep.attack_origins = {
+            k: dict(v) for k, v in
+            attack_origins(match, config)[team.value].items()}
     except Exception:
         pass
     try:
@@ -1428,6 +1445,17 @@ def _merge_blockers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_attack_origins(reports) -> dict:
+    """Eredet szerinti támadás/gól számok pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for k, v in (r.attack_origins or {}).items():
+            cur = tally.setdefault(k, {"attacks": 0, "goals": 0})
+            cur["attacks"] += int(v.get("attacks", 0))
+            cur["goals"] += int(v.get("goals", 0))
+    return tally
+
+
 def _merge_shooter_overperf(reports) -> list:
     """Lövőnkénti befejezés-többlet (gól − xG) pontos összegzése."""
     tally: dict = {}
@@ -1542,6 +1570,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         en_endgame=sum(r.en_endgame for r in reports),
         pace_attacks=sum(r.pace_attacks for r in reports),
         pace_minutes=round(sum(r.pace_minutes for r in reports), 1),
+        attack_origins=_merge_attack_origins(reports),
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),
