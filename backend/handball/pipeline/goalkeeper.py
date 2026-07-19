@@ -356,3 +356,58 @@ def detect_empty_net(match: Match, config=None) -> list[dict]:
                 })
     out.sort(key=lambda w: w["start_frame"])
     return out
+
+
+# Kapus-indítás: védés után ennyi másodpercen belül átért labda számít
+# gyors felhozatalnak; ennél tovább már nem az indítást mérjük.
+OUTLET_FAST_S = 6.0
+OUTLET_MAX_S = 20.0
+
+
+def outlet_speed(match: Match, config=None) -> dict:
+    """Kapus-indítás: védés után mennyi idő alatt ér a labda a felezőig
+    a VÉDŐ csapat támadó irányába. A gyors kidobás kontra-fegyver — a
+    lassú felhozatal idejét ad az ellenfél visszarendeződésének.
+
+    Visszatérés csapatonként (a védést jegyző oldal):
+      {"saves", "outlets", "sum_s", "avg_s", "fast"}
+    ahol avg_s None, ha nem volt mérhető indítás.
+    """
+    from .xg import match_xg
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out = {side: {"saves": 0, "outlets": 0, "sum_s": 0.0, "fast": 0}
+           for side in ("home", "away")}
+    frames = match.frames
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") != "save":
+            continue
+        def_side = "away" if sh["team"] == "home" else "home"
+        rec = out[def_side]
+        rec["saves"] += 1
+        # A védés utáni első felező-átlépés a védő csapat irányába:
+        # a home lövő a +x kapura lőtt, így az away indítás x < 20 felé
+        # megy (és fordítva).
+        t0 = sh["t"]
+        crossed = None
+        for fr in frames:
+            if fr.t <= t0 or fr.ball is None:
+                continue
+            if (fr.t - t0) / fps > OUTLET_MAX_S:
+                break
+            if sh["team"] == "home" and fr.ball.x < 20.0:
+                crossed = fr.t
+                break
+            if sh["team"] == "away" and fr.ball.x > 20.0:
+                crossed = fr.t
+                break
+        if crossed is not None:
+            dt = (crossed - t0) / fps
+            rec["outlets"] += 1
+            rec["sum_s"] += dt
+            if dt <= OUTLET_FAST_S:
+                rec["fast"] += 1
+    for rec in out.values():
+        rec["avg_s"] = (round(rec["sum_s"] / rec["outlets"], 1)
+                        if rec["outlets"] else None)
+        rec["sum_s"] = round(rec["sum_s"], 1)
+    return out

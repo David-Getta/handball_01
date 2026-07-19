@@ -1656,8 +1656,9 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         res = {"goalkeepers": goalkeeper_stats(match)}
         try:
-            from ..pipeline.goalkeeper import goalkeeper_timeline
+            from ..pipeline.goalkeeper import goalkeeper_timeline, outlet_speed
             res["timeline"] = goalkeeper_timeline(match)
+            res["outlets"] = outlet_speed(match)
         except Exception:
             pass
         return res

@@ -440,6 +440,17 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
                 sent += f"; ebből {n_big} ziccert fogott (bravúr-védés)"
         except Exception:
             pass
+        # Kapus-indítás: gyors felhozatal védés után (2+ mért indításnál).
+        try:
+            from .goalkeeper import OUTLET_FAST_S, outlet_speed
+            orec = outlet_speed(match)[key]
+            if orec["outlets"] >= 2 and orec["avg_s"] is not None \
+                    and orec["avg_s"] <= OUTLET_FAST_S:
+                sent += (f"; az indítása gyors: védés után átlag "
+                         f"{orec['avg_s']:.0f} mp alatt ér át a labda "
+                         "a felezőn")
+        except Exception:
+            pass
         # Kapus-csere: ha volt, a két kapus mérlegével együtt mondjuk el.
         try:
             from .goalkeeper import goalkeeper_timeline
