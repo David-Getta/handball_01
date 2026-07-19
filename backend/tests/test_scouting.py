@@ -1479,3 +1479,14 @@ def test_shot_selection_keys():
     few = ScoutingReport(team="away", team_name="X", shots=6, xg=0.4)
     _, _, k3 = _coach_keys(few)
     assert not any("xG/lövés" in k for k in k3)
+
+
+def test_shot_selection_in_narrative():
+    """A lövés-választás a Befejezésük narratívában is megjelenik."""
+    from handball.pipeline.scouting import scouting_narrative
+    rep = ScoutingReport(team="away", team_name="X", shots=20, goals=4,
+                         xg=1.6)
+    sec = next((x for x in scouting_narrative(rep)
+                if x["title"] == "Befejezésük"), None)
+    assert sec is not None
+    assert "kis esélyű lövést" in sec["body"]
