@@ -137,6 +137,7 @@ def test_story_section_opens_summary():
     assert first["title"] == "A meccs története"
     assert "Hazai nyert 3–0-ra" in first["body"]
     assert "legnagyobb különbség 3 gól" in first["body"]
+    assert "A meccs embere a(z) 1. játékos" in first["body"]
 
 
 def test_lineups_section_in_summary():
