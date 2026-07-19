@@ -411,3 +411,48 @@ def outlet_speed(match: Match, config=None) -> dict:
                         if rec["outlets"] else None)
         rec["sum_s"] = round(rec["sum_s"], 1)
     return out
+
+
+# Az üres-kapus szakasz vége után ennyi másodpercig a kapott gól még
+# a lehozott kapus árának számít (amíg a kapus visszaér).
+EMPTY_NET_GOAL_MARGIN_S = 5.0
+
+
+def empty_net_goals(match: Match, config=None) -> dict:
+    """Üres kapura kapott gólok: a 7 a 6 (lehozott kapus) ára.
+
+    Egy gól akkor "üres kapus", ha a kapott gól pillanatában a kapuját
+    elhagyó csapat épp felismert üres-kapus szakaszban volt. Ez mutatja
+    meg, megérte-e a plusz mezőnyjátékos.
+
+    Visszatérés csapatonként: {"windows", "empty_s", "conceded_empty"}.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    margin = EMPTY_NET_GOAL_MARGIN_S * fps
+    windows = detect_empty_net(match, config)
+    out = {side: {"windows": 0, "empty_s": 0.0, "conceded_empty": 0}
+           for side in ("home", "away")}
+    for w in windows:
+        rec = out[w["team"]]
+        rec["windows"] += 1
+        rec["empty_s"] += w["duration_s"]
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        scorer = getattr(e.team, "value", e.team)
+        conceding = "away" if scorer == "home" else "home"
+        for w in windows:
+            # A szakasz vége után is számít pár másodpercig: a büntető
+            # gól tipikusan a labdaszerzés UTÁN esik, amíg a kapus
+            # visszaér (a birtoklás-váltás már lezárta a szakaszt).
+            if (w["team"] == conceding
+                    and w["start_frame"] <= e.t <= w["end_frame"] + margin):
+                out[conceding]["conceded_empty"] += 1
+                break
+    for rec in out.values():
+        rec["empty_s"] = round(rec["empty_s"], 1)
+    return out

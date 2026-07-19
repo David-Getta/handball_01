@@ -296,3 +296,39 @@ def test_outlet_speed_measures_fast_restart():
     assert rec["avg_s"] is not None and rec["avg_s"] <= OUTLET_FAST_S
     # A home oldalon nem történt védés.
     assert outlet_speed(_match(frames))["home"]["saves"] == 0
+
+
+def test_empty_net_goals_counts_punish_goal():
+    """A 7 a 6 szakasz után azonnal bedobott gól "üres kapura kapott"
+    gólnak számít a kaput elhagyó csapatnál."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import empty_net_goals
+
+    frames = []
+    # 5 mp 7 a 6: a hazai kapus elöl, a hazai csapat birtokol.
+    for t in range(125):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME, x=30.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+    # Labdaszerzés után a vendég azonnal az üres hazai kapuba dob.
+    for i in range(7):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           role="kapus"),
+            PlayerPosition(track_id=4, team=Team.AWAY, x=3.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        frames.append(Frame(t=125 + i, players=players,
+                            ball=Ball(x=max(2.6 - 0.6 * i, 0.0), y=10.0,
+                                      confidence=1.0)))
+    rec = empty_net_goals(_match(frames))
+    assert rec["home"]["windows"] == 1
+    assert rec["home"]["conceded_empty"] == 1
+    assert rec["away"]["conceded_empty"] == 0
