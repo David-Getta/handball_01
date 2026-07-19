@@ -143,3 +143,31 @@ def auto_normalize(match: Match) -> Optional[dict]:
     swapped = detect_side_swap(match, ht)
     mirrored = normalize_sides(match, ht) if swapped else 0
     return {"halftime_t": ht, "swapped": swapped, "mirrored_frames": mirrored}
+
+
+# A szünet utáni kezdés ablaka: a 2. félidő első percei.
+RESTART_WINDOW_S = 300.0
+
+
+def second_half_start(match: Match, config=None) -> Optional[dict]:
+    """A szünet utáni kezdés mérlege: ki üt először a 2. félidőben.
+
+    A felismert félidő utáni RESTART_WINDOW_S-ben (5 perc) dobott gólok
+    csapatonként — az "öltözőből rosszul kijövő" csapat visszatérő
+    mintája felderítési kulcsot érdemel. None, ha nincs felismert
+    félidő-jel.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    ht = detect_halftime(match)
+    if ht is None:
+        return None
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    t_end = ht + round(RESTART_WINDOW_S * fps)
+    goals = {"home": 0, "away": 0}
+    for e in detect_shots(match, config or TacticsConfig()):
+        if e.type == EventType.GOAL and ht <= e.t <= t_end:
+            goals[e.team.value] += 1
+    return {"halftime_s": round(ht / fps, 1),
+            "home": goals["home"], "away": goals["away"]}

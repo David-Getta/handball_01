@@ -247,6 +247,11 @@ class ScoutingReport:
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
+    # A szünet utáni kezdés (a 2. félidő első 5 perce): dobott/kapott
+    # gólok + hány meccsen volt mérhető félidő-jel — összegződik.
+    restart_for: int = 0
+    restart_against: int = 0
+    restart_matches: int = 0
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -832,6 +837,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(
                 "A szélsőik alig vannak játékban — a faluk középen "
                 "dől el: szűkíthetsz, a sávot vállalhatod.")
+    # A szünet utáni kezdés: ki üt először a 2. félidőben.
+    if rep.restart_matches >= 1:
+        d_rs = rep.restart_against - rep.restart_for
+        if d_rs >= 3:
+            keys.append(
+                f"Az öltözőből rosszul jönnek ki: a 2. félidő első 5 "
+                f"percében a mérlegük {rep.restart_for}–"
+                f"{rep.restart_against} — a szünet után TI kezdjetek "
+                "magas tempóval, ott nyitva vannak.")
+        elif d_rs <= -3:
+            keys.append(
+                f"A szünet után ők ütnek először ({rep.restart_for}–"
+                f"{rep.restart_against} az első 5 percben) — a 2. "
+                "félidő eleje ellenük kiemelt figyelmet kér: kész "
+                "tervvel gyertek ki az öltözőből.")
     # Visszarendeződés: lassú védelem ellen a gyors indítás a fegyver.
     if rep.rec_transitions >= 4:
         rec_avg = rep.rec_sum_s / rep.rec_transitions
@@ -1189,6 +1209,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
             if w["team_down"] == team.value)
+        from .halftime import second_half_start
+        shs = second_half_start(match, config)
+        if shs is not None:
+            other = "away" if team.value == "home" else "home"
+            rep.restart_for = shs[team.value]
+            rep.restart_against = shs[other]
+            rep.restart_matches = 1
     except Exception:
         pass
     try:
@@ -1916,6 +1943,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         susp_earners=_merge_susp_earners(reports),
         susp_players=_merge_susp_players(reports),
         suspensions=sum(r.suspensions for r in reports),
+        restart_for=sum(r.restart_for for r in reports),
+        restart_against=sum(r.restart_against for r in reports),
+        restart_matches=sum(r.restart_matches for r in reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),

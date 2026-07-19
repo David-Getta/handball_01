@@ -1854,3 +1854,25 @@ def test_trend_includes_suspensions_metric():
     assert rec is not None
     assert rec["older"] == 2.0 and rec["newer"] == 0.0
     assert rec["better"] is True
+
+
+def test_restart_keys_both_directions():
+    """A szünet utáni kezdés kulcsa mindkét irányban, +-3 gólkülönbség
+    fölött szólal meg."""
+    from handball.pipeline.scouting import _coach_keys
+    weak = ScoutingReport(team="away", team_name="X",
+                          restart_matches=2, restart_for=1,
+                          restart_against=4)
+    _, _, keys = _coach_keys(weak)
+    assert any("öltözőből rosszul jönnek ki" in k for k in keys)
+    strong = ScoutingReport(team="away", team_name="X",
+                            restart_matches=2, restart_for=5,
+                            restart_against=1)
+    _, _, k2 = _coach_keys(strong)
+    assert any("ők ütnek először" in k for k in k2)
+    quiet = ScoutingReport(team="away", team_name="X",
+                           restart_matches=2, restart_for=2,
+                           restart_against=3)
+    _, _, k3 = _coach_keys(quiet)
+    assert not any("öltözőből" in k or "ütnek először" in k
+                   for k in k3)
