@@ -2382,6 +2382,24 @@ def create_app():
         newer = _combined_report(newer_body)
         return trend_report(older, newer)
 
+    @app.post("/scouting/matchup")
+    def scouting_matchup(body: dict):
+        """Meccsterv-illesztés: a SAJÁT és az ELLENFÉL profiljának
+        keresztezése páros-specifikus tanácsokká.
+
+        Törzs: {"own": {"items": [...]}, "opp": {"items": [...]}} — az
+        items formátuma azonos a /scouting-éval."""
+        own_body = body.get("own")
+        opp_body = body.get("opp")
+        if not own_body or not opp_body:
+            raise HTTPException(status_code=400,
+                                detail="own and opp required")
+        from ..pipeline.scouting import matchup_plan
+        own = _combined_report(own_body)
+        opp = _combined_report(opp_body)
+        return {"plan": matchup_plan(own, opp),
+                "own_team": own.team_name, "opp_team": opp.team_name}
+
     @app.post("/scouting/export")
     def combined_scouting_export(body: dict):
         """Az egyesített felderítés NYOMTATHATÓ HTML-je (mint az egy-meccses export)."""
