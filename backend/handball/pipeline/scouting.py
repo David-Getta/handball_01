@@ -1435,6 +1435,16 @@ def match_key_players(match: Match, config=None) -> dict:
     except Exception:
         pass
     try:
+        from .rules import seven_meter_earners
+        sme = seven_meter_earners(match, config)
+        for side in ("home", "away"):
+            el = sme.get(side) or []
+            if el and el[0]["earned"] >= 2:
+                add(side, "Hetes-kiharcoló", el[0]["player_id"],
+                    f"{el[0]['earned']} kiharcolt hetes")
+    except Exception:
+        pass
+    try:
         from .goalkeeper import outlet_speed
         osp = outlet_speed(match, config)
         for side in ("home", "away"):

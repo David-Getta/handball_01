@@ -1690,3 +1690,41 @@ def test_seven_earner_key_and_merge():
     assert not any("harcolja ki" in k for k in k2)
     merged = _merge_seven_earners([rep, one])
     assert merged[0] == {"player_id": 9, "earned": 3}
+
+
+def test_match_key_players_seven_earner_role():
+    """2 kiharcolt hetes → Hetes-kiharcoló szerep a kulcsemberek közt."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource)
+    from handball.pipeline.scouting import match_key_players
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(2):  # két kiharcolt hetes, mindig a 9-es tör be
+        for _ in range(50):
+            frames.append(Frame(
+                t=t, players=[pl(9, 37.5, 10.0), pl(1, 28.0, 10.0)],
+                ball=Ball(x=36.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(50):
+            frames.append(Frame(
+                t=t, players=[pl(9, 34.0, 10.0), pl(1, 30.0, 10.0)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(200):  # 8 mp szünet: a 10 mp-es hetes-debounce
+            frames.append(Frame(t=t, players=[pl(1, 25.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(MatchMeta(match_id="se", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    kp = match_key_players(m)
+    role = next((it for it in kp["home"]
+                 if it["role"] == "Hetes-kiharcoló"), None)
+    assert role is not None
+    assert role["player_id"] == 9
