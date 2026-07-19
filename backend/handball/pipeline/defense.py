@@ -346,3 +346,76 @@ def defensive_pressure(match, config=None) -> dict:
             "frames": n,
         }
     return out
+
+
+# Visszarendeződés: ennyi védőnek kell a saját térfélen lennie, hogy a
+# védelmet "visszaértnek" tekintsük; a mérést ennyi mp-nél levágjuk.
+RECOVERY_DEFENDERS = 4
+RECOVERY_SLOW_S = 5.0
+RECOVERY_MAX_S = 15.0
+
+
+def transition_recovery(match, config=None) -> dict:
+    """Visszarendeződés-idő: labdavesztés után mennyi idő alatt ér
+    vissza legalább RECOVERY_DEFENDERS védő a saját térfélre.
+
+    A kontra-védekezés nyers száma: a lassú visszarendeződés ellen a
+    gyors indítás, a gyors ellen a felállt támadás a recept.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal):
+      {"transitions", "sum_s", "avg_s", "slow"} — avg_s None, ha nincs
+    mérhető átmenet; slow: az RECOVERY_SLOW_S-nél lassabbak száma.
+    """
+    from ..models.tracking import Team
+    from .setplays import segment_attacks
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+    out = {side: {"transitions": 0, "sum_s": 0.0, "slow": 0}
+           for side in ("home", "away")}
+
+    for seq in segment_attacks(match, config):
+        att = seq.team
+        deff = Team.AWAY if att == Team.HOME else Team.HOME
+        # A védő a támadó céltáblájának térfelét védi.
+        goal_x = config.attacks_toward_x(att)
+        own_half_near = goal_x >= COURT_LENGTH_M / 2.0
+        i0 = idx_of.get(seq.start_t)
+        if i0 is None:
+            continue
+        recovered = None
+        for i in range(i0, min(len(frames),
+                               i0 + int(RECOVERY_MAX_S * fps))):
+            fr = frames[i]
+            backs = 0
+            seen = 0
+            for p_ in fr.players:
+                if p_.team != deff or p_.role == "kapus":
+                    continue
+                seen += 1
+                in_own = (p_.x >= COURT_LENGTH_M / 2.0
+                          if own_half_near
+                          else p_.x <= COURT_LENGTH_M / 2.0)
+                if in_own:
+                    backs += 1
+            if seen < RECOVERY_DEFENDERS:
+                continue  # kevés látott védő — nem mérhető kocka
+            if backs >= RECOVERY_DEFENDERS:
+                recovered = fr.t
+                break
+        if recovered is None:
+            continue
+        dt = (recovered - seq.start_t) / fps
+        rec = out[deff.value]
+        rec["transitions"] += 1
+        rec["sum_s"] += dt
+        if dt >= RECOVERY_SLOW_S:
+            rec["slow"] += 1
+    for rec in out.values():
+        rec["avg_s"] = (round(rec["sum_s"] / rec["transitions"], 1)
+                        if rec["transitions"] else None)
+        rec["sum_s"] = round(rec["sum_s"], 1)
+    return out
