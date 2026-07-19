@@ -362,6 +362,9 @@ def detect_empty_net(match: Match, config=None) -> list[dict]:
 # gyors felhozatalnak; ennél tovább már nem az indítást mérjük.
 OUTLET_FAST_S = 6.0
 OUTLET_MAX_S = 20.0
+# A felező-átlépésnél ennyire közel álló saját játékos számít az
+# indítás célpontjának.
+OUTLET_TARGET_RADIUS_M = 4.0
 
 
 def outlet_speed(match: Match, config=None) -> dict:
@@ -370,14 +373,19 @@ def outlet_speed(match: Match, config=None) -> dict:
     lassú felhozatal idejét ad az ellenfél visszarendeződésének.
 
     Visszatérés csapatonként (a védést jegyző oldal):
-      {"saves", "outlets", "sum_s", "avg_s", "fast"}
-    ahol avg_s None, ha nem volt mérhető indítás.
+      {"saves", "outlets", "sum_s", "avg_s", "fast",
+       "targets": [{"player_id", "n"}]}
+    ahol avg_s None, ha nem volt mérhető indítás; a targets a
+    felező-átlépésnél a labdához legközelebbi saját mezőnyjátékos —
+    az indítás tipikus célpontja.
     """
     from .xg import match_xg
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
-    out = {side: {"saves": 0, "outlets": 0, "sum_s": 0.0, "fast": 0}
+    out = {side: {"saves": 0, "outlets": 0, "sum_s": 0.0, "fast": 0,
+                  "targets": {}}
            for side in ("home", "away")}
     frames = match.frames
+    frames_by_t = {f.t: f for f in frames}
     for sh in match_xg(match, config).get("shots", []):
         if sh.get("outcome") != "save":
             continue
@@ -406,10 +414,26 @@ def outlet_speed(match: Match, config=None) -> dict:
             rec["sum_s"] += dt
             if dt <= OUTLET_FAST_S:
                 rec["fast"] += 1
+            # A célpont: az átlépésnél a labdához legközelebbi saját
+            # (nem kapus) játékos — neki megy az első hosszú passz.
+            fr = frames_by_t.get(crossed)
+            if fr is not None and fr.ball is not None:
+                cand = [(abs(p.x - fr.ball.x) + abs(p.y - fr.ball.y), p)
+                        for p in fr.players
+                        if getattr(p.team, "value", p.team) == def_side
+                        and getattr(p, "role", None) != "kapus"]
+                if cand:
+                    d, p = min(cand, key=lambda c: c[0])
+                    if d <= OUTLET_TARGET_RADIUS_M:
+                        rec["targets"][p.track_id] = (
+                            rec["targets"].get(p.track_id, 0) + 1)
     for rec in out.values():
         rec["avg_s"] = (round(rec["sum_s"] / rec["outlets"], 1)
                         if rec["outlets"] else None)
         rec["sum_s"] = round(rec["sum_s"], 1)
+        rec["targets"] = [{"player_id": pid, "n": n}
+                          for pid, n in sorted(rec["targets"].items(),
+                                               key=lambda kv: -kv[1])]
     return out
 
 

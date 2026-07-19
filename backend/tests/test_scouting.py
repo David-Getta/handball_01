@@ -1109,3 +1109,24 @@ def test_top_blocker_key_and_merge():
     assert not any("faluk kulcsa" in k for k in k2)
     merged = _merge_blockers([rep, few])
     assert merged[0] == {"player_id": 5, "blocks": 5}
+
+
+def test_outlet_target_key_and_merge():
+    """Ha az indítások fele+ ugyanahhoz a játékoshoz megy, célpont-kulcs
+    születik; szórt célpontoknál nem."""
+    from handball.pipeline.scouting import (_coach_keys,
+                                            _merge_outlet_targets)
+    rep = ScoutingReport(team="away", team_name="X", gk_outlets=4,
+                         gk_outlet_fast=1, gk_outlet_sum_s=40.0,
+                         gk_outlet_targets=[{"player_id": 12, "n": 3},
+                                            {"player_id": 8, "n": 1}])
+    _, _, keys = _coach_keys(rep)
+    assert any("célpontja" in k and "12." in k for k in keys)
+    spread = ScoutingReport(team="away", team_name="X", gk_outlets=4,
+                            gk_outlet_fast=1, gk_outlet_sum_s=40.0,
+                            gk_outlet_targets=[{"player_id": 12, "n": 1},
+                                               {"player_id": 8, "n": 1}])
+    _, _, k2 = _coach_keys(spread)
+    assert not any("célpontja" in k for k in k2)
+    merged = _merge_outlet_targets([rep, spread])
+    assert merged[0] == {"player_id": 12, "n": 4}

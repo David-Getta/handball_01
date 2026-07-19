@@ -368,3 +368,36 @@ def test_empty_net_goals_counts_scored_7v6():
     assert rec["home"]["windows"] == 1
     assert rec["home"]["scored_7v6"] == 1
     assert rec["home"]["conceded_empty"] == 0
+
+
+def test_outlet_target_identified():
+    """A felező-átlépésnél a labda melletti saját mezőnyjátékos az
+    indítás célpontja."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import outlet_speed
+
+    def _pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    for i in range(8):
+        frames.append(Frame(
+            t=i,
+            players=[_pl(1, Team.HOME, 37.0, 10.0),
+                     _pl(30, Team.AWAY, 39.0, 10.0, role="kapus")],
+            ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                      confidence=1.0)))
+    # Az indítás átér a felezőn; a 12-es away szélső ott várja a labdát.
+    for j in range(60):
+        bx = max(38.8 - 0.4 * j, 5.0)
+        frames.append(Frame(
+            t=8 + j,
+            players=[_pl(30, Team.AWAY, 39.0, 10.0, role="kapus"),
+                     _pl(12, Team.AWAY, 18.0, 10.0)],
+            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+    rec = outlet_speed(_match(frames))["away"]
+    assert rec["outlets"] == 1
+    assert rec["targets"] == [{"player_id": 12, "n": 1}]
