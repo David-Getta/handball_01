@@ -376,3 +376,39 @@ def test_missed_big_chances_trigger_ziccer_focus():
     assert "3 nagy helyzet" in item["why"]
     assert tf["away"] == [] or all(
         it["title"] != "Ziccer-befejezés" for it in tf["away"])
+
+
+def test_slow_outlets_trigger_restart_focus():
+    """3 mért, de lassú kapus-indítás → "Gyors indítás védés után" fókusz
+    a védő (away) oldalon."""
+    def keeper():
+        gk = _pl(30, Team.AWAY, 39.0, 10.0)
+        gk.role = "kapus"
+        return gk
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        # Fogott lövés: a labda a kapusnál (38,8 m) megáll...
+        for i in range(8):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 37.0, 10.0), keeper()],
+                ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        # ...majd a labda ~8 mp-ig a saját térfélen marad, csak utána
+        # ér át a felezőn (lassú indítás).
+        for j in range(200):
+            frames.append(Frame(t=t, players=[keeper()],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[keeper()],
+                            ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+        t += 100
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["away"]
+                 if it["title"] == "Gyors indítás védés után"), None)
+    assert item is not None
+    assert "3 mért indításból" in item["why"]
+    assert item["area"] == "kapus"

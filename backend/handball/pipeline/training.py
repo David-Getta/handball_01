@@ -368,4 +368,22 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 18) Lassú kapus-indítás: a védés utáni felhozatal gyakorlása —
+    # a gyors kidobás kontra-fegyver (a felderítési kulcs tükör-szabálya).
+    try:
+        from .goalkeeper import outlet_speed
+        osp = outlet_speed(match, config)
+        for side in ("home", "away"):
+            rec = osp[side]
+            if rec["outlets"] >= 3 and rec["fast"] / rec["outlets"] < 0.5:
+                avg = rec["sum_s"] / rec["outlets"]
+                add(side, "kapus", "Gyors indítás védés után",
+                    f"a {rec['outlets']} mért indításból csak "
+                    f"{rec['fast']} ért át gyorsan a felezőn "
+                    f"(átlag {avg:.0f} mp)",
+                    "kidobás-gyakorlás célkapukra, első passz a futó "
+                    "szélsőnek, indítás-jel begyakorlása védés után")
+    except Exception:
+        pass
+
     return out
