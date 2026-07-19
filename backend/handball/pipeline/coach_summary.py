@@ -497,6 +497,24 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
                          "cserélt")
                 if parts_gk:
                     sent += " (" + ", ".join(parts_gk) + ")"
+                # Bejött-e a csere? A két kapus a helyzetek nehézségén
+                # át összemérve (GSAx), 3+ kapott lövésnél.
+                cmp_ = [(st["track_id"], pk[st["track_id"]])
+                        for st in tl["stints"][:2]
+                        if pk.get(st["track_id"], {}).get(
+                            "on_target", 0) >= 3]
+                if len(cmp_) == 2:
+                    (t1, r1), (t2, r2) = cmp_
+                    d = r2["prevented"] - r1["prevented"]
+                    if d >= 1.0:
+                        sent += (f"; a csere bejött: a második kapus "
+                                 f"({t2}.) mérlege {r2['prevented']:+.1f}"
+                                 f" xG, az elsőé {r1['prevented']:+.1f}")
+                    elif d <= -1.0:
+                        sent += (f"; a csere nem hozott javulást: az "
+                                 f"első kapus ({t1}.) mérlege volt a "
+                                 f"jobb ({r1['prevented']:+.1f} xG, a "
+                                 f"másodiké {r2['prevented']:+.1f})")
         except Exception:
             pass
         # Leggyengébb sarok: a legalacsonyabb védés%-ú, min. 2 lövést

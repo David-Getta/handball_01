@@ -260,6 +260,42 @@ def test_goalkeeper_timeline_detects_change_and_splits_stats():
     assert tl["per_keeper"][8]["saves"] == 0
 
 
+def test_goalkeeper_timeline_per_keeper_xg_balance():
+    """Cserénél a kapusonkénti mérleg a helyzet-értéket is hozza:
+    a védés pluszba, a kis xG-jű lövésből kapott gól mínuszba viszi
+    a kapus GSAx-mérlegét (prevented = faced_xg − kapott gól)."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import goalkeeper_timeline
+
+    def gk(tid):
+        return PlayerPosition(track_id=tid, team=Team.AWAY, x=39.0, y=10.0,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    frames = []
+    for t in range(600):
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _shot_sequence(600, gk_track=9, save=True)
+    t0 = 600 + 8
+    frames.append(Frame(t=t0, players=[], ball=Ball(x=20.0, y=10.0,
+                                                    confidence=1.0)))
+    for i in range(600):
+        frames.append(Frame(t=t0 + 1 + i, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _shot_sequence(t0 + 601, gk_track=8, save=False)
+
+    tl = goalkeeper_timeline(_match(frames))["away"]
+    r9, r8 = tl["per_keeper"][9], tl["per_keeper"][8]
+    # A 9-es védett: pozitív mérleg, kapott gól nélkül.
+    assert r9["faced_xg"] > 0 and r9["conceded"] == 0
+    assert r9["prevented"] == r9["faced_xg"]
+    # A 8-as gólt kapott: a mérlege a helyzet-értékkel csökkentett −1.
+    assert r8["conceded"] == 1
+    assert r8["prevented"] < 0
+    assert abs(r8["prevented"] - (r8["faced_xg"] - 1)) < 0.02
+
+
 def test_outlet_speed_measures_fast_restart():
     """Védés után gyorsan felezőn átvitt labda → gyors indítás a védő
     (away) oldalon; a lassan visszahozott labda nem számít gyorsnak."""
