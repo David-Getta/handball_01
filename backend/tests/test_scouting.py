@@ -1576,3 +1576,33 @@ def test_key_players_detail_includes_position():
     kp = match_key_players(m)
     fo = next(it for it in kp["home"] if it["role"] == "Fő lövő")
     assert "· beálló" in fo["detail"]
+
+
+def test_key_players_get_estimated_positions():
+    """A kulcsjátékos-lista "mezőnyjátékos" címkéje helyett becsült
+    poszt kerül, ha van elég minta."""
+    from handball.models.tracking import (Ball, Frame,
+                                          PlayerPosition, PositionSource)
+    from handball.pipeline.scouting import _key_players
+    from handball.pipeline.tactics import TacticsConfig
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    for t in range(150):
+        frames.append(Frame(t=t, players=[
+            pl(1, 34.0, 10.0),   # beálló-hely
+            pl(2, 36.0, 2.0),    # szélső-hely
+            pl(3, 28.0, 10.0),   # nála a labda → irányító marad
+        ], ball=Ball(x=28.3, y=10.0, confidence=1.0)))
+    from handball.models.tracking import Match, MatchMeta
+    m = Match(MatchMeta(match_id="kpe", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    rows = _key_players(m, Team.HOME, TacticsConfig())
+    roles = {r.track_id: r.role for r in rows}
+    assert roles[3] == "irányító"       # birtoklásból, mint eddig
+    assert roles[1] == "beálló"
+    assert roles[2] == "szélső"
