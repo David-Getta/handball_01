@@ -241,6 +241,9 @@ class ScoutingReport:
     # A kiállítás-kiharcolóik: [{"player_id", "earned"}] — ki hozza a
     # 2 perceket; játékosonként meccsek közt összegezhető.
     susp_earners: list = field(default_factory=list)
+    # A kiülőik: [{"player_id", "suspensions"}] — ki szedi össze a
+    # 2 perceket; játékosonként meccsek közt összegezhető.
+    susp_players: list = field(default_factory=list)
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -889,6 +892,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"játékos harcolja ki ({top_se['earned']} kiharcolt 2 perc) "
             "— a betörésénél a test tartsa fel, a kéz maradjon lent: "
             "ellene a belemenés emberhátrányt ér.")
+    # A fegyelmezetlen védőjük: aki rendre kiül — támadd egy-egyben,
+    # a következő belemenése újabb emberelőnyt hoz nekünk.
+    if rep.susp_players and rep.susp_players[0]["suspensions"] >= 2:
+        top_sp = rep.susp_players[0]
+        keys.append(
+            f"A(z) {top_sp['player_id']}. játékosuk fegyelmezetlen "
+            f"({top_sp['suspensions']} kiállítás) — támadd őt egy az "
+            "egyben: nyomás alatt szabálytalankodik, és a harmadik "
+            "2 perc végleges kizárás.")
     # A kontra befejezője: ha a lerohanás-gólok zömét ugyanaz a játékos
     # szerzi, a visszafutásnál ő az első számú felvevendő ember.
     if rep.fb_finishers and rep.fb_finishers[0]["goals"] >= 2:
@@ -1166,6 +1178,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.susp_earners = [
             dict(e) for e in
             suspension_earners(match, config)[team.value]]
+        from .rules import suspended_players
+        rep.susp_players = [
+            dict(e) for e in
+            suspended_players(match, config)[team.value]]
     except Exception:
         pass
     try:
@@ -1579,6 +1595,17 @@ def _merge_susp_earners(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_susp_players(reports) -> list:
+    """Kiülőnkénti kiállítás-számok pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for e in (r.susp_players or []):
+            tally[e["player_id"]] = (tally.get(e["player_id"], 0)
+                                     + int(e["suspensions"]))
+    return [{"player_id": pid, "suspensions": n}
+            for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
@@ -1863,6 +1890,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         seven_takers=_merge_seven_takers(reports),
         seven_earners=_merge_seven_earners(reports),
         susp_earners=_merge_susp_earners(reports),
+        susp_players=_merge_susp_players(reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
