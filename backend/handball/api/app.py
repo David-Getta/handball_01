@@ -1659,6 +1659,17 @@ def create_app():
                 xg_saved_away = xs["away"]
         except Exception:
             pass
+        susp_home = susp_away = None
+        try:
+            from ..pipeline.rules import detect_powerplay
+            pps_lib = detect_powerplay(m)
+            if pps_lib:
+                susp_home = sum(1 for w in pps_lib
+                                if w["team_down"] == "home")
+                susp_away = sum(1 for w in pps_lib
+                                if w["team_down"] == "away")
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -1685,6 +1696,8 @@ def create_app():
             "blocks_away": blocks_away,
             "fastest_kmh": fastest_kmh,
             "xg_saved_home": xg_saved_home,
+            "suspensions_home": susp_home,
+            "suspensions_away": susp_away,
             "xg_saved_away": xg_saved_away,
         }
         _summary_cache[m.meta.match_id] = (key, out)
