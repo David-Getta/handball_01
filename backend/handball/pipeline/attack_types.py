@@ -314,3 +314,53 @@ def match_pace(match: Match,
             "home_attacks": counts["home"], "away_attacks": counts["away"],
             "per_min": round(per_min, 2), "label": label,
             "halves": halves}
+
+
+# Támadás-eredet: az előzmény-esemény legfeljebb ennyi másodperccel a
+# támadás kezdete előtt számít bele az eredet-címkébe.
+ORIGIN_LOOKBACK_S = 8.0
+
+
+def attack_origins(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Honnan indulnak a támadások: középkezdésből (kapott gól után),
+    kidobásból (az ellenfél kimaradt lövése után) vagy labdaszerzésből
+    (minden más). A kontra-védekezés tervezéséhez: akinek a góljai
+    labdaszerzésből jönnek, az ellen a labdabiztonság duplán számít.
+
+    Visszatérés csapatonként: {eredet: {"attacks", "goals"}}.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    look = ORIGIN_LOOKBACK_S * fps
+    tail = round(ATTACK_TAIL_S * fps)
+    shots = [(e.t, e.team.value, e.type == EventType.GOAL)
+             for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {} for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        opp = "away" if side == "home" else "home"
+        # Az utolsó ellenfél-lövés a támadás kezdete előtti ablakban.
+        prev = None
+        for (t, tm, goal) in shots:
+            if tm == opp and a["start_frame"] - look <= t < a["start_frame"]:
+                prev = (t, goal)
+        if prev is None:
+            origin = "labdaszerzés"
+        elif prev[1]:
+            origin = "középkezdés"
+        else:
+            origin = "kidobás"
+        rec = out[side].setdefault(origin, {"attacks": 0, "goals": 0})
+        rec["attacks"] += 1
+        hit = next((True for (t, tm, goal) in shots
+                    if tm == side and goal
+                    and a["start_frame"] <= t <= a["end_frame"] + tail),
+                   False)
+        if hit:
+            rec["goals"] += 1
+    return out

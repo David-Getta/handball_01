@@ -1490,3 +1490,24 @@ def test_shot_selection_in_narrative():
                 if x["title"] == "Befejezésük"), None)
     assert sec is not None
     assert "kis esélyű lövést" in sec["body"]
+
+
+def test_attack_origin_key_and_merge():
+    """Ha a gólok fele+ labdaszerzésből jön (5+ gólnál), kulcs születik;
+    az eredet-számok pontosan összegződnek."""
+    from handball.pipeline.scouting import (_coach_keys,
+                                            _merge_attack_origins)
+    rep = ScoutingReport(
+        team="away", team_name="X",
+        attack_origins={"labdaszerzés": {"attacks": 10, "goals": 4},
+                        "kidobás": {"attacks": 6, "goals": 2}})
+    _, _, keys = _coach_keys(rep)
+    assert any("labdaszerzésből indul" in k for k in keys)
+    few = ScoutingReport(
+        team="away", team_name="X",
+        attack_origins={"labdaszerzés": {"attacks": 4, "goals": 1},
+                        "középkezdés": {"attacks": 8, "goals": 4}})
+    _, _, k2 = _coach_keys(few)
+    assert not any("labdaszerzésből indul" in k for k in k2)
+    merged = _merge_attack_origins([rep, few])
+    assert merged["labdaszerzés"] == {"attacks": 14, "goals": 5}
