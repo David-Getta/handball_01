@@ -1124,6 +1124,16 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 f'szabad lövőt enged: {_fp("home")} / {_fp("away")}')
     except Exception:
         pass
+    # Meccs-tempó a fejlécbe (támadás/perc, ha elég hosszú a felvétel).
+    try:
+        from .attack_types import match_pace
+        _pc = match_pace(match)
+        if _pc.get("available"):
+            header_bits.append(
+                f'tempó: {_pc["per_min"]:.1f} támadás/perc '
+                f'({_pc["label"]})')
+    except Exception:
+        pass
     # Félidei állás a fejlécbe (ha felismerhető a szünet).
     try:
         from .momentum import halftime_score

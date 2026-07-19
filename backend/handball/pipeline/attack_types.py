@@ -255,3 +255,39 @@ def fast_break_finishers(match: Match,
     return {side: [{"player_id": pid, "goals": n}
                    for pid, n in sorted(rec.items(), key=lambda kv: -kv[1])]
             for side, rec in tally.items()}
+
+
+# Meccs-tempó küszöbök: összesített támadás/perc — e fölött "tempós",
+# ez alatt "lassú" a meccs (a kettő közt "közepes tempójú").
+PACE_FAST_PER_MIN = 2.2
+PACE_SLOW_PER_MIN = 1.4
+PACE_MIN_DURATION_MIN = 10.0
+
+
+def match_pace(match: Match,
+               config: Optional[TacticsConfig] = None) -> dict:
+    """Meccs-tempó: hány támadás jut egy percre.
+
+    A tempó a taktika lenyomata: a sok támadás gyors, oda-vissza
+    játékot jelent (kontra-kockázattal), a kevés türelmes építkezést.
+    Rövid felvételen (PACE_MIN_DURATION_MIN alatt) nem értelmezzük.
+
+    Visszatérés: {"available", "duration_min", "home_attacks",
+    "away_attacks", "per_min", "label"} — a label gyors/közepes/lassú.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    duration_min = len(match.frames) / fps / 60.0
+    if duration_min < PACE_MIN_DURATION_MIN:
+        return {"available": False, "duration_min": round(duration_min, 1)}
+    counts = {"home": 0, "away": 0}
+    for seq in segment_attacks(match, config):
+        counts[seq.team.value] += 1
+    total = counts["home"] + counts["away"]
+    per_min = total / duration_min
+    label = ("gyors" if per_min >= PACE_FAST_PER_MIN
+             else "lassú" if per_min <= PACE_SLOW_PER_MIN
+             else "közepes")
+    return {"available": True, "duration_min": round(duration_min, 1),
+            "home_attacks": counts["home"], "away_attacks": counts["away"],
+            "per_min": round(per_min, 2), "label": label}

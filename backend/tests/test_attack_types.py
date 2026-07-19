@@ -150,3 +150,24 @@ def test_attack_duration_efficiency_buckets():
     empty = Match(_meta(), [Frame(t=i, players=[], ball=None)
                             for i in range(10)])
     assert attack_duration_efficiency(empty) == {"home": {}, "away": {}}
+
+
+def test_match_pace_counts_and_label():
+    """A tempó a szegmentált támadásokból és a felvétel hosszából jön;
+    rövid felvételen nem értelmezzük."""
+    from handball.pipeline.attack_types import match_pace
+
+    # Rövid felvétel: nincs tempó-értékelés.
+    short = Match(_meta(), [Frame(t=i, players=[], ball=None)
+                            for i in range(100)])
+    assert match_pace(short)["available"] is False
+
+    # 12 perces üres felvétel: 0 támadás → lassú címke, 0/perc.
+    n = int(12 * 60 * 25)
+    long_empty = Match(_meta(), [Frame(t=i, players=[], ball=None)
+                                 for i in range(n)])
+    pc = match_pace(long_empty)
+    assert pc["available"] is True
+    assert pc["home_attacks"] == 0 and pc["away_attacks"] == 0
+    assert pc["per_min"] == 0.0
+    assert pc["label"] == "lassú"
