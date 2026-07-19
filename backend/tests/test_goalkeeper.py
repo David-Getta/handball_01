@@ -258,3 +258,41 @@ def test_goalkeeper_timeline_detects_change_and_splits_stats():
     assert tl["per_keeper"][9]["save_pct"] == 100.0
     assert tl["per_keeper"][8]["on_target"] == 1
     assert tl["per_keeper"][8]["saves"] == 0
+
+
+def test_outlet_speed_measures_fast_restart():
+    """Védés után gyorsan felezőn átvitt labda → gyors indítás a védő
+    (away) oldalon; a lassan visszahozott labda nem számít gyorsnak."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import OUTLET_FAST_S, outlet_speed
+
+    def _pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y)
+
+    def keeper():
+        gk = _pl(30, Team.AWAY, 39.0, 10.0)
+        gk.role = "kapus"
+        return gk
+
+    # Fogott lövés: a labda a kapusnál (38,8 m) megáll...
+    frames = []
+    for i in range(8):
+        frames.append(Frame(
+            t=i,
+            players=[_pl(1, Team.HOME, 37.0, 10.0), keeper()],
+            ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                      confidence=1.0)))
+    # ...majd az indítás 2 mp alatt átér a felezőn (x < 20).
+    for j in range(60):
+        frames.append(Frame(
+            t=8 + j,
+            players=[keeper()],
+            ball=Ball(x=max(38.8 - 0.4 * j, 5.0), y=10.0,
+                      confidence=1.0)))
+    rec = outlet_speed(_match(frames))["away"]
+    assert rec["saves"] == 1
+    assert rec["outlets"] == 1
+    assert rec["fast"] == 1
+    assert rec["avg_s"] is not None and rec["avg_s"] <= OUTLET_FAST_S
+    # A home oldalon nem történt védés.
+    assert outlet_speed(_match(frames))["home"]["saves"] == 0
