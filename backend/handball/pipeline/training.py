@@ -403,4 +403,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 20) Egy-tengelyű támadás: ha a gólok zöme egyetlen (gólpasszoló ->
+    # lövő) párosból jön, az ellenfél elvágja — B-tervet kell építeni.
+    try:
+        from .event_detection import (EventType, assist_network,
+                                      detect_shots)
+        net = assist_network(match, config)
+        goals_by = {"home": 0, "away": 0}
+        for e in detect_shots(match, config):
+            if e.type == EventType.GOAL:
+                goals_by[e.team.value] += 1
+        for side in ("home", "away"):
+            pairs = net[side]["pairs"]
+            if not pairs or not goals_by[side]:
+                continue
+            top = pairs[0]
+            share = top["goals"] / goals_by[side]
+            if top["goals"] >= 3 and share >= 0.6:
+                add(side, "támadás", "Támadás-változatosság",
+                    f"a gólok {100.0 * share:.0f}%-a a(z) {top['from']}. "
+                    f"→ {top['to']}. tengelyről jött",
+                    "másodlagos befejezési utak gyakorlása (szélső-"
+                    "befutás, beálló-játék), lekapcsolódó mozgások a "
+                    "tengely letámadása ellen")
+    except Exception:
+        pass
+
     return out
