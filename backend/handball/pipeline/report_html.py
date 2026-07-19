@@ -870,10 +870,35 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 j = jersey_of.get(pid)
                 return f"#{j}" if j is not None else f"{pid}. játékos"
 
+            # Ziccer-mérleg (xG >= 0,5): csapatonként és lövőnként
+            # [gól, nagy helyzet] — a küszöb a többi felülettel azonos.
+            from .xg import BIG_CHANCE_XG
+            big = {"home": [0, 0], "away": [0, 0]}
+            bigp: dict = {}
+            for sh in r.get("shots", []):
+                if sh.get("xg", 0.0) < BIG_CHANCE_XG:
+                    continue
+                big[sh["team"]][1] += 1
+                big[sh["team"]][0] += int(sh.get("outcome") == "goal")
+                if sh.get("player_id") is not None:
+                    pr = bigp.setdefault(sh["player_id"], [0, 0])
+                    pr[1] += 1
+                    pr[0] += int(sh.get("outcome") == "goal")
+            big_row = ""
+            if big["home"][1] + big["away"][1] >= 1:
+                big_row = (
+                    "<tr><td>Ziccer (gól / nagy helyzet)</td>"
+                    f'<td class="num">{big["home"][0]}/{big["home"][1]}</td>'
+                    f'<td class="num">{big["away"][0]}/{big["away"][1]}'
+                    "</td></tr>")
+
             srows = []
             for rec in r["shooters"][:8]:
                 name = home if rec["team"] == "home" else away
                 d = rec["diff"]
+                bz = bigp.get(rec["player_id"])
+                bz_cell = (f'<td class="num">{bz[0]}/{bz[1]}</td>'
+                           if bz else '<td class="num">–</td>')
                 srows.append(
                     f"<tr><td>{escape(_lab(rec['player_id']))}</td>"
                     f"<td>{escape(name)}</td>"
@@ -881,7 +906,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                     f'<td class="num">{rec["goals"]}</td>'
                     f'<td class="num">{rec["xg"]:.1f}</td>'
                     f'<td class="num"><b>{"+" if d > 0 else ""}{d:.1f}</b></td>'
-                    "</tr>")
+                    + bz_cell + "</tr>")
             xg_html = (
                 "<h2>Helyzetminőség (várható gól)</h2>"
                 "<table><tr><th></th>"
@@ -895,15 +920,18 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 f'<td class="num">{ta["goals"]}</td></tr>'
                 f'<tr><td>Befejezés (gól − xG)</td>'
                 f'<td class="num">{th["diff"]:+.1f}</td>'
-                f'<td class="num">{ta["diff"]:+.1f}</td></tr></table>'
+                f'<td class="num">{ta["diff"]:+.1f}</td></tr>'
+                + big_row + "</table>"
                 + ("<table><tr><th>Lövő</th><th>Csapat</th>"
                    '<th class="num">Lövés</th><th class="num">Gól</th>'
-                   '<th class="num">xG</th><th class="num">+/−</th></tr>'
+                   '<th class="num">xG</th><th class="num">+/−</th>'
+                   '<th class="num">Ziccer</th></tr>'
                    + "".join(srows) + "</table>" if srows else "")
                 + '<p class="note">Az xG a lövés helyéből számolt '
                   'helyzetérték (kapu-távolság + látott kapuszög). Pozitív '
                   'befejezés-érték: a csapat/játékos a helyzetei felett '
-                  'teljesített.</p>')
+                  'teljesített. Ziccer: legalább 0,5 xG értékű helyzet '
+                  '(gól / összes).</p>')
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
