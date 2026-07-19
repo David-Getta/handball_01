@@ -504,3 +504,35 @@ def test_multiple_fading_players_trigger_rotation_focus():
     assert item is not None
     assert "2 játékos" in item["why"]
     assert item["area"] == "kondíció"
+
+
+def test_negative_gsax_triggers_keeper_focus():
+    """Ha a kapus a helyzetekből várhatónál 2+ góllal többet kap,
+    Kapus-forma fókusz születik a védő oldalon."""
+    def gk():
+        p = _pl(30, Team.AWAY, 39.0, 10.0)
+        p.role = "kapus"
+        return p
+
+    # 4 távoli, kis xG-jű hazai gól: a kapus a várhatónál jóval
+    # többet kap (GSAx ~ −3) — ez a kapus-forma jel.
+    frames = []
+    t = 0
+    for _ in range(4):
+        for i in range(10):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 28.0, 4.0), gk()],
+                ball=Ball(x=min(28.5 + 1.3 * i, 40.0),
+                          y=4.0 + min(0.65 * i, 6.0),
+                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["away"]
+                 if it["title"] == "Kapus-forma"), None)
+    assert item is not None
+    assert "GSAx" in item["why"]
+    assert item["area"] == "kapus"
