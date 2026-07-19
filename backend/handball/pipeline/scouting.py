@@ -1740,6 +1740,23 @@ def matchup_plan(own: "ScoutingReport",
             "bravúr-védés) — a nagy helyzeteik sem biztos gólok: ne "
             "essetek szét egy-egy védekezési hiba után.")
 
+    # 9) A fegyelmezetlen védőjük × a ti kiharcolóitok.
+    opp_sp = (opp.susp_players or [None])[0]
+    own_earn = 0
+    own_earner_id = None
+    for lst in (own.susp_earners or []), (own.seven_earners or []):
+        if lst and lst[0]["earned"] > own_earn:
+            own_earn = lst[0]["earned"]
+            own_earner_id = lst[0]["player_id"]
+    if (opp_sp and opp_sp["suspensions"] >= 2 and own_earn >= 2
+            and own_earner_id is not None):
+        plan.append(
+            f"A(z) {opp_sp['player_id']}. játékosuk fegyelmezetlen "
+            f"({opp_sp['suspensions']} kiállítás), nálatok a(z) "
+            f"{own_earner_id}. játékos harcolja ki a szabálytalanságokat "
+            f"({own_earn}×) — küldd őt az ő sávjába: 2 perc vagy hetes "
+            "lesz belőle.")
+
     return plan
 
 
