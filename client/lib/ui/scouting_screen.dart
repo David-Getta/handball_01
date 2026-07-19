@@ -384,6 +384,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átlag ${avg.toStringAsFixed(0)} mp";
   }
 
+  // Gól-posztok: a legtermékenyebb poszt és aránya (6+ besorolt gól,
+  // a narratívával azonos küszöb).
+  String? _postGoals(Map<String, dynamic> r) {
+    final pg = (r["post_goals"] as Map?)?.cast<String, dynamic>();
+    if (pg == null || pg.isEmpty) return null;
+    var total = 0;
+    String? topKey;
+    var topN = 0;
+    pg.forEach((k, v) {
+      final n = ((v as num?) ?? 0).toInt();
+      total += n;
+      if (n > topN) {
+        topN = n;
+        topKey = k;
+      }
+    });
+    if (total < 6 || topKey == null) return null;
+    return "$topKey ${(100.0 * topN / total).round()}%";
+  }
+
   // Visszaérés: átlagos visszarendeződés-idő (4+ mért átmenetnél),
   // a kulcsokkal azonos 5 / 3 mp-es címke-küszöbökkel.
   String? _recovery(Map<String, dynamic> r) {
@@ -695,6 +715,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_gkXg(r) != null) ["Kapus-xG", _gkXg(r)!],
       if (_goalSource(r) != null) ["Gól-forrás", _goalSource(r)!],
       if (_recovery(r) != null) ["Visszaérés", _recovery(r)!],
+      if (_postGoals(r) != null) ["Gól-posztok", _postGoals(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
