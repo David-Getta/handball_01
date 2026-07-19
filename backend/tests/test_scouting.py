@@ -1541,3 +1541,38 @@ def test_recovery_keys_and_combine():
     assert comb.rec_transitions == 12
     assert abs(comb.rec_sum_s - 48.0) < 1e-6
     assert comb.rec_slow == 4
+
+
+def test_key_players_detail_includes_position():
+    """Elég mintánál a kulcsember-mérleg poszt-címkét is kap."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource)
+    from handball.pipeline.scouting import match_key_players
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    # Hosszú birtoklás-fázis: az 1-es középen, ~7 m-re áll (beálló).
+    for _ in range(150):
+        frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                            ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+        t += 1
+    # Négy lövése gólt ér → Fő lövő.
+    for _ in range(4):
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="kpp", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    kp = match_key_players(m)
+    fo = next(it for it in kp["home"] if it["role"] == "Fő lövő")
+    assert "· beálló" in fo["detail"]
