@@ -207,6 +207,29 @@ def test_seven_meter_no_shot_is_unknown():
     assert out[0]["outcome"] == "ismeretlen" and out[0]["shooter_id"] is None
 
 
+def test_seven_meter_direction_detected():
+    """A hetes iránya a kapu-síkbeli labdahelyből: a kapu közepére
+    tartó lövés "közép", az alacsony y-ra tartó (a +x kapura) "bal"."""
+    out = seven_meter_outcomes(_seven_then_shot(goal=True))
+    assert len(out) == 1
+    assert out[0]["irany"] == "közép"
+
+    frames = []
+    t = 0
+    for _ in range(30):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(7):  # a lövés a bal alsó sávba (y=8.8) megy
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=8.8,
+                                      confidence=1.0)))
+        t += 1
+    out2 = seven_meter_outcomes(Match(_meta(), frames))
+    assert len(out2) == 1
+    assert out2[0]["irany"] == "bal"
+
+
 def test_seven_meter_earner_identified():
     """A hetes előtt a kapuhoz legközelebb járó támadó a kiharcoló."""
     from handball.pipeline.rules import seven_meter_earners

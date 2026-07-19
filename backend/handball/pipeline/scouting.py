@@ -789,6 +789,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         if (top_s["attempts"] >= 3
                 and top_s["goals"] / top_s["attempts"] <= 0.5):
             sent7 += " A mérlege gyenge: a kapus bátran vállalhat mozgást."
+        # Ha az iránya kiszámítható (a mért hetesei 70%-a egy sávba
+        # megy), a kapus konkrét utasítást kap.
+        dirs7 = top_s.get("dirs") or {}
+        n_dirs = sum(dirs7.values())
+        if n_dirs >= 3:
+            best_d = max(dirs7, key=dirs7.get)
+            if dirs7[best_d] / n_dirs >= 0.7:
+                hu = {"bal": "balra", "jobb": "jobbra",
+                      "közép": "középre"}[best_d]
+                sent7 += (f" Kiszámítható: a mért hetesei "
+                          f"{100.0 * dirs7[best_d] / n_dirs:.0f}%-ban "
+                          f"{hu} mennek — a kapus induljon {hu}.")
         keys.append(sent7)
     # A beállójuk: ha egyértelmű, ki az, célzott utasítás jár hozzá.
     pivots = [tid for tid, p_ in (rep.positions or {}).items()
@@ -1123,9 +1135,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             if sm["team"] != team.value or sm.get("shooter_id") is None:
                 continue
             rec7 = sv.setdefault(sm["shooter_id"],
-                                 {"attempts": 0, "goals": 0})
+                                 {"attempts": 0, "goals": 0,
+                                  "dirs": {}})
             rec7["attempts"] += 1
             rec7["goals"] += int(sm["outcome"] == "gól")
+            if sm.get("irany"):
+                rec7["dirs"][sm["irany"]] = \
+                    rec7["dirs"].get(sm["irany"], 0) + 1
         rep.seven_takers = [
             {"player_id": pid, **r}
             for pid, r in sorted(sv.items(),
@@ -1527,16 +1543,18 @@ def _merge_seven_earners(reports) -> list:
 
 
 def _merge_seven_takers(reports) -> list:
-    """Hetes-dobónkénti kísérlet/gól számok pontos összegzése."""
+    """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
     for r in reports:
         for t in (r.seven_takers or []):
-            cur = tally.setdefault(t["player_id"], [0, 0])
+            cur = tally.setdefault(t["player_id"], [0, 0, {}])
             cur[0] += int(t["attempts"])
             cur[1] += int(t["goals"])
-    return [{"player_id": pid, "attempts": a, "goals": g}
-            for pid, (a, g) in sorted(tally.items(),
-                                      key=lambda kv: -kv[1][0])]
+            for d, n in (t.get("dirs") or {}).items():
+                cur[2][d] = cur[2].get(d, 0) + int(n)
+    return [{"player_id": pid, "attempts": a, "goals": g, "dirs": ds}
+            for pid, (a, g, ds) in sorted(tally.items(),
+                                          key=lambda kv: -kv[1][0])]
 
 
 def _merge_fb_finishers(reports) -> list:
