@@ -1464,3 +1464,18 @@ def test_match_key_players_cold_finisher_role():
     assert role is not None
     assert role["player_id"] == 1
     assert "xG-hez képest" in role["detail"]
+
+
+def test_shot_selection_keys():
+    """Kis átlag-xG → "engedd a távolit"; nagy átlag-xG → "válogatósak";
+    kevés lövésnél nincs kulcs."""
+    from handball.pipeline.scouting import _coach_keys
+    spray = ScoutingReport(team="away", team_name="X", shots=20, xg=1.6)
+    _, _, k1 = _coach_keys(spray)
+    assert any("kis esélyű lövést" in k for k in k1)
+    picky = ScoutingReport(team="away", team_name="X", shots=12, xg=2.4)
+    _, _, k2 = _coach_keys(picky)
+    assert any("Válogatósak" in k for k in k2)
+    few = ScoutingReport(team="away", team_name="X", shots=6, xg=0.4)
+    _, _, k3 = _coach_keys(few)
+    assert not any("xG/lövés" in k for k in k3)
