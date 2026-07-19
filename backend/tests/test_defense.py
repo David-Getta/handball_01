@@ -206,3 +206,31 @@ def test_defensive_pressure_tight_vs_loose():
     assert tight is not None and loose is not None
     assert tight < loose
     assert abs(tight - 1.0) < 0.2  # ~1 m-re állt a védő
+
+
+def test_transition_recovery_measures_slow_return():
+    """Ha a védők sokáig az ellenfél térfelén ragadnak, a
+    visszarendeződés lassúként mérődik."""
+    from handball.models.tracking import Ball, Frame, Match, MatchMeta
+    from handball.pipeline.defense import transition_recovery
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y)
+
+    frames = []
+    for t in range(300):
+        # A hazai birtokol és lassan nyomul a +x kapu felé.
+        bx = 22.0 + 0.05 * t
+        players = [pl(1, Team.HOME, bx, 10.0)]
+        # Négy vendég védő 6 mp-ig elöl ragad (x=10), majd visszaér.
+        dx = 10.0 if t < 150 else 35.0
+        for k in range(4):
+            players.append(pl(10 + k, Team.AWAY, dx, 4.0 + 4 * k))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="rc", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    rec = transition_recovery(m)["away"]
+    assert rec["transitions"] >= 1
+    assert rec["avg_s"] is not None and rec["avg_s"] >= 5.0
+    assert rec["slow"] >= 1
