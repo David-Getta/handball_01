@@ -104,3 +104,31 @@ def test_auto_normalize_end_to_end():
     # Szünet nélküli meccsen nem csinál semmit.
     m2 = Match(_meta(), _play_frames(0, 240, home_x=12.0, away_x=26.0))
     assert auto_normalize(m2) is None
+
+
+def test_second_half_start_counts_goals():
+    """A szünet utáni első 5 perc góljai csapatonként; félidő-jel
+    nélkül None."""
+    from handball.pipeline.halftime import second_half_start
+
+    frames = _play_frames(0, 120, home_x=12.0, away_x=26.0)
+    t = len(frames)
+    frames += _break_frames(t, 90)
+    t = len(frames)
+    frames += _play_frames(t, 30, home_x=12.0, away_x=26.0)
+    t = len(frames)
+    for i in range(8):  # hazai gól a szünet után (a +x kapuba)
+        frames.append(Frame(t=t + i,
+                            players=[_pl(100, Team.HOME, 33.5, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+    t += 8
+    frames += _play_frames(t, 30, home_x=12.0, away_x=26.0)
+    m = Match(_meta(), frames)
+    rec = second_half_start(m)
+    assert rec is not None
+    assert rec["home"] >= 1 and rec["away"] == 0
+
+    no_ht = Match(_meta(), _play_frames(0, 240, home_x=12.0,
+                                        away_x=26.0))
+    assert second_half_start(no_ht) is None
