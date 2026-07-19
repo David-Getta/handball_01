@@ -323,3 +323,42 @@ def test_report_ziccer_row_and_shooter_column():
     assert "Ziccer (gól / nagy helyzet)" in html
     assert "3/4" in html
     assert '<th class="num">Ziccer</th>' in html
+
+
+def test_report_gk_outlet_column():
+    """A Kapus-teljesítmény tábla Indítás-oszlopa: fogott lövés utáni
+    gyors felhozatalnál kiírja az átlagot és a gyorsak számát."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                           source=PositionSource.MEASURED, confidence=1.0)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    # Fogott lövés a kapusnál (38,8 m-nél megáll a labda)...
+    for i in range(8):
+        frames.append(Frame(
+            t=i,
+            players=[pl(1, Team.HOME, 37.0, 10.0),
+                     pl(30, Team.AWAY, 39.0, 10.0, role="kapus")],
+            ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                      confidence=1.0)))
+    # ...majd az indítás pár másodperc alatt átér a felezőn.
+    for j in range(60):
+        frames.append(Frame(
+            t=8 + j,
+            players=[pl(30, Team.AWAY, 39.0, 10.0, role="kapus")],
+            ball=Ball(x=max(38.8 - 0.4 * j, 5.0), y=10.0,
+                      confidence=1.0)))
+    m = Match(MatchMeta(match_id="go", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Kapus-teljesítmény" in html
+    assert "Indítás (felezőig)" in html
+    assert "1/1 gyors" in html
+    assert "Indítás: védés után" in html
