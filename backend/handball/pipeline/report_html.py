@@ -133,6 +133,50 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
     except Exception:
         pass
 
+    # Szerep-tábla: a több meccsből összegzett játékos-profilok — a
+    # csempékkel és a kulcsokkal azonos küszöbökkel.
+    roles_html = ""
+    try:
+        role_rows = []
+
+        def _role(role, pid, detail):
+            role_rows.append(f"<tr><td>{escape(role)}</td>"
+                             f"<td>{pid}. játékos</td>"
+                             f"<td>{escape(detail)}</td></tr>")
+
+        per_sh: dict = {}
+        for rec_sz in (rep.shooter_zones or []):
+            per_sh[rec_sz["player_id"]] = (
+                per_sh.get(rec_sz["player_id"], 0) + int(rec_sz["shots"]))
+        if per_sh:
+            pid, n_sh = max(per_sh.items(), key=lambda kv: kv[1])
+            if n_sh >= 3:
+                _role("Fő lövő", pid, f"{n_sh} azonosított lövés")
+        bl = rep.blockers or []
+        if bl and bl[0]["blocks"] >= 3:
+            _role("A fal kulcsa", bl[0]["player_id"],
+                  f"{bl[0]['blocks']} blokk")
+        sv = rep.seven_takers or []
+        if sv and sv[0]["attempts"] >= 2:
+            _role("Hetes-dobó", sv[0]["player_id"],
+                  f"{sv[0]['goals']}/{sv[0]['attempts']} gól")
+        fb = rep.fb_finishers or []
+        if fb and fb[0]["goals"] >= 2:
+            _role("Kontra-befejező", fb[0]["player_id"],
+                  f"{fb[0]['goals']} kontra-gól")
+        ot = rep.gk_outlet_targets or []
+        if (ot and rep.gk_outlets >= 2 and ot[0]["n"] >= 2
+                and ot[0]["n"] / rep.gk_outlets >= 0.5):
+            _role("Indítás-célpont", ot[0]["player_id"],
+                  f"{ot[0]['n']}/{rep.gk_outlets} indítás")
+        if role_rows:
+            roles_html = ("<h2>Kikre készülj (szerepek)</h2><table>"
+                          "<tr><th>Szerep</th><th>Játékos</th>"
+                          "<th>Mérleg</th></tr>"
+                          + "".join(role_rows) + "</table>")
+    except Exception:
+        pass
+
     metric_items = [
         _metric("Szervezett támadás", f"{rep.attack_share_pct:.0f}%"),
         _metric("Gyors indítás", f"{rep.fast_break_pct:.0f}%"),
@@ -303,6 +347,8 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
 
   <h2>Védekezésük (amikor ők védenek)</h2>
   {_defense_bars(rep.defense_distribution)}
+
+  {roles_html}
 
   <h2>Kulcsjátékosaik</h2>
   {_players(rep.key_players)}

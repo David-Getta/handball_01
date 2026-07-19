@@ -118,3 +118,28 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_scouting_report_role_table():
+    """A felderítő jelentés szerep-táblája a küszöböt elérő profilokat
+    mutatja; küszöb alatt a szekció elmarad."""
+    from handball.pipeline.report_html import scouting_report_html
+    from handball.pipeline.scouting import ScoutingReport
+
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél", matches=2,
+        shooter_zones=[{"player_id": 7, "zone": "átlövés bal",
+                        "shots": 5}],
+        blockers=[{"player_id": 5, "blocks": 4}],
+        seven_takers=[{"player_id": 11, "attempts": 3, "goals": 2}],
+        fb_finishers=[{"player_id": 9, "goals": 2}],
+        gk_outlets=4,
+        gk_outlet_targets=[{"player_id": 12, "n": 3}])
+    html = scouting_report_html(rep)
+    assert "Kikre készülj (szerepek)" in html
+    for frag in ("Fő lövő", "7. játékos", "A fal kulcsa", "Hetes-dobó",
+                 "Kontra-befejező", "Indítás-célpont"):
+        assert frag in html, frag
+
+    empty = ScoutingReport(team="away", team_name="Ellenfél")
+    assert "Kikre készülj (szerepek)" not in scouting_report_html(empty)
