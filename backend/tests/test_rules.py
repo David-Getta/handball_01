@@ -276,3 +276,27 @@ def test_suspension_earner_identified():
     assert earners["away"] and earners["away"][0]["player_id"] == 205
     assert earners["away"][0]["earned"] == 1
     assert earners["home"] == []
+
+
+def test_suspended_player_identified():
+    """A hátrány alatt eltűnő track a kiülő; több eltűnőnél nincs
+    jelölés (nincs hamis vádaskodás)."""
+    from handball.pipeline.rules import suspended_players
+
+    def mk(t, home_tracks):
+        players = [_pl(tid, Team.HOME, 15.0 + (tid % 10), 4.0 + (tid % 6))
+                   for tid in home_tracks]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(6)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=20.0, y=10.0, confidence=1.0))
+
+    full = [100, 101, 102, 103, 104, 105]
+    down = [100, 101, 102, 103, 104]  # a 105-ös ült ki
+    frames = [mk(t, full) for t in range(750)]
+    frames += [mk(t, down) for t in range(750, 2250)]
+    frames += [mk(t, full) for t in range(2250, 3000)]
+    m = Match(_meta(), frames)
+    out = suspended_players(m)
+    assert out["home"] == [{"player_id": 105, "suspensions": 1}]
+    assert out["away"] == []

@@ -463,3 +463,48 @@ def suspension_earners(match: Match,
                    for pid, n in sorted(rec.items(),
                                         key=lambda kv: -kv[1])]
             for side, rec in tally.items()}
+
+
+# A kiülő azonosításához: ennyivel a hátrány kezdete előtt nézzük, ki
+# volt még a pályán (aki a teljes hátrány alatt el is tűnik, az ült ki).
+SUSP_WHO_LOOKBACK_S = 20.0
+
+
+def suspended_players(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Ki ült ki: a kiállítás lenyomata a TRACKEKBEN is ott van — a
+    büntetett játékos a hátrány teljes ideje alatt hiányzik a pályáról.
+
+    A hátrány kezdete előtti SUSP_WHO_LOOKBACK_S-ben mért, nem kapus
+    trackek közül az a kiülő, amelyik a hátrány alatt egyszer sem
+    látszik. Ha több ilyen van (cserehullám zaja), inkább nem mondunk
+    semmit — nincs hamis vádaskodás.
+
+    Visszatérés: {"home"/"away": [{"player_id", "suspensions"}]} — a
+    BÜNTETETT oldal szerint, kiállítás-szám szerint csökkenő sorban.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tally: dict = {"home": {}, "away": {}}
+    for w in detect_powerplay(match):
+        side = w["team_down"]
+        t0, t1 = w["start_frame"], w["end_frame"]
+        look = t0 - round(SUSP_WHO_LOOKBACK_S * fps)
+        before: set = set()
+        during: set = set()
+        for f in match.frames:
+            if look <= f.t < t0:
+                for p in f.players:
+                    if (p.team.value == side and p.role != "kapus"
+                            and p.source == PositionSource.MEASURED):
+                        before.add(p.track_id)
+            elif t0 <= f.t <= t1:
+                for p in f.players:
+                    if p.team.value == side:
+                        during.add(p.track_id)
+        gone = [tid for tid in before if tid not in during]
+        if len(gone) == 1:
+            tally[side][gone[0]] = tally[side].get(gone[0], 0) + 1
+    return {side: [{"player_id": pid, "suspensions": n}
+                   for pid, n in sorted(rec.items(),
+                                        key=lambda kv: -kv[1])]
+            for side, rec in tally.items()}
