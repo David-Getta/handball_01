@@ -429,6 +429,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 24) Szélső-játék: ha vannak szélsők a felállásban, de a gólokból
+    # kimaradnak, a támadás beszűkült — szélesíteni kell.
+    try:
+        from .roles import estimate_positions
+        from .xg import match_xg
+        est = estimate_positions(match, config)
+        r_xg = match_xg(match, config)
+        for side in ("home", "away"):
+            wings = {tid for tid, p_ in est.get(side, {}).items()
+                     if p_["poszt"] == "szélső"}
+            if not wings:
+                continue
+            team_goals = r_xg["teams"][side]["goals"]
+            if team_goals < 6:
+                continue
+            wing_goals = sum(rec["goals"] for rec in r_xg.get("shooters", [])
+                             if rec["team"] == side
+                             and rec["player_id"] in wings)
+            if wing_goals / team_goals <= 0.15:
+                add(side, "támadás", "Szélső-játék bevonása",
+                    f"a {team_goals} gólból csak {wing_goals} jött "
+                    "szélsőtől, pedig a felállásban ott vannak",
+                    "szélső-befutások begyakorlása, gyors átemelés a "
+                    "túloldali szélsőnek, bedobás utáni szélső-figura")
+    except Exception:
+        pass
+
     # 23) Visszarendeződés-tempó: ha méréssel is lassú a visszaérés,
     # nem kell kontra-gólt várni a jelzéshez — korai figyelmeztetés.
     try:
