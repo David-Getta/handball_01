@@ -448,3 +448,36 @@ def test_empty_net_costs_trigger_7v6_focus():
                  if it["title"] == "7 a 6 labdabiztonság"), None)
     assert item is not None
     assert "2 gólt kaptak üres kapura" in item["why"]
+
+
+def test_single_axis_goals_trigger_variety_focus():
+    """Ha minden gól ugyanarról az (1-es -> 2-es) tengelyről jön (3 gól),
+    "Támadás-változatosság" fókusz születik."""
+    frames = []
+    t = 0
+    for _ in range(3):
+        # passz 1→2, majd a 2-es gólja a +x kapura
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 25.0, 10.0),
+                                          _pl(2, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+        for i in range(7):
+            frames.append(Frame(t=t,
+                                players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["home"]
+                 if it["title"] == "Támadás-változatosság"), None)
+    assert item is not None
+    assert "1. → 2. tengelyről" in item["why"]
