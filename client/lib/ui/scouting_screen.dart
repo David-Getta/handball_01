@@ -384,6 +384,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átlag ${avg.toStringAsFixed(0)} mp";
   }
 
+  // Visszaérés: átlagos visszarendeződés-idő (4+ mért átmenetnél),
+  // a kulcsokkal azonos 5 / 3 mp-es címke-küszöbökkel.
+  String? _recovery(Map<String, dynamic> r) {
+    final n = ((r["rec_transitions"] as num?) ?? 0).toInt();
+    if (n < 4) return null;
+    final avg = ((r["rec_sum_s"] as num?) ?? 0).toDouble() / n;
+    final label = avg >= 5.0
+        ? "lassú"
+        : avg <= 3.0
+            ? "villámgyors"
+            : "átlagos";
+    return "${avg.toStringAsFixed(1)} mp · $label";
+  }
+
   // Gól-forrás: a fő támadás-eredet (50%+ aránynál, 5+ gólnál) —
   // a narratívával azonos küszöb.
   String? _goalSource(Map<String, dynamic> r) {
@@ -680,6 +694,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_pace(r) != null) ["Tempó", _pace(r)!],
       if (_gkXg(r) != null) ["Kapus-xG", _gkXg(r)!],
       if (_goalSource(r) != null) ["Gól-forrás", _goalSource(r)!],
+      if (_recovery(r) != null) ["Visszaérés", _recovery(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],

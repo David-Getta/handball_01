@@ -2083,6 +2083,8 @@ def create_app():
                 _layer("xg_saved", lambda: xg_saved(match))
                 _layer("xg_prevented", lambda: xg_prevented(match))
                 _layer("attack_origins", lambda: attack_origins(match))
+                from ..pipeline.defense import transition_recovery
+                _layer("recovery", lambda: transition_recovery(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
