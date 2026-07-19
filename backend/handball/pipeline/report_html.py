@@ -178,6 +178,28 @@ def scouting_report_html(rep: ScoutingReport,
                           "<tr><th>Szerep</th><th>Játékos</th>"
                           "<th>Mérleg</th></tr>"
                           + "".join(role_rows) + "</table>")
+        # Hetes-dobóik irány-táblája — a kapus egy pillantásra látja,
+        # ki hová szokta lőni (csak mért iránnyal rendelkező dobóknál).
+        hu_dir = {"bal": "balra", "jobb": "jobbra", "közép": "középre"}
+        seven_rows = []
+        for t7 in (rep.seven_takers or []):
+            if t7.get("attempts", 0) < 2:
+                continue
+            dirs7 = t7.get("dirs") or {}
+            dir_txt = " · ".join(
+                f"{hu_dir.get(d, d)} {n}×"
+                for d, n in sorted(dirs7.items(),
+                                   key=lambda kv: -kv[1])) or "—"
+            seven_rows.append(
+                f"<tr><td>{t7['player_id']}. játékos</td>"
+                f'<td class="num">{t7["goals"]}/{t7["attempts"]}</td>'
+                f"<td>{escape(dir_txt)}</td></tr>")
+        if seven_rows:
+            roles_html += ("<h2>Hetes-dobóik (irányokkal)</h2><table>"
+                           "<tr><th>Dobó</th>"
+                           '<th class="num">Gól/kísérlet</th>'
+                           "<th>Merre lövi</th></tr>"
+                           + "".join(seven_rows) + "</table>")
     except Exception:
         pass
 
