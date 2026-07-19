@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#256)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#280)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -89,6 +89,30 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   védések (fogott ziccerek) egy-egy gombbal exportálhatók; a bravúr-
   védések száma az edzői összefoglaló kapus-sorába is bekerül.
   (#255, #256)
+- **Ziccer-réteg mindenhol**: ziccer-mérleg a felderítésben (bravúr-
+  kapus / kihagyós befejezés kulcsokkal), a meccsjelentés
+  Helyzetminőség blokkjában (csapat-sor + lövőnkénti oszlop), és
+  edzés-fókusz a kihagyott ziccerekből. (#257, #258, #259)
+- **Kapus-indítás ív**: védés utáni felhozatal-sebesség (6 mp-en belül
+  gyors) méréstől a felderítési kulcsig, jelentés-oszlopig és
+  edzés-fókuszig; plusz az indítás tipikus célpontja ("őt vedd fel
+  először"). (#260, #261, #262, #263, #274)
+- **7 a 6 mérleg**: az üres kapura kapott gólok (az ára) és a 7 a 6-ban
+  dobott gólok (a hozama) együtt — összefoglalóban, jelentésben,
+  felderítési gyengeségben és edzés-fókuszban. (#264, #265, #268)
+- **Játékos-profilok a felderítésben**: honnan lő a fő lövőjük
+  (zóna-szokás), mikor fárad el (2. félidei tempó-esés), ki készíti
+  elő a góljait (gól-tengely), ki a faluk kulcsa, ki dobja a
+  heteseiket, ki fejezi be a kontráikat — mind több meccs közt
+  pontosan összegzett számokból, klip-exporttal a fő lövőről.
+  (#266, #267, #269, #270, #271, #273, #275, #276)
+- **Kulcsemberek egy helyen**: közös réteg + tábla a jelentésben +
+  kártya az appban — kinél dől el a meccs, a felderítési kulcsokkal
+  azonos küszöbökkel. (#277, #278, #279)
+- **Meccs-tempó**: támadás/perc címkével (gyors/közepes/lassú) az
+  összefoglalóban és a jelentés fejléc-sávjában. (#280)
+- **Fejlődés-követés bővítés**: bravúr-védés és gyors indítás
+  meccsenkénti trendje (a nem mért időszak kimarad). (#272)
 - **Labdaeladás-térkép**: hol veszik el a labdát (saját/közép/támadó
   harmad) — kontra-kulcs a felderítésben, edzés-fókusz és jelentés-sor.
   (#176, #177, #178, #179)
