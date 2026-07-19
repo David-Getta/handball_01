@@ -284,3 +284,20 @@ def test_suspension_offender_named_in_summary():
                 if s_["title"] == "Kiállítások és hétméteresek"), None)
     assert sec is not None
     assert "kiülői: 105. játékos" in sec["body"]
+
+
+def test_xg_verdict_sentences():
+    """Az xG-ítélet: megérdemelt győzelem, helyzetek elleni győzelem,
+    és a hallgatás esetei (döntetlen / kicsi xG-különbség)."""
+    from handball.pipeline.coach_summary import _xg_verdict
+    v = _xg_verdict({"goals": 3, "xg": 1.0}, {"goals": 2, "xg": 3.2},
+                    "H", "A")
+    assert v is not None and "másik oldal állt jobban" in v
+    assert "H győzelmét" in v
+    v2 = _xg_verdict({"goals": 4, "xg": 3.5}, {"goals": 1, "xg": 1.2},
+                     "H", "A")
+    assert v2 is not None and "megérdemelt" in v2 and "H" in v2
+    assert _xg_verdict({"goals": 2, "xg": 3.0}, {"goals": 2, "xg": 1.0},
+                       "H", "A") is None
+    assert _xg_verdict({"goals": 3, "xg": 2.0}, {"goals": 1, "xg": 1.5},
+                       "H", "A") is None

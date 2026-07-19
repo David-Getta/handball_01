@@ -133,6 +133,26 @@ def _events_section(match: Match, home: str, away: str) -> dict | None:
     return {"title": "Gólok és lövések", "body": body}
 
 
+def _xg_verdict(th: dict, ta: dict, home: str, away: str) -> str | None:
+    """Ítélet: a helyzetek alapján is az nyert-e, aki a táblán?
+
+    Csak akkor szólal meg, ha van győztes ÉS az xG-különbség érdemi
+    (>= 1.0) — döntetlennél vagy kiegyenlített helyzetképnél nincs mit
+    kimondani.
+    """
+    gh, ga = th["goals"], ta["goals"]
+    if gh == ga or abs(th["xg"] - ta["xg"]) < 1.0:
+        return None
+    won_home = gh > ga
+    wname = home if won_home else away
+    if won_home == (th["xg"] > ta["xg"]):
+        return (f" A(z) {wname} győzelme a helyzetek alapján is "
+                "megérdemelt.")
+    return (f" A helyzetek alapján a másik oldal állt jobban — a(z) "
+            f"{wname} győzelmét a kapusteljesítmény és a hatékony "
+            "befejezés hozta.")
+
+
 def _xg_section(match: Match, home: str, away: str) -> dict | None:
     """Helyzetminőség: várható gól (xG) vs tényleges — befejezés-hatékonyság."""
     from .xg import match_xg
@@ -159,6 +179,9 @@ def _xg_section(match: Match, home: str, away: str) -> dict | None:
         elif rec["diff"] <= -0.8:
             body += (f" A(z) {name} elpuskázott helyzeteket "
                      f"({rec['diff']:.1f}) — a befejezésen érdemes dolgozni.")
+    verdict = _xg_verdict(th, ta, home, away)
+    if verdict:
+        body += verdict
     # Lövőnkénti kép: a helyzetei felett/alatt teljesítő játékosok
     # (legalább 3 lövéssel — egy-egy lövésből nincs értelmes kép).
     pool = [r for r in r_all.get("shooters", []) if r["shots"] >= 3]
