@@ -414,3 +414,52 @@ def seven_meter_earners(match: Match,
                    for pid, n in sorted(rec.items(),
                                         key=lambda kv: -kv[1])]
             for side, rec in tally.items()}
+
+
+# Kiállítás-kiharcoló: ennyivel a hátrány észlelt kezdete előtt keressük
+# a szabálytalanságot kiváltó támadót (a PP-ablak felbontása miatt tág).
+SUSP_EARNER_LOOKBACK_S = PP_WINDOW_S
+
+
+def suspension_earners(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Ki harcolja ki a kiállításokat: a hátrány kezdete előtti
+    másodpercekben a támadott kapuhoz legközelebb nyomuló (nem kapus)
+    ellenfél-támadó kapja a jóváírást.
+
+    Ugyanaz a magyarázható heurisztika, mint a hetes-kiharcolónál: a
+    2 percet tipikusan a kapura törő ember elleni szabálytalanság hozza.
+    A felderítésben ebből lesz a "ő hozza a kiállításokat" kulcs.
+
+    Visszatérés: {"home"/"away": [{"player_id", "earned"}]} — a
+    KIHARCOLÓ (előnyt szerző) oldal szerint csoportosítva.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+    tally: dict = {"home": {}, "away": {}}
+    for w in detect_powerplay(match):
+        earner_team = "away" if w["team_down"] == "home" else "home"
+        goal_x = config.attacks_toward_x(
+            Team.HOME if earner_team == "home" else Team.AWAY)
+        # A hátrány-ablak kezdete előtti másodpercekben, kockáról
+        # kockára: ki járt legmélyebben a kapunál.
+        t0 = w["start_frame"] - round(SUSP_EARNER_LOOKBACK_S * fps)
+        best = None
+        for dt in range(0, round(SUSP_EARNER_LOOKBACK_S * fps) + 1):
+            fr = frames_by_t.get(t0 + dt)
+            if fr is None:
+                continue
+            for p in fr.players:
+                if p.team.value != earner_team or p.role == "kapus":
+                    continue
+                d = abs(p.x - goal_x)
+                if best is None or d < best[1]:
+                    best = (p.track_id, d)
+        if best is not None:
+            side = tally[earner_team]
+            side[best[0]] = side.get(best[0], 0) + 1
+    return {side: [{"player_id": pid, "earned": n}
+                   for pid, n in sorted(rec.items(),
+                                        key=lambda kv: -kv[1])]
+            for side, rec in tally.items()}

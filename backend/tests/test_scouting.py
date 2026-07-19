@@ -1196,6 +1196,25 @@ def test_seven_taker_direction_key():
     assert key2 is not None and "induljon" not in key2
 
 
+def test_suspension_earner_key_and_merge():
+    """2+ kiharcolt 2 perc → kulcs a fegyelmezett védekezésre; a
+    darabszámok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys, _merge_susp_earners
+    rep = ScoutingReport(
+        team="away", team_name="X",
+        susp_earners=[{"player_id": 9, "earned": 2}])
+    _, _, keys = _coach_keys(rep)
+    key = next((k for k in keys if "kiállításokat" in k), None)
+    assert key is not None and "9. játékos" in key.replace("9. \n", "9. ")
+    one = ScoutingReport(
+        team="away", team_name="X",
+        susp_earners=[{"player_id": 9, "earned": 1}])
+    _, _, k2 = _coach_keys(one)
+    assert not any("kiállításokat" in k for k in k2)
+    merged = _merge_susp_earners([rep, one])
+    assert merged == [{"player_id": 9, "earned": 3}]
+
+
 def test_match_key_players_top_shooter():
     """A match_key_players a 3+ lövéses fő lövőt adja vissza a megfelelő
     oldalon, mérleggel."""

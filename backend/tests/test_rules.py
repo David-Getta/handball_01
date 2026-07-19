@@ -251,3 +251,28 @@ def test_seven_meter_earner_identified():
             ball=Ball(x=33.0, y=10.0, confidence=1.0)))
     earners = seven_meter_earners(Match(_meta(), frames))["home"]
     assert earners and earners[0]["player_id"] == 9
+
+
+def test_suspension_earner_identified():
+    """A hátrány kezdete előtt a hazai kapuig betörő vendég játékos a
+    kiállítás kiharcolója."""
+    from handball.pipeline.rules import suspension_earners
+
+    def mk(t, deep=False, home_n=6):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(home_n)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(5)]
+        # A 205-ös vendég: normálisan hátul, a betörésnél a kapunál.
+        players.append(_pl(205, Team.AWAY, 2.0 if deep else 30.0, 9.0))
+        return Frame(t=t, players=players,
+                     ball=Ball(x=20.0, y=10.0, confidence=1.0))
+
+    frames = [mk(t, deep=(t >= 700)) for t in range(750)]
+    frames += [mk(t, home_n=5) for t in range(750, 2250)]  # 2 perc lenyomata
+    frames += [mk(t) for t in range(2250, 3000)]
+    m = Match(_meta(), frames)
+    earners = suspension_earners(m)
+    assert earners["away"] and earners["away"][0]["player_id"] == 205
+    assert earners["away"][0]["earned"] == 1
+    assert earners["home"] == []
