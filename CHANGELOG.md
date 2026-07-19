@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#280)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#310)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -113,6 +113,30 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   összefoglalóban és a jelentés fejléc-sávjában. (#280)
 - **Fejlődés-követés bővítés**: bravúr-védés és gyors indítás
   meccsenkénti trendje (a nem mért időszak kimarad). (#272)
+- **Kapus-xG páros**: hárított xG (a nehéz védéseket díjazó mutató) és
+  megmentett gólok (GSAx: kapott gól a helyzet-minőséghez mérve) —
+  jelentés-oszlop és -sor, edzői mondat, felderítési erősség/gyengeség,
+  trend, szezon-összkép és kapus-forma edzés-szabály.
+  (#300–#306, #309, #310)
+- **Kulcsemberek bővítés**: Gól-tengely, Ágyú (85+ km/h), Bravúr-kapus
+  és Hidegvérű befejező szerepek; Kulcsemberek szekció az edzői
+  összefoglalóban; szerep-tábla a nyomtatható felderítő jelentésben.
+  (#291, #295, #297, #298, #299, #308)
+- **7 a 6 időzítés + klipek**: mikor húzzák elő a lehozott kapust
+  (hátrányban-minta kulccsal), és a szakaszok egy gombbal
+  exportálhatók. (#282, #283)
+- **Új klip-típusok**: fordulópont (a győzelmi esély billenése) és
+  blokkolt lövések. (#284, #288)
+- **Hidegvérű befejező és lövő-szokások a felderítésben**: gól − xG
+  többlet kulccsal; tempó-profil (támadás/perc) kulcsokkal és
+  csempével. (#286, #287, #296, #307)
+- **Késő csere + rotáció**: elfáradt, le nem cserélt játékosok jelzése
+  és rotáció-tervezés edzés-szabály. (#289, #290)
+- **Meccs-tempó mélyítés**: félidőnkénti bontás, csapatonkénti
+  Támadás/perc sor a jelentésben. (#292, #293)
+- **Csomag-export bővítés**: 9 új réteg az elemzesek.json-ban. (#294)
+- **Egy-tengelyű támadás edzés-szabály**: B-terv, ha a gólok zöme egy
+  gólpasszoló → lövő párosból jön. (#285)
 - **Labdaeladás-térkép**: hol veszik el a labdát (saját/közép/támadó
   harmad) — kontra-kulcs a felderítésben, edzés-fókusz és jelentés-sor.
   (#176, #177, #178, #179)
