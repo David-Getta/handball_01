@@ -1722,6 +1722,16 @@ def create_app():
                 teams[name] = recurring
         return {"teams": teams, "matches": counts}
 
+    @app.get("/matches/{match_id}/positions")
+    def get_positions(match_id: str):
+        """Poszt-becslés: ki a beálló / szélső / átlövő / irányító a
+        támadó-fázis átlag-pozícióiból."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.roles import estimate_positions
+        return {"positions": estimate_positions(match)}
+
     @app.get("/matches/{match_id}/key-players")
     def get_key_players(match_id: str):
         """Kulcsemberek: kinél dől el a meccs (fő lövő, fal kulcsa,
