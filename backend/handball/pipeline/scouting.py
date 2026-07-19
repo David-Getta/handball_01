@@ -1744,6 +1744,16 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             if int(pr["passes"]) >= 5:
                 body += (f" A játékuk a {pr['from']}. és {pr['to']}. játékos "
                          f"tengelyén megy ({pr['passes']} passz).")
+        # Miből élnek: ha kirajzolódik a fő gól-forrás, elmondjuk.
+        ao_n = rep.attack_origins or {}
+        tg = sum(v.get("goals", 0) for v in ao_n.values())
+        if tg >= 5:
+            top_o, top_v = max(ao_n.items(),
+                               key=lambda kv: kv[1].get("goals", 0))
+            share_o = 100.0 * top_v.get("goals", 0) / tg
+            if share_o >= 50.0:
+                body += (f" A góljaik fő forrása: {top_o} "
+                         f"({share_o:.0f}%).")
         # Melyik fal fogja meg őket (ha van elég formánkénti minta).
         pools = [(f_, v) for f_, v in (rep.vs_formation or {}).items()
                  if v["shots"] >= 4]

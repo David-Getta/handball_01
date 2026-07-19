@@ -1511,3 +1511,15 @@ def test_attack_origin_key_and_merge():
     assert not any("labdaszerzésből indul" in k for k in k2)
     merged = _merge_attack_origins([rep, few])
     assert merged["labdaszerzés"] == {"attacks": 14, "goals": 5}
+
+
+def test_attack_origin_in_narrative():
+    """Az 50%+ arányú fő gól-forrás az Így támadnak narratívába kerül."""
+    from handball.pipeline.scouting import scouting_narrative
+    rep = ScoutingReport(
+        team="away", team_name="X", avg_attack_duration_s=10.0,
+        attack_origins={"labdaszerzés": {"attacks": 10, "goals": 4},
+                        "kidobás": {"attacks": 6, "goals": 1}})
+    secs = scouting_narrative(rep)
+    body = " ".join(x["body"] for x in secs)
+    assert "fő forrása: labdaszerzés" in body

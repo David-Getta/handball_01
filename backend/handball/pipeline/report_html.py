@@ -850,6 +850,25 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 '<th class="num">Gól</th><th class="num">Gól%</th></tr>'
                 + "".join(erows) + "</table>")
 
+        from .attack_types import attack_origins
+        ao_rep = attack_origins(match)
+        orows = []
+        for side, name in (("home", home), ("away", away)):
+            for origin, rec in sorted((ao_rep.get(side) or {}).items(),
+                                      key=lambda kv: -kv[1]["attacks"]):
+                orows.append(
+                    f"<tr><td>{escape(name)}</td>"
+                    f"<td>{escape(origin)}</td>"
+                    f'<td class="num">{rec["attacks"]}</td>'
+                    f'<td class="num">{rec["goals"]}</td></tr>')
+        if orows:
+            parts_html.append(
+                "<h2>Támadás-eredet (miből indul)</h2>"
+                "<table><tr><th>Csapat</th><th>Eredet</th>"
+                '<th class="num">Támadás</th>'
+                '<th class="num">Gól</th></tr>'
+                + "".join(orows) + "</table>")
+
         from .goalkeeper import detect_empty_net
         empty = detect_empty_net(match)
         if empty:
