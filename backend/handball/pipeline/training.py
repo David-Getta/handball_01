@@ -528,4 +528,21 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 26) Szünet utáni kezdés: ha a 2. félidő első 5 percében 2+ gólos
+    # mínuszba kerül a csapat, a visszatérés-protokollon kell dolgozni.
+    try:
+        from .halftime import second_half_start
+        shs = second_half_start(match, config)
+        if shs is not None:
+            for side, other in (("home", "away"), ("away", "home")):
+                if shs[other] - shs[side] >= 2:
+                    add(side, "mentális", "Szünet utáni protokoll",
+                        f"a 2. félidő első 5 perce {shs[side]}–"
+                        f"{shs[other]} — a csapat az öltözőben maradt",
+                        "a 2. félidő első támadása legyen előre "
+                        "megbeszélt figura; bemelegítő 2 perces magas "
+                        "tempójú játék a pályára lépés előtt")
+    except Exception:
+        pass
+
     return out
