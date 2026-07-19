@@ -1073,3 +1073,22 @@ def test_assist_pair_axis_key_and_merge():
     assert not any("tengelye" in k for k in k2)
     merged = _merge_assist_pairs([few, few])
     assert merged == [{"from": 4, "to": 7, "goals": 4}]
+
+
+def test_trend_includes_keeper_metrics_when_measured():
+    """A bravúr-védés és a gyors indítás trendje megjelenik, ha mindkét
+    időszakban volt mérés — nulla oldalnál (nincs mérés) kimarad."""
+    older = ScoutingReport(team="away", team_name="X", matches=2,
+                           gk_big_saves=2, gk_outlet_fast=2)
+    newer = ScoutingReport(team="away", team_name="X", matches=2,
+                           gk_big_saves=6, gk_outlet_fast=4)
+    tr = trend_report(older, newer)
+    m = {x["metric"]: x for x in tr["metrics"]}
+    assert m["gk_big_saves"]["better"] is True
+    assert m["gk_big_saves"]["older"] == 1.0   # meccsenkénti átlag
+    assert m["gk_big_saves"]["newer"] == 3.0
+    assert m["gk_outlet_fast"]["better"] is True
+    # Nulla (nem mért) oldal → a mutató kimarad, nem "romlás".
+    none_old = ScoutingReport(team="away", team_name="X", matches=2)
+    tr2 = trend_report(none_old, newer)
+    assert "gk_big_saves" not in {x["metric"] for x in tr2["metrics"]}
