@@ -1369,3 +1369,14 @@ def test_gk_xg_saved_strength_and_combine():
     assert not any("nehéz lövéseket" in x for x in s2)
     comb = combine_reports([rep, low])
     assert abs(comb.gk_xg_saved - 3.6) < 1e-6
+
+
+def test_gk_xg_saved_in_narrative():
+    """Az 1,0+/meccs hárított xG a Kapusuk narratívában is megjelenik."""
+    from handball.pipeline.scouting import scouting_narrative
+    rep = ScoutingReport(team="away", team_name="X", matches=2,
+                         gk_on_target=8, gk_saves=5, gk_xg_saved=2.6)
+    sec = next(x for x in scouting_narrative(rep)
+               if x["title"] == "Kapusuk")
+    assert "hárított" in sec["body"]
+    assert "1.3" in sec["body"] or "1,3" in sec["body"]
