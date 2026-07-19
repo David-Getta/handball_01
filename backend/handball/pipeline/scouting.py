@@ -184,6 +184,10 @@ class ScoutingReport:
     en_windows: int = 0
     en_trailing: int = 0
     en_endgame: int = 0
+    # Tempó-profil: támadásaik száma és a mért játékpercek — az
+    # átlagos támadás/perc több meccsre pontosan visszaszámolható.
+    pace_attacks: int = 0
+    pace_minutes: float = 0.0
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
@@ -848,6 +852,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                          f"(~{rep.empty_net_s / rep.matches:.0f} mp/meccs).")
         keys.append("Lehozott kapussal támadnak — labdaszerzés után az "
                     "ÜRES KAPURA azonnal dobhatsz, gyakorold a hosszú indítást.")
+    # Tempó-profil: a csapat támadás/perc mutatója (csak érdemi, 20+
+    # mért percnél). A meccs-szintű küszöbök (2,2 / 1,4 összesített)
+    # fele jut egy csapatra: 1,1 fölött tempós, 0,7 alatt lassú.
+    if rep.pace_minutes >= 20.0:
+        per_min = rep.pace_attacks / rep.pace_minutes
+        if per_min >= 1.1:
+            keys.append(
+                f"Tempósan játszanak ({per_min:.1f} támadás/perc) — mély "
+                "rotációval bírd a tempójukat, és ha megcsúszol, "
+                "lassítsd le a meccset.")
+        elif per_min <= 0.7:
+            keys.append(
+                f"Lassú meccseket játszanak ({per_min:.1f} támadás/perc) "
+                "— a tempóváltás és a gyors középkezdés kizökkenti őket.")
     # A 7 a 6 időzítése: ha mintázata van, előre lehet rá készülni.
     if rep.en_windows >= 2 and rep.en_trailing / rep.en_windows >= 0.7:
         keys.append(
@@ -933,6 +951,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.en_windows = enc["windows"]
         rep.en_trailing = enc["trailing"]
         rep.en_endgame = enc["endgame"]
+        from .attack_types import match_pace
+        pc = match_pace(match, config)
+        if pc.get("available"):
+            rep.pace_attacks = pc[f"{team.value}_attacks"]
+            rep.pace_minutes = pc["duration_min"]
     except Exception:
         pass
     try:
@@ -1389,6 +1412,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         en_windows=sum(r.en_windows for r in reports),
         en_trailing=sum(r.en_trailing for r in reports),
         en_endgame=sum(r.en_endgame for r in reports),
+        pace_attacks=sum(r.pace_attacks for r in reports),
+        pace_minutes=round(sum(r.pace_minutes for r in reports), 1),
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),

@@ -1224,3 +1224,24 @@ def test_en_timing_key_and_combine():
     comb = combine_reports([rep, mixed])
     assert comb.en_windows == 7
     assert comb.en_trailing == 5
+
+
+def test_pace_profile_keys_and_combine():
+    """Tempós csapat → rotáció-kulcs; lassú csapat → tempóváltás-kulcs;
+    kevés mért percnél nincs kulcs. A számok összegződnek."""
+    from handball.pipeline.scouting import _coach_keys
+    fast = ScoutingReport(team="away", team_name="X",
+                          pace_attacks=60, pace_minutes=50.0)
+    _, _, k1 = _coach_keys(fast)
+    assert any("Tempósan játszanak" in k for k in k1)
+    slow = ScoutingReport(team="away", team_name="X",
+                          pace_attacks=20, pace_minutes=50.0)
+    _, _, k2 = _coach_keys(slow)
+    assert any("Lassú meccseket játszanak" in k for k in k2)
+    short = ScoutingReport(team="away", team_name="X",
+                           pace_attacks=30, pace_minutes=10.0)
+    _, _, k3 = _coach_keys(short)
+    assert not any("támadás/perc" in k for k in k3)
+    comb = combine_reports([fast, slow])
+    assert comb.pace_attacks == 80
+    assert abs(comb.pace_minutes - 100.0) < 1e-6
