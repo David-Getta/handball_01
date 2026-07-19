@@ -643,6 +643,16 @@ class _MatchScreenState extends State<MatchScreen> {
                 : () => _exportClips(match, typesOverride: ["empty_net"]),
             icon: const Icon(Icons.groups, color: AppColors.accent),
           ),
+          // A meccs fordulópontja: a győzelmi esély legnagyobb billenése
+          // — az az egy jelenet, amit mindenki vissza akar nézni.
+          IconButton(
+            tooltip: "Fordulópont klip (a győzelmi esély billenése)",
+            onPressed: _exportingClips
+                ? null
+                : () =>
+                    _exportClips(match, typesOverride: ["turning_point"]),
+            icon: const Icon(Icons.trending_up, color: AppColors.gold),
+          ),
         ]),
       ),
       Expanded(

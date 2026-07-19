@@ -33,7 +33,8 @@ _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "seven_meter": "hetmeteres", "timeout": "idokeres",
             "substitution": "csere", "note": "jegyzet",
             "missed_chance": "kihagyott-ziccer", "big_save": "nagy-vedes",
-            "top_shooter": "fo-lovo", "empty_net": "het-a-hat"}
+            "top_shooter": "fo-lovo", "empty_net": "het-a-hat",
+            "turning_point": "fordulopont"}
 
 
 @dataclass
