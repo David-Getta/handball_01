@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#355)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#368)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -135,6 +135,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   kapott gól kapusonként); az edzői összefoglaló ki is mondja az
   ítéletet, a jelentés csere-jegyzete pedig számmal hozza. (#354,
   #355)
+- **Hetes-szokás**: merre lövik a heteseiket (bal/közép/jobb a dobó
+  szemszögéből) — kiszámítható dobónál a kapus konkrét utasítást kap
+  ("induljon balra"); irány a jelentés-listában és az app csempéjén,
+  hetes-mérleg sor a Csapat-mutatókban. (#357, #358, #359)
+- **Fegyelem-réteg**: ki harcolja ki a kiállításokat és ki üli le őket
+  (a hátrány alatt eltűnő track azonosítása) — felderítési kulcsok,
+  "2 perc-hozó" Kulcsember-szerep, Fegyelem csempe, kiállítás-sor a
+  jelentésben kiülőkkel, kiülők/kiharcolók az összefoglalóban,
+  fegyelem-párbaj meccsterv-szabály, Kiállítás/meccs trend-mutató és
+  Fegyelmezett védekezés edzés-fókusz (25. szabály).
+  (#360–#368)
 - **Visszarendeződés-idő**: labdavesztés után mikor áll fel a védelem
   — kulcsok, jelentés-sor, csempe és edzés-szabály. (#320–#323)
 - **Támadás-eredet**: középkezdés / kidobás / labdaszerzés címkék
