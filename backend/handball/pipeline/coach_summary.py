@@ -326,6 +326,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     if known:
         body += (" Leggyakoribb védekezési forma — "
                  + ", ".join(f"{n}: {f}" for n, f in known) + ".")
+    # Előny-kezelés: időhúzás vezetve / kapkodás hátrányban (8+ mp).
+    try:
+        from .attack_types import pace_by_score
+        pbs_all = pace_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_l = pbs_all[side]["leading"]
+            rec_t = pbs_all[side]["trailing"]
+            if rec_l["avg_s"] is None or rec_t["avg_s"] is None:
+                continue
+            if rec_l["avg_s"] - rec_t["avg_s"] >= 8.0:
+                body += (f" A(z) {name} vezetésnél átlag "
+                         f"{rec_l['avg_s']:.0f} mp-re nyújtotta a "
+                         f"támadásait (hátrányban {rec_t['avg_s']:.0f}) "
+                         "— tudatos időhúzás.")
+            elif rec_t["avg_s"] - rec_l["avg_s"] >= 8.0:
+                body += (f" A(z) {name} hátrányban jóval rövidebb, "
+                         f"kapkodó támadásokat vállalt (átlag "
+                         f"{rec_t['avg_s']:.0f} mp, vezetve "
+                         f"{rec_l['avg_s']:.0f}).")
+    except Exception:
+        pass
     # Passzív-veszély: a támadások jelentős része húzódik 35 mp fölé.
     try:
         from .tactics import slow_attacks

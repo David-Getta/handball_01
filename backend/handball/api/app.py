@@ -2158,6 +2158,9 @@ def create_app():
                 from ..pipeline.halftime import second_half_start
                 _layer("second_half_start",
                        lambda: second_half_start(match))
+                from ..pipeline.attack_types import pace_by_score
+                _layer("pace_by_score",
+                       lambda: pace_by_score(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
