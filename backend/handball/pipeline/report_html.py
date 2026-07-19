@@ -955,9 +955,29 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         sevens = detect_seven_meters(match)
         if sevens:
             fps_ = match.meta.fps if match.meta.fps > 0 else 25.0
+            # Kimenetel + dobó + kiharcoló, ha azonosítható.
+            out_by_t: dict = {}
+            try:
+                from .rules import seven_meter_outcomes
+                for sm in seven_meter_outcomes(match):
+                    out_by_t[sm["t"]] = sm
+            except Exception:
+                pass
+
+            def _seven_extra(e):
+                sm = out_by_t.get(e["t"])
+                if not sm:
+                    return ""
+                bits = []
+                if sm.get("shooter_id") is not None:
+                    bits.append(f"dobó: {sm['shooter_id']}.")
+                if sm.get("outcome") and sm["outcome"] != "ismeretlen":
+                    bits.append(sm["outcome"])
+                return f" ({', '.join(bits)})" if bits else ""
             lis = "".join(
                 f"<li><b>{_fmt_clock(e['t'] / fps_)}</b> — "
-                f"{team_names.get(e['team'], e['team'])} hétméterese</li>"
+                f"{team_names.get(e['team'], e['team'])} hétméterese"
+                f"{_seven_extra(e)}</li>"
                 for e in sevens)
             parts_html.append("<h2>Hétméteresek</h2><ul>" + lis + "</ul>")
 
