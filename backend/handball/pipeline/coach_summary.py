@@ -407,11 +407,22 @@ def _players_section(match: Match, home: str, away: str) -> dict | None:
         rows = [r for r in player_fatigue(match) if r["drop_pct"] >= 20.0]
         if rows:
             top = rows[0]
-            sentences.append(
+            sent_f = (
                 f"A legnagyobb tempó-visszaesés: {label(top['track_id'])} "
                 f"({top['first_ms']:.1f} → {top['second_ms']:.1f} m/s, "
-                f"−{top['drop_pct']:.0f}%) — hasonló meccsnél korábbi "
-                "csere segíthet.")
+                f"−{top['drop_pct']:.0f}%)")
+            # Ha le sem cserélték, a jelzés erősebb: késő csere.
+            try:
+                from .substitutions import late_sub_flags
+                late = {f_["track_id"] for f_ in late_sub_flags(match)}
+                if top["track_id"] in late:
+                    sent_f += (" — végig a pályán maradt: hasonló "
+                               "meccsen korábbi csere segíthet")
+                else:
+                    sent_f += " — hasonló meccsnél korábbi csere segíthet"
+            except Exception:
+                sent_f += " — hasonló meccsnél korábbi csere segíthet"
+            sentences.append(sent_f + ".")
     except Exception:
         pass
     return {"title": "Kiugró játékosok", "body": " ".join(sentences)}

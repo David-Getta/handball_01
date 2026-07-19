@@ -82,3 +82,34 @@ def test_impact_counts_goals_after():
     assert r["teams"]["home"]["goals_for_after"] == 1
     assert r["teams"]["home"]["goals_against_after"] == 0
     assert r["events"][0]["goals_for_after"] == 1
+
+
+def test_late_sub_flags_fading_player_left_on_court():
+    """A 2. félidőben 20%+ tempót eső, le nem cserélt játékos késő-csere
+    jelzést kap; az egyenletes tempójú nem."""
+    from handball.pipeline.substitutions import late_sub_flags
+
+    frames = []
+    n_half = 1000  # 40 mp félidőnként (25 fps)
+    x1 = 5.0
+    x3 = 5.0
+    for t in range(2 * n_half):
+        # 1-es: az első félidőben 2 m/s, a másodikban 1 m/s (esés 50%).
+        v1 = 0.08 if t < n_half else 0.04
+        x1 += v1
+        if x1 > 35.0:
+            x1 = 5.0
+        # 3-as: végig 1,5 m/s (nincs érdemi esés).
+        x3 += 0.06
+        if x3 > 35.0:
+            x3 = 5.0
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, x1, 8.0),
+            _pl(3, Team.HOME, x3, 12.0),
+        ]))
+    flags = late_sub_flags(Match(_meta(), frames))
+    ids = [f["track_id"] for f in flags]
+    assert 1 in ids
+    assert 3 not in ids
+    top = next(f for f in flags if f["track_id"] == 1)
+    assert top["drop_pct"] >= 20.0
