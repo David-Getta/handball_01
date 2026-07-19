@@ -143,3 +143,17 @@ def test_scouting_report_role_table():
 
     empty = ScoutingReport(team="away", team_name="Ellenfél")
     assert "Kikre készülj (szerepek)" not in scouting_report_html(empty)
+
+
+def test_scouting_report_matchup_section():
+    """A meccsterv-mondatok külön szakaszként kerülnek a felderítő
+    HTML-be; nélkülük a szakasz elmarad."""
+    from handball.pipeline.report_html import scouting_report_html
+    from handball.pipeline.scouting import ScoutingReport
+
+    rep = ScoutingReport(team="away", team_name="Ellenfél")
+    html = scouting_report_html(
+        rep, matchup=["A kontra az első számú fegyveretek."])
+    assert "Meccsterv (a kettőnk párosítása)" in html
+    assert "első számú fegyveretek" in html
+    assert "Meccsterv" not in scouting_report_html(rep)
