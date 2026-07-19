@@ -1077,6 +1077,15 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                   'befejezés-érték: a csapat/játékos a helyzetei felett '
                   'teljesített. Ziccer: legalább 0,5 xG értékű helyzet '
                   '(gól / összes).</p>')
+            # Ítélet: a helyzetek alapján is az nyert-e, aki a táblán?
+            try:
+                from .coach_summary import _xg_verdict
+                verdict = _xg_verdict(th, ta, home, away)
+                if verdict:
+                    xg_html += (f'<p class="note"><b>{escape(verdict.strip())}'
+                                "</b></p>")
+            except Exception:
+                pass
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
