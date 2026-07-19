@@ -1284,6 +1284,21 @@ def match_key_players(match: Match, config=None) -> dict:
     except Exception:
         pass
     try:
+        from .goalkeeper import goalkeeper_stats
+        from .xg import big_saves
+        gstats = goalkeeper_stats(match)
+        n_big = {"home": 0, "away": 0}
+        for bs in big_saves(match, config):
+            # A lövő csapata áll a rekordban — a védés a másik oldalé.
+            n_big["away" if bs["team"] == "home" else "home"] += 1
+        for side in ("home", "away"):
+            rec_gk = gstats.get(side)
+            if rec_gk and n_big[side] >= 2:
+                add(side, "Bravúr-kapus", rec_gk["track_id"],
+                    f"{n_big[side]} fogott ziccer")
+    except Exception:
+        pass
+    try:
         from .event_detection import shot_speeds
         sp = shot_speeds(match, config)
         for side in ("home", "away"):
