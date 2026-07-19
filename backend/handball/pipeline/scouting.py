@@ -1477,6 +1477,16 @@ def match_key_players(match: Match, config=None) -> dict:
     except Exception:
         pass
     try:
+        from .rules import suspension_earners
+        sue = suspension_earners(match, config)
+        for side in ("home", "away"):
+            el = sue.get(side) or []
+            if el and el[0]["earned"] >= 2:
+                add(side, "2 perc-hozó", el[0]["player_id"],
+                    f"{el[0]['earned']} kiharcolt kiállítás")
+    except Exception:
+        pass
+    try:
         from .goalkeeper import outlet_speed
         osp = outlet_speed(match, config)
         for side in ("home", "away"):
