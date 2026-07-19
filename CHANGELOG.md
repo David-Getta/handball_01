@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#352)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#355)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -130,6 +130,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Jelentés-finomítások**: a Hétméteresek listája a dobót és a
   kimenetelt is mutatja; a Gól-idővonalon ott a gólszerző. (#351,
   #352)
+- **Kapusonkénti GSAx — bejött-e a csere?**: kapuscserénél a két kapus
+  a kapott lövések nehézségén át is összemérhető (hárított érték −
+  kapott gól kapusonként); az edzői összefoglaló ki is mondja az
+  ítéletet, a jelentés csere-jegyzete pedig számmal hozza. (#354,
+  #355)
 - **Visszarendeződés-idő**: labdavesztés után mikor áll fel a védelem
   — kulcsok, jelentés-sor, csempe és edzés-szabály. (#320–#323)
 - **Támadás-eredet**: középkezdés / kidobás / labdaszerzés címkék
