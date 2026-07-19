@@ -213,3 +213,57 @@ def test_attack_origins_classifies_kickoff():
     away = ao["away"]
     assert "középkezdés" in away
     assert away["középkezdés"]["attacks"] >= 1
+
+
+def test_pace_by_score_buckets_by_lead():
+    """A támadás-hossz állás szerint: gól előtt "level", utána a vezető
+    csapat támadásai "leading" csoportba kerülnek."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.attack_types import pace_by_score
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+
+    def attack(seconds, gap=20):
+        nonlocal t
+        for i in range(int(seconds * 25)):
+            frames.append(Frame(t=t, players=[
+                pl(1, Team.HOME, 30.0, 10.0),
+                pl(2, Team.AWAY, 32.0, 12.0),
+            ], ball=Ball(x=30.5, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(gap):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    # Három hazai támadás döntetlennél...
+    for _ in range(3):
+        attack(10)
+    # ...egy hazai gól...
+    for i in range(8):
+        frames.append(Frame(t=t, players=[pl(1, Team.HOME, 33.5, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    for _ in range(20):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # ...majd három hosszabb hazai támadás vezetésnél.
+    for _ in range(3):
+        attack(30)
+    m = Match(MatchMeta(match_id="pbs", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    res = pace_by_score(m)["home"]
+    assert res["level"]["attacks"] >= 3
+    assert res["leading"]["attacks"] >= 3
+    assert res["leading"]["avg_s"] is not None
+    assert res["level"]["avg_s"] is not None
+    assert res["leading"]["avg_s"] > res["level"]["avg_s"]

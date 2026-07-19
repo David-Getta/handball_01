@@ -252,6 +252,12 @@ class ScoutingReport:
     restart_for: int = 0
     restart_against: int = 0
     restart_matches: int = 0
+    # Előny-kezelés: támadás-darab + összhossz állás szerint (vezetve /
+    # hátrányban) — meccsek közt összegződik, az átlag visszaszámolható.
+    lead_attacks: int = 0
+    lead_sum_s: float = 0.0
+    trail_attacks: int = 0
+    trail_sum_s: float = 0.0
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -837,6 +843,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(
                 "A szélsőik alig vannak játékban — a faluk középen "
                 "dől el: szűkíthetsz, a sávot vállalhatod.")
+    # Előny-kezelés: időhúzás vezetve, kapkodás hátrányban.
+    if (rep.lead_attacks >= 3 and rep.trail_attacks >= 3):
+        lead_avg = rep.lead_sum_s / rep.lead_attacks
+        trail_avg = rep.trail_sum_s / rep.trail_attacks
+        if lead_avg - trail_avg >= 8.0:
+            keys.append(
+                f"Előnyben húzzák az időt (átlag {lead_avg:.0f} mp-es "
+                f"támadások, hátrányban {trail_avg:.0f}) — ne engedd "
+                "őket előnybe: az elején tartsd magas tempón a meccset, "
+                "mert vezetve altatják.")
+        if trail_avg <= 12.0 and lead_avg - trail_avg >= 8.0:
+            keys.append(
+                "Hátrányban kapkodnak (rövid, kényszerített támadások) "
+                "— ha nálatok az előny, a türelmes védekezés hibákba "
+                "kergeti őket.")
     # A szünet utáni kezdés: ki üt először a 2. félidőben.
     if rep.restart_matches >= 1:
         d_rs = rep.restart_against - rep.restart_for
@@ -1216,6 +1237,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.restart_for = shs[team.value]
             rep.restart_against = shs[other]
             rep.restart_matches = 1
+        from .attack_types import pace_by_score
+        pbs = pace_by_score(match, config)[team.value]
+        rep.lead_attacks = pbs["leading"]["attacks"]
+        rep.lead_sum_s = pbs["leading"]["sum_s"]
+        rep.trail_attacks = pbs["trailing"]["attacks"]
+        rep.trail_sum_s = pbs["trailing"]["sum_s"]
     except Exception:
         pass
     try:
@@ -1946,6 +1973,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
         restart_matches=sum(r.restart_matches for r in reports),
+        lead_attacks=sum(r.lead_attacks for r in reports),
+        lead_sum_s=round(sum(r.lead_sum_s for r in reports), 1),
+        trail_attacks=sum(r.trail_attacks for r in reports),
+        trail_sum_s=round(sum(r.trail_sum_s for r in reports), 1),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),

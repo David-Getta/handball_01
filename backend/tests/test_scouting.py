@@ -1876,3 +1876,20 @@ def test_restart_keys_both_directions():
     _, _, k3 = _coach_keys(quiet)
     assert not any("öltözőből" in k or "ütnek először" in k
                    for k in k3)
+
+
+def test_lead_management_keys():
+    """Előny-kezelés kulcsok: időhúzás vezetve (+ kapkodás hátrányban),
+    kis különbségnél hallgatás."""
+    from handball.pipeline.scouting import _coach_keys
+    slowlead = ScoutingReport(team="away", team_name="X",
+                              lead_attacks=5, lead_sum_s=150.0,
+                              trail_attacks=5, trail_sum_s=50.0)
+    _, _, keys = _coach_keys(slowlead)
+    assert any("Előnyben húzzák az időt" in k for k in keys)
+    assert any("Hátrányban kapkodnak" in k for k in keys)
+    even = ScoutingReport(team="away", team_name="X",
+                          lead_attacks=5, lead_sum_s=100.0,
+                          trail_attacks=5, trail_sum_s=90.0)
+    _, _, k2 = _coach_keys(even)
+    assert not any("Előnyben húzzák" in k for k in k2)
