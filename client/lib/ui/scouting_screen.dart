@@ -543,7 +543,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final a = ((top["attempts"] as num?) ?? 0).toInt();
     if (a < 2) return null;
     final g = ((top["goals"] as num?) ?? 0).toInt();
-    return "${top["player_id"]}. · $g/$a gól";
+    var txt = "${top["player_id"]}. · $g/$a gól";
+    // Irány-szokás: ha a mért hetesei 70%+ egy sávba mennek (3+ mérés),
+    // a csempe is kimondja — azonos küszöb a felderítési kulccsal.
+    final dirs = (top["dirs"] as Map?)?.cast<String, dynamic>();
+    if (dirs != null && dirs.isNotEmpty) {
+      var total = 0;
+      String? best;
+      var bestN = 0;
+      dirs.forEach((k, v) {
+        final n = (v as num).toInt();
+        total += n;
+        if (n > bestN) {
+          bestN = n;
+          best = k;
+        }
+      });
+      if (total >= 3 && bestN / total >= 0.7 && best != null) {
+        const hu = {"bal": "balra", "jobb": "jobbra", "közép": "középre"};
+        txt += " · jellemzően ${hu[best] ?? best} lövi";
+      }
+    }
+    return txt;
   }
 
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
