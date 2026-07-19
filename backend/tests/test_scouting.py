@@ -1838,3 +1838,19 @@ def test_matchup_plan_discipline_rule():
     plan2 = matchup_plan(ScoutingReport(team="home", team_name="Mi"),
                          opp)
     assert not any("fegyelmezetlen" in p_ for p_ in plan2)
+
+
+def test_trend_includes_suspensions_metric():
+    """A fejlődés-követés hozza a kiállítás/meccs mutatót — a kevesebb
+    a jobb, és a 0 valós értékként számít (nem "nincs mérés")."""
+    from handball.pipeline.scouting import trend_report
+    older = ScoutingReport(team="home", team_name="Mi", matches=2,
+                           suspensions=4)
+    newer = ScoutingReport(team="home", team_name="Mi", matches=2,
+                           suspensions=0)
+    tr = trend_report(older, newer)
+    rec = next((m_ for m_ in tr["metrics"]
+                if m_["metric"] == "suspensions"), None)
+    assert rec is not None
+    assert rec["older"] == 2.0 and rec["newer"] == 0.0
+    assert rec["better"] is True

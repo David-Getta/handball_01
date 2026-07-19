@@ -244,6 +244,9 @@ class ScoutingReport:
     # A kiülőik: [{"player_id", "suspensions"}] — ki szedi össze a
     # 2 perceket; játékosonként meccsek közt összegezhető.
     susp_players: list = field(default_factory=list)
+    # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
+    # — meccsek közt összegződik, a trendben meccsenkénti átlag.
+    suspensions: int = 0
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -1182,6 +1185,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.susp_players = [
             dict(e) for e in
             suspended_players(match, config)[team.value]]
+        from .rules import detect_powerplay
+        rep.suspensions = sum(
+            1 for w in detect_powerplay(match)
+            if w["team_down"] == team.value)
     except Exception:
         pass
     try:
@@ -1908,6 +1915,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         seven_earners=_merge_seven_earners(reports),
         susp_earners=_merge_susp_earners(reports),
         susp_players=_merge_susp_players(reports),
+        suspensions=sum(r.suspensions for r in reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
@@ -2293,6 +2301,8 @@ _TREND_METRICS = [
     ("gk_outlet_fast", "Gyors indítás védés után / meccs", "", True, True),
     ("gk_xg_saved", "Hárított xG / meccs", "", True, True),
     ("gk_xg_prevented", "Megmentett gól (GSAx) / meccs", "", True, True),
+    # Fegyelem: kiállítás meccsenként (kevesebb = jobb; a 0 valós érték).
+    ("suspensions", "Kiállítás / meccs", "", False, True),
 ]
 
 
