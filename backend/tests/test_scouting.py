@@ -1290,3 +1290,29 @@ def test_match_key_players_goal_axis():
     assert axis["player_id"] == 2
     assert "1. játékostól" in axis["detail"]
     assert "2 gól" in axis["detail"]
+
+
+def test_match_key_players_cannon_role():
+    """A 85 km/h fölötti lövés "Ágyú" szerepet ad a lövőnek."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource)
+    from handball.pipeline.scouting import match_key_players
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    # 1 m/kocka a kapu felé 25 fps-en = 25 m/s = 90 km/h.
+    frames = []
+    for i in range(7):
+        frames.append(Frame(t=i, players=[pl(1, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0,
+                                      confidence=1.0)))
+    m = Match(MatchMeta(match_id="cn", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    kp = match_key_players(m)
+    cannon = next((it for it in kp["home"] if it["role"] == "Ágyú"), None)
+    assert cannon is not None
+    assert cannon["player_id"] == 1
+    assert "km/h" in cannon["detail"]
