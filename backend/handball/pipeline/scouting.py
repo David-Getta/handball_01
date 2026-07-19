@@ -761,6 +761,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 and top_s["goals"] / top_s["attempts"] <= 0.5):
             sent7 += " A mérlege gyenge: a kapus bátran vállalhat mozgást."
         keys.append(sent7)
+    # Lövés-választás: átlagos helyzet-érték lövésenként — megmutatja,
+    # válogatósak-e vagy távolról is vállalkoznak.
+    if rep.shots >= 10 and rep.xg > 0:
+        avg_xg = rep.xg / rep.shots
+        if avg_xg <= 0.10:
+            keys.append(
+                f"Sok kis esélyű lövést vállalnak (átlag "
+                f"{avg_xg:.2f} xG/lövés) — a távoli lövést engedheted, "
+                "a betörést és a beállót zárd.")
+        elif avg_xg >= 0.18:
+            keys.append(
+                f"Válogatósak: csak jó helyzetből lőnek (átlag "
+                f"{avg_xg:.2f} xG/lövés) — fegyelmezett fal és a "
+                "passzív-jel kivárása ellenük a recept.")
     # Hidegvérű befejező: aki tartósan a helyzetei felett teljesít,
     # annak a fél-helyzeteit sem szabad megengedni.
     if rep.shooter_overperf and rep.shooter_overperf[0]["diff"] >= 1.0:
