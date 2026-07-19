@@ -165,6 +165,11 @@ class ScoutingReport:
     # — meccsek közt összegződik, az arány mindig visszaszámolható.
     big_total: int = 0
     big_missed: int = 0
+    # Kapus-indításuk: mért indítások, összidő (mp) és a gyorsak száma
+    # (védés után 6 mp-en belül a felezőn) — meccsek közt összegződik.
+    gk_outlets: int = 0
+    gk_outlet_sum_s: float = 0.0
+    gk_outlet_fast: int = 0
     gk_conceded_zones: dict = field(default_factory=dict)
     # Minden kapura tartó lövés zóna-bontása (védés is) — ebből és a
     # kapott gólok zónáiból zónánkénti védés-hatékonyság, így a kapus
@@ -676,6 +681,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"Ziccereket hagynak ki: {rep.big_total} nagy helyzetükből "
             f"{rep.big_missed} kimaradt — szoros fal mellett a nagy "
             "helyzet sem garantált gól náluk.")
+    # Kapus-indításuk: ha a mért indítások fele gyors, a lövés utáni
+    # visszarendeződés létkérdés ellenük.
+    if rep.gk_outlets >= 2 and rep.gk_outlet_fast / rep.gk_outlets >= 0.5:
+        avg = rep.gk_outlet_sum_s / rep.gk_outlets
+        keys.append(
+            f"Kapusuk gyorsan indít (átlag {avg:.0f} mp alatt a felezőn) "
+            "— minden lövés után AZONNAL vissza: a lassú visszafutást "
+            "kontrával büntetik.")
     if rep.gk_conceded_zones:
         zone, n = max(rep.gk_conceded_zones.items(), key=lambda kv: kv[1])
         if n >= 2:
@@ -822,6 +835,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         # A lövő az ellenfél — a védés a felderített csapat kapusáé.
         rep.gk_big_saves = sum(1 for b in big_saves(match, config)
                                if b["team"] != team.value)
+        from .goalkeeper import outlet_speed
+        orec = outlet_speed(match, config)[team.value]
+        rep.gk_outlets = orec["outlets"]
+        rep.gk_outlet_sum_s = orec["sum_s"]
+        rep.gk_outlet_fast = orec["fast"]
     except Exception:
         pass
     try:
@@ -1021,6 +1039,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gk_on_target=sum(r.gk_on_target for r in reports),
         gk_saves=sum(r.gk_saves for r in reports),
         gk_big_saves=sum(r.gk_big_saves for r in reports),
+        gk_outlets=sum(r.gk_outlets for r in reports),
+        gk_outlet_sum_s=round(sum(r.gk_outlet_sum_s for r in reports), 1),
+        gk_outlet_fast=sum(r.gk_outlet_fast for r in reports),
         big_total=sum(r.big_total for r in reports),
         big_missed=sum(r.big_missed for r in reports),
         empty_net_s=round(sum(r.empty_net_s for r in reports), 1),

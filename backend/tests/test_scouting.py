@@ -957,3 +957,24 @@ def test_big_chance_metrics_keys_and_combine():
     assert comb.gk_big_saves == 6
     assert comb.big_total == 12
     assert comb.big_missed == 8
+
+
+def test_gk_outlet_key_and_combine():
+    """Gyors kapus-indítás → felderítési kulcs a visszarendeződésről;
+    a darabszámok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="X",
+                         gk_outlets=4, gk_outlet_fast=3,
+                         gk_outlet_sum_s=16.0)
+    _, _, keys = _coach_keys(rep)
+    assert any("gyorsan indít" in k for k in keys)
+    # Lassú indításnál nincs kulcs.
+    slow = ScoutingReport(team="away", team_name="X",
+                          gk_outlets=4, gk_outlet_fast=1,
+                          gk_outlet_sum_s=50.0)
+    _, _, keys2 = _coach_keys(slow)
+    assert not any("gyorsan indít" in k for k in keys2)
+    comb = combine_reports([rep, rep])
+    assert comb.gk_outlets == 8
+    assert comb.gk_outlet_fast == 6
+    assert abs(comb.gk_outlet_sum_s - 32.0) < 1e-6

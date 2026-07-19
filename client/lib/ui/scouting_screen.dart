@@ -374,6 +374,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   /// Lövés-erő: átlag + csúcs km/h — csak elég mért lövésnél (5+).
+  // Kapus-indítás: a mért indítások átlagideje a felezőig — csak akkor
+  // mutatjuk, ha a fele gyors (a kulcsokkal azonos küszöb).
+  String? _gkOutlet(Map<String, dynamic> r) {
+    final n = ((r["gk_outlets"] as num?) ?? 0).toInt();
+    final fast = ((r["gk_outlet_fast"] as num?) ?? 0).toInt();
+    if (n < 2 || fast / n < 0.5) return null;
+    final avg = ((r["gk_outlet_sum_s"] as num?) ?? 0).toDouble() / n;
+    return "átlag ${avg.toStringAsFixed(0)} mp";
+  }
+
   // Ziccer-mérleg: nagy helyzeteikből (xG >= 0,5) hány lett gól.
   String? _bigChances(Map<String, dynamic> r) {
     final total = ((r["big_total"] as num?) ?? 0).toInt();
@@ -526,6 +536,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       // Kapusuk fogott ziccerei — ugyanaz a küszöb (2+), mint a kulcsokban.
       if (((r["gk_big_saves"] as num?) ?? 0) >= 2)
         ["Bravúr-védés", "${r["gk_big_saves"]}"],
+      if (_gkOutlet(r) != null) ["Kapus-indítás", _gkOutlet(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
