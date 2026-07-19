@@ -218,3 +218,18 @@ def test_simulated_halftime_break_is_detected():
     rows = analysis_confidence(m)
     ht = next(r for r in rows if r["layer"] == "halftime")
     assert ht["available"] is True
+
+
+def test_confidence_includes_positions_layer():
+    """A megbízhatósági lista tartalmazza a poszt-becslés réteget, és
+    üres meccsen nem elérhetőként jelöli."""
+    from handball.models.tracking import Frame, Match, MatchMeta
+    from handball.pipeline.quality import analysis_confidence
+
+    m = Match(MatchMeta(match_id="qp", home_team="H", away_team="A",
+                        fps=25.0),
+              [Frame(t=i, players=[], ball=None) for i in range(100)])
+    rows = analysis_confidence(m)
+    pos = next(r for r in rows if r["layer"] == "positions")
+    assert pos["available"] is False
+    assert "poszt" in pos["reason"]
