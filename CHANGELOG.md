@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#342)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#352)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -121,7 +121,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (#324–#332, #336, #340, #341, #342, #329, #330, #331)
 - **A meccs története**: az összefoglaló és a jelentés folyó
   bekezdéssel nyit — eredmény, félidő, legnagyobb különbség,
-  vezetés-váltások, fordulópont. (#338, #339)
+  vezetés-váltások, fordulópont, a billenést hozó gól-sorozat oka és
+  a meccs embere. (#338, #339, #349, #350)
+- **Meccsterv-illesztés**: a saját és az ellenfél-profil keresztezése
+  nyolc páros szabállyal ("az ő erősségük × a mi gyengeségünk") —
+  végpont, kártya a felderítő képernyőn, Meccsterv szakasz a
+  nyomtatható felderítő jelentésben. (#344–#348)
+- **Jelentés-finomítások**: a Hétméteresek listája a dobót és a
+  kimenetelt is mutatja; a Gól-idővonalon ott a gólszerző. (#351,
+  #352)
 - **Visszarendeződés-idő**: labdavesztés után mikor áll fel a védelem
   — kulcsok, jelentés-sor, csempe és edzés-szabály. (#320–#323)
 - **Támadás-eredet**: középkezdés / kidobás / labdaszerzés címkék
