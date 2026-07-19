@@ -2155,6 +2155,9 @@ def create_app():
                 from ..pipeline.rules import suspension_earners
                 _layer("susp_earners",
                        lambda: suspension_earners(match))
+                from ..pipeline.halftime import second_half_start
+                _layer("second_half_start",
+                       lambda: second_half_start(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

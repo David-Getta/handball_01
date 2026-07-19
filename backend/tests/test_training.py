@@ -617,3 +617,54 @@ def test_repeated_suspensions_trigger_discipline_focus():
     assert "Fegyelmezett védekezés" in titles
     assert all(f["title"] != "Fegyelmezett védekezés"
                for f in tf["away"])
+
+
+def test_bad_restart_triggers_protocol_focus():
+    """Ha a 2. félidő első 5 percében 2+ gólos mínuszba kerül a csapat,
+    a Szünet utáni protokoll fókusz jár."""
+    from handball.models.tracking import Ball
+
+    def play(t0, seconds, fps=25.0):
+        frames = []
+        for i in range(int(seconds * fps)):
+            players = [_pl(100 + k, Team.HOME, 12.0 + k * 0.5,
+                           4.0 + k * 2) for k in range(6)]
+            players += [_pl(200 + k, Team.AWAY, 26.0 + k * 0.5,
+                            4.0 + k * 2) for k in range(6)]
+            frames.append(Frame(t=t0 + i, players=players,
+                                ball=Ball(x=19.0, y=10.0,
+                                          confidence=1.0)))
+        return frames
+
+    def brk(t0, seconds, fps=25.0):
+        return [Frame(t=t0 + i, players=[], ball=None)
+                for i in range(int(seconds * fps))]
+
+    def away_goal(t0):
+        frames = []
+        for i in range(8):  # vendég gól a -x kapuba
+            frames.append(Frame(t=t0 + i,
+                                players=[_pl(201, Team.AWAY, 6.5, 10.0)],
+                                ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                                          confidence=1.0)))
+        return frames
+
+    frames = play(0, 120)
+    t = len(frames)
+    frames += brk(t, 90)
+    t = len(frames)
+    frames += play(t, 20)
+    t = len(frames)
+    frames += away_goal(t)
+    t += 8
+    frames += play(t, 20)
+    t = len(frames)
+    frames += away_goal(t)
+    t += 8
+    frames += play(t, 20)
+    m = Match(_meta(), frames)
+    tf = training_focus(m)
+    titles = [f["title"] for f in tf["home"]]
+    assert "Szünet utáni protokoll" in titles
+    assert all(f["title"] != "Szünet utáni protokoll"
+               for f in tf["away"])
