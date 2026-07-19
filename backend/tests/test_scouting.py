@@ -1755,3 +1755,27 @@ def test_matchup_plan_crosses_both_profiles():
                               fast_break_pct=2.0)
     plan2 = matchup_plan(slow_own, opp)
     assert not any("kontra ebben a párosításban" in p_ for p_ in plan2)
+
+
+def test_matchup_plan_extended_rules():
+    """A 6-8. meccsterv-szabályok is páros-feltételesek."""
+    from handball.pipeline.scouting import matchup_plan
+    own = ScoutingReport(team="home", team_name="Mi", matches=2,
+                         gk_xg_saved=2.4, gk_big_saves=3,
+                         sub_rotations=3, sub_after_for=4,
+                         sub_after_against=2)
+    opp = ScoutingReport(team="away", team_name="Ok", matches=2,
+                         seven_takers=[{"player_id": 11, "attempts": 4,
+                                        "goals": 1}],
+                         pace_attacks=60, pace_minutes=50.0,
+                         big_total=6, big_missed=4)
+    plan = matchup_plan(own, opp)
+    joined = " ".join(plan)
+    assert "ez a párbaj nektek áll" in joined
+    assert "friss lábak nálatok" in joined
+    assert "nagy helyzeteik sem biztos gólok" in joined
+    # Gyenge saját kapusnál a hetes-párbaj mondat elmarad.
+    weak_own = ScoutingReport(team="home", team_name="Mi", matches=2,
+                              gk_xg_saved=0.2)
+    plan2 = matchup_plan(weak_own, opp)
+    assert not any("párbaj nektek áll" in p_ for p_ in plan2)
