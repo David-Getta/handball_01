@@ -671,6 +671,20 @@ def _story_section(match: Match, home: str, away: str) -> dict | None:
             body += (f" A fordulópont a {int(tp['t_s'] // 60)}. perc "
                      "környékén jött, ekkor billent el a győzelmi "
                      "esély.")
+            # A billenés oka: ha egy gól-sorozat hozta, elmondjuk.
+            try:
+                from .momentum import annotate_runs
+                fps = match.meta.fps if match.meta.fps > 0 else 25.0
+                tp_frame = tp["t_s"] * fps
+                for r_ in annotate_runs(match):
+                    if r_["start_frame"] <= tp_frame <= r_["end_frame"]:
+                        cause = (f" ({r_['context'][0]})"
+                                 if r_.get("context") else "")
+                        body += (f" A billenést egy {r_['length']} gólos "
+                                 f"sorozat hozta{cause}.")
+                        break
+            except Exception:
+                pass
     except Exception:
         pass
     return {"title": "A meccs története", "body": body}
