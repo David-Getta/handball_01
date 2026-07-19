@@ -763,6 +763,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 : "${(m["xg_saved_home"] as num).toStringAsFixed(1)} – "
                     "${((m["xg_saved_away"] as num?) ?? 0).toStringAsFixed(1)}"
           ],
+          // Fegyelem: hány kiállítást szedett össze a két csapat.
+          [
+            "Kiállítás (H–V)",
+            m["suspensions_home"] == null
+                ? "—"
+                : pair(m["suspensions_home"], m["suspensions_away"])
+          ],
           [
             "Leggyorsabb lövés",
             m["fastest_kmh"] == null
