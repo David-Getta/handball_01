@@ -197,6 +197,9 @@ class ScoutingReport:
     # A lerohanásaik befejezői: [{"player_id", "goals"}] — ki futja ki a
     # kontrákat; játékosonként meccsek közt összegezhető.
     fb_finishers: list = field(default_factory=list)
+    # A hetes-dobóik: [{"player_id", "attempts", "goals"}] — ki áll oda a
+    # hétméteresekhez és milyen mérleggel; meccsek közt összegezhető.
+    seven_takers: list = field(default_factory=list)
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -717,6 +720,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"Kapusuk gyorsan indít (átlag {avg:.0f} mp alatt a felezőn) "
             "— minden lövés után AZONNAL vissza: a lassú visszafutást "
             "kontrával büntetik.")
+    # A hetes-dobójuk: ha kirajzolódik, ki áll oda, a kapus az ő
+    # szokásaira készülhet — gyenge mérlegnél ez bizalom-kérdés is.
+    if rep.seven_takers and rep.seven_takers[0]["attempts"] >= 2:
+        top_s = rep.seven_takers[0]
+        sent7 = (f"A heteseiket a(z) {top_s['player_id']}. játékos dobja "
+                 f"({top_s['goals']}/{top_s['attempts']} gól) — a kapus "
+                 "az ő szokásaira készüljön.")
+        if (top_s["attempts"] >= 3
+                and top_s["goals"] / top_s["attempts"] <= 0.5):
+            sent7 += " A mérlege gyenge: a kapus bátran vállalhat mozgást."
+        keys.append(sent7)
     # A kontra befejezője: ha a lerohanás-gólok zömét ugyanaz a játékos
     # szerzi, a visszafutásnál ő az első számú felvevendő ember.
     if rep.fb_finishers and rep.fb_finishers[0]["goals"] >= 2:
@@ -914,6 +928,19 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.fb_finishers = [
             dict(f) for f in
             fast_break_finishers(match, config)[team.value]]
+        from .rules import seven_meter_outcomes
+        sv: dict = {}
+        for sm in seven_meter_outcomes(match, config):
+            if sm["team"] != team.value or sm.get("shooter_id") is None:
+                continue
+            rec7 = sv.setdefault(sm["shooter_id"],
+                                 {"attempts": 0, "goals": 0})
+            rec7["attempts"] += 1
+            rec7["goals"] += int(sm["outcome"] == "gól")
+        rep.seven_takers = [
+            {"player_id": pid, **r}
+            for pid, r in sorted(sv.items(),
+                                 key=lambda kv: -kv[1]["attempts"])]
     except Exception:
         pass
     try:
@@ -1127,6 +1154,19 @@ def _top_shooter_habit(rep) -> tuple | None:
     return best
 
 
+def _merge_seven_takers(reports) -> list:
+    """Hetes-dobónkénti kísérlet/gól számok pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for t in (r.seven_takers or []):
+            cur = tally.setdefault(t["player_id"], [0, 0])
+            cur[0] += int(t["attempts"])
+            cur[1] += int(t["goals"])
+    return [{"player_id": pid, "attempts": a, "goals": g}
+            for pid, (a, g) in sorted(tally.items(),
+                                      key=lambda kv: -kv[1][0])]
+
+
 def _merge_fb_finishers(reports) -> list:
     """Kontra-befejezők gólszámainak pontos összegzése meccsek közt."""
     tally: dict = {}
@@ -1261,6 +1301,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         blockers=_merge_blockers(reports),
         gk_outlet_targets=_merge_outlet_targets(reports),
         fb_finishers=_merge_fb_finishers(reports),
+        seven_takers=_merge_seven_takers(reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
