@@ -188,6 +188,9 @@ class ScoutingReport:
     # Gólpassz-párok: [{"from", "to", "goals"}] — ki kinek készíti elő a
     # góljaikat; párokként meccsek közt összegezhető.
     assist_pairs: list = field(default_factory=list)
+    # Blokkolóik: [{"player_id", "blocks"}] — ki tartja a falukat;
+    # játékosonként meccsek közt összegezhető.
+    blockers: list = field(default_factory=list)
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -576,6 +579,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         strengths.append(f"Aktív a faluk: {rep.blocks} lövést blokkoltak.")
         keys.append("Sokat blokkolnak — átlövés helyett beálló-játékkal és "
                     "szélső-befutásokkal kerüld a falat.")
+    # A fal kulcsembere: ha egy védő adja a blokkok zömét, őt kell
+    # kimozdítani a helyéről.
+    if rep.blockers and rep.blockers[0]["blocks"] >= 3:
+        top_b = rep.blockers[0]
+        keys.append(
+            f"A faluk kulcsa a(z) {top_b['player_id']}. játékos "
+            f"({top_b['blocks']} blokk) — elzárással húzd ki a helyéről: "
+            "mögötte nyílik meg az átlövés.")
 
     # Hosszú gólcsendre hajlamosak: ha leállnak, akkor kell ellépni.
     if rep.drought_longest_s >= 480.0:
@@ -959,7 +970,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.drought_longest_s = goal_droughts(match, config)[
             team.value]["longest_s"]
         from .defense import detect_blocks
-        rep.blocks = detect_blocks(match, config)[team.value]["blocks"]
+        blk = detect_blocks(match, config)[team.value]
+        rep.blocks = blk["blocks"]
+        rep.blockers = [dict(b) for b in blk.get("blockers", [])]
         from .tactics import slow_attacks
         sarec = slow_attacks(match, config)[team.value]
         rep.slow_attacks_total = sarec["attacks"]
@@ -1085,6 +1098,17 @@ def _top_shooter_habit(rep) -> tuple | None:
     return best
 
 
+def _merge_blockers(reports) -> list:
+    """Blokkolónkénti blokkszámok pontos összegzése meccsek közt."""
+    tally: dict = {}
+    for r in reports:
+        for b in (r.blockers or []):
+            tally[b["player_id"]] = (tally.get(b["player_id"], 0)
+                                     + int(b["blocks"]))
+    return [{"player_id": pid, "blocks": n}
+            for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_assist_pairs(reports) -> list:
     """(gólpasszoló, lövő) párok gólszámainak pontos összegzése."""
     tally: dict = {}
@@ -1184,6 +1208,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),
+        blockers=_merge_blockers(reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),

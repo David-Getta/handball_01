@@ -1092,3 +1092,20 @@ def test_trend_includes_keeper_metrics_when_measured():
     none_old = ScoutingReport(team="away", team_name="X", matches=2)
     tr2 = trend_report(none_old, newer)
     assert "gk_big_saves" not in {x["metric"] for x in tr2["metrics"]}
+
+
+def test_top_blocker_key_and_merge():
+    """3+ blokkos védő → "a faluk kulcsa" kulcs; kevesebbnél nincs.
+    A blokkolónkénti számok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys, _merge_blockers
+    rep = ScoutingReport(team="away", team_name="X", blocks=4,
+                         blockers=[{"player_id": 5, "blocks": 3},
+                                   {"player_id": 3, "blocks": 1}])
+    _, _, keys = _coach_keys(rep)
+    assert any("faluk kulcsa" in k and "5. játékos" in k for k in keys)
+    few = ScoutingReport(team="away", team_name="X", blocks=2,
+                         blockers=[{"player_id": 5, "blocks": 2}])
+    _, _, k2 = _coach_keys(few)
+    assert not any("faluk kulcsa" in k for k in k2)
+    merged = _merge_blockers([rep, few])
+    assert merged[0] == {"player_id": 5, "blocks": 5}

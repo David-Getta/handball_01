@@ -994,6 +994,21 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 + '<p class="note">Szabad lövő: a lövés pillanatában nem '
                   'volt védő a lövő 2 m-es körzetében — fedezés-hiba, '
                   'érdemes videóról visszanézni.</p>')
+            # A fal kulcsembere: a legtöbb blokkot jegyző védő (2+ blokk).
+            try:
+                from .defense import detect_blocks
+                blk = detect_blocks(match)
+                tops = []
+                for side, name in (("home", home), ("away", away)):
+                    bl = blk[side].get("blockers") or []
+                    if bl and bl[0]["blocks"] >= 2:
+                        tops.append(f"{name}: {bl[0]['player_id']}. játékos "
+                                    f"({bl[0]['blocks']} blokk)")
+                if tops:
+                    defense_html += ('<p class="note">A fal kulcsembere — '
+                                     + escape(" · ".join(tops)) + "</p>")
+            except Exception:
+                pass
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
