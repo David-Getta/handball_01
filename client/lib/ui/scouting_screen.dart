@@ -567,6 +567,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return txt;
   }
 
+  // Előny-kezelés: támadás-hossz vezetve vs hátrányban (időhúzás /
+  // kapkodás jele, 8+ mp különbségnél — mint a felderítési kulcs).
+  String? _leadPace(Map<String, dynamic> r) {
+    final la = ((r["lead_attacks"] as num?) ?? 0).toInt();
+    final ta = ((r["trail_attacks"] as num?) ?? 0).toInt();
+    if (la < 3 || ta < 3) return null;
+    final lavg = ((r["lead_sum_s"] as num?) ?? 0).toDouble() / la;
+    final tavg = ((r["trail_sum_s"] as num?) ?? 0).toDouble() / ta;
+    if ((lavg - tavg).abs() < 8.0) return null;
+    final verdict = lavg > tavg ? "előnyben altatnak" : "hátrányban kapkodnak";
+    return "${lavg.toStringAsFixed(0)}/${tavg.toStringAsFixed(0)} mp · $verdict";
+  }
+
   // Szünet-kezdés: a 2. félidő első 5 percének mérlege (3+ gól
   // különbségnél mutatjuk — azonos küszöb a felderítési kulccsal).
   String? _restart(Map<String, dynamic> r) {
@@ -808,6 +821,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_sevenTaker(r) != null) ["Hetes-dobó", _sevenTaker(r)!],
       if (_discipline(r) != null) ["Fegyelem", _discipline(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
+      if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_fbFinisher(r) != null) ["Kontra-befejező", _fbFinisher(r)!],
       if (_outletTarget(r) != null)
         ["Indítás-célpont", _outletTarget(r)!],
