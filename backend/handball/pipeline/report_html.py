@@ -1290,64 +1290,19 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         pass
 
     # Kulcsemberek: a játékos-profil rétegek egy kompakt táblában —
-    # kinél dől el a meccs (fő lövő, fal kulcsa, hetes-dobó, kontra).
+    # a közös match_key_players rétegből (azonos küszöbök a felderítéssel).
     keyplayers_html = ""
     try:
+        from .scouting import match_key_players
+        kp = match_key_players(match)
         rows_kp = []
-
-        def _kp(name, role, player, detail):
-            rows_kp.append(f"<tr><td>{escape(name)}</td>"
-                           f"<td>{escape(role)}</td>"
-                           f"<td>{escape(player)}</td>"
-                           f"<td>{escape(detail)}</td></tr>")
-
-        from .xg import match_xg as _mxg
-        _r = _mxg(match)
         for side, name in (("home", home), ("away", away)):
-            top_sh = next((rec for rec in _r.get("shooters", [])
-                           if rec["team"] == side), None)
-            if top_sh and top_sh["shots"] >= 3:
-                _kp(name, "Fő lövő", f"{top_sh['player_id']}. játékos",
-                    f"{top_sh['goals']} gól / {top_sh['shots']} lövés")
-        from .defense import detect_blocks as _db
-        _blk = _db(match)
-        for side, name in (("home", home), ("away", away)):
-            bl = _blk[side].get("blockers") or []
-            if bl and bl[0]["blocks"] >= 2:
-                _kp(name, "A fal kulcsa", f"{bl[0]['player_id']}. játékos",
-                    f"{bl[0]['blocks']} blokk")
-        from .rules import seven_meter_outcomes as _smo
-        _sv: dict = {}
-        for sm in _smo(match):
-            if sm.get("shooter_id") is None:
-                continue
-            k7 = (sm["team"], sm["shooter_id"])
-            a, g = _sv.get(k7, (0, 0))
-            _sv[k7] = (a + 1, g + int(sm["outcome"] == "gól"))
-        for side, name in (("home", home), ("away", away)):
-            cand7 = [(pid, ag) for (tm, pid), ag in _sv.items()
-                     if tm == side]
-            if cand7:
-                pid, (a, g) = max(cand7, key=lambda c: c[1][0])
-                if a >= 2:
-                    _kp(name, "Hetes-dobó", f"{pid}. játékos",
-                        f"{g}/{a} gól")
-        from .attack_types import fast_break_finishers as _fbf
-        _fb = _fbf(match)
-        for side, name in (("home", home), ("away", away)):
-            fl = _fb.get(side) or []
-            if fl and fl[0]["goals"] >= 2:
-                _kp(name, "Kontra-befejező",
-                    f"{fl[0]['player_id']}. játékos",
-                    f"{fl[0]['goals']} kontra-gól")
-        from .goalkeeper import outlet_speed as _osp
-        _ot = _osp(match)
-        for side, name in (("home", home), ("away", away)):
-            tg = _ot[side].get("targets") or []
-            if tg and tg[0]["n"] >= 2:
-                _kp(name, "Indítás-célpont",
-                    f"{tg[0]['player_id']}. játékos",
-                    f"{tg[0]['n']} indítás")
+            for it in kp.get(side, []):
+                rows_kp.append(
+                    f"<tr><td>{escape(name)}</td>"
+                    f"<td>{escape(it['role'])}</td>"
+                    f"<td>{it['player_id']}. játékos</td>"
+                    f"<td>{escape(it['detail'])}</td></tr>")
         if rows_kp:
             keyplayers_html = (
                 "<h2>Kulcsemberek</h2><table>"
