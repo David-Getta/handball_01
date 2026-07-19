@@ -697,17 +697,7 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
     # Lövő-szokás: ha a fő lövőjük jellemzően egy zónából dolgozik,
     # arra a helyzetre külön lehet készülni.
     if rep.shooter_zones:
-        per: dict = {}
-        for rec_sz in rep.shooter_zones:
-            pz = per.setdefault(rec_sz["player_id"], {})
-            pz[rec_sz["zone"]] = pz.get(rec_sz["zone"], 0) + rec_sz["shots"]
-        best = None
-        for pid, zn in per.items():
-            total = sum(zn.values())
-            z, n = max(zn.items(), key=lambda kv: kv[1])
-            if (total >= 4 and n / total >= 0.6
-                    and (best is None or n > best[2])):
-                best = (pid, z, n, total)
+        best = _top_shooter_habit(rep)
         if best:
             pid, z, n, total = best
             keys.append(
@@ -1027,6 +1017,23 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     rep.strengths, rep.weaknesses, rep.keys_to_game = s, w, k
     return rep
 
+
+
+def _top_shooter_habit(rep) -> tuple | None:
+    """A legkoncentráltabb fő lövő: (player_id, zóna, lövés a zónából,
+    összes lövés), ha 4+ lövésének 60%+-a egy zónából jön — különben None.
+    A kulcs, a narratíva és a kliens-csempe közös küszöbe."""
+    per: dict = {}
+    for rec in (rep.shooter_zones or []):
+        pz = per.setdefault(rec["player_id"], {})
+        pz[rec["zone"]] = pz.get(rec["zone"], 0) + int(rec["shots"])
+    best = None
+    for pid, zn in per.items():
+        total = sum(zn.values())
+        z, n = max(zn.items(), key=lambda kv: kv[1])
+        if total >= 4 and n / total >= 0.6 and (best is None or n > best[2]):
+            best = (pid, z, n, total)
+    return best
 
 
 def _merge_shooter_zones(reports) -> list:
@@ -1380,6 +1387,17 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             body += (f" Ziccert is fog: {rep.gk_big_saves} nagy helyzetet "
                      "(xG ≥ 0,5) hárított.")
         out.append({"title": "Kapusuk", "body": body})
+
+    # Fő lövőjük szokása: honnan dolgozik (ha kirajzolódik a minta).
+    habit = _top_shooter_habit(rep)
+    if habit:
+        pid, z, n, total = habit
+        out.append({
+            "title": "Fő lövőjük",
+            "body": (f"A(z) {pid}. játékos {total} lövéséből {n} "
+                     f"({100.0 * n / total:.0f}%) ugyanonnan jött: {z} — "
+                     "a fal és a kapus erre a helyzetre készülhet."),
+        })
 
     # Kulcsjátékos: akinél a legtöbb labda megfordul — a kapust átugorjuk
     # (nála kidobásoknál jár a labda, nem ő szervezi a támadást).
