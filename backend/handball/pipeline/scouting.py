@@ -1628,6 +1628,36 @@ def matchup_plan(own: "ScoutingReport",
             f"(átlag {own.rec_sum_s / own.rec_transitions:.1f} mp) — "
             "lövés után az azonnali visszafutás legyen az első parancs.")
 
+    # 6) A gyenge hetes-dobójuk × a ti formában lévő kapusotok.
+    opp_taker = (opp.seven_takers or [None])[0]
+    if (opp_taker and opp_taker["attempts"] >= 3
+            and opp_taker["goals"] / opp_taker["attempts"] <= 0.5
+            and own.matches and own.gk_xg_saved / own.matches >= 1.0):
+        plan.append(
+            f"A hetes-dobójuk bizonytalan ({opp_taker['goals']}/"
+            f"{opp_taker['attempts']}), a ti kapusotok formában van — "
+            "hetesnél bátran vállalhat mozgást, ez a párbaj nektek áll.")
+
+    # 7) A tempós játékuk × a ti működő rotációtok.
+    if (opp.pace_minutes >= 20.0
+            and opp.pace_attacks / opp.pace_minutes >= 1.1
+            and own.sub_rotations >= 2
+            and own.sub_after_for - own.sub_after_against >= 0):
+        plan.append(
+            "Tempós meccs lesz "
+            f"({opp.pace_attacks / opp.pace_minutes:.1f} támadás/perc az "
+            "ő oldalukon) — a rotációtok mérlege jó, forgassatok "
+            "bátran: a friss lábak nálatok vannak.")
+
+    # 8) A kihagyós befejezésük × a ti bravúr-kapusotok.
+    if (opp.big_total >= 4 and opp.big_missed / opp.big_total >= 0.5
+            and own.gk_big_saves >= 2):
+        plan.append(
+            f"Ziccereket hagynak ki ({opp.big_missed}/{opp.big_total}), "
+            f"a ti kapusotok pedig fogja őket ({own.gk_big_saves} "
+            "bravúr-védés) — a nagy helyzeteik sem biztos gólok: ne "
+            "essetek szét egy-egy védekezési hiba után.")
+
     return plan
 
 
