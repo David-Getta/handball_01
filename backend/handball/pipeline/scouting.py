@@ -182,6 +182,9 @@ class ScoutingReport:
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
+    # A lövőik fáradása: [{"player_id", "drop_sum_pct", "n"}] — a 2.
+    # félidei tempó-esések összege és darabszáma (átlag visszaszámolható).
+    shooter_fades: list = field(default_factory=list)
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -704,6 +707,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A(z) {pid}. játékos lövéseinek {100.0 * n / total:.0f}%-a "
                 f"innen jön: {z} — erre a helyzetre külön készülj "
                 "(fal-állás, kapus-pozíció).")
+    # A fő lövőjük fáradása: hajrá-kulcs, ha a 2. félidőben lelassul.
+    if rep.shooter_zones and rep.shooter_fades:
+        per_shots: dict = {}
+        for rec_sz in rep.shooter_zones:
+            per_shots[rec_sz["player_id"]] = (
+                per_shots.get(rec_sz["player_id"], 0) + rec_sz["shots"])
+        top_pid = max(per_shots.items(), key=lambda kv: kv[1])[0]
+        fade = next((f for f in rep.shooter_fades
+                     if f["player_id"] == top_pid and f["n"]), None)
+        if fade:
+            avg_drop = fade["drop_sum_pct"] / fade["n"]
+            if avg_drop >= SHOOTER_FADE_PCT:
+                keys.append(
+                    f"A fő lövőjük ({top_pid}. játékos) elfárad: a második "
+                    f"félidőben átlag {avg_drop:.0f}%-kal lassabb — a "
+                    "hajrában friss védőt rá, és kényszerítsd "
+                    "visszafutásra.")
     if rep.gk_conceded_zones:
         zone, n = max(rep.gk_conceded_zones.items(), key=lambda kv: kv[1])
         if n >= 2:
@@ -875,6 +895,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.shooter_zones = [
             {"player_id": pid, "zone": z, "shots": n}
             for (pid, z), n in sorted(hab.items(), key=lambda kv: -kv[1])]
+        # A lövőik mért tempó-esése (a fő lövő elleni hajrá-kulcshoz).
+        from .stats import player_fatigue
+        shooter_ids = {pid for (pid, _z) in hab}
+        rep.shooter_fades = [
+            {"player_id": f["track_id"],
+             "drop_sum_pct": f["drop_pct"], "n": 1}
+            for f in player_fatigue(match)
+            if f["team"] == team.value and f["track_id"] in shooter_ids]
     except Exception:
         pass
     try:
@@ -1019,6 +1047,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
 
 
 
+# A fő lövő "elfárad" kulcs küszöbe: ekkora 2. félidei tempó-esés
+# (%) fölött érdemes a hajrára külön készülni ellene.
+SHOOTER_FADE_PCT = 15.0
+
+
 def _top_shooter_habit(rep) -> tuple | None:
     """A legkoncentráltabb fő lövő: (player_id, zóna, lövés a zónából,
     összes lövés), ha 4+ lövésének 60%+-a egy zónából jön — különben None.
@@ -1034,6 +1067,18 @@ def _top_shooter_habit(rep) -> tuple | None:
         if total >= 4 and n / total >= 0.6 and (best is None or n > best[2]):
             best = (pid, z, n, total)
     return best
+
+
+def _merge_shooter_fades(reports) -> list:
+    """Játékosonkénti tempó-esés összegek pontos összevonása."""
+    tally: dict = {}
+    for r in reports:
+        for rec in (r.shooter_fades or []):
+            cur = tally.setdefault(rec["player_id"], [0.0, 0])
+            cur[0] += float(rec["drop_sum_pct"])
+            cur[1] += int(rec["n"])
+    return [{"player_id": pid, "drop_sum_pct": round(d, 1), "n": n}
+            for pid, (d, n) in sorted(tally.items())]
 
 
 def _merge_shooter_zones(reports) -> list:
@@ -1110,6 +1155,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         empty_net_s=round(sum(r.empty_net_s for r in reports), 1),
         empty_net_conceded=sum(r.empty_net_conceded for r in reports),
         shooter_zones=_merge_shooter_zones(reports),
+        shooter_fades=_merge_shooter_fades(reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
