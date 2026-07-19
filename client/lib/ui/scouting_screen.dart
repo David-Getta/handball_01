@@ -384,6 +384,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átlag ${avg.toStringAsFixed(0)} mp";
   }
 
+  // Gól-forrás: a fő támadás-eredet (50%+ aránynál, 5+ gólnál) —
+  // a narratívával azonos küszöb.
+  String? _goalSource(Map<String, dynamic> r) {
+    final ao = (r["attack_origins"] as Map?)?.cast<String, dynamic>();
+    if (ao == null || ao.isEmpty) return null;
+    var total = 0;
+    String? topKey;
+    var topGoals = 0;
+    ao.forEach((k, v) {
+      final g = (((v as Map)["goals"] as num?) ?? 0).toInt();
+      total += g;
+      if (g > topGoals) {
+        topGoals = g;
+        topKey = k;
+      }
+    });
+    if (total < 5 || topKey == null || topGoals / total < 0.5) {
+      return null;
+    }
+    final pct = (100.0 * topGoals / total).round();
+    return "$topKey $pct%";
+  }
+
   // Kapus-xG: hárított xG és GSAx meccsenkénti átlaga — csak mért
   // védéseknél mutatjuk.
   String? _gkXg(Map<String, dynamic> r) {
@@ -656,6 +679,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Indítás-célpont", _outletTarget(r)!],
       if (_pace(r) != null) ["Tempó", _pace(r)!],
       if (_gkXg(r) != null) ["Kapus-xG", _gkXg(r)!],
+      if (_goalSource(r) != null) ["Gól-forrás", _goalSource(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
