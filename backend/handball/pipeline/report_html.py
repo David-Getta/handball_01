@@ -1193,6 +1193,26 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _sa("home"), _sa("away")))
         except Exception:
             pass
+        # Kiállítás-mérleg sora (ha volt emberhátrány) — a kiülőkkel.
+        try:
+            from .rules import detect_powerplay, suspended_players
+            _pp = detect_powerplay(match)
+            if _pp:
+                n_pp = {"home": 0, "away": 0}
+                for w_ in _pp:
+                    n_pp[w_["team_down"]] += 1
+                sp_ = suspended_players(match)
+
+                def _pp_txt(side):
+                    who = " · ".join(
+                        f"{e_['player_id']}."
+                        for e_ in (sp_.get(side) or [])[:2])
+                    base = str(n_pp[side])
+                    return f"{base} ({who})" if who else base
+                rows.append(("Kiállítás (2 perc)",
+                             _pp_txt("home"), _pp_txt("away")))
+        except Exception:
+            pass
         # Hétméteres-mérleg sora (ha volt büntető).
         try:
             from .rules import seven_meter_summary

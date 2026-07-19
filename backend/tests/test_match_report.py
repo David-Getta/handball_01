@@ -649,3 +649,36 @@ def test_report_seven_meter_summary_row():
     html = match_report_html(m, {}, [], None)
     assert "Hétméteres (gól/kísérlet)" in html
     assert "1/1" in html
+
+
+def test_report_suspension_row_with_offender():
+    """Ha volt kiállítás, a Csapat-mutatók sora hozza a darabszámot és
+    a kiülő mezszámát."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+
+    def mk(t, home_tracks):
+        players = [PlayerPosition(track_id=tid, team=Team.HOME,
+                                  x=15.0 + (tid % 10), y=4.0 + (tid % 6),
+                                  source=PositionSource.MEASURED,
+                                  confidence=1.0)
+                   for tid in home_tracks]
+        players += [PlayerPosition(track_id=200 + k, team=Team.AWAY,
+                                   x=25.0 + k, y=4.0 + k,
+                                   source=PositionSource.MEASURED,
+                                   confidence=1.0)
+                    for k in range(6)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=20.0, y=10.0, confidence=1.0))
+
+    full = [100, 101, 102, 103, 104, 105]
+    down = [100, 101, 102, 103, 104]
+    frames = [mk(t, full) for t in range(750)]
+    frames += [mk(t, down) for t in range(750, 2250)]
+    frames += [mk(t, full) for t in range(2250, 3000)]
+    m = Match(MatchMeta(match_id="ppr", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Kiállítás (2 perc)" in html
+    assert "1 (105.)" in html
