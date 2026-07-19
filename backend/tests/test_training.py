@@ -591,3 +591,29 @@ def test_unused_wings_trigger_width_focus():
                  if it["title"] == "Szélső-játék bevonása"), None)
     assert item is not None
     assert "6 gólból csak 0" in item["why"]
+
+
+def test_repeated_suspensions_trigger_discipline_focus():
+    """2+ felismert kiállítás → Fegyelmezett védekezés fókusz a
+    büntetett oldalon."""
+    from handball.models.tracking import Ball
+
+    def mk(t, home_n):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(home_n)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(6)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=20.0, y=10.0, confidence=1.0))
+
+    frames = [mk(t, 6) for t in range(750)]
+    frames += [mk(t, 5) for t in range(750, 2250)]     # 1. kiállítás
+    frames += [mk(t, 6) for t in range(2250, 3000)]
+    frames += [mk(t, 5) for t in range(3000, 4500)]    # 2. kiállítás
+    frames += [mk(t, 6) for t in range(4500, 5250)]
+    m = Match(_meta(), frames)
+    tf = training_focus(m)
+    titles = [f["title"] for f in tf["home"]]
+    assert "Fegyelmezett védekezés" in titles
+    assert all(f["title"] != "Fegyelmezett védekezés"
+               for f in tf["away"])

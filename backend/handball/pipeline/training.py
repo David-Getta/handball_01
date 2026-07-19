@@ -509,4 +509,23 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 25) Fegyelem: ha a csapat többször kiül (2+ felismert kiállítás),
+    # a védekezés-technikán kell dolgozni — az emberhátrány a
+    # leggyorsabb módja a meccs elvesztésének.
+    try:
+        from .rules import detect_powerplay
+        n_susp = {"home": 0, "away": 0}
+        for w in detect_powerplay(match):
+            n_susp[w["team_down"]] += 1
+        for side in ("home", "away"):
+            if n_susp[side] >= 2:
+                add(side, "védekezés", "Fegyelmezett védekezés",
+                    f"{n_susp[side]} kiállítást szedett össze a csapat "
+                    "— az emberhátrányok percei kapott gólokat érnek",
+                    "test-elzárás kéz nélkül (1v1 falgyakorlat), "
+                    "lépésmunka a betörő lassítására fogás helyett, "
+                    "kiszorítás oldalra a hatosnál")
+    except Exception:
+        pass
+
     return out
