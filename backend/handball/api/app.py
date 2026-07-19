@@ -1205,6 +1205,32 @@ def create_app():
                                for bs in big_saves(match)]
                     except Exception:
                         pass
+                if "top_shooter" in types:
+                    # A fő lövő lövései: csapatonként a legtöbbet lövő
+                    # azonosított játékos minden lövése — felderítési
+                    # videó-csomag ("készülj a fő lövőre").
+                    try:
+                        from ..pipeline.xg import match_xg
+                        shots = [s_ for s_ in
+                                 match_xg(match).get("shots", [])
+                                 if s_.get("player_id") is not None]
+                        for side in ("home", "away"):
+                            per: dict = {}
+                            for s_ in shots:
+                                if s_["team"] == side:
+                                    per[s_["player_id"]] = (
+                                        per.get(s_["player_id"], 0) + 1)
+                            if not per:
+                                continue
+                            top = max(per.items(),
+                                      key=lambda kv: kv[1])[0]
+                            ev += [{"t": s_["t"], "type": "top_shooter",
+                                    "team": side}
+                                   for s_ in shots
+                                   if s_["team"] == side
+                                   and s_["player_id"] == top]
+                    except Exception:
+                        pass
                 if "note" in types:
                     # Az edző saját jegyzetei — a megjelölt pillanat
                     # jelenete, a jegyzet szövegével a fájlnévben.

@@ -147,3 +147,18 @@ def test_note_clip_uses_label_in_filename(tmp_path):
     assert "jegyzet" in name
     assert "szép_indítás" in name
     assert "!" not in name  # az írásjelek kimaradnak a fájlnévből
+
+
+def test_top_shooter_clip_gets_hungarian_name(tmp_path):
+    """A fő lövő klip-típus magyar fájlnevet kap (fo-lovo)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 40, "type": "top_shooter", "team": "home"},
+              {"t": 80, "type": "goal", "team": "home"}]
+    res = export_event_clips(m, events, {"top_shooter"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "fo-lovo" in names
+    assert "gol" not in names
