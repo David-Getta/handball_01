@@ -137,3 +137,27 @@ def test_story_section_opens_summary():
     assert first["title"] == "A meccs története"
     assert "Hazai nyert 3–0-ra" in first["body"]
     assert "legnagyobb különbség 3 gól" in first["body"]
+
+
+def test_lineups_section_in_summary():
+    """A becsült posztok az összefoglalóban is megjelennek."""
+    from handball.models.tracking import (Ball, Frame, PlayerPosition,
+                                          PositionSource, Team)
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    for t in range(150):
+        frames.append(Frame(t=t, players=[
+            pl(1, 34.0, 10.0), pl(2, 36.0, 2.0), pl(3, 28.0, 10.0),
+        ], ball=Ball(x=28.3, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="lus", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    data = coach_summary(m)
+    sec = next((s_ for s_ in data["sections"]
+                if s_["title"] == "Felállások (becsült posztok)"), None)
+    assert sec is not None
+    assert "beálló: 1." in sec["body"]

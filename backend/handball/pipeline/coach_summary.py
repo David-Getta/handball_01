@@ -878,6 +878,29 @@ def coach_summary(match: Match) -> dict:
     except Exception:
         pass
 
+    # Felállások: a becsült posztok csapatonként egy-egy mondatban.
+    try:
+        from .roles import estimate_positions
+        est_cs = estimate_positions(match)
+        names_lu = {"home": home, "away": away}
+        order_lu = ["irányító", "átlövő", "beálló", "szélső"]
+        parts_lu = []
+        for side in ("home", "away"):
+            by_post: dict = {}
+            for tid, r_ in sorted(est_cs.get(side, {}).items()):
+                by_post.setdefault(r_["poszt"], []).append(f"{tid}.")
+            if by_post:
+                inner = " · ".join(f"{p_}: {', '.join(by_post[p_])}"
+                                   for p_ in order_lu if p_ in by_post)
+                parts_lu.append(f"{names_lu[side]} — {inner}")
+        if parts_lu:
+            sections.append({
+                "title": "Felállások (becsült posztok)",
+                "body": "; ".join(parts_lu) + ".",
+            })
+    except Exception:
+        pass
+
     # Kulcsemberek: kinél dőlt el a meccs — szereponként egy név.
     try:
         from .scouting import match_key_players
