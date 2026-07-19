@@ -1757,6 +1757,10 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
         if rep.gk_big_saves >= 2:
             body += (f" Ziccert is fog: {rep.gk_big_saves} nagy helyzetet "
                      "(xG ≥ 0,5) hárított.")
+        if rep.gk_xg_saved / max(1, rep.matches) >= 1.0:
+            body += (f" A védései nehézség-súlyozva is erősek: "
+                     f"{rep.gk_xg_saved / rep.matches:.1f} hárított "
+                     "xG meccsenként.")
         out.append({"title": "Kapusuk", "body": body})
 
     # Fő lövőjük szokása: honnan dolgozik (ha kirajzolódik a minta).
