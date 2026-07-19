@@ -634,6 +634,48 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
     return {"title": "Sorozatok", "body": body.strip()}, highlights
 
 
+def _story_section(match: Match, home: str, away: str) -> dict | None:
+    """A meccs története egy bekezdésben: eredmény, félidő, fordulópont,
+    legnagyobb előny — a meglévő rétegek számaiból, mondatokban."""
+    from .momentum import halftime_score, score_progression, win_probability
+    prog = score_progression(match)
+    gh, ga = prog["final"]
+    if gh + ga < 2:
+        return None
+    if gh > ga:
+        opener = (f"A(z) {home} nyert {gh}–{ga}-ra a(z) {away} ellen")
+    elif ga > gh:
+        opener = (f"A(z) {away} nyert {ga}–{gh}-ra a(z) {home} ellen")
+    else:
+        opener = f"Döntetlen: {gh}–{ga}"
+    body = opener
+    try:
+        hs = halftime_score(match)
+        if hs is not None:
+            body += f" (félidőben {hs['home']}–{hs['away']})"
+    except Exception:
+        pass
+    body += "."
+    bl = prog.get("biggest_lead") or {}
+    top_lead = max(bl.get("home", 0), bl.get("away", 0))
+    if top_lead >= 3:
+        lead_name = home if bl.get("home", 0) >= bl.get("away", 0) else away
+        body += (f" A legnagyobb különbség {top_lead} gól volt "
+                 f"({lead_name}).")
+    if prog.get("lead_changes", 0) >= 3:
+        body += (f" A vezetés {prog['lead_changes']}× cserélt gazdát — "
+                 "végig szoros meccs volt.")
+    try:
+        tp = win_probability(match).get("turning_point")
+        if tp is not None:
+            body += (f" A fordulópont a {int(tp['t_s'] // 60)}. perc "
+                     "környékén jött, ekkor billent el a győzelmi "
+                     "esély.")
+    except Exception:
+        pass
+    return {"title": "A meccs története", "body": body}
+
+
 def coach_summary(match: Match) -> dict:
     """A meccs automatikus edzői összefoglalója.
 
@@ -645,7 +687,8 @@ def coach_summary(match: Match) -> dict:
     sections: list[dict] = []
     highlights: list[str] = []
 
-    for build in (_events_section, _xg_section, _style_section):
+    for build in (_story_section, _events_section, _xg_section,
+                  _style_section):
         try:
             s = build(match, home, away)
             if s:
