@@ -205,6 +205,10 @@ class ScoutingReport:
     # Becsült posztok: {track_id: poszt} — meccsek közt az első érdemi
     # becslés marad (a felállás ritkán változik).
     positions: dict = field(default_factory=dict)
+    # Szélső-függés: a becsült szélsők góljai és az azonosított lövőktől
+    # jött összes gól — meccsek közt összegződik.
+    wing_goals: int = 0
+    wing_total_goals: int = 0
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
@@ -789,6 +793,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"A beállójuk a(z) {pivots[0]}. játékos — az elzárásaira "
             "lépj ki korán, és tartsd folyamatos fizikai kontaktban: "
             "ha ő labdát kap 6 méteren, az már késő.")
+    # Szélső-függés: honnan jönnek a góljaik a posztok szerint.
+    if rep.wing_total_goals >= 6:
+        wing_share = rep.wing_goals / rep.wing_total_goals
+        if wing_share >= 0.4:
+            keys.append(
+                f"A góljaik {100.0 * wing_share:.0f}%-át a szélsőik "
+                "szerzik — zárd a szélső sávot: a szélre kilépő védő "
+                "ne késsen, és a bedobásnál is figyelj rájuk.")
+        elif wing_share <= 0.1 and any(
+                p_ == "szélső" for p_ in (rep.positions or {}).values()):
+            keys.append(
+                "A szélsőik alig vannak játékban — a faluk középen "
+                "dől el: szűkíthetsz, a sávot vállalhatod.")
     # Visszarendeződés: lassú védelem ellen a gyors indítás a fegyver.
     if rep.rec_transitions >= 4:
         rec_avg = rep.rec_sum_s / rep.rec_transitions
@@ -1063,6 +1080,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.positions = {tid: r["poszt"] for tid, r in
                          estimate_positions(match, config)
                          .get(team.value, {}).items()}
+        wings = {tid for tid, p_ in rep.positions.items()
+                 if p_ == "szélső"}
+        for rec_sh in match_xg(match, config).get("shooters", []):
+            if rec_sh["team"] != team.value:
+                continue
+            rep.wing_total_goals += rec_sh["goals"]
+            if rec_sh["player_id"] in wings:
+                rep.wing_goals += rec_sh["goals"]
     except Exception:
         pass
     try:
@@ -1634,6 +1659,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rec_slow=sum(r.rec_slow for r in reports),
         positions={tid: poszt for r in reversed(reports)
                    for tid, poszt in (r.positions or {}).items()},
+        wing_goals=sum(r.wing_goals for r in reports),
+        wing_total_goals=sum(r.wing_total_goals for r in reports),
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),
