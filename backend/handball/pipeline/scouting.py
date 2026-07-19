@@ -1301,7 +1301,18 @@ def match_key_players(match: Match, config=None) -> dict:
     config = config or TacticsConfig()
     out: dict = {"home": [], "away": []}
 
+    # Poszt-becslés: ha van elég minta, a mérleg mellé odaírjuk a
+    # posztot is ("4 gól / 6 lövés · átlövő").
+    try:
+        from .roles import estimate_positions
+        _posts = estimate_positions(match, config)
+    except Exception:
+        _posts = {"home": {}, "away": {}}
+
     def add(side, role, pid, detail):
+        p_ = (_posts.get(side) or {}).get(pid)
+        if p_ is not None and role != "Bravúr-kapus":
+            detail = f"{detail} · {p_['poszt']}"
         out[side].append({"role": role, "player_id": pid, "detail": detail})
 
     try:
