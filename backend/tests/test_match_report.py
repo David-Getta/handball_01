@@ -288,3 +288,38 @@ def test_report_xg_block():
                   [Frame(t=i, players=[], ball=None) for i in range(10)])
     assert "Helyzetminőség (várható gól)" not in \
         match_report_html(empty, {}, [], None)
+
+
+def test_report_ziccer_row_and_shooter_column():
+    """Nagy xG-jű helyzeteknél megjelenik a Ziccer-sor (gól / nagy helyzet)
+    és a lövő-tábla Ziccer-oszlopa."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0,
+                              jersey_number=7)
+
+    frames = []
+    t = 0
+    for k in range(4):  # 4 közeli helyzet a 7-estől: 3 gól + 1 mellé
+        goal = k < 3
+        for i in range(7):
+            frames.append(Frame(
+                t=t,
+                players=[pl(1, 37.0, 10.0)],
+                ball=Ball(x=min(37.4 + 0.6 * i, 40.0),
+                          y=10.0 if goal else 10.0 - i * 1.0,
+                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[], ball=Ball(x=20.0, y=10.0,
+                                                       confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="zr", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Ziccer (gól / nagy helyzet)" in html
+    assert "3/4" in html
+    assert '<th class="num">Ziccer</th>' in html
