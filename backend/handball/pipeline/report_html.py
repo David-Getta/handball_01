@@ -1324,9 +1324,20 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                          f'{cb_txt}{cl_txt}{tp_txt}</div>')
     except Exception:
         pass
+    # A meccs története egy bekezdésben — ugyanaz a szöveg, mint az
+    # edzői összefoglaló nyitó-szekciója.
+    story_html = ""
+    try:
+        from .coach_summary import _story_section
+        st = _story_section(match, home, away)
+        if st:
+            story_html = ('<p class="cs"><b>A meccs története.</b> '
+                          + escape(st["body"]) + "</p>")
+    except Exception:
+        pass
     header_extra = (
         (f'<div class="sub">{" · ".join(header_bits)}</div>'
-         if header_bits else "") + prog_line)
+         if header_bits else "") + prog_line + story_html)
 
     # Kapus-teljesítmény (ha van kapus-jelölés a meccsen).
     gk_html = ""
