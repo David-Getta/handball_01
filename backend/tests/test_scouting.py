@@ -992,3 +992,24 @@ def test_empty_net_conceded_weakness_and_combine():
     assert not any("üres kapura" in w for w in w2)
     comb = combine_reports([rep, rep])
     assert comb.empty_net_conceded == 4
+
+
+def test_shooter_zone_habit_key_and_merge():
+    """Ha a fő lövő lövéseinek 60%+-a egy zónából jön (4+ lövés),
+    kulcs születik; a (játékos, zóna) párok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys, _merge_shooter_zones
+    rep = ScoutingReport(
+        team="away", team_name="X",
+        shooter_zones=[{"player_id": 7, "zone": "átlövés bal", "shots": 5},
+                       {"player_id": 7, "zone": "beálló (6 m)", "shots": 1}])
+    _, _, keys = _coach_keys(rep)
+    assert any("7. játékos" in k and "átlövés bal" in k for k in keys)
+    # Kiegyenlített eloszlásnál nincs kulcs.
+    flat = ScoutingReport(
+        team="away", team_name="X",
+        shooter_zones=[{"player_id": 7, "zone": "átlövés bal", "shots": 2},
+                       {"player_id": 7, "zone": "beálló (6 m)", "shots": 2}])
+    _, _, k2 = _coach_keys(flat)
+    assert not any("innen jön" in k for k in k2)
+    merged = _merge_shooter_zones([rep, rep])
+    assert merged[0] == {"player_id": 7, "zone": "átlövés bal", "shots": 10}

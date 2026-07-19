@@ -179,6 +179,9 @@ class ScoutingReport:
     empty_net_s: float = 0.0
     # Üres kapura kapott góljaik (7 a 6 közben) — meccsek közt összegződik.
     empty_net_conceded: int = 0
+    # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
+    # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
+    shooter_zones: list = field(default_factory=list)
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -691,6 +694,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"Kapusuk gyorsan indít (átlag {avg:.0f} mp alatt a felezőn) "
             "— minden lövés után AZONNAL vissza: a lassú visszafutást "
             "kontrával büntetik.")
+    # Lövő-szokás: ha a fő lövőjük jellemzően egy zónából dolgozik,
+    # arra a helyzetre külön lehet készülni.
+    if rep.shooter_zones:
+        per: dict = {}
+        for rec_sz in rep.shooter_zones:
+            pz = per.setdefault(rec_sz["player_id"], {})
+            pz[rec_sz["zone"]] = pz.get(rec_sz["zone"], 0) + rec_sz["shots"]
+        best = None
+        for pid, zn in per.items():
+            total = sum(zn.values())
+            z, n = max(zn.items(), key=lambda kv: kv[1])
+            if (total >= 4 and n / total >= 0.6
+                    and (best is None or n > best[2])):
+                best = (pid, z, n, total)
+        if best:
+            pid, z, n, total = best
+            keys.append(
+                f"A(z) {pid}. játékos lövéseinek {100.0 * n / total:.0f}%-a "
+                f"innen jön: {z} — erre a helyzetre külön készülj "
+                "(fal-állás, kapus-pozíció).")
     if rep.gk_conceded_zones:
         zone, n = max(rep.gk_conceded_zones.items(), key=lambda kv: kv[1])
         if n >= 2:
@@ -851,6 +874,17 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.gk_outlets = orec["outlets"]
         rep.gk_outlet_sum_s = orec["sum_s"]
         rep.gk_outlet_fast = orec["fast"]
+        # Lövő-szokások: azonosított lövőik lövései zóna szerint.
+        goal_x = config.attacks_toward_x(team)
+        hab: dict = {}
+        for sh in match_xg(match, config).get("shots", []):
+            if sh["team"] != team.value or sh.get("player_id") is None:
+                continue
+            z = _shot_zone(sh["x"], sh["y"], goal_x)
+            hab[(sh["player_id"], z)] = hab.get((sh["player_id"], z), 0) + 1
+        rep.shooter_zones = [
+            {"player_id": pid, "zone": z, "shots": n}
+            for (pid, z), n in sorted(hab.items(), key=lambda kv: -kv[1])]
     except Exception:
         pass
     try:
@@ -994,6 +1028,17 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
     return rep
 
 
+
+def _merge_shooter_zones(reports) -> list:
+    """(játékos, zóna) párok lövésszámainak pontos összegzése meccsek közt."""
+    tally: dict = {}
+    for r in reports:
+        for rec in (r.shooter_zones or []):
+            k = (rec["player_id"], rec["zone"])
+            tally[k] = tally.get(k, 0) + int(rec["shots"])
+    return [{"player_id": pid, "zone": z, "shots": n}
+            for (pid, z), n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
 def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
     """Több meccs jelentését egyesíti egy csapatról (több meccs = valós profil).
 
@@ -1057,6 +1102,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         big_missed=sum(r.big_missed for r in reports),
         empty_net_s=round(sum(r.empty_net_s for r in reports), 1),
         empty_net_conceded=sum(r.empty_net_conceded for r in reports),
+        shooter_zones=_merge_shooter_zones(reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
