@@ -1224,6 +1224,23 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _sa("home"), _sa("away")))
         except Exception:
             pass
+        # Előny-kezelés sora: támadás-hossz vezetve/hátrányban.
+        try:
+            from .attack_types import pace_by_score
+            _pb = pace_by_score(match)
+
+            def _pb_txt(side):
+                rec_l = _pb[side]["leading"]
+                rec_t = _pb[side]["trailing"]
+                if rec_l["avg_s"] is None or rec_t["avg_s"] is None:
+                    return "—"
+                return (f'{rec_l["avg_s"]:.0f} / {rec_t["avg_s"]:.0f}'
+                        " mp")
+            if _pb_txt("home") != "—" or _pb_txt("away") != "—":
+                rows.append(("Támadás-hossz vezetve / hátrányban",
+                             _pb_txt("home"), _pb_txt("away")))
+        except Exception:
+            pass
         # Kiállítás-mérleg sora (ha volt emberhátrány) — a kiülőkkel.
         try:
             from .rules import detect_powerplay, suspended_players
