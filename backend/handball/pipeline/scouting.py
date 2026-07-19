@@ -1818,6 +1818,19 @@ def matchup_plan(own: "ScoutingReport",
             f"({own_earn}×) — küldd őt az ő sávjába: 2 perc vagy hetes "
             "lesz belőle.")
 
+    # 10) Az ő időhúzásuk × a ti erős kezdésetek.
+    if (opp.lead_attacks >= 3 and opp.trail_attacks >= 3
+            and own.fh_goals_for - own.fh_goals_against >= 3):
+        opp_lead_avg = opp.lead_sum_s / opp.lead_attacks
+        opp_trail_avg = opp.trail_sum_s / opp.trail_attacks
+        if opp_lead_avg - opp_trail_avg >= 8.0:
+            plan.append(
+                f"Előnyben altatják a meccset (átlag {opp_lead_avg:.0f} "
+                f"mp-es támadások), ti pedig jól kezdtek "
+                f"({own.fh_goals_for}–{own.fh_goals_against} az első "
+                "félidőkben) — ha az elején ti vezettek, a fő fegyverük "
+                "kiesik: nyissatok magas tempóval.")
+
     return plan
 
 
