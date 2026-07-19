@@ -468,3 +468,46 @@ def test_report_gsax_row():
                         fps=25.0), frames)
     html = match_report_html(m, {}, [], None)
     assert "Megmentett gól (GSAx)" in html
+
+
+def test_report_7v6_trailing_note():
+    """Ha a 7 a 6 szakaszok jellemzően hátrányban indulnak (2+ szakasz,
+    70%+), a jelentés lista-sora időzítés-jegyzetet kap."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                           source=PositionSource.MEASURED, confidence=1.0)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    t = 0
+    for _ in range(2):
+        # A vendég gólt dob a hazai kapuba → hazai hátrány.
+        for i in range(7):
+            frames.append(Frame(
+                t=t, players=[pl(4, Team.AWAY, 3.0, 10.0)],
+                ball=Ball(x=max(2.6 - 0.6 * i, 0.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        # Szünet labda nélkül (a szakaszokat is elválasztja).
+        for _ in range(60):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+        # Hazai 7 a 6: a kapus elöl, a hazai birtokol 5 mp-ig.
+        for _ in range(125):
+            frames.append(Frame(
+                t=t,
+                players=[pl(1, Team.HOME, 20.0, 10.0, role="kapus"),
+                         pl(2, Team.HOME, 30.0, 10.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+    m = Match(MatchMeta(match_id="entr", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Hetedik mezőnyjátékos (7 a 6)" in html
+    assert "jellemzően hátrányban indítva" in html
