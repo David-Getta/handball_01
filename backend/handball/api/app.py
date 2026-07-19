@@ -2038,6 +2038,28 @@ def create_app():
                 _layer("substitutions", lambda: substitution_impact(match))
                 _layer("stoppages", lambda: timeout_effects(match))
                 _layer("training", lambda: training_focus(match))
+                # Újabb rétegek: kapus-indítás, 7 a 6 mérleg/időzítés,
+                # kontra-befejezők, kulcsemberek, tempó, késő cserék.
+                from ..pipeline.attack_types import (fast_break_finishers,
+                                                     match_pace)
+                from ..pipeline.goalkeeper import (empty_net_context,
+                                                   empty_net_goals,
+                                                   outlet_speed)
+                from ..pipeline.scouting import match_key_players
+                from ..pipeline.substitutions import late_sub_flags
+                from ..pipeline.xg import big_saves, missed_big_chances
+                _layer("outlets", lambda: outlet_speed(match))
+                _layer("empty_net_goals", lambda: empty_net_goals(match))
+                _layer("empty_net_context",
+                       lambda: empty_net_context(match))
+                _layer("fast_break_finishers",
+                       lambda: fast_break_finishers(match))
+                _layer("key_players", lambda: match_key_players(match))
+                _layer("pace", lambda: match_pace(match))
+                _layer("late_subs", lambda: late_sub_flags(match))
+                _layer("big_saves", lambda: big_saves(match))
+                _layer("missed_big_chances",
+                       lambda: missed_big_chances(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
