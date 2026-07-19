@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#368)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#378)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -139,6 +139,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   szemszögéből) — kiszámítható dobónál a kapus konkrét utasítást kap
   ("induljon balra"); irány a jelentés-listában és az app csempéjén,
   hetes-mérleg sor a Csapat-mutatókban. (#357, #358, #359)
+- **Szünet utáni kezdés**: ki üt először a 2. félidőben (az első 5
+  perc mérlege) — felderítési kulcs mindkét irányban, csempe, a meccs
+  történetének mondata, Szünet utáni protokoll edzés-fókusz (26.
+  szabály) és csomag-réteg. (#374–#377)
+- **xG-ítélet**: megérdemelt volt-e a győzelem a helyzetek alapján —
+  közös ítélet-mondat az összefoglalóban és a jelentésben; 7 a 6
+  ítélet (megérte-e a vállalás) az összefoglalóban. (#372, #373,
+  #378)
+- **Excel-kész játékos-CSV**: gól, lövés, xG, blokk és becsült poszt
+  oszlopok a statisztika-exportban; kiállítás-számok a könyvtár-
+  áttekintőben és a dashboard összevető táblájában. (#370, #371)
 - **Fegyelem-réteg**: ki harcolja ki a kiállításokat és ki üli le őket
   (a hátrány alatt eltűnő track azonosítása) — felderítési kulcsok,
   "2 perc-hozó" Kulcsember-szerep, Fegyelem csempe, kiállítás-sor a
