@@ -2097,6 +2097,9 @@ def create_app():
                 _layer("recovery", lambda: transition_recovery(match))
                 from ..pipeline.roles import estimate_positions
                 _layer("positions", lambda: estimate_positions(match))
+                from ..pipeline.rules import seven_meter_earners
+                _layer("seven_earners",
+                       lambda: seven_meter_earners(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
