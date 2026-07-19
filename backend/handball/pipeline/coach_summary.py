@@ -728,6 +728,19 @@ def _story_section(match: Match, home: str, away: str) -> dict | None:
                 pass
     except Exception:
         pass
+    # A szünet utáni kezdés: ha az első 5 perc egyoldalú volt (2+ gól
+    # különbség), a történet is elmondja, ki ütött először.
+    try:
+        from .halftime import second_half_start
+        shs = second_half_start(match)
+        if shs is not None and abs(shs["home"] - shs["away"]) >= 2:
+            first_name = home if shs["home"] > shs["away"] else away
+            hi = max(shs["home"], shs["away"])
+            lo = min(shs["home"], shs["away"])
+            body += (f" A második félidőt a(z) {first_name} kezdte "
+                     f"jobban ({hi}–{lo} az első öt percben).")
+    except Exception:
+        pass
     # A meccs embere: a legeredményesebb azonosított lövő (3+ gólnál).
     try:
         from .xg import match_xg
