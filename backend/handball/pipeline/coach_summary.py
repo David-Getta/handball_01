@@ -442,6 +442,14 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
         if rec.get("seven_faced"):
             sent += (f"; hétméteresből {rec['seven_saved']}/"
                      f"{rec['seven_faced']}-t fogott meg")
+        # Hárított xG: a védések nehézség-súlyozott értéke (ha érdemi).
+        try:
+            from .xg import xg_saved
+            xs = xg_saved(match)[key]
+            if xs >= 1.0:
+                sent += f"; hárított xG: {xs:.1f}"
+        except Exception:
+            pass
         # Bravúr-védések: hány ziccert fogott a kapus (ha volt ilyen).
         try:
             from .xg import big_saves
