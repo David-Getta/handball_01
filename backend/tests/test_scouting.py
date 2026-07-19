@@ -1893,3 +1893,20 @@ def test_lead_management_keys():
                           trail_attacks=5, trail_sum_s=90.0)
     _, _, k2 = _coach_keys(even)
     assert not any("Előnyben húzzák" in k for k in k2)
+
+
+def test_matchup_plan_slowdown_rule():
+    """10. szabály: az ő időhúzásuk × a mi erős első félidőnk."""
+    from handball.pipeline.scouting import matchup_plan
+    own = ScoutingReport(team="home", team_name="Mi",
+                         fh_goals_for=12, fh_goals_against=8)
+    opp = ScoutingReport(team="away", team_name="Ok",
+                         lead_attacks=5, lead_sum_s=150.0,
+                         trail_attacks=5, trail_sum_s=50.0)
+    plan = matchup_plan(own, opp)
+    assert any("altatják a meccset" in p_ for p_ in plan)
+    # Gyenge saját kezdésnél a mondat elmarad.
+    weak = ScoutingReport(team="home", team_name="Mi",
+                          fh_goals_for=8, fh_goals_against=8)
+    plan2 = matchup_plan(weak, opp)
+    assert not any("altatják" in p_ for p_ in plan2)
