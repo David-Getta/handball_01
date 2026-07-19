@@ -1316,3 +1316,40 @@ def test_match_key_players_cannon_role():
     assert cannon is not None
     assert cannon["player_id"] == 1
     assert "km/h" in cannon["detail"]
+
+
+def test_match_key_players_big_save_keeper_role():
+    """2 fogott ziccer → Bravúr-kapus szerep a védő csapat kapusával."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource)
+    from handball.pipeline.scouting import match_key_players
+
+    def pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                           source=PositionSource.MEASURED, confidence=1.0)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    t = 0
+    for _ in range(2):  # két fogott ziccer: a labda a kapusnál megáll
+        for i in range(8):
+            frames.append(Frame(
+                t=t,
+                players=[pl(1, Team.HOME, 37.0, 10.0),
+                         pl(30, Team.AWAY, 39.0, 10.0, role="kapus")],
+                ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="bk", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    kp = match_key_players(m)
+    role = next((it for it in kp["away"]
+                 if it["role"] == "Bravúr-kapus"), None)
+    assert role is not None
+    assert role["player_id"] == 30
+    assert "2 fogott ziccer" in role["detail"]
