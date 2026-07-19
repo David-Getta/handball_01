@@ -203,6 +203,16 @@ class ApiClient {
     return data["match_id"] as String;
   }
 
+  /// Kulcsemberek (GET /matches/{id}/key-players): kinél dől el a meccs.
+  Future<Map<String, dynamic>> fetchKeyPlayers(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/key-players"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a kulcsember-lista: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// A feldolgozás minőség-jelentése (GET /matches/{id}/quality).
   Future<Map<String, dynamic>> fetchQuality(String matchId) async {
     final resp = await http.get(Uri.parse("$baseUrl/matches/$matchId/quality"));

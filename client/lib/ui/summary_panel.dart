@@ -36,6 +36,9 @@ class SummaryPanel extends StatelessWidget {
   /// Gól-sorozatok az eredmény-grafikon kiemeléséhez (üresnél nincs sáv).
   final List<Map<String, dynamic>> runs;
 
+  /// Kulcsemberek a backendtől: {"home": [{"role","player_id","detail"}]}
+  final Map<String, dynamic>? keyPlayers;
+
   /// Edzés-fókusz javaslatok a backendtől: {"home": [...], "away": [...]}
   /// — elemenként {"area","title","why","drill"}. Null/üresnél nincs kártya.
   final Map<String, dynamic>? training;
@@ -61,6 +64,7 @@ class SummaryPanel extends StatelessWidget {
     this.coach,
     this.runs = const [],
     this.training,
+    this.keyPlayers,
     this.progression,
     this.goalTimeline = const [],
   });
@@ -247,6 +251,67 @@ class SummaryPanel extends StatelessWidget {
     ];
   }
 
+  /// Kulcsemberek kártya: szereponként a meccs meghatározó játékosai —
+  /// ugyanazokból a rétegekből, mint a jelentés Kulcsemberek táblája.
+  List<Widget> _keyPlayersCard() {
+    final kp = keyPlayers;
+    if (kp == null) return const [];
+    final sides = [
+      ("home", homeName, AppColors.home),
+      ("away", awayName, AppColors.away),
+    ];
+    final hasAny =
+        sides.any((s) => ((kp[s.$1] as List?) ?? const []).isNotEmpty);
+    if (!hasAny) return const [];
+    return [
+      Text("KULCSEMBEREK", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (key, name, color) in sides)
+              if (((kp[key] as List?) ?? const []).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(name,
+                      style: AppText.value
+                          .copyWith(fontSize: 12.5, color: color)),
+                ),
+                for (final it
+                    in ((kp[key] as List).cast<Map<String, dynamic>>()))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 4),
+                    child: Text.rich(TextSpan(children: [
+                      TextSpan(
+                          text: "${it["role"]}: ",
+                          style: AppText.label.copyWith(
+                              fontSize: 11.5,
+                              color: AppColors.textFaint)),
+                      TextSpan(
+                          text: "${it["player_id"]}. játékos",
+                          style: AppText.value.copyWith(fontSize: 12)),
+                      TextSpan(
+                          text: "  (${it["detail"]})",
+                          style: AppText.label.copyWith(
+                              fontSize: 11.5,
+                              color: AppColors.textPrimary)),
+                    ])),
+                  ),
+              ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+    ];
+  }
+
   /// Edzés-fókusz kártya: csapatonként a javasolt gyakorlás-fókuszok,
   /// indoklással (a meccs-adat) és gyakorlat-típussal.
   List<Widget> _trainingCard() {
@@ -367,6 +432,7 @@ class SummaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
         ],
+        ..._keyPlayersCard(),
         ..._trainingCard(),
         if (goals.isNotEmpty) ...[
           Text("EREDMÉNY-ALAKULÁS", style: AppText.sectionLabel),

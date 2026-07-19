@@ -59,6 +59,7 @@ class _MatchScreenState extends State<MatchScreen> {
   // A feldolgozás minőség-önellenőrzése (score + figyelmeztetések) — a
   // felhasználó lássa, mennyire megbízható az elemzés. Demó módban null.
   Map<String, dynamic>? _quality;
+  Map<String, dynamic>? _keyPlayers;
   // Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary).
   Map<String, dynamic>? _coach;
   // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
@@ -138,6 +139,7 @@ class _MatchScreenState extends State<MatchScreen> {
     String label;
     List<Map<String, dynamic>> events = [];
     Map<String, dynamic>? quality;
+    Map<String, dynamic>? keyPlayers;
     List<Map<String, dynamic>> notes = [];
     Map<String, dynamic>? coach;
     List<Map<String, dynamic>> attacks = [];
@@ -263,6 +265,12 @@ class _MatchScreenState extends State<MatchScreen> {
           quality = null; // minőség-jelentés nélkül is teljes a nézet
         }
         try {
+          keyPlayers = (await _api.fetchKeyPlayers(widget.matchId))["key_players"]
+              as Map<String, dynamic>?;
+        } catch (_) {
+          keyPlayers = null; // kulcsemberek nélkül is teljes a nézet
+        }
+        try {
           notes = await _api.fetchNotes(widget.matchId);
         } catch (_) {
           notes = []; // jegyzetek nélkül is teljes a nézet
@@ -286,6 +294,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _xgShooters = xgShooters;
       _passNetwork = computePassNetwork(match, events, _passTeam);
       _quality = quality;
+      _keyPlayers = keyPlayers;
       _notes = notes;
       _coach = coach;
       _attacks = attacks;
@@ -2486,6 +2495,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           coach: _coach,
                           runs: _momentum,
                           training: _training,
+                          keyPlayers: _keyPlayers,
                           progression: _progression,
                           goalTimeline: _goalTimeline,
                         ),
