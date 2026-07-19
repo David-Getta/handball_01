@@ -1147,3 +1147,29 @@ def test_fb_finisher_key_and_merge():
     assert not any("lerohanásaikat" in k for k in k2)
     merged = _merge_fb_finishers([rep, one])
     assert merged[0] == {"player_id": 9, "goals": 3}
+
+
+def test_seven_taker_key_and_merge():
+    """2+ hetes ugyanattól a dobótól → kulcs a kapusnak; gyenge mérlegnél
+    külön biztatás. A kísérlet/gól számok meccsek közt összegződnek."""
+    from handball.pipeline.scouting import _coach_keys, _merge_seven_takers
+    rep = ScoutingReport(
+        team="away", team_name="X",
+        seven_takers=[{"player_id": 11, "attempts": 3, "goals": 1}])
+    _, _, keys = _coach_keys(rep)
+    key = next((k for k in keys if "heteseiket" in k), None)
+    assert key is not None and "11. játékos" in key
+    assert "bátran vállalhat" in key          # 1/3 = gyenge mérleg
+    strong = ScoutingReport(
+        team="away", team_name="X",
+        seven_takers=[{"player_id": 11, "attempts": 3, "goals": 3}])
+    _, _, k2 = _coach_keys(strong)
+    key2 = next((k for k in k2 if "heteseiket" in k), None)
+    assert key2 is not None and "bátran vállalhat" not in key2
+    one = ScoutingReport(
+        team="away", team_name="X",
+        seven_takers=[{"player_id": 11, "attempts": 1, "goals": 1}])
+    _, _, k3 = _coach_keys(one)
+    assert not any("heteseiket" in k for k in k3)
+    merged = _merge_seven_takers([rep, strong])
+    assert merged[0] == {"player_id": 11, "attempts": 6, "goals": 4}
