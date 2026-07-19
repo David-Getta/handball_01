@@ -171,3 +171,19 @@ def test_match_pace_counts_and_label():
     assert pc["home_attacks"] == 0 and pc["away_attacks"] == 0
     assert pc["per_min"] == 0.0
     assert pc["label"] == "lassú"
+
+
+def test_match_pace_halves_split():
+    """Megadott félidő-határnál a tempó félidőnként is kijön; határ
+    nélkül (és rövid féllel) a halves None."""
+    from handball.pipeline.attack_types import match_pace
+
+    n = int(12 * 60 * 25)
+    m = Match(_meta(), [Frame(t=i, players=[], ball=None)
+                        for i in range(n)])
+    # Kézzel megadott félidő-határ: mindkét fél 6 perc.
+    pc = match_pace(m, half_t=n // 2)
+    assert pc["halves"] == {"first_per_min": 0.0, "second_per_min": 0.0}
+    # Túl rövid második fél: nincs bontás.
+    pc2 = match_pace(m, half_t=n - 100)
+    assert pc2["halves"] is None
