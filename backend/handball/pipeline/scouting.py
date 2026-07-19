@@ -185,6 +185,9 @@ class ScoutingReport:
     # A lövőik fáradása: [{"player_id", "drop_sum_pct", "n"}] — a 2.
     # félidei tempó-esések összege és darabszáma (átlag visszaszámolható).
     shooter_fades: list = field(default_factory=list)
+    # Gólpassz-párok: [{"from", "to", "goals"}] — ki kinek készíti elő a
+    # góljaikat; párokként meccsek közt összegezhető.
+    assist_pairs: list = field(default_factory=list)
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -724,6 +727,16 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                     f"félidőben átlag {avg_drop:.0f}%-kal lassabb — a "
                     "hajrában friss védőt rá, és kényszerítsd "
                     "visszafutásra.")
+    # A gól-tengely: ha egy (gólpasszoló -> lövő) páros 3+ gólt hozott,
+    # a passzsáv elvágása többet ér, mint a lövő önmagában.
+    if rep.assist_pairs:
+        top_ap = max(rep.assist_pairs, key=lambda pr: pr["goals"])
+        if top_ap["goals"] >= 3:
+            keys.append(
+                f"A góljaik tengelye a(z) {top_ap['from']}. → "
+                f"{top_ap['to']}. páros ({top_ap['goals']} gól) — a "
+                "passzsáv elvágása (elé lépés, letámadás) többet ér, "
+                "mint a lövő önálló fogása.")
     if rep.gk_conceded_zones:
         zone, n = max(rep.gk_conceded_zones.items(), key=lambda kv: kv[1])
         if n >= 2:
@@ -903,6 +916,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
              "drop_sum_pct": f["drop_pct"], "n": 1}
             for f in player_fatigue(match)
             if f["team"] == team.value and f["track_id"] in shooter_ids]
+        from .event_detection import assist_network
+        rep.assist_pairs = [dict(pr) for pr in
+                            assist_network(match, config)[team.value]["pairs"]]
     except Exception:
         pass
     try:
@@ -1069,6 +1085,17 @@ def _top_shooter_habit(rep) -> tuple | None:
     return best
 
 
+def _merge_assist_pairs(reports) -> list:
+    """(gólpasszoló, lövő) párok gólszámainak pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for pr in (r.assist_pairs or []):
+            k = (pr["from"], pr["to"])
+            tally[k] = tally.get(k, 0) + int(pr["goals"])
+    return [{"from": a, "to": b, "goals": n}
+            for (a, b), n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_shooter_fades(reports) -> list:
     """Játékosonkénti tempó-esés összegek pontos összevonása."""
     tally: dict = {}
@@ -1156,6 +1183,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         empty_net_conceded=sum(r.empty_net_conceded for r in reports),
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
+        assist_pairs=_merge_assist_pairs(reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),
