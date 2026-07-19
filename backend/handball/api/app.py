@@ -1671,6 +1671,16 @@ def create_app():
                 teams[name] = recurring
         return {"teams": teams, "matches": counts}
 
+    @app.get("/matches/{match_id}/key-players")
+    def get_key_players(match_id: str):
+        """Kulcsemberek: kinél dől el a meccs (fő lövő, fal kulcsa,
+        hetes-dobó, kontra-befejező, indítás-célpont)."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.scouting import match_key_players
+        return {"key_players": match_key_players(match)}
+
     @app.get("/matches/{match_id}/goalkeepers")
     def get_goalkeeper_stats(match_id: str):
         """Kapus-teljesítmény: kapott kapura tartó lövések, védések,

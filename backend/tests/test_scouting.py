@@ -1173,3 +1173,37 @@ def test_seven_taker_key_and_merge():
     assert not any("heteseiket" in k for k in k3)
     merged = _merge_seven_takers([rep, strong])
     assert merged[0] == {"player_id": 11, "attempts": 6, "goals": 4}
+
+
+def test_match_key_players_top_shooter():
+    """A match_key_players a 3+ lövéses fő lövőt adja vissza a megfelelő
+    oldalon, mérleggel."""
+    from handball.models.tracking import Ball, Frame, Match, MatchMeta
+    from handball.pipeline.scouting import match_key_players
+
+    def pl(tid, x, y):
+        from handball.models.tracking import (PlayerPosition,
+                                              PositionSource)
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(4):
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="mkp", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    kp = match_key_players(m)
+    roles = {it["role"]: it for it in kp["home"]}
+    assert "Fő lövő" in roles
+    assert roles["Fő lövő"]["player_id"] == 1
+    assert "lövés" in roles["Fő lövő"]["detail"]
+    assert kp["away"] == []

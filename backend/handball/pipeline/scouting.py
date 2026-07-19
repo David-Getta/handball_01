@@ -1154,6 +1154,81 @@ def _top_shooter_habit(rep) -> tuple | None:
     return best
 
 
+def match_key_players(match: Match, config=None) -> dict:
+    """Kulcsemberek egy meccsből: kinél dől el a játék — szereponként a
+    legjellemzőbb játékos, csak érdemi mintánál. A jelentés Kulcsemberek
+    táblája és az API ugyanebből dolgozik (azonos küszöbök a felderítési
+    kulcsokkal).
+
+    Visszatérés: {"home"/"away": [{"role", "player_id", "detail"}]}
+    """
+    config = config or TacticsConfig()
+    out: dict = {"home": [], "away": []}
+
+    def add(side, role, pid, detail):
+        out[side].append({"role": role, "player_id": pid, "detail": detail})
+
+    try:
+        from .xg import match_xg
+        r = match_xg(match, config)
+        for side in ("home", "away"):
+            top = next((rec for rec in r.get("shooters", [])
+                        if rec["team"] == side), None)
+            if top and top["shots"] >= 3:
+                add(side, "Fő lövő", top["player_id"],
+                    f"{top['goals']} gól / {top['shots']} lövés")
+    except Exception:
+        pass
+    try:
+        from .defense import detect_blocks
+        blk = detect_blocks(match, config)
+        for side in ("home", "away"):
+            bl = blk[side].get("blockers") or []
+            if bl and bl[0]["blocks"] >= 2:
+                add(side, "A fal kulcsa", bl[0]["player_id"],
+                    f"{bl[0]['blocks']} blokk")
+    except Exception:
+        pass
+    try:
+        from .rules import seven_meter_outcomes
+        sv: dict = {}
+        for sm in seven_meter_outcomes(match, config):
+            if sm.get("shooter_id") is None:
+                continue
+            k = (sm["team"], sm["shooter_id"])
+            a, g = sv.get(k, (0, 0))
+            sv[k] = (a + 1, g + int(sm["outcome"] == "gól"))
+        for side in ("home", "away"):
+            cand = [(pid, ag) for (tm, pid), ag in sv.items() if tm == side]
+            if cand:
+                pid, (a, g) = max(cand, key=lambda c: c[1][0])
+                if a >= 2:
+                    add(side, "Hetes-dobó", pid, f"{g}/{a} gól")
+    except Exception:
+        pass
+    try:
+        from .attack_types import fast_break_finishers
+        fb = fast_break_finishers(match, config)
+        for side in ("home", "away"):
+            fl = fb.get(side) or []
+            if fl and fl[0]["goals"] >= 2:
+                add(side, "Kontra-befejező", fl[0]["player_id"],
+                    f"{fl[0]['goals']} kontra-gól")
+    except Exception:
+        pass
+    try:
+        from .goalkeeper import outlet_speed
+        osp = outlet_speed(match, config)
+        for side in ("home", "away"):
+            tg = osp[side].get("targets") or []
+            if tg and tg[0]["n"] >= 2:
+                add(side, "Indítás-célpont", tg[0]["player_id"],
+                    f"{tg[0]['n']} indítás")
+    except Exception:
+        pass
+    return out
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól számok pontos összegzése."""
     tally: dict = {}
