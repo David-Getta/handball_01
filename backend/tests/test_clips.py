@@ -177,3 +177,16 @@ def test_empty_net_clip_gets_hungarian_name(tmp_path):
         names = " ".join(z.namelist())
     assert "het-a-hat" in names
     assert "gol" not in names
+
+
+def test_turning_point_clip_gets_hungarian_name(tmp_path):
+    """A fordulópont klip-típus magyar fájlnevet kap (fordulopont)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "turning_point", "team": "home"}]
+    res = export_event_clips(m, events, {"turning_point"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "fordulopont" in names

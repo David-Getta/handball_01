@@ -1205,6 +1205,23 @@ def create_app():
                                for bs in big_saves(match)]
                     except Exception:
                         pass
+                if "turning_point" in types:
+                    # A meccs fordulópontja: a győzelmi esély legnagyobb
+                    # billenésének pillanata (ha volt legalább 2 gól).
+                    try:
+                        from ..pipeline.momentum import win_probability
+                        tp = win_probability(match).get("turning_point")
+                        if tp is not None:
+                            fps_tp = (match.meta.fps
+                                      if match.meta.fps > 0 else 25.0)
+                            ev.append({
+                                "t": round(tp["t_s"] * fps_tp),
+                                "type": "turning_point",
+                                "team": ("home" if tp["to_p"] > tp["from_p"]
+                                         else "away"),
+                            })
+                    except Exception:
+                        pass
                 if "empty_net" in types:
                     # 7 a 6 szakaszok: a lehozott kapusos játék jelenetei
                     # — a saját végrehajtás és az ellenfél szokásainak
