@@ -265,7 +265,8 @@ PACE_MIN_DURATION_MIN = 10.0
 
 
 def match_pace(match: Match,
-               config: Optional[TacticsConfig] = None) -> dict:
+               config: Optional[TacticsConfig] = None,
+               half_t: int | None = None) -> dict:
     """Meccs-tempó: hány támadás jut egy percre.
 
     A tempó a taktika lenyomata: a sok támadás gyors, oda-vissza
@@ -273,7 +274,10 @@ def match_pace(match: Match,
     Rövid felvételen (PACE_MIN_DURATION_MIN alatt) nem értelmezzük.
 
     Visszatérés: {"available", "duration_min", "home_attacks",
-    "away_attacks", "per_min", "label"} — a label gyors/közepes/lassú.
+    "away_attacks", "per_min", "label", "halves"} — a label
+    gyors/közepes/lassú; a halves {"first_per_min", "second_per_min"}
+    a felismert (vagy megadott) félidő-határ szerint, ha mindkét fél
+    legalább 5 perc — különben None.
     """
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
@@ -281,13 +285,32 @@ def match_pace(match: Match,
     if duration_min < PACE_MIN_DURATION_MIN:
         return {"available": False, "duration_min": round(duration_min, 1)}
     counts = {"home": 0, "away": 0}
-    for seq in segment_attacks(match, config):
+    seqs = list(segment_attacks(match, config))
+    for seq in seqs:
         counts[seq.team.value] += 1
     total = counts["home"] + counts["away"]
     per_min = total / duration_min
     label = ("gyors" if per_min >= PACE_FAST_PER_MIN
              else "lassú" if per_min <= PACE_SLOW_PER_MIN
              else "közepes")
+    # Félidőnkénti bontás: elárulja, elfogy-e a meccsből a tempó.
+    halves = None
+    if half_t is None:
+        try:
+            from .halftime import detect_halftime
+            half_t = detect_halftime(match)
+        except Exception:
+            half_t = None
+    if half_t is not None:
+        first_min = half_t / fps / 60.0
+        second_min = (len(match.frames) - half_t) / fps / 60.0
+        if first_min >= 5.0 and second_min >= 5.0:
+            first_n = sum(1 for seq in seqs if seq.start_t < half_t)
+            halves = {
+                "first_per_min": round(first_n / first_min, 2),
+                "second_per_min": round((total - first_n) / second_min, 2),
+            }
     return {"available": True, "duration_min": round(duration_min, 1),
             "home_attacks": counts["home"], "away_attacks": counts["away"],
-            "per_min": round(per_min, 2), "label": label}
+            "per_min": round(per_min, 2), "label": label,
+            "halves": halves}

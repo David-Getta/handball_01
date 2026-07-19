@@ -828,14 +828,25 @@ def coach_summary(match: Match) -> dict:
                       "lassú": "türelmes építkezés — a felállt fal elleni "
                                "megoldások döntöttek",
                       "közepes": "kiegyensúlyozott tempó"}[pc["label"]]
-            sections.append({
-                "title": "Meccs-tempó",
-                "body": (f"{pc['label'].capitalize()} tempójú meccs: "
-                         f"{pc['per_min']:.1f} támadás/perc "
-                         f"({pc['home_attacks']} + {pc['away_attacks']} "
-                         f"támadás {pc['duration_min']:.0f} perc alatt) — "
-                         + flavor + "."),
-            })
+            body_pc = (f"{pc['label'].capitalize()} tempójú meccs: "
+                       f"{pc['per_min']:.1f} támadás/perc "
+                       f"({pc['home_attacks']} + {pc['away_attacks']} "
+                       f"támadás {pc['duration_min']:.0f} perc alatt) — "
+                       + flavor + ".")
+            # Félidei bontás: érdemi (20%+) tempó-változásnál mondjuk el.
+            hv = pc.get("halves")
+            if hv and hv["first_per_min"] > 0:
+                change = (hv["second_per_min"] - hv["first_per_min"]) \
+                    / hv["first_per_min"]
+                if change <= -0.2:
+                    body_pc += (f" A tempó a második félidőben esett: "
+                                f"{hv['first_per_min']:.1f} → "
+                                f"{hv['second_per_min']:.1f} támadás/perc.")
+                elif change >= 0.2:
+                    body_pc += (f" A meccs a második félidőben pörgött "
+                                f"fel: {hv['first_per_min']:.1f} → "
+                                f"{hv['second_per_min']:.1f} támadás/perc.")
+            sections.append({"title": "Meccs-tempó", "body": body_pc})
     except Exception:
         pass
 
