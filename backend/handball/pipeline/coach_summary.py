@@ -687,6 +687,19 @@ def _story_section(match: Match, home: str, away: str) -> dict | None:
                 pass
     except Exception:
         pass
+    # A meccs embere: a legeredményesebb azonosított lövő (3+ gólnál).
+    try:
+        from .xg import match_xg
+        best_sc = None
+        for rec in match_xg(match).get("shooters", []):
+            if best_sc is None or rec["goals"] > best_sc["goals"]:
+                best_sc = rec
+        if best_sc is not None and best_sc["goals"] >= 3:
+            name_sc = home if best_sc["team"] == "home" else away
+            body += (f" A meccs embere a(z) {best_sc['player_id']}. "
+                     f"játékos ({name_sc}) {best_sc['goals']} góllal.")
+    except Exception:
+        pass
     return {"title": "A meccs története", "body": body}
 
 
