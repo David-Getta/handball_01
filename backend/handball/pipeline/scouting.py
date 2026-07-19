@@ -411,6 +411,13 @@ def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) 
     # kapus ne "irányítóként" szerepeljen, csak mert nála is jár a labda.
     gk_tracks = {p.track_id for f in match.frames for p in f.players
                  if p.role == "kapus"}
+    # Poszt-becslés: a "mezőnyjátékos" helyett konkrét posztot írunk,
+    # ha van elég támadó-fázisú minta.
+    try:
+        from .roles import estimate_positions
+        est_pos = estimate_positions(match, config).get(team.value, {})
+    except Exception:
+        est_pos = {}
     rows: list[KeyPlayer] = []
     # A csapat játékosai: akiket többségében ehhez a csapathoz soroltunk.
     for tid, tteam in team_of.items():
@@ -420,6 +427,8 @@ def _key_players(match: Match, team: Team, config: TacticsConfig, top: int = 4) 
         dist = stats[tid].distance_m if tid in stats else 0.0
         role = ("kapus" if tid in gk_tracks
                 else "irányító" if pf > 0 else "mezőnyjátékos")
+        if role == "mezőnyjátékos" and tid in est_pos:
+            role = est_pos[tid]["poszt"]
         rows.append(KeyPlayer(track_id=tid, possession_frames=pf,
                               distance_m=round(dist, 1), role=role))
     # Rendezés: előbb a legtöbb labdabirtoklás, majd a legaktívabb.
