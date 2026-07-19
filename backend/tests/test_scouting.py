@@ -1638,3 +1638,22 @@ def test_pivot_key_from_positions():
                          positions={1: "beálló", 5: "beálló"})
     _, _, k2 = _coach_keys(two)
     assert not any("beállójuk" in k for k in k2)
+
+
+def test_wing_dependency_keys_and_combine():
+    """40%+ szélső-gólnál sáv-zárás kulcs; 10% alatt (ismert szélsőkkel)
+    szűkítés-kulcs; a számok összegződnek."""
+    from handball.pipeline.scouting import _coach_keys
+    heavy = ScoutingReport(team="away", team_name="X",
+                           wing_goals=4, wing_total_goals=8,
+                           positions={2: "szélső"})
+    _, _, k1 = _coach_keys(heavy)
+    assert any("szélsőik szerzik" in k for k in k1)
+    light = ScoutingReport(team="away", team_name="X",
+                           wing_goals=0, wing_total_goals=8,
+                           positions={2: "szélső"})
+    _, _, k2 = _coach_keys(light)
+    assert any("alig vannak játékban" in k for k in k2)
+    comb = combine_reports([heavy, light])
+    assert comb.wing_goals == 4
+    assert comb.wing_total_goals == 16
