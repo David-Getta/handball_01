@@ -863,14 +863,26 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
             except Exception:
                 eng = {}
 
+            try:
+                from .goalkeeper import empty_net_context
+                enc_all = empty_net_context(match)
+            except Exception:
+                enc_all = {}
+
             def _en_bal(t):
                 r = eng.get(t) or {}
                 sc = r.get("scored_7v6", 0)
                 co = r.get("conceded_empty", 0)
+                extra = ""
                 if sc or co:
-                    return (f" (mérleg: +{sc} dobott, "
-                            f"\u2212{co} kapott üres kapura)")
-                return ""
+                    extra = (f" (mérleg: +{sc} dobott, "
+                             f"\u2212{co} kapott üres kapura)")
+                # Időzítés-minta: jellemzően hátrányban nyúlnak hozzá?
+                enc = enc_all.get(t) or {}
+                if (enc.get("windows", 0) >= 2
+                        and enc.get("trailing", 0) / enc["windows"] >= 0.7):
+                    extra += " — jellemzően hátrányban indítva"
+                return extra
             lis = "".join(
                 f"<li>{team_names.get(t, t)}: összesen {s_:.0f} mp "
                 f"lehozott kapussal{_en_bal(t)}</li>"
