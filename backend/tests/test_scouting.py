@@ -1353,3 +1353,19 @@ def test_match_key_players_big_save_keeper_role():
     assert role is not None
     assert role["player_id"] == 30
     assert "2 fogott ziccer" in role["detail"]
+
+
+def test_gk_xg_saved_strength_and_combine():
+    """Meccsenként 1,0+ hárított xG erősségként jelenik meg; az összeg
+    meccsek közt pontosan adódik."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="X", matches=2,
+                         gk_xg_saved=2.6)
+    strengths, _, _ = _coach_keys(rep)
+    assert any("nehéz lövéseket is fogja" in x for x in strengths)
+    low = ScoutingReport(team="away", team_name="X", matches=2,
+                         gk_xg_saved=1.0)
+    s2, _, _ = _coach_keys(low)
+    assert not any("nehéz lövéseket" in x for x in s2)
+    comb = combine_reports([rep, low])
+    assert abs(comb.gk_xg_saved - 3.6) < 1e-6
