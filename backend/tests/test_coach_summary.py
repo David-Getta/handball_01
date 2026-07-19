@@ -75,3 +75,34 @@ def test_empty_match_degrades_gracefully():
     data = coach_summary(m)
     assert data["sections"] == []
     assert coach_summary_text(m) == ""
+
+
+def test_key_players_section_lists_top_shooter():
+    """A 3+ lövéses fő lövő a Kulcsemberek szekcióban is megjelenik."""
+    from handball.models.tracking import (Ball, Frame, PlayerPosition,
+                                          PositionSource, Team)
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(4):
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="kpc", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    data = coach_summary(m)
+    sec = next((s_ for s_ in data["sections"]
+                if s_["title"] == "Kulcsemberek"), None)
+    assert sec is not None
+    assert "fő lövő" in sec["body"]
+    assert "1. játékos" in sec["body"]

@@ -818,6 +818,25 @@ def coach_summary(match: Match) -> dict:
     except Exception:
         pass
 
+    # Kulcsemberek: kinél dőlt el a meccs — szereponként egy név.
+    try:
+        from .scouting import match_key_players
+        kp = match_key_players(match)
+        names_kp = {"home": home, "away": away}
+        parts_kp = []
+        for side in ("home", "away"):
+            items = kp.get(side) or []
+            if items:
+                inner = ", ".join(
+                    f"{it['role'].lower()}: {it['player_id']}. játékos "
+                    f"({it['detail']})" for it in items)
+                parts_kp.append(f"{names_kp[side]} — {inner}")
+        if parts_kp:
+            sections.append({"title": "Kulcsemberek",
+                             "body": "; ".join(parts_kp) + "."})
+    except Exception:
+        pass
+
     # Meccs-tempó: támadás/perc — a meccs karaktere egy számban.
     try:
         from .attack_types import match_pace
