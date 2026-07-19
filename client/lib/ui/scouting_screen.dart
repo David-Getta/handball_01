@@ -384,6 +384,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átlag ${avg.toStringAsFixed(0)} mp";
   }
 
+  // Tempó-profil: támadás/perc (20+ mért percnél; a kulcsokkal azonos
+  // 1,1 / 0,7 küszöbök adnak címkét).
+  String? _pace(Map<String, dynamic> r) {
+    final attacks = ((r["pace_attacks"] as num?) ?? 0).toInt();
+    final minutes = ((r["pace_minutes"] as num?) ?? 0).toDouble();
+    if (minutes < 20.0) return null;
+    final perMin = attacks / minutes;
+    final label = perMin >= 1.1
+        ? "tempós"
+        : perMin <= 0.7
+            ? "lassú"
+            : "közepes";
+    return "${perMin.toStringAsFixed(1)}/perc · $label";
+  }
+
   // A fal kulcsa: a legtöbb blokkot jegyző védő (3+ blokk, mint a
   // kulcsokban).
   String? _topBlocker(Map<String, dynamic> r) {
@@ -626,6 +641,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_fbFinisher(r) != null) ["Kontra-befejező", _fbFinisher(r)!],
       if (_outletTarget(r) != null)
         ["Indítás-célpont", _outletTarget(r)!],
+      if (_pace(r) != null) ["Tempó", _pace(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
