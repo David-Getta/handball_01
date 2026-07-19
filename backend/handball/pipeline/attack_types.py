@@ -364,3 +364,48 @@ def attack_origins(match: Match,
         if hit:
             rec["goals"] += 1
     return out
+
+
+# Előny-kezelés: ennyi mérhető támadás kell mindkét állás-helyzetben.
+SCORE_PACE_MIN_ATTACKS = 3
+
+
+def pace_by_score(match, config=None) -> dict:
+    """Támadás-hossz állás szerint: mit csinál a csapat előnyben és
+    hátrányban.
+
+    Minden támadás-szakaszhoz megnézzük a támadó csapat gólkülönbségét
+    a szakasz kezdetén (vezet / hátrányban / döntetlen), és állásonként
+    átlagoljuk a szakasz hosszát. A vezetésnél elnyúló támadás =
+    időhúzás; a hátrányban rövidülő = kapkodás — mindkettő edzői jel.
+
+    Visszatérés csapatonként: {"leading"/"trailing"/"level":
+    {"attacks", "sum_s", "avg_s"}} — avg_s None, ha nincs elég minta.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    out = {side: {k: {"attacks": 0, "sum_s": 0.0, "avg_s": None}
+                  for k in ("leading", "trailing", "level")}
+           for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        own = sum(1 for (t, tm) in goals if t < seq.start_t and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < seq.start_t and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        rec = out[side][state]
+        rec["attacks"] += 1
+        rec["sum_s"] += (seq.end_t - seq.start_t + 1) / fps
+    for side in ("home", "away"):
+        for rec in out[side].values():
+            if rec["attacks"] >= SCORE_PACE_MIN_ATTACKS:
+                rec["avg_s"] = round(rec["sum_s"] / rec["attacks"], 1)
+            rec["sum_s"] = round(rec["sum_s"], 1)
+    return out
