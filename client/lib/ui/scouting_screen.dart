@@ -42,6 +42,7 @@ class ScoutingScreen extends StatefulWidget {
 class _ScoutingScreenState extends State<ScoutingScreen> {
   final ApiClient _api = ApiClient();
   late String _team = widget.team;
+  List<String> _matchup = const [];
   Map<String, dynamic>? _report;
   // Figura-egyezés a mentett könyvtárral (csak egy-meccses módban töltjük).
   Map<String, dynamic>? _playbookMatch;
@@ -73,10 +74,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           pm = null; // enélkül is teljes a jelentés
         }
       }
+      // Meccsterv: a MI profilunk (ugyanezen meccsek másik oldala)
+      // keresztezve az ellenfélével — enélkül is teljes a jelentés.
+      List<String> matchup = const [];
+      try {
+        final oppItems = widget.items ??
+            [
+              {"match_id": widget.matchId, "team": _team}
+            ];
+        final ownItems = [
+          for (final it in oppItems)
+            {
+              "match_id": it["match_id"],
+              "team": (it["team"] == "home") ? "away" : "home",
+            }
+        ];
+        matchup = await _api.fetchMatchupPlan(ownItems, oppItems);
+      } catch (_) {
+        matchup = const [];
+      }
       if (!mounted) return;
       setState(() {
         _report = r;
         _playbookMatch = pm;
+        _matchup = matchup;
         _loading = false;
       });
     } catch (e) {
@@ -208,6 +229,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
           const SizedBox(height: AppSpacing.lg),
         ],
         _keysCard(r),
+        if (_matchup.isNotEmpty) _matchupCard(),
         const SizedBox(height: AppSpacing.lg),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: _listCard("ERŐSSÉGEK", r["strengths"], AppColors.accent, Icons.trending_up)),
@@ -264,6 +286,39 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   /// A LEGFONTOSABB kártya: hogyan játssz ellenük.
+  // Meccsterv: páros-specifikus tanácsok — a mi profilunk és az övék
+  // keresztezéséből (POST /scouting/matchup).
+  Widget _matchupCard() {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("MECCSTERV (A KETTŐNK PÁROSÍTÁSA)",
+                style: AppText.sectionLabel
+                    .copyWith(color: AppColors.accent)),
+            const SizedBox(height: AppSpacing.sm),
+            for (final p in _matchup)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text("• $p",
+                    style: AppText.label.copyWith(
+                        fontSize: 12.5, color: AppColors.textPrimary)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _keysCard(Map<String, dynamic> r) {
     final keys = (r["keys_to_game"] as List?) ?? const [];
     return Container(

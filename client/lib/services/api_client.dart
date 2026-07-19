@@ -466,6 +466,26 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Meccsterv-illesztés (POST /scouting/matchup): a saját és az
+  /// ellenfél-profil keresztezéséből páros-specifikus tanácsok.
+  Future<List<String>> fetchMatchupPlan(
+      List<Map<String, dynamic>> ownItems,
+      List<Map<String, dynamic>> oppItems) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/matchup"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "own": {"items": ownItems},
+        "opp": {"items": oppItems},
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a meccsterv: HTTP ${resp.statusCode}");
+    }
+    final data = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return ((data["plan"] as List?) ?? const []).cast<String>();
+  }
+
   /// Az egyesített felderítés nyomtatható HTML-je (POST /scouting/export).
   Future<Uint8List> fetchCombinedScoutingExport(
       List<Map<String, String>> items) async {
