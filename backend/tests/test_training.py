@@ -561,3 +561,33 @@ def test_slow_recovery_triggers_transition_focus():
                  if it["title"] == "Visszarendeződés-tempó"), None)
     assert item is not None
     assert "felálló védelemig" in item["why"]
+
+
+def test_unused_wings_trigger_width_focus():
+    """Ha a felállásban vannak szélsők, de a gólok mind középről jönnek,
+    Szélső-játék fókusz születik."""
+    frames = []
+    t = 0
+    # Birtoklás-fázis: szélsők a sávban, a lövő középen (poszt-minta).
+    for _ in range(150):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 33.0, 10.0),
+            _pl(2, Team.HOME, 36.0, 2.0),
+            _pl(7, Team.HOME, 36.0, 18.0),
+        ], ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+        t += 1
+    # 6 gól, mind az 1-estől (középről).
+    for _ in range(6):
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    tf = training_focus(Match(_meta(), frames))
+    item = next((it for it in tf["home"]
+                 if it["title"] == "Szélső-játék bevonása"), None)
+    assert item is not None
+    assert "6 gólból csak 0" in item["why"]
