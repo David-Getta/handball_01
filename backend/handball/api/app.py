@@ -1205,6 +1205,18 @@ def create_app():
                                for bs in big_saves(match)]
                     except Exception:
                         pass
+                if "block" in types:
+                    # Blokkolt lövések: a fal munkája — a blokkoló
+                    # csapathoz írva.
+                    try:
+                        from ..pipeline.defense import detect_blocks
+                        blk = detect_blocks(match)
+                        for side in ("home", "away"):
+                            ev += [{"t": e_["t"], "type": "block",
+                                    "team": side}
+                                   for e_ in blk[side].get("events", [])]
+                    except Exception:
+                        pass
                 if "turning_point" in types:
                     # A meccs fordulópontja: a győzelmi esély legnagyobb
                     # billenésének pillanata (ha volt legalább 2 gól).

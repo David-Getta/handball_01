@@ -190,3 +190,16 @@ def test_turning_point_clip_gets_hungarian_name(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "fordulopont" in names
+
+
+def test_block_clip_gets_hungarian_name(tmp_path):
+    """A blokk klip-típus magyar fájlnevet kap (blokk)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 50, "type": "block", "team": "away"}]
+    res = export_event_clips(m, events, {"block"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "blokk" in names

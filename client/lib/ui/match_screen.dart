@@ -653,6 +653,15 @@ class _MatchScreenState extends State<MatchScreen> {
                     _exportClips(match, typesOverride: ["turning_point"]),
             icon: const Icon(Icons.trending_up, color: AppColors.gold),
           ),
+          // Blokkolt lövések: a fal munkája — a blokk-technika és a
+          // fal-állás visszanézéséhez.
+          IconButton(
+            tooltip: "Blokk klipek (a falon elakadt lövések)",
+            onPressed: _exportingClips
+                ? null
+                : () => _exportClips(match, typesOverride: ["block"]),
+            icon: const Icon(Icons.front_hand, color: AppColors.accent),
+          ),
         ]),
       ),
       Expanded(
