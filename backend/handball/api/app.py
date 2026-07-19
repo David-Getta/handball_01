@@ -2073,6 +2073,11 @@ def create_app():
                 _layer("big_saves", lambda: big_saves(match))
                 _layer("missed_big_chances",
                        lambda: missed_big_chances(match))
+                from ..pipeline.attack_types import attack_origins
+                from ..pipeline.xg import xg_prevented, xg_saved
+                _layer("xg_saved", lambda: xg_saved(match))
+                _layer("xg_prevented", lambda: xg_prevented(match))
+                _layer("attack_origins", lambda: attack_origins(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

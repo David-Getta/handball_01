@@ -74,7 +74,8 @@ def test_package_without_video_contains_report_and_csv():
                 "possession", "outlets", "empty_net_goals",
                 "empty_net_context", "fast_break_finishers",
                 "key_players", "pace", "late_subs", "big_saves",
-                "missed_big_chances"):
+                "missed_big_chances", "xg_saved", "xg_prevented",
+                "attack_origins"):
         assert key in analyses, key
     # Az edzői összefoglaló sima szövegként is (osszefoglalo.txt).
     assert "osszefoglalo.txt" in names
