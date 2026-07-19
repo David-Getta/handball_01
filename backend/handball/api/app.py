@@ -1611,6 +1611,15 @@ def create_app():
                 fastest_kmh = fastest["speed_kmh"]
         except Exception:
             pass
+        xg_saved_home = xg_saved_away = None
+        try:
+            from ..pipeline.xg import xg_saved
+            xs = xg_saved(m)
+            if xs["home"] or xs["away"]:
+                xg_saved_home = xs["home"]
+                xg_saved_away = xs["away"]
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -1636,6 +1645,8 @@ def create_app():
             "blocks_home": blocks_home,
             "blocks_away": blocks_away,
             "fastest_kmh": fastest_kmh,
+            "xg_saved_home": xg_saved_home,
+            "xg_saved_away": xg_saved_away,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out

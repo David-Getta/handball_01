@@ -755,6 +755,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             "Blokkolt lövés (H–V)",
             pair(m["blocks_home"], m["blocks_away"])
           ],
+          // Hárított xG: a kapusok nehézség-súlyozott védés-mérlege.
+          [
+            "Hárított xG (H–V)",
+            m["xg_saved_home"] == null
+                ? "—"
+                : "${(m["xg_saved_home"] as num).toStringAsFixed(1)} – "
+                    "${((m["xg_saved_away"] as num?) ?? 0).toStringAsFixed(1)}"
+          ],
           [
             "Leggyorsabb lövés",
             m["fastest_kmh"] == null
