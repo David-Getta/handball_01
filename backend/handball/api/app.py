@@ -1205,6 +1205,17 @@ def create_app():
                                for bs in big_saves(match)]
                     except Exception:
                         pass
+                if "empty_net" in types:
+                    # 7 a 6 szakaszok: a lehozott kapusos játék jelenetei
+                    # — a saját végrehajtás és az ellenfél szokásainak
+                    # visszanézéséhez.
+                    try:
+                        from ..pipeline.goalkeeper import detect_empty_net
+                        ev += [{"t": w["start_frame"], "type": "empty_net",
+                                "team": w["team"]}
+                               for w in detect_empty_net(match)]
+                    except Exception:
+                        pass
                 if "top_shooter" in types:
                     # A fő lövő lövései: csapatonként a legtöbbet lövő
                     # azonosított játékos minden lövése — felderítési

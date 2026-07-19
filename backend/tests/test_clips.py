@@ -162,3 +162,18 @@ def test_top_shooter_clip_gets_hungarian_name(tmp_path):
         names = " ".join(z.namelist())
     assert "fo-lovo" in names
     assert "gol" not in names
+
+
+def test_empty_net_clip_gets_hungarian_name(tmp_path):
+    """A 7 a 6 klip-típus magyar fájlnevet kap (het-a-hat)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 40, "type": "empty_net", "team": "home"},
+              {"t": 80, "type": "goal", "team": "home"}]
+    res = export_event_clips(m, events, {"empty_net"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "het-a-hat" in names
+    assert "gol" not in names
