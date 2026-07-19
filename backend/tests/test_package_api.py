@@ -77,6 +77,13 @@ def test_package_without_video_contains_report_and_csv():
                 "missed_big_chances", "xg_saved", "xg_prevented",
                 "attack_origins", "recovery", "positions"):
         assert key in analyses, key
+    # Az edzésterv pontosan akkor van a csomagban, ha van fókusz.
+    tf_pkg = analyses.get("training") or {}
+    has_focus = any((tf_pkg.get(s_) or []) for s_ in ("home", "away"))
+    assert ("edzesterv.txt" in names) == has_focus
+    if has_focus:
+        etxt = z.read("edzesterv.txt").decode("utf-8")
+        assert "gyakorlat:" in etxt
     # Az edzői összefoglaló sima szövegként is (osszefoglalo.txt).
     assert "osszefoglalo.txt" in names
     txt = z.read("osszefoglalo.txt").decode("utf-8")

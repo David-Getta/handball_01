@@ -2148,6 +2148,28 @@ def create_app():
                     if summary_txt:
                         z.writestr("osszefoglalo.txt",
                                    summary_txt.encode("utf-8"))
+                    # Edzésterv sima szövegként: fókuszok indoklással
+                    # és gyakorlatokkal, csapatonként.
+                    tf_pkg = analyses.get("training") or {}
+                    tl_lines = []
+                    for side, name in (("home", match.meta.home_team),
+                                       ("away", match.meta.away_team)):
+                        items = tf_pkg.get(side) or []
+                        if not items:
+                            continue
+                        tl_lines += [name, "=" * len(name)]
+                        for it in items:
+                            tl_lines.append(
+                                f"- {it.get('title', '')} "
+                                f"({it.get('area', '')})")
+                            tl_lines.append(
+                                f"  miért: {it.get('why', '')}")
+                            tl_lines.append(
+                                f"  gyakorlat: {it.get('drill', '')}")
+                        tl_lines.append("")
+                    if tl_lines:
+                        z.writestr("edzesterv.txt",
+                                   "\n".join(tl_lines).encode("utf-8"))
                     if clips_zip is not None and clips_zip.exists():
                         z.write(clips_zip, "klipek.zip")
                 job["status"] = "done"
