@@ -634,6 +634,15 @@ class _MatchScreenState extends State<MatchScreen> {
                     _exportClips(match, typesOverride: ["top_shooter"]),
             icon: const Icon(Icons.person_search, color: AppColors.gold),
           ),
+          // 7 a 6: a lehozott kapusos szakaszok — végrehajtás-ellenőrzés
+          // és az ellenfél szokásainak visszanézése.
+          IconButton(
+            tooltip: "7 a 6 klipek (lehozott kapusos szakaszok)",
+            onPressed: _exportingClips
+                ? null
+                : () => _exportClips(match, typesOverride: ["empty_net"]),
+            icon: const Icon(Icons.groups, color: AppColors.accent),
+          ),
         ]),
       ),
       Expanded(
