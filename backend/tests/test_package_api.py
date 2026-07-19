@@ -115,3 +115,18 @@ if __name__ == "__main__":
     test_package_without_video_contains_report_and_csv()
     test_package_download_404_before_export()
     print("Minden csomag-export teszt OK.")
+
+
+def test_scouting_matchup_endpoint():
+    """A meccsterv-végpont a két kombinált profilból tervet ad vissza."""
+    client, mid = _client_with_match()
+    body = {"own": {"items": [{"match_id": mid, "team": "home"}]},
+            "opp": {"items": [{"match_id": mid, "team": "away"}]}}
+    r = client.post("/scouting/matchup", json=body)
+    assert r.status_code == 200
+    data = r.json()
+    assert "plan" in data and isinstance(data["plan"], list)
+    # Hiányzó oldal → 400.
+    r2 = client.post("/scouting/matchup",
+                     json={"own": {"items": []}})
+    assert r2.status_code == 400
