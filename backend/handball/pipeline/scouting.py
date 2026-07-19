@@ -203,6 +203,9 @@ class ScoutingReport:
     # Gólpassz-párok: [{"from", "to", "goals"}] — ki kinek készíti elő a
     # góljaikat; párokként meccsek közt összegezhető.
     assist_pairs: list = field(default_factory=list)
+    # Befejezés-többlet lövőnként: [{"player_id", "diff"}] — gól − xG;
+    # játékosonként meccsek közt összegezhető.
+    shooter_overperf: list = field(default_factory=list)
     # Blokkolóik: [{"player_id", "blocks"}] — ki tartja a falukat;
     # játékosonként meccsek közt összegezhető.
     blockers: list = field(default_factory=list)
@@ -758,6 +761,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 and top_s["goals"] / top_s["attempts"] <= 0.5):
             sent7 += " A mérlege gyenge: a kapus bátran vállalhat mozgást."
         keys.append(sent7)
+    # Hidegvérű befejező: aki tartósan a helyzetei felett teljesít,
+    # annak a fél-helyzeteit sem szabad megengedni.
+    if rep.shooter_overperf and rep.shooter_overperf[0]["diff"] >= 1.0:
+        top_o = rep.shooter_overperf[0]
+        keys.append(
+            f"A(z) {top_o['player_id']}. játékos a helyzetei FELETT "
+            f"teljesít ({top_o['diff']:+.1f} gól az xG-hez képest) — ne "
+            "hagyd tisztán: a fél-helyzetét is belövi.")
     # A kontra befejezője: ha a lerohanás-gólok zömét ugyanaz a játékos
     # szerzi, a visszafutásnál ő az első számú felvevendő ember.
     if rep.fb_finishers and rep.fb_finishers[0]["goals"] >= 2:
@@ -1048,6 +1059,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         from .event_detection import assist_network
         rep.assist_pairs = [dict(pr) for pr in
                             assist_network(match, config)[team.value]["pairs"]]
+        rep.shooter_overperf = [
+            {"player_id": rec["player_id"], "diff": rec["diff"]}
+            for rec in match_xg(match, config).get("shooters", [])
+            if rec["team"] == team.value]
     except Exception:
         pass
     try:
@@ -1384,6 +1399,17 @@ def _merge_blockers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_shooter_overperf(reports) -> list:
+    """Lövőnkénti befejezés-többlet (gól − xG) pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for rec in (r.shooter_overperf or []):
+            tally[rec["player_id"]] = round(
+                tally.get(rec["player_id"], 0.0) + float(rec["diff"]), 2)
+    return [{"player_id": pid, "diff": d}
+            for pid, d in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_assist_pairs(reports) -> list:
     """(gólpasszoló, lövő) párok gólszámainak pontos összegzése."""
     tally: dict = {}
@@ -1490,6 +1516,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),
+        shooter_overperf=_merge_shooter_overperf(reports),
         blockers=_merge_blockers(reports),
         gk_outlet_targets=_merge_outlet_targets(reports),
         fb_finishers=_merge_fb_finishers(reports),
