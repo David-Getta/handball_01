@@ -1429,3 +1429,38 @@ def test_shooter_overperf_key_and_merge():
     assert not any("FELETT" in k for k in k2)
     merged = _merge_shooter_overperf([rep, small])
     assert merged[0] == {"player_id": 7, "diff": 1.8}
+
+
+def test_match_key_players_cold_finisher_role():
+    """A +1,0 fölötti befejezés-többletű lövő "Hidegvérű befejező"
+    szerepet kap."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource)
+    from handball.pipeline.scouting import match_key_players
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    # 4 távoli (kis xG-jű) gól ugyanattól a lövőtől: diff = 4 − ~kis xG.
+    frames = []
+    t = 0
+    for _ in range(4):
+        for i in range(10):
+            frames.append(Frame(t=t, players=[pl(1, 28.0, 4.0)],
+                                ball=Ball(x=min(28.5 + 1.3 * i, 40.0),
+                                          y=4.0 + min(0.65 * i, 6.0),
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="cf", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    kp = match_key_players(m)
+    role = next((it for it in kp["home"]
+                 if it["role"] == "Hidegvérű befejező"), None)
+    assert role is not None
+    assert role["player_id"] == 1
+    assert "xG-hez képest" in role["detail"]

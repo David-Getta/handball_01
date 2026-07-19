@@ -1322,6 +1322,21 @@ def match_key_players(match: Match, config=None) -> dict:
     except Exception:
         pass
     try:
+        from .xg import match_xg as _mxg_kp
+        r_kp = _mxg_kp(match, config)
+        for side in ("home", "away"):
+            best = None
+            for rec in r_kp.get("shooters", []):
+                if rec["team"] != side:
+                    continue
+                if best is None or rec["diff"] > best["diff"]:
+                    best = rec
+            if best is not None and best["diff"] >= 1.0:
+                add(side, "Hidegvérű befejező", best["player_id"],
+                    f"{best['diff']:+.1f} gól az xG-hez képest")
+    except Exception:
+        pass
+    try:
         from .goalkeeper import goalkeeper_stats
         from .xg import big_saves
         gstats = goalkeeper_stats(match)
