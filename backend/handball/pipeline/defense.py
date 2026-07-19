@@ -255,7 +255,8 @@ def detect_blocks(match, config=None) -> dict:
     mellett. Ezt a védekező csapat blokkjának számoljuk, a blokkolóval.
 
     Visszatérés: {"home"/"away": {"blocks", "blockers":
-    [{"player_id","blocks"}]}} — a kulcs a BLOKKOLÓ (védekező) csapat.
+    [{"player_id","blocks"}], "events": [{"t","player_id"}]}} — a kulcs
+    a BLOKKOLÓ (védekező) csapat; az events a klip-exporthoz ad időt.
     """
     from ..models.tracking import Team
     from .event_detection import _attacking_team_for_goal
@@ -264,7 +265,8 @@ def detect_blocks(match, config=None) -> dict:
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     frames = match.frames
-    out = {side: {"blocks": 0, "blockers": {}} for side in ("home", "away")}
+    out = {side: {"blocks": 0, "blockers": {}, "events": []}
+           for side in ("home", "away")}
     last_block_t = -10**9
 
     for i in range(1, len(frames) - 1):
@@ -295,6 +297,7 @@ def detect_blocks(match, config=None) -> dict:
                 rec = out[defending.value]
                 rec["blocks"] += 1
                 rec["blockers"][best[0]] = rec["blockers"].get(best[0], 0) + 1
+                rec["events"].append({"t": f1.t, "player_id": best[0]})
                 last_block_t = f1.t
 
     for rec in out.values():
