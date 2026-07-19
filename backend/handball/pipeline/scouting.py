@@ -197,6 +197,11 @@ class ScoutingReport:
     # Támadás-eredet: {eredet: {"attacks", "goals"}} — honnan indulnak
     # (középkezdés/kidobás/labdaszerzés); eredetenként összegződik.
     attack_origins: dict = field(default_factory=dict)
+    # Visszarendeződés: mért átmenetek, összidő és a lassúak (5 mp+)
+    # száma — az átlag több meccsre pontosan visszaszámolható.
+    rec_transitions: int = 0
+    rec_sum_s: float = 0.0
+    rec_slow: int = 0
     # Lövő-szokások: [{"player_id", "zone", "shots"}] — honnan lőnek a
     # játékosaik; (játékos, zóna) párokként meccsek közt összegezhető.
     shooter_zones: list = field(default_factory=list)
@@ -764,6 +769,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 and top_s["goals"] / top_s["attempts"] <= 0.5):
             sent7 += " A mérlege gyenge: a kapus bátran vállalhat mozgást."
         keys.append(sent7)
+    # Visszarendeződés: lassú védelem ellen a gyors indítás a fegyver.
+    if rep.rec_transitions >= 4:
+        rec_avg = rep.rec_sum_s / rep.rec_transitions
+        if rec_avg >= 5.0:
+            keys.append(
+                f"Lassan rendeződnek vissza (átlag {rec_avg:.1f} mp a "
+                "felálló védelemig) — labdaszerzés után AZONNAL indíts: "
+                "az első 5 másodperc a tiéd.")
+        elif rec_avg <= 3.0:
+            keys.append(
+                f"Villámgyorsan visszaérnek (átlag {rec_avg:.1f} mp) — "
+                "a kontra ellenük ritkán jön össze, építs türelmes "
+                "felállt támadásra.")
     # Támadás-eredet: ha a góljaik jelentős része labdaszerzésből jön,
     # a labdabiztonság ellenük duplán számít.
     ao = rep.attack_origins or {}
@@ -1016,6 +1034,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.attack_origins = {
             k: dict(v) for k, v in
             attack_origins(match, config)[team.value].items()}
+        from .defense import transition_recovery
+        trr = transition_recovery(match, config)[team.value]
+        rep.rec_transitions = trr["transitions"]
+        rep.rec_sum_s = trr["sum_s"]
+        rep.rec_slow = trr["slow"]
     except Exception:
         pass
     try:
@@ -1571,6 +1594,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pace_attacks=sum(r.pace_attacks for r in reports),
         pace_minutes=round(sum(r.pace_minutes for r in reports), 1),
         attack_origins=_merge_attack_origins(reports),
+        rec_transitions=sum(r.rec_transitions for r in reports),
+        rec_sum_s=round(sum(r.rec_sum_s for r in reports), 1),
+        rec_slow=sum(r.rec_slow for r in reports),
         shooter_zones=_merge_shooter_zones(reports),
         shooter_fades=_merge_shooter_fades(reports),
         assist_pairs=_merge_assist_pairs(reports),

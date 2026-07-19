@@ -1523,3 +1523,21 @@ def test_attack_origin_in_narrative():
     secs = scouting_narrative(rep)
     body = " ".join(x["body"] for x in secs)
     assert "fő forrása: labdaszerzés" in body
+
+
+def test_recovery_keys_and_combine():
+    """Lassú visszarendeződés → "azonnal indíts" kulcs; gyors →
+    "türelmes felállt támadás"; a számok összegződnek."""
+    from handball.pipeline.scouting import _coach_keys
+    slow = ScoutingReport(team="away", team_name="X",
+                          rec_transitions=6, rec_sum_s=36.0, rec_slow=4)
+    _, _, k1 = _coach_keys(slow)
+    assert any("Lassan rendeződnek vissza" in k for k in k1)
+    fast = ScoutingReport(team="away", team_name="X",
+                          rec_transitions=6, rec_sum_s=12.0, rec_slow=0)
+    _, _, k2 = _coach_keys(fast)
+    assert any("Villámgyorsan visszaérnek" in k for k in k2)
+    comb = combine_reports([slow, fast])
+    assert comb.rec_transitions == 12
+    assert abs(comb.rec_sum_s - 48.0) < 1e-6
+    assert comb.rec_slow == 4
