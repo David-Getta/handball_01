@@ -178,3 +178,27 @@ def xg_saved(match: Match, config: Optional[XGConfig] = None) -> dict:
         if sh.get("outcome") == "save":
             out["away" if sh["team"] == "home" else "home"] += sh["xg"]
     return {k: round(v, 2) for k, v in out.items()}
+
+
+def xg_prevented(match: Match, config: Optional[XGConfig] = None) -> dict:
+    """Megmentett gólok (GSAx): a kapura tartó lövések összesített
+    helyzet-értéke MÍNUSZ a ténylegesen kapott gólok, a védő oldalon.
+
+    Pozitív: a kapus a helyzetekhez képest kevesebbet kapott (jó forma);
+    negatív: többet kapott a vártnál. A mellé menő lövés nem számít —
+    az nem a kapus érdeme.
+
+    Visszatérés: {"home"/"away": {"faced_xg", "conceded", "prevented"}}.
+    """
+    out = {side: {"faced_xg": 0.0, "conceded": 0, "prevented": 0.0}
+           for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") not in ("save", "goal"):
+            continue
+        rec = out["away" if sh["team"] == "home" else "home"]
+        rec["faced_xg"] += sh["xg"]
+        rec["conceded"] += int(sh["outcome"] == "goal")
+    for rec in out.values():
+        rec["faced_xg"] = round(rec["faced_xg"], 2)
+        rec["prevented"] = round(rec["faced_xg"] - rec["conceded"], 2)
+    return out

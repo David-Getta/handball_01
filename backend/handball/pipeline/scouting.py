@@ -164,6 +164,9 @@ class ScoutingReport:
     # Hárított xG: a fogott lövések helyzet-értékének összege — a nehéz
     # védések súlyozott mutatója; meccsek közt összegződik.
     gk_xg_saved: float = 0.0
+    # Megmentett gólok (GSAx): kapura tartó xG mínusz kapott gól —
+    # negatív, ha a kapusuk a vártnál többet kap; összegződik.
+    gk_xg_prevented: float = 0.0
     # Ziccer-mérlegük: nagy xG-jű helyzeteik száma és a gól nélkül maradtak
     # — meccsek közt összegződik, az arány mindig visszaszámolható.
     big_total: int = 0
@@ -714,6 +717,12 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         elif save_pct <= 20.0:
             weaknesses.append(f"Bizonytalan kapus ({save_pct:.0f}% védés) — "
                               "érdemes kapura menni.")
+    # Megmentett gólok: ha a kapusuk a vártnál többet kap, támadható.
+    if rep.gk_xg_prevented / max(1, rep.matches) <= -1.0:
+        weaknesses.append(
+            f"Kapusuk a helyzetekhez képest sokat kap "
+            f"({rep.gk_xg_prevented / rep.matches:+.1f} gól/meccs a "
+            "várthoz képest) — a kapura lövés kifizetődő.")
     # Hárított xG: a kapusuk a nehéz lövéseket is fogja-e.
     if rep.gk_xg_saved / max(1, rep.matches) >= 1.0:
         strengths.append(
@@ -1008,6 +1017,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                                if b["team"] != team.value)
         from .xg import xg_saved
         rep.gk_xg_saved = xg_saved(match, config)[team.value]
+        from .xg import xg_prevented
+        rep.gk_xg_prevented = xg_prevented(
+            match, config)[team.value]["prevented"]
         from .goalkeeper import outlet_speed
         orec = outlet_speed(match, config)[team.value]
         rep.gk_outlets = orec["outlets"]
@@ -1462,6 +1474,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gk_saves=sum(r.gk_saves for r in reports),
         gk_big_saves=sum(r.gk_big_saves for r in reports),
         gk_xg_saved=round(sum(r.gk_xg_saved for r in reports), 2),
+        gk_xg_prevented=round(sum(r.gk_xg_prevented for r in reports), 2),
         gk_outlets=sum(r.gk_outlets for r in reports),
         gk_outlet_sum_s=round(sum(r.gk_outlet_sum_s for r in reports), 1),
         gk_outlet_fast=sum(r.gk_outlet_fast for r in reports),
