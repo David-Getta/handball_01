@@ -807,6 +807,27 @@ def coach_summary(match: Match) -> dict:
     except Exception:
         pass
 
+    # Meccs-tempó: támadás/perc — a meccs karaktere egy számban.
+    try:
+        from .attack_types import match_pace
+        pc = match_pace(match)
+        if pc.get("available"):
+            flavor = {"gyors": "oda-vissza játék — a kontra-védekezés és "
+                               "a cserék frissessége döntött",
+                      "lassú": "türelmes építkezés — a felállt fal elleni "
+                               "megoldások döntöttek",
+                      "közepes": "kiegyensúlyozott tempó"}[pc["label"]]
+            sections.append({
+                "title": "Meccs-tempó",
+                "body": (f"{pc['label'].capitalize()} tempójú meccs: "
+                         f"{pc['per_min']:.1f} támadás/perc "
+                         f"({pc['home_attacks']} + {pc['away_attacks']} "
+                         f"támadás {pc['duration_min']:.0f} perc alatt) — "
+                         + flavor + "."),
+            })
+    except Exception:
+        pass
+
     # 7 a 6 elleni (üres kapus) szakaszok — ha voltak, külön szekció + jelzés.
     try:
         from .goalkeeper import detect_empty_net
