@@ -1807,6 +1807,15 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
                      f"(a lövéseik {100.0 * rec['shots'] / total:.0f}%-a).")
         if rep.turnovers:
             body += f" Labdaeladásuk: {rep.turnovers}."
+        # Lövés-választás: válogatósak vagy távolról is vállalkoznak.
+        if rep.shots >= 10 and rep.xg > 0:
+            avg_xg = rep.xg / rep.shots
+            if avg_xg <= 0.10:
+                body += (f" Sok kis esélyű lövést vállalnak (átlag "
+                         f"{avg_xg:.2f} xG/lövés).")
+            elif avg_xg >= 0.18:
+                body += (f" Válogatósak: csak jó helyzetből lőnek "
+                         f"(átlag {avg_xg:.2f} xG/lövés).")
         out.append({"title": "Befejezésük", "body": body})
 
     # Kapusuk: védés-hatékonyság, csak érdemi mintánál (>=4 kapura tartó).
