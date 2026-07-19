@@ -978,3 +978,17 @@ def test_gk_outlet_key_and_combine():
     assert comb.gk_outlets == 8
     assert comb.gk_outlet_fast == 6
     assert abs(comb.gk_outlet_sum_s - 32.0) < 1e-6
+
+
+def test_empty_net_conceded_weakness_and_combine():
+    """2+ üres kapura kapott gól → gyengeség a felderítésben; a szám
+    meccsek közt összegződik."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="X", empty_net_conceded=2)
+    _, weaknesses, _ = _coach_keys(rep)
+    assert any("üres kapura" in w for w in weaknesses)
+    none = ScoutingReport(team="away", team_name="X", empty_net_conceded=1)
+    _, w2, _ = _coach_keys(none)
+    assert not any("üres kapura" in w for w in w2)
+    comb = combine_reports([rep, rep])
+    assert comb.empty_net_conceded == 4

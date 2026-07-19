@@ -177,6 +177,8 @@ class ScoutingReport:
     gk_on_target_zones: dict = field(default_factory=dict)
     # 7 a 6 elleni (lehozott kapusos) játék összideje másodpercben.
     empty_net_s: float = 0.0
+    # Üres kapura kapott góljaik (7 a 6 közben) — meccsek közt összegződik.
+    empty_net_conceded: int = 0
     # Emberelőny-mutatók (kiállítások alatt): lövés/gól előnyben, és a
     # HÁTRÁNYBAN kapott gólok — a "kerüld a kiállítást ellenük" jelhez.
     pp_shots: int = 0
@@ -746,6 +748,12 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                          f"(~{rep.empty_net_s / rep.matches:.0f} mp/meccs).")
         keys.append("Lehozott kapussal támadnak — labdaszerzés után az "
                     "ÜRES KAPURA azonnal dobhatsz, gyakorold a hosszú indítást.")
+    # Ha ez már gólokba is került nekik, az gyengeség: büntethető szokás.
+    if rep.empty_net_conceded >= 2:
+        weaknesses.append(
+            f"A 7 a 6-juk kockázatos: {rep.empty_net_conceded} gólt "
+            "kaptak üres kapura — a labdaszerzés utáni gyors dobás "
+            "ellenük kiemelten kifizetődő.")
 
     if not keys:
         keys.append("Kevés a minta — több meccsük felderítése pontosít.")
@@ -811,6 +819,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.empty_net_s = round(sum(
             w["duration_s"] for w in detect_empty_net(match, config)
             if w["team"] == team.value), 1)
+        from .goalkeeper import empty_net_goals
+        rep.empty_net_conceded = empty_net_goals(
+            match, config)[team.value]["conceded_empty"]
     except Exception:
         pass
     try:
@@ -1045,6 +1056,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         big_total=sum(r.big_total for r in reports),
         big_missed=sum(r.big_missed for r in reports),
         empty_net_s=round(sum(r.empty_net_s for r in reports), 1),
+        empty_net_conceded=sum(r.empty_net_conceded for r in reports),
         pp_shots=sum(r.pp_shots for r in reports),
         pp_goals=sum(r.pp_goals for r in reports),
         sh_conceded=sum(r.sh_conceded for r in reports),

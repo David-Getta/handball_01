@@ -819,10 +819,22 @@ def coach_summary(match: Match) -> dict:
             parts = [f"a(z) {names.get(t, t)} összesen "
                      f"{s_:.0f} másodpercet játszott lehozott kapussal"
                      for t, s_ in per_team.items()]
+            body = ("7 a 6 elleni játék: " + "; ".join(parts) +
+                    f" ({len(windows)} szakasz).")
+            # Az ára: üres kapura kapott gólok (ha voltak).
+            try:
+                from .goalkeeper import empty_net_goals
+                eng = empty_net_goals(match)
+                costs = [f"a(z) {names.get(t, t)} {r['conceded_empty']} "
+                         "gólt kapott üres kapura"
+                         for t, r in eng.items() if r["conceded_empty"]]
+                if costs:
+                    body += " Az ára: " + "; ".join(costs) + "."
+            except Exception:
+                pass
             sections.append({
                 "title": "Hetedik mezőnyjátékos",
-                "body": ("7 a 6 elleni játék: " + "; ".join(parts) +
-                         f" ({len(windows)} szakasz)."),
+                "body": body,
             })
             highlights.append(
                 "Üres kapu ellen a labdaszerzés utáni azonnali kapura dobás "
