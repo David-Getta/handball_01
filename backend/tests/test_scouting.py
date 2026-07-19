@@ -1728,3 +1728,30 @@ def test_match_key_players_seven_earner_role():
                  if it["role"] == "Hetes-kiharcoló"), None)
     assert role is not None
     assert role["player_id"] == 9
+
+
+def test_matchup_plan_crosses_both_profiles():
+    """A meccsterv-illesztés csak akkor ad mondatot, ha MINDKÉT oldal
+    feltétele teljesül."""
+    from handball.pipeline.scouting import matchup_plan
+    own = ScoutingReport(team="home", team_name="Mi", matches=2,
+                         fast_break_pct=15.0, shots=20,
+                         turnover_front=6,
+                         rec_transitions=5, rec_sum_s=30.0)
+    opp = ScoutingReport(team="away", team_name="Ok", matches=2,
+                         rec_transitions=6, rec_sum_s=36.0,
+                         gk_xg_prevented=-2.4,
+                         gk_outlets=4, gk_outlet_fast=3,
+                         attack_origins={"labdaszerzés":
+                                         {"attacks": 10, "goals": 5}})
+    plan = matchup_plan(own, opp)
+    joined = " ".join(plan)
+    assert "kontra ebben a párosításban" in joined
+    assert "kapura lövést" in joined
+    assert "labdabiztonság ezen a meccsen" in joined
+    assert "azonnali visszafutás" in joined
+    # Ha a saját oldal nem kontrázik, a kontra-mondat elmarad.
+    slow_own = ScoutingReport(team="home", team_name="Mi",
+                              fast_break_pct=2.0)
+    plan2 = matchup_plan(slow_own, opp)
+    assert not any("kontra ebben a párosításban" in p_ for p_ in plan2)
