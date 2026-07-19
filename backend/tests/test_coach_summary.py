@@ -106,3 +106,34 @@ def test_key_players_section_lists_top_shooter():
     assert sec is not None
     assert "fő lövő" in sec["body"]
     assert "1. játékos" in sec["body"]
+
+
+def test_story_section_opens_summary():
+    """2+ gólos meccsen az összefoglaló első szekciója a meccs
+    története, eredménnyel."""
+    from handball.models.tracking import (Ball, Frame, PlayerPosition,
+                                          PositionSource, Team)
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(3):  # 3 hazai gól
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="st", home_team="Hazai", away_team="Vendég",
+                        fps=25.0), frames)
+    data = coach_summary(m)
+    first = data["sections"][0]
+    assert first["title"] == "A meccs története"
+    assert "Hazai nyert 3–0-ra" in first["body"]
+    assert "legnagyobb különbség 3 gól" in first["body"]
