@@ -161,3 +161,34 @@ def test_lineups_section_in_summary():
                 if s_["title"] == "Felállások (becsült posztok)"), None)
     assert sec is not None
     assert "beálló: 1." in sec["body"]
+
+
+def test_story_mentions_run_at_turning_point():
+    """Ha a fordulópont egy gól-sorozat közben jön, a történet a
+    sorozatot is megnevezi."""
+    from handball.models.tracking import (Ball, Frame, PlayerPosition,
+                                          PositionSource, Team)
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(4):  # 4 gyors hazai gól = sorozat
+        for i in range(7):
+            frames.append(Frame(t=t, players=[pl(1, 33.0, 10.0)],
+                                ball=Ball(x=34.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 20
+    m = Match(MatchMeta(match_id="str", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    data = coach_summary(m)
+    first = data["sections"][0]
+    assert first["title"] == "A meccs története"
+    if "fordulópont" in first["body"]:
+        assert "sorozat hozta" in first["body"]
