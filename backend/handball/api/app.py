@@ -2402,9 +2402,20 @@ def create_app():
 
     @app.post("/scouting/export")
     def combined_scouting_export(body: dict):
-        """Az egyesített felderítés NYOMTATHATÓ HTML-je (mint az egy-meccses export)."""
+        """Az egyesített felderítés NYOMTATHATÓ HTML-je (mint az
+        egy-meccses export). Opcionális "own" kulccsal a meccsterv-
+        illesztés is bekerül a jelentésbe."""
         from fastapi import Response
-        html = scouting_report_html(_combined_report(body))
+        rep = _combined_report(body)
+        matchup = None
+        own_body = body.get("own")
+        if own_body:
+            try:
+                from ..pipeline.scouting import matchup_plan
+                matchup = matchup_plan(_combined_report(own_body), rep)
+            except Exception:
+                matchup = None
+        html = scouting_report_html(rep, matchup=matchup)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     @app.get("/matches/{match_id}/coaching")

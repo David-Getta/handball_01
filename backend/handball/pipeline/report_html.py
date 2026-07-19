@@ -114,11 +114,15 @@ def _players(key_players: list) -> str:
             f'<tbody>{"".join(rows)}</tbody></table>')
 
 
-def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None) -> str:
+def scouting_report_html(rep: ScoutingReport,
+                         playbook_match: dict | None = None,
+                         matchup: list[str] | None = None) -> str:
     """A jelentés teljes, önálló HTML-je (nyomtatható; böngészőből PDF).
 
     `playbook_match` (opcionális): a mentett figurákkal való egyezés
     ({total_attacks, matched, unmatched}) — külön szakaszként kerül be.
+    `matchup` (opcionális): a meccsterv-illesztés mondatai — "a kettőnk
+    párosítása" szakaszként kerül be.
     """
     name = escape(rep.team_name)
     matches = f"{rep.matches} meccs alapján" if rep.matches > 1 else "1 meccs alapján"
@@ -349,6 +353,10 @@ def scouting_report_html(rep: ScoutingReport, playbook_match: dict | None = None
   {_defense_bars(rep.defense_distribution)}
 
   {roles_html}
+
+  {("<h2>Meccsterv (a kettőnk párosítása)</h2><ul>"
+     + "".join(f"<li>{escape(p_)}</li>" for p_ in matchup) + "</ul>")
+    if matchup else ""}
 
   <h2>Kulcsjátékosaik</h2>
   {_players(rep.key_players)}
