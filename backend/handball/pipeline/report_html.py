@@ -1151,6 +1151,19 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              str(bl["away"]["blocks"])))
         except Exception:
             pass
+        # Visszarendeződés: labdavesztés után hány mp a felálló védelem.
+        try:
+            from .defense import transition_recovery
+            _tr = transition_recovery(match)
+            if any(_tr[s_]["transitions"] >= 4 for s_ in ("home", "away")):
+                def _tr_txt(side):
+                    r = _tr[side]
+                    return (f'{r["avg_s"]:.1f} mp'
+                            if r["transitions"] >= 4 else "—")
+                rows.append(("Visszarendeződés (átlag)",
+                             _tr_txt("home"), _tr_txt("away")))
+        except Exception:
+            pass
         # Megmentett gólok (GSAx): kapott gól a helyzet-minőséghez mérve.
         try:
             from .xg import xg_prevented
