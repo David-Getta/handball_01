@@ -384,6 +384,50 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átlag ${avg.toStringAsFixed(0)} mp";
   }
 
+  // A fal kulcsa: a legtöbb blokkot jegyző védő (3+ blokk, mint a
+  // kulcsokban).
+  String? _topBlocker(Map<String, dynamic> r) {
+    final list = (r["blockers"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    final top = list.first as Map<String, dynamic>;
+    final n = ((top["blocks"] as num?) ?? 0).toInt();
+    if (n < 3) return null;
+    return "${top["player_id"]}. · $n blokk";
+  }
+
+  // Hetes-dobó: a legtöbb hetest dobó játékos (2+ kísérlet).
+  String? _sevenTaker(Map<String, dynamic> r) {
+    final list = (r["seven_takers"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    final top = list.first as Map<String, dynamic>;
+    final a = ((top["attempts"] as num?) ?? 0).toInt();
+    if (a < 2) return null;
+    final g = ((top["goals"] as num?) ?? 0).toInt();
+    return "${top["player_id"]}. · $g/$a gól";
+  }
+
+  // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
+  String? _fbFinisher(Map<String, dynamic> r) {
+    final list = (r["fb_finishers"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    final top = list.first as Map<String, dynamic>;
+    final g = ((top["goals"] as num?) ?? 0).toInt();
+    if (g < 2) return null;
+    return "${top["player_id"]}. · $g gól";
+  }
+
+  // Indítás-célpont: akihez a kapus-indítások zöme fut ki (2+, és az
+  // indítások fele — mint a kulcsokban).
+  String? _outletTarget(Map<String, dynamic> r) {
+    final list = (r["gk_outlet_targets"] as List?) ?? const [];
+    final outlets = ((r["gk_outlets"] as num?) ?? 0).toInt();
+    if (list.isEmpty || outlets < 2) return null;
+    final top = list.first as Map<String, dynamic>;
+    final n = ((top["n"] as num?) ?? 0).toInt();
+    if (n < 2 || n / outlets < 0.5) return null;
+    return "${top["player_id"]}. · $n/$outlets indítás";
+  }
+
   // Fő lövő szokása: a legkoncentráltabb lövő (4+ lövés, 60%+ egy
   // zónából) — a backend-kulcsokkal azonos küszöb.
   String? _shooterHabit(Map<String, dynamic> r) {
@@ -577,6 +621,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Bravúr-védés", "${r["gk_big_saves"]}"],
       if (_gkOutlet(r) != null) ["Kapus-indítás", _gkOutlet(r)!],
       if (_shooterHabit(r) != null) ["Fő lövő", _shooterHabit(r)!],
+      if (_topBlocker(r) != null) ["Fal kulcsa", _topBlocker(r)!],
+      if (_sevenTaker(r) != null) ["Hetes-dobó", _sevenTaker(r)!],
+      if (_fbFinisher(r) != null) ["Kontra-befejező", _fbFinisher(r)!],
+      if (_outletTarget(r) != null)
+        ["Indítás-célpont", _outletTarget(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
