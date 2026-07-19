@@ -127,3 +127,30 @@ def substitution_impact(match: Match,
         rec["goals_for_after"] += gf
         rec["goals_against_after"] += ga
     return {"events": events, "teams": teams}
+
+
+# Késő csere: ekkora 2. félidei tempó-esés fölött már cserét várnánk.
+LATE_SUB_DROP_PCT = 20.0
+
+
+def late_sub_flags(match: Match,
+                   config: Optional[TacticsConfig] = None) -> list[dict]:
+    """Késő cserék: nagy tempó-esésű játékosok, akiket NEM cseréltek le.
+
+    A fáradás-réteg (player_fatigue) és a csere-felismerés metszete:
+    aki 20%+ tempót esett a 2. félidőben és végig a pályán maradt, azt
+    hasonló meccsen érdemes korábban pihentetni.
+
+    Visszatérés: [{"track_id", "team", "drop_pct"}] esés szerint.
+    """
+    from .stats import player_fatigue
+
+    config = config or TacticsConfig()
+    subbed_out: set = set()
+    for w in detect_substitutions(match, config):
+        subbed_out.update(w.get("out_ids", []))
+    return [{"track_id": r["track_id"], "team": r["team"],
+             "drop_pct": r["drop_pct"]}
+            for r in player_fatigue(match)
+            if r["drop_pct"] >= LATE_SUB_DROP_PCT
+            and r["track_id"] not in subbed_out]
