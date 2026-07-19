@@ -539,3 +539,29 @@ def test_report_opens_with_story():
     html = match_report_html(m, {}, [], None)
     assert "A meccs története." in html
     assert "Hazai nyert 3–0-ra" in html
+
+
+def test_report_lineups_section():
+    """Elég mintánál a jelentés Felállások szekciót kap a becsült
+    posztokkal."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
+    )
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0)
+
+    frames = []
+    for t in range(150):
+        frames.append(Frame(t=t, players=[
+            pl(1, 34.0, 10.0),   # beálló
+            pl(2, 36.0, 2.0),    # szélső
+            pl(3, 28.0, 10.0),   # irányító (nála a labda)
+        ], ball=Ball(x=28.3, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="lu", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Felállások (becsült posztok)" in html
+    assert "beálló: 1." in html
+    assert "szélső: 2." in html

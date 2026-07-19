@@ -1445,6 +1445,33 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass
 
+    # Felállások: a becsült posztok csapatonként, egy-egy sorban.
+    lineups_html = ""
+    try:
+        from .roles import estimate_positions
+        est_lu = estimate_positions(match)
+        lu_rows = []
+        order_lu = ["irányító", "átlövő", "beálló", "szélső"]
+        for side, name in (("home", home), ("away", away)):
+            by_post: dict = {}
+            for tid, r_ in sorted(est_lu.get(side, {}).items()):
+                by_post.setdefault(r_["poszt"], []).append(f"{tid}.")
+            if not by_post:
+                continue
+            parts_lu = [f"{p_}: {', '.join(by_post[p_])}"
+                        for p_ in order_lu if p_ in by_post]
+            lu_rows.append(f"<tr><td>{escape(name)}</td>"
+                           f"<td>{escape(' · '.join(parts_lu))}</td></tr>")
+        if lu_rows:
+            lineups_html = (
+                "<h2>Felállások (becsült posztok)</h2><table>"
+                "<tr><th>Csapat</th><th>Posztok</th></tr>"
+                + "".join(lu_rows) + "</table>"
+                + '<p class="note">A poszt a támadó-fázis átlag-helyéből '
+                  "becsült címke (min. 4 mp-nyi minta játékosonként).</p>")
+    except Exception:
+        pass
+
     # Kulcsemberek: a játékos-profil rétegek egy kompakt táblában —
     # a közös match_key_players rétegből (azonos küszöbök a felderítéssel).
     keyplayers_html = ""
@@ -1586,6 +1613,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
   {xg_html}
 
   {defense_html}
+
+  {lineups_html}
 
   {keyplayers_html}
 
