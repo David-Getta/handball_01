@@ -684,6 +684,9 @@ def test_report_suspension_row_with_offender():
     html = match_report_html(m, {}, [], None)
     assert "Kiállítás (2 perc)" in html
     assert "1 (105.)" in html
+    # A meccs gerince szekció is hozza a kiállítás-pillanatot.
+    assert "A meccs gerince (kulcs-pillanatok)" in html
+    assert "emberhátrányban" in html
 
 
 def test_report_drought_row():
