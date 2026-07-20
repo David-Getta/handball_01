@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#432)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#439)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -160,6 +160,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **key_moments a gépi exportban**: a meccs gerince az
   elemzesek.json-ban is — a csomag minden rétege emberi ÉS gépi
   formában. (#413)
+- **Hetes-irány kör bezárva**: a dobó a saját lapján látja az
+  irány-képét és a kiszámíthatóság-figyelmeztetést, a kapus a kapott
+  hetesek irányait, az edzésterv irány-váltogató sorozatot javasol
+  (28. szabály); Meccsterv szakasz minden felderítő-exportban,
+  FIGURÁK kártya az Összegzés fülön, "Gólcsend vége" kulcs-pillanat.
+  (#434–#439)
 - **Videó-dosszié és klip-rendszer**: a tematikus klip-csomagok egy
   olvasható menüben, Teljes videó-dosszié egy kattintásra; szabad
   lövő (fedezés-hiba) klipek; ismétlés-szűrés és a kimaradt jelenetek
