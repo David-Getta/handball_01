@@ -1795,6 +1795,22 @@ def create_app():
         from ..pipeline.roles import estimate_positions
         return {"positions": estimate_positions(match)}
 
+    @app.get("/matches/{match_id}/players/{track_id}/report")
+    def get_player_report(match_id: str, track_id: int):
+        """Játékos-lap: egy játékos meccs-riportja kiosztható HTML-ben
+        (játék-mérleg + fizikai mutatók). 404, ha a track ismeretlen."""
+        from fastapi.responses import HTMLResponse
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.report_html import player_report_html
+        try:
+            html = player_report_html(match, track_id)
+        except ValueError:
+            raise HTTPException(status_code=404,
+                                detail="player not found")
+        return HTMLResponse(content=html)
+
     @app.get("/matches/{match_id}/key-moments")
     def get_key_moments(match_id: str):
         """A meccs gerince: kulcs-pillanatok időrendben (fordulópont,

@@ -772,3 +772,24 @@ def test_report_goal_timeline_halftime_marker():
                         fps=25.0), frames)
     html = match_report_html(m, {}, detect_events(m), None)
     assert "— FÉLIDŐ (1 – 0) —" in html
+
+
+def test_player_report_html_contains_game_and_physical():
+    """A játékos-lap hozza a játék-mérleget és a fizikai blokkot; a
+    lövő gólja és a táv is ott van. Ismeretlen track → ValueError."""
+    import pytest as _pytest
+
+    from handball.pipeline.report_html import player_report_html
+
+    m = simulate_ground_truth(duration_s=10, fps=25.0, seed=4)
+    # Egy tényleges lövő trackje a meccsről (ha van), különben bármelyik.
+    from handball.pipeline.xg import match_xg
+    shooters = match_xg(m).get("shooters", [])
+    tid = (shooters[0]["player_id"] if shooters
+           else m.frames[0].players[0].track_id)
+    html = player_report_html(m, tid)
+    assert "JÁTÉKOS-LAP" in html
+    assert "Fizikai mutatók" in html and "Táv" in html
+    assert "Játék-mérleg" in html
+    with _pytest.raises(ValueError):
+        player_report_html(m, 99999)
