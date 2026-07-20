@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#413)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#417)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -160,6 +160,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **key_moments a gépi exportban**: a meccs gerince az
   elemzesek.json-ban is — a csomag minden rétege emberi ÉS gépi
   formában. (#413)
+- **Szezon-riport egy kattintásra**: a csapat szezonja automatikus
+  időszak-bontású fejlődés-táblával + visszatérő edzés-fókuszokkal,
+  csapat-választós gombbal a dashboardon. (#416, #417)
+- **Élő vezetés-váltás jelzés**: az élő követés folyamában arany
+  jelzés a fordulat pillanatában ("reagálj: időkérés vagy
+  védekezés-váltás jöhet"). (#415)
 - **A meccs gerince a jelentésben + ikonok**: a kulcs-pillanatok
   szekcióként a nyomtatható jelentésben (ötödik felület), az app
   kártyáján típus-ikonokkal és színekkel. (#405, #406)
