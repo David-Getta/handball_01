@@ -2262,6 +2262,8 @@ def create_app():
                 from ..pipeline.attack_types import pace_by_score
                 _layer("pace_by_score",
                        lambda: pace_by_score(match))
+                from ..pipeline.momentum import key_moments
+                _layer("key_moments", lambda: key_moments(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
