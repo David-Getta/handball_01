@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#409)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#413)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -154,7 +154,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   játékos") — a szezon görgetve is olvasható. (#403)
 - **Szezon játékos-lap**: a játékos teljes szezonja egy nyomtatható
   oldalon (összesítő + meccsről meccsre tábla), letöltés-gombbal a
-  játékos-fejlődés képernyőn. (#408, #409)
+  játékos-fejlődés képernyőn. Kapus-mezszámnál védés- és GSAx-oszlop
+  a lapon és a képernyőn is (színezett formagörbe). (#408, #409,
+  #411, #412)
+- **key_moments a gépi exportban**: a meccs gerince az
+  elemzesek.json-ban is — a csomag minden rétege emberi ÉS gépi
+  formában. (#413)
 - **A meccs gerince a jelentésben + ikonok**: a kulcs-pillanatok
   szekcióként a nyomtatható jelentésben (ötödik felület), az app
   kártyáján típus-ikonokkal és színekkel. (#405, #406)
