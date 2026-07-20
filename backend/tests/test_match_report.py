@@ -954,3 +954,42 @@ def test_player_report_gk_seven_directions():
     html = player_report_html(m, 9)
     assert "Hetesek ellened (irányok)" in html
     assert "balra 1×" in html
+
+
+def test_player_report_taker_direction_and_predictability():
+    """A dobó lapja hozza a saját irány-képét, és két azonos irányú
+    hetesnél a kiszámíthatóság-figyelmeztetést."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def taker():
+        return PlayerPosition(track_id=1, team=Team.HOME, x=32.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(2):  # két hetes, mindkettő balra
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[taker()],
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[taker()],
+                                ball=Ball(x=min(34.0 + i, 40.0), y=8.8,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(260):  # a hetes-debounce (10 mp) leteljen
+            frames.append(Frame(t=t, players=[taker()],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(MatchMeta(match_id="tk7", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = player_report_html(m, 1)
+    assert "Heteseid irányai" in html
+    assert "balra 2×" in html
+    assert "kiszámítható vagy" in html
