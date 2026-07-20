@@ -1910,3 +1910,24 @@ def test_matchup_plan_slowdown_rule():
                           fh_goals_for=8, fh_goals_against=8)
     plan2 = matchup_plan(weak, opp)
     assert not any("altatják" in p_ for p_ in plan2)
+
+
+def test_discipline_narrative_section():
+    """A Fegyelmük szakasz 2+ kiállításnál jelenik meg, a kiülőkkel és
+    a kiharcolóval; fegyelmezett csapatnál nincs ilyen szakasz."""
+    from handball.pipeline.scouting import scouting_narrative
+    rep = ScoutingReport(
+        team="away", team_name="X", matches=2, suspensions=4,
+        susp_players=[{"player_id": 105, "suspensions": 2},
+                      {"player_id": 103, "suspensions": 1}],
+        susp_earners=[{"player_id": 9, "earned": 2}])
+    secs = scouting_narrative(rep)
+    sec = next((s_ for s_ in secs if s_["title"] == "Fegyelmük"), None)
+    assert sec is not None
+    assert "4 kiállítás" in sec["body"]
+    assert "105. (2×)" in sec["body"]
+    assert "9. játékosuk harcolja ki" in sec["body"]
+    clean = ScoutingReport(team="away", team_name="X", matches=2,
+                           suspensions=1)
+    assert not any(s_["title"] == "Fegyelmük"
+                   for s_ in scouting_narrative(clean))
