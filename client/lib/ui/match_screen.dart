@@ -1274,6 +1274,23 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
+  /// Kulcs-pillanat átemelése az edzői jegyzetek közé (a pillanat
+  /// címkéjével) — a jegyzet a lejátszóból és a csomagból is látszik.
+  Future<void> _noteKeyMoment(Match match, int t, String label) async {
+    try {
+      await _api.addNote(widget.matchId, t, label);
+      final notes = await _api.fetchNotes(widget.matchId);
+      if (!mounted) return;
+      setState(() => _notes = notes);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Jegyzetbe került: $label")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Nem sikerült a jegyzet: $e")));
+    }
+  }
+
   Future<void> _addNote(Match match) async {
     final text = _noteCtrl.text.trim();
     if (text.isEmpty || _savingNote) return;
@@ -2604,6 +2621,8 @@ class _MatchScreenState extends State<MatchScreen> {
                           keyPlayers: _keyPlayers,
                           keyMoments: _keyMoments,
                           setplayEff: _setplayEff,
+                          onNoteMoment: (t, label) =>
+                              _noteKeyMoment(match, t, label),
                           progression: _progression,
                           goalTimeline: _goalTimeline,
                         ),
