@@ -872,3 +872,45 @@ def test_player_report_goalkeeper_block():
     assert "kapus" in html
     assert "2 (100%)" in html  # 2 védés, 100%
     assert "GSAx" in html
+
+
+def test_player_report_goalkeeper_tips():
+    """A sok kis-xG-s gólt kapó kapus lapján forma-jel és leggyengébb
+    zóna javaslat is megjelenik."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def gk():
+        return PlayerPosition(track_id=9, team=Team.AWAY, x=39.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    def shooter():
+        return PlayerPosition(track_id=4, team=Team.HOME, x=33.5,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(7):  # hét kapott gól — erős forma-jel
+        for i in range(8):
+            players = [gk()] + ([shooter()] if i == 0 else [])
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[gk()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="gkt", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = player_report_html(m, 9)
+    assert "Mire figyelj" in html
+    assert "Forma-jel" in html
+    assert "Leggyengébb zónád" in html
