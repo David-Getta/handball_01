@@ -2537,6 +2537,22 @@ def create_app():
         newer = _combined_report(newer_body)
         return trend_report(older, newer)
 
+    @app.post("/scouting/trend/export")
+    def scouting_trend_export(body: dict):
+        """A fejlődés-riport nyomtatható HTML-ben — a /scouting/trend
+        törzsével azonos bemenettel."""
+        from fastapi.responses import HTMLResponse
+        older_body = body.get("older")
+        newer_body = body.get("newer")
+        if not older_body or not newer_body:
+            raise HTTPException(status_code=400,
+                                detail="older and newer required")
+        older = _combined_report(older_body)
+        newer = _combined_report(newer_body)
+        from ..pipeline.report_html import trend_report_html
+        return HTMLResponse(content=trend_report_html(
+            trend_report(older, newer)))
+
     @app.post("/scouting/matchup")
     def scouting_matchup(body: dict):
         """Meccsterv-illesztés: a SAJÁT és az ELLENFÉL profiljának

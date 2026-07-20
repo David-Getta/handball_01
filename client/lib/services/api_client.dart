@@ -491,6 +491,23 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Fejlődés-riport nyomtatható HTML-je (POST /scouting/trend/export).
+  Future<List<int>> fetchTrendExport(
+      List<Map<String, String>> older,
+      List<Map<String, String>> newer) async {
+    final resp = await http.post(
+      Uri.parse("$baseUrl/scouting/trend/export"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(
+          {"older": {"items": older}, "newer": {"items": newer}}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült a fejlődés-riport: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// Meccsterv-illesztés (POST /scouting/matchup): a saját és az
   /// ellenfél-profil keresztezéséből páros-specifikus tanácsok.
   Future<List<String>> fetchMatchupPlan(

@@ -175,3 +175,26 @@ def test_scouting_report_seven_direction_table():
     assert "balra 3×" in html and "középre 1×" in html
     assert "7. játékos" in html and "9. játékos" in html
     assert "4. játékos" not in html  # 1 kísérlet a küszöb alatt
+
+
+def test_trend_report_html_renders_metrics_and_summary():
+    """A fejlődés-riport HTML hozza a mutató-táblát (irány-jelekkel) és
+    az összegzést."""
+    from handball.pipeline.report_html import trend_report_html
+    tr = {
+        "team_name": "Mi csapatunk",
+        "older_matches": 3, "newer_matches": 2,
+        "metrics": [
+            {"metric": "goals", "label": "Gól / meccs", "unit": "",
+             "older": 24.0, "newer": 28.0, "delta": 4.0,
+             "better": True},
+            {"metric": "turnovers", "label": "Labdaeladás / meccs",
+             "unit": "", "older": 10.0, "newer": 13.0, "delta": 3.0,
+             "better": False},
+        ],
+        "summary": ["Javulás: gól / meccs 24.0 → 28.0."],
+    }
+    html = trend_report_html(tr)
+    assert "FEJLŐDÉS-RIPORT" in html and "Mi csapatunk" in html
+    assert "Gól / meccs" in html and "▲" in html and "▼" in html
+    assert "Javulás: gól / meccs" in html

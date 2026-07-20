@@ -2191,3 +2191,80 @@ def player_report_html(match, track_id: int) -> str:
 elemzési rétegekből jönnek — azonos küszöbökkel, mint a
 meccsjelentésben.</footer>
 </div></body></html>"""
+
+
+def trend_report_html(tr: dict) -> str:
+    """Fejlődés-riport: a két időszak trend-összevetése nyomtatható
+    HTML-ben — mutatónként régi/új érték és irány, plusz az összegző
+    mondatok. A /scouting/trend kimenetét rendereli.
+    """
+    name = tr.get("team_name") or "Csapat"
+    rows = []
+    for m_ in tr.get("metrics", []):
+        better = m_.get("better")
+        cls = ("up" if better is True
+               else "down" if better is False else "")
+        arrow = ("▲" if better is True
+                 else "▼" if better is False else "–")
+        unit = m_.get("unit", "")
+        rows.append(
+            f"<tr><td>{escape(str(m_.get('label', '')))}</td>"
+            f'<td class="num">{m_.get("older", 0):.1f}{escape(unit)}'
+            "</td>"
+            f'<td class="num">{m_.get("newer", 0):.1f}{escape(unit)}'
+            "</td>"
+            f'<td class="num {cls}">{arrow} '
+            f'{m_.get("delta", 0):+.1f}{escape(unit)}</td></tr>')
+    table = ("<table><tr><th>Mutató</th>"
+             '<th class="num">Régebbi</th><th class="num">Újabb</th>'
+             '<th class="num">Változás</th></tr>'
+             + "".join(rows) + "</table>") if rows else         '<p class="empty">Nincs összevethető mutató.</p>'
+    summary = "".join(f"<li>{escape(s_)}</li>"
+                      for s_ in tr.get("summary", []))
+    return f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Fejlődés-riport — {escape(name)}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+         Arial, sans-serif; color: #101722; background: #fff;
+         line-height: 1.5; }}
+  .page {{ max-width: 720px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px;
+           margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em;
+           text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+       color: #12988a; margin: 26px 0 10px; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+  th, td {{ padding: 7px 10px; border-bottom: 1px solid #E3E8EF;
+           text-align: left; }}
+  th.num, td.num {{ text-align: right; }}
+  td.up {{ color: #0B7A45; font-weight: 600; }}
+  td.down {{ color: #B42318; font-weight: 600; }}
+  ul {{ margin: 8px 0 0; padding-left: 20px; }}
+  li {{ font-size: 13px; margin-bottom: 6px; }}
+  .empty {{ color: #8492A6; font-size: 13px; }}
+  footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
+</style>
+</head>
+<body><div class="page">
+<header>
+  <div class="brand">SPORT MACHINE · FEJLŐDÉS-RIPORT</div>
+  <h1>{escape(name)}</h1>
+  <div class="sub">Régebbi időszak: {tr.get("older_matches", 0)} meccs ·
+  Újabb időszak: {tr.get("newer_matches", 0)} meccs — a darabszám-mutatók
+  meccsenkénti átlagra normálva.</div>
+</header>
+<h2>Mutatók</h2>
+{table}
+<h2>Összegzés</h2>
+<ul>{summary}</ul>
+<footer>▲ javulás · ▼ romlás · – semleges irányú mutató. A nem mért
+időszakok mutatói kimaradnak, hogy ne látsszanak hamis változásnak.
+</footer>
+</div></body></html>"""

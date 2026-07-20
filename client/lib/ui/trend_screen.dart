@@ -6,6 +6,9 @@
 /// Az adatokat a backend /scouting/trend végpontja adja.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -93,7 +96,40 @@ class _TrendScreenState extends State<TrendScreen> {
           ),
         ],
       ),
+      const Spacer(),
+      // Nyomtatható fejlődés-riport mentése (HTML) — kiosztható.
+      if (t != null)
+        IconButton(
+          tooltip: "Fejlődés-riport mentése (HTML)",
+          onPressed: _saveReport,
+          icon: const Icon(Icons.download, color: AppColors.accent),
+        ),
     ]);
+  }
+
+  /// A nyomtatható riport letöltése és mentése a választott helyre.
+  Future<void> _saveReport() async {
+    try {
+      final bytes =
+          await _api.fetchTrendExport(widget.older, widget.newer);
+      if (!mounted) return;
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Fejlődés-riport mentése (HTML)",
+        fileName: "fejlodes_riport.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Fejlődés-riport mentve: $path — böngészőből "
+              "nyomtatható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Riport-hiba: $e")));
+    }
   }
 
   Widget _body() {
