@@ -613,92 +613,72 @@ class _MatchScreenState extends State<MatchScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.movie_outlined, color: AppColors.accent),
           ),
-          // Kihagyott ziccerek (xG >= 0,5, gól nélkül) — a leginkább
-          // visszanézendő jelenetek egy kattintással.
-          IconButton(
-            tooltip: "Kihagyott ziccer klipek (nagy xG, gól nélkül)",
-            onPressed: _exportingClips
-                ? null
-                : () => _exportClips(match,
-                    typesOverride: ["missed_chance"]),
-            icon: const Icon(Icons.priority_high, color: AppColors.gold),
-          ),
-          // Nagy védések: a kapus által fogott ziccerek (xG >= 0,5, save)
-          // — a kapusteljesítmény kiemelt pillanatai.
-          IconButton(
-            tooltip: "Nagy védés klipek (fogott ziccerek)",
-            onPressed: _exportingClips
-                ? null
-                : () => _exportClips(match, typesOverride: ["big_save"]),
-            icon: const Icon(Icons.back_hand, color: AppColors.accent),
-          ),
-          // Fő lövő: a legtöbbet lövő játékos lövései — felderítési
-          // videó-csomag a következő ellenfél elleni készüléshez.
-          IconButton(
-            tooltip: "Fő lövő klipek (a legtöbbet lövő játékos lövései)",
-            onPressed: _exportingClips
-                ? null
-                : () =>
-                    _exportClips(match, typesOverride: ["top_shooter"]),
-            icon: const Icon(Icons.person_search, color: AppColors.gold),
-          ),
-          // Szabad lövők: a fedezés-hibák jelenetei — védekezés-
-          // tanuló anyag ("itt hagytuk szabadon").
-          IconButton(
-            tooltip: "Szabad lövő klipek (fedezés-hibák)",
-            onPressed: _exportingClips
-                ? null
-                : () => _exportClips(match,
-                    typesOverride: ["free_shot"]),
-            icon: const Icon(Icons.person_off_outlined,
-                color: AppColors.away),
-          ),
-          // Legjobb figura: a leggólerősebb visszatérő támadás-minta
-          // klipjei — az ellenfél "kenyerének" felismeréséhez.
-          IconButton(
-            tooltip: "Figura-klipek (a legjobb visszatérő minta)",
-            onPressed: _exportingClips
-                ? null
-                : () => _exportClips(match,
-                    typesOverride: ["best_figure"]),
-            icon: const Icon(Icons.pattern, color: AppColors.accent),
-          ),
-          // Kulcs-pillanatok: a meccs gerince (fordulópont, sorozatok,
-          // kiállítások, hetesek, kapuscserék) egy klip-csomagban.
-          IconButton(
-            tooltip: "Kulcs-pillanat klipek (a meccs gerince)",
-            onPressed: _exportingClips
-                ? null
-                : () => _exportClips(match, typesOverride: ["key_moment"]),
-            icon: const Icon(Icons.auto_awesome, color: AppColors.gold),
-          ),
-          // 7 a 6: a lehozott kapusos szakaszok — végrehajtás-ellenőrzés
-          // és az ellenfél szokásainak visszanézése.
-          IconButton(
-            tooltip: "7 a 6 klipek (lehozott kapusos szakaszok)",
-            onPressed: _exportingClips
-                ? null
-                : () => _exportClips(match, typesOverride: ["empty_net"]),
-            icon: const Icon(Icons.groups, color: AppColors.accent),
-          ),
-          // A meccs fordulópontja: a győzelmi esély legnagyobb billenése
-          // — az az egy jelenet, amit mindenki vissza akar nézni.
-          IconButton(
-            tooltip: "Fordulópont klip (a győzelmi esély billenése)",
-            onPressed: _exportingClips
-                ? null
-                : () =>
-                    _exportClips(match, typesOverride: ["turning_point"]),
-            icon: const Icon(Icons.trending_up, color: AppColors.gold),
-          ),
-          // Blokkolt lövések: a fal munkája — a blokk-technika és a
-          // fal-állás visszanézéséhez.
-          IconButton(
-            tooltip: "Blokk klipek (a falon elakadt lövések)",
-            onPressed: _exportingClips
-                ? null
-                : () => _exportClips(match, typesOverride: ["block"]),
-            icon: const Icon(Icons.front_hand, color: AppColors.accent),
+          // Tematikus klip-csomagok egy menüben — a gomb-sor nem nő
+          // tovább, és minden csomagnak olvasható neve van.
+          PopupMenuButton<String>(
+            enabled: !_exportingClips,
+            tooltip: "Tematikus klip-csomagok",
+            icon: const Icon(Icons.video_library_outlined,
+                color: AppColors.gold),
+            color: AppColors.surface,
+            onSelected: (t) =>
+                _exportClips(match, typesOverride: [t]),
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                  value: "key_moment",
+                  child: ListTile(
+                      leading: Icon(Icons.auto_awesome, size: 18),
+                      title: Text("Kulcs-pillanatok (a meccs gerince)"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "turning_point",
+                  child: ListTile(
+                      leading: Icon(Icons.trending_up, size: 18),
+                      title: Text("Fordulópont"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "missed_chance",
+                  child: ListTile(
+                      leading: Icon(Icons.priority_high, size: 18),
+                      title: Text("Kihagyott ziccerek"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "big_save",
+                  child: ListTile(
+                      leading: Icon(Icons.back_hand, size: 18),
+                      title: Text("Nagy védések"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "top_shooter",
+                  child: ListTile(
+                      leading: Icon(Icons.person_search, size: 18),
+                      title: Text("Fő lövő lövései"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "free_shot",
+                  child: ListTile(
+                      leading: Icon(Icons.person_off_outlined, size: 18),
+                      title: Text("Szabad lövők (fedezés-hibák)"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "best_figure",
+                  child: ListTile(
+                      leading: Icon(Icons.pattern, size: 18),
+                      title: Text("Legjobb figura"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "block",
+                  child: ListTile(
+                      leading: Icon(Icons.front_hand, size: 18),
+                      title: Text("Blokkok (a fal munkája)"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "empty_net",
+                  child: ListTile(
+                      leading: Icon(Icons.groups, size: 18),
+                      title: Text("7 a 6 szakaszok"),
+                      dense: true)),
+            ],
           ),
         ]),
       ),
