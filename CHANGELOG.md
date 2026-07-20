@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#439)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#448)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -160,6 +160,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **key_moments a gépi exportban**: a meccs gerince az
   elemzesek.json-ban is — a csomag minden rétege emberi ÉS gépi
   formában. (#413)
+- **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
+  kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
+  csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
+  szél-gólok). (#446–#448)
+- **Munkafolyamat-hidak**: kulcs-pillanatból jegyzet egy koppintással;
+  meccsterv.txt a csomagban a visszavágóra; élő irány-tipp a
+  hetes-jelzésben (csak a korábbi hetesekből); hetes-mérleg sor a
+  könyvtár-összevetőben; közös irány-szótár. (#441–#445)
 - **Hetes-irány kör bezárva**: a dobó a saját lapján látja az
   irány-képét és a kiszámíthatóság-figyelmeztetést, a kapus a kapott
   hetesek irányait, az edzésterv irány-váltogató sorozatot javasol
