@@ -941,12 +941,17 @@ class _MatchScreenState extends State<MatchScreen> {
     setState(() => _exportingClips = true);
     try {
       final jobId = await _api.startClipExport(widget.matchId, types);
-      // A vágás haladásának követése (másodpercenként).
+      // A vágás haladásának követése (másodpercenként). A záró üzenet
+      // a mentés-visszajelzőbe kerül (pl. "12 jelenet kimaradt").
+      String doneMsg = "";
       while (true) {
         await Future.delayed(const Duration(seconds: 1));
         final job = await _api.fetchJob(jobId);
         final status = job["status"] as String?;
-        if (status == "done") break;
+        if (status == "done") {
+          doneMsg = (job["message"] as String?) ?? "";
+          break;
+        }
         if (status == "error") {
           throw Exception(job["error"] ?? "ismeretlen hiba");
         }
@@ -967,7 +972,8 @@ class _MatchScreenState extends State<MatchScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Klipek mentve: $path — kicsomagolás után "
-              "lejátszhatók/megoszthatók")));
+              "lejátszhatók/megoszthatók"
+              "${doneMsg.contains("kimaradt") ? " · $doneMsg" : ""}")));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
