@@ -668,3 +668,29 @@ def test_bad_restart_triggers_protocol_focus():
     assert "Szünet utáni protokoll" in titles
     assert all(f["title"] != "Szünet utáni protokoll"
                for f in tf["away"])
+
+
+def test_unproductive_figure_triggers_refresh_focus():
+    """Ha a leggyakoribb figura 4+ támadásból sem hoz gólt, a
+    Figura-frissítés fókusz jár."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+    for _ in range(4):  # négy azonos mintájú hazai támadás, gól nélkül
+        for _ in range(8):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 30.0, 10.0),
+                _pl(2, Team.HOME, 28.0, 8.0),
+                _pl(3, Team.HOME, 32.0, 12.0),
+            ], ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(_meta(), frames)
+    tf = training_focus(m)
+    titles = [f["title"] for f in tf["home"]]
+    assert "Figura-frissítés" in titles
