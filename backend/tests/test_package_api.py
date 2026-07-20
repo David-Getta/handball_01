@@ -165,5 +165,8 @@ def test_season_report_endpoint():
     assert r.status_code == 200
     assert "SZEZON-RIPORT" in r.text and "Szimu Hazai" in r.text
     assert "Fejlődés a szezonon belül" in r.text
+    # A szezon meccsről meccsre tábla is ott van, az ellenféllel.
+    assert "A szezon meccsről meccsre" in r.text
+    assert "Szimu Vendég" in r.text
     assert client2.get("/season/report",
                        params={"team": "Nincs Ilyen"}).status_code == 404
