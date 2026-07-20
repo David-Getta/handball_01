@@ -917,3 +917,40 @@ def test_player_report_goalkeeper_tips():
     assert "Mire figyelj" in html
     assert "Forma-jel" in html
     assert "Leggyengébb zónád" in html
+
+
+def test_player_report_gk_seven_directions():
+    """A kapus-lap hozza a kapott hetesek irány-képét ("balra 1×")."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def gk():
+        return PlayerPosition(track_id=9, team=Team.AWAY, x=39.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    frames = []
+    t = 0
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(30):  # hazai hetes: álló labda a 7 m-es ponton
+        frames.append(Frame(t=t, players=[
+            gk(), PlayerPosition(track_id=1, team=Team.HOME, x=32.0,
+                                 y=10.0, source=PositionSource.MEASURED,
+                                 confidence=1.0)],
+            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(7):  # a lövés balra (alacsony y) megy gólba
+        frames.append(Frame(t=t, players=[gk()],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=8.8,
+                                      confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="gk7", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = player_report_html(m, 9)
+    assert "Hetesek ellened (irányok)" in html
+    assert "balra 1×" in html

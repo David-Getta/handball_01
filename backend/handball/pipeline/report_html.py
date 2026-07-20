@@ -1965,6 +1965,28 @@ def player_report_html(match, track_id: int) -> str:
                     gk_items.append(_metric(
                         "Indítás (átlag a felezőig)",
                         f"{orec['avg_s']:.1f} s · {lab}"))
+                # A kapott hetesek irány-képe: merre lőtték ellened.
+                try:
+                    from .rules import seven_meter_outcomes
+                    hu_d = {"bal": "balra", "jobb": "jobbra",
+                            "közép": "középre"}
+                    dcnt: dict = {}
+                    for sm in seven_meter_outcomes(match):
+                        if sm.get("team") == gk_side:
+                            continue  # a sajátjaik dobták, nem ellened
+                        if sm.get("irany"):
+                            dcnt[sm["irany"]] = \
+                                dcnt.get(sm["irany"], 0) + 1
+                    if dcnt:
+                        gk_items.append(_metric(
+                            "Hetesek ellened (irányok)",
+                            " · ".join(
+                                f"{hu_d.get(d_, d_)} {n_}×"
+                                for d_, n_ in sorted(
+                                    dcnt.items(),
+                                    key=lambda kv: -kv[1]))))
+                except Exception:
+                    pass
         except Exception:
             pass
 
