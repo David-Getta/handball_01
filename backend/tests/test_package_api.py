@@ -86,6 +86,10 @@ def test_package_without_video_contains_report_and_csv():
     if has_focus:
         etxt = z.read("edzesterv.txt").decode("utf-8")
         assert "gyakorlat:" in etxt
+    # Kulcs-pillanatok: ha van ilyen fájl, időbélyeges sorokat hoz.
+    if "kulcs_pillanatok.txt" in names:
+        kp = z.read("kulcs_pillanatok.txt").decode("utf-8")
+        assert kp.startswith("[")
     # Az edzői összefoglaló sima szövegként is (osszefoglalo.txt).
     assert "osszefoglalo.txt" in names
     txt = z.read("osszefoglalo.txt").decode("utf-8")
