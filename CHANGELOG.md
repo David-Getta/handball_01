@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#385)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#393)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -139,6 +139,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   szemszögéből) — kiszámítható dobónál a kapus konkrét utasítást kap
   ("induljon balra"); irány a jelentés-listában és az app csempéjén,
   hetes-mérleg sor a Csapat-mutatókban. (#357, #358, #359)
+- **A meccs gerince (kulcs-pillanatok)**: fordulópont, sorozatok,
+  kiállítások, hetesek, kapuscserék és vezetés-váltások egy közös
+  rétegben — kattintható kártya az appban (ugrás a videóban),
+  olvasható txt a csomagban, API-végpont és egy gombos klip-csomag.
+  (#385, #391–#393)
+- **Jelentés-mélyítés**: FÉLIDŐ-jelölő a Gól-idővonalban a félidei
+  állással; Gól/lövés és Gól−xG oszlop a Játékos-terhelésben;
+  Leghosszabb gólcsend sor (mettől meddig); Fegyelmük narratíva-
+  szakasz a felderítésben. (#387–#390)
 - **Előny-kezelés**: időhúzás vezetve / kapkodás hátrányban (a
   támadás-hossz állás szerint) — kulcsok, jelentés-sor, csempe,
   összefoglaló-mondat, 10. meccsterv-szabály, csomag-réteg.
