@@ -2266,6 +2266,46 @@ def create_app():
                                        .encode("utf-8"))
                     except Exception:
                         pass
+                    # Játékos-lapok: minden játékos egyéni meccs-
+                    # riportja a jatekos_lapok/ mappában — kiosztásra.
+                    try:
+                        import re
+
+                        from ..pipeline.report_html import (
+                            player_report_html)
+                        from ..pipeline.stats import (
+                            aggregate_by_jersey, compute_player_stats)
+                        _pl_stats = compute_player_stats(match)
+                        _team_of: dict = {}
+                        _jersey_of: dict = {}
+                        for _fr in match.frames:
+                            for _p in _fr.players:
+                                _team_of.setdefault(
+                                    _p.track_id,
+                                    getattr(_p.team, "value", _p.team))
+                                if _p.jersey_number is not None:
+                                    _jersey_of.setdefault(
+                                        _p.track_id, _p.jersey_number)
+                        _fps_pl = (match.meta.fps
+                                   if match.meta.fps > 0 else 25.0)
+                        for _g in aggregate_by_jersey(
+                                _pl_stats, _team_of, _jersey_of,
+                                fps=_fps_pl):
+                            if not _g["track_ids"]:
+                                continue
+                            _safe = re.sub(
+                                r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+", "_",
+                                f"{_g['team']}_{_g['label']}")
+                            try:
+                                z.writestr(
+                                    f"jatekos_lapok/{_safe}.html",
+                                    player_report_html(
+                                        match, _g["track_ids"][0])
+                                    .encode("utf-8"))
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
                     # Edzésterv sima szövegként: fókuszok indoklással
                     # és gyakorlatokkal, csapatonként.
                     tf_pkg = analyses.get("training") or {}
