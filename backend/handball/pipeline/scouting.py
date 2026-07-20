@@ -2325,6 +2325,27 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
                          + " ".join(parts_p)),
             })
 
+    # Fegyelmük: kiállítás-hajlam + a kiülők és kiharcolók nevei.
+    if rep.suspensions >= 2 or (rep.susp_players
+                                and rep.susp_players[0]["suspensions"] >= 2):
+        per_match = rep.suspensions / max(1, rep.matches)
+        body = (f"Fegyelmezetlenek: {rep.suspensions} kiállítás "
+                f"{rep.matches} meccsen (átlag {per_match:.1f}/meccs).")
+        if rep.susp_players:
+            who = ", ".join(
+                f"{e['player_id']}. ({e['suspensions']}×)"
+                for e in rep.susp_players[:3])
+            body += f" A kiülőik: {who}."
+        if rep.susp_earners and rep.susp_earners[0]["earned"] >= 2:
+            body += (f" A másik irányban a(z) "
+                     f"{rep.susp_earners[0]['player_id']}. játékosuk "
+                     f"harcolja ki a 2 perceket "
+                     f"({rep.susp_earners[0]['earned']}×) — vele "
+                     "szemben kéz nélkül védekezzetek.")
+        body += (" A nyomás alatti védekezésük sebezhető: a bátor "
+                 "betörés náluk emberelőnyt érhet.")
+        out.append({"title": "Fegyelmük", "body": body})
+
     # Kulcsjátékos: akinél a legtöbb labda megfordul — a kapust átugorjuk
     # (nála kidobásoknál jár a labda, nem ő szervezi a támadást).
     kp = next((k for k in rep.key_players if k.get("role") != "kapus"), None)
