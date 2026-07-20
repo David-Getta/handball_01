@@ -151,12 +151,34 @@ class _LiveScreenState extends State<LiveScreen> {
                 "Emberhátrány: $down kevesebben van — a létszámfölényt "
                 "gyors, széles játékkal érdemes kihasználni.")));
       }
-      for (final e in ((r["seven_meters"] as List?) ?? const [])
-          .cast<Map<String, dynamic>>()) {
+      final sevens = ((r["seven_meters"] as List?) ?? const [])
+          .cast<Map<String, dynamic>>();
+      for (final e in sevens) {
         final team = names[e["team"]] ?? "";
-        out.add(_FeedEntry(
-            (e["t"] as num?)?.toInt() ?? 0,
-            Suggestion(4, "taktika", "Hétméteres következik — $team dob.")));
+        final t7 = (e["t"] as num?)?.toInt() ?? 0;
+        var text = "Hétméteres következik — $team dob.";
+        // A dobó KORÁBBI hetesei ezen a meccsen: ha volt már mért
+        // iránya, a kapus élő tippet kap (jövőbe nem nézünk).
+        final sid = e["shooter_id"];
+        if (sid != null) {
+          final dirs = <String, int>{};
+          for (final p in sevens) {
+            if (p["shooter_id"] == sid &&
+                ((p["t"] as num?)?.toInt() ?? 0) < t7 &&
+                p["irany"] != null) {
+              dirs["${p["irany"]}"] = (dirs["${p["irany"]}"] ?? 0) + 1;
+            }
+          }
+          if (dirs.isNotEmpty) {
+            final best =
+                dirs.entries.reduce((a, b) => a.value >= b.value ? a : b);
+            const hu = {"bal": "balra", "jobb": "jobbra",
+                "közép": "középre"};
+            text += " A dobó eddigi hetesei ${hu[best.key] ?? best.key} "
+                "mentek (${best.value}×).";
+          }
+        }
+        out.add(_FeedEntry(t7, Suggestion(4, "taktika", text)));
       }
       for (final a in ((r["passive_risk"] as List?) ?? const [])
           .cast<Map<String, dynamic>>()) {
