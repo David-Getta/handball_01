@@ -343,3 +343,39 @@ def test_key_moment_clip_type_mapped():
     ev = [{"t": km["t"], "type": "key_moment", "team": "home",
            "label": km["label"]} for km in key_moments(m)]
     assert ev and all("label" in e and e["label"] for e in ev)
+
+
+def test_key_moments_lead_change():
+    """A vezetés-átvétel gólja kulcs-pillanat; az első vezetés és az
+    egyenlítés nem az."""
+    from handball.pipeline.momentum import key_moments
+
+    frames = []
+    t = 0
+
+    def goal(team):
+        nonlocal t
+        if team == Team.HOME:
+            xs = [min(34.0 + i, 40.0) for i in range(8)]
+            px = 33.5
+        else:
+            xs = [max(6.0 - i, 0.0) for i in range(8)]
+            px = 6.5
+        for x in xs:
+            frames.append(Frame(t=t, players=[_pl(1, team, px, 10.0)],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    goal(Team.HOME)   # 1–0: első vezetés, nem váltás
+    goal(Team.AWAY)   # 1–1: egyenlítés, nem váltás
+    goal(Team.AWAY)   # 1–2: vezetés-váltás!
+    m = Match(_meta(), frames)
+    labels = [k["label"] for k in key_moments(m)]
+    changes = [lab for lab in labels if "Vezetés-váltás" in lab]
+    assert len(changes) == 1
+    assert "1–2" in changes[0] and "A" in changes[0]

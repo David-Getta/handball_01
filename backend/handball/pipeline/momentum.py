@@ -564,6 +564,26 @@ def key_moments(match: Match, config=None) -> list[dict]:
     except Exception:
         pass
     try:
+        # Vezetés-váltások: a gól, amelyikkel a csapat átveszi a
+        # vezetést (nem az egyenlítés — az még nem fordulat).
+        from .event_detection import EventType, detect_shots
+        sc = {"home": 0, "away": 0}
+        leader = None
+        for e in detect_shots(match):
+            if e.type != EventType.GOAL:
+                continue
+            sc[e.team.value] += 1
+            new_leader = ("home" if sc["home"] > sc["away"]
+                          else "away" if sc["away"] > sc["home"]
+                          else leader)
+            if new_leader != leader and new_leader is not None                     and leader is not None:
+                add(e.t,
+                    f"Vezetés-váltás — a(z) {names[new_leader]} "
+                    f"átveszi a vezetést ({sc['home']}–{sc['away']})")
+            leader = new_leader
+    except Exception:
+        pass
+    try:
         from .rules import detect_powerplay, seven_meter_outcomes
         for w in detect_powerplay(match):
             add(w["start_frame"],
