@@ -1653,9 +1653,25 @@ def create_app():
                        .get(team, []))[:6]
         except Exception:
             pass
+        # A szezon meccsről meccsre: dátum + ellenfél + főcím.
+        timeline = []
+        try:
+            for date_, mid_, side_ in entries:
+                m_ = _store.get(mid_)
+                if m_ is None:
+                    continue
+                summ_ = _match_summary(m_)
+                timeline.append({
+                    "date": date_ or mid_,
+                    "opponent": (m_.meta.away_team if side_ == "home"
+                                 else m_.meta.home_team),
+                    "headline": summ_.get("headline"),
+                })
+        except Exception:
+            timeline = []
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
-            team, tr, focuses, len(entries)))
+            team, tr, focuses, len(entries), timeline=timeline))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):

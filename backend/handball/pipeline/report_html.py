@@ -2509,13 +2509,25 @@ számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
 
 
 def season_report_html(team: str, tr: dict, focuses: list[dict],
-                       n_matches: int) -> str:
+                       n_matches: int,
+                       timeline: list[dict] | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
     """
     table = _trend_metrics_table(tr)
     summary = "".join(f"<li>{escape(s_)}</li>"
                       for s_ in tr.get("summary", []))
+    timeline_html = ""
+    if timeline:
+        rows_tl = "".join(
+            f"<tr><td>{escape(str(e.get('date') or ''))}</td>"
+            f"<td>{escape(str(e.get('opponent') or ''))}</td>"
+            f"<td>{escape(str(e.get('headline') or '—'))}</td></tr>"
+            for e in timeline)
+        timeline_html = (
+            "<h2>A szezon meccsről meccsre</h2>"
+            "<table><tr><th>Dátum</th><th>Ellenfél</th>"
+            "<th>Mi történt</th></tr>" + rows_tl + "</table>")
     focus_html = ""
     if focuses:
         items = "".join(
@@ -2565,6 +2577,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
   fele automatikusan összevetve ({tr.get("older_matches", 0)} vs
   {tr.get("newer_matches", 0)} meccs).</div>
 </header>
+{timeline_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}
 <h2>Összegzés</h2>
