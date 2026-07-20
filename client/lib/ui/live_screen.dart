@@ -167,6 +167,19 @@ class _LiveScreenState extends State<LiveScreen> {
                 "kényszeríts ritmusváltást vagy lövést.")));
       }
     } catch (_) {}
+    // Vezetés-váltások: a meccs gerincéből — élőben ez a "most fordult
+    // a meccs" pillanat, a padnak azonnal reagálnia kell.
+    try {
+      for (final m in await _api.fetchKeyMoments(matchId)) {
+        final label = "${(m as Map)["label"]}";
+        if (!label.startsWith("Vezetés-váltás")) continue;
+        out.add(_FeedEntry(
+            (m["t"] as num?)?.toInt() ?? 0,
+            Suggestion(5, "momentum",
+                "$label — reagálj: időkérés vagy védekezés-váltás "
+                "jöhet.")));
+      }
+    } catch (_) {}
     // Gól-sorozatok: a széria lezárultakor jelzés az okokkal — élőben ez
     // az "időt kell kérni / váltani kell" pillanat.
     try {
