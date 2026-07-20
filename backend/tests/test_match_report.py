@@ -719,3 +719,56 @@ def test_report_drought_row():
     assert "Leghosszabb gólcsend" in html
     # A vendég egyszer sem szerzett gólt → a teljes felvétel a csendje.
     assert "6 perc" in html
+
+
+def test_report_goal_timeline_halftime_marker():
+    """Felismert szünetnél a Gól-idővonalat FÉLIDŐ-jelölő vágja ketté,
+    a félidei részeredménnyel."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.event_detection import detect_events
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    def play(t0, seconds):
+        frames = []
+        for i in range(int(seconds * 25)):
+            players = [pl(100 + k, Team.HOME, 12.0 + k, 4.0 + k)
+                       for k in range(6)]
+            players += [pl(200 + k, Team.AWAY, 26.0 + k, 4.0 + k)
+                        for k in range(6)]
+            frames.append(Frame(t=t0 + i, players=players,
+                                ball=Ball(x=19.0, y=10.0,
+                                          confidence=1.0)))
+        return frames
+
+    frames = play(0, 60)
+    t = len(frames)
+    for i in range(8):  # hazai gól az 1. félidőben
+        frames.append(Frame(t=t + i,
+                            players=[pl(101, Team.HOME, 33.5, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+    t += 8
+    frames += play(t, 60)
+    t = len(frames)
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * 25))]  # szünet
+    t = len(frames)
+    frames += play(t, 60)
+    t = len(frames)
+    for i in range(8):  # vendég gól a 2. félidőben (a -x kapuba)
+        frames.append(Frame(t=t + i,
+                            players=[pl(201, Team.AWAY, 6.5, 10.0)],
+                            ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                                      confidence=1.0)))
+    t += 8
+    frames += play(t, 60)
+    m = Match(MatchMeta(match_id="htm", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, detect_events(m), None)
+    assert "— FÉLIDŐ (1 – 0) —" in html

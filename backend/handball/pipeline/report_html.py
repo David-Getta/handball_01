@@ -633,12 +633,29 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     ])
 
     # Gól-idővonal: minden gól játékidővel, csapat szerint (a lényeg egy pillantásra).
+    # Ha felismerhető a szünet, FÉLIDŐ-jelölő vágja ketté a listát.
+    ht_t = None
+    try:
+        from .halftime import detect_halftime
+        ht_t = detect_halftime(match)
+    except Exception:
+        pass
     goal_rows = []
+    ht_marked = False
+    run_h = run_a = 0
     for e in events:
         typ = getattr(e.type, "value", e.type)
         if typ != "goal":
             continue
         team = getattr(e.team, "value", e.team)
+        if (ht_t is not None and not ht_marked and e.t >= ht_t):
+            goal_rows.append(
+                f"<li><b>— FÉLIDŐ ({run_h} – {run_a}) —</b></li>")
+            ht_marked = True
+        if team == "home":
+            run_h += 1
+        else:
+            run_a += 1
         name = meta.home_team if team == "home" else meta.away_team
         scorer = ""
         pid = getattr(e, "player_id", None)
@@ -649,6 +666,10 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         goal_rows.append(
             f"<li><b>{_fmt_clock(e.t / fps)}</b> — GÓL · {escape(name)}"
             f"{scorer}</li>")
+    if ht_t is not None and goal_rows and not ht_marked:
+        # Minden gól az első félidőben esett — a jelölő a lista végére.
+        goal_rows.append(
+            f"<li><b>— FÉLIDŐ ({run_h} – {run_a}) —</b></li>")
     goals_html = ("<ul>" + "".join(goal_rows) + "</ul>") if goal_rows else \
         '<p class="empty">Nincs felismert gól az elemzett szakaszban.</p>'
     # Szakaszonkénti gól-eloszlás (mikor esnek a gólok) — sáv-táblaként.
