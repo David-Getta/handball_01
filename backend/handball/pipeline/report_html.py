@@ -2103,6 +2103,34 @@ def player_report_html(match, track_id: int) -> str:
                 "alatti hetes-sorozatok edzésen, kapussal.")
     except Exception:
         pass
+    # Kapus-javaslatok: forma-jel és a leggyengébb zóna — csak kapusnak.
+    if is_gk:
+        try:
+            from .goalkeeper import goalkeeper_stats, goalkeeper_timeline
+            pk_t = (goalkeeper_timeline(match).get(gk_side)
+                    or {}).get("per_keeper", {})
+            rec_t = next((pk_t[t_] for t_ in tids if t_ in pk_t), None)
+            if rec_t and rec_t.get("on_target", 0) >= 3 \
+                    and rec_t.get("prevented", 0.0) <= -2.0:
+                tips.append(
+                    f"Forma-jel: a helyzetekhez képest "
+                    f"{rec_t['prevented']:+.1f} a mérleged — nézd vissza "
+                    "a kapott gólokat: helyezkedés vagy időzítés?")
+            if len(pk_t) <= 1:
+                gs_t = goalkeeper_stats(match).get(gk_side) or {}
+                zsp = gs_t.get("zone_save_pct", {})
+                otz = gs_t.get("on_target_zones", {})
+                cand = [(z_, p_) for z_, p_ in zsp.items()
+                        if otz.get(z_, 0) >= 2]
+                if cand:
+                    z_, p_ = min(cand, key=lambda kv: kv[1])
+                    if p_ <= 40.0:
+                        tips.append(
+                            f"Leggyengébb zónád: {z_} ({p_:.0f}% "
+                            "védés) — célzott helyezkedés-gyakorlás "
+                            "erre a sarokra, lövő-sorozattal.")
+        except Exception:
+            pass
     tips_html = ""
     if tips:
         tips_html = ("<h2>Mire figyelj</h2><ul>"
