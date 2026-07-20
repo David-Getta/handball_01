@@ -2632,8 +2632,19 @@ def create_app():
             except Exception:
                 continue
         pm = match_attacks_to_playbook(match, plays, TacticsConfig(), team=t) if plays else None
-        html = scouting_report_html(scout_team(match, t, TacticsConfig()),
-                                    playbook_match=pm)
+        rep_sc = scout_team(match, t, TacticsConfig())
+        # Meccsterv-illesztés a másik oldallal (mint a képernyő
+        # MECCSTERV kártyája) — hibatűrően, enélkül is teljes.
+        matchup = None
+        try:
+            from ..pipeline.scouting import matchup_plan
+            own_t = Team.HOME if t == Team.AWAY else Team.AWAY
+            matchup = matchup_plan(
+                scout_team(match, own_t, TacticsConfig()), rep_sc) or None
+        except Exception:
+            matchup = None
+        html = scouting_report_html(rep_sc, playbook_match=pm,
+                                    matchup=matchup)
         return Response(content=html, media_type="text/html; charset=utf-8")
 
     def _combined_report(body: dict):

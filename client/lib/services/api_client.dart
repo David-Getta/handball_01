@@ -555,10 +555,22 @@ class ApiClient {
   /// Az egyesített felderítés nyomtatható HTML-je (POST /scouting/export).
   Future<Uint8List> fetchCombinedScoutingExport(
       List<Map<String, String>> items) async {
+    // A saját oldal a tükrözött items — ebből épül a nyomtatott
+    // jelentés Meccsterv szakasza (mint a képernyő MECCSTERV kártyája).
+    final own = [
+      for (final it in items)
+        {
+          "match_id": it["match_id"],
+          "team": (it["team"] == "home") ? "away" : "home",
+        }
+    ];
     final resp = await http.post(
       Uri.parse("$baseUrl/scouting/export"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"items": items}),
+      body: jsonEncode({
+        "items": items,
+        "own": {"items": own},
+      }),
     );
     if (resp.statusCode != 200) {
       throw Exception("Nem sikerült az export: HTTP ${resp.statusCode}");
