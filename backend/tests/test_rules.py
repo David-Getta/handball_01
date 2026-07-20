@@ -300,3 +300,30 @@ def test_suspended_player_identified():
     out = suspended_players(m)
     assert out["home"] == [{"player_id": 105, "suspensions": 1}]
     assert out["away"] == []
+
+
+def test_key_moments_includes_powerplay_and_seven():
+    """A key_moments réteg időrendben hozza a kiállítást és a hetest."""
+    from handball.pipeline.momentum import key_moments
+
+    frames = _roster_frames(0, 30, 6, 6)
+    frames += _roster_frames(750, 60, 5, 6)     # kiállítás-lenyomat
+    frames += _roster_frames(2250, 30, 6, 6)
+    t = 3000
+    for _ in range(30):  # álló labda a 7 m-es ponton
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(7):  # gól
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    m = Match(_meta(), frames)
+    kms = key_moments(m)
+    labels = [k["label"] for k in kms]
+    assert any("Kiállítás" in lab for lab in labels)
+    assert any("Hétméteres" in lab and "gól" in lab for lab in labels)
+    # Időrend: a t értékek nem csökkennek.
+    ts = [k["t"] for k in kms]
+    assert ts == sorted(ts)

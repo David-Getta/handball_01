@@ -38,6 +38,7 @@ class SummaryPanel extends StatelessWidget {
 
   /// Kulcsemberek a backendtől: {"home": [{"role","player_id","detail"}]}
   final Map<String, dynamic>? keyPlayers;
+  final List<dynamic> keyMoments;
 
   /// Edzés-fókusz javaslatok a backendtől: {"home": [...], "away": [...]}
   /// — elemenként {"area","title","why","drill"}. Null/üresnél nincs kártya.
@@ -65,6 +66,7 @@ class SummaryPanel extends StatelessWidget {
     this.runs = const [],
     this.training,
     this.keyPlayers,
+    this.keyMoments = const [],
     this.progression,
     this.goalTimeline = const [],
   });
@@ -251,6 +253,49 @@ class SummaryPanel extends StatelessWidget {
     ];
   }
 
+  /// Kulcs-pillanatok kártya: a meccs gerince időrendben — koppintásra
+  /// a lejátszó odaugrik (a csomag kulcs_pillanatok.txt párja).
+  List<Widget> _keyMomentsCard() {
+    if (keyMoments.isEmpty) return const [];
+    String clk(num s) =>
+        "${(s ~/ 60)}:${(s % 60).toInt().toString().padLeft(2, "0")}";
+    return [
+      Text("KULCS-PILLANATOK", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(children: [
+          for (final m in keyMoments.cast<Map<String, dynamic>>())
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: onSeekFrame == null
+                  ? null
+                  : () => onSeekFrame!(((m["t"] as num?) ?? 0).toInt()),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                child: Row(children: [
+                  Text(clk((m["t_s"] as num?) ?? 0),
+                      style: AppText.value.copyWith(
+                          fontSize: 12, color: AppColors.accent)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text("${m["label"]}",
+                          style: AppText.label.copyWith(fontSize: 12))),
+                ]),
+              ),
+            ),
+        ]),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+    ];
+  }
+
   /// Kulcsemberek kártya: szereponként a meccs meghatározó játékosai —
   /// ugyanazokból a rétegekből, mint a jelentés Kulcsemberek táblája.
   List<Widget> _keyPlayersCard() {
@@ -432,6 +477,7 @@ class SummaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
         ],
+        ..._keyMomentsCard(),
         ..._keyPlayersCard(),
         ..._trainingCard(),
         if (goals.isNotEmpty) ...[

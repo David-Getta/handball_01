@@ -1784,6 +1784,17 @@ def create_app():
         from ..pipeline.roles import estimate_positions
         return {"positions": estimate_positions(match)}
 
+    @app.get("/matches/{match_id}/key-moments")
+    def get_key_moments(match_id: str):
+        """A meccs gerince: kulcs-pillanatok időrendben (fordulópont,
+        sorozatok, kiállítások, hetesek, kapuscserék) — az app
+        kattintható listájához és külső felhasználáshoz."""
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        from ..pipeline.momentum import key_moments
+        return {"moments": key_moments(match)}
+
     @app.get("/matches/{match_id}/key-players")
     def get_key_players(match_id: str):
         """Kulcsemberek: kinél dől el a meccs (fő lövő, fal kulcsa,
@@ -2213,74 +2224,16 @@ def create_app():
                         z.writestr("osszefoglalo.txt",
                                    summary_txt.encode("utf-8"))
                     # Kulcs-pillanatok: időbélyeges lista a videó gyors
-                    # visszanézéséhez (fordulópont, sorozatok, hetesek,
-                    # kiállítások, kapuscsere) — rétegenként hibatűrő.
+                    # visszanézéséhez — a közös key_moments rétegből.
                     try:
-                        fps_k = (match.meta.fps
-                                 if match.meta.fps > 0 else 25.0)
-                        names_k = {"home": match.meta.home_team,
-                                   "away": match.meta.away_team}
-
-                        def _clk(sec: float) -> str:
-                            return (f"[{int(sec // 60)}:"
-                                    f"{int(sec % 60):02d}]")
-                        moments: list[tuple[float, str]] = []
-                        try:
-                            from ..pipeline.momentum import win_probability
-                            tp_k = win_probability(match).get(
-                                "turning_point")
-                            if tp_k is not None:
-                                moments.append((tp_k["t_s"],
-                                                "Fordulópont — itt "
-                                                "billent a meccs"))
-                        except Exception:
-                            pass
-                        try:
-                            from ..pipeline.momentum import annotate_runs
-                            for r_k in annotate_runs(match):
-                                if r_k.get("length", 0) >= 3:
-                                    ctx = (f" ({r_k['context'][0]})"
-                                           if r_k.get("context") else "")
-                                    moments.append(
-                                        (r_k["start_frame"] / fps_k,
-                                         f"{r_k['length']} gólos "
-                                         f"{names_k.get(r_k['team'], r_k['team'])}"
-                                         f" sorozat kezdete{ctx}"))
-                        except Exception:
-                            pass
-                        try:
-                            from ..pipeline.rules import (
-                                detect_powerplay, seven_meter_outcomes)
-                            for w_k in detect_powerplay(match):
-                                moments.append(
-                                    (w_k["start_frame"] / fps_k,
-                                     "Kiállítás — a(z) "
-                                     f"{names_k[w_k['team_down']]} "
-                                     "emberhátrányban"))
-                            for sm_k in seven_meter_outcomes(match):
-                                lab = ("Hétméteres — "
-                                       f"{names_k.get(sm_k['team'], '')}")
-                                if sm_k.get("outcome") and                                         sm_k["outcome"] != "ismeretlen":
-                                    lab += f" ({sm_k['outcome']})"
-                                moments.append((sm_k["t"] / fps_k, lab))
-                        except Exception:
-                            pass
-                        try:
-                            from ..pipeline.goalkeeper import (
-                                goalkeeper_timeline)
-                            tlk = goalkeeper_timeline(match)
-                            for side_k in ("home", "away"):
-                                for ch in (tlk.get(side_k) or {}).get(
-                                        "changes", []):
-                                    moments.append(
-                                        (ch, "Kapuscsere — "
-                                         f"{names_k[side_k]}"))
-                        except Exception:
-                            pass
-                        if moments:
-                            moments.sort(key=lambda mv: mv[0])
-                            klines = [f"{_clk(sec)} {txt}"
-                                      for sec, txt in moments]
+                        from ..pipeline.momentum import key_moments
+                        kms = key_moments(match)
+                        if kms:
+                            klines = [
+                                f"[{int(km['t_s'] // 60)}:"
+                                f"{int(km['t_s'] % 60):02d}] "
+                                f"{km['label']}"
+                                for km in kms]
                             z.writestr("kulcs_pillanatok.txt",
                                        "\n".join(klines)
                                        .encode("utf-8"))

@@ -204,6 +204,20 @@ class ApiClient {
   }
 
   /// Kulcsemberek (GET /matches/{id}/key-players): kinél dől el a meccs.
+  /// Kulcs-pillanatok (GET /matches/{id}/key-moments): a meccs gerince
+  /// időrendben — az app kattintható listájához.
+  Future<List<dynamic>> fetchKeyMoments(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/key-moments"));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült a kulcs-pillanat lista: HTTP ${resp.statusCode}");
+    }
+    final json =
+        jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+    return (json["moments"] as List?) ?? const [];
+  }
+
   Future<Map<String, dynamic>> fetchKeyPlayers(String matchId) async {
     final resp =
         await http.get(Uri.parse("$baseUrl/matches/$matchId/key-players"));
