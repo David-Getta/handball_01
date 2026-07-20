@@ -326,6 +326,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     if known:
         body += (" Leggyakoribb védekezési forma — "
                  + ", ".join(f"{n}: {f}" for n, f in known) + ".")
+    # Támadás-szélesség: kirívóan széles vagy szűk támadójáték.
+    try:
+        from .attack_types import attack_width
+        aw_all = attack_width(match)
+        for side, name in (("home", home), ("away", away)):
+            v = aw_all[side]["avg_width_m"]
+            if v is None:
+                continue
+            if v >= 14.0:
+                body += (f" A(z) {name} szélesen támadott (átlag "
+                         f"{v:.0f} m-re széthúzva).")
+            elif v <= 9.0:
+                body += (f" A(z) {name} szűken, közép-központúan "
+                         f"támadott (átlag {v:.0f} m).")
+    except Exception:
+        pass
     # Figura-hatékonyság: melyik begyakorolt támadás hozott gólt.
     try:
         from .setplays import setplay_efficiency
