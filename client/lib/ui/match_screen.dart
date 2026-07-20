@@ -964,6 +964,34 @@ class _MatchScreenState extends State<MatchScreen> {
     }
   }
 
+  /// Játékos-lap: egy játékos meccs-riportja HTML-ben, mentés a
+  /// felhasználó által választott helyre.
+  Future<void> _savePlayerReport(
+      Match match, int trackId, String label) async {
+    try {
+      final bytes = await _api.fetchPlayerReport(widget.matchId, trackId);
+      if (!mounted) return;
+      final safe = label.replaceAll(
+          RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Játékos-lap mentése (HTML)",
+        fileName: "jatekos_lap_$safe.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Játékos-lap mentve: $path — böngészőből "
+              "nyomtatható, kiosztható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Játékos-lap hiba: $e")));
+    }
+  }
+
   /// Meccs-csomag: jelentés + CSV + gólklipek egy zip-ben (a backend állítja
   /// össze job-ként), mentés a felhasználó által választott helyre.
   Future<void> _exportPackage() async {
@@ -2522,7 +2550,12 @@ class _MatchScreenState extends State<MatchScreen> {
             Expanded(
               child: TabBarView(
                 children: [
-                  StatsPanel(stats: _stats, homeName: match.meta.homeTeam, awayName: match.meta.awayTeam),
+                  StatsPanel(
+                      stats: _stats,
+                      homeName: match.meta.homeTeam,
+                      awayName: match.meta.awayTeam,
+                      onPlayerReport: (tid, label) =>
+                          _savePlayerReport(match, tid, label)),
                   _summary == null
                       ? const SizedBox()
                       : SummaryPanel(

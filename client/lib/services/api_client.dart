@@ -204,6 +204,17 @@ class ApiClient {
   }
 
   /// Kulcsemberek (GET /matches/{id}/key-players): kinél dől el a meccs.
+  /// Játékos-lap (GET /matches/{id}/players/{track}/report): egy játékos
+  /// meccs-riportja nyomtatható HTML-ként, bájtokban.
+  Future<List<int>> fetchPlayerReport(String matchId, int trackId) async {
+    final resp = await http.get(Uri.parse(
+        "$baseUrl/matches/$matchId/players/$trackId/report"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a játékos-lap: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// Kulcs-pillanatok (GET /matches/{id}/key-moments): a meccs gerince
   /// időrendben — az app kattintható listájához.
   Future<List<dynamic>> fetchKeyMoments(String matchId) async {

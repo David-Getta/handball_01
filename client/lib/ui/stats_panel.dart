@@ -18,6 +18,9 @@ class StatsPanel extends StatefulWidget {
   final Color homeColor;
   final Color awayColor;
 
+  /// Játékos-lap mentése (track_id, címke) — ha null, nincs lap-gomb.
+  final void Function(int trackId, String label)? onPlayerReport;
+
   const StatsPanel({
     super.key,
     required this.stats,
@@ -25,6 +28,7 @@ class StatsPanel extends StatefulWidget {
     required this.awayName,
     this.homeColor = AppColors.home,
     this.awayColor = AppColors.away,
+    this.onPlayerReport,
   });
 
   @override
@@ -115,6 +119,7 @@ class _StatsPanelState extends State<StatsPanel> {
           _cell("táv", 64),
           _cell("max km/h", 66),
           _cell("sprint", 48),
+          if (widget.onPlayerReport != null) const SizedBox(width: 30),
         ]),
       );
 
@@ -170,6 +175,19 @@ class _StatsPanelState extends State<StatsPanel> {
               child: Text("${s.sprintCount}×",
                   textAlign: TextAlign.right,
                   style: AppText.label.copyWith(fontSize: 13, color: AppColors.gold))),
+          if (widget.onPlayerReport != null)
+            SizedBox(
+              width: 30,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                iconSize: 15,
+                tooltip: "Játékos-lap mentése (HTML)",
+                icon: const Icon(Icons.badge_outlined,
+                    color: AppColors.textFaint),
+                onPressed: () =>
+                    widget.onPlayerReport!(s.trackId, label),
+              ),
+            ),
         ],
       ),
     );
