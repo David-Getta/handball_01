@@ -77,7 +77,7 @@ def test_package_without_video_contains_report_and_csv():
                 "missed_big_chances", "xg_saved", "xg_prevented",
                 "attack_origins", "recovery", "positions",
                 "seven_earners", "susp_earners", "second_half_start",
-                "pace_by_score"):
+                "pace_by_score", "key_moments"):
         assert key in analyses, key
     # Az edzésterv pontosan akkor van a csomagban, ha van fókusz.
     tf_pkg = analyses.get("training") or {}
