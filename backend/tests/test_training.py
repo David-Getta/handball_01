@@ -694,3 +694,35 @@ def test_unproductive_figure_triggers_refresh_focus():
     tf = training_focus(m)
     titles = [f["title"] for f in tf["home"]]
     assert "Figura-frissítés" in titles
+
+
+def test_predictable_seven_taker_triggers_variation_focus():
+    """Ha a dobó két mért hetese ugyanabba a sávba megy, a
+    Hetes-variáció fókusz jár."""
+    from handball.models.tracking import Ball
+
+    def taker():
+        return _pl(1, Team.HOME, 32.0, 10.0)
+
+    frames = []
+    t = 0
+    for _ in range(2):  # két hetes, mindkettő balra (y=8.8)
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[taker()],
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[taker()],
+                                ball=Ball(x=min(34.0 + i, 40.0), y=8.8,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(260):
+            frames.append(Frame(t=t, players=[taker()],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(_meta(), frames)
+    tf = training_focus(m)
+    titles = [f["title"] for f in tf["home"]]
+    assert "Hetes-variáció" in titles
