@@ -584,6 +584,21 @@ def key_moments(match: Match, config=None) -> list[dict]:
     except Exception:
         pass
     try:
+        # Gólcsend vége: ha egy 5+ perces saját gól nélküli időszak
+        # góllal zárult, a megtörés pillanata kulcs-pillanat.
+        dr = goal_droughts(match)
+        total_s = (len(match.frames) / fps) if match.frames else 0.0
+        for side in ("home", "away"):
+            rec = dr.get(side) or {}
+            if rec.get("longest_s", 0.0) >= 300.0 \
+                    and rec.get("end_s", total_s) < total_s - 0.5:
+                add(rec["end_s"] * fps,
+                    f"Gólcsend vége — a(z) {names[side]} "
+                    f"{rec['longest_s'] / 60:.0f} perc után újra "
+                    "betalált")
+    except Exception:
+        pass
+    try:
         from .rules import detect_powerplay, seven_meter_outcomes
         for w in detect_powerplay(match):
             add(w["start_frame"],
