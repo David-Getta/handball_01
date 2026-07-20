@@ -1965,3 +1965,21 @@ def test_matchup_plan_figure_rule():
                            def_shots_against=10, def_free_shots=1)
     plan2 = matchup_plan(tight, opp)
     assert not any("életbiztosítás" in p_ for p_ in plan2)
+
+
+def test_attack_width_keys_both_directions():
+    """Széles támadásnál kilépés-fegyelem, szűknél szűkítés-kulcs;
+    köztes értéknél hallgatás."""
+    from handball.pipeline.scouting import _coach_keys
+    wide = ScoutingReport(team="away", team_name="X",
+                          width_frames=200, width_sum_m=3000.0)
+    _, _, keys = _coach_keys(wide)
+    assert any("Szélesen támadnak" in k for k in keys)
+    narrow = ScoutingReport(team="away", team_name="X",
+                            width_frames=200, width_sum_m=1600.0)
+    _, _, k2 = _coach_keys(narrow)
+    assert any("Szűken támadnak" in k for k in k2)
+    mid = ScoutingReport(team="away", team_name="X",
+                         width_frames=200, width_sum_m=2300.0)
+    _, _, k3 = _coach_keys(mid)
+    assert not any("támadnak (" in k for k in k3)

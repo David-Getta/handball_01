@@ -252,6 +252,10 @@ class ScoutingReport:
     restart_for: int = 0
     restart_against: int = 0
     restart_matches: int = 0
+    # Támadás-szélesség: mérhető kockák + összterjedelem — meccsek
+    # közt összegződik, az átlag visszaszámolható.
+    width_frames: int = 0
+    width_sum_m: float = 0.0
     # A legjobb meccs-figurájuk: a leggólerősebb visszatérő minta
     # mérlege (meccsek közt a legerősebb marad — a címkék meccsenként
     # függetlenek, ezért nem összegzünk).
@@ -848,6 +852,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(
                 "A szélsőik alig vannak játékban — a faluk középen "
                 "dől el: szűkíthetsz, a sávot vállalhatod.")
+    # Támadás-szélesség: széthúzott vagy beszűkült támadójáték.
+    if rep.width_frames >= 100 and rep.width_sum_m > 0:
+        avg_w = rep.width_sum_m / rep.width_frames
+        if avg_w >= 14.0:
+            keys.append(
+                f"Szélesen támadnak (átlag {avg_w:.0f} m-re húzzák "
+                "szét a falat) — a szélső védőid ne csússzanak be: a "
+                "kilépés fegyelme ellenük a kulcs.")
+        elif avg_w <= 9.0:
+            keys.append(
+                f"Szűken támadnak (átlag {avg_w:.0f} m) — bátran "
+                "szűkíthetsz: a fal középen dolgozzon, a szélre alig "
+                "jár labda.")
     # A legjobb figurájuk: begyakorolt minta, ami gólt hoz — a fal
     # akkor véd ellene, ha az első passzokról felismeri.
     if rep.best_fig_attacks >= 3 and rep.best_fig_goals >= 2:
@@ -1250,6 +1267,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.restart_for = shs[team.value]
             rep.restart_against = shs[other]
             rep.restart_matches = 1
+        from .attack_types import attack_width
+        aw = attack_width(match, config)[team.value]
+        rep.width_frames = aw["frames"]
+        if aw["avg_width_m"] is not None:
+            rep.width_sum_m = round(aw["avg_width_m"] * aw["frames"], 1)
         from .setplays import setplay_efficiency
         rows_fig = setplay_efficiency(match, config).get(team.value) or []
         best_fig = max(rows_fig, key=lambda r: r["goals"], default=None)
@@ -2016,6 +2038,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
         restart_matches=sum(r.restart_matches for r in reports),
+        width_frames=sum(r.width_frames for r in reports),
+        width_sum_m=round(sum(r.width_sum_m for r in reports), 1),
         best_fig_attacks=max(reports,
                              key=lambda r: r.best_fig_goals)
         .best_fig_attacks,

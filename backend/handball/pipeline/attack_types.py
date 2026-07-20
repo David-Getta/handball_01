@@ -409,3 +409,47 @@ def pace_by_score(match, config=None) -> dict:
                 rec["avg_s"] = round(rec["sum_s"] / rec["attacks"], 1)
             rec["sum_s"] = round(rec["sum_s"], 1)
     return out
+
+
+# Támadás-szélesség: legalább ennyi mérhető kocka kell az átlaghoz.
+ATTACK_WIDTH_MIN_FRAMES = 100
+
+
+def attack_width(match, config=None) -> dict:
+    """Támadás-szélesség: mennyire húzza szét a csapat a pályát.
+
+    Saját labdabirtoklású kockánként a támadott térfélen lévő (nem
+    kapus) támadók oldalirányú terjedelme (max y − min y), legalább
+    3 látott támadóval. A széles játék a fal széthúzásának, a szűk a
+    közép-erőltetésnek a jele — mindkettő ellen más a recept.
+
+    Visszatérés csapatonként: {"frames", "avg_width_m"} — az átlag
+    None, ha nincs ATTACK_WIDTH_MIN_FRAMES mérhető kocka.
+    """
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig, possession_team
+
+    config = config or TacticsConfig()
+    acc = {"home": [0, 0.0], "away": [0, 0.0]}  # (kocka, összeg)
+    for fr in match.frames:
+        poss = possession_team(fr, config)
+        if poss is None:
+            continue
+        goal_x = config.attacks_toward_x(poss)
+        ys = [p.y for p in fr.players
+              if p.team == poss and p.role != "kapus"
+              and abs(p.x - goal_x) <= 15.0]
+        if len(ys) < 3:
+            continue
+        rec = acc[poss.value]
+        rec[0] += 1
+        rec[1] += max(ys) - min(ys)
+    out = {}
+    for side in ("home", "away"):
+        n, sum_w = acc[side]
+        out[side] = {
+            "frames": n,
+            "avg_width_m": (round(sum_w / n, 1)
+                            if n >= ATTACK_WIDTH_MIN_FRAMES else None),
+        }
+    return out

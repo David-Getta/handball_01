@@ -1314,6 +1314,19 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _sa("home"), _sa("away")))
         except Exception:
             pass
+        # Támadás-szélesség sora: szélesen vagy szűken támadnak-e.
+        try:
+            from .attack_types import attack_width
+            _aw = attack_width(match)
+            if any(_aw[s_]["avg_width_m"] is not None
+                   for s_ in ("home", "away")):
+                def _aw_txt(side):
+                    v = _aw[side]["avg_width_m"]
+                    return f"{v:.1f} m" if v is not None else "—"
+                rows.append(("Támadás-szélesség (átlag)",
+                             _aw_txt("home"), _aw_txt("away")))
+        except Exception:
+            pass
         # Gólcsend sora: a leghosszabb saját gól nélküli időszak, ha
         # legalább az egyik oldalon érdemi (5+ perc).
         try:

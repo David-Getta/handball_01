@@ -267,3 +267,35 @@ def test_pace_by_score_buckets_by_lead():
     assert res["leading"]["avg_s"] is not None
     assert res["level"]["avg_s"] is not None
     assert res["leading"]["avg_s"] > res["level"]["avg_s"]
+
+
+def test_attack_width_measures_spread():
+    """A széthúzott támadás nagyobb átlag-szélességet ad, mint a szűk;
+    kevés mintánál None."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.attack_types import attack_width
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    def build(ys):
+        frames = []
+        for t in range(150):
+            players = [pl(i + 1, Team.HOME, 30.0, ys[i])
+                       for i in range(len(ys))]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.5, y=ys[0],
+                                          confidence=1.0)))
+        return Match(MatchMeta(match_id="aw", home_team="H",
+                               away_team="A", fps=25.0), frames)
+
+    wide = attack_width(build([2.0, 10.0, 18.0]))["home"]
+    narrow = attack_width(build([8.0, 10.0, 12.0]))["home"]
+    assert wide["avg_width_m"] == 16.0
+    assert narrow["avg_width_m"] == 4.0
+    short = attack_width(Match(MatchMeta(match_id="aw2", home_team="H",
+                                         away_team="A", fps=25.0),
+                               build([2.0, 10.0, 18.0]).frames[:50]))
+    assert short["home"]["avg_width_m"] is None
