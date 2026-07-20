@@ -41,6 +41,10 @@ class SummaryPanel extends StatelessWidget {
   final List<dynamic> keyMoments;
   final Map<String, dynamic>? setplayEff;
 
+  /// Kulcs-pillanat jegyzetbe emelése (frame, címke) — ha null, nincs
+  /// jegyzet-gomb a sorokon.
+  final void Function(int frame, String label)? onNoteMoment;
+
   /// Edzés-fókusz javaslatok a backendtől: {"home": [...], "away": [...]}
   /// — elemenként {"area","title","why","drill"}. Null/üresnél nincs kártya.
   final Map<String, dynamic>? training;
@@ -69,6 +73,7 @@ class SummaryPanel extends StatelessWidget {
     this.keyPlayers,
     this.keyMoments = const [],
     this.setplayEff,
+    this.onNoteMoment,
     this.progression,
     this.goalTimeline = const [],
   });
@@ -310,6 +315,19 @@ class SummaryPanel extends StatelessWidget {
                   Expanded(
                       child: Text("${m["label"]}",
                           style: AppText.label.copyWith(fontSize: 12))),
+                  if (onNoteMoment != null)
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                          minWidth: 26, minHeight: 26),
+                      iconSize: 14,
+                      tooltip: "Jegyzetbe",
+                      icon: const Icon(Icons.note_add_outlined,
+                          color: AppColors.textFaint),
+                      onPressed: () => onNoteMoment!(
+                          ((m["t"] as num?) ?? 0).toInt(),
+                          "${m["label"]}"),
+                    ),
                 ]),
               ),
             ),
