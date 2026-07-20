@@ -1931,3 +1931,20 @@ def test_discipline_narrative_section():
                            suspensions=1)
     assert not any(s_["title"] == "Fegyelmük"
                    for s_ in scouting_narrative(clean))
+
+
+def test_best_figure_key_and_combine():
+    """A működő figura kulcsot ad (3+ támadás, 2+ gól); a kombinált
+    profilban a legerősebb meccs-figura marad."""
+    from handball.pipeline.scouting import _coach_keys, combine_reports
+    strong = ScoutingReport(team="away", team_name="X", matches=1,
+                            best_fig_attacks=4, best_fig_goals=3)
+    _, _, keys = _coach_keys(strong)
+    assert any("figurájuk, ami működik" in k for k in keys)
+    weak = ScoutingReport(team="away", team_name="X", matches=1,
+                          best_fig_attacks=2, best_fig_goals=1)
+    _, _, k2 = _coach_keys(weak)
+    assert not any("figurájuk, ami működik" in k for k in k2)
+    merged = combine_reports([weak, strong])
+    assert merged.best_fig_goals == 3
+    assert merged.best_fig_attacks == 4

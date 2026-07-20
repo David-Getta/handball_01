@@ -252,6 +252,11 @@ class ScoutingReport:
     restart_for: int = 0
     restart_against: int = 0
     restart_matches: int = 0
+    # A legjobb meccs-figurájuk: a leggólerősebb visszatérő minta
+    # mérlege (meccsek közt a legerősebb marad — a címkék meccsenként
+    # függetlenek, ezért nem összegzünk).
+    best_fig_attacks: int = 0
+    best_fig_goals: int = 0
     # Előny-kezelés: támadás-darab + összhossz állás szerint (vezetve /
     # hátrányban) — meccsek közt összegződik, az átlag visszaszámolható.
     lead_attacks: int = 0
@@ -843,6 +848,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(
                 "A szélsőik alig vannak játékban — a faluk középen "
                 "dől el: szűkíthetsz, a sávot vállalhatod.")
+    # A legjobb figurájuk: begyakorolt minta, ami gólt hoz — a fal
+    # akkor véd ellene, ha az első passzokról felismeri.
+    if rep.best_fig_attacks >= 3 and rep.best_fig_goals >= 2:
+        keys.append(
+            f"Van egy figurájuk, ami működik: {rep.best_fig_attacks} "
+            f"támadásból {rep.best_fig_goals} gól — nézd vissza a "
+            "figura-klipeket, és az első passzokról ismerjétek fel: "
+            "aki előbb lép, az töri meg.")
     # Előny-kezelés: időhúzás vezetve, kapkodás hátrányban.
     if (rep.lead_attacks >= 3 and rep.trail_attacks >= 3):
         lead_avg = rep.lead_sum_s / rep.lead_attacks
@@ -1237,6 +1250,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.restart_for = shs[team.value]
             rep.restart_against = shs[other]
             rep.restart_matches = 1
+        from .setplays import setplay_efficiency
+        rows_fig = setplay_efficiency(match, config).get(team.value) or []
+        best_fig = max(rows_fig, key=lambda r: r["goals"], default=None)
+        if best_fig is not None and best_fig["goals"] >= 1:
+            rep.best_fig_attacks = best_fig["attacks"]
+            rep.best_fig_goals = best_fig["goals"]
         from .attack_types import pace_by_score
         pbs = pace_by_score(match, config)[team.value]
         rep.lead_attacks = pbs["leading"]["attacks"]
@@ -1986,6 +2005,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
         restart_matches=sum(r.restart_matches for r in reports),
+        best_fig_attacks=max(reports,
+                             key=lambda r: r.best_fig_goals)
+        .best_fig_attacks,
+        best_fig_goals=max(r.best_fig_goals for r in reports),
         lead_attacks=sum(r.lead_attacks for r in reports),
         lead_sum_s=round(sum(r.lead_sum_s for r in reports), 1),
         trail_attacks=sum(r.trail_attacks for r in reports),
