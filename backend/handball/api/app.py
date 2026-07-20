@@ -2714,11 +2714,13 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         r = discover_setplays(match, threshold=threshold)
+        from ..pipeline.setplays import setplay_efficiency
         return {
             "attacks": r.attacks,
             "num_figures": r.num_figures,
             "figure_sizes": r.figure_sizes,
             "labels": r.labels,
+            "efficiency": setplay_efficiency(match, threshold=threshold),
         }
 
     @app.get("/matches/{match_id}/events")

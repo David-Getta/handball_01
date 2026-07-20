@@ -274,3 +274,52 @@ def discover_setplays(match: Match, config: TacticsConfig | None = None,
         figure_sizes=sizes,
         labels=labels,
     )
+
+
+def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
+                       threshold: float = 0.15, min_length: int = 5,
+                       min_attacks: int = 2) -> dict:
+    """Melyik figura működik: klaszterenként támadás / lövés / gól.
+
+    A figurákat csapatonként külön klaszterezzük (a két csapat mintái
+    ne keveredjenek), és minden támadás-szakaszhoz hozzárendeljük a
+    benne (vagy közvetlenül utána, 3 mp-en belül) esett lövéseket.
+    A felderítésben ebből lesz a "melyik figurájuk veszélyes" kép.
+
+    Visszatérés csapatonként: [{"figure", "attacks", "shots", "goals",
+    "goal_pct"}] — csak a min_attacks-szor látott figurák, gyakoriság
+    szerint csökkenő sorrendben.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(3.0 * fps)
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        agg: dict = {}
+        for seq, lab in zip(seqs, labels):
+            rec = agg.setdefault(lab, {"attacks": 0, "shots": 0,
+                                       "goals": 0})
+            rec["attacks"] += 1
+            for e in shots_ev:
+                if e.team == team and \
+                        seq.start_t <= e.t <= seq.end_t + tail:
+                    rec["shots"] += 1
+                    if e.type == EventType.GOAL:
+                        rec["goals"] += 1
+        rows = [{"figure": int(lab), **rec,
+                 "goal_pct": round(100.0 * rec["goals"] / rec["attacks"],
+                                   1)}
+                for lab, rec in agg.items()
+                if rec["attacks"] >= min_attacks]
+        rows.sort(key=lambda r: (-r["attacks"], -r["goals"]))
+        out[team.value] = rows
+    return out
