@@ -214,3 +214,38 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_setplay_efficiency_counts_goals_per_figure():
+    """Az azonos mintázatú, gólra vitt támadások egy figuraként, a
+    gól-hozammal együtt jelennek meg."""
+    from handball.pipeline.setplays import setplay_efficiency
+
+    frames = []
+    t = 0
+    for _ in range(3):  # három azonos mintájú hazai támadás...
+        for i in range(8):
+            frames.append(_home_attack_frame(t, [30.0, 28.0, 32.0]))
+            t += 1
+        # ...mindegyik gólba fut (a labda a +x kapuba repül).
+        for i in range(8):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.5, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(MatchMeta(match_id="eff", home_team="A", away_team="B",
+                        fps=25.0), frames)
+    eff = setplay_efficiency(m)
+    rows = eff["home"]
+    assert rows, eff
+    top = rows[0]
+    assert top["attacks"] >= 3
+    assert top["goals"] >= 2
+    assert top["goal_pct"] > 0
+    assert eff["away"] == []

@@ -326,6 +326,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     if known:
         body += (" Leggyakoribb védekezési forma — "
                  + ", ".join(f"{n}: {f}" for n, f in known) + ".")
+    # Figura-hatékonyság: melyik begyakorolt támadás hozott gólt.
+    try:
+        from .setplays import setplay_efficiency
+        eff_sp = setplay_efficiency(match)
+        for side, name in (("home", home), ("away", away)):
+            rows_sp = eff_sp.get(side) or []
+            best_sp = max(rows_sp, key=lambda r: r["goals"], default=None)
+            if best_sp and best_sp["attacks"] >= 3 \
+                    and best_sp["goals"] >= 2:
+                body += (f" A(z) {name} legjobb figurája "
+                         f"{best_sp['attacks']} támadásból "
+                         f"{best_sp['goals']} gólt hozott "
+                         f"({best_sp['goal_pct']:.0f}%).")
+    except Exception:
+        pass
     # Előny-kezelés: időhúzás vezetve / kapkodás hátrányban (8+ mp).
     try:
         from .attack_types import pace_by_score
