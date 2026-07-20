@@ -1670,6 +1670,36 @@ def create_app():
                 xg_saved_away = xs["away"]
         except Exception:
             pass
+        # Egymondatos főcím a könyvtár-listához: eredmény + jelleg +
+        # a meccs embere (ha kirajzolódik).
+        headline = None
+        try:
+            total_g = goals_home + goals_away
+            if total_g:
+                margin = abs(goals_home - goals_away)
+                if goals_home == goals_away:
+                    core = f"döntetlen ({goals_home}–{goals_away})"
+                else:
+                    wname = (m.meta.home_team if goals_home > goals_away
+                             else m.meta.away_team)
+                    jelleg = ("szoros" if margin <= 2
+                              else "sima" if margin >= 6 else "")
+                    core = (f"{wname}-siker "
+                            f"({goals_home}–{goals_away})")
+                    if jelleg:
+                        core = f"{jelleg} {core}"
+                headline = core[0].upper() + core[1:]
+                from ..pipeline.xg import match_xg
+                best_sc = None
+                for rec_sc in match_xg(m).get("shooters", []):
+                    if best_sc is None or rec_sc["goals"] > best_sc["goals"]:
+                        best_sc = rec_sc
+                if best_sc is not None and best_sc["goals"] >= 4:
+                    headline += (f" — a meccs embere a(z) "
+                                 f"{best_sc['player_id']}. játékos "
+                                 f"({best_sc['goals']} gól)")
+        except Exception:
+            pass
         susp_home = susp_away = None
         try:
             from ..pipeline.rules import detect_powerplay
@@ -1707,6 +1737,7 @@ def create_app():
             "blocks_away": blocks_away,
             "fastest_kmh": fastest_kmh,
             "xg_saved_home": xg_saved_home,
+            "headline": headline,
             "suspensions_home": susp_home,
             "suspensions_away": susp_away,
             "xg_saved_away": xg_saved_away,
