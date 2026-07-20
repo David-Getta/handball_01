@@ -2073,6 +2073,14 @@ szabad lövőt enged: "
                     ],
                   ]),
                   const SizedBox(height: 6),
+                  // Egymondatos főcím: mi történt a meccsen (ha megjött).
+                  if ((sum?["headline"] as String?) != null) ...[
+                    Text(sum!["headline"] as String,
+                        style: AppText.value.copyWith(
+                            fontSize: 12.5, color: AppColors.gold),
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                  ],
                   Text(meta, style: AppText.label.copyWith(fontSize: 12)),
                   if (sum != null) ...[
                     const SizedBox(height: 4),
