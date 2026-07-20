@@ -1983,3 +1983,21 @@ def test_attack_width_keys_both_directions():
                          width_frames=200, width_sum_m=2300.0)
     _, _, k3 = _coach_keys(mid)
     assert not any("támadnak (" in k for k in k3)
+
+
+def test_matchup_plan_width_rule():
+    """12. szabály: az ő széles játékuk × a mi szél-góljaink —
+    páros-feltételes."""
+    from handball.pipeline.scouting import matchup_plan
+    own = ScoutingReport(team="home", team_name="Mi",
+                         gk_conceded_zones={"balszél": 3, "jobbszél": 1,
+                                            "átlövés közép": 4})
+    opp = ScoutingReport(team="away", team_name="Ok",
+                         width_frames=200, width_sum_m=3000.0)
+    plan = matchup_plan(own, opp)
+    assert any("szélső-védő kilépés-fegyelme" in p_ for p_ in plan)
+    center = ScoutingReport(team="home", team_name="Mi",
+                            gk_conceded_zones={"átlövés közép": 8})
+    plan2 = matchup_plan(center, opp)
+    assert not any("kilépés-fegyelme ezen a meccsen" in p_
+                   for p_ in plan2)
