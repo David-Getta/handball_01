@@ -1870,6 +1870,23 @@ def matchup_plan(own: "ScoutingReport",
             "— a figura-felismerés nálatok életbiztosítás: nézzétek a "
             "figura-klipeket, és az első passznál szóljon a fal.")
 
+    # 12) Az ő széles játékuk × a ti szélről kapott góljaitok.
+    opp_avg_w = (opp.width_sum_m / opp.width_frames
+                 if opp.width_frames >= 100 and opp.width_sum_m > 0
+                 else None)
+    own_conc_zones = own.gk_conceded_zones or {}
+    own_conc = sum(own_conc_zones.values())
+    own_wing_conc = sum(v for z, v in own_conc_zones.items()
+                        if "szél" in z)
+    if (opp_avg_w is not None and opp_avg_w >= 14.0
+            and own_conc >= 6 and own_wing_conc / own_conc >= 0.4):
+        plan.append(
+            f"Szélesen játszanak (átlag {opp_avg_w:.0f} m), ti pedig a "
+            f"kapott gólok {100.0 * own_wing_conc / own_conc:.0f}%-át "
+            "szélről kapjátok — a szélső-védő kilépés-fegyelme ezen a "
+            "meccsen döntő: későn kilépni tilos, besegíteni középre "
+            "csak labda-oldalon.")
+
     # 10) Az ő időhúzásuk × a ti erős kezdésetek.
     if (opp.lead_attacks >= 3 and opp.trail_attacks >= 3
             and own.fh_goals_for - own.fh_goals_against >= 3):
