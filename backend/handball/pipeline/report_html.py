@@ -2030,6 +2030,7 @@ def player_report_html(match, track_id: int) -> str:
             game_items.append(_metric("Blokk", str(n_blk)))
     except Exception:
         pass
+    seven_dirs: dict = {}
     try:
         from .rules import seven_meter_outcomes
         sv_a = sv_g = 0
@@ -2037,9 +2038,21 @@ def player_report_html(match, track_id: int) -> str:
             if sm.get("shooter_id") in tids:
                 sv_a += 1
                 sv_g += int(sm["outcome"] == "gól")
+                if sm.get("irany"):
+                    seven_dirs[sm["irany"]] = \
+                        seven_dirs.get(sm["irany"], 0) + 1
         if sv_a:
             game_items.append(_metric("Hetes (gól/kísérlet)",
                                       f"{sv_g}/{sv_a}"))
+        if seven_dirs:
+            hu_d7 = {"bal": "balra", "jobb": "jobbra",
+                     "közép": "középre"}
+            game_items.append(_metric(
+                "Heteseid irányai",
+                " · ".join(f"{hu_d7.get(d_, d_)} {n_}×"
+                           for d_, n_ in sorted(
+                               seven_dirs.items(),
+                               key=lambda kv: -kv[1]))))
     except Exception:
         pass
     try:
@@ -2171,6 +2184,14 @@ def player_report_html(match, track_id: int) -> str:
             tips.append(
                 f"Hetes-rutin: {sv_g2}/{sv_a2} a mérleged — nyomás "
                 "alatti hetes-sorozatok edzésen, kapussal.")
+        # Kiszámíthatóság: ha a mért heteseid nagy része egy sávba
+        # megy, a kapusok előbb-utóbb rád tanulnak.
+        n_d7 = sum(seven_dirs.values())
+        if n_d7 >= 2 and max(seven_dirs.values()) / n_d7 >= 0.75:
+            tips.append(
+                "Hetes-irány: kiszámítható vagy — a mért heteseid "
+                "nagy része ugyanabba a sávba megy; edzésen tudatosan "
+                "váltogasd az irányt.")
     except Exception:
         pass
     # Kapus-javaslatok: forma-jel és a leggyengébb zóna — csak kapusnak.
