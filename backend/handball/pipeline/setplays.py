@@ -287,8 +287,9 @@ def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
     A felderítésben ebből lesz a "melyik figurájuk veszélyes" kép.
 
     Visszatérés csapatonként: [{"figure", "attacks", "shots", "goals",
-    "goal_pct"}] — csak a min_attacks-szor látott figurák, gyakoriság
-    szerint csökkenő sorrendben.
+    "goal_pct", "starts"}] — csak a min_attacks-szor látott figurák,
+    gyakoriság szerint csökkenő sorrendben; a starts a figura
+    támadásainak kezdő-frame-jei (klip-exporthoz).
     """
     from .event_detection import EventType, detect_shots
 
@@ -307,8 +308,9 @@ def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
         agg: dict = {}
         for seq, lab in zip(seqs, labels):
             rec = agg.setdefault(lab, {"attacks": 0, "shots": 0,
-                                       "goals": 0})
+                                       "goals": 0, "starts": []})
             rec["attacks"] += 1
+            rec["starts"].append(int(seq.start_t))
             for e in shots_ev:
                 if e.team == team and \
                         seq.start_t <= e.t <= seq.end_t + tail:

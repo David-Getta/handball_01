@@ -1256,6 +1256,26 @@ def create_app():
                                    for e_ in blk[side].get("events", [])]
                     except Exception:
                         pass
+                if "best_figure" in types:
+                    # A legjobb (leggólerősebb) figura támadásai
+                    # csapatonként — "tanuld meg felismerni" csomag.
+                    try:
+                        from ..pipeline.setplays import setplay_efficiency
+                        eff_bf = setplay_efficiency(match)
+                        for side in ("home", "away"):
+                            rows_bf = eff_bf.get(side) or []
+                            best_bf = max(rows_bf,
+                                          key=lambda r: r["goals"],
+                                          default=None)
+                            if best_bf is None or best_bf["goals"] < 1:
+                                continue
+                            ev += [{"t": t_bf, "type": "best_figure",
+                                    "team": side,
+                                    "label": (f"{best_bf['figure'] + 1}. "
+                                              "figura")}
+                                   for t_bf in best_bf.get("starts", [])]
+                    except Exception:
+                        pass
                 if "key_moment" in types:
                     # A meccs gerince videóban: a key_moments réteg
                     # pillanataiból egy-egy klip, a címkével a
