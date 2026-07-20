@@ -61,6 +61,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic>? _quality;
   Map<String, dynamic>? _keyPlayers;
   List<dynamic> _keyMoments = const [];
+  Map<String, dynamic>? _setplayEff;
   // Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary).
   Map<String, dynamic>? _coach;
   // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
@@ -142,6 +143,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<String, dynamic>? quality;
     Map<String, dynamic>? keyPlayers;
     List<dynamic> keyMoments = const [];
+    Map<String, dynamic>? setplayEff;
     List<Map<String, dynamic>> notes = [];
     Map<String, dynamic>? coach;
     List<Map<String, dynamic>> attacks = [];
@@ -278,6 +280,12 @@ class _MatchScreenState extends State<MatchScreen> {
           keyMoments = const []; // kulcs-pillanatok nélkül is teljes
         }
         try {
+          setplayEff = (await _api.fetchSetplays(widget.matchId))["efficiency"]
+              as Map<String, dynamic>?;
+        } catch (_) {
+          setplayEff = null; // figura-kép nélkül is teljes a nézet
+        }
+        try {
           notes = await _api.fetchNotes(widget.matchId);
         } catch (_) {
           notes = []; // jegyzetek nélkül is teljes a nézet
@@ -303,6 +311,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _quality = quality;
       _keyPlayers = keyPlayers;
       _keyMoments = keyMoments;
+      _setplayEff = setplayEff;
       _notes = notes;
       _coach = coach;
       _attacks = attacks;
@@ -2594,6 +2603,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           training: _training,
                           keyPlayers: _keyPlayers,
                           keyMoments: _keyMoments,
+                          setplayEff: _setplayEff,
                           progression: _progression,
                           goalTimeline: _goalTimeline,
                         ),

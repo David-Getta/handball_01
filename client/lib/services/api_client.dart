@@ -239,6 +239,18 @@ class ApiClient {
     return resp.bodyBytes;
   }
 
+  /// Figura-felismerés (GET /matches/{id}/setplays): visszatérő
+  /// támadás-minták + hatékonyság (efficiency) csapatonként.
+  Future<Map<String, dynamic>> fetchSetplays(String matchId) async {
+    final resp =
+        await http.get(Uri.parse("$baseUrl/matches/$matchId/setplays"));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült a figura-elemzés: HTTP ${resp.statusCode}");
+    }
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Kulcs-pillanatok (GET /matches/{id}/key-moments): a meccs gerince
   /// időrendben — az app kattintható listájához.
   Future<List<dynamic>> fetchKeyMoments(String matchId) async {
