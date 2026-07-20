@@ -248,4 +248,7 @@ def test_setplay_efficiency_counts_goals_per_figure():
     assert top["attacks"] >= 3
     assert top["goals"] >= 2
     assert top["goal_pct"] > 0
+    # A klip-exporthoz a figura kezdő-frame-jei is megvannak.
+    assert len(top["starts"]) == top["attacks"]
+    assert all(isinstance(t_, int) for t_ in top["starts"])
     assert eff["away"] == []

@@ -642,6 +642,16 @@ class _MatchScreenState extends State<MatchScreen> {
                     _exportClips(match, typesOverride: ["top_shooter"]),
             icon: const Icon(Icons.person_search, color: AppColors.gold),
           ),
+          // Legjobb figura: a leggólerősebb visszatérő támadás-minta
+          // klipjei — az ellenfél "kenyerének" felismeréséhez.
+          IconButton(
+            tooltip: "Figura-klipek (a legjobb visszatérő minta)",
+            onPressed: _exportingClips
+                ? null
+                : () => _exportClips(match,
+                    typesOverride: ["best_figure"]),
+            icon: const Icon(Icons.pattern, color: AppColors.accent),
+          ),
           // Kulcs-pillanatok: a meccs gerince (fordulópont, sorozatok,
           // kiállítások, hetesek, kapuscserék) egy klip-csomagban.
           IconButton(
