@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#398)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#403)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -143,7 +143,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   HTML-ben — játék-mérleg (gól/lövés, xG, ziccer, blokk, hetes,
   kiharcolások), fizikai mutatók és "Mire figyelj" személyes
   javaslatok; gomb a Statisztika fülön, jatekos_lapok/ mappa a
-  csomagban, API-végpont. (#395–#398)
+  csomagban, API-végpont. A kapus saját mérleget kap (védés%, GSAx,
+  hetes-védés, indítás) kapus-javaslatokkal (forma-jel, leggyengébb
+  zóna). (#395–#398, #400, #401)
+- **Fejlődés-riport nyomtatva**: a két időszak trend-összevetése
+  kiosztható HTML-ben (irány-jelekkel, összegzéssel) — letöltés-gomb
+  a trend-képernyőn. (#402)
+- **Meccs-főcímek a könyvtárban**: minden kártyán egymondatos
+  történet ("Szoros Hazai-siker (28–26) — a meccs embere a 7.
+  játékos") — a szezon görgetve is olvasható. (#403)
 - **A meccs gerince (kulcs-pillanatok)**: fordulópont, sorozatok,
   kiállítások, hetesek, kapuscserék és vezetés-váltások egy közös
   rétegben — kattintható kártya az appban (ugrás a videóban),
