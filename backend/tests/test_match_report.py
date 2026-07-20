@@ -54,6 +54,8 @@ def test_report_includes_player_load_when_given():
     assert "Játékos-terhelés" in html
     assert "Max km/h" in html and "Sprint" in html
     assert "2. félidei tempó" in html
+    # A játék-mérleg oszlopok is ott vannak (gól/lövés + gól−xG).
+    assert "Gól/lövés" in html and "Gól−xG" in html
     # nélküle a szakasz sem jelenik meg
     assert "Játékos-terhelés" not in match_report_html(m, {}, [], None)
 
