@@ -35,7 +35,8 @@ _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
             "missed_chance": "kihagyott-ziccer", "big_save": "nagy-vedes",
             "top_shooter": "fo-lovo", "empty_net": "het-a-hat",
             "turning_point": "fordulopont", "block": "blokk",
-            "key_moment": "kulcs-pillanat", "best_figure": "figura"}
+            "key_moment": "kulcs-pillanat", "best_figure": "figura",
+            "free_shot": "szabad-lovo"}
 
 
 @dataclass
