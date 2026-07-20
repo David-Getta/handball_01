@@ -90,6 +90,11 @@ def test_package_without_video_contains_report_and_csv():
     if "kulcs_pillanatok.txt" in names:
         kp = z.read("kulcs_pillanatok.txt").decode("utf-8")
         assert kp.startswith("[")
+    # Játékos-lapok: minden játékosnak egy HTML a jatekos_lapok/ alatt.
+    pl_pages = [n for n in names if n.startswith("jatekos_lapok/")]
+    assert pl_pages, names
+    phtml = z.read(pl_pages[0]).decode("utf-8")
+    assert "JÁTÉKOS-LAP" in phtml
     # Az edzői összefoglaló sima szövegként is (osszefoglalo.txt).
     assert "osszefoglalo.txt" in names
     txt = z.read("osszefoglalo.txt").decode("utf-8")
