@@ -1567,6 +1567,20 @@ def create_app():
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey, "points": points}
 
+    @app.get("/players/season-report")
+    def get_player_season_report(team: str, jersey: int):
+        """Szezon játékos-lap nyomtatható HTML-ben: a játékos meccsről
+        meccsre (a /players/trend pontjaiból). 404, ha a mezszámhoz
+        egyetlen meccsen sincs adat."""
+        from fastapi.responses import HTMLResponse
+        data = get_player_trend(team, jersey)
+        if not data["points"]:
+            raise HTTPException(status_code=404,
+                                detail="no data for player")
+        from ..pipeline.report_html import player_season_html
+        return HTMLResponse(content=player_season_html(
+            team, jersey, data["points"]))
+
     # Szezon-összkép gyorsítótár: meccsenkénti kivonat, a frame-szám a
     # kulcs érvényessége — újrafeldolgozásnál magától frissül.
     _summary_cache: dict = {}
