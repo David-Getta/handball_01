@@ -728,6 +728,15 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                     post_of[tid_] = r_["poszt"]
         except Exception:
             pass
+        # Játék-mérleg trackenként (gól/lövés + gól−xG) — a fizikai és
+        # a játék-teljesítmény így egy sorban olvasható.
+        shooter_of: dict = {}
+        try:
+            from .xg import match_xg
+            for r_sh in match_xg(match).get("shooters", []):
+                shooter_of[r_sh["player_id"]] = r_sh
+        except Exception:
+            pass
         rows = []
         for g in ranked:
             name = meta.home_team if g["team"] == "home" else meta.away_team
@@ -740,12 +749,22 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 fade = (f"−{d:.0f}%" if d > 0 else f"+{-d:.0f}%")
             else:
                 fade = "—"
+            g_goals = sum(shooter_of.get(t, {}).get("goals", 0)
+                          for t in g["track_ids"])
+            g_shots = sum(shooter_of.get(t, {}).get("shots", 0)
+                          for t in g["track_ids"])
+            g_diff = sum(shooter_of.get(t, {}).get("diff", 0.0)
+                         for t in g["track_ids"])
+            game = f"{g_goals}/{g_shots}" if g_shots else "—"
+            diff_txt = f"{g_diff:+.1f}" if g_shots else "—"
             rows.append(
                 f"<tr><td>{escape(g['label'])}</td><td>{escape(name)}</td>"
                 f"<td>{escape(poszt)}</td>"
                 f'<td class="num">{g["distance_m"]:.0f} m</td>'
                 f'<td class="num">{g["top_speed_ms"] * 3.6:.1f}</td>'
                 f'<td class="num">{g["sprint_count"]}</td>'
+                f'<td class="num">{game}</td>'
+                f'<td class="num">{diff_txt}</td>'
                 f'<td class="num">{fade}</td></tr>')
         if rows:
             load_html = ('<h2>Játékos-terhelés (top 10 táv szerint)</h2>'
@@ -753,6 +772,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                          '<th>Poszt</th>'
                          '<th class="num">Táv</th><th class="num">Max km/h</th>'
                          '<th class="num">Sprint</th>'
+                         '<th class="num">Gól/lövés</th>'
+                         '<th class="num">Gól−xG</th>'
                          '<th class="num">2. félidei tempó</th></tr>'
                          + "".join(rows) + "</table>")
 
