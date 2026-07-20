@@ -219,3 +219,33 @@ def test_player_season_html_totals_and_rows():
     assert "3/5" in html            # gól/lövés az összesítőben és a sorban
     assert "2026-01-17" in html and "—" in html
     assert "Csúcssebesség" in html
+
+
+def test_player_season_html_goalkeeper_columns():
+    """Kapus mezszámnál a szezon-lap Védés és GSAx oszlopot + kapus-
+    összesítőt hoz; mezőnyjátékosnál ezek nincsenek."""
+    from handball.pipeline.report_html import player_season_html
+    gk_points = [
+        {"match_id": "m1", "date": "2026-01-10", "opponent": "A",
+         "distance_m": 900.0, "top_speed_ms": 4.0, "sprint_count": 1,
+         "minutes": 55.0, "shots": 0, "goals": 0, "xg": None,
+         "xg_diff": None, "gk_on_target": 12, "gk_saves": 5,
+         "gk_prevented": 1.2},
+        {"match_id": "m2", "date": "2026-01-17", "opponent": "B",
+         "distance_m": 850.0, "top_speed_ms": 4.2, "sprint_count": 0,
+         "minutes": 60.0, "shots": 0, "goals": 0, "xg": None,
+         "xg_diff": None, "gk_on_target": 8, "gk_saves": 4,
+         "gk_prevented": -0.4},
+    ]
+    html = player_season_html("Mi", 16, gk_points)
+    assert "Védés összesen" in html and "9/20 (45%)" in html
+    assert "GSAx összesen" in html and "+0.8" in html
+    assert "5/12" in html and "4/8" in html
+    field_points = [{"match_id": "m1", "date": "2026-01-10",
+                     "opponent": "A", "distance_m": 4200.0,
+                     "top_speed_ms": 6.5, "sprint_count": 9,
+                     "minutes": 42.0, "shots": 5, "goals": 3,
+                     "xg": 2.4, "xg_diff": 0.6, "gk_on_target": None,
+                     "gk_saves": None, "gk_prevented": None}]
+    html2 = player_season_html("Mi", 7, field_points)
+    assert "Védés összesen" not in html2 and "GSAx" not in html2
