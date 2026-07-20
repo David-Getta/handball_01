@@ -2210,12 +2210,9 @@ meccsjelentésben.</footer>
 </div></body></html>"""
 
 
-def trend_report_html(tr: dict) -> str:
-    """Fejlődés-riport: a két időszak trend-összevetése nyomtatható
-    HTML-ben — mutatónként régi/új érték és irány, plusz az összegző
-    mondatok. A /scouting/trend kimenetét rendereli.
-    """
-    name = tr.get("team_name") or "Csapat"
+def _trend_metrics_table(tr: dict) -> str:
+    """A trend-mutatók táblája (régi/új/irány) — a fejlődés- és a
+    szezon-riport közös építőeleme."""
     rows = []
     for m_ in tr.get("metrics", []):
         better = m_.get("better")
@@ -2232,10 +2229,19 @@ def trend_report_html(tr: dict) -> str:
             "</td>"
             f'<td class="num {cls}">{arrow} '
             f'{m_.get("delta", 0):+.1f}{escape(unit)}</td></tr>')
-    table = ("<table><tr><th>Mutató</th>"
-             '<th class="num">Régebbi</th><th class="num">Újabb</th>'
-             '<th class="num">Változás</th></tr>'
-             + "".join(rows) + "</table>") if rows else         '<p class="empty">Nincs összevethető mutató.</p>'
+    return ("<table><tr><th>Mutató</th>"
+            '<th class="num">Régebbi</th><th class="num">Újabb</th>'
+            '<th class="num">Változás</th></tr>'
+            + "".join(rows) + "</table>") if rows else         '<p class="empty">Nincs összevethető mutató.</p>'
+
+
+def trend_report_html(tr: dict) -> str:
+    """Fejlődés-riport: a két időszak trend-összevetése nyomtatható
+    HTML-ben — mutatónként régi/új érték és irány, plusz az összegző
+    mondatok. A /scouting/trend kimenetét rendereli.
+    """
+    name = tr.get("team_name") or "Csapat"
+    table = _trend_metrics_table(tr)
     summary = "".join(f"<li>{escape(s_)}</li>"
                       for s_ in tr.get("summary", []))
     return f"""<!DOCTYPE html>
@@ -2414,4 +2420,72 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
 <footer>A mezszám-hozzárendelés utáni track-csoportok összegzett
 számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
 </footer>
+</div></body></html>"""
+
+
+def season_report_html(team: str, tr: dict, focuses: list[dict],
+                       n_matches: int) -> str:
+    """Szezon-riport: a csapat szezonja egy oldalon — automatikus
+    időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
+    """
+    table = _trend_metrics_table(tr)
+    summary = "".join(f"<li>{escape(s_)}</li>"
+                      for s_ in tr.get("summary", []))
+    focus_html = ""
+    if focuses:
+        items = "".join(
+            f"<li><b>{escape(str(f_.get('title', '')))}</b> "
+            f"({escape(str(f_.get('area', '')))}) — "
+            f"{f_.get('count', 0)} meccsen; gyakorlat: "
+            f"{escape(str(f_.get('drill', '')))}</li>"
+            for f_ in focuses)
+        focus_html = ("<h2>Visszatérő edzés-fókuszok</h2><ul>"
+                      + items + "</ul>")
+    return f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Szezon-riport — {escape(team)}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+         Arial, sans-serif; color: #101722; background: #fff;
+         line-height: 1.5; }}
+  .page {{ max-width: 720px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px;
+           margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em;
+           text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+       color: #12988a; margin: 26px 0 10px; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+  th, td {{ padding: 7px 10px; border-bottom: 1px solid #E3E8EF;
+           text-align: left; }}
+  th.num, td.num {{ text-align: right; }}
+  td.up {{ color: #0B7A45; font-weight: 600; }}
+  td.down {{ color: #B42318; font-weight: 600; }}
+  ul {{ margin: 8px 0 0; padding-left: 20px; }}
+  li {{ font-size: 13px; margin-bottom: 6px; }}
+  .empty {{ color: #8492A6; font-size: 13px; }}
+  footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
+</style>
+</head>
+<body><div class="page">
+<header>
+  <div class="brand">SPORT MACHINE · SZEZON-RIPORT</div>
+  <h1>{escape(team)}</h1>
+  <div class="sub">{n_matches} elemzett meccs — az első és a második
+  fele automatikusan összevetve ({tr.get("older_matches", 0)} vs
+  {tr.get("newer_matches", 0)} meccs).</div>
+</header>
+<h2>Fejlődés a szezonon belül</h2>
+{table}
+<h2>Összegzés</h2>
+<ul>{summary}</ul>
+{focus_html}
+<footer>▲ javulás · ▼ romlás · – semleges irányú mutató; a darabszám-
+mutatók meccsenkénti átlagra normálva. A visszatérő fókusz: ami
+legalább két meccsen előjött — nem egyszeri kisiklás.</footer>
 </div></body></html>"""
