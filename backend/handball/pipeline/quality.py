@@ -238,6 +238,18 @@ def analysis_confidence(match: Match) -> list[dict]:
     except Exception:
         pass
 
+    n_field = n_jersey = 0
+    seen_tracks: set = set()
+    for f in match.frames:
+        for p in f.players:
+            if p.track_id in seen_tracks or p.role == "kapus":
+                continue
+            seen_tracks.add(p.track_id)
+            n_field += 1
+            if p.jersey_number is not None:
+                n_jersey += 1
+    jersey_cov = (100.0 * n_jersey / n_field) if n_field else 0.0
+
     def row(layer, label, ok, ok_reason, fail_reason):
         return {"layer": layer, "label": label, "available": bool(ok),
                 "reason": ok_reason if ok else fail_reason}
@@ -261,6 +273,11 @@ def analysis_confidence(match: Match) -> list[dict]:
         row("conditioning", "Kondíció / fáradás", dur_s >= 300.0,
             f"{dur_s / 60:.0f} perces felvétel",
             "5 percnél rövidebb felvétel — tempó-trend nem mérhető"),
+        row("jerseys", "Mezszám-alapú rétegek (játékos-lap, trend)",
+            jersey_cov >= 50.0,
+            f"{jersey_cov:.0f}% mezszám-lefedettség",
+            f"kevés mezszám ({jersey_cov:.0f}% < 50%) — rendelj "
+            "számokat a játékosokhoz a meccs-nézetben"),
         row("positions", "Poszt-becslés", n_positions >= 6,
             f"{n_positions} játékos posztja becsülhető",
             f"kevés poszt-minta ({n_positions} < 6 játékos) — a "

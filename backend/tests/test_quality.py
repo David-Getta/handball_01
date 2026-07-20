@@ -233,3 +233,31 @@ def test_confidence_includes_positions_layer():
     pos = next(r for r in rows if r["layer"] == "positions")
     assert pos["available"] is False
     assert "poszt" in pos["reason"]
+
+
+def test_confidence_includes_jersey_layer():
+    """A mezszám-lefedettség sor jelen van: mezszámos meccsnél
+    elérhető, szám nélküli meccsnél magyar teendővel jelez."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.quality import analysis_confidence
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    rows = analysis_confidence(simulate_ground_truth(duration_s=10,
+                                                     fps=25.0, seed=3))
+    jr = next(r for r in rows if r["layer"] == "jerseys")
+    assert "mezszám" in jr["reason"]
+
+    frames = [Frame(t=0, players=[
+        PlayerPosition(track_id=1, team=Team.HOME, x=10.0, y=10.0,
+                       source=PositionSource.MEASURED, confidence=1.0),
+        PlayerPosition(track_id=2, team=Team.AWAY, x=30.0, y=10.0,
+                       source=PositionSource.MEASURED, confidence=1.0),
+    ], ball=Ball(x=20.0, y=10.0, confidence=1.0))]
+    m = Match(MatchMeta(match_id="jq", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    jr2 = next(r for r in analysis_confidence(m)
+               if r["layer"] == "jerseys")
+    assert jr2["available"] is False
+    assert "rendelj" in jr2["reason"]
