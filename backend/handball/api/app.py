@@ -1256,6 +1256,17 @@ def create_app():
                                    for e_ in blk[side].get("events", [])]
                     except Exception:
                         pass
+                if "key_moment" in types:
+                    # A meccs gerince videóban: a key_moments réteg
+                    # pillanataiból egy-egy klip, a címkével a
+                    # fájlnévben.
+                    try:
+                        from ..pipeline.momentum import key_moments
+                        ev += [{"t": km["t"], "type": "key_moment",
+                                "team": "home", "label": km["label"]}
+                               for km in key_moments(match)]
+                    except Exception:
+                        pass
                 if "turning_point" in types:
                     # A meccs fordulópontja: a győzelmi esély legnagyobb
                     # billenésének pillanata (ha volt legalább 2 gól).

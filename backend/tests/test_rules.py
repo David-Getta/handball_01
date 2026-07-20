@@ -327,3 +327,19 @@ def test_key_moments_includes_powerplay_and_seven():
     # Időrend: a t értékek nem csökkennek.
     ts = [k["t"] for k in kms]
     assert ts == sorted(ts)
+
+
+def test_key_moment_clip_type_mapped():
+    """A kulcs-pillanat klip-típus magyar fájlnév-címkét kap, és a
+    key_moments elemei klip-eseménnyé alakíthatók (label-lel)."""
+    from handball.pipeline.clips import _TYPE_HU
+    from handball.pipeline.momentum import key_moments
+
+    assert _TYPE_HU["key_moment"] == "kulcs-pillanat"
+    frames = _roster_frames(0, 30, 6, 6)
+    frames += _roster_frames(750, 60, 5, 6)
+    frames += _roster_frames(2250, 30, 6, 6)
+    m = Match(_meta(), frames)
+    ev = [{"t": km["t"], "type": "key_moment", "team": "home",
+           "label": km["label"]} for km in key_moments(m)]
+    assert ev and all("label" in e and e["label"] for e in ev)
