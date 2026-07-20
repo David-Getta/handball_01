@@ -2299,6 +2299,9 @@ def create_app():
                        lambda: pace_by_score(match))
                 from ..pipeline.momentum import key_moments
                 _layer("key_moments", lambda: key_moments(match))
+                from ..pipeline.setplays import setplay_efficiency
+                _layer("setplay_efficiency",
+                       lambda: setplay_efficiency(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

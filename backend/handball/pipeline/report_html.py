@@ -1059,6 +1059,37 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass
 
+    # Figura-hatékonyság: melyik begyakorolt támadás hozott gólt.
+    setplays_html = ""
+    try:
+        from .setplays import setplay_efficiency
+        eff_sp = setplay_efficiency(match)
+        sp_rows = []
+        for side, name in (("home", home), ("away", away)):
+            for r_sp in (eff_sp.get(side) or [])[:4]:
+                sp_rows.append(
+                    f"<tr><td>{escape(name)}</td>"
+                    f'<td class="num">{r_sp["figure"] + 1}.</td>'
+                    f'<td class="num">{r_sp["attacks"]}</td>'
+                    f'<td class="num">{r_sp["shots"]}</td>'
+                    f'<td class="num">{r_sp["goals"]}</td>'
+                    f'<td class="num">{r_sp["goal_pct"]:.0f}%</td></tr>')
+        if sp_rows:
+            setplays_html = (
+                "<h2>Figurák (visszatérő támadás-minták)</h2>"
+                "<table><tr><th>Csapat</th>"
+                '<th class="num">Figura</th>'
+                '<th class="num">Támadás</th>'
+                '<th class="num">Lövés</th>'
+                '<th class="num">Gól</th>'
+                '<th class="num">Gól-arány</th></tr>'
+                + "".join(sp_rows) + "</table>"
+                + '<p class="note">A figura: azonos mozgás-mintázatú, '
+                  'legalább kétszer játszott támadás — a magas gól-arányú '
+                  'figura a csapat kenyere, arra érdemes készülni.</p>')
+    except Exception:
+        pass
+
     # A meccs gerince: a kulcs-pillanatok időrendi listája — ugyanaz a
     # réteg, mint az app kártyája és a csomag kulcs_pillanatok.txt-je.
     moments_html = ""
@@ -1074,7 +1105,7 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                             "<ul>" + lis_km + "</ul>")
     except Exception:
         pass
-    rules_html = moments_html + rules_html
+    rules_html = moments_html + setplays_html + rules_html
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""
