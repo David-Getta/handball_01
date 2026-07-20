@@ -6,6 +6,9 @@
 /// pl. hogy a sérülés utáni visszatérésnél hol tart a játékos.
 library;
 
+import "dart:io";
+
+import "package:file_picker/file_picker.dart";
 import "package:flutter/material.dart";
 
 import "../services/api_client.dart";
@@ -97,6 +100,35 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
     }
   }
 
+  /// A szezon-lap letöltése és mentése a választott helyre.
+  Future<void> _saveSeasonReport() async {
+    final team = _team;
+    final jersey = int.tryParse(_jerseyCtrl.text.trim());
+    if (team == null || jersey == null) return;
+    try {
+      final bytes = await _api.fetchPlayerSeasonReport(team, jersey);
+      if (!mounted) return;
+      final safe = team.replaceAll(
+          RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Szezon-lap mentése (HTML)",
+        fileName: "szezon_lap_${safe}_$jersey.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Szezon-lap mentve: $path — böngészőből "
+              "nyomtatható, kiosztható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Szezon-lap hiba: $e")));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppShell(
@@ -154,6 +186,16 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                   : const Icon(Icons.timeline, size: 18),
               label: const Text("Lekérdezés"),
             ),
+            // Szezon-lap mentése (HTML) — csak ha van megjelenített adat.
+            if (_points.isNotEmpty) ...[
+              const SizedBox(width: AppSpacing.md),
+              IconButton(
+                tooltip: "Szezon-lap mentése (HTML)",
+                onPressed: _saveSeasonReport,
+                icon: const Icon(Icons.badge_outlined,
+                    color: AppColors.accent),
+              ),
+            ],
           ]),
           const SizedBox(height: AppSpacing.lg),
           if (_error != null)

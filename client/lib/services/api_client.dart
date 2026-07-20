@@ -204,6 +204,18 @@ class ApiClient {
   }
 
   /// Kulcsemberek (GET /matches/{id}/key-players): kinél dől el a meccs.
+  /// Szezon játékos-lap (GET /players/season-report): a játékos szezonja
+  /// nyomtatható HTML-ként, bájtokban.
+  Future<List<int>> fetchPlayerSeasonReport(String team, int jersey) async {
+    final resp = await http.get(Uri.parse(
+        "$baseUrl/players/season-report?team=${Uri.encodeQueryComponent(team)}"
+        "&jersey=$jersey"));
+    if (resp.statusCode != 200) {
+      throw Exception("Nem sikerült a szezon-lap: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// Játékos-lap (GET /matches/{id}/players/{track}/report): egy játékos
   /// meccs-riportja nyomtatható HTML-ként, bájtokban.
   Future<List<int>> fetchPlayerReport(String matchId, int trackId) async {
