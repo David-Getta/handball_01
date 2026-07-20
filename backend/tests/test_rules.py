@@ -379,3 +379,38 @@ def test_key_moments_lead_change():
     changes = [lab for lab in labels if "Vezetés-váltás" in lab]
     assert len(changes) == 1
     assert "1–2" in changes[0] and "A" in changes[0]
+
+
+def test_key_moments_drought_end():
+    """Az 5+ perces gólcsend góllal záruló megtörése kulcs-pillanat;
+    a felvétel végéig tartó csend nem az."""
+    from handball.pipeline.momentum import key_moments
+
+    frames = []
+    t = 0
+    # Korai hazai gól, hogy legyen "gólok közti" csend.
+    for i in range(8):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.5, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    # ~6 perc csend...
+    for _ in range(9000):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # ...majd a megtörő gól.
+    for i in range(8):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.5, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    for _ in range(100):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(_meta(), frames)
+    labels = [k["label"] for k in key_moments(m)]
+    ends = [lab for lab in labels if "Gólcsend vége" in lab]
+    assert len(ends) == 1
+    assert "6 perc" in ends[0] and "H" in ends[0]
