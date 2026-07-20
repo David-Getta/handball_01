@@ -1948,3 +1948,20 @@ def test_best_figure_key_and_combine():
     merged = combine_reports([weak, strong])
     assert merged.best_fig_goals == 3
     assert merged.best_fig_attacks == 4
+
+
+def test_matchup_plan_figure_rule():
+    """11. szabály: az ő működő figurájuk × a mi fedezés-hibáink —
+    páros-feltételes."""
+    from handball.pipeline.scouting import matchup_plan
+    own = ScoutingReport(team="home", team_name="Mi",
+                         def_shots_against=10, def_free_shots=5)
+    opp = ScoutingReport(team="away", team_name="Ok",
+                         best_fig_attacks=4, best_fig_goals=3)
+    plan = matchup_plan(own, opp)
+    assert any("figura-felismerés nálatok életbiztosítás" in p_
+               for p_ in plan)
+    tight = ScoutingReport(team="home", team_name="Mi",
+                           def_shots_against=10, def_free_shots=1)
+    plan2 = matchup_plan(tight, opp)
+    assert not any("életbiztosítás" in p_ for p_ in plan2)

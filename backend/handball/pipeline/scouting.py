@@ -1837,6 +1837,17 @@ def matchup_plan(own: "ScoutingReport",
             f"({own_earn}×) — küldd őt az ő sávjába: 2 perc vagy hetes "
             "lesz belőle.")
 
+    # 11) A működő figurájuk × a ti fedezés-hibáitok.
+    if (opp.best_fig_attacks >= 3 and opp.best_fig_goals >= 2
+            and own.def_shots_against >= 8
+            and own.def_free_shots / own.def_shots_against >= 0.4):
+        plan.append(
+            f"Van egy figurájuk, ami működik ({opp.best_fig_attacks} "
+            f"támadásból {opp.best_fig_goals} gól), ti pedig sokszor "
+            f"hagytok szabad lövőt ({100.0 * own.def_free_shots / own.def_shots_against:.0f}%) "
+            "— a figura-felismerés nálatok életbiztosítás: nézzétek a "
+            "figura-klipeket, és az első passznál szóljon a fal.")
+
     # 10) Az ő időhúzásuk × a ti erős kezdésetek.
     if (opp.lead_attacks >= 3 and opp.trail_attacks >= 3
             and own.fh_goals_for - own.fh_goals_against >= 3):
