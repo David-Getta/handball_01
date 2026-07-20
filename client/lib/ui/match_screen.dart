@@ -621,9 +621,21 @@ class _MatchScreenState extends State<MatchScreen> {
             icon: const Icon(Icons.video_library_outlined,
                 color: AppColors.gold),
             color: AppColors.surface,
-            onSelected: (t) =>
-                _exportClips(match, typesOverride: [t]),
+            onSelected: (t) => _exportClips(match,
+                typesOverride: t == "_all"
+                    ? const [
+                        "goal", "key_moment", "turning_point",
+                        "missed_chance", "big_save", "top_shooter",
+                        "free_shot", "best_figure", "block", "empty_net",
+                      ]
+                    : [t]),
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                  value: "_all",
+                  child: ListTile(
+                      leading: Icon(Icons.video_library, size: 18),
+                      title: Text("Teljes videó-dosszié (minden csomag)"),
+                      dense: true)),
               PopupMenuItem(
                   value: "key_moment",
                   child: ListTile(
