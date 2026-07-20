@@ -642,6 +642,15 @@ class _MatchScreenState extends State<MatchScreen> {
                     _exportClips(match, typesOverride: ["top_shooter"]),
             icon: const Icon(Icons.person_search, color: AppColors.gold),
           ),
+          // Kulcs-pillanatok: a meccs gerince (fordulópont, sorozatok,
+          // kiállítások, hetesek, kapuscserék) egy klip-csomagban.
+          IconButton(
+            tooltip: "Kulcs-pillanat klipek (a meccs gerince)",
+            onPressed: _exportingClips
+                ? null
+                : () => _exportClips(match, typesOverride: ["key_moment"]),
+            icon: const Icon(Icons.auto_awesome, color: AppColors.gold),
+          ),
           // 7 a 6: a lehozott kapusos szakaszok — végrehajtás-ellenőrzés
           // és az ellenfél szokásainak visszanézése.
           IconButton(
