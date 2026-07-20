@@ -259,6 +259,22 @@ class SummaryPanel extends StatelessWidget {
     if (keyMoments.isEmpty) return const [];
     String clk(num s) =>
         "${(s ~/ 60)}:${(s % 60).toInt().toString().padLeft(2, "0")}";
+    // Típus-ikon a címkéből — a lista pásztázva is olvasható.
+    (IconData, Color) iconOf(String label) => switch (label) {
+          _ when label.startsWith("Fordulópont") =>
+            (Icons.trending_up, AppColors.gold),
+          _ when label.startsWith("Vezetés-váltás") =>
+            (Icons.swap_vert, AppColors.gold),
+          _ when label.contains("sorozat kezdete") =>
+            (Icons.bolt, AppColors.accent),
+          _ when label.startsWith("Kiállítás") =>
+            (Icons.person_remove, AppColors.away),
+          _ when label.startsWith("Hétméteres") =>
+            (Icons.sports_score, AppColors.accent),
+          _ when label.startsWith("Kapuscsere") =>
+            (Icons.swap_horiz, AppColors.textSecondary),
+          _ => (Icons.flag_outlined, AppColors.textSecondary),
+        };
     return [
       Text("KULCS-PILLANATOK", style: AppText.sectionLabel),
       const SizedBox(height: AppSpacing.sm),
@@ -280,6 +296,11 @@ class SummaryPanel extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                 child: Row(children: [
+                  Builder(builder: (_) {
+                    final (ic, col) = iconOf("${m["label"]}");
+                    return Icon(ic, size: 15, color: col);
+                  }),
+                  const SizedBox(width: 8),
                   Text(clk((m["t_s"] as num?) ?? 0),
                       style: AppText.value.copyWith(
                           fontSize: 12, color: AppColors.accent)),
