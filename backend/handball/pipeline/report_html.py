@@ -1059,6 +1059,23 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     except Exception:
         pass
 
+    # A meccs gerince: a kulcs-pillanatok időrendi listája — ugyanaz a
+    # réteg, mint az app kártyája és a csomag kulcs_pillanatok.txt-je.
+    moments_html = ""
+    try:
+        from .momentum import key_moments
+        kms = key_moments(match)
+        if kms:
+            lis_km = "".join(
+                f"<li><b>{_fmt_clock(km['t_s'])}</b> — "
+                f"{escape(km['label'])}</li>"
+                for km in kms)
+            moments_html = ("<h2>A meccs gerince (kulcs-pillanatok)</h2>"
+                            "<ul>" + lis_km + "</ul>")
+    except Exception:
+        pass
+    rules_html = moments_html + rules_html
+
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""
     try:
