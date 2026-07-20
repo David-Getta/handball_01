@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#403)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#409)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -152,6 +152,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Meccs-főcímek a könyvtárban**: minden kártyán egymondatos
   történet ("Szoros Hazai-siker (28–26) — a meccs embere a 7.
   játékos") — a szezon görgetve is olvasható. (#403)
+- **Szezon játékos-lap**: a játékos teljes szezonja egy nyomtatható
+  oldalon (összesítő + meccsről meccsre tábla), letöltés-gombbal a
+  játékos-fejlődés képernyőn. (#408, #409)
+- **A meccs gerince a jelentésben + ikonok**: a kulcs-pillanatok
+  szekcióként a nyomtatható jelentésben (ötödik felület), az app
+  kártyáján típus-ikonokkal és színekkel. (#405, #406)
 - **A meccs gerince (kulcs-pillanatok)**: fordulópont, sorozatok,
   kiállítások, hetesek, kapuscserék és vezetés-váltások egy közös
   rétegben — kattintható kártya az appban (ugrás a videóban),
