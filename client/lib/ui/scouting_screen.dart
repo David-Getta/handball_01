@@ -567,6 +567,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return txt;
   }
 
+  // Támadás-szélesség: szélesen (14 m+) vagy szűken (9 m alatt)
+  // támadnak — azonos küszöbök a felderítési kulccsal.
+  String? _attackWidth(Map<String, dynamic> r) {
+    final n = ((r["width_frames"] as num?) ?? 0).toInt();
+    final sum = ((r["width_sum_m"] as num?) ?? 0).toDouble();
+    if (n < 100 || sum <= 0) return null;
+    final avg = sum / n;
+    final verdict = avg >= 14.0
+        ? "széles"
+        : avg <= 9.0
+            ? "szűk"
+            : null;
+    if (verdict == null) return null;
+    return "${avg.toStringAsFixed(1)} m · $verdict";
+  }
+
   // Fő figura: a leggólerősebb visszatérő minta (3+ támadás, 2+ gól
   // — azonos küszöb a felderítési kulccsal).
   String? _bestFigure(Map<String, dynamic> r) {
@@ -832,6 +848,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],
+      if (_attackWidth(r) != null)
+        ["Támadás-szélesség", _attackWidth(r)!],
       if (_fbFinisher(r) != null) ["Kontra-befejező", _fbFinisher(r)!],
       if (_outletTarget(r) != null)
         ["Indítás-célpont", _outletTarget(r)!],

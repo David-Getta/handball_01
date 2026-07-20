@@ -2353,6 +2353,8 @@ def create_app():
                 from ..pipeline.setplays import setplay_efficiency
                 _layer("setplay_efficiency",
                        lambda: setplay_efficiency(match))
+                from ..pipeline.attack_types import attack_width
+                _layer("attack_width", lambda: attack_width(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
