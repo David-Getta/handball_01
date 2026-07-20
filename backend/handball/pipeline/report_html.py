@@ -1984,6 +1984,80 @@ def player_report_html(match, track_id: int) -> str:
     game_html = ("".join(game_items)
                  or '<p class="empty">Nincs mért játék-esemény '
                     '(lövés, blokk, hetes) ennél a játékosnál.</p>')
+
+    # Mire figyelj: legfeljebb 3 személyes, tényeken álló javaslat —
+    # ugyanazokkal a küszöbökkel, mint a csapat-szintű rétegek.
+    tips: list[str] = []
+    try:
+        from .xg import BIG_CHANCE_XG, match_xg
+        r_tip = match_xg(match)
+        t_goals = t_shots = 0
+        t_diff = 0.0
+        big_missed_n = 0
+        for r_ in r_tip.get("shooters", []):
+            if r_["player_id"] in tids:
+                t_goals += r_["goals"]
+                t_shots += r_["shots"]
+                t_diff += r_["diff"]
+        for sh in r_tip.get("shots", []):
+            if sh.get("player_id") in tids \
+                    and sh.get("xg", 0.0) >= BIG_CHANCE_XG \
+                    and sh.get("outcome") != "goal":
+                big_missed_n += 1
+        if big_missed_n >= 2:
+            tips.append(
+                f"Ziccer-befejezés: {big_missed_n} nagy helyzet maradt "
+                "kihasználatlan — a heti edzésbe férjen bele ziccer-"
+                "sorozat fáradt lábbal is.")
+        elif t_shots >= 3 and t_diff <= -1.0:
+            tips.append(
+                f"Befejezés: a helyzeteid alatt teljesítettél "
+                f"({t_diff:+.1f} gól a várhatóhoz képest) — a lövés-"
+                "kiválasztáson és a nyugodt befejezésen múlik.")
+    except Exception:
+        pass
+    try:
+        from .stats import player_fatigue
+        drops_t = [r_["drop_pct"] for r_ in player_fatigue(match)
+                   if r_["track_id"] in tids]
+        if drops_t and max(drops_t) >= 20.0:
+            tips.append(
+                f"Erőnlét/rotáció: a 2. félidőre −{max(drops_t):.0f}% "
+                "tempó — beszélj az edződdel a csere-időzítésről, vagy "
+                "célzott állóképesség-blokk jöhet.")
+    except Exception:
+        pass
+    try:
+        from .rules import suspended_players
+        n_susp_t = sum(e_["suspensions"]
+                       for side in ("home", "away")
+                       for e_ in suspended_players(match)[side]
+                       if e_["player_id"] in tids)
+        if n_susp_t >= 1:
+            tips.append(
+                f"Fegyelem: {n_susp_t} kiállítás — a betörőt tested "
+                "helyzetével lassítsd, ne fogással: a következő 2 perc "
+                "a csapatnak gólokba kerül.")
+    except Exception:
+        pass
+    try:
+        from .rules import seven_meter_outcomes
+        sv_a2 = sv_g2 = 0
+        for sm in seven_meter_outcomes(match):
+            if sm.get("shooter_id") in tids:
+                sv_a2 += 1
+                sv_g2 += int(sm["outcome"] == "gól")
+        if sv_a2 >= 2 and sv_g2 / sv_a2 <= 0.5:
+            tips.append(
+                f"Hetes-rutin: {sv_g2}/{sv_a2} a mérleged — nyomás "
+                "alatti hetes-sorozatok edzésen, kapussal.")
+    except Exception:
+        pass
+    tips_html = ""
+    if tips:
+        tips_html = ("<h2>Mire figyelj</h2><ul>"
+                     + "".join(f"<li>{escape(t_)}</li>"
+                               for t_ in tips[:3]) + "</ul>")
     sub = f"{meta.home_team} vs {meta.away_team}"
     if meta.date:
         sub += f" · {meta.date}"
@@ -2014,6 +2088,8 @@ def player_report_html(match, track_id: int) -> str:
   .mv {{ font-size: 20px; font-weight: 700; }}
   .ml {{ font-size: 11px; color: #8492A6; }}
   .empty {{ color: #8492A6; font-size: 13px; }}
+  ul {{ margin: 8px 0 0; padding-left: 20px; }}
+  li {{ font-size: 13px; margin-bottom: 6px; }}
   footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
 </style>
 </head>
@@ -2027,6 +2103,7 @@ def player_report_html(match, track_id: int) -> str:
 <div class="metrics">{game_html}</div>
 <h2>Fizikai mutatók</h2>
 <div class="metrics">{"".join(phys_items)}</div>
+{tips_html}
 <footer>A számok a pálya-koordinátás követésből és a magyarázható
 elemzési rétegekből jönnek — azonos küszöbökkel, mint a
 meccsjelentésben.</footer>
