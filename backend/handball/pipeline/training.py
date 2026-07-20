@@ -567,4 +567,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 28) Hetes-variáció: ha a fő dobónk irány-képe kiszámítható (2+
+    # mért heteséből 75%+ egy sávba megy), az ellenfél kapusa készülni
+    # fog rá — váltogatás kell.
+    try:
+        from .rules import seven_meter_outcomes
+        by_taker: dict = {}
+        for sm in seven_meter_outcomes(match, config):
+            if sm.get("shooter_id") is None or not sm.get("irany"):
+                continue
+            rec28 = by_taker.setdefault((sm["team"], sm["shooter_id"]),
+                                        {})
+            rec28[sm["irany"]] = rec28.get(sm["irany"], 0) + 1
+        for (side, pid), dirs28 in by_taker.items():
+            n28 = sum(dirs28.values())
+            if n28 >= 2 and max(dirs28.values()) / n28 >= 0.75:
+                add(side, "befejezés", "Hetes-variáció",
+                    f"a(z) {pid}. játékos hetesei kiszámíthatóak: a "
+                    f"mért {n28} dobásból a nagy többség ugyanabba a "
+                    "sávba ment",
+                    "hetes-sorozat kötelező irány-váltogatással "
+                    "(a dobó előre húzott kártya szerint lő), kapussal, "
+                    "nyomás alatt")
+                break  # csapatonként egy fókusz elég
+    except Exception:
+        pass
+
     return out
