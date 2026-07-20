@@ -1870,6 +1870,56 @@ def player_report_html(match, track_id: int) -> str:
     team_name = (meta.home_team if row["team"] == "home"
                  else meta.away_team)
 
+    # Kapus-e a játékos? A kapus lapján a védés-mérleg a főszereplő.
+    is_gk = False
+    gk_side = None
+    for fr in match.frames:
+        for p in fr.players:
+            if p.track_id in tids and p.role == "kapus":
+                is_gk = True
+                gk_side = getattr(p.team, "value", p.team)
+                break
+        if is_gk:
+            break
+
+    gk_items: list[str] = []
+    if is_gk:
+        try:
+            from .goalkeeper import (OUTLET_FAST_S, goalkeeper_stats,
+                                     goalkeeper_timeline, outlet_speed)
+            tlk = goalkeeper_timeline(match).get(gk_side) or {}
+            pk = tlk.get("per_keeper", {})
+            rec_gk = next((pk[t_] for t_ in tids if t_ in pk), None)
+            if rec_gk and rec_gk.get("on_target"):
+                gk_items.append(_metric("Kapura tartó lövés",
+                                        str(rec_gk["on_target"])))
+                gk_items.append(_metric(
+                    "Védés",
+                    f"{rec_gk['saves']} "
+                    f"({rec_gk['save_pct']:.0f}%)"))
+                if "prevented" in rec_gk:
+                    gk_items.append(_metric(
+                        "Mérleg a helyzetekhez képest (GSAx)",
+                        f"{rec_gk['prevented']:+.1f}"))
+            # Ha ő az egyetlen kapus, a csapat-szintű kapus-számok is
+            # az övéi: hetes-mérleg és indítás-átlag.
+            if len(pk) <= 1:
+                gs = goalkeeper_stats(match).get(gk_side) or {}
+                if gs.get("seven_faced"):
+                    gk_items.append(_metric(
+                        "Hetes-védés",
+                        f"{gs['seven_saved']}/{gs['seven_faced']}"))
+                orec = outlet_speed(match).get(gk_side) or {}
+                if orec.get("outlets", 0) >= 2 \
+                        and orec.get("avg_s") is not None:
+                    lab = ("gyors" if orec["avg_s"] <= OUTLET_FAST_S
+                           else "átlagos")
+                    gk_items.append(_metric(
+                        "Indítás (átlag a felezőig)",
+                        f"{orec['avg_s']:.1f} s · {lab}"))
+        except Exception:
+            pass
+
     game_items: list[str] = []
     # Játék-mérleg: gól/lövés, xG, ziccer — a meccs xG-rétegéből.
     try:
@@ -2061,8 +2111,12 @@ def player_report_html(match, track_id: int) -> str:
     sub = f"{meta.home_team} vs {meta.away_team}"
     if meta.date:
         sub += f" · {meta.date}"
-    if poszt:
+    if is_gk:
+        sub += " · kapus"
+    elif poszt:
         sub += f" · becsült poszt: {poszt}"
+    gk_html = (f'<h2>Kapus-mérleg</h2><div class="metrics">'
+               f'{"".join(gk_items)}</div>' if gk_items else "")
     return f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -2099,6 +2153,7 @@ def player_report_html(match, track_id: int) -> str:
   <h1>{escape(row['label'])} — {escape(team_name)}</h1>
   <div class="sub">{escape(sub)}</div>
 </header>
+{gk_html}
 <h2>Játék-mérleg</h2>
 <div class="metrics">{game_html}</div>
 <h2>Fizikai mutatók</h2>
