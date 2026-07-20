@@ -1804,6 +1804,19 @@ def create_app():
                                  f"({best_sc['goals']} gól)")
         except Exception:
             pass
+        seven_bal = None
+        try:
+            from ..pipeline.rules import seven_meter_summary
+            _s7 = seven_meter_summary(m)
+            if _s7["home"]["attempts"] or _s7["away"]["attempts"]:
+                seven_bal = {
+                    "home": f"{_s7['home']['goals']}/"
+                            f"{_s7['home']['attempts']}",
+                    "away": f"{_s7['away']['goals']}/"
+                            f"{_s7['away']['attempts']}",
+                }
+        except Exception:
+            pass
         susp_home = susp_away = None
         try:
             from ..pipeline.rules import detect_powerplay
@@ -1842,6 +1855,7 @@ def create_app():
             "fastest_kmh": fastest_kmh,
             "xg_saved_home": xg_saved_home,
             "headline": headline,
+            "seven_balance": seven_bal,
             "suspensions_home": susp_home,
             "suspensions_away": susp_away,
             "xg_saved_away": xg_saved_away,
