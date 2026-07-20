@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#393)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#398)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -139,6 +139,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   szemszögéből) — kiszámítható dobónál a kapus konkrét utasítást kap
   ("induljon balra"); irány a jelentés-listában és az app csempéjén,
   hetes-mérleg sor a Csapat-mutatókban. (#357, #358, #359)
+- **Játékos-lap**: minden játékos egyéni meccs-riportja kiosztható
+  HTML-ben — játék-mérleg (gól/lövés, xG, ziccer, blokk, hetes,
+  kiharcolások), fizikai mutatók és "Mire figyelj" személyes
+  javaslatok; gomb a Statisztika fülön, jatekos_lapok/ mappa a
+  csomagban, API-végpont. (#395–#398)
 - **A meccs gerince (kulcs-pillanatok)**: fordulópont, sorozatok,
   kiállítások, hetesek, kapuscserék és vezetés-váltások egy közös
   rétegben — kattintható kártya az appban (ugrás a videóban),
