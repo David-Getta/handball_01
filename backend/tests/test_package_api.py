@@ -142,3 +142,22 @@ def test_scouting_matchup_endpoint():
     r2 = client.post("/scouting/matchup",
                      json={"own": {"items": []}})
     assert r2.status_code == 400
+
+
+def test_season_report_endpoint():
+    """Két tárolt meccsből a szezon-riport HTML összeáll; ismeretlen
+    csapatnál 404."""
+    client, mid = _client_with_match()
+    # Második meccs ugyanazokkal a csapatnevekkel (másik seed).
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=2)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    client2 = TestClient(create_app())
+    r = client2.get("/season/report",
+                    params={"team": "Szimu Hazai"})
+    assert r.status_code == 200
+    assert "SZEZON-RIPORT" in r.text and "Szimu Hazai" in r.text
+    assert "Fejlődés a szezonon belül" in r.text
+    assert client2.get("/season/report",
+                       params={"team": "Nincs Ilyen"}).status_code == 404

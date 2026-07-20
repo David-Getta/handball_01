@@ -1585,6 +1585,41 @@ def create_app():
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey, "points": points}
 
+    @app.get("/season/report")
+    def get_season_report(team: str):
+        """Szezon-riport egy kattintásra: a csapat meccsei időrendben
+        két időszakra bontva (fejlődés-tábla) + visszatérő edzés-
+        fókuszok — nyomtatható HTML-ben. 404, ha 2-nél kevesebb meccs
+        van a csapattól."""
+        from fastapi.responses import HTMLResponse
+        entries = []
+        for m in _store.values():
+            side = ("home" if m.meta.home_team == team
+                    else "away" if m.meta.away_team == team else None)
+            if side is None:
+                continue
+            entries.append((m.meta.date or "", m.meta.match_id, side))
+        entries.sort()
+        if len(entries) < 2:
+            raise HTTPException(status_code=404,
+                                detail="too few matches for team")
+        cut = max(1, len(entries) // 2)
+        older_items = [{"match_id": e[1], "team": e[2]}
+                       for e in entries[:cut]]
+        newer_items = [{"match_id": e[1], "team": e[2]}
+                       for e in entries[cut:]]
+        tr = trend_report(_combined_report({"items": older_items}),
+                          _combined_report({"items": newer_items}))
+        focuses = []
+        try:
+            focuses = (library_training_focus().get("teams", {})
+                       .get(team, []))[:6]
+        except Exception:
+            pass
+        from ..pipeline.report_html import season_report_html
+        return HTMLResponse(content=season_report_html(
+            team, tr, focuses, len(entries)))
+
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
         """Szezon játékos-lap nyomtatható HTML-ben: a játékos meccsről
