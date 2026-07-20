@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#424)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#432)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -160,6 +160,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **key_moments a gépi exportban**: a meccs gerince az
   elemzesek.json-ban is — a csomag minden rétege emberi ÉS gépi
   formában. (#413)
+- **Videó-dosszié és klip-rendszer**: a tematikus klip-csomagok egy
+  olvasható menüben, Teljes videó-dosszié egy kattintásra; szabad
+  lövő (fedezés-hiba) klipek; ismétlés-szűrés és a kimaradt jelenetek
+  jelzése appon belül is. (#427–#431)
+- **Meccsterv 11. szabály**: az ő működő figurájuk × a mi
+  fedezés-hibáink ("a figura-felismerés nálatok életbiztosítás");
+  mezszám-lefedettség sor a megbízhatósági önjelentésben.
+  (#426, #432)
 - **Figura-hatékonyság**: melyik begyakorolt támadás hozott gólt —
   csapatonként klaszterezett minták mérlege (támadás/lövés/gól),
   Figurák tábla a jelentésben, figura-klip export egy gombbal,
