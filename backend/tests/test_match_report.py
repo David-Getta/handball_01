@@ -682,3 +682,38 @@ def test_report_suspension_row_with_offender():
     html = match_report_html(m, {}, [], None)
     assert "Kiállítás (2 perc)" in html
     assert "1 (105.)" in html
+
+
+def test_report_drought_row():
+    """5+ perces gólcsendnél a Csapat-mutatók sora hozza a hosszát és a
+    helyét; a rövid oldal "—" marad."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+
+    def pl(x=20.0):
+        return PlayerPosition(track_id=1, team=Team.HOME, x=x, y=10.0,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(4400):  # ~3 perc játék gól nélkül
+        frames.append(Frame(t=t, players=[pl()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(8):  # hazai gól
+        frames.append(Frame(t=t, players=[pl(33.5)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    for _ in range(4400):  # ~3 perc újra gól nélkül
+        frames.append(Frame(t=t, players=[pl()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="drr", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Leghosszabb gólcsend" in html
+    # A vendég egyszer sem szerzett gólt → a teljes felvétel a csendje.
+    assert "6 perc" in html

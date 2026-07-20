@@ -1224,6 +1224,24 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _sa("home"), _sa("away")))
         except Exception:
             pass
+        # Gólcsend sora: a leghosszabb saját gól nélküli időszak, ha
+        # legalább az egyik oldalon érdemi (5+ perc).
+        try:
+            from .momentum import goal_droughts
+            _dr = goal_droughts(match)
+            if any(_dr[s_]["longest_s"] >= 300.0
+                   for s_ in ("home", "away")):
+                def _dr_txt(side):
+                    r = _dr[side]
+                    if r["longest_s"] < 300.0:
+                        return "—"
+                    return (f'{r["longest_s"] / 60:.0f} perc '
+                            f'({_fmt_clock(r["start_s"])}–'
+                            f'{_fmt_clock(r["end_s"])})')
+                rows.append(("Leghosszabb gólcsend",
+                             _dr_txt("home"), _dr_txt("away")))
+        except Exception:
+            pass
         # Előny-kezelés sora: támadás-hossz vezetve/hátrányban.
         try:
             from .attack_types import pace_by_score
