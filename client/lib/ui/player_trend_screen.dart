@@ -233,6 +233,16 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         0.0, (s, p) => s + ((p["xg"] as num?)?.toDouble() ?? 0.0));
     final totalXgDiff = _points.fold(
         0.0, (s, p) => s + ((p["xg_diff"] as num?)?.toDouble() ?? 0.0));
+    // Kapus-mód: ha bármely meccsen van védés-mérleg, a kapus-oszlopok
+    // is megjelennek (azonos adatok a szezon-lappal).
+    final isGk = _points.any(
+        (p) => ((p["gk_on_target"] as num?)?.toInt() ?? 0) > 0);
+    final gkOn = _points.fold(
+        0, (s, p) => s + ((p["gk_on_target"] as num?)?.toInt() ?? 0));
+    final gkSaves = _points.fold(
+        0, (s, p) => s + ((p["gk_saves"] as num?)?.toInt() ?? 0));
+    final gkPrev = _points.fold(
+        0.0, (s, p) => s + ((p["gk_prevented"] as num?)?.toDouble() ?? 0.0));
     return [
       // Szezon-összkép.
       Wrap(spacing: AppSpacing.lg, runSpacing: AppSpacing.sm, children: [
@@ -245,6 +255,10 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
         if (totalXg > 0)
           _chip("várható gól: ${totalXg.toStringAsFixed(1)} · befejezés: "
               "${totalXgDiff >= 0 ? "+" : ""}${totalXgDiff.toStringAsFixed(1)}"),
+        if (isGk && gkOn > 0)
+          _chip("védés: $gkSaves/$gkOn "
+              "(${(100.0 * gkSaves / gkOn).toStringAsFixed(0)}%) · GSAx: "
+              "${gkPrev >= 0 ? "+" : ""}${gkPrev.toStringAsFixed(1)}"),
       ]),
       const SizedBox(height: AppSpacing.lg),
       // Fejléc + meccsenkénti sorok (táv-csíkkal — a forma ránézésre látszik).
@@ -258,10 +272,12 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           _cell("sprint", 48),
           _cell("gól/löv", 56),
           _cell("xG ±", 52),
+          if (isGk) _cell("védés", 52),
+          if (isGk) _cell("GSAx", 50),
           _cell("perc", 44),
         ]),
       ),
-      ..._points.map((p) => _row(p, maxDist)),
+      ..._points.map((p) => _row(p, maxDist, isGk)),
     ];
   }
 
@@ -281,7 +297,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           textAlign: TextAlign.right,
           style: AppText.label.copyWith(fontSize: 10, color: AppColors.textFaint)));
 
-  Widget _row(Map<String, dynamic> p, double maxDist) {
+  Widget _row(Map<String, dynamic> p, double maxDist, bool isGk) {
     final dist = (p["distance_m"] as num?)?.toDouble() ?? 0.0;
     final frac = maxDist > 0 ? (dist / maxDist).clamp(0.0, 1.0) : 0.0;
     final date = (p["date"] as String?) ?? "";
@@ -351,6 +367,33 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                   textAlign: TextAlign.right,
                   style: AppText.label.copyWith(fontSize: 13, color: color));
             })),
+        // Kapus-cellák: védés-mérleg + GSAx (csak kapus-mezszámnál).
+        if (isGk) ...[
+          SizedBox(
+              width: 52,
+              child: Text(
+                  ((p["gk_on_target"] as num?)?.toInt() ?? 0) > 0
+                      ? "${p["gk_saves"] ?? 0}/${p["gk_on_target"]}"
+                      : "—",
+                  textAlign: TextAlign.right,
+                  style: AppText.label.copyWith(
+                      fontSize: 13, color: AppColors.textPrimary))),
+          SizedBox(
+              width: 50,
+              child: Builder(builder: (_) {
+                final g = (p["gk_prevented"] as num?)?.toDouble();
+                final color = g == null || g.abs() < 0.3
+                    ? AppColors.textFaint
+                    : (g > 0 ? AppColors.accent : AppColors.away);
+                return Text(
+                    g == null
+                        ? "—"
+                        : "${g >= 0 ? "+" : ""}${g.toStringAsFixed(1)}",
+                    textAlign: TextAlign.right,
+                    style: AppText.label.copyWith(
+                        fontSize: 13, color: color));
+              })),
+        ],
         SizedBox(
             width: 44,
             child: Text("${p["minutes"] ?? "-"}",
