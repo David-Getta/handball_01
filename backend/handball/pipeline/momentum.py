@@ -524,3 +524,65 @@ def scoring_timeline(match: Match, bucket_s: float = 300.0, config=None) -> dict
         idx = min(n - 1, int((e.t / fps) / step))
         buckets[idx]["home" if e.team == Team.HOME else "away"] += 1
     return {"bucket_s": round(step, 1), "buckets": buckets}
+
+
+def key_moments(match: Match, config=None) -> list[dict]:
+    """A meccs gerince: kulcs-pillanatok egyetlen, időrendi listában.
+
+    Fordulópont, 3+ gólos sorozatok kezdete (okkal), kiállítások,
+    hétméteresek (kimenetellel) és kapuscserék — rétegenként hibatűrő,
+    így ami számolható, az mindig megjön. A csomag-export
+    kulcs_pillanatok.txt fájlja és az app Kulcs-pillanatok kártyája is
+    ebből az egy rétegből épül.
+
+    Visszatérés: [{"t", "t_s", "label"}] időrendben.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    names = {"home": match.meta.home_team, "away": match.meta.away_team}
+    moments: list[dict] = []
+
+    def add(t_frame: float, label: str):
+        moments.append({"t": int(t_frame),
+                        "t_s": round(t_frame / fps, 1),
+                        "label": label})
+
+    try:
+        tp = win_probability(match).get("turning_point")
+        if tp is not None:
+            add(tp["t_s"] * fps, "Fordulópont — itt billent a meccs")
+    except Exception:
+        pass
+    try:
+        for r in annotate_runs(match):
+            if r.get("length", 0) >= 3:
+                ctx = (f" ({r['context'][0]})" if r.get("context")
+                       else "")
+                add(r["start_frame"],
+                    f"{r['length']} gólos "
+                    f"{names.get(r['team'], r['team'])} sorozat "
+                    f"kezdete{ctx}")
+    except Exception:
+        pass
+    try:
+        from .rules import detect_powerplay, seven_meter_outcomes
+        for w in detect_powerplay(match):
+            add(w["start_frame"],
+                f"Kiállítás — a(z) {names[w['team_down']]} "
+                "emberhátrányban")
+        for sm in seven_meter_outcomes(match):
+            lab = f"Hétméteres — {names.get(sm['team'], '')}"
+            if sm.get("outcome") and sm["outcome"] != "ismeretlen":
+                lab += f" ({sm['outcome']})"
+            add(sm["t"], lab)
+    except Exception:
+        pass
+    try:
+        from .goalkeeper import goalkeeper_timeline
+        tl = goalkeeper_timeline(match)
+        for side in ("home", "away"):
+            for ch in (tl.get(side) or {}).get("changes", []):
+                add(ch * fps, f"Kapuscsere — {names[side]}")
+    except Exception:
+        pass
+    moments.sort(key=lambda m: m["t"])
+    return moments
