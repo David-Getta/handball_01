@@ -2285,3 +2285,104 @@ def trend_report_html(tr: dict) -> str:
 időszakok mutatói kimaradnak, hogy ne látsszanak hamis változásnak.
 </footer>
 </div></body></html>"""
+
+
+def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
+    """Szezon játékos-lap: egy játékos meccsről meccsre, nyomtatható
+    HTML-ben — a /players/trend pontjaiból (összesítő + meccs-tábla).
+    """
+    n = len(points)
+    goals = sum(p_.get("goals", 0) for p_ in points)
+    shots = sum(p_.get("shots", 0) for p_ in points)
+    xg_vals = [p_["xg"] for p_ in points if p_.get("xg") is not None]
+    xg_sum = round(sum(xg_vals), 1) if xg_vals else None
+    minutes = round(sum(p_.get("minutes", 0.0) for p_ in points), 1)
+    dist_km = round(sum(p_.get("distance_m", 0.0)
+                        for p_ in points) / 1000.0, 1)
+    sprints = sum(p_.get("sprint_count", 0) for p_ in points)
+    top_kmh = round(max((p_.get("top_speed_ms", 0.0) for p_ in points),
+                        default=0.0) * 3.6, 1)
+
+    totals = [
+        _metric("Meccs", str(n)),
+        _metric("Gól / lövés", f"{goals}/{shots}"),
+    ]
+    if xg_sum is not None:
+        totals.append(_metric("Várható gól (xG)", f"{xg_sum:.1f}"))
+        totals.append(_metric("Befejezés (gól−xG)",
+                              f"{goals - xg_sum:+.1f}"))
+    totals += [
+        _metric("Játékperc (mért)", f"{minutes:.0f}"),
+        _metric("Táv összesen", f"{dist_km:.1f} km"),
+        _metric("Sprint", str(sprints)),
+        _metric("Csúcssebesség", f"{top_kmh:.1f} km/h"),
+    ]
+
+    rows = []
+    for p_ in points:
+        when = p_.get("date") or p_.get("match_id", "")
+        opp = p_.get("opponent") or "—"
+        game = (f"{p_.get('goals', 0)}/{p_.get('shots', 0)}"
+                if p_.get("shots") else "—")
+        xg_c = (f"{p_['xg']:.1f}" if p_.get("xg") is not None else "—")
+        diff_c = (f"{p_['xg_diff']:+.1f}"
+                  if p_.get("xg_diff") is not None else "—")
+        rows.append(
+            f"<tr><td>{escape(str(when))}</td><td>{escape(opp)}</td>"
+            f'<td class="num">{p_.get("minutes", 0):.0f}</td>'
+            f'<td class="num">{game}</td>'
+            f'<td class="num">{xg_c}</td>'
+            f'<td class="num">{diff_c}</td>'
+            f'<td class="num">{p_.get("distance_m", 0):.0f} m</td>'
+            f'<td class="num">{p_.get("sprint_count", 0)}</td></tr>')
+    table = ("<table><tr><th>Dátum</th><th>Ellenfél</th>"
+             '<th class="num">Perc</th><th class="num">Gól/lövés</th>'
+             '<th class="num">xG</th><th class="num">+/−</th>'
+             '<th class="num">Táv</th><th class="num">Sprint</th></tr>'
+             + "".join(rows) + "</table>")
+
+    return f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Szezon-lap — #{jersey} ({escape(team)})</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+         Arial, sans-serif; color: #101722; background: #fff;
+         line-height: 1.5; }}
+  .page {{ max-width: 760px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px;
+           margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em;
+           text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+       color: #12988a; margin: 26px 0 10px; }}
+  .metrics {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+  .metric {{ border: 1px solid #E3E8EF; border-radius: 10px;
+            padding: 10px 14px; min-width: 110px; }}
+  .mv {{ font-size: 20px; font-weight: 700; }}
+  .ml {{ font-size: 11px; color: #8492A6; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 12.5px; }}
+  th, td {{ padding: 6px 9px; border-bottom: 1px solid #E3E8EF;
+           text-align: left; }}
+  th.num, td.num {{ text-align: right; }}
+  footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
+</style>
+</head>
+<body><div class="page">
+<header>
+  <div class="brand">SPORT MACHINE · SZEZON-LAP</div>
+  <h1>#{jersey} — {escape(team)}</h1>
+  <div class="sub">{n} elemzett meccs, időrendben.</div>
+</header>
+<h2>Szezon-összesítő</h2>
+<div class="metrics">{"".join(totals)}</div>
+<h2>Meccsről meccsre</h2>
+{table}
+<footer>A mezszám-hozzárendelés utáni track-csoportok összegzett
+számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
+</footer>
+</div></body></html>"""

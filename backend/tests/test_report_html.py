@@ -198,3 +198,24 @@ def test_trend_report_html_renders_metrics_and_summary():
     assert "FEJLŐDÉS-RIPORT" in html and "Mi csapatunk" in html
     assert "Gól / meccs" in html and "▲" in html and "▼" in html
     assert "Javulás: gól / meccs" in html
+
+
+def test_player_season_html_totals_and_rows():
+    """A szezon-lap hozza az összesítőt és a meccsenkénti sorokat; a
+    nem mért cellák "—" jellel."""
+    from handball.pipeline.report_html import player_season_html
+    points = [
+        {"match_id": "m1", "date": "2026-01-10", "opponent": "A",
+         "distance_m": 4200.0, "top_speed_ms": 6.5, "sprint_count": 9,
+         "minutes": 42.0, "shots": 5, "goals": 3, "xg": 2.4,
+         "xg_diff": 0.6},
+        {"match_id": "m2", "date": "2026-01-17", "opponent": "B",
+         "distance_m": 3900.0, "top_speed_ms": 6.9, "sprint_count": 7,
+         "minutes": 38.0, "shots": 0, "goals": 0, "xg": None,
+         "xg_diff": None},
+    ]
+    html = player_season_html("Mi", 7, points)
+    assert "SZEZON-LAP" in html and "#7 — Mi" in html
+    assert "3/5" in html            # gól/lövés az összesítőben és a sorban
+    assert "2026-01-17" in html and "—" in html
+    assert "Csúcssebesség" in html
