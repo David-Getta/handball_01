@@ -180,7 +180,7 @@ def scouting_report_html(rep: ScoutingReport,
                           + "".join(role_rows) + "</table>")
         # Hetes-dobóik irány-táblája — a kapus egy pillantásra látja,
         # ki hová szokta lőni (csak mért iránnyal rendelkező dobóknál).
-        hu_dir = {"bal": "balra", "jobb": "jobbra", "közép": "középre"}
+        from .rules import SEVEN_DIR_HU as hu_dir
         seven_rows = []
         for t7 in (rep.seven_takers or []):
             if t7.get("attempts", 0) < 2:
@@ -1045,8 +1045,8 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 if sm.get("outcome") and sm["outcome"] != "ismeretlen":
                     bits.append(sm["outcome"])
                 if sm.get("irany"):
-                    bits.append({"bal": "balra", "jobb": "jobbra",
-                                 "közép": "középre"}[sm["irany"]])
+                    from .rules import SEVEN_DIR_HU
+                    bits.append(SEVEN_DIR_HU[sm["irany"]])
                 return f" ({', '.join(bits)})" if bits else ""
             lis = "".join(
                 f"<li><b>{_fmt_clock(e['t'] / fps_)}</b> — "
@@ -1967,9 +1967,8 @@ def player_report_html(match, track_id: int) -> str:
                         f"{orec['avg_s']:.1f} s · {lab}"))
                 # A kapott hetesek irány-képe: merre lőtték ellened.
                 try:
-                    from .rules import seven_meter_outcomes
-                    hu_d = {"bal": "balra", "jobb": "jobbra",
-                            "közép": "középre"}
+                    from .rules import (SEVEN_DIR_HU as hu_d,
+                                        seven_meter_outcomes)
                     dcnt: dict = {}
                     for sm in seven_meter_outcomes(match):
                         if sm.get("team") == gk_side:
@@ -2045,8 +2044,7 @@ def player_report_html(match, track_id: int) -> str:
             game_items.append(_metric("Hetes (gól/kísérlet)",
                                       f"{sv_g}/{sv_a}"))
         if seven_dirs:
-            hu_d7 = {"bal": "balra", "jobb": "jobbra",
-                     "közép": "középre"}
+            from .rules import SEVEN_DIR_HU as hu_d7
             game_items.append(_metric(
                 "Heteseid irányai",
                 " · ".join(f"{hu_d7.get(d_, d_)} {n_}×"
