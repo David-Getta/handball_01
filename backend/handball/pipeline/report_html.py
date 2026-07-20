@@ -1838,3 +1838,196 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
 </body>
 </html>
 """
+
+
+def player_report_html(match, track_id: int) -> str:
+    """Játékos-lap: egy játékos meccs-riportja kiosztható, egyoldalas
+    HTML-ben — játék-mérleg + fizikai mutatók, a meccs rétegeiből.
+
+    A track_id a játékos bármelyik trackje lehet: a mezszám-összevonás
+    után a teljes track-csoport adatai kerülnek a lapra. ValueError,
+    ha a track nem szerepel a meccsen.
+    """
+    from .stats import aggregate_by_jersey, compute_player_stats
+
+    meta = match.meta
+    fps = meta.fps if meta.fps > 0 else 25.0
+    stats = compute_player_stats(match)
+    team_of: dict = {}
+    jersey_of: dict = {}
+    for fr in match.frames:
+        for p in fr.players:
+            team_of.setdefault(p.track_id,
+                               getattr(p.team, "value", p.team))
+            if p.jersey_number is not None:
+                jersey_of.setdefault(p.track_id, p.jersey_number)
+    row = next((g for g in aggregate_by_jersey(stats, team_of,
+                                               jersey_of, fps=fps)
+                if track_id in g["track_ids"]), None)
+    if row is None:
+        raise ValueError("ismeretlen track a meccsen")
+    tids = set(row["track_ids"])
+    team_name = (meta.home_team if row["team"] == "home"
+                 else meta.away_team)
+
+    game_items: list[str] = []
+    # Játék-mérleg: gól/lövés, xG, ziccer — a meccs xG-rétegéből.
+    try:
+        from .xg import BIG_CHANCE_XG, match_xg
+        r_all = match_xg(match)
+        goals = shots = 0
+        xg_sum = diff_sum = 0.0
+        for r_ in r_all.get("shooters", []):
+            if r_["player_id"] in tids:
+                goals += r_["goals"]
+                shots += r_["shots"]
+                xg_sum += r_["xg"]
+                diff_sum += r_["diff"]
+        if shots:
+            game_items.append(_metric("Gól / lövés", f"{goals}/{shots}"))
+            game_items.append(_metric("Várható gól (xG)",
+                                      f"{xg_sum:.1f}"))
+            game_items.append(_metric("Befejezés (gól−xG)",
+                                      f"{diff_sum:+.1f}"))
+        big_g = big_n = 0
+        for sh in r_all.get("shots", []):
+            if sh.get("player_id") in tids \
+                    and sh.get("xg", 0.0) >= BIG_CHANCE_XG:
+                big_n += 1
+                big_g += int(sh.get("outcome") == "goal")
+        if big_n:
+            game_items.append(_metric("Ziccer (gól/össz)",
+                                      f"{big_g}/{big_n}"))
+    except Exception:
+        pass
+    try:
+        from .defense import detect_blocks
+        blk = detect_blocks(match)
+        n_blk = sum(1 for side in ("home", "away")
+                    for e_ in blk[side].get("events", [])
+                    if e_.get("player_id") in tids)
+        if n_blk:
+            game_items.append(_metric("Blokk", str(n_blk)))
+    except Exception:
+        pass
+    try:
+        from .rules import seven_meter_outcomes
+        sv_a = sv_g = 0
+        for sm in seven_meter_outcomes(match):
+            if sm.get("shooter_id") in tids:
+                sv_a += 1
+                sv_g += int(sm["outcome"] == "gól")
+        if sv_a:
+            game_items.append(_metric("Hetes (gól/kísérlet)",
+                                      f"{sv_g}/{sv_a}"))
+    except Exception:
+        pass
+    try:
+        from .rules import seven_meter_earners, suspension_earners
+        e7 = sum(e_["earned"] for side in ("home", "away")
+                 for e_ in seven_meter_earners(match)[side]
+                 if e_["player_id"] in tids)
+        if e7:
+            game_items.append(_metric("Kiharcolt hetes", str(e7)))
+        e2 = sum(e_["earned"] for side in ("home", "away")
+                 for e_ in suspension_earners(match)[side]
+                 if e_["player_id"] in tids)
+        if e2:
+            game_items.append(_metric("Kiharcolt 2 perc", str(e2)))
+    except Exception:
+        pass
+    try:
+        from .attack_types import fast_break_finishers
+        fbg = sum(f_["goals"] for side in ("home", "away")
+                  for f_ in fast_break_finishers(match)[side]
+                  if f_["player_id"] in tids)
+        if fbg:
+            game_items.append(_metric("Kontra-gól", str(fbg)))
+    except Exception:
+        pass
+
+    poszt = ""
+    try:
+        from .roles import estimate_positions
+        est = estimate_positions(match)
+        poszt = next((r_["poszt"] for side in ("home", "away")
+                      for tid_, r_ in est.get(side, {}).items()
+                      if tid_ in tids), "")
+    except Exception:
+        pass
+
+    fade = ""
+    try:
+        from .stats import player_fatigue
+        drops = [r_["drop_pct"] for r_ in player_fatigue(match)
+                 if r_["track_id"] in tids]
+        if drops:
+            d = max(drops)
+            fade = f"−{d:.0f}%" if d > 0 else f"+{-d:.0f}%"
+    except Exception:
+        pass
+
+    zones = row["zone_seconds"]
+    phys_items = [
+        _metric("Táv", f"{row['distance_m']:.0f} m"),
+        _metric("Átl. sebesség", f"{row['avg_speed_ms']:.1f} m/s"),
+        _metric("Max sebesség",
+                f"{row['top_speed_ms'] * 3.6:.1f} km/h"),
+        _metric("Sprint", str(row["sprint_count"])),
+        _metric("Sprint-táv", f"{row['sprint_distance_m']:.0f} m"),
+        _metric("Sprintben töltött idő",
+                f"{zones.get('sprint', 0.0):.0f} s"),
+    ]
+    if fade:
+        phys_items.append(_metric("2. félidei tempó", fade))
+
+    game_html = ("".join(game_items)
+                 or '<p class="empty">Nincs mért játék-esemény '
+                    '(lövés, blokk, hetes) ennél a játékosnál.</p>')
+    sub = f"{meta.home_team} vs {meta.away_team}"
+    if meta.date:
+        sub += f" · {meta.date}"
+    if poszt:
+        sub += f" · becsült poszt: {poszt}"
+    return f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Játékos-lap — {escape(row['label'])}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+         Arial, sans-serif; color: #101722; background: #fff;
+         line-height: 1.5; }}
+  .page {{ max-width: 640px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px;
+           margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em;
+           text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+       color: #12988a; margin: 26px 0 10px; }}
+  .metrics {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+  .metric {{ border: 1px solid #E3E8EF; border-radius: 10px;
+            padding: 10px 14px; min-width: 120px; }}
+  .mv {{ font-size: 20px; font-weight: 700; }}
+  .ml {{ font-size: 11px; color: #8492A6; }}
+  .empty {{ color: #8492A6; font-size: 13px; }}
+  footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
+</style>
+</head>
+<body><div class="page">
+<header>
+  <div class="brand">SPORT MACHINE · JÁTÉKOS-LAP</div>
+  <h1>{escape(row['label'])} — {escape(team_name)}</h1>
+  <div class="sub">{escape(sub)}</div>
+</header>
+<h2>Játék-mérleg</h2>
+<div class="metrics">{game_html}</div>
+<h2>Fizikai mutatók</h2>
+<div class="metrics">{"".join(phys_items)}</div>
+<footer>A számok a pálya-koordinátás követésből és a magyarázható
+elemzési rétegekből jönnek — azonos küszöbökkel, mint a
+meccsjelentésben.</footer>
+</div></body></html>"""
