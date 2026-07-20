@@ -829,3 +829,46 @@ def test_player_report_discipline_tip():
     # A vétlen társ lapján nincs fegyelem-javaslat.
     html2 = player_report_html(m, 100)
     assert "Fegyelem:" not in html2
+
+
+def test_player_report_goalkeeper_block():
+    """A kapus lapján a Kapus-mérleg blokk a védéseket és a GSAx-et
+    hozza, a fejlécben "kapus" áll."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def gk():
+        return PlayerPosition(track_id=9, team=Team.AWAY, x=39.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    def shooter():
+        return PlayerPosition(track_id=4, team=Team.HOME, x=33.5,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(2):  # két védés a 9-esre
+        for i in range(8):
+            players = [gk()] + ([shooter()] if i == 0 else [])
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(33.6 + i, 38.8), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[gk()],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="gkp", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = player_report_html(m, 9)
+    assert "Kapus-mérleg" in html
+    assert "kapus" in html
+    assert "2 (100%)" in html  # 2 védés, 100%
+    assert "GSAx" in html
