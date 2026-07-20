@@ -567,6 +567,15 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return txt;
   }
 
+  // Fő figura: a leggólerősebb visszatérő minta (3+ támadás, 2+ gól
+  // — azonos küszöb a felderítési kulccsal).
+  String? _bestFigure(Map<String, dynamic> r) {
+    final a = ((r["best_fig_attacks"] as num?) ?? 0).toInt();
+    final g = ((r["best_fig_goals"] as num?) ?? 0).toInt();
+    if (a < 3 || g < 2) return null;
+    return "$a támadás · $g gól";
+  }
+
   // Előny-kezelés: támadás-hossz vezetve vs hátrányban (időhúzás /
   // kapkodás jele, 8+ mp különbségnél — mint a felderítési kulcs).
   String? _leadPace(Map<String, dynamic> r) {
@@ -822,6 +831,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_discipline(r) != null) ["Fegyelem", _discipline(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
+      if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],
       if (_fbFinisher(r) != null) ["Kontra-befejező", _fbFinisher(r)!],
       if (_outletTarget(r) != null)
         ["Indítás-célpont", _outletTarget(r)!],
