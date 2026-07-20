@@ -545,4 +545,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 27) Figura-frissítés: ha a leggyakoribb figura terméketlen (4+
+    # támadásból legfeljebb 20% gól), az ellenfelek már olvassák —
+    # variáció kell.
+    try:
+        from .setplays import setplay_efficiency
+        eff_tf = setplay_efficiency(match)
+        for side in ("home", "away"):
+            rows_tf = eff_tf.get(side) or []
+            if not rows_tf:
+                continue
+            top_tf = rows_tf[0]  # gyakoriság szerint az első
+            if top_tf["attacks"] >= 4 and top_tf["goal_pct"] <= 20.0:
+                add(side, "támadás", "Figura-frissítés",
+                    f"a leggyakoribb figura {top_tf['attacks']} "
+                    f"támadásból csak {top_tf['goals']} gólt hozott "
+                    f"({top_tf['goal_pct']:.0f}%) — kiszámíthatóvá vált",
+                    "a fő figurához második befejezési ág begyakorlása "
+                    "(át a túloldalra / beálló-bejátszás), és egy új "
+                    "nyitó-variáció ugyanabból az alapállásból")
+    except Exception:
+        pass
+
     return out
