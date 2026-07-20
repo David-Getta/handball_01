@@ -1374,7 +1374,10 @@ def create_app():
                                          progress_cb=cb)
                 job["status"] = "done"
                 job["progress"] = 1.0
-                job["message"] = f"kész: {res.count} klip"
+                job["message"] = (f"kész: {res.count} klip"
+                                  + (f" ({res.skipped} jelenet kimaradt "
+                                     "— ismétlés vagy limit)"
+                                     if res.skipped else ""))
             except Exception as e:
                 job["status"] = "error"
                 job["error"] = str(e)
