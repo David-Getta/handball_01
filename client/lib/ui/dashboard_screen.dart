@@ -763,6 +763,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 : "${(m["xg_saved_home"] as num).toStringAsFixed(1)} – "
                     "${((m["xg_saved_away"] as num?) ?? 0).toStringAsFixed(1)}"
           ],
+          // Hetes-mérleg: gól/kísérlet a két oldalon.
+          [
+            "Hetes gól/kís. (H–V)",
+            (m["seven_balance"] as Map?) == null
+                ? "—"
+                : "${(m["seven_balance"] as Map)["home"]} – "
+                    "${(m["seven_balance"] as Map)["away"]}"
+          ],
           // Fegyelem: hány kiállítást szedett össze a két csapat.
           [
             "Kiállítás (H–V)",
