@@ -1549,11 +1549,29 @@ def create_app():
                 xg = round(v, 2) if v > 0 else None
             except Exception:
                 pass
+            # Kapus-mérleg (ha a mezszám kapusé): védés + GSAx ezen a
+            # meccsen, a kapusonkénti idővonal-rétegből.
+            gk_on = gk_saves = gk_prevented = None
+            try:
+                from ..pipeline.goalkeeper import goalkeeper_timeline
+                pk_tr = (goalkeeper_timeline(match)
+                         .get(side.value, {}) or {}).get("per_keeper", {})
+                recs_tr = [pk_tr[t] for t in tracks if t in pk_tr]
+                if recs_tr:
+                    gk_on = sum(r["on_target"] for r in recs_tr)
+                    gk_saves = sum(r["saves"] for r in recs_tr)
+                    gk_prevented = round(
+                        sum(r.get("prevented", 0.0) for r in recs_tr), 2)
+            except Exception:
+                pass
             points.append({
                 "match_id": match.meta.match_id,
                 "date": match.meta.date,
                 "opponent": (match.meta.away_team if side == Team.HOME
                              else match.meta.home_team),
+                "gk_on_target": gk_on,
+                "gk_saves": gk_saves,
+                "gk_prevented": gk_prevented,
                 "distance_m": round(distance, 1),
                 "top_speed_ms": round(top, 2),
                 "sprint_count": sprints,

@@ -2317,6 +2317,20 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
         _metric("Sprint", str(sprints)),
         _metric("Csúcssebesség", f"{top_kmh:.1f} km/h"),
     ]
+    # Kapus-összesítő: ha a mezszám kapusé, a védés-mérleg is a lapon.
+    is_gk_season = any(p_.get("gk_on_target") for p_ in points)
+    if is_gk_season:
+        gk_on_sum = sum(p_.get("gk_on_target") or 0 for p_ in points)
+        gk_sv_sum = sum(p_.get("gk_saves") or 0 for p_ in points)
+        gk_prev_sum = sum(p_.get("gk_prevented") or 0.0
+                          for p_ in points)
+        if gk_on_sum:
+            totals.append(_metric(
+                "Védés összesen",
+                f"{gk_sv_sum}/{gk_on_sum} "
+                f"({100.0 * gk_sv_sum / gk_on_sum:.0f}%)"))
+            totals.append(_metric("GSAx összesen",
+                                  f"{gk_prev_sum:+.1f}"))
 
     rows = []
     for p_ in points:
@@ -2327,17 +2341,32 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
         xg_c = (f"{p_['xg']:.1f}" if p_.get("xg") is not None else "—")
         diff_c = (f"{p_['xg_diff']:+.1f}"
                   if p_.get("xg_diff") is not None else "—")
+        gk_cells = ""
+        if is_gk_season:
+            if p_.get("gk_on_target"):
+                gk_cells = (
+                    f'<td class="num">{p_.get("gk_saves", 0)}/'
+                    f'{p_["gk_on_target"]}</td>'
+                    f'<td class="num">'
+                    f'{(p_.get("gk_prevented") or 0.0):+.1f}</td>')
+            else:
+                gk_cells = ('<td class="num">—</td>'
+                            '<td class="num">—</td>')
         rows.append(
             f"<tr><td>{escape(str(when))}</td><td>{escape(opp)}</td>"
             f'<td class="num">{p_.get("minutes", 0):.0f}</td>'
             f'<td class="num">{game}</td>'
             f'<td class="num">{xg_c}</td>'
             f'<td class="num">{diff_c}</td>'
+            + gk_cells +
             f'<td class="num">{p_.get("distance_m", 0):.0f} m</td>'
             f'<td class="num">{p_.get("sprint_count", 0)}</td></tr>')
+    gk_heads = ('<th class="num">Védés</th><th class="num">GSAx</th>'
+                if is_gk_season else "")
     table = ("<table><tr><th>Dátum</th><th>Ellenfél</th>"
              '<th class="num">Perc</th><th class="num">Gól/lövés</th>'
              '<th class="num">xG</th><th class="num">+/−</th>'
+             + gk_heads +
              '<th class="num">Táv</th><th class="num">Sprint</th></tr>'
              + "".join(rows) + "</table>")
 
