@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#417)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#424)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -160,6 +160,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **key_moments a gépi exportban**: a meccs gerince az
   elemzesek.json-ban is — a csomag minden rétege emberi ÉS gépi
   formában. (#413)
+- **Figura-hatékonyság**: melyik begyakorolt támadás hozott gólt —
+  csapatonként klaszterezett minták mérlege (támadás/lövés/gól),
+  Figurák tábla a jelentésben, figura-klip export egy gombbal,
+  Figura-frissítés edzés-szabály (27.), "van egy figurájuk, ami
+  működik" felderítési kulcs és Fő figura csempe. (#419–#424)
 - **Szezon-riport egy kattintásra**: a csapat szezonja automatikus
   időszak-bontású fejlődés-táblával + visszatérő edzés-fókuszokkal,
   csapat-választós gombbal a dashboardon. (#416, #417)
