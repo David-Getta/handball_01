@@ -95,6 +95,11 @@ def test_package_without_video_contains_report_and_csv():
     assert pl_pages, names
     phtml = z.read(pl_pages[0]).decode("utf-8")
     assert "JÁTÉKOS-LAP" in phtml
+    # Meccsterv a visszavágóra: ha van páros-találat, terv-fájl készül.
+    if "meccsterv.txt" in names:
+        mt = z.read("meccsterv.txt").decode("utf-8")
+        assert "terve a" in mt and mt.strip().startswith(("Szimu", "-")) \
+            or "terve a" in mt
     # Az edzői összefoglaló sima szövegként is (osszefoglalo.txt).
     assert "osszefoglalo.txt" in names
     txt = z.read("osszefoglalo.txt").decode("utf-8")

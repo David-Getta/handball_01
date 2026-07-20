@@ -2446,6 +2446,36 @@ def create_app():
                                 continue
                     except Exception:
                         pass
+                    # Meccsterv a visszavágóra: a két csapat e meccsen
+                    # mért profiljának keresztezése, mindkét irányban.
+                    try:
+                        from ..pipeline.scouting import (matchup_plan,
+                                                         scout_team)
+                        rep_h = scout_team(match, Team.HOME,
+                                           TacticsConfig())
+                        rep_a = scout_team(match, Team.AWAY,
+                                           TacticsConfig())
+                        mt_lines = []
+                        plan_h = matchup_plan(rep_h, rep_a)
+                        if plan_h:
+                            head_h = (f"{match.meta.home_team} terve a "
+                                      f"{match.meta.away_team} ellen")
+                            mt_lines += [head_h, "=" * len(head_h)]
+                            mt_lines += [f"- {p_}" for p_ in plan_h]
+                            mt_lines.append("")
+                        plan_a = matchup_plan(rep_a, rep_h)
+                        if plan_a:
+                            head_a = (f"{match.meta.away_team} terve a "
+                                      f"{match.meta.home_team} ellen")
+                            mt_lines += [head_a, "=" * len(head_a)]
+                            mt_lines += [f"- {p_}" for p_ in plan_a]
+                            mt_lines.append("")
+                        if mt_lines:
+                            z.writestr("meccsterv.txt",
+                                       "\n".join(mt_lines)
+                                       .encode("utf-8"))
+                    except Exception:
+                        pass
                     # Edzésterv sima szövegként: fókuszok indoklással
                     # és gyakorlatokkal, csapatonként.
                     tf_pkg = analyses.get("training") or {}
