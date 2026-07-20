@@ -821,8 +821,8 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
         if n_dirs >= 3:
             best_d = max(dirs7, key=dirs7.get)
             if dirs7[best_d] / n_dirs >= 0.7:
-                hu = {"bal": "balra", "jobb": "jobbra",
-                      "közép": "középre"}[best_d]
+                from .rules import SEVEN_DIR_HU
+                hu = SEVEN_DIR_HU[best_d]
                 sent7 += (f" Kiszámítható: a mért hetesei "
                           f"{100.0 * dirs7[best_d] / n_dirs:.0f}%-ban "
                           f"{hu} mennek — a kapus induljon {hu}.")

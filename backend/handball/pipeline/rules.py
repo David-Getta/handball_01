@@ -199,6 +199,8 @@ SEVEN_OUTCOME_WINDOW_S = 6.0
 
 # A hetes iránya: a labda kapu-síkbeli y-eltérése ennél nagyobb → szélső sáv.
 SEVEN_DIR_SIDE_M = 0.5
+# Az irány magyar határozói alakja — minden felület ebből ír ("balra").
+SEVEN_DIR_HU = {"bal": "balra", "jobb": "jobbra", "közép": "középre"}
 # Csak akkor mondunk irányt, ha a labda ennyire megközelítette a kapu síkját.
 SEVEN_DIR_MAX_PLANE_M = 1.5
 
