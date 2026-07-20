@@ -41,9 +41,15 @@ _TYPE_HU = {"goal": "gol", "shot": "loves", "turnover": "labdaelado",
 
 @dataclass
 class ClipResult:
-    """Az export eredménye: a zip útja + hány klip készült."""
+    """Az export eredménye: a zip útja + hány klip készült.
+
+    A skipped az azonos pillanatra eső ismétlések és a MAX_CLIPS fölé
+    eső jelenetek száma — a hívó ebből tudja jelezni, hogy a csomag
+    nem teljes.
+    """
     zip_path: str
     count: int
+    skipped: int = 0
 
 
 def _clock(seconds: float) -> str:
@@ -95,7 +101,18 @@ def export_event_clips(match: Match, events: list, types: set[str],
 
     picked = [e for e in events if _field(e, "type") in types]
     picked.sort(key=lambda e: _field(e, "t") or 0)
-    picked = picked[:MAX_CLIPS]
+    n_requested = len(picked)
+    # Azonos pillanatra eső ismétlések ki (több csomagban is szereplő
+    # jelenet — pl. gól, ami egyben vezetés-váltás — csak egyszer kell).
+    dedup = []
+    last_t = None
+    for e in picked:
+        t_e = int(_field(e, "t") or 0)
+        if last_t is not None and abs(t_e - last_t) < 2:
+            continue
+        dedup.append(e)
+        last_t = t_e
+    picked = dedup[:MAX_CLIPS]
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -158,4 +175,5 @@ def export_event_clips(match: Match, events: list, types: set[str],
             z.write(f, f.name)
     if progress_cb:
         progress_cb(len(picked), len(picked), f"kész: {len(made)} klip")
-    return ClipResult(zip_path=str(zip_path), count=len(made))
+    return ClipResult(zip_path=str(zip_path), count=len(made),
+                      skipped=max(0, n_requested - len(made)))

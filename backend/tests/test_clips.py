@@ -203,3 +203,21 @@ def test_block_clip_gets_hungarian_name(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "blokk" in names
+
+
+def test_duplicate_moments_deduplicated_and_reported(tmp_path):
+    """Az azonos pillanatra eső (több csomagban is szereplő) jelenet
+    csak egyszer kerül a zip-be, és a skipped számolja a kimaradókat."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [
+        {"t": 60, "type": "goal", "team": "home"},
+        {"t": 60, "type": "key_moment", "team": "home",
+         "label": "Vezetés-váltás"},
+        {"t": 120, "type": "goal", "team": "away"},
+    ]
+    res = export_event_clips(m, events, {"goal", "key_moment"},
+                             tmp_path / "ki")
+    assert res.count == 2
+    assert res.skipped == 1
