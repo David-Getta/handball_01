@@ -1273,6 +1273,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   icon: const Icon(Icons.timeline, color: AppColors.textSecondary),
                   tooltip: "Játékos-fejlődés (mezszám alapján)",
                 ),
+                // Szezon-riport: csapat-választás után nyomtatható HTML.
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.assessment_outlined,
+                      color: AppColors.textSecondary),
+                  tooltip: "Szezon-riport mentése (csapatonként)",
+                  color: AppColors.surface,
+                  onSelected: _saveSeasonReport,
+                  itemBuilder: (_) => [
+                    for (final t in <String>{
+                      for (final m in _matches) ...[
+                        if (m["home_team"] != null)
+                          m["home_team"] as String,
+                        if (m["away_team"] != null)
+                          m["away_team"] as String,
+                      ]
+                    }.toList()
+                      ..sort())
+                      PopupMenuItem(
+                        value: t,
+                        child: Text(t, style: AppText.value
+                            .copyWith(fontSize: 13)),
+                      ),
+                  ],
+                ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.archive_outlined,
                       color: AppColors.textSecondary),
@@ -1975,6 +1999,33 @@ szabad lövőt enged: "
         ],
       ),
     );
+  }
+
+  /// Szezon-riport letöltése és mentése a választott csapatra.
+  Future<void> _saveSeasonReport(String team) async {
+    try {
+      final bytes = await _api.fetchSeasonReport(team);
+      if (!mounted) return;
+      final safe = team.replaceAll(
+          RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Szezon-riport mentése (HTML)",
+        fileName: "szezon_riport_$safe.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return; // a felhasználó megszakította
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Szezon-riport mentve: $path — böngészőből "
+              "nyomtatható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Szezon-riport hiba: $e — legalább 2 meccs "
+              "kell a csapattól")));
+    }
   }
 
   /// Kis eredmény-címke a felismert gólokból: ki nyerte a felvételt.
