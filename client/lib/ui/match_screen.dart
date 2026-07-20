@@ -642,6 +642,17 @@ class _MatchScreenState extends State<MatchScreen> {
                     _exportClips(match, typesOverride: ["top_shooter"]),
             icon: const Icon(Icons.person_search, color: AppColors.gold),
           ),
+          // Szabad lövők: a fedezés-hibák jelenetei — védekezés-
+          // tanuló anyag ("itt hagytuk szabadon").
+          IconButton(
+            tooltip: "Szabad lövő klipek (fedezés-hibák)",
+            onPressed: _exportingClips
+                ? null
+                : () => _exportClips(match,
+                    typesOverride: ["free_shot"]),
+            icon: const Icon(Icons.person_off_outlined,
+                color: AppColors.away),
+          ),
           // Legjobb figura: a leggólerősebb visszatérő támadás-minta
           // klipjei — az ellenfél "kenyerének" felismeréséhez.
           IconButton(

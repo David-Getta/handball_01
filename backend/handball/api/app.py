@@ -1256,6 +1256,20 @@ def create_app():
                                    for e_ in blk[side].get("events", [])]
                     except Exception:
                         pass
+                if "free_shot" in types:
+                    # Fedezés-hibák: a szabadon hagyott lövők jelenetei
+                    # — a VÉDEKEZŐ oldal tanuló-anyaga.
+                    try:
+                        from ..pipeline.defense import defense_analysis
+                        _da = defense_analysis(match)
+                        for side in ("home", "away"):
+                            ev += [{"t": sh_["t"], "type": "free_shot",
+                                    "team": side,
+                                    "label": sh_.get("zone") or ""}
+                                   for sh_ in _da[side].get("shots", [])
+                                   if sh_.get("free") is True]
+                    except Exception:
+                        pass
                 if "best_figure" in types:
                     # A legjobb (leggólerősebb) figura támadásai
                     # csapatonként — "tanuld meg felismerni" csomag.
