@@ -340,3 +340,44 @@ def test_pivot_usage_labels_attacks_through_pivot():
     assert res["home"]["pivot_attacks"] >= 1
     # Volt beálló nélküli hazai támadás is.
     assert res["home"]["pivot_attacks"] < res["home"]["attacks"]
+
+
+def test_pivot_usage_on_sliced_match_gives_first_half_picture():
+    """A rész-meccsre (első félidő kockái) számolt beálló-kép a
+    félidei állapotot adja — a második félidő beálló-játéka nem
+    szivárog vissza."""
+    from handball.models.tracking import Match as M
+    from handball.pipeline.attack_types import pivot_usage
+
+    frames = []
+    t = 0
+    # 1. félidő: a támadás a beálló NÉLKÜL megy (a labda az 1-esnél).
+    for i in range(200):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 27.0, 10.0),
+            _pl(5, Team.HOME, 34.0, 10.0),
+            _pl(20, Team.AWAY, 36.0, 8.0)],
+            ball=Ball(x=27.0, y=10.0, confidence=1.0)))
+        t += 1
+    half_end = t - 1
+    for i in range(50):  # szünet-szerű szakasz (vendég birtoklás)
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 20.0, 10.0),
+            _pl(5, Team.HOME, 20.0, 12.0),
+            _pl(20, Team.AWAY, 19.0, 10.0)],
+            ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+        t += 1
+    # 2. félidő: minden a beállón át.
+    for i in range(200):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 27.0, 10.0),
+            _pl(5, Team.HOME, 34.0, 10.0),
+            _pl(20, Team.AWAY, 36.0, 8.0)],
+            ball=Ball(x=34.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = M(_meta(), frames)
+    sub = M(m.meta, [f for f in m.frames if f.t <= half_end])
+    fh = pivot_usage(sub)["home"]
+    assert fh["attacks"] >= 1 and fh["pivot_attacks"] == 0
+    full = pivot_usage(m)["home"]
+    assert full["pivot_attacks"] >= 1  # a teljes képben már van beállós

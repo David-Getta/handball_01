@@ -2112,6 +2112,22 @@ def create_app():
             res["pivot"] = pivot_usage(match)
         except Exception:
             pass
+        try:
+            # Félidei beálló-kép: az élő nézet a szünetben ebből ad
+            # "keresd a beadást" jelzést — csak az első félidő
+            # kockáiból (a rész-meccsen újraszámolva, a poszt-becslés
+            # sem lát a jövőbe).
+            from ..models.tracking import Match as _M
+            from ..pipeline.attack_types import pivot_usage
+            from ..pipeline.halftime import detect_halftime
+            ht = detect_halftime(match)
+            if ht is not None:
+                sub = _M(match.meta,
+                         [f for f in match.frames if f.t <= ht])
+                res["pivot_fh"] = {"until_frame": ht,
+                                   **pivot_usage(sub)}
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/empty-net")
