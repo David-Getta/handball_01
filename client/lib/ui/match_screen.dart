@@ -63,6 +63,8 @@ class _MatchScreenState extends State<MatchScreen> {
   List<dynamic> _keyMoments = const [];
   Map<String, dynamic>? _setplayEff;
   Map<String, dynamic>? _marking;
+  Map<String, dynamic>? _blocks;
+  Map<String, dynamic>? _ballWinners;
   // Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary).
   Map<String, dynamic>? _coach;
   // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
@@ -163,6 +165,8 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<int, Map<String, dynamic>> xgShooters = {};
     Map<int, bool> freeByT = {};
     Map<String, dynamic>? marking;
+    Map<String, dynamic>? blocks;
+    Map<String, dynamic>? ballWinners;
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -263,9 +267,14 @@ class _MatchScreenState extends State<MatchScreen> {
             }
           }
           marking = (d["marking"] as Map?)?.cast<String, dynamic>();
+          blocks = (d["blocks"] as Map?)?.cast<String, dynamic>();
+          ballWinners =
+              (d["ball_winners"] as Map?)?.cast<String, dynamic>();
         } catch (_) {
           freeByT = {}; // védekezés-réteg nélkül is teljes a nézet
           marking = null;
+          blocks = null;
+          ballWinners = null;
         }
         try {
           quality = await _api.fetchQuality(widget.matchId);
@@ -317,6 +326,8 @@ class _MatchScreenState extends State<MatchScreen> {
       _keyMoments = keyMoments;
       _setplayEff = setplayEff;
       _marking = marking;
+      _blocks = blocks;
+      _ballWinners = ballWinners;
       _notes = notes;
       _coach = coach;
       _attacks = attacks;
@@ -2646,6 +2657,8 @@ class _MatchScreenState extends State<MatchScreen> {
                           keyMoments: _keyMoments,
                           setplayEff: _setplayEff,
                           marking: _marking,
+                          blocks: _blocks,
+                          ballWinners: _ballWinners,
                           onNoteMoment: (t, label) =>
                               _noteKeyMoment(match, t, label),
                           progression: _progression,
