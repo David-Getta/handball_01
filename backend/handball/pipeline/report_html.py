@@ -2548,6 +2548,18 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
             totals.append(_metric("GSAx összesen",
                                   f"{gk_prev_sum:+.1f}"))
 
+    # Emberfogás-összesítő és oszlopok: ha van mért őrzése a szezonban.
+    has_marking = any(p_.get("mark_s") for p_ in points)
+    if has_marking:
+        mark_pts = [p_ for p_ in points if p_.get("mark_s")]
+        m_total_s = sum(p_["mark_s"] for p_ in mark_pts)
+        m_avg = (sum((p_.get("mark_dist") or 0.0) * p_["mark_s"]
+                     for p_ in mark_pts) / m_total_s
+                 if m_total_s else 0.0)
+        totals.append(_metric("Őrzés összesen",
+                              f"{m_total_s:.0f} mp · átl. "
+                              f"{m_avg:.1f} m"))
+
     rows = []
     for p_ in points:
         when = p_.get("date") or p_.get("match_id", "")
@@ -2568,21 +2580,30 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
             else:
                 gk_cells = ('<td class="num">—</td>'
                             '<td class="num">—</td>')
+        mark_cells = ""
+        if has_marking:
+            if p_.get("mark_s"):
+                mark_cells = (
+                    f'<td class="num">{p_["mark_s"]:.0f} mp · '
+                    f'{(p_.get("mark_dist") or 0.0):.1f} m</td>')
+            else:
+                mark_cells = '<td class="num">—</td>'
         rows.append(
             f"<tr><td>{escape(str(when))}</td><td>{escape(opp)}</td>"
             f'<td class="num">{p_.get("minutes", 0):.0f}</td>'
             f'<td class="num">{game}</td>'
             f'<td class="num">{xg_c}</td>'
             f'<td class="num">{diff_c}</td>'
-            + gk_cells +
+            + gk_cells + mark_cells +
             f'<td class="num">{p_.get("distance_m", 0):.0f} m</td>'
             f'<td class="num">{p_.get("sprint_count", 0)}</td></tr>')
     gk_heads = ('<th class="num">Védés</th><th class="num">GSAx</th>'
                 if is_gk_season else "")
+    mark_heads = ('<th class="num">Őrzés</th>' if has_marking else "")
     table = ("<table><tr><th>Dátum</th><th>Ellenfél</th>"
              '<th class="num">Perc</th><th class="num">Gól/lövés</th>'
              '<th class="num">xG</th><th class="num">+/−</th>'
-             + gk_heads +
+             + gk_heads + mark_heads +
              '<th class="num">Táv</th><th class="num">Sprint</th></tr>'
              + "".join(rows) + "</table>")
 

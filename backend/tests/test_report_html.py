@@ -286,3 +286,29 @@ def test_scouting_report_markers_table():
     assert "9. játékos" not in html  # 50 kocka alatt kimarad
     html2 = scouting_report_html(_rep(markers=[]))
     assert "Emberfogóik" not in html2
+
+
+def test_player_season_html_marking_column():
+    """Ha van mért őrzés, a szezon-lap Őrzés oszlopot és összesítőt
+    hoz (súlyozott átlagtávval); enélkül az oszlop sincs ott."""
+    from handball.pipeline.report_html import player_season_html
+    pts = [
+        {"match_id": "m1", "date": "2026-01-10", "opponent": "A",
+         "distance_m": 4000.0, "top_speed_ms": 6.0, "sprint_count": 5,
+         "minutes": 40.0, "shots": 2, "goals": 1, "xg": 0.8,
+         "xg_diff": 0.2, "gk_on_target": None, "gk_saves": None,
+         "gk_prevented": None, "mark_s": 120.0, "mark_dist": 1.5},
+        {"match_id": "m2", "date": "2026-01-17", "opponent": "B",
+         "distance_m": 3800.0, "top_speed_ms": 6.2, "sprint_count": 4,
+         "minutes": 38.0, "shots": 1, "goals": 0, "xg": 0.3,
+         "xg_diff": -0.3, "gk_on_target": None, "gk_saves": None,
+         "gk_prevented": None, "mark_s": 60.0, "mark_dist": 3.0},
+    ]
+    html = player_season_html("Mi", 4, pts)
+    assert "Őrzés összesen" in html
+    # Súlyozott átlag: (120*1,5 + 60*3,0) / 180 = 2,0 m.
+    assert "180 mp · átl. 2.0 m" in html
+    assert "120 mp · 1.5 m" in html and "60 mp · 3.0 m" in html
+    pts2 = [dict(p, mark_s=None, mark_dist=None) for p in pts]
+    html2 = player_season_html("Mi", 4, pts2)
+    assert "Őrzés" not in html2

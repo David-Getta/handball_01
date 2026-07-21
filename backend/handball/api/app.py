@@ -1635,6 +1635,20 @@ def create_app():
                         sum(r.get("prevented", 0.0) for r in recs_tr), 2)
             except Exception:
                 pass
+            # Emberfogás ezen a meccsen (ha van mért őrzése).
+            mark_s = mark_dist = None
+            try:
+                from ..pipeline.defense import marking_pairs
+                mk_tr = marking_pairs(match)[side.value]["defenders"]
+                fr_tr = sum(d_["frames"] for d_ in mk_tr
+                            if d_["defender"] in tracks)
+                ds_tr = sum(d_["dist_sum"] for d_ in mk_tr
+                            if d_["defender"] in tracks)
+                if fr_tr:
+                    mark_s = round(fr_tr / fps, 0)
+                    mark_dist = round(ds_tr / fr_tr, 2)
+            except Exception:
+                pass
             points.append({
                 "match_id": match.meta.match_id,
                 "date": match.meta.date,
@@ -1643,6 +1657,8 @@ def create_app():
                 "gk_on_target": gk_on,
                 "gk_saves": gk_saves,
                 "gk_prevented": gk_prevented,
+                "mark_s": mark_s,
+                "mark_dist": mark_dist,
                 "distance_m": round(distance, 1),
                 "top_speed_ms": round(top, 2),
                 "sprint_count": sprints,
