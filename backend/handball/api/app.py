@@ -1898,6 +1898,16 @@ def create_app():
                                 if w["team_down"] == "away")
         except Exception:
             pass
+        pivot_home = pivot_away = None
+        try:
+            from ..pipeline.attack_types import pivot_usage
+            pu_lib = pivot_usage(m)
+            if pu_lib["home"]["attacks"] >= 5:
+                pivot_home = pu_lib["home"]["pivot_share_pct"]
+            if pu_lib["away"]["attacks"] >= 5:
+                pivot_away = pu_lib["away"]["pivot_share_pct"]
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -1929,6 +1939,8 @@ def create_app():
             "suspensions_home": susp_home,
             "suspensions_away": susp_away,
             "xg_saved_away": xg_saved_away,
+            "pivot_share_home": pivot_home,
+            "pivot_share_away": pivot_away,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out

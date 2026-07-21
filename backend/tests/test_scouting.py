@@ -2097,3 +2097,17 @@ def test_pivot_fields_merge_and_matchup_rule():
     plan2 = matchup_plan(ScoutingReport(team="home", team_name="Mi"),
                          comb)
     assert not any("testtel és helyezkedéssel" in p_ for p_ in plan2)
+
+
+def test_trend_includes_pivot_metric():
+    """A fejlődés-követés hozza a beállós támadás / meccs mutatót,
+    meccsenkénti átlagra normálva."""
+    from handball.pipeline.scouting import trend_report
+    older = ScoutingReport(team="home", team_name="Mi", matches=2,
+                           pivot_attacks=4)
+    newer = ScoutingReport(team="home", team_name="Mi", matches=2,
+                           pivot_attacks=8)
+    tr = trend_report(older, newer)
+    row = next(r_ for r_ in tr["metrics"]
+               if r_["label"] == "Beállós támadás / meccs")
+    assert row["older"] == 2.0 and row["newer"] == 4.0

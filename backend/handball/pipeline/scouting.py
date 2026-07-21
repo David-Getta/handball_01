@@ -2602,6 +2602,8 @@ _TREND_METRICS = [
     ("gk_xg_prevented", "Megmentett gól (GSAx) / meccs", "", True, True),
     # Fegyelem: kiállítás meccsenként (kevesebb = jobb; a 0 valós érték).
     ("suspensions", "Kiállítás / meccs", "", False, True),
+    # Beálló-terhelés: beállós támadás meccsenként (irány-semleges).
+    ("pivot_attacks", "Beállós támadás / meccs", "", None, True),
 ]
 
 
@@ -2619,7 +2621,7 @@ def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
     # mutatót kihagyjuk, hogy ne látsszon hamis javulásnak/romlásnak.
     optional = {"possession_pct", "defensive_pressure_m",
                 "gk_big_saves", "gk_outlet_fast", "gk_xg_saved",
-                "gk_xg_prevented"}
+                "gk_xg_prevented", "pivot_attacks"}
     for field_name, label, unit, up_is_better, per_match in _TREND_METRICS:
         a = float(getattr(older, field_name))
         b = float(getattr(newer, field_name))

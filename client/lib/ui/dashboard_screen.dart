@@ -778,6 +778,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ? "—"
                 : pair(m["suspensions_home"], m["suspensions_away"])
           ],
+          // Beálló-terhelés: a támadások hányada megy a beállón át.
+          [
+            "Beállós támadás (H–V)",
+            m["pivot_share_home"] == null && m["pivot_share_away"] == null
+                ? "—"
+                : "${m["pivot_share_home"] == null ? "—" : "${(m["pivot_share_home"] as num).toStringAsFixed(0)}%"} – "
+                    "${m["pivot_share_away"] == null ? "—" : "${(m["pivot_share_away"] as num).toStringAsFixed(0)}%"}"
+          ],
           [
             "Leggyorsabb lövés",
             m["fastest_kmh"] == null
