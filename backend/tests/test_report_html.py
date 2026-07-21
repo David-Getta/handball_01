@@ -267,3 +267,22 @@ def test_h2h_report_html_matchup_section():
     assert "Támadd a szélső védőt." in html
     html2 = h2h_report_html("Mi", "Ok", stats, timeline)
     assert "Meccsterv a visszavágóra" not in html2
+
+
+def test_scouting_report_markers_table():
+    """A nyomtatható felderítő jelentés Emberfogóik táblát hoz (50+
+    kocka), laza/tapadó címkével; kevés kockánál a tábla elmarad."""
+    from handball.pipeline.report_html import scouting_report_html
+    rep = _rep(markers=[{"player_id": 4, "frames": 80,
+                         "dist_sum": 240.0},
+                        {"player_id": 2, "frames": 60,
+                         "dist_sum": 60.0},
+                        {"player_id": 9, "frames": 20,
+                         "dist_sum": 30.0}])
+    html = scouting_report_html(rep)
+    assert "Emberfogóik (átlagtávval)" in html
+    assert "3.0 m · LAZA" in html
+    assert "1.0 m · tapadó" in html
+    assert "9. játékos" not in html  # 50 kocka alatt kimarad
+    html2 = scouting_report_html(_rep(markers=[]))
+    assert "Emberfogóik" not in html2

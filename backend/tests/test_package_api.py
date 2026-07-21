@@ -115,7 +115,7 @@ def test_package_without_video_contains_report_and_csv():
     csv = z.read("statisztika.csv").decode("utf-8")
     assert "Játékos;Csapat" in csv
     # A játék-statisztika oszlopok is ott vannak a fejlécben.
-    assert ";Gól;Lövés;xG;Blokk;Poszt" in csv
+    assert ";Gól;Lövés;xG;Blokk;Poszt;Őrzés (mp);Őrzés átl. táv (m)" in csv
 
 
 def test_package_download_404_before_export():

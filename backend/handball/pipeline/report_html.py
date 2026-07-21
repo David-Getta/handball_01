@@ -200,6 +200,26 @@ def scouting_report_html(rep: ScoutingReport,
                            '<th class="num">Gól/kísérlet</th>'
                            "<th>Merre lövi</th></tr>"
                            + "".join(seven_rows) + "</table>")
+        # Emberfogóik: ki milyen szorosan őriz — a laza oldal a
+        # támadható, a tapadó ellen elzárás kell (top 4, 50+ kocka).
+        mark_rows = []
+        for mk8 in sorted((rep.markers or []),
+                          key=lambda m8: -m8["frames"])[:4]:
+            if mk8["frames"] < 50:
+                continue
+            avg8 = mk8["dist_sum"] / mk8["frames"]
+            tag8 = (" · LAZA" if avg8 >= 2.5
+                    else " · tapadó" if avg8 <= 1.5 else "")
+            mark_rows.append(
+                f"<tr><td>{mk8['player_id']}. játékos</td>"
+                f'<td class="num">{mk8["frames"]}</td>'
+                f'<td class="num">{avg8:.1f} m{tag8}</td></tr>')
+        if mark_rows:
+            roles_html += ("<h2>Emberfogóik (átlagtávval)</h2><table>"
+                           "<tr><th>Védő</th>"
+                           '<th class="num">Őrzés-kocka</th>'
+                           '<th class="num">Átl. táv</th></tr>'
+                           + "".join(mark_rows) + "</table>")
     except Exception:
         pass
 
