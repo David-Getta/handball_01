@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#465)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#474)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -182,7 +182,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   beállóra" kulcsok + 15. meccsterv-szabály (beálló-terhelés ×
   kiállítás-hajlam) + csempe (#462), 30. edzés-szabály
   (Beálló-kapcsolat, két ággal) + játékos-lap beálló-blokk (#463),
-  trend-mutató és könyvtár-összevető sor (#464).
+  trend-mutató és könyvtár-összevető sor (#464), beállós gól-klipek
+  (#469).
+- **Félidei élő jelzések**: a szünet pillanatában szól az élő nézet —
+  laza őrzésnél "szorosabb tapadást a másodikra", kihasználatlan
+  beállónál "keresd a beadást"; mindkettő csak az első félidő
+  kockáiból, jövőbe nézés nélkül. (#466, #467)
+- **Emberfogás az exportokban**: Őrzés-oszlopok a statisztika-CSV-ben,
+  "Emberfogóik" tábla a nyomtatható felderítőben (LAZA/tapadó
+  címkével), Őrzés-oszlop + összesítő a szezon játékos-lapon.
+  (#468, #470)
+- **Betörés-folyosók**: új réteg — hol lép be a labdás ember a kapu
+  9 m-es körzetébe (öt sáv, oldal-normalizálva); összefoglaló +
+  "átjáróház" kiemelés, jelentés-sor, API, csomag (#471),
+  felderítés-profil + 16. meccsterv-szabály (betörés-sáv × laza fal)
+  + csempe (#472), 31. edzés-szabály (Sáv-védelem) + betörés-klipek
+  sávval a fájlnévben (#473).
 - **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
   kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
   csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
