@@ -993,3 +993,34 @@ def test_player_report_taker_direction_and_predictability():
     assert "Heteseid irányai" in html
     assert "balra 2×" in html
     assert "kiszámítható vagy" in html
+
+
+def test_player_report_marking_metrics_and_tip():
+    """A védő lapján megjelenik az emberfogás-mérleg (őrzés-idő +
+    átlagtáv + leggyakoribb őrzött); laza őrzésnél tipp is jár."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    for t in range(60):
+        frames.append(Frame(t=t, players=[
+            pl(1, Team.HOME, 25.0, 10.0),
+            pl(20, Team.AWAY, 25.0, 13.0)],
+            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="pmk", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = player_report_html(m, 20)
+    assert "Emberfogás (őrzés-idő)" in html
+    assert "átl. 3.0 m" in html
+    assert "Leggyakoribb őrzötted" in html
+    assert "tapadj karnyújtásnyira" in html
+    # A támadó lapján nincs emberfogás-blokk.
+    html2 = player_report_html(m, 1)
+    assert "Emberfogás (őrzés-idő)" not in html2

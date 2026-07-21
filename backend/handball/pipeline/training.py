@@ -593,4 +593,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 29) Emberfogás-tapadás: ha van lazán őrző védőnk (a leglazább
+    # emberfogó 2,5 m+ átlagtávról kíséri az emberét), az egy-egy
+    # elleni védekezést kell gyakorolni — névre szólóan.
+    try:
+        from .defense import MARK_LOOSE_M, marking_pairs
+        mk29 = marking_pairs(match, config)
+        for side in ("home", "away"):
+            cands = [d29 for d29 in mk29[side]["defenders"]
+                     if d29["frames"] >= 50]
+            if not cands:
+                continue
+            loose29 = max(cands, key=lambda d29: d29["avg_dist_m"])
+            if loose29["avg_dist_m"] < MARK_LOOSE_M:
+                continue
+            pid29 = (loose29["defender_jersey"]
+                     if loose29["defender_jersey"] is not None
+                     else loose29["defender"])
+            add(side, "védekezés", "Emberfogás-tapadás",
+                f"a(z) {pid29}-es átlag {loose29['avg_dist_m']:.1f} "
+                "m-ről őrzi az emberét — az egy-egy elleni tapadás "
+                "laza",
+                "1-1 elleni árnyékolás szűk folyosóban: a védő végig "
+                "karnyújtáson belül marad, 30 mp-es körök, "
+                "szerepcserével")
+    except Exception:
+        pass
+
     return out
