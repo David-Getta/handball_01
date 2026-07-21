@@ -930,6 +930,15 @@ class ApiClient {
     return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
   }
 
+  /// Szezon-toplisták (GET /library/leaders): gól/blokk/szerzés/védés
+  /// vezérei a teljes könyvtárból, mezszám alapján összegezve.
+  Future<Map<String, dynamic>> fetchLibraryLeaders() async {
+    final resp = await http.get(Uri.parse("$baseUrl/library/leaders"))
+        .timeout(const Duration(seconds: 12));
+    if (resp.statusCode != 200) return const {};
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Szezon-összkép a kezdőlapnak (GET /library/summary): összesített
   /// mutatók (meccsek, játékidő, gólok, táv, sprintek) + meccsenkénti
   /// kivonat a "per_match" kulcs alatt.

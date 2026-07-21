@@ -2087,6 +2087,90 @@ def create_app():
             "per_match": per,
         }
 
+    @app.get("/library/leaders")
+    def library_leaders():
+        """Szezon-toplisták a teljes könyvtárból: gól, blokk,
+        labdaszerzés és védés vezérei — mezszám alapján összegezve
+        (a mezszám nélküli trackek kimaradnak: meccsek közt nincs
+        stabil azonosítójuk). Minden lista a top 5-öt adja."""
+        goals_t: dict = {}
+        blocks_t: dict = {}
+        steals_t: dict = {}
+        saves_t: dict = {}
+        for m in _store.values():
+            jersey_of: dict = {}
+            team_name = {"home": m.meta.home_team,
+                         "away": m.meta.away_team}
+            for fr in m.frames:
+                for p in fr.players:
+                    if p.jersey_number is not None:
+                        jersey_of.setdefault(p.track_id,
+                                             p.jersey_number)
+            team_of: dict = {}
+            for fr in m.frames:
+                for p in fr.players:
+                    team_of.setdefault(p.track_id,
+                                       getattr(p.team, "value", p.team))
+
+            def _key(tid):
+                j = jersey_of.get(tid)
+                if j is None:
+                    return None
+                tname = team_name.get(team_of.get(tid))
+                if not tname:
+                    return None
+                return (tname, j)
+
+            try:
+                from ..pipeline.xg import match_xg
+                for r_ in match_xg(m).get("shooters", []):
+                    k = _key(r_["player_id"])
+                    if k and r_["goals"]:
+                        goals_t[k] = goals_t.get(k, 0) + r_["goals"]
+            except Exception:
+                pass
+            try:
+                from ..pipeline.defense import detect_blocks
+                blk = detect_blocks(m)
+                for side in ("home", "away"):
+                    for e_ in blk[side].get("events", []):
+                        k = _key(e_.get("player_id"))
+                        if k:
+                            blocks_t[k] = blocks_t.get(k, 0) + 1
+            except Exception:
+                pass
+            try:
+                from ..pipeline.defense import ball_winners
+                bw = ball_winners(m)
+                for side in ("home", "away"):
+                    for w_ in bw[side]["players"]:
+                        k = _key(w_["player_id"])
+                        if k:
+                            steals_t[k] = (steals_t.get(k, 0)
+                                           + w_["steals"])
+            except Exception:
+                pass
+            try:
+                from ..pipeline.goalkeeper import goalkeeper_timeline
+                tl = goalkeeper_timeline(m)
+                for side in ("home", "away"):
+                    pk = (tl.get(side) or {}).get("per_keeper", {})
+                    for tid, rec in pk.items():
+                        k = _key(tid)
+                        if k and rec.get("saves"):
+                            saves_t[k] = (saves_t.get(k, 0)
+                                          + rec["saves"])
+            except Exception:
+                pass
+
+        def _top(tally):
+            return [{"team": k[0], "jersey": k[1], "value": v}
+                    for k, v in sorted(tally.items(),
+                                       key=lambda kv: -kv[1])[:5]]
+
+        return {"goals": _top(goals_t), "blocks": _top(blocks_t),
+                "steals": _top(steals_t), "saves": _top(saves_t)}
+
     # Edzés-fókusz kivonat-gyorsítótár (match_id → (kulcs, eredmény)) — a
     # könyvtár-szintű összesítés ne számolja újra a változatlan meccseket.
     _training_cache: dict = {}
