@@ -1828,10 +1828,22 @@ def create_app():
                     v["d"] += 1
         except Exception:
             venue = None
+        # A szezon játékosai: a könyvtár-toplisták e csapatra szűrve
+        # (top 3 kategóriánként) — hibatűrően.
+        leaders = None
+        try:
+            all_leaders = library_leaders()
+            leaders = {
+                k: [e for e in v if e["team"] == team][:3]
+                for k, v in all_leaders.items()}
+            if not any(leaders.values()):
+                leaders = None
+        except Exception:
+            leaders = None
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
             team, tr, focuses, len(entries), timeline=timeline,
-            venue=venue))
+            venue=venue, leaders=leaders))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):

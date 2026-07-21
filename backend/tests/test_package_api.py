@@ -172,6 +172,9 @@ def test_season_report_endpoint():
     assert "Szimu Vendég" in r.text
     # Hazai vs idegen mérleg-szakasz (mindkét meccs hazai volt).
     assert "Hazai vs idegen" in r.text
+    # A rövid (5 mp-es) sim-meccseken nincs toplista-adat — a szakasz
+    # ilyenkor elegánsan elmarad (lásd a dedikált leaders-tesztet).
+    assert "A szezon játékosai" not in r.text
     assert client2.get("/season/report",
                        params={"team": "Nincs Ilyen"}).status_code == 404
 
@@ -198,6 +201,27 @@ def test_season_report_venue_split():
                        r'<td class="num">(\d+)</td>', r.text)
     assert row_h and row_i
     assert int(row_h.group(1)) >= 1 and int(row_i.group(1)) >= 1
+
+
+def test_season_report_leaders_section():
+    """Ha van toplista-adat (hosszabb meccseken labdaszerzés már
+    mérhető), a szezon-riport hozza A szezon játékosai szakaszt."""
+    import shutil
+    tmp2 = tempfile.mkdtemp(prefix="handball_leaders_test_")
+    os.environ["HANDBALL_DATA_DIR"] = tmp2
+    matches_dir = Path(tmp2) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    for seed in (2, 3):
+        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed)
+        (matches_dir / f"{m.meta.match_id}.json").write_text(
+            json.dumps(m.to_dict()), encoding="utf-8")
+    client = TestClient(create_app())
+    r = client.get("/season/report", params={"team": "Szimu Hazai"})
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    shutil.rmtree(tmp2, ignore_errors=True)
+    assert r.status_code == 200
+    assert "A szezon játékosai" in r.text
+    assert "Labdaszerző" in r.text
 
 
 def test_head_to_head_report_endpoint():
