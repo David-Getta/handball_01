@@ -114,7 +114,7 @@ def test_library_leaders_endpoint():
     r = client.get("/library/leaders")
     assert r.status_code == 200
     data = r.json()
-    for key in ("goals", "blocks", "steals", "saves"):
+    for key in ("goals", "blocks", "steals", "saves", "assists"):
         assert key in data and isinstance(data[key], list)
         vals = [e["value"] for e in data[key]]
         assert vals == sorted(vals, reverse=True)

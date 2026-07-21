@@ -2109,6 +2109,7 @@ def create_app():
         blocks_t: dict = {}
         steals_t: dict = {}
         saves_t: dict = {}
+        assists_t: dict = {}
         for m in _store.values():
             jersey_of: dict = {}
             team_name = {"home": m.meta.home_team,
@@ -2174,6 +2175,18 @@ def create_app():
                                           + rec["saves"])
             except Exception:
                 pass
+            try:
+                from ..pipeline.event_detection import (EventType,
+                                                        detect_events)
+                for e_ in detect_events(m):
+                    if e_.type != EventType.GOAL:
+                        continue
+                    aid = (e_.detail or {}).get("assist_id")
+                    k = _key(aid) if aid is not None else None
+                    if k:
+                        assists_t[k] = assists_t.get(k, 0) + 1
+            except Exception:
+                pass
 
         def _top(tally):
             return [{"team": k[0], "jersey": k[1], "value": v}
@@ -2181,7 +2194,8 @@ def create_app():
                                        key=lambda kv: -kv[1])[:5]]
 
         return {"goals": _top(goals_t), "blocks": _top(blocks_t),
-                "steals": _top(steals_t), "saves": _top(saves_t)}
+                "steals": _top(steals_t), "saves": _top(saves_t),
+                "assists": _top(assists_t)}
 
     # Edzés-fókusz kivonat-gyorsítótár (match_id → (kulcs, eredmény)) — a
     # könyvtár-szintű összesítés ne számolja újra a változatlan meccseket.

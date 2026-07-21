@@ -1882,6 +1882,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (l == null) return const [];
     final cats = [
       ("goals", "Gólkirály", "gól"),
+      ("assists", "Gólpassz-vezér", "gólpassz"),
       ("saves", "Védés-vezér", "védés"),
       ("blocks", "Fal kulcsa", "blokk"),
       ("steals", "Labdaszerző", "szerzés"),
