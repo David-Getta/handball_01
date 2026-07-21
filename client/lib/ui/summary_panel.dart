@@ -41,6 +41,9 @@ class SummaryPanel extends StatelessWidget {
   final List<dynamic> keyMoments;
   final Map<String, dynamic>? setplayEff;
 
+  /// Őrzési párok (defense/marking): ki kit fogott a védekezésben.
+  final Map<String, dynamic>? marking;
+
   /// Kulcs-pillanat jegyzetbe emelése (frame, címke) — ha null, nincs
   /// jegyzet-gomb a sorokon.
   final void Function(int frame, String label)? onNoteMoment;
@@ -73,6 +76,7 @@ class SummaryPanel extends StatelessWidget {
     this.keyPlayers,
     this.keyMoments = const [],
     this.setplayEff,
+    this.marking,
     this.onNoteMoment,
     this.progression,
     this.goalTimeline = const [],
@@ -390,6 +394,72 @@ class SummaryPanel extends StatelessWidget {
     ];
   }
 
+  /// Őrzési párok kártya: melyik védő melyik támadót fogta, mennyi ideig
+  /// és milyen szorosan — 2,5 m feletti átlagtávnál laza őrzés jelzéssel.
+  List<Widget> _markingCard() {
+    final mk = marking;
+    if (mk == null) return const [];
+    final sides = [
+      ("home", homeName, AppColors.home),
+      ("away", awayName, AppColors.away),
+    ];
+    List<Map<String, dynamic>> pairsOf(String key) =>
+        (((mk[key] as Map?)?["pairs"] as List?) ?? const [])
+            .cast<Map<String, dynamic>>();
+    if (sides.every((s) => pairsOf(s.$1).isEmpty)) return const [];
+    String label(Map<String, dynamic> p, String who) {
+      final j = (p["${who}_jersey"] as num?)?.toInt();
+      if (j != null) return "$j-es";
+      return "#${(p[who] as num?)?.toInt() ?? "?"}";
+    }
+
+    return [
+      Text("ŐRZÉSI PÁROK (KI KIT FOGOTT)", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (key, name, color) in sides)
+              if (pairsOf(key).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(name,
+                      style: AppText.value
+                          .copyWith(fontSize: 12.5, color: color)),
+                ),
+                for (final p in pairsOf(key).take(3))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 4),
+                    child: Builder(builder: (_) {
+                      final dist =
+                          ((p["avg_dist_m"] as num?) ?? 0).toDouble();
+                      final loose = dist >= 2.5;
+                      return Text(
+                          "${label(p, "defender")} fogta a(z) "
+                          "${label(p, "attacker")} támadót — "
+                          "${((p["share_pct"] as num?) ?? 0).toStringAsFixed(0)}% idő, "
+                          "átl. ${dist.toStringAsFixed(1)} m"
+                          "${loose ? " · LAZA" : ""}",
+                          style: AppText.label.copyWith(
+                              fontSize: 12,
+                              color: loose ? AppColors.gold : null));
+                    }),
+                  ),
+              ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+    ];
+  }
+
   /// Kulcsemberek kártya: szereponként a meccs meghatározó játékosai —
   /// ugyanazokból a rétegekből, mint a jelentés Kulcsemberek táblája.
   List<Widget> _keyPlayersCard() {
@@ -573,6 +643,7 @@ class SummaryPanel extends StatelessWidget {
         ],
         ..._keyMomentsCard(),
         ..._figuresCard(),
+        ..._markingCard(),
         ..._keyPlayersCard(),
         ..._trainingCard(),
         if (goals.isNotEmpty) ...[

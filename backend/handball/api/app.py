@@ -2336,6 +2336,8 @@ def create_app():
                 from ..pipeline.defense import pressure_finishing
                 _layer("pressure_finishing",
                        lambda: pressure_finishing(match))
+                from ..pipeline.defense import marking_pairs
+                _layer("marking", lambda: marking_pairs(match))
                 from ..pipeline.tactics import attack_sides
                 _layer("attack_sides", lambda: attack_sides(match))
                 from ..pipeline.tactics import efficiency_vs_formation
