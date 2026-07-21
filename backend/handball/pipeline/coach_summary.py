@@ -298,6 +298,26 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                         "bejövő betörésekből; oda kell a segítő védő.")
     except Exception:
         pass
+    # Labdaszerzők: ki a védekezés motorja (a szerzések harmadát hozza).
+    try:
+        from .defense import ball_winners
+        bw = ball_winners(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bw = bw[side]
+            if rec_bw["total"] < 4 or not rec_bw["players"]:
+                continue
+            top_bw = rec_bw["players"][0]
+            if (top_bw["steals"] >= 3
+                    and top_bw["steals"] / rec_bw["total"] >= 0.34):
+                who_bw = (f"{top_bw['jersey']}-es"
+                          if top_bw["jersey"] is not None
+                          else f"{top_bw['player_id']}. játékos")
+                parts.append(
+                    f"a(z) {name} labdaszerzéseinek motorja a(z) "
+                    f"{who_bw} ({top_bw['steals']} a csapat "
+                    f"{rec_bw['total']} szerzéséből)")
+    except Exception:
+        pass
     # Őrzési párok: a legstabilabb pár + a laza őrzés figyelmeztetése.
     try:
         from .defense import MARK_LOOSE_M, marking_pairs

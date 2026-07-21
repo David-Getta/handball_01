@@ -620,3 +620,50 @@ def breakthrough_lanes(match, config=None) -> dict:
                 rec["lanes"].items(),
                 key=lambda kv: -kv[1]["entries"]))
     return out
+
+
+def ball_winners(match, config=None) -> dict:
+    """Labdaszerzők: birtokos-váltásnál (csapatváltás) az ÚJ birtokos
+    kapja a labdaszerzés-jóváírást — ki a védekezés motorja.
+
+    A blokk és az őrzési párok mellé ez a harmadik egyéni védekezés-
+    mutató: a felderítésben ("vele szemben óvatos passz"), a játékos-
+    lapon és az összefoglalóban is megjelenik.
+
+    Visszatérés csapatonként (a SZERZŐ oldal):
+      {"total", "players": [{"player_id", "jersey", "steals"}],
+       "ts": [{"t", "player_id"}]}
+    — players a szerzések száma szerint csökkenően; ts a szerzés-
+    pillanatok (klip-exporthoz).
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    jersey: dict[int, int] = {}
+    tally: dict[str, dict[int, int]] = {"home": {}, "away": {}}
+    ts: dict[str, list] = {"home": [], "away": []}
+    prev = None
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+        holder = ball_holder(f, config)
+        if (holder is not None and prev is not None
+                and holder.team != prev.team
+                and holder.role != "kapus"):
+            side = holder.team.value
+            tally[side][holder.track_id] = (
+                tally[side].get(holder.track_id, 0) + 1)
+            ts[side].append({"t": f.t, "player_id": holder.track_id})
+        if holder is not None:
+            prev = holder
+    out = {}
+    for side in ("home", "away"):
+        players = [{"player_id": tid, "jersey": jersey.get(tid),
+                    "steals": n}
+                   for tid, n in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        out[side] = {"total": sum(tally[side].values()),
+                     "players": players, "ts": ts[side]}
+    return out
