@@ -214,6 +214,32 @@ class _LiveScreenState extends State<LiveScreen> {
         }
       }
     } catch (_) {}
+    // Félidei beálló-kép: ha az első félidőben alig ment a beállón át
+    // a játék (van beálló, de a támadások <=15%-a), a szünetben szól.
+    try {
+      final a = await _api.fetchAttacks(matchId);
+      final fh = (a["pivot_fh"] as Map?)?.cast<String, dynamic>();
+      if (fh != null) {
+        final atFrame = ((fh["until_frame"] as num?) ?? 0).toInt();
+        for (final side in ["home", "away"]) {
+          final rec = (fh[side] as Map?)?.cast<String, dynamic>();
+          if (rec == null) continue;
+          final attacks = ((rec["attacks"] as num?) ?? 0).toInt();
+          final pivots = ((rec["pivot_ids"] as List?) ?? const []);
+          final share = (rec["pivot_share_pct"] as num?)?.toDouble();
+          if (attacks < 5 || pivots.isEmpty || share == null) continue;
+          if (share > 15.0) continue;
+          final team = names[side] ?? "";
+          out.add(_FeedEntry(
+              atFrame,
+              Suggestion(4, "taktika",
+                  "Félidei kép ($team): a támadások csak "
+                  "${share.toStringAsFixed(0)}%-a ment a beállón át — "
+                  "a másodikban keresd a beadást, onnan jönnek a "
+                  "legjobb helyzetek.")));
+        }
+      }
+    } catch (_) {}
     // Vezetés-váltások: a meccs gerincéből — élőben ez a "most fordult
     // a meccs" pillanat, a padnak azonnal reagálnia kell.
     try {
