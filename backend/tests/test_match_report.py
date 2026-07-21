@@ -1024,3 +1024,41 @@ def test_player_report_marking_metrics_and_tip():
     # A támadó lapján nincs emberfogás-blokk.
     html2 = player_report_html(m, 1)
     assert "Emberfogás (őrzés-idő)" not in html2
+
+
+def test_player_report_pivot_block():
+    """A becsült beálló lapján megjelenik a csapat beállós támadás-
+    mérlege; a nem beálló lapján nem."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    for _ in range(6):  # 6 hazai támadás a beállón át, szünetekkel
+        for i in range(150):
+            frames.append(Frame(t=t, players=[
+                pl(1, Team.HOME, 27.0, 10.0),
+                pl(5, Team.HOME, 34.0, 10.0),
+                pl(20, Team.AWAY, 36.0, 8.0)],
+                ball=Ball(x=34.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(40):
+            frames.append(Frame(t=t, players=[
+                pl(1, Team.HOME, 20.0, 10.0),
+                pl(5, Team.HOME, 34.0, 10.0),
+                pl(20, Team.AWAY, 19.0, 10.0)],
+                ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+            t += 1
+    m = Match(MatchMeta(match_id="ppv", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = player_report_html(m, 5)
+    assert "Beállós támadás (rajtad át)" in html
+    html2 = player_report_html(m, 1)
+    assert "Beállós támadás (rajtad át)" not in html2

@@ -593,6 +593,42 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 30) Beálló-kapcsolat: ha van beálló, de a támadások alig mennek
+    # rajta át (15% alatt), vagy a beállós játék terméketlen (a gólarány
+    # 15+ ponttal rosszabb, mint nélküle), a beadás-játékot kell
+    # gyakorolni.
+    try:
+        from .attack_types import pivot_usage
+        pu30 = pivot_usage(match, config)
+        for side in ("home", "away"):
+            rec30 = pu30[side]
+            if rec30["attacks"] < 6 or not rec30["pivot_ids"]:
+                continue
+            share30 = 100.0 * rec30["pivot_attacks"] / rec30["attacks"]
+            if share30 <= 15.0:
+                add(side, "támadás", "Beálló-kapcsolat",
+                    f"a támadások mindössze {share30:.0f}%-a megy a "
+                    "beállón át — a legjobb helyzeteket adó kapcsolat "
+                    "kihasználatlan",
+                    "beadás-gyakorlat mozgó beállóra: átlövő-beálló "
+                    "kettősök, elzárás után azonnali beadás, védőkkel")
+                continue
+            other30 = rec30["attacks"] - rec30["pivot_attacks"]
+            if (rec30["pivot_attacks"] >= 3 and other30 >= 3
+                    and rec30["pivot_goal_pct"] is not None
+                    and rec30["other_goal_pct"] is not None
+                    and rec30["other_goal_pct"]
+                    - rec30["pivot_goal_pct"] >= 15.0):
+                add(side, "támadás", "Beálló-kapcsolat",
+                    f"a beállós támadás terméketlen ("
+                    f"{rec30['pivot_goal_pct']:.0f}% gól, nélküle "
+                    f"{rec30['other_goal_pct']:.0f}%) — a beadás vagy "
+                    "a befejezés akad el",
+                    "beadás utáni befejezés-sorozat: fordulás lövésbe "
+                    "két védő közt, passzív jelzésig kötelező beadás")
+    except Exception:
+        pass
+
     # 29) Emberfogás-tapadás: ha van lazán őrző védőnk (a leglazább
     # emberfogó 2,5 m+ átlagtávról kíséri az emberét), az egy-egy
     # elleni védekezést kell gyakorolni — névre szólóan.

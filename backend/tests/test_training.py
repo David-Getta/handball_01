@@ -748,3 +748,36 @@ def test_training_flags_loose_marking():
     out2 = training_focus(scene(1.0))
     assert not any(it["title"] == "Emberfogás-tapadás"
                    for it in out2["away"])
+
+
+def test_training_flags_underused_pivot():
+    """30) Ha van beálló, de a támadások alig mennek rajta át,
+    Beálló-kapcsolat fókusz születik; beálló-központú játéknál nem."""
+    def scene(ball_at_pivot):
+        frames = []
+        t = 0
+        for _ in range(8):  # 8 hazai támadás-szakasz, szünetekkel
+            for i in range(150):
+                bx, by = (34.0, 10.0) if ball_at_pivot else (27.0, 10.0)
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 27.0, 10.0),
+                    _pl(5, Team.HOME, 34.0, 10.0),
+                    _pl(20, Team.AWAY, 36.0, 8.0)],
+                    ball=Ball(x=bx, y=by, confidence=1.0)))
+                t += 1
+            for i in range(40):  # vendég-birtoklás: szakasz-határ
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 20.0, 10.0),
+                    _pl(5, Team.HOME, 34.0, 10.0),
+                    _pl(20, Team.AWAY, 19.0, 10.0)],
+                    ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+                t += 1
+        return Match(_meta(), frames)
+
+    out = training_focus(scene(False))
+    items = [it for it in out["home"]
+             if it["title"] == "Beálló-kapcsolat"]
+    assert items and "kihasználatlan" in items[0]["why"]
+    out2 = training_focus(scene(True))
+    assert not any(it["title"] == "Beálló-kapcsolat"
+                   for it in out2["home"])
