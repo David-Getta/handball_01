@@ -263,6 +263,29 @@ class _LiveScreenState extends State<LiveScreen> {
         }
       }
     } catch (_) {}
+    // Hajrá-protokoll: ha a hajrá szoros állásról indul, az utolsó
+    // szakasz kezdetén szól a padnak — a döntéseket előre kell hozni.
+    try {
+      final pr = await _api.fetchProgression(matchId);
+      final cl = (pr["clutch"] as Map?)?.cast<String, dynamic>();
+      if (cl != null &&
+          (cl["available"] as bool? ?? false) &&
+          (cl["close"] as bool? ?? false)) {
+        final winS = ((cl["window_s"] as num?) ?? 300).toDouble();
+        final fps = match.meta.fps > 0 ? match.meta.fps : 25.0;
+        final atFrame = (match.frames.length - winS * fps).round();
+        final ss = ((cl["start_score"] as List?) ?? const [0, 0]);
+        if (atFrame > 0) {
+          out.add(_FeedEntry(
+              atFrame,
+              Suggestion(5, "taktika",
+                  "Hajrá-protokoll: ${ss[0]}–${ss[1]} az állás, "
+                  "${(winS / 60).round()} perc van hátra — időkérés-terv "
+                  "elő, eldöntött hetes-dobó, 7 a 6 döntés; minden "
+                  "támadás lövéssel záruljon.")));
+        }
+      }
+    } catch (_) {}
     // Vezetés-váltások: a meccs gerincéből — élőben ez a "most fordult
     // a meccs" pillanat, a padnak azonnal reagálnia kell.
     try {
