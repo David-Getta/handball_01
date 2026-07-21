@@ -1062,3 +1062,46 @@ def test_player_report_pivot_block():
     assert "Beállós támadás (rajtad át)" in html
     html2 = player_report_html(m, 1)
     assert "Beállós támadás (rajtad át)" not in html2
+
+
+def test_report_individual_defense_table():
+    """Az Egyéni védekezés tábla a labdaszerzést és az őrzést hozza a
+    védőre; az aktivitás nélküli meccsen a tábla elmarad."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import match_report_html
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    # Őrzés (60 kocka), majd a vendég 20-as labdát szerez.
+    for _ in range(60):
+        frames.append(Frame(t=t, players=[
+            pl(1, Team.HOME, 25.0, 10.0),
+            pl(20, Team.AWAY, 25.0, 11.0)],
+            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[
+            pl(1, Team.HOME, 25.0, 10.0),
+            pl(20, Team.AWAY, 25.0, 11.0)],
+            ball=Ball(x=25.0, y=11.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="pdt", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Egyéni védekezés" in html
+    assert "Labdaszerzés" in html
+    # A 20-as sora: 1 szerzés + ~2,4 mp őrzés 1 m-en.
+    assert "20. játékos" in html
+    # Üres meccsen nincs tábla.
+    m2 = Match(MatchMeta(match_id="pdt2", home_team="H",
+                         away_team="A", fps=25.0),
+               [Frame(t=0, players=[pl(1, Team.HOME, 20.0, 10.0)])])
+    html2 = match_report_html(m2, {}, [], None)
+    assert "Egyéni védekezés" not in html2
