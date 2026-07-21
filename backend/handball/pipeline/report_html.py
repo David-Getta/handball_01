@@ -2826,6 +2826,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
     leaders_html = ""
     if leaders:
         cats_ld = (("goals", "Gólkirály", "gól"),
+                   ("assists", "Gólpassz-vezér", "gólpassz"),
                    ("saves", "Védés-vezér", "védés"),
                    ("blocks", "Fal kulcsa", "blokk"),
                    ("steals", "Labdaszerző", "szerzés"))
