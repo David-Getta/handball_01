@@ -2191,6 +2191,16 @@ def player_report_html(match, track_id: int) -> str:
                     f"{alab_m} ({pr_m['share_pct']:.0f}%)"))
     except Exception:
         pass
+    # Labdaszerzés: a játékos szerzett labdái (birtokos-váltásból).
+    try:
+        from .defense import ball_winners
+        bw_pl = ball_winners(match)[row["team"]]
+        n_bw = sum(p_["steals"] for p_ in bw_pl["players"]
+                   if p_["player_id"] in tids)
+        if n_bw:
+            game_items.append(_metric("Labdaszerzés", str(n_bw)))
+    except Exception:
+        pass
     # Beálló-szerep: ha a játékos a becsült beálló, a csapat beállós
     # támadás-mérlege az ő lapjára tartozik.
     try:

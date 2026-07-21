@@ -2332,6 +2332,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import ball_winners
+            res["ball_winners"] = ball_winners(match)
+        except Exception:
+            pass
+        try:
             # Félidei emberfogás-kép: az élő nézet a szünetben ebből ad
             # "szorosabb tapadást a másodikra" jelzést (jövőbe nézés
             # nélkül — csak az első félidő kockáiból).
@@ -2509,6 +2514,8 @@ def create_app():
                 _layer("pass_chains", lambda: pass_chains(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
+                from ..pipeline.defense import ball_winners
+                _layer("ball_winners", lambda: ball_winners(match))
                 from ..pipeline.tactics import attack_sides
                 _layer("attack_sides", lambda: attack_sides(match))
                 from ..pipeline.tactics import efficiency_vs_formation

@@ -334,3 +334,29 @@ def test_breakthrough_lanes_detects_entry_lane():
     # Messze maradva (x<=30) nincs betörés.
     res3 = breakthrough_lanes(scene([28.0] * 80, 10.0))
     assert res3["home"]["entries"] == 0
+
+
+def test_ball_winners_credit_new_holder():
+    """Csapatváltásos birtokos-váltásnál az új birtokos kap
+    labdaszerzés-jóváírást; csapaton belüli passznál senki."""
+    from handball.models.tracking import Ball, Frame, Match
+    from handball.pipeline.defense import ball_winners
+
+    frames = []
+    t = 0
+    # Hazai 1-es birtokol, majd a vendég 20-as szerzi meg (váltás),
+    # utána a 20-as passzol a 21-esnek (csapaton belül — nem szerzés).
+    for holder, x, y in [(1, 25.0, 10.0)] * 10 + \
+                        [(20, 26.0, 10.0)] * 10 + \
+                        [(21, 28.0, 12.0)] * 10:
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 25.0, 10.0),
+            _pl(20, Team.AWAY, 26.0, 10.0),
+            _pl(21, Team.AWAY, 28.0, 12.0)],
+            ball=Ball(x=x, y=y, confidence=1.0)))
+        t += 1
+    res = ball_winners(Match(_meta(), frames))
+    assert res["away"]["total"] == 1
+    assert res["away"]["players"][0]["player_id"] == 20
+    assert res["away"]["ts"] and res["away"]["ts"][0]["player_id"] == 20
+    assert res["home"]["total"] == 0
