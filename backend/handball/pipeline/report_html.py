@@ -2590,7 +2590,8 @@ legalább két meccsen előjött — nem egyszeri kisiklás.</footer>
 
 
 def h2h_report_html(team_a: str, team_b: str, stats: dict,
-                    timeline: list[dict]) -> str:
+                    timeline: list[dict],
+                    matchup: list[str] | None = None) -> str:
     """Egymás ellen: a két csapat egymás elleni mérlege a könyvtárból
     — győzelmi mérleg, gól-mérleg és meccs-lista főcímekkel.
     """
@@ -2599,6 +2600,13 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
         f'<td class="num">{escape(str(e.get("score") or ""))}</td>'
         f"<td>{escape(str(e.get('headline') or '—'))}</td></tr>"
         for e in timeline)
+    matchup_html = ""
+    if matchup:
+        items = "".join(f"<li>{escape(p_)}</li>" for p_ in matchup)
+        matchup_html = (
+            f"<h2>Meccsterv a visszavágóra ({escape(team_a)} "
+            "szemszögéből, a legutóbbi meccs profiljából)</h2>"
+            "<ul>" + items + "</ul>")
     return f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -2627,6 +2635,8 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
   th, td {{ padding: 7px 10px; border-bottom: 1px solid #E3E8EF;
            text-align: left; }}
   th.num, td.num {{ text-align: right; white-space: nowrap; }}
+  ul {{ margin: 8px 0 0; padding-left: 20px; }}
+  li {{ font-size: 13px; margin-bottom: 6px; }}
   footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
 </style>
 </head>
@@ -2648,6 +2658,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 <h2>Meccsről meccsre</h2>
 <table><tr><th>Dátum</th><th class="num">Eredmény</th>
 <th>Mi történt</th></tr>{rows}</table>
+{matchup_html}
 <footer>A visszavágó-készüléshez: a legutóbbi meccs csomagjában ott a
 meccsterv.txt, a felderítő képernyőn pedig a több-meccses
 ellenfél-profil.</footer>

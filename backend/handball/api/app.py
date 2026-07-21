@@ -1658,9 +1658,23 @@ def create_app():
                 "score": f"{g_a} – {g_b}",
                 "headline": summ_.get("headline"),
             })
+        # Meccsterv a visszavágóra: a LEGUTÓBBI közös meccs profiljai
+        # keresztezve, az A csapat szemszögéből — hibatűrően.
+        matchup = None
+        try:
+            from ..pipeline.scouting import matchup_plan
+            m_last = entries[-1][1]
+            side_a = (Team.HOME if m_last.meta.home_team == team_a
+                      else Team.AWAY)
+            side_b = Team.AWAY if side_a == Team.HOME else Team.HOME
+            matchup = matchup_plan(
+                scout_team(m_last, side_a, TacticsConfig()),
+                scout_team(m_last, side_b, TacticsConfig())) or None
+        except Exception:
+            matchup = None
         from ..pipeline.report_html import h2h_report_html
         return HTMLResponse(content=h2h_report_html(
-            team_a, team_b, stats, timeline))
+            team_a, team_b, stats, timeline, matchup=matchup))
 
     @app.get("/season/report")
     def get_season_report(team: str):
