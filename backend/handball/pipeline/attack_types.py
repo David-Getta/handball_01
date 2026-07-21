@@ -529,3 +529,69 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             round(100.0 * rec["other_goals"] / other, 1)
             if other > 0 else None)
     return out
+
+
+# Passz-lánc vödrök: hány passzból épül a támadás (gyors befejezés /
+# rövid játék / türelmes körbejáratás).
+PASS_BUCKETS = ((2, "0–2 passz"), (5, "3–5 passz"))
+PASS_LONG_LABEL = "6+ passz"
+
+
+def pass_chains(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-lánc: támadásonként hány passz előzi meg a befejezést, és
+    melyik lánc-hossz hozza a gólokat — megéri-e a türelmes
+    körbejáratás, vagy a gyors befejezés a fegyverük.
+
+    A passzokat a detect_passes adja (csapaton belüli birtokos-váltás),
+    a gól-párosítás a támadás + ATTACK_TAIL_S alatti első saját gól.
+
+    Visszatérés csapatonként:
+      {"attacks", "passes", "avg_passes", "buckets":
+       {vödör: {"attacks", "goals", "goal_pct"}}, "best_bucket"}
+    — avg_passes None, ha nincs támadás; best_bucket a legjobb
+    gólarányú vödör (2+ támadástól).
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    passes = [(p.t, p.team.value) for p in detect_passes(match, config)]
+    shots = [(e.t, e.team.value, e.type == EventType.GOAL)
+             for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out = {side: {"attacks": 0, "passes": 0, "buckets": {},
+                  "avg_passes": None, "best_bucket": None}
+           for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        n_pass = sum(1 for (t, tm) in passes
+                     if tm == side and seq.start_t <= t <= seq.end_t)
+        bucket = next((lab for lim, lab in PASS_BUCKETS
+                       if n_pass <= lim), PASS_LONG_LABEL)
+        goal = next((True for (t, tm, g) in shots
+                     if tm == side and g
+                     and seq.start_t <= t <= seq.end_t + tail), False)
+        rec = out[side]
+        rec["attacks"] += 1
+        rec["passes"] += n_pass
+        b = rec["buckets"].setdefault(bucket,
+                                      {"attacks": 0, "goals": 0})
+        b["attacks"] += 1
+        if goal:
+            b["goals"] += 1
+    for rec in out.values():
+        if rec["attacks"]:
+            rec["avg_passes"] = round(rec["passes"] / rec["attacks"], 1)
+        best = None
+        for lab, b in rec["buckets"].items():
+            b["goal_pct"] = round(100.0 * b["goals"] / b["attacks"], 1)
+            if b["attacks"] >= 2 and (best is None
+                                      or b["goal_pct"] > best[1]):
+                best = (lab, b["goal_pct"])
+        if best is not None and best[1] > 0:
+            rec["best_bucket"] = best[0]
+    return out

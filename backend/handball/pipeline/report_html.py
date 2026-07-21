@@ -1388,6 +1388,25 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _bl_txt("home"), _bl_txt("away")))
         except Exception:
             pass
+        # Passz-lánc sora: átlagos passz-szám támadásonként.
+        try:
+            from .attack_types import pass_chains
+            _pc = pass_chains(match)
+            if any(_pc[s_]["attacks"] >= 5
+                   and _pc[s_]["avg_passes"] is not None
+                   for s_ in ("home", "away")):
+                def _pc_txt(side):
+                    r = _pc[side]
+                    if r["attacks"] < 5 or r["avg_passes"] is None:
+                        return "—"
+                    txt = f'{r["avg_passes"]:.1f}'
+                    if r["best_bucket"]:
+                        txt += f' (top: {r["best_bucket"]})'
+                    return txt
+                rows.append(("Passz / támadás",
+                             _pc_txt("home"), _pc_txt("away")))
+        except Exception:
+            pass
         # Beállós támadás sora: a támadások hányada megy a beállón át.
         try:
             from .attack_types import pivot_usage
