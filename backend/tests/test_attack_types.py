@@ -299,3 +299,44 @@ def test_attack_width_measures_spread():
                                          away_team="A", fps=25.0),
                                build([2.0, 10.0, 18.0]).frames[:50]))
     assert short["home"]["avg_width_m"] is None
+
+
+def test_pivot_usage_labels_attacks_through_pivot():
+    """A beállón átfutó támadás beállósként számolódik; ha a labda nem
+    jár a beállónál, nem. A beállót a poszt-becslés adja (6 m körüli
+    átlag-pozíció a támadó-fázisban)."""
+    from handball.pipeline.attack_types import pivot_usage
+
+    frames = []
+    t = 0
+    # 1. támadás (8 mp): a labda a beállónál (5-ös, x=34) időzik.
+    for i in range(200):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 27.0, 10.0),
+            _pl(5, Team.HOME, 34.0, 10.0),
+            _pl(20, Team.AWAY, 36.0, 8.0)],
+            ball=Ball(x=34.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Szünet (vendég birtoklás középen) — a szakaszok szétválnak.
+    for i in range(50):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 20.0, 10.0),
+            _pl(5, Team.HOME, 20.0, 12.0),
+            _pl(20, Team.AWAY, 19.0, 10.0)],
+            ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+        t += 1
+    # 2. hazai támadás (8 mp): a labda végig az irányítónál (1-es).
+    for i in range(200):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 28.0, 10.0),
+            _pl(5, Team.HOME, 34.0, 14.0),
+            _pl(20, Team.AWAY, 36.0, 8.0)],
+            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(_meta(), frames)
+    res = pivot_usage(m)
+    assert 5 in res["home"]["pivot_ids"]
+    assert res["home"]["attacks"] >= 2
+    assert res["home"]["pivot_attacks"] >= 1
+    # Volt beálló nélküli hazai támadás is.
+    assert res["home"]["pivot_attacks"] < res["home"]["attacks"]

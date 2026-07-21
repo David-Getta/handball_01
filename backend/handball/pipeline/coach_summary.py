@@ -372,6 +372,35 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"támadott (átlag {v:.0f} m).")
     except Exception:
         pass
+    # Beálló-terhelés: mennyit megy a játék a beállón át, és megéri-e.
+    try:
+        from .attack_types import pivot_usage
+        pu = pivot_usage(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pu = pu[side]
+            if rec_pu["attacks"] < 5 or rec_pu["pivot_share_pct"] is None:
+                continue
+            if rec_pu["pivot_share_pct"] >= 40.0:
+                body += (f" A(z) {name} támadásainak "
+                         f"{rec_pu['pivot_share_pct']:.0f}%-a a beállón "
+                         "át ment")
+                if (rec_pu["pivot_goal_pct"] is not None
+                        and rec_pu["other_goal_pct"] is not None):
+                    jobb = (rec_pu["pivot_goal_pct"]
+                            - rec_pu["other_goal_pct"])
+                    if jobb >= 15.0:
+                        body += (f" — és megérte: gólarány "
+                                 f"{rec_pu['pivot_goal_pct']:.0f}% a "
+                                 f"beállóval, {rec_pu['other_goal_pct']:.0f}% "
+                                 "nélküle")
+                    elif jobb <= -15.0:
+                        body += (f" — pedig nem érte meg: gólarány "
+                                 f"{rec_pu['pivot_goal_pct']:.0f}% a "
+                                 f"beállóval, {rec_pu['other_goal_pct']:.0f}% "
+                                 "nélküle")
+                body += "."
+    except Exception:
+        pass
     # Figura-hatékonyság: melyik begyakorolt támadás hozott gólt.
     try:
         from .setplays import setplay_efficiency

@@ -453,3 +453,77 @@ def attack_width(match, config=None) -> dict:
                             if n >= ATTACK_WIDTH_MIN_FRAMES else None),
         }
     return out
+
+
+# Beálló-terhelés: a támadás akkor "beállós", ha a labda legalább ennyi
+# kockán át a becsült beállónál járt a szakasz alatt (villanás ellen).
+PIVOT_TOUCH_MIN_FRAMES = 3
+
+
+def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Beálló-terhelés: a támadások mekkora része megy át a beállón, és
+    az eredményesebb-e, mint a beálló nélküli játék.
+
+    A poszt-becslés (estimate_positions) beállói + a labdabirtokos
+    kockánkénti azonosítása adja a "beállós támadás" címkét; a
+    lövés-párosítás ugyanaz, mint az attack_efficiency-nél (a szakasz
+    + ATTACK_TAIL_S alatti első saját lövés).
+
+    Visszatérés csapatonként:
+      {"attacks", "pivot_attacks", "pivot_goals", "other_goals",
+       "pivot_share_pct", "pivot_goal_pct", "other_goal_pct",
+       "pivot_ids"}
+    — a pct-k None, ha a nevezőjük 0; pivot_ids: a becsült beálló
+    track-ek (mezszám híján is stabil kulcs).
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    posts = estimate_positions(match, config)
+    pivots = {side: {tid for tid, r in posts.get(side, {}).items()
+                     if r["poszt"] == "beálló"}
+              for side in ("home", "away")}
+    shots = [(e.t, e.team.value, e.type == EventType.GOAL)
+             for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out = {side: {"attacks": 0, "pivot_attacks": 0, "pivot_goals": 0,
+                  "other_goals": 0, "pivot_ids": sorted(pivots[side])}
+           for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        rec = out[side]
+        rec["attacks"] += 1
+        touch = 0
+        for fr in seq.frames:
+            h = ball_holder(fr, config)
+            if h is not None and h.track_id in pivots[side]:
+                touch += 1
+        is_pivot = touch >= PIVOT_TOUCH_MIN_FRAMES
+        goal = next((True for (t, tm, g) in shots
+                     if tm == side and g
+                     and seq.start_t <= t <= seq.end_t + tail), False)
+        if is_pivot:
+            rec["pivot_attacks"] += 1
+            if goal:
+                rec["pivot_goals"] += 1
+        elif goal:
+            rec["other_goals"] += 1
+
+    for rec in out.values():
+        other = rec["attacks"] - rec["pivot_attacks"]
+        rec["pivot_share_pct"] = (
+            round(100.0 * rec["pivot_attacks"] / rec["attacks"], 1)
+            if rec["attacks"] else None)
+        rec["pivot_goal_pct"] = (
+            round(100.0 * rec["pivot_goals"] / rec["pivot_attacks"], 1)
+            if rec["pivot_attacks"] else None)
+        rec["other_goal_pct"] = (
+            round(100.0 * rec["other_goals"] / other, 1)
+            if other > 0 else None)
+    return out
