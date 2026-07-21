@@ -723,6 +723,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return txt;
   }
 
+  // Rotáció: átlag bevetett játékos + alapember (a mérhető meccsekből;
+  // a backend-kulcsokkal azonos küszöbök).
+  String? _rotation(Map<String, dynamic> r) {
+    final n = ((r["rotation_matches"] as num?) ?? 0).toInt();
+    if (n == 0) return null;
+    final used = ((r["rotation_used_sum"] as num?) ?? 0).toInt() / n;
+    final reg = ((r["rotation_regulars_sum"] as num?) ?? 0).toInt() / n;
+    if (used > 8.0 && used < 11.0) return null; // csak a kirívó érdekes
+    final tag = used <= 8.0 ? "szűk pad" : "széles pad";
+    return "${used.toStringAsFixed(0)} játékos "
+        "(${reg.toStringAsFixed(0)} alapember) · $tag";
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -947,6 +960,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_pivotUsage(r) != null) ["Beálló-terhelés", _pivotUsage(r)!],
       if (_breakLane(r) != null) ["Betörés-sáv", _breakLane(r)!],
       if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
+      if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

@@ -263,6 +263,11 @@ class ScoutingReport:
     pass_attacks: int = 0
     pass_total: int = 0
     pass_buckets: dict = field(default_factory=dict)
+    # Rotációjuk: bevetett + alapember összegek és a mérhető meccsek
+    # száma — átlag = összeg / meccsek, pontosan összegződik.
+    rotation_used_sum: int = 0
+    rotation_regulars_sum: int = 0
+    rotation_matches: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -857,6 +862,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                     "6+ passzból) — ne ugrálj ki a falból, a hosszú "
                     "támadás végén jön a valódi befejezés.")
 
+    # Rotációjuk: szűk pad = a hajrában fogynak el; széles pad =
+    # végig magas tempót bírnak.
+    if rep.rotation_matches:
+        avg_used = rep.rotation_used_sum / rep.rotation_matches
+        if avg_used <= 8.0:
+            weaknesses.append(
+                f"Szűk rotációval játszanak (átlag {avg_used:.0f} "
+                "bevetett játékos).")
+            keys.append(
+                "Szűk a paduk — vidd tempóban a meccset, sok cserével: "
+                "a hajrára elfogynak.")
+        elif avg_used >= 11.0:
+            strengths.append(
+                f"Széles paddal forgatnak (átlag {avg_used:.0f} "
+                "bevetett játékos) — a tempó nekik dolgozik.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -1382,6 +1403,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.pass_buckets = {
             k: {"attacks": v["attacks"], "goals": v["goals"]}
             for k, v in pch["buckets"].items()}
+        from .stats import rotation_depth
+        rd = rotation_depth(match)[team.value]
+        if rd["used"] >= 6:
+            rep.rotation_used_sum = rd["used"]
+            rep.rotation_regulars_sum = rd["regulars"]
+            rep.rotation_matches = 1
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2126,6 +2153,17 @@ def matchup_plan(own: "ScoutingReport",
             "lövés után NE reklamálj, az első két hazafutó lépés "
             "kötelező mindenkinek.")
 
+    # 18) Az ő szűk paduk × a ti széles rotációtok: a tempó a fegyver.
+    if opp.rotation_matches and own.rotation_matches:
+        opp_used = opp.rotation_used_sum / opp.rotation_matches
+        own_used = own.rotation_used_sum / own.rotation_matches
+        if opp_used <= 8.0 and own_used >= 10.0:
+            plan.append(
+                f"Náluk átlag {opp_used:.0f} ember viszi a meccset, "
+                f"nálatok {own_used:.0f} — magas tempó és sűrű csere "
+                "az első perctől: a második félidő közepére nyílik "
+                "az olló, ott kell elmenni.")
+
     return plan
 
 
@@ -2287,6 +2325,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pass_attacks=sum(r.pass_attacks for r in reports),
         pass_total=sum(r.pass_total for r in reports),
         pass_buckets=_merge_pass_buckets(reports),
+        rotation_used_sum=sum(r.rotation_used_sum for r in reports),
+        rotation_regulars_sum=sum(r.rotation_regulars_sum
+                                  for r in reports),
+        rotation_matches=sum(r.rotation_matches for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

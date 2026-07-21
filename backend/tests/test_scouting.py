@@ -2172,3 +2172,34 @@ def test_pass_chain_merge_keys_and_rule17():
     ok_def = ScoutingReport(team="home", team_name="Mi")
     assert not any("villámtámadásból" in p_
                    for p_ in matchup_plan(ok_def, comb))
+
+
+def test_rotation_merge_keys_and_rule18():
+    """A rotáció-összegek meccsek közt összegződnek (átlag = összeg /
+    meccsek); a szűk pad gyengeség + kulcs; a 18. szabály csak
+    széles saját paddal szól."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan)
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        rotation_used_sum=7, rotation_regulars_sum=6,
+                        rotation_matches=1)
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        rotation_used_sum=9, rotation_regulars_sum=6,
+                        rotation_matches=1)
+    comb = combine_reports([r1, r2])
+    assert comb.rotation_used_sum == 16 and comb.rotation_matches == 2
+    strengths, weaknesses, keys = _coach_keys(comb)
+    assert any("Szűk rotációval" in w for w in weaknesses)
+    assert any("vidd tempóban" in k for k in keys)
+    own_wide = ScoutingReport(team="home", team_name="Mi",
+                              rotation_used_sum=11,
+                              rotation_regulars_sum=7,
+                              rotation_matches=1)
+    plan = matchup_plan(own_wide, comb)
+    assert any("nyílik" in p_ and "olló" in p_ for p_ in plan)
+    # Szűk saját paddal a 18. szabály hallgat.
+    own_narrow = ScoutingReport(team="home", team_name="Mi",
+                                rotation_used_sum=7,
+                                rotation_regulars_sum=6,
+                                rotation_matches=1)
+    assert not any("olló" in p_ for p_ in matchup_plan(own_narrow, comb))
