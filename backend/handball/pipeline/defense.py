@@ -538,3 +538,80 @@ def marking_pairs(match, config=None, until_t=None) -> dict:
             "defenders": defenders,
         }
     return out
+
+
+# Betörés-folyosók: a labdás támadó ennyire megközelíti a kaput, az
+# számít betörésnek; a sávhatárok a pálya-szélesség arányában (a támadó
+# szemszögéből nézve, oldal-normalizálva).
+BREAK_IN_DIST_M = 9.0
+_LANE_FRACS = (0.28, 0.42, 0.58, 0.72)
+_LANE_LABELS = ("bal szél", "bal átlövő", "közép",
+                "jobb átlövő", "jobb szél")
+
+
+def breakthrough_lanes(match, config=None) -> dict:
+    """Betörés-folyosók: támadásonként hol lép be a labdás ember a
+    kapu 9 m-es körzetébe (a támadó szemszögéből vett sávokban).
+
+    Védekezés-oldali olvasata a fontos: az ELLENFÉL betörési képéből
+    látszik, melyik sávban lyukas a fal. A gól-párosítás a támadás
+    + rövid rátartás alatti első saját gól (mint a támadás-rétegeknél).
+
+    Visszatérés a TÁMADÓ csapat szerint:
+      {"home"/"away": {"entries", "lanes": {sáv: {"entries", "goals"}},
+                       "top_lane": sáv|None}}
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .calibration import COURT_WIDTH_M
+    from .setplays import segment_attacks
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(2.0 * fps)
+    shots = [(e.t, e.team.value, e.type == EventType.GOAL)
+             for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out = {side: {"entries": 0, "lanes": {}, "top_lane": None}
+           for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        goal_x = config.attacks_toward_x(seq.team)
+        entry_y = None
+        for fr in seq.frames:
+            h = ball_holder(fr, config)
+            if h is None:
+                continue
+            gy = 10.0  # kapu-közép y (20 m-es pálya)
+            if math.hypot(h.x - goal_x, h.y - gy) <= BREAK_IN_DIST_M:
+                # A támadó szemszögéből: a -x kapunál tükrözzük az y-t.
+                entry_y = (h.y if goal_x > 0
+                           else COURT_WIDTH_M - h.y)
+                break
+        if entry_y is None:
+            continue
+        frac = entry_y / COURT_WIDTH_M
+        lane = _LANE_LABELS[
+            sum(1 for b in _LANE_FRACS if frac >= b)]
+        rec = out[side]
+        rec["entries"] += 1
+        lrec = rec["lanes"].setdefault(lane, {"entries": 0, "goals": 0})
+        lrec["entries"] += 1
+        if next((True for (t, tm, g) in shots
+                 if tm == side and g
+                 and seq.start_t <= t <= seq.end_t + tail), False):
+            lrec["goals"] += 1
+    for rec in out.values():
+        if rec["lanes"]:
+            rec["top_lane"] = max(
+                rec["lanes"].items(),
+                key=lambda kv: (kv[1]["entries"], kv[1]["goals"]))[0]
+            rec["lanes"] = dict(sorted(
+                rec["lanes"].items(),
+                key=lambda kv: -kv[1]["entries"]))
+    return out

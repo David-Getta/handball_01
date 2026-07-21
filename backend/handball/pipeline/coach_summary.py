@@ -274,6 +274,30 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                 parts.append(sent)
     except Exception:
         pass
+    # Betörés-folyosók: melyik sávban jönnek be ellenük (a VÉDEKEZŐ
+    # olvasat: az ellenfél betörési képe = a mi falunk lyuka).
+    try:
+        from .defense import breakthrough_lanes
+        bl_att = breakthrough_lanes(match)
+        for att_side, def_name in (("home", away), ("away", home)):
+            rec_bl = bl_att[att_side]
+            if rec_bl["entries"] < 5 or not rec_bl["top_lane"]:
+                continue
+            top_bl = rec_bl["lanes"][rec_bl["top_lane"]]
+            share_bl = 100.0 * top_bl["entries"] / rec_bl["entries"]
+            if share_bl >= 40.0:
+                parts.append(
+                    f"a(z) {def_name} ellen a betörések "
+                    f"{share_bl:.0f}%-a a(z) {rec_bl['top_lane']} "
+                    f"sávban jött ({top_bl['entries']}/"
+                    f"{rec_bl['entries']}, {top_bl['goals']} gól)")
+                if top_bl["goals"] >= 2:
+                    highlights.append(
+                        f"{def_name}: a(z) {rec_bl['top_lane']} sáv "
+                        f"átjáróház — {top_bl['goals']} gól az ott "
+                        "bejövő betörésekből; oda kell a segítő védő.")
+    except Exception:
+        pass
     # Őrzési párok: a legstabilabb pár + a laza őrzés figyelmeztetése.
     try:
         from .defense import MARK_LOOSE_M, marking_pairs

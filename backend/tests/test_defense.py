@@ -305,3 +305,32 @@ def test_marking_pairs_until_t_limits_window():
     full = marking_pairs(m)["away"]["pairs"]
     assert full[0]["frames"] == 90
     assert full[0]["avg_dist_m"] < 2.0  # a teljes képben már szoros
+
+
+def test_breakthrough_lanes_detects_entry_lane():
+    """A 9 m-en belülre lépő labdás ember betörésnek számít, a sávot a
+    belépési y adja (oldal-normalizálva); kapu-távolban maradó
+    támadásnál nincs betörés."""
+    from handball.models.tracking import Ball, Frame, Match
+    from handball.pipeline.defense import breakthrough_lanes
+
+    def scene(xs, y):
+        frames = []
+        for t, x in enumerate(xs):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, x, y),
+                _pl(20, Team.AWAY, 38.0, 10.0)],
+                ball=Ball(x=x, y=y, confidence=1.0)))
+        return Match(_meta(), frames)
+
+    # Középen betör: x 28→34 (a +x kapu 9 m-es körén belülre ér).
+    xs = [28.0 + 0.1 * i for i in range(80)]
+    res = breakthrough_lanes(scene(xs, 10.0))
+    assert res["home"]["entries"] == 1
+    assert res["home"]["top_lane"] == "közép"
+    # Alsó sávban (y=3) betörve a szél-sáv kapja.
+    res2 = breakthrough_lanes(scene(xs, 3.0))
+    assert res2["home"]["top_lane"] in ("bal szél", "jobb szél")
+    # Messze maradva (x<=30) nincs betörés.
+    res3 = breakthrough_lanes(scene([28.0] * 80, 10.0))
+    assert res3["home"]["entries"] == 0

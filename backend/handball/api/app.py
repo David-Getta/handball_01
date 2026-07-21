@@ -2266,6 +2266,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import breakthrough_lanes
+            res["breakthroughs"] = breakthrough_lanes(match)
+        except Exception:
+            pass
+        try:
             # Félidei emberfogás-kép: az élő nézet a szünetben ebből ad
             # "szorosabb tapadást a másodikra" jelzést (jövőbe nézés
             # nélkül — csak az első félidő kockáiból).
@@ -2436,6 +2441,9 @@ def create_app():
                 _layer("marking", lambda: marking_pairs(match))
                 from ..pipeline.attack_types import pivot_usage
                 _layer("pivot_usage", lambda: pivot_usage(match))
+                from ..pipeline.defense import breakthrough_lanes
+                _layer("breakthroughs",
+                       lambda: breakthrough_lanes(match))
                 from ..pipeline.tactics import attack_sides
                 _layer("attack_sides", lambda: attack_sides(match))
                 from ..pipeline.tactics import efficiency_vs_formation
