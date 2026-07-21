@@ -170,3 +170,24 @@ def test_season_report_endpoint():
     assert "Szimu Vendég" in r.text
     assert client2.get("/season/report",
                        params={"team": "Nincs Ilyen"}).status_code == 404
+
+
+def test_head_to_head_report_endpoint():
+    """A két csapat egymás elleni riportja összeáll (mérleg + lista);
+    közös meccs nélkül 404."""
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=3)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    client2 = TestClient(create_app())
+    r = client2.get("/head-to-head/report",
+                    params={"team_a": "Szimu Hazai",
+                            "team_b": "Szimu Vendég"})
+    assert r.status_code == 200
+    assert "EGYMÁS ELLEN" in r.text
+    assert "Mérleg (Szimu Hazai szemszögéből)" in r.text
+    assert "Meccsről meccsre" in r.text
+    assert client2.get("/head-to-head/report",
+                       params={"team_a": "Szimu Hazai",
+                               "team_b": "Nincs Ilyen"}).status_code == 404
