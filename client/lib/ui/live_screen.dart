@@ -240,6 +240,29 @@ class _LiveScreenState extends State<LiveScreen> {
         }
       }
     } catch (_) {}
+    // Félidei rotáció-kép: ha az első félidőt szűk kerettel nyomta
+    // végig a csapat, a szünetben szól — a hajrá-fáradás megelőzhető.
+    try {
+      final ts = await _api.fetchTeamStats(matchId);
+      final fh = (ts["rotation_fh"] as Map?)?.cast<String, dynamic>();
+      if (fh != null) {
+        final atFrame = ((fh["until_frame"] as num?) ?? 0).toInt();
+        for (final side in ["home", "away"]) {
+          final rec = (fh[side] as Map?)?.cast<String, dynamic>();
+          if (rec == null) continue;
+          final used = ((rec["used"] as num?) ?? 0).toInt();
+          final reg = ((rec["regulars"] as num?) ?? 0).toInt();
+          if (used < 6 || used > 8) continue;
+          final team = names[side] ?? "";
+          out.add(_FeedEntry(
+              atFrame,
+              Suggestion(4, "taktika",
+                  "Félidei kép ($team): eddig $used emberrel ment a "
+                  "meccs ($reg alapember) — frissíts a második "
+                  "félidőre, a szűk rotáció a hajrában üt vissza.")));
+        }
+      }
+    } catch (_) {}
     // Vezetés-váltások: a meccs gerincéből — élőben ez a "most fordult
     // a meccs" pillanat, a padnak azonnal reagálnia kell.
     try {

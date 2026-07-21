@@ -2804,6 +2804,21 @@ def create_app():
             out["rotation"] = rotation_depth(match)
         except Exception:
             pass
+        try:
+            # Félidei rotáció-kép: az élő nézet a szünetben ebből ad
+            # "frissíts, fáradnak" jelzést — a rész-meccsen újraszámolva,
+            # jövőbe nézés nélkül.
+            from ..models.tracking import Match as _M
+            from ..pipeline.halftime import detect_halftime
+            from ..pipeline.stats import rotation_depth
+            ht = detect_halftime(match)
+            if ht is not None:
+                sub = _M(match.meta,
+                         [f for f in match.frames if f.t <= ht])
+                out["rotation_fh"] = {"until_frame": ht,
+                                      **rotation_depth(sub)}
+        except Exception:
+            pass
         return out
 
     @app.get("/matches/{match_id}/tactics")
