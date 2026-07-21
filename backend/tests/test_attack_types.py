@@ -381,3 +381,45 @@ def test_pivot_usage_on_sliced_match_gives_first_half_picture():
     assert fh["attacks"] >= 1 and fh["pivot_attacks"] == 0
     full = pivot_usage(m)["home"]
     assert full["pivot_attacks"] >= 1  # a teljes képben már van beállós
+
+
+def test_pass_chains_buckets_by_pass_count():
+    """A passz-lánc a támadáson belüli passzokat számolja és vödrökbe
+    sorolja; a passz nélküli támadás a rövid vödörbe esik."""
+    from handball.pipeline.attack_types import pass_chains
+
+    frames = []
+    t = 0
+    # 1. támadás: 3 passz (1→2→3→1), a labda játékosról játékosra.
+    holders = [1, 1, 2, 2, 3, 3, 1, 1]
+    pos = {1: (26.0, 8.0), 2: (28.0, 12.0), 3: (30.0, 10.0)}
+    for h in holders:
+        for _ in range(12):
+            hx, hy = pos[h]
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, *pos[1]),
+                _pl(2, Team.HOME, *pos[2]),
+                _pl(3, Team.HOME, *pos[3]),
+                _pl(20, Team.AWAY, 36.0, 8.0)],
+                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+    # Szünet: gazdátlan labda — szakasz-határ.
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 15.0, 10.0),
+            _pl(20, Team.AWAY, 36.0, 8.0)],
+            ball=Ball(x=2.0, y=1.0, confidence=1.0)))
+        t += 1
+    # 2. támadás: végig az 1-esnél (0 passz).
+    for _ in range(120):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 27.0, 10.0),
+            _pl(20, Team.AWAY, 36.0, 8.0)],
+            ball=Ball(x=27.0, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(_meta(), frames)
+    res = pass_chains(m)["home"]
+    assert res["attacks"] >= 2
+    assert res["buckets"].get("3–5 passz", {}).get("attacks", 0) >= 1
+    assert res["buckets"].get("0–2 passz", {}).get("attacks", 0) >= 1
+    assert res["avg_passes"] is not None and res["avg_passes"] >= 1.0

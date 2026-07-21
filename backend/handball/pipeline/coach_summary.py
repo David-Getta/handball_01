@@ -425,6 +425,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 body += "."
     except Exception:
         pass
+    # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
+    try:
+        from .attack_types import pass_chains
+        pc = pass_chains(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pc = pc[side]
+            if rec_pc["attacks"] < 5 or rec_pc["avg_passes"] is None:
+                continue
+            sent_pc = (f" A(z) {name} átlag {rec_pc['avg_passes']:.1f} "
+                       "passzból építette a támadásait")
+            best_pc = rec_pc["best_bucket"]
+            if best_pc is not None:
+                b_pc = rec_pc["buckets"][best_pc]
+                sent_pc += (f"; a legjobb gólarányt a(z) {best_pc} "
+                            f"hozta ({b_pc['goals']}/{b_pc['attacks']}, "
+                            f"{b_pc['goal_pct']:.0f}%)")
+            body += sent_pc + "."
+    except Exception:
+        pass
     # Figura-hatékonyság: melyik begyakorolt támadás hozott gólt.
     try:
         from .setplays import setplay_efficiency
