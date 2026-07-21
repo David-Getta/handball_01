@@ -2069,3 +2069,31 @@ def test_coach_keys_and_matchup_tight_marker():
     plan2 = matchup_plan(ScoutingReport(team="home", team_name="Mi"),
                          opp)
     assert not any("tapadó emberfogó" in p_ for p_ in plan2)
+
+
+def test_pivot_fields_merge_and_matchup_rule():
+    """A beálló-terhelés darabszámai meccsek közt összegződnek; a 15.
+    szabály (beálló-terhelés × kiállítás-hajlam) mindkét küszöbhöz
+    kötött; az edzői kulcs a terhelés-arányról szól."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan)
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        pivot_total_attacks=5, pivot_attacks=3,
+                        pivot_goals=2, pivot_other_goals=0)
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        pivot_total_attacks=5, pivot_attacks=2,
+                        pivot_goals=1, pivot_other_goals=1)
+    comb = combine_reports([r1, r2])
+    assert comb.pivot_total_attacks == 10
+    assert comb.pivot_attacks == 5
+    assert comb.pivot_goals == 3
+    assert comb.pivot_other_goals == 1
+    _, _, keys = _coach_keys(comb)
+    assert any("a beállón át megy" in k for k in keys)
+    own = ScoutingReport(team="home", team_name="Mi", suspensions=2)
+    plan = matchup_plan(own, comb)
+    assert any("testtel és helyezkedéssel" in p_ for p_ in plan)
+    # Fegyelmezett csapatnál (0 kiállítás) a 15. szabály hallgat.
+    plan2 = matchup_plan(ScoutingReport(team="home", team_name="Mi"),
+                         comb)
+    assert not any("testtel és helyezkedéssel" in p_ for p_ in plan2)
