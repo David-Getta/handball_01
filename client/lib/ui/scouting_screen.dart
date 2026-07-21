@@ -736,6 +736,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "(${reg.toStringAsFixed(0)} alapember) · $tag";
   }
 
+  // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
+  // backend-kulcsokkal azonos küszöb.
+  String? _ballWinner(Map<String, dynamic> r) {
+    final list = (r["ball_winners"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    final top = list.first as Map<String, dynamic>;
+    final n = ((top["steals"] as num?) ?? 0).toInt();
+    if (n < 3) return null;
+    return "${top["player_id"]}-es · $n szerzés";
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -961,6 +972,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_breakLane(r) != null) ["Betörés-sáv", _breakLane(r)!],
       if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
+      if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

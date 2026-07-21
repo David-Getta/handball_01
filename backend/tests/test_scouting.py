@@ -2203,3 +2203,25 @@ def test_rotation_merge_keys_and_rule18():
                                 rotation_regulars_sum=6,
                                 rotation_matches=1)
     assert not any("olló" in p_ for p_ in matchup_plan(own_narrow, comb))
+
+
+def test_ball_winners_merge_and_key():
+    """A labdaszerző-számok meccsek közt összegződnek; 3+ szerzésnél
+    erősség + "óvatos passz" kulcs születik."""
+    from handball.pipeline.scouting import _coach_keys, combine_reports
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        ball_winners=[{"player_id": 3, "steals": 2}])
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        ball_winners=[{"player_id": 3, "steals": 2},
+                                      {"player_id": 8, "steals": 1}])
+    comb = combine_reports([r1, r2])
+    by_pid = {w["player_id"]: w["steals"] for w in comb.ball_winners}
+    assert by_pid == {3: 4, 8: 1}
+    strengths, _, keys = _coach_keys(comb)
+    assert any("3-es a labdaszerzőjük" in s_ for s_ in strengths)
+    assert any("rövid, biztos passz" in k for k in keys)
+    # Kevés szerzésnél nincs kulcs.
+    few = ScoutingReport(team="away", team_name="Ok",
+                         ball_winners=[{"player_id": 3, "steals": 2}])
+    _, _, k2 = _coach_keys(few)
+    assert not any("labdaszerző" in k for k in k2)

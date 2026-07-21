@@ -641,7 +641,7 @@ class _MatchScreenState extends State<MatchScreen> {
                         "goal", "key_moment", "turning_point",
                         "missed_chance", "big_save", "top_shooter",
                         "free_shot", "best_figure", "pivot_goal",
-                        "breakthrough", "block", "empty_net",
+                        "breakthrough", "steal", "block", "empty_net",
                       ]
                     : [t]),
             itemBuilder: (_) => const [
@@ -704,6 +704,12 @@ class _MatchScreenState extends State<MatchScreen> {
                   child: ListTile(
                       leading: Icon(Icons.login, size: 18),
                       title: Text("Betörések (sávval a fájlnévben)"),
+                      dense: true)),
+              PopupMenuItem(
+                  value: "steal",
+                  child: ListTile(
+                      leading: Icon(Icons.back_hand, size: 18),
+                      title: Text("Labdaszerzések"),
                       dense: true)),
               PopupMenuItem(
                   value: "block",
