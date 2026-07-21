@@ -1370,6 +1370,24 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _sa("home"), _sa("away")))
         except Exception:
             pass
+        # Betörés-folyosó sora: hol jön be ellenük a labdás ember
+        # (a védekező oszlopában az ELLENFÉL fő betörő-sávja).
+        try:
+            from .defense import breakthrough_lanes
+            _bl = breakthrough_lanes(match)
+            def _bl_txt(def_side):
+                att = "away" if def_side == "home" else "home"
+                r = _bl[att]
+                if r["entries"] < 5 or not r["top_lane"]:
+                    return "—"
+                top = r["lanes"][r["top_lane"]]
+                return (f'{r["top_lane"]} '
+                        f'({100.0 * top["entries"] / r["entries"]:.0f}%)')
+            if _bl_txt("home") != "—" or _bl_txt("away") != "—":
+                rows.append(("Betörés-folyosó (ellenük)",
+                             _bl_txt("home"), _bl_txt("away")))
+        except Exception:
+            pass
         # Beállós támadás sora: a támadások hányada megy a beállón át.
         try:
             from .attack_types import pivot_usage
