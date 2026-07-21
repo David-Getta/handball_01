@@ -62,6 +62,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Map<String, dynamic>? _keyPlayers;
   List<dynamic> _keyMoments = const [];
   Map<String, dynamic>? _setplayEff;
+  Map<String, dynamic>? _marking;
   // Automatikus edzői összefoglaló (GET /matches/{id}/coach-summary).
   Map<String, dynamic>? _coach;
   // Címkézett támadás-szakaszok (GET /matches/{id}/attacks).
@@ -161,6 +162,7 @@ class _MatchScreenState extends State<MatchScreen> {
     Map<int, double> xgByT = {};
     Map<int, Map<String, dynamic>> xgShooters = {};
     Map<int, bool> freeByT = {};
+    Map<String, dynamic>? marking;
     if (await _api.isHealthy()) {
       try {
         match = await _api.fetchMatch(widget.matchId);
@@ -260,8 +262,10 @@ class _MatchScreenState extends State<MatchScreen> {
               if (t != null && fr != null) freeByT[t] = fr;
             }
           }
+          marking = (d["marking"] as Map?)?.cast<String, dynamic>();
         } catch (_) {
           freeByT = {}; // védekezés-réteg nélkül is teljes a nézet
+          marking = null;
         }
         try {
           quality = await _api.fetchQuality(widget.matchId);
@@ -312,6 +316,7 @@ class _MatchScreenState extends State<MatchScreen> {
       _keyPlayers = keyPlayers;
       _keyMoments = keyMoments;
       _setplayEff = setplayEff;
+      _marking = marking;
       _notes = notes;
       _coach = coach;
       _attacks = attacks;
@@ -2621,6 +2626,7 @@ class _MatchScreenState extends State<MatchScreen> {
                           keyPlayers: _keyPlayers,
                           keyMoments: _keyMoments,
                           setplayEff: _setplayEff,
+                          marking: _marking,
                           onNoteMoment: (t, label) =>
                               _noteKeyMoment(match, t, label),
                           progression: _progression,
