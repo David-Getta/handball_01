@@ -2001,3 +2001,48 @@ def test_matchup_plan_width_rule():
     plan2 = matchup_plan(center, opp)
     assert not any("kilépés-fegyelme ezen a meccsen" in p_
                    for p_ in plan2)
+
+
+def test_markers_merge_and_matchup_loose_rule():
+    """Az emberfogó-számok (kockák + táv-összeg) meccsek közt pontosan
+    összegződnek; a 13. meccsterv-szabály a laza emberfogóra csak a
+    küszöbök felett süt el."""
+    from handball.pipeline.scouting import combine_reports, matchup_plan
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        markers=[{"player_id": 4, "frames": 40,
+                                  "dist_sum": 110.0}])
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        markers=[{"player_id": 4, "frames": 30,
+                                  "dist_sum": 90.0},
+                                 {"player_id": 2, "frames": 60,
+                                  "dist_sum": 60.0}])
+    comb = combine_reports([r1, r2])
+    by_pid = {m["player_id"]: m for m in comb.markers}
+    assert by_pid[4]["frames"] == 70
+    assert abs(by_pid[4]["dist_sum"] - 200.0) < 0.01
+    assert by_pid[2]["frames"] == 60
+    # A 4-es átlaga 200/70 ≈ 2,86 m — laza; a 13. szabály róla szól.
+    own = ScoutingReport(team="home", team_name="Mi")
+    plan = matchup_plan(own, comb)
+    assert any("4-es védőjük lazán őrzi" in p_ for p_ in plan)
+    # Szoros emberfogóval (2-es, 1 m átlag) nem szól a szabály.
+    tight = ScoutingReport(team="away", team_name="Ok", markers=[
+        {"player_id": 2, "frames": 60, "dist_sum": 60.0}])
+    assert not any("lazán őrzi" in p_ for p_ in matchup_plan(own, tight))
+
+
+def test_coach_keys_flag_loose_marker():
+    """Az edzői kulcsok a laza emberfogót gyengeségként és "hova
+    játssz" kulcsként is hozzák; szoros emberfogónál hallgatnak."""
+    from handball.pipeline.scouting import _coach_keys
+    rep = ScoutingReport(team="away", team_name="Ok", matches=1,
+                         markers=[{"player_id": 9, "frames": 80,
+                                   "dist_sum": 240.0}])
+    _, weaknesses, keys = _coach_keys(rep)
+    assert any("9-es védőjük lazán őrzi" in w for w in weaknesses)
+    assert any("egy-egy elleni játékot" in k for k in keys)
+    tight = ScoutingReport(team="away", team_name="Ok", matches=1,
+                           markers=[{"player_id": 9, "frames": 80,
+                                     "dist_sum": 80.0}])
+    _, w2, k2 = _coach_keys(tight)
+    assert not any("lazán őrzi" in w for w in w2)

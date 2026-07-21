@@ -244,6 +244,10 @@ class ScoutingReport:
     # A kiülőik: [{"player_id", "suspensions"}] — ki szedi össze a
     # 2 perceket; játékosonként meccsek közt összegezhető.
     susp_players: list = field(default_factory=list)
+    # Emberfogóik: védőnkénti őrzés-kockák + táv-összeg
+    # [{"player_id", "frames", "dist_sum"}] — darabszám-alapú, meccsek
+    # közt pontosan összegezhető; átlagtáv = dist_sum / frames.
+    markers: list = field(default_factory=list)
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -755,6 +759,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                         f"({rep.def_zones[worst]['goals']} kapott gól) — "
                         "ide szervezz befejezést.")
 
+    # Emberfogásuk: a leglazább védő megtámadható oldala.
+    if rep.markers:
+        loose_m = max(rep.markers,
+                      key=lambda m_: m_["dist_sum"] / m_["frames"])
+        loose_avg = loose_m["dist_sum"] / loose_m["frames"]
+        if loose_m["frames"] >= 50 and loose_avg >= 2.5:
+            weaknesses.append(
+                f"A(z) {loose_m['player_id']}-es védőjük lazán őrzi az "
+                f"emberét (átlag {loose_avg:.1f} m).")
+            keys.append(
+                f"A(z) {loose_m['player_id']}-es védő oldalára vidd az "
+                "egy-egy elleni játékot — ott van tér.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -1256,6 +1273,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.susp_players = [
             dict(e) for e in
             suspended_players(match, config)[team.value]]
+        from .defense import marking_pairs
+        rep.markers = [
+            {"player_id": (d["defender_jersey"]
+                           if d["defender_jersey"] is not None
+                           else d["defender"]),
+             "frames": d["frames"], "dist_sum": d["dist_sum"]}
+            for d in marking_pairs(match, config)[team.value]["defenders"]]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -1708,6 +1732,19 @@ def _merge_susp_players(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_markers(reports) -> list:
+    """Emberfogónkénti őrzés-kockák és táv-összegek pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for e in (r.markers or []):
+            rec = tally.setdefault(e["player_id"], [0, 0.0])
+            rec[0] += int(e["frames"])
+            rec[1] += float(e["dist_sum"])
+    return [{"player_id": pid, "frames": n, "dist_sum": round(ds, 2)}
+            for pid, (n, ds) in sorted(tally.items(),
+                                       key=lambda kv: -kv[1][0])]
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
@@ -1900,6 +1937,17 @@ def matchup_plan(own: "ScoutingReport",
                 "félidőkben) — ha az elején ti vezettek, a fő fegyverük "
                 "kiesik: nyissatok magas tempóval.")
 
+    # 13) A leglazább emberfogójuk: az ő oldalára vidd az egy-egyet.
+    if opp.markers:
+        loose = max(opp.markers,
+                    key=lambda m_: m_["dist_sum"] / m_["frames"])
+        loose_avg = loose["dist_sum"] / loose["frames"]
+        if loose["frames"] >= 50 and loose_avg >= 2.5:
+            plan.append(
+                f"A(z) {loose['player_id']}-es védőjük lazán őrzi az "
+                f"emberét (átlag {loose_avg:.1f} m) — az ő oldalára "
+                "szervezd az egy-egy elleni játékot és a betöréseket.")
+
     return plan
 
 
@@ -2051,6 +2099,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         seven_earners=_merge_seven_earners(reports),
         susp_earners=_merge_susp_earners(reports),
         susp_players=_merge_susp_players(reports),
+        markers=_merge_markers(reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

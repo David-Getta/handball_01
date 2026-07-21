@@ -627,6 +627,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${top["player_id"]}. · $n kiállítás";
   }
 
+  // Laza emberfogó: a legnagyobb átlagtávú védő (50+ kocka, 2,5 m+)
+  // — ugyanaz a küszöb, mint a kulcsokban és a 13. meccsterv-szabályban.
+  String? _looseMarker(Map<String, dynamic> r) {
+    final list = (r["markers"] as List?) ?? const [];
+    Map<String, dynamic>? loose;
+    double looseAvg = 0;
+    for (final e in list) {
+      final m = e as Map<String, dynamic>;
+      final frames = ((m["frames"] as num?) ?? 0).toInt();
+      if (frames < 50) continue;
+      final avg = (((m["dist_sum"] as num?) ?? 0).toDouble()) / frames;
+      if (loose == null || avg > looseAvg) {
+        loose = m;
+        looseAvg = avg;
+      }
+    }
+    if (loose == null || looseAvg < 2.5) return null;
+    return "${loose["player_id"]}-es · átl. ${looseAvg.toStringAsFixed(1)} m";
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -845,6 +865,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_topBlocker(r) != null) ["Fal kulcsa", _topBlocker(r)!],
       if (_sevenTaker(r) != null) ["Hetes-dobó", _sevenTaker(r)!],
       if (_discipline(r) != null) ["Fegyelem", _discipline(r)!],
+      if (_looseMarker(r) != null) ["Laza emberfogó", _looseMarker(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],
