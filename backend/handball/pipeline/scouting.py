@@ -771,6 +771,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(
                 f"A(z) {loose_m['player_id']}-es védő oldalára vidd az "
                 "egy-egy elleni játékot — ott van tér.")
+        # A tapadó emberfogójuk viszont erősség: oda elzárás nélkül
+        # nem érdemes befejezést szervezni.
+        tight_m = min(rep.markers,
+                      key=lambda m_: m_["dist_sum"] / m_["frames"])
+        tight_avg = tight_m["dist_sum"] / tight_m["frames"]
+        if tight_m["frames"] >= 50 and tight_avg <= 1.5:
+            strengths.append(
+                f"A(z) {tight_m['player_id']}-es védőjük tapadó "
+                f"emberfogó (átlag {tight_avg:.1f} m).")
+            keys.append(
+                f"A(z) {tight_m['player_id']}-es védő oldalára csak "
+                "elzárással szervezz befejezést — egy-egyben nehezen "
+                "verhető.")
 
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
@@ -1947,6 +1960,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"A(z) {loose['player_id']}-es védőjük lazán őrzi az "
                 f"emberét (átlag {loose_avg:.1f} m) — az ő oldalára "
                 "szervezd az egy-egy elleni játékot és a betöréseket.")
+
+    # 14) A tapadó emberfogójuk × a ti fő lövőtök: elzárással kell
+    # szabadítani, vagy a másik oldalra terhelni.
+    if opp.markers:
+        tight = min(opp.markers,
+                    key=lambda m_: m_["dist_sum"] / m_["frames"])
+        tight_avg = tight["dist_sum"] / tight["frames"]
+        own_top = (own.shooter_overperf or [None])[0]
+        if (tight["frames"] >= 50 and tight_avg <= 1.5
+                and own_top and own_top.get("diff", 0) >= 1.0):
+            plan.append(
+                f"A(z) {tight['player_id']}-es védőjük tapadó emberfogó "
+                f"(átlag {tight_avg:.1f} m), a ti fő lövőtök pedig a(z) "
+                f"{own_top['player_id']}. játékos — ha őt fogja, "
+                "elzárással szabadítsd, vagy tudatosan a túloldalra "
+                "terhelj: egy-egyben ott nem lesz tér.")
 
     return plan
 

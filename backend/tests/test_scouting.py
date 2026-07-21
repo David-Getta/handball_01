@@ -2046,3 +2046,26 @@ def test_coach_keys_flag_loose_marker():
                                      "dist_sum": 80.0}])
     _, w2, k2 = _coach_keys(tight)
     assert not any("lazán őrzi" in w for w in w2)
+
+
+def test_coach_keys_and_matchup_tight_marker():
+    """A tapadó emberfogó (<=1,5 m átlag, 50+ kocka) erősség + "csak
+    elzárással" kulcs; a 14. meccsterv-szabály a fő lövővel párosítva
+    süt el."""
+    from handball.pipeline.scouting import _coach_keys, matchup_plan
+    opp = ScoutingReport(team="away", team_name="Ok", matches=1,
+                         markers=[{"player_id": 3, "frames": 80,
+                                   "dist_sum": 96.0}])
+    strengths, _, keys = _coach_keys(opp)
+    assert any("3-es védőjük tapadó emberfogó" in s_ for s_ in strengths)
+    assert any("csak" in k and "elzárással" in k for k in keys)
+    own = ScoutingReport(team="home", team_name="Mi",
+                         shooter_overperf=[{"player_id": 7,
+                                            "diff": 1.5}])
+    plan = matchup_plan(own, opp)
+    assert any("tapadó emberfogó" in p_ and "7. játékos" in p_
+               for p_ in plan)
+    # Fő lövő nélkül a 14. szabály hallgat.
+    plan2 = matchup_plan(ScoutingReport(team="home", team_name="Mi"),
+                         opp)
+    assert not any("tapadó emberfogó" in p_ for p_ in plan2)
