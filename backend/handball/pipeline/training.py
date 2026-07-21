@@ -629,6 +629,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 31) Sáv-védelem: ha az ellenfél betörései egy sávban
+    # koncentrálódnak ellenünk (40%+, 2+ gól onnan), a segítő védő
+    # csúszását kell gyakorolni abban a sávban.
+    try:
+        from .defense import breakthrough_lanes
+        bl31 = breakthrough_lanes(match, config)
+        for att31 in ("home", "away"):
+            def31 = "away" if att31 == "home" else "home"
+            rec31 = bl31[att31]
+            if rec31["entries"] < 5 or not rec31["top_lane"]:
+                continue
+            top31 = rec31["lanes"][rec31["top_lane"]]
+            share31 = 100.0 * top31["entries"] / rec31["entries"]
+            if share31 >= 40.0 and top31["goals"] >= 2:
+                add(def31, "védekezés", "Sáv-védelem",
+                    f"az ellenfél betöréseinek {share31:.0f}%-a a(z) "
+                    f"{rec31['top_lane']} sávban jött, {top31['goals']} "
+                    "góllal — a segítő védő későn ér oda",
+                    "sáv-védelem gyakorlat: a betörő sávjába a szomszéd "
+                    "védő időben csúszik be, mögötte lánc-zárás, "
+                    "3 támadó vs 3 védő felállásból")
+    except Exception:
+        pass
+
     # 29) Emberfogás-tapadás: ha van lazán őrző védőnk (a leglazább
     # emberfogó 2,5 m+ átlagtávról kíséri az emberét), az egy-egy
     # elleni védekezést kell gyakorolni — névre szólóan.

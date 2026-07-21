@@ -235,3 +235,19 @@ def test_pivot_goal_clip_gets_hungarian_name(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "beallo-gol" in names
+
+
+def test_breakthrough_clip_gets_hungarian_name(tmp_path):
+    """A betörés klip-típus magyar fájlnevet kap (betores), a sáv a
+    címkéből kerül a fájlnévbe."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "breakthrough", "team": "home",
+               "label": "közép"}]
+    res = export_event_clips(m, events, {"breakthrough"},
+                             tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "betores" in names
