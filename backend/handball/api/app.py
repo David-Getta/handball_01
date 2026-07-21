@@ -1118,11 +1118,21 @@ def create_app():
                     poszt_of[tid_] = r_["poszt"]
         except Exception:
             pass
+        mark_of: dict = {}
+        try:
+            from ..pipeline.defense import marking_pairs
+            mk_csv = marking_pairs(match)
+            for side_ in ("home", "away"):
+                for d_ in mk_csv[side_]["defenders"]:
+                    mark_of[d_["defender"]] = d_
+        except Exception:
+            pass
 
         lines = ["Játékos;Csapat;Track-ek;Táv (m);Átl. sebesség (m/s);"
                  "Max sebesség (km/h);Sprintek;Sprint táv (m);"
                  "Séta (mp);Kocogás (mp);Futás (mp);Sprint (mp);"
-                 "Mért kocka;Becsült kocka;Gól;Lövés;xG;Blokk;Poszt"]
+                 "Mért kocka;Becsült kocka;Gól;Lövés;xG;Blokk;Poszt;"
+                 "Őrzés (mp);Őrzés átl. táv (m)"]
         for g in rows:
             team = (match.meta.home_team if g["team"] == "home"
                     else match.meta.away_team)
@@ -1145,6 +1155,17 @@ def create_app():
                 str(sum(blocks_of.get(t, 0) for t in g["track_ids"])),
                 next((poszt_of[t] for t in g["track_ids"]
                       if t in poszt_of), ""),
+                # Emberfogás: a track-csoport összes őrzés-kockája
+                # másodpercben + a súlyozott átlagtáv.
+                (lambda fr_, ds_: num(fr_ / fps) if fr_ else "")(
+                    sum(mark_of.get(t, {}).get("frames", 0)
+                        for t in g["track_ids"]),
+                    0),
+                (lambda fr_, ds_: num(ds_ / fr_) if fr_ else "")(
+                    sum(mark_of.get(t, {}).get("frames", 0)
+                        for t in g["track_ids"]),
+                    sum(mark_of.get(t, {}).get("dist_sum", 0.0)
+                        for t in g["track_ids"])),
             ]))
         return "\ufeff" + "\r\n".join(lines) + "\r\n"  # BOM: Excel
 
