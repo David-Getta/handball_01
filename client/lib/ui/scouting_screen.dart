@@ -667,6 +667,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${tight["player_id"]}-es · átl. ${tightAvg.toStringAsFixed(1)} m";
   }
 
+  // Beálló-terhelés: a támadások hányada megy a beállón át (6+
+  // támadásból, 40%+ arány) — a backend-kulcsokkal azonos küszöb.
+  String? _pivotUsage(Map<String, dynamic> r) {
+    final total = ((r["pivot_total_attacks"] as num?) ?? 0).toInt();
+    final piv = ((r["pivot_attacks"] as num?) ?? 0).toInt();
+    if (total < 6) return null;
+    final share = 100.0 * piv / total;
+    if (share < 40.0) return null;
+    var txt = "${share.toStringAsFixed(0)}% a beállón át";
+    if (piv >= 3) {
+      final pg = 100.0 * ((r["pivot_goals"] as num?) ?? 0).toInt() / piv;
+      txt += " · gól ${pg.toStringAsFixed(0)}%";
+    }
+    return txt;
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -888,6 +904,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_looseMarker(r) != null) ["Laza emberfogó", _looseMarker(r)!],
       if (_tightMarker(r) != null)
         ["Tapadó emberfogó", _tightMarker(r)!],
+      if (_pivotUsage(r) != null) ["Beálló-terhelés", _pivotUsage(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

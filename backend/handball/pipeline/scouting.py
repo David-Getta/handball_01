@@ -248,6 +248,12 @@ class ScoutingReport:
     # [{"player_id", "frames", "dist_sum"}] — darabszám-alapú, meccsek
     # közt pontosan összegezhető; átlagtáv = dist_sum / frames.
     markers: list = field(default_factory=list)
+    # Beálló-terhelés: támadások / beállós támadások / góljaik / beálló
+    # nélküli gólok — darabszámok, meccsek közt pontosan összegződnek.
+    pivot_total_attacks: int = 0
+    pivot_attacks: int = 0
+    pivot_goals: int = 0
+    pivot_other_goals: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -785,6 +791,30 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "elzárással szervezz befejezést — egy-egyben nehezen "
                 "verhető.")
 
+    # Beálló-terhelésük: ha a támadásaik zöme a beállón át megy,
+    # a beálló-védelem lesz a meccs egyik kulcsa.
+    if rep.pivot_total_attacks >= 6:
+        pshare = 100.0 * rep.pivot_attacks / rep.pivot_total_attacks
+        if pshare >= 40.0:
+            keys.append(
+                f"Támadásaik {pshare:.0f}%-a a beállón át megy — "
+                "szendvics a beállóra, és előzd meg a beadást: a "
+                "kapott labdája már veszély.")
+            if rep.pivot_attacks >= 3:
+                pg = 100.0 * rep.pivot_goals / rep.pivot_attacks
+                other_n = rep.pivot_total_attacks - rep.pivot_attacks
+                og = (100.0 * rep.pivot_other_goals / other_n
+                      if other_n else None)
+                if og is not None and pg - og >= 15.0:
+                    strengths.append(
+                        f"A beálló-játékuk kifizetődő: {pg:.0f}% gól a "
+                        f"beállón át, {og:.0f}% nélküle.")
+                elif og is not None and og - pg >= 15.0:
+                    weaknesses.append(
+                        f"A beálló-játékuk terméketlen ({pg:.0f}% gól, "
+                        f"nélküle {og:.0f}%) — hagyd, hogy oda "
+                        "erőltessék.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -1293,6 +1323,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                            else d["defender"]),
              "frames": d["frames"], "dist_sum": d["dist_sum"]}
             for d in marking_pairs(match, config)[team.value]["defenders"]]
+        from .attack_types import pivot_usage
+        pu = pivot_usage(match, config)[team.value]
+        rep.pivot_total_attacks = pu["attacks"]
+        rep.pivot_attacks = pu["pivot_attacks"]
+        rep.pivot_goals = pu["pivot_goals"]
+        rep.pivot_other_goals = pu["other_goals"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -1977,6 +2013,17 @@ def matchup_plan(own: "ScoutingReport",
                 "elzárással szabadítsd, vagy tudatosan a túloldalra "
                 "terhelj: egy-egyben ott nem lesz tér.")
 
+    # 15) Az ő beálló-terhelésük × a ti kiállítás-hajlamotok: a beálló-
+    # védelem testtel megy, nem fogással — különben 2 perc lesz.
+    if opp.pivot_total_attacks >= 6 and own.suspensions >= 2:
+        pshare15 = 100.0 * opp.pivot_attacks / opp.pivot_total_attacks
+        if pshare15 >= 40.0:
+            plan.append(
+                f"Támadásaik {pshare15:.0f}%-a a beállón át megy, ti "
+                f"pedig {own.suspensions} kiállítást szedtetek össze — "
+                "a beállót testtel és helyezkedéssel tartsd, fogással "
+                "ne: náluk ebből 2 perc és hetes lesz.")
+
     return plan
 
 
@@ -2129,6 +2176,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         susp_earners=_merge_susp_earners(reports),
         susp_players=_merge_susp_players(reports),
         markers=_merge_markers(reports),
+        pivot_total_attacks=sum(r.pivot_total_attacks for r in reports),
+        pivot_attacks=sum(r.pivot_attacks for r in reports),
+        pivot_goals=sum(r.pivot_goals for r in reports),
+        pivot_other_goals=sum(r.pivot_other_goals for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
