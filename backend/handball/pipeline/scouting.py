@@ -258,6 +258,11 @@ class ScoutingReport:
     # 9 m-en belülre; darabszámok, meccsek közt pontosan összegződnek.
     break_entries: int = 0
     break_lanes: dict = field(default_factory=dict)
+    # Passz-láncaik: támadások / összes passz / vödrönkénti mérleg
+    # {vödör: {"attacks", "goals"}} — darabszámok, pontosan összegződnek.
+    pass_attacks: int = 0
+    pass_total: int = 0
+    pass_buckets: dict = field(default_factory=dict)
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -830,6 +835,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "sávban jön — oda segítő védőt, a sáv-váltást előre "
                 "beszéljétek meg.")
 
+    # Passz-láncaik: miből élnek — gyors első hullám vagy türelmes
+    # körbejáratás (a legjobb gólarányú vödörből, 4+ támadástól).
+    if rep.pass_attacks >= 6 and rep.pass_buckets:
+        best_pb = None
+        for lab_pb, v_pb in rep.pass_buckets.items():
+            if v_pb["attacks"] < 4 or not v_pb["goals"]:
+                continue
+            pct_pb = 100.0 * v_pb["goals"] / v_pb["attacks"]
+            if best_pb is None or pct_pb > best_pb[1]:
+                best_pb = (lab_pb, pct_pb, v_pb)
+        if best_pb is not None and best_pb[1] >= 40.0:
+            if best_pb[0] == "0–2 passz":
+                keys.append(
+                    f"A gyors első hullámból élnek ({best_pb[1]:.0f}% "
+                    "gól 0–2 passzból) — az első lövést zárd le, "
+                    "a visszazárás az első lépésnél dől el.")
+            elif best_pb[0] == "6+ passz":
+                keys.append(
+                    f"Türelmesen körbejáratnak ({best_pb[1]:.0f}% gól "
+                    "6+ passzból) — ne ugrálj ki a falból, a hosszú "
+                    "támadás végén jön a valódi befejezés.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -1348,6 +1375,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         bl = breakthrough_lanes(match, config)[team.value]
         rep.break_entries = bl["entries"]
         rep.break_lanes = {k: dict(v) for k, v in bl["lanes"].items()}
+        from .attack_types import pass_chains
+        pch = pass_chains(match, config)[team.value]
+        rep.pass_attacks = pch["attacks"]
+        rep.pass_total = pch["passes"]
+        rep.pass_buckets = {
+            k: {"attacks": v["attacks"], "goals": v["goals"]}
+            for k, v in pch["buckets"].items()}
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -1825,6 +1859,17 @@ def _merge_break_lanes(reports) -> dict:
                        key=lambda kv: -kv[1]["entries"]))
 
 
+def _merge_pass_buckets(reports) -> dict:
+    """Passz-vödrönkénti támadás/gól számok pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for k, v in (r.pass_buckets or {}).items():
+            cur = tally.setdefault(k, {"attacks": 0, "goals": 0})
+            cur["attacks"] += int(v.get("attacks", 0))
+            cur["goals"] += int(v.get("goals", 0))
+    return tally
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
@@ -2069,6 +2114,18 @@ def matchup_plan(own: "ScoutingReport",
                 "lépj ki korábban, és a segítő védő már a betörés "
                 "ELŐTT csússzon be.")
 
+    # 17) Az ő gyors első hullámuk × a ti gyenge visszazárásotok.
+    qb = (opp.pass_buckets or {}).get("0–2 passz")
+    if (qb and qb["attacks"] >= 4 and qb["goals"]
+            and 100.0 * qb["goals"] / qb["attacks"] >= 40.0
+            and own.transition_goals_against >= 2):
+        plan.append(
+            f"A góljaik jelentős része 0–2 passzos villámtámadásból "
+            f"jön ({qb['goals']}/{qb['attacks']}), ti pedig "
+            f"{own.transition_goals_against} átmenet-gólt kaptatok — "
+            "lövés után NE reklamálj, az első két hazafutó lépés "
+            "kötelező mindenkinek.")
+
     return plan
 
 
@@ -2227,6 +2284,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pivot_other_goals=sum(r.pivot_other_goals for r in reports),
         break_entries=sum(r.break_entries for r in reports),
         break_lanes=_merge_break_lanes(reports),
+        pass_attacks=sum(r.pass_attacks for r in reports),
+        pass_total=sum(r.pass_total for r in reports),
+        pass_buckets=_merge_pass_buckets(reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
