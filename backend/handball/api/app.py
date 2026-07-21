@@ -1324,6 +1324,21 @@ def create_app():
                                    pu_cl[side]["pivot_goal_ts"]]
                     except Exception:
                         pass
+                if "breakthrough" in types:
+                    # Betörések: az ellenfél belépései a 9 m-en belülre
+                    # — a sáv a fájlnévben, védekezés-videózáshoz.
+                    try:
+                        from ..pipeline.defense import breakthrough_lanes
+                        bl_cl = breakthrough_lanes(match)
+                        for side in ("home", "away"):
+                            ev += [{"t": e_bt["t"],
+                                    "type": "breakthrough",
+                                    "team": side,
+                                    "label": e_bt["lane"]}
+                                   for e_bt in
+                                   bl_cl[side]["entries_ts"]]
+                    except Exception:
+                        pass
                 if "key_moment" in types:
                     # A meccs gerince videóban: a key_moments réteg
                     # pillanataiból egy-egy klip, a címkével a

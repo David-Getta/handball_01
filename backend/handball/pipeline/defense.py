@@ -559,7 +559,9 @@ def breakthrough_lanes(match, config=None) -> dict:
 
     Visszatérés a TÁMADÓ csapat szerint:
       {"home"/"away": {"entries", "lanes": {sáv: {"entries", "goals"}},
-                       "top_lane": sáv|None}}
+                       "top_lane": sáv|None,
+                       "entries_ts": [{"t", "lane"}]}}
+    — entries_ts: a belépési pillanatok (klip-exporthoz).
     """
     import math
 
@@ -577,12 +579,13 @@ def breakthrough_lanes(match, config=None) -> dict:
              for e in detect_shots(match, config)
              if e.type in (EventType.SHOT, EventType.GOAL)]
 
-    out = {side: {"entries": 0, "lanes": {}, "top_lane": None}
+    out = {side: {"entries": 0, "lanes": {}, "top_lane": None,
+                  "entries_ts": []}
            for side in ("home", "away")}
     for seq in segment_attacks(match, config):
         side = seq.team.value
         goal_x = config.attacks_toward_x(seq.team)
-        entry_y = None
+        entry_y = entry_t = None
         for fr in seq.frames:
             h = ball_holder(fr, config)
             if h is None:
@@ -592,6 +595,7 @@ def breakthrough_lanes(match, config=None) -> dict:
                 # A támadó szemszögéből: a -x kapunál tükrözzük az y-t.
                 entry_y = (h.y if goal_x > 0
                            else COURT_WIDTH_M - h.y)
+                entry_t = fr.t
                 break
         if entry_y is None:
             continue
@@ -600,6 +604,7 @@ def breakthrough_lanes(match, config=None) -> dict:
             sum(1 for b in _LANE_FRACS if frac >= b)]
         rec = out[side]
         rec["entries"] += 1
+        rec["entries_ts"].append({"t": entry_t, "lane": lane})
         lrec = rec["lanes"].setdefault(lane, {"entries": 0, "goals": 0})
         lrec["entries"] += 1
         if next((True for (t, tm, g) in shots

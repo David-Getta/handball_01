@@ -781,3 +781,47 @@ def test_training_flags_underused_pivot():
     out2 = training_focus(scene(True))
     assert not any(it["title"] == "Beálló-kapcsolat"
                    for it in out2["home"])
+
+
+def test_training_flags_lane_defense():
+    """31) Ha az ellenfél betörései egy sávban jönnek és gólokat is
+    hoznak, a védekező oldal Sáv-védelem fókuszt kap."""
+    def frames_scene():
+        frames = []
+        t = 0
+        defs = [(33.0, 10.5), (36.0, 6.0), (36.0, 14.0), (38.0, 10.0)]
+        for _ in range(6):
+            # Hazai betörés középen 8 m-ig, fedezett lövővel.
+            for i in range(120):
+                bx = 26.0 + 0.05 * i
+                players = [_pl(1, Team.HOME, bx, 10.0)]
+                players += [_pl(20 + k, Team.AWAY, dx, dy)
+                            for k, (dx, dy) in enumerate(defs)]
+                frames.append(Frame(t=t, players=players,
+                                    ball=Ball(x=bx, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+            # Gól 8 m-ről (a lövő mellett védő áll — nem szabad lövés).
+            for i in range(12):
+                players = [_pl(1, Team.HOME, 32.0, 10.0)]
+                players += [_pl(20 + k, Team.AWAY, dx, dy)
+                            for k, (dx, dy) in enumerate(defs)]
+                frames.append(Frame(t=t, players=players,
+                                    ball=Ball(x=32.0 + 0.8 * i, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+            # Gazdátlan labda a sarokban: szakasz-határ, vendég-támadás
+            # nélkül (nem terheli a vendég támadó-szabályait).
+            for i in range(40):
+                players = [_pl(1, Team.HOME, 15.0, 10.0)]
+                players += [_pl(20 + k, Team.AWAY, dx, dy)
+                            for k, (dx, dy) in enumerate(defs)]
+                frames.append(Frame(t=t, players=players,
+                                    ball=Ball(x=2.0, y=1.0,
+                                              confidence=1.0)))
+                t += 1
+        return Match(_meta(), frames)
+
+    out = training_focus(frames_scene())
+    items = [it for it in out["away"] if it["title"] == "Sáv-védelem"]
+    assert items and "közép sávban jött" in items[0]["why"]
