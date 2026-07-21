@@ -1828,6 +1828,38 @@ def create_app():
                     v["d"] += 1
         except Exception:
             venue = None
+        # Ellenfél-mérleg: ellenfelenként Gy/D/V + gól-mérleg.
+        opponents = None
+        try:
+            opp_acc: dict = {}
+            for date_, mid_, side_ in entries:
+                m_ = _store.get(mid_)
+                if m_ is None:
+                    continue
+                summ_ = _match_summary(m_)
+                gh_, ga_ = summ_["goals_home"], summ_["goals_away"]
+                gf_, gc_ = (gh_, ga_) if side_ == "home" else (ga_, gh_)
+                opp_name = (m_.meta.away_team if side_ == "home"
+                            else m_.meta.home_team) or "?"
+                o = opp_acc.setdefault(opp_name,
+                                       {"matches": 0, "w": 0, "d": 0,
+                                        "l": 0, "gf": 0, "ga": 0})
+                o["matches"] += 1
+                o["gf"] += gf_
+                o["ga"] += gc_
+                if gf_ > gc_:
+                    o["w"] += 1
+                elif gf_ < gc_:
+                    o["l"] += 1
+                else:
+                    o["d"] += 1
+            if opp_acc:
+                opponents = [{"opponent": k, **v}
+                             for k, v in sorted(
+                                 opp_acc.items(),
+                                 key=lambda kv: -kv[1]["matches"])]
+        except Exception:
+            opponents = None
         # A szezon játékosai: a könyvtár-toplisták e csapatra szűrve
         # (top 3 kategóriánként) — hibatűrően.
         leaders = None
@@ -1843,7 +1875,7 @@ def create_app():
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
             team, tr, focuses, len(entries), timeline=timeline,
-            venue=venue, leaders=leaders))
+            venue=venue, leaders=leaders, opponents=opponents))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
