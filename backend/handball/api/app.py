@@ -1788,9 +1788,37 @@ def create_app():
                 })
         except Exception:
             timeline = []
+        # Hazai vs idegen mérleg: győzelem/döntetlen/vereség + gólok
+        # pályaválasztás szerint — hibatűrően.
+        venue = None
+        try:
+            venue = {"home": {"w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0,
+                              "matches": 0},
+                     "away": {"w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0,
+                              "matches": 0}}
+            for date_, mid_, side_ in entries:
+                m_ = _store.get(mid_)
+                if m_ is None:
+                    continue
+                summ_ = _match_summary(m_)
+                gh_, ga_ = summ_["goals_home"], summ_["goals_away"]
+                gf_, gc_ = (gh_, ga_) if side_ == "home" else (ga_, gh_)
+                v = venue[side_]
+                v["matches"] += 1
+                v["gf"] += gf_
+                v["ga"] += gc_
+                if gf_ > gc_:
+                    v["w"] += 1
+                elif gf_ < gc_:
+                    v["l"] += 1
+                else:
+                    v["d"] += 1
+        except Exception:
+            venue = None
         from ..pipeline.report_html import season_report_html
         return HTMLResponse(content=season_report_html(
-            team, tr, focuses, len(entries), timeline=timeline))
+            team, tr, focuses, len(entries), timeline=timeline,
+            venue=venue))
 
     @app.get("/players/season-report")
     def get_player_season_report(team: str, jersey: int):
