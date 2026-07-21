@@ -281,3 +281,27 @@ def test_marking_pairs_needs_min_frames():
             ball=Ball(x=25.0, y=10.0, confidence=1.0)))
     res = marking_pairs(Match(_meta(), frames))
     assert res["away"]["pairs"] == []
+
+
+def test_marking_pairs_until_t_limits_window():
+    """until_t-vel csak az addigi kockák számítanak — a félidei kép nem
+    néz a jövőbe: az első szakasz laza őrzése látszik akkor is, ha a
+    védő később feljavul."""
+    from handball.models.tracking import Ball, Frame, Match
+    from handball.pipeline.defense import marking_pairs
+
+    frames = []
+    # Első 30 kocka: laza őrzés (3 m); utána 60 kocka szoros (1 m).
+    for t in range(90):
+        dy = 3.0 if t < 30 else 1.0
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 25.0, 10.0),
+            _pl(20, Team.AWAY, 25.0, 10.0 + dy)],
+            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+    m = Match(_meta(), frames)
+    fh = marking_pairs(m, until_t=29)["away"]["pairs"]
+    assert fh and abs(fh[0]["avg_dist_m"] - 3.0) < 0.05
+    assert fh[0]["frames"] == 30
+    full = marking_pairs(m)["away"]["pairs"]
+    assert full[0]["frames"] == 90
+    assert full[0]["avg_dist_m"] < 2.0  # a teljes képben már szoros

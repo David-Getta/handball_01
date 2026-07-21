@@ -2199,6 +2199,18 @@ def create_app():
             res["marking"] = marking_pairs(match)
         except Exception:
             pass
+        try:
+            # Félidei emberfogás-kép: az élő nézet a szünetben ebből ad
+            # "szorosabb tapadást a másodikra" jelzést (jövőbe nézés
+            # nélkül — csak az első félidő kockáiból).
+            from ..pipeline.defense import marking_pairs
+            from ..pipeline.halftime import detect_halftime
+            ht = detect_halftime(match)
+            if ht is not None:
+                res["marking_fh"] = {"until_frame": ht,
+                                     **marking_pairs(match, until_t=ht)}
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/playmaker")
