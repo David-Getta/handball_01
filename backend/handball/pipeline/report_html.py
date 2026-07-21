@@ -2707,7 +2707,8 @@ számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
 
 def season_report_html(team: str, tr: dict, focuses: list[dict],
                        n_matches: int,
-                       timeline: list[dict] | None = None) -> str:
+                       timeline: list[dict] | None = None,
+                       venue: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
     """
@@ -2725,6 +2726,26 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             "<h2>A szezon meccsről meccsre</h2>"
             "<table><tr><th>Dátum</th><th>Ellenfél</th>"
             "<th>Mi történt</th></tr>" + rows_tl + "</table>")
+    venue_html = ""
+    if venue:
+        def _vrow(label, v):
+            if not v or not v.get("matches"):
+                return (f"<tr><td>{label}</td>"
+                        '<td class="num">—</td><td class="num">—</td>'
+                        '<td class="num">—</td></tr>')
+            return (f"<tr><td>{label}</td>"
+                    f'<td class="num">{v["matches"]}</td>'
+                    f'<td class="num">{v["w"]} / {v["d"]} / {v["l"]}'
+                    "</td>"
+                    f'<td class="num">{v["gf"]} – {v["ga"]}</td></tr>')
+        venue_html = (
+            "<h2>Hazai vs idegen</h2>"
+            "<table><tr><th>Pálya</th><th class=\"num\">Meccs</th>"
+            '<th class="num">Gy / D / V</th>'
+            '<th class="num">Gólok</th></tr>'
+            + _vrow("Hazai", venue.get("home"))
+            + _vrow("Idegen", venue.get("away"))
+            + "</table>")
     focus_html = ""
     if focuses:
         items = "".join(
@@ -2775,6 +2796,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
   {tr.get("newer_matches", 0)} meccs).</div>
 </header>
 {timeline_html}
+{venue_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}
 <h2>Összegzés</h2>

@@ -169,8 +169,34 @@ def test_season_report_endpoint():
     # A szezon meccsről meccsre tábla is ott van, az ellenféllel.
     assert "A szezon meccsről meccsre" in r.text
     assert "Szimu Vendég" in r.text
+    # Hazai vs idegen mérleg-szakasz (mindkét meccs hazai volt).
+    assert "Hazai vs idegen" in r.text
     assert client2.get("/season/report",
                        params={"team": "Nincs Ilyen"}).status_code == 404
+
+
+def test_season_report_venue_split():
+    """A pályaválasztás szerinti mérleg a jó oldalra könyveli a
+    meccseket: egy hazai + egy idegen meccsből 1–1 kerül a sorokba."""
+    client, mid = _client_with_match()
+    m2 = simulate_ground_truth(duration_s=5, fps=25.0, seed=4)
+    # A második meccsen a Szimu Hazai idegenben játszik.
+    m2.meta.home_team = "Szimu Vendég"
+    m2.meta.away_team = "Szimu Hazai"
+    matches_dir = Path(_tmp) / "data" / "matches"
+    (matches_dir / f"{m2.meta.match_id}.json").write_text(
+        json.dumps(m2.to_dict()), encoding="utf-8")
+    client2 = TestClient(create_app())
+    r = client2.get("/season/report", params={"team": "Szimu Hazai"})
+    assert r.status_code == 200
+    assert "Hazai vs idegen" in r.text
+    import re as _re
+    row_h = _re.search(r"<tr><td>Hazai</td>"
+                       r'<td class="num">(\d+)</td>', r.text)
+    row_i = _re.search(r"<tr><td>Idegen</td>"
+                       r'<td class="num">(\d+)</td>', r.text)
+    assert row_h and row_i
+    assert int(row_h.group(1)) >= 1 and int(row_i.group(1)) >= 1
 
 
 def test_head_to_head_report_endpoint():
