@@ -683,6 +683,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return txt;
   }
 
+  // Betörés-sáv: hol lépnek be a 9 m-en belülre (5+ betörésből,
+  // 40%+ egy sávban) — a backend-kulcsokkal azonos küszöb.
+  String? _breakLane(Map<String, dynamic> r) {
+    final total = ((r["break_entries"] as num?) ?? 0).toInt();
+    final lanes = (r["break_lanes"] as Map?)?.cast<String, dynamic>();
+    if (total < 5 || lanes == null || lanes.isEmpty) return null;
+    final top = lanes.entries.first;
+    final n = (((top.value as Map)["entries"] as num?) ?? 0).toInt();
+    final share = 100.0 * n / total;
+    if (share < 40.0) return null;
+    return "${top.key} · ${share.toStringAsFixed(0)}%";
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -905,6 +918,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_tightMarker(r) != null)
         ["Tapadó emberfogó", _tightMarker(r)!],
       if (_pivotUsage(r) != null) ["Beálló-terhelés", _pivotUsage(r)!],
+      if (_breakLane(r) != null) ["Betörés-sáv", _breakLane(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

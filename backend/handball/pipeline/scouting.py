@@ -254,6 +254,10 @@ class ScoutingReport:
     pivot_attacks: int = 0
     pivot_goals: int = 0
     pivot_other_goals: int = 0
+    # Betörés-folyosóik: {sáv: {"entries", "goals"}} — hol lépnek be a
+    # 9 m-en belülre; darabszámok, meccsek közt pontosan összegződnek.
+    break_entries: int = 0
+    break_lanes: dict = field(default_factory=dict)
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -815,6 +819,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                         f"nélküle {og:.0f}%) — hagyd, hogy oda "
                         "erőltessék.")
 
+    # Betörés-folyosójuk: ha egy sávban koncentrálódnak a betöréseik,
+    # oda kell a segítő védő.
+    if rep.break_entries >= 5 and rep.break_lanes:
+        top_lane, top_rec = next(iter(rep.break_lanes.items()))
+        lane_share = 100.0 * top_rec["entries"] / rep.break_entries
+        if lane_share >= 40.0:
+            keys.append(
+                f"Betöréseik {lane_share:.0f}%-a a(z) {top_lane} "
+                "sávban jön — oda segítő védőt, a sáv-váltást előre "
+                "beszéljétek meg.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -1329,6 +1344,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.pivot_attacks = pu["pivot_attacks"]
         rep.pivot_goals = pu["pivot_goals"]
         rep.pivot_other_goals = pu["other_goals"]
+        from .defense import breakthrough_lanes
+        bl = breakthrough_lanes(match, config)[team.value]
+        rep.break_entries = bl["entries"]
+        rep.break_lanes = {k: dict(v) for k, v in bl["lanes"].items()}
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -1794,6 +1813,18 @@ def _merge_markers(reports) -> list:
                                        key=lambda kv: -kv[1][0])]
 
 
+def _merge_break_lanes(reports) -> dict:
+    """Sávonkénti betörés/gól számok pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for k, v in (r.break_lanes or {}).items():
+            cur = tally.setdefault(k, {"entries": 0, "goals": 0})
+            cur["entries"] += int(v.get("entries", 0))
+            cur["goals"] += int(v.get("goals", 0))
+    return dict(sorted(tally.items(),
+                       key=lambda kv: -kv[1]["entries"]))
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
@@ -2024,6 +2055,20 @@ def matchup_plan(own: "ScoutingReport",
                 "a beállót testtel és helyezkedéssel tartsd, fogással "
                 "ne: náluk ebből 2 perc és hetes lesz.")
 
+    # 16) Az ő betörés-sávjuk × a ti laza falatok: abban a sávban kell
+    # korábban kilépni.
+    if (opp.break_entries >= 6 and opp.break_lanes
+            and own.defensive_pressure_m >= 2.0):
+        top16, rec16 = next(iter(opp.break_lanes.items()))
+        share16 = 100.0 * rec16["entries"] / opp.break_entries
+        if share16 >= 50.0:
+            plan.append(
+                f"A betöréseik {share16:.0f}%-a a(z) {top16} sávban "
+                f"jön, ti pedig lazán védekeztek (átlag "
+                f"{own.defensive_pressure_m:.1f} m) — abban a sávban "
+                "lépj ki korábban, és a segítő védő már a betörés "
+                "ELŐTT csússzon be.")
+
     return plan
 
 
@@ -2180,6 +2225,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pivot_attacks=sum(r.pivot_attacks for r in reports),
         pivot_goals=sum(r.pivot_goals for r in reports),
         pivot_other_goals=sum(r.pivot_other_goals for r in reports),
+        break_entries=sum(r.break_entries for r in reports),
+        break_lanes=_merge_break_lanes(reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
