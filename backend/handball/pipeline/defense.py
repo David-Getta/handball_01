@@ -441,9 +441,13 @@ def marking_pairs(match, config=None) -> dict:
     Visszatérés csapatonként (a VÉDEKEZŐ oldal):
       {"pairs": [{"defender", "defender_jersey", "attacker",
                   "attacker_jersey", "frames", "share_pct",
-                  "avg_dist_m"}], "loosest": pár|None}
+                  "avg_dist_m"}], "loosest": pár|None,
+       "defenders": [{"defender", "defender_jersey", "frames",
+                      "dist_sum", "avg_dist_m"}]}
     — share_pct: a védő őrzés-kockáinak hány %-a jutott erre a támadóra;
-    loosest: a legnagyobb átlagtávú pár (MARK_LOOSE_M felett laza őrzés).
+    loosest: a legnagyobb átlagtávú pár (MARK_LOOSE_M felett laza őrzés);
+    defenders: védőnkénti ÖSSZES őrzés-kocka és táv-összeg (bármelyik
+    támadóval) — a felderítés ebből összegez pontosan meccsek között.
     """
     import math
 
@@ -457,6 +461,7 @@ def marking_pairs(match, config=None) -> dict:
     acc: dict[str, dict[tuple[int, int], list[float]]] = {
         "home": {}, "away": {}}
     def_frames: dict[str, dict[int, int]] = {"home": {}, "away": {}}
+    def_dist: dict[str, dict[int, float]] = {"home": {}, "away": {}}
 
     for f in match.frames:
         for p in f.players:
@@ -485,6 +490,8 @@ def marking_pairs(match, config=None) -> dict:
             rec[1] += dist
             def_frames[side][best.track_id] = (
                 def_frames[side].get(best.track_id, 0) + 1)
+            def_dist[side][best.track_id] = (
+                def_dist[side].get(best.track_id, 0.0) + dist)
 
     out = {}
     for side in ("home", "away"):
@@ -510,9 +517,19 @@ def marking_pairs(match, config=None) -> dict:
                 "avg_dist_m": round(rec[1] / rec[0], 2),
             })
         pairs.sort(key=lambda p_: -p_["frames"])
+        defenders = [
+            {"defender": dt,
+             "defender_jersey": jersey.get(dt),
+             "frames": n,
+             "dist_sum": round(def_dist[side][dt], 2),
+             "avg_dist_m": round(def_dist[side][dt] / n, 2)}
+            for dt, n in sorted(def_frames[side].items(),
+                                key=lambda kv: -kv[1])
+            if n >= MARK_MIN_FRAMES]
         out[side] = {
             "pairs": pairs,
             "loosest": (max(pairs, key=lambda p_: p_["avg_dist_m"])
                         if pairs else None),
+            "defenders": defenders,
         }
     return out
