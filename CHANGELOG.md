@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#452)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#457)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -163,6 +163,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Szezon-történet és egymás ellen**: a szezon-riport meccsről
   meccsre főcím-táblával nyit; új Egymás ellen riport (két csapat
   közös mérlege és meccs-listája) dashboard-gombbal. (#450–#452)
+- **Meccsterv a visszavágóra**: az Egymás ellen riport előre is néz —
+  a legutóbbi közös meccs profiljait keresztezi a meccsterv-motorral
+  (12 szabály), és terv-listát ad A csapat szemszögéből. (#454)
+- **Őrzési párok**: ki kit fogott a védekezésben — védőnként a
+  leggyakoribb őrzött, idő-aránnyal és átlagtávval, 2,5 m felett laza
+  őrzés jelzéssel; öt felületen (API, edzői összefoglaló,
+  jelentés-tábla, app-kártya, elemzés-csomag). (#455, #456)
 - **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
   kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
   csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
