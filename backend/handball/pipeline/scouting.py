@@ -268,6 +268,9 @@ class ScoutingReport:
     rotation_used_sum: int = 0
     rotation_regulars_sum: int = 0
     rotation_matches: int = 0
+    # Labdaszerzőik: [{"player_id", "steals"}] — ki szerzi a labdákat;
+    # játékosonként meccsek közt pontosan összegezhető.
+    ball_winners: list = field(default_factory=list)
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -878,6 +881,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Széles paddal forgatnak (átlag {avg_used:.0f} "
                 "bevetett játékos) — a tempó nekik dolgozik.")
 
+    # Labdaszerzőjük: aki elcsípi a passzokat — vele szemben óvatos játék.
+    if rep.ball_winners:
+        top_bw = rep.ball_winners[0]
+        if top_bw["steals"] >= 3:
+            strengths.append(
+                f"A(z) {top_bw['player_id']}-es a labdaszerzőjük "
+                f"({top_bw['steals']} szerzés).")
+            keys.append(
+                f"A(z) {top_bw['player_id']}-es elcsípi a labdákat — "
+                "az ő zónájában rövid, biztos passz; a hosszú "
+                "keresztpasszt nála ne erőltesd.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -1409,6 +1424,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.rotation_used_sum = rd["used"]
             rep.rotation_regulars_sum = rd["regulars"]
             rep.rotation_matches = 1
+        from .defense import ball_winners
+        rep.ball_winners = [
+            {"player_id": (w["jersey"] if w["jersey"] is not None
+                           else w["player_id"]),
+             "steals": w["steals"]}
+            for w in ball_winners(match, config)[team.value]["players"]]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -1897,6 +1918,17 @@ def _merge_pass_buckets(reports) -> dict:
     return tally
 
 
+def _merge_ball_winners(reports) -> list:
+    """Labdaszerzőnkénti darabszámok pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for w in (r.ball_winners or []):
+            tally[w["player_id"]] = (tally.get(w["player_id"], 0)
+                                     + int(w["steals"]))
+    return [{"player_id": pid, "steals": n}
+            for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
@@ -2329,6 +2361,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rotation_regulars_sum=sum(r.rotation_regulars_sum
                                   for r in reports),
         rotation_matches=sum(r.rotation_matches for r in reports),
+        ball_winners=_merge_ball_winners(reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

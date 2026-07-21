@@ -251,3 +251,17 @@ def test_breakthrough_clip_gets_hungarian_name(tmp_path):
     with zipfile.ZipFile(res.zip_path) as z:
         names = " ".join(z.namelist())
     assert "betores" in names
+
+
+def test_steal_clip_gets_hungarian_name(tmp_path):
+    """A labdaszerzés klip-típus magyar fájlnevet kap (labdaszerzes)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "steal", "team": "home",
+               "label": "labdaszerzés"}]
+    res = export_event_clips(m, events, {"steal"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "labdaszerzes" in names

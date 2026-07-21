@@ -1339,6 +1339,19 @@ def create_app():
                                    bl_cl[side]["entries_ts"]]
                     except Exception:
                         pass
+                if "steal" in types:
+                    # Labdaszerzések: a birtokos-váltás pillanatai — a
+                    # védekezés motorjának videós visszanézése.
+                    try:
+                        from ..pipeline.defense import ball_winners
+                        bw_cl = ball_winners(match)
+                        for side in ("home", "away"):
+                            ev += [{"t": e_bw["t"], "type": "steal",
+                                    "team": side,
+                                    "label": "labdaszerzés"}
+                                   for e_bw in bw_cl[side]["ts"]]
+                    except Exception:
+                        pass
                 if "key_moment" in types:
                     # A meccs gerince videóban: a key_moments réteg
                     # pillanataiból egy-egy klip, a címkével a
