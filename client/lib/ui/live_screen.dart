@@ -189,6 +189,31 @@ class _LiveScreenState extends State<LiveScreen> {
                 "kényszeríts ritmusváltást vagy lövést.")));
       }
     } catch (_) {}
+    // Félidei emberfogás-kép: a szünetben szól, ha valaki lazán őrzött
+    // az első félidőben (csak az addigi kockákból — jövőbe nem nézünk).
+    try {
+      final d = await _api.fetchDefense(matchId);
+      final fh = (d["marking_fh"] as Map?)?.cast<String, dynamic>();
+      if (fh != null) {
+        final atFrame = ((fh["until_frame"] as num?) ?? 0).toInt();
+        for (final side in ["home", "away"]) {
+          final loose =
+              ((fh[side] as Map?)?["loosest"] as Map?)?.cast<String, dynamic>();
+          if (loose == null) continue;
+          final dist = ((loose["avg_dist_m"] as num?) ?? 0).toDouble();
+          if (dist < 2.5) continue;
+          final j = (loose["defender_jersey"] as num?)?.toInt();
+          final who = j != null ? "$j-es" : "#${loose["defender"]}";
+          final team = names[side] ?? "";
+          out.add(_FeedEntry(
+              atFrame,
+              Suggestion(4, "taktika",
+                  "Félidei kép ($team): a(z) $who átlag "
+                  "${dist.toStringAsFixed(1)} m-ről őrizte az emberét — "
+                  "a második félidőre szorosabb tapadást kérj.")));
+        }
+      }
+    } catch (_) {}
     // Vezetés-váltások: a meccs gerincéből — élőben ez a "most fordult
     // a meccs" pillanat, a padnak azonnal reagálnia kell.
     try {

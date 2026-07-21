@@ -430,7 +430,7 @@ MARK_LOOSE_M = 2.5
 MARK_TIGHT_M = 1.5
 
 
-def marking_pairs(match, config=None) -> dict:
+def marking_pairs(match, config=None, until_t=None) -> dict:
     """Őrzési párok: ki kit fogott a védekezésben.
 
     Kockánként (amikor az ellenfélnél a labda) minden TÁMADÓ mezőny-
@@ -449,6 +449,8 @@ def marking_pairs(match, config=None) -> dict:
     loosest: a legnagyobb átlagtávú pár (MARK_LOOSE_M felett laza őrzés);
     defenders: védőnkénti ÖSSZES őrzés-kocka és táv-összeg (bármelyik
     támadóval) — a felderítés ebből összegez pontosan meccsek között.
+    until_t: ha adott, csak az addigi kockák számítanak (élő/félidei
+    kép — jövőbe nézés nélkül).
     """
     import math
 
@@ -465,6 +467,8 @@ def marking_pairs(match, config=None) -> dict:
     def_dist: dict[str, dict[int, float]] = {"home": {}, "away": {}}
 
     for f in match.frames:
+        if until_t is not None and f.t > until_t:
+            break
         for p in f.players:
             if p.jersey_number is not None and p.track_id not in jersey:
                 jersey[p.track_id] = p.jersey_number
