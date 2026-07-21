@@ -2120,6 +2120,21 @@ def player_report_html(match, track_id: int) -> str:
                     f"{alab_m} ({pr_m['share_pct']:.0f}%)"))
     except Exception:
         pass
+    # Beálló-szerep: ha a játékos a becsült beálló, a csapat beállós
+    # támadás-mérlege az ő lapjára tartozik.
+    try:
+        from .attack_types import pivot_usage
+        pu_pl = pivot_usage(match)[row["team"]]
+        if (set(pu_pl["pivot_ids"]) & tids
+                and pu_pl["attacks"] >= 5
+                and pu_pl["pivot_share_pct"] is not None):
+            val_pl = (f"{pu_pl['pivot_attacks']} támadás "
+                      f"({pu_pl['pivot_share_pct']:.0f}%), "
+                      f"{pu_pl['pivot_goals']} gól")
+            game_items.append(_metric("Beállós támadás (rajtad át)",
+                                      val_pl))
+    except Exception:
+        pass
     seven_dirs: dict = {}
     try:
         from .rules import seven_meter_outcomes
