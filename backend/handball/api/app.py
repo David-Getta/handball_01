@@ -2091,10 +2091,16 @@ def create_app():
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
-        return {"attacks": classify_attacks(match),
-                "mix": attack_mix(match),
-                "efficiency": attack_efficiency(match),
-                "duration_efficiency": attack_duration_efficiency(match)}
+        res = {"attacks": classify_attacks(match),
+               "mix": attack_mix(match),
+               "efficiency": attack_efficiency(match),
+               "duration_efficiency": attack_duration_efficiency(match)}
+        try:
+            from ..pipeline.attack_types import pivot_usage
+            res["pivot"] = pivot_usage(match)
+        except Exception:
+            pass
+        return res
 
     @app.get("/matches/{match_id}/empty-net")
     def get_empty_net(match_id: str):
@@ -2338,6 +2344,8 @@ def create_app():
                        lambda: pressure_finishing(match))
                 from ..pipeline.defense import marking_pairs
                 _layer("marking", lambda: marking_pairs(match))
+                from ..pipeline.attack_types import pivot_usage
+                _layer("pivot_usage", lambda: pivot_usage(match))
                 from ..pipeline.tactics import attack_sides
                 _layer("attack_sides", lambda: attack_sides(match))
                 from ..pipeline.tactics import efficiency_vs_formation

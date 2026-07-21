@@ -1350,6 +1350,25 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _sa("home"), _sa("away")))
         except Exception:
             pass
+        # Beállós támadás sora: a támadások hányada megy a beállón át.
+        try:
+            from .attack_types import pivot_usage
+            _pu = pivot_usage(match)
+            if any(_pu[s_]["attacks"] >= 5
+                   and _pu[s_]["pivot_share_pct"] is not None
+                   for s_ in ("home", "away")):
+                def _pu_txt(side):
+                    r = _pu[side]
+                    if r["attacks"] < 5 or r["pivot_share_pct"] is None:
+                        return "—"
+                    txt = f'{r["pivot_share_pct"]:.0f}%'
+                    if r["pivot_goal_pct"] is not None:
+                        txt += f' (gól {r["pivot_goal_pct"]:.0f}%)'
+                    return txt
+                rows.append(("Beállós támadás",
+                             _pu_txt("home"), _pu_txt("away")))
+        except Exception:
+            pass
         # Támadás-szélesség sora: szélesen vagy szűken támadnak-e.
         try:
             from .attack_types import attack_width
