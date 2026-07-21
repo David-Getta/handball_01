@@ -1622,6 +1622,46 @@ def create_app():
         points.sort(key=lambda p: (p["date"] or "", p["match_id"]))
         return {"team": team, "jersey": jersey, "points": points}
 
+    @app.get("/head-to-head/report")
+    def get_h2h_report(team_a: str, team_b: str):
+        """Egymás ellen: a két csapat egymás elleni meccseinek mérlege
+        és listája nyomtatható HTML-ben. 404, ha nincs közös meccs."""
+        from fastapi.responses import HTMLResponse
+        pair = {team_a, team_b}
+        entries = []
+        for m in _store.values():
+            if {m.meta.home_team, m.meta.away_team} != pair:
+                continue
+            entries.append((m.meta.date or "", m))
+        entries.sort(key=lambda e: (e[0], e[1].meta.match_id))
+        if not entries:
+            raise HTTPException(status_code=404,
+                                detail="no matches between the teams")
+        stats = {"matches": len(entries), "wins_a": 0, "wins_b": 0,
+                 "draws": 0, "goals_a": 0, "goals_b": 0}
+        timeline = []
+        for date_, m in entries:
+            summ_ = _match_summary(m)
+            gh, ga = summ_["goals_home"], summ_["goals_away"]
+            a_home = m.meta.home_team == team_a
+            g_a, g_b = (gh, ga) if a_home else (ga, gh)
+            stats["goals_a"] += g_a
+            stats["goals_b"] += g_b
+            if g_a > g_b:
+                stats["wins_a"] += 1
+            elif g_b > g_a:
+                stats["wins_b"] += 1
+            else:
+                stats["draws"] += 1
+            timeline.append({
+                "date": date_ or m.meta.match_id,
+                "score": f"{g_a} – {g_b}",
+                "headline": summ_.get("headline"),
+            })
+        from ..pipeline.report_html import h2h_report_html
+        return HTMLResponse(content=h2h_report_html(
+            team_a, team_b, stats, timeline))
+
     @app.get("/season/report")
     def get_season_report(team: str):
         """Szezon-riport egy kattintásra: a csapat meccsei időrendben

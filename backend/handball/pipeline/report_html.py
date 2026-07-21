@@ -2587,3 +2587,68 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 mutatók meccsenkénti átlagra normálva. A visszatérő fókusz: ami
 legalább két meccsen előjött — nem egyszeri kisiklás.</footer>
 </div></body></html>"""
+
+
+def h2h_report_html(team_a: str, team_b: str, stats: dict,
+                    timeline: list[dict]) -> str:
+    """Egymás ellen: a két csapat egymás elleni mérlege a könyvtárból
+    — győzelmi mérleg, gól-mérleg és meccs-lista főcímekkel.
+    """
+    rows = "".join(
+        f"<tr><td>{escape(str(e.get('date') or ''))}</td>"
+        f'<td class="num">{escape(str(e.get("score") or ""))}</td>'
+        f"<td>{escape(str(e.get('headline') or '—'))}</td></tr>"
+        for e in timeline)
+    return f"""<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Egymás ellen — {escape(team_a)} vs {escape(team_b)}</title>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font-family: system-ui, -apple-system, "Segoe UI",
+         Arial, sans-serif; color: #101722; background: #fff;
+         line-height: 1.5; }}
+  .page {{ max-width: 720px; margin: 0 auto; padding: 36px 32px 48px; }}
+  header {{ border-bottom: 3px solid #12988a; padding-bottom: 14px;
+           margin-bottom: 22px; }}
+  .brand {{ font-size: 11px; letter-spacing: .22em;
+           text-transform: uppercase; color: #8492A6; }}
+  h1 {{ margin: 6px 0 2px; font-size: 26px; }}
+  .sub {{ color: #4A5768; font-size: 13px; }}
+  h2 {{ font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+       color: #12988a; margin: 26px 0 10px; }}
+  .metrics {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+  .metric {{ border: 1px solid #E3E8EF; border-radius: 10px;
+            padding: 10px 14px; min-width: 120px; }}
+  .mv {{ font-size: 20px; font-weight: 700; }}
+  .ml {{ font-size: 11px; color: #8492A6; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+  th, td {{ padding: 7px 10px; border-bottom: 1px solid #E3E8EF;
+           text-align: left; }}
+  th.num, td.num {{ text-align: right; white-space: nowrap; }}
+  footer {{ margin-top: 30px; font-size: 11px; color: #8492A6; }}
+</style>
+</head>
+<body><div class="page">
+<header>
+  <div class="brand">SPORT MACHINE · EGYMÁS ELLEN</div>
+  <h1>{escape(team_a)} vs {escape(team_b)}</h1>
+  <div class="sub">{stats.get("matches", 0)} elemzett egymás elleni
+  meccs a könyvtárból.</div>
+</header>
+<h2>Mérleg ({escape(team_a)} szemszögéből)</h2>
+<div class="metrics">
+  {_metric("Győzelem", str(stats.get("wins_a", 0)))}
+  {_metric("Döntetlen", str(stats.get("draws", 0)))}
+  {_metric("Vereség", str(stats.get("wins_b", 0)))}
+  {_metric("Gól-mérleg",
+           f"{stats.get('goals_a', 0)} – {stats.get('goals_b', 0)}")}
+</div>
+<h2>Meccsről meccsre</h2>
+<table><tr><th>Dátum</th><th class="num">Eredmény</th>
+<th>Mi történt</th></tr>{rows}</table>
+<footer>A visszavágó-készüléshez: a legutóbbi meccs csomagjában ott a
+meccsterv.txt, a felderítő képernyőn pedig a több-meccses
+ellenfél-profil.</footer>
+</div></body></html>"""
