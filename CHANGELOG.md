@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#474)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#482)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -198,6 +198,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   felderítés-profil + 16. meccsterv-szabály (betörés-sáv × laza fal)
   + csempe (#472), 31. edzés-szabály (Sáv-védelem) + betörés-klipek
   sávval a fájlnévben (#473).
+- **Passz-lánc**: új réteg — hány passzból épül a támadás, és melyik
+  lánc-hossz hozza a gólokat (0–2 / 3–5 / 6+ vödrök); összefoglaló,
+  jelentés-sor, API, csomag (#475), felderítés-profil + "gyors első
+  hullám" / "türelmes körbejáratás" kulcsok + 17. meccsterv-szabály
+  + csempe (#476), 32. edzés-szabály (két ággal) + könyvtár-összevető
+  sor (#477).
+- **Rotáció-mélység**: új réteg — hány emberrel megy a meccs (bevetett
+  / alapember, kapus és beugrók nélkül); összefoglaló-mondat,
+  jelentés-sor, /team-stats API, csomag (#478), felderítés-profil +
+  szűk pad / széles pad kulcsok + 18. meccsterv-szabály (tempó-terv)
+  + csempe (#479), félidei élő rotáció-jelzés ("frissíts a
+  másodikra") (#480).
+- **Hazai vs idegen**: a szezon-riport pályaválasztás szerinti
+  mérleg-táblát kap (meccsek, Gy/D/V, gólok). (#481)
 - **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
   kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
   csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
