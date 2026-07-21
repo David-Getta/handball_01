@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#448)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#452)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -160,6 +160,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **key_moments a gépi exportban**: a meccs gerince az
   elemzesek.json-ban is — a csomag minden rétege emberi ÉS gépi
   formában. (#413)
+- **Szezon-történet és egymás ellen**: a szezon-riport meccsről
+  meccsre főcím-táblával nyit; új Egymás ellen riport (két csapat
+  közös mérlege és meccs-listája) dashboard-gombbal. (#450–#452)
 - **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
   kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
   csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
