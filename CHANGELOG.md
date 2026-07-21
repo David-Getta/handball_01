@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#457)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#465)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -170,6 +170,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   leggyakoribb őrzött, idő-aránnyal és átlagtávval, 2,5 m felett laza
   őrzés jelzéssel; öt felületen (API, edzői összefoglaló,
   jelentés-tábla, app-kártya, elemzés-csomag). (#455, #456)
+- **Emberfogó-profil a felderítésben**: a laza (2,5 m+) emberfogó
+  gyengeség + "oda vidd az egy-egyet" kulcs és 13. meccsterv-szabály;
+  a tapadó (1,5 m alatti) erősség + "csak elzárással" kulcs és a fő
+  lövővel párosított 14. szabály; két új csempe; 29. edzés-szabály
+  (Emberfogás-tapadás) és játékos-lap védekezés-mérleg személyes
+  tippel. (#458–#460)
+- **Beálló-terhelés**: új réteg — a támadások hányada megy a beállón
+  át, és gólarányban megéri-e; teljes kör: összefoglaló-mondat,
+  jelentés-sor, API, csomag (#461), felderítés-profil + "szendvics a
+  beállóra" kulcsok + 15. meccsterv-szabály (beálló-terhelés ×
+  kiállítás-hajlam) + csempe (#462), 30. edzés-szabály
+  (Beálló-kapcsolat, két ággal) + játékos-lap beálló-blokk (#463),
+  trend-mutató és könyvtár-összevető sor (#464).
 - **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
   kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
   csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
