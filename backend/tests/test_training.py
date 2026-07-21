@@ -825,3 +825,37 @@ def test_training_flags_lane_defense():
     out = training_focus(frames_scene())
     items = [it for it in out["away"] if it["title"] == "Sáv-védelem"]
     assert items and "közép sávban jött" in items[0]["why"]
+
+
+def test_training_flags_unproductive_long_chains():
+    """32) Ha a 6+ passzos támadások terméketlenek, Passz-lánc fókusz
+    születik időkorlátos gyakorlattal."""
+    from handball.pipeline.training import training_focus as tf32
+
+    def scene():
+        frames = []
+        t = 0
+        pos = {1: (26.0, 8.0), 2: (28.0, 12.0), 3: (30.0, 10.0)}
+        for _ in range(6):
+            # 7 passzos (8 birtokos-váltásos) támadás, gól nélkül.
+            for h in [1, 2, 3, 1, 2, 3, 1, 2]:
+                for _ in range(10):
+                    hx, hy = pos[h]
+                    frames.append(Frame(t=t, players=[
+                        _pl(1, Team.HOME, *pos[1]),
+                        _pl(2, Team.HOME, *pos[2]),
+                        _pl(3, Team.HOME, *pos[3]),
+                        _pl(20, Team.AWAY, 36.0, 8.0)],
+                        ball=Ball(x=hx, y=hy, confidence=1.0)))
+                    t += 1
+            for _ in range(40):  # gazdátlan labda: szakasz-határ
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 15.0, 10.0),
+                    _pl(20, Team.AWAY, 36.0, 8.0)],
+                    ball=Ball(x=2.0, y=1.0, confidence=1.0)))
+                t += 1
+        return Match(_meta(), frames)
+
+    out = tf32(scene())
+    items = [it for it in out["home"] if it["title"] == "Passz-lánc"]
+    assert items and "terméketlenek" in items[0]["why"]

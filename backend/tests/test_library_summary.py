@@ -66,6 +66,7 @@ def test_summary_counts_and_per_match():
         assert d["goals_home"] >= 0 and d["goals_away"] >= 0
         # A beálló-terhelés mező jelen van (None, ha nem mérhető).
         assert "pivot_share_home" in d and "pivot_share_away" in d
+        assert "pass_avg_home" in d and "pass_avg_away" in d
     # Az összesített mutatók a meccsenkéntiek összegei.
     assert s["sprints"] == sum(d["sprints"] for d in s["per_match"])
     assert s["saves"] == sum(d["saves"] for d in s["per_match"])

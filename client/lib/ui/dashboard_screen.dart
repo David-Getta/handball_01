@@ -778,6 +778,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ? "—"
                 : pair(m["suspensions_home"], m["suspensions_away"])
           ],
+          // Passz-lánc: átlagos passz-szám támadásonként.
+          [
+            "Passz / támadás (H–V)",
+            m["pass_avg_home"] == null && m["pass_avg_away"] == null
+                ? "—"
+                : "${m["pass_avg_home"] == null ? "—" : (m["pass_avg_home"] as num).toStringAsFixed(1)} – "
+                    "${m["pass_avg_away"] == null ? "—" : (m["pass_avg_away"] as num).toStringAsFixed(1)}"
+          ],
           // Beálló-terhelés: a támadások hányada megy a beállón át.
           [
             "Beállós támadás (H–V)",

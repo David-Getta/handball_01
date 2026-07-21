@@ -629,6 +629,40 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 32) Passz-lánc: ha a hosszú körbejáratás terméketlen (6+ passzos
+    # támadások gólarány nélkül), vagy a rövid játék elkapkodott (a
+    # támadások zöme 0–2 passz, gyenge gólaránnyal), célzott gyakorlat.
+    try:
+        from .attack_types import pass_chains
+        pc32 = pass_chains(match, config)
+        for side in ("home", "away"):
+            rec32 = pc32[side]
+            if rec32["attacks"] < 6:
+                continue
+            long32 = rec32["buckets"].get("6+ passz")
+            short32 = rec32["buckets"].get("0–2 passz")
+            if (long32 and long32["attacks"] >= 4
+                    and long32["goal_pct"] <= 20.0):
+                add(side, "támadás", "Passz-lánc",
+                    f"a hosszú (6+ passzos) támadások terméketlenek "
+                    f"({long32['goals']}/{long32['attacks']} gól) — a "
+                    "körbejáratás végén elfogy a lendület",
+                    "körbejáratás időkorláttal: a 4. passz után két "
+                    "passzon belül kötelező befejezés-kísérlet, "
+                    "passzív-jelzéssel")
+                continue
+            if (short32 and short32["attacks"] >= 4
+                    and short32["goal_pct"] <= 25.0
+                    and short32["attacks"] / rec32["attacks"] >= 0.6):
+                add(side, "támadás", "Passz-lánc",
+                    f"a támadások zöme 0–2 passzos, de gyenge "
+                    f"gólaránnyal ({short32['goals']}/"
+                    f"{short32['attacks']}) — elkapkodott befejezések",
+                    "türelem-gyakorlat: minimum 4 passz kötelező a "
+                    "lövés előtt, kivéve tiszta ziccernél")
+    except Exception:
+        pass
+
     # 31) Sáv-védelem: ha az ellenfél betörései egy sávban
     # koncentrálódnak ellenünk (40%+, 2+ gól onnan), a segítő védő
     # csúszását kell gyakorolni abban a sávban.
