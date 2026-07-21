@@ -216,6 +216,20 @@ class ApiClient {
     return resp.bodyBytes;
   }
 
+  /// Egymás ellen riport (GET /head-to-head/report): a két csapat
+  /// közös meccseinek mérlege nyomtatható HTML-ként, bájtokban.
+  Future<List<int>> fetchHeadToHead(String teamA, String teamB) async {
+    final resp = await http.get(Uri.parse(
+        "$baseUrl/head-to-head/report"
+        "?team_a=${Uri.encodeQueryComponent(teamA)}"
+        "&team_b=${Uri.encodeQueryComponent(teamB)}"));
+    if (resp.statusCode != 200) {
+      throw Exception(
+          "Nem sikerült az egymás elleni riport: HTTP ${resp.statusCode}");
+    }
+    return resp.bodyBytes;
+  }
+
   /// Szezon játékos-lap (GET /players/season-report): a játékos szezonja
   /// nyomtatható HTML-ként, bájtokban.
   Future<List<int>> fetchPlayerSeasonReport(String team, int jersey) async {
