@@ -44,6 +44,11 @@ class SummaryPanel extends StatelessWidget {
   /// Őrzési párok (defense/marking): ki kit fogott a védekezésben.
   final Map<String, dynamic>? marking;
 
+  /// Blokkok (defense/blocks) és labdaszerzők (defense/ball_winners) —
+  /// az Egyéni védekezés kártya forrásai.
+  final Map<String, dynamic>? blocks;
+  final Map<String, dynamic>? ballWinners;
+
   /// Kulcs-pillanat jegyzetbe emelése (frame, címke) — ha null, nincs
   /// jegyzet-gomb a sorokon.
   final void Function(int frame, String label)? onNoteMoment;
@@ -77,6 +82,8 @@ class SummaryPanel extends StatelessWidget {
     this.keyMoments = const [],
     this.setplayEff,
     this.marking,
+    this.blocks,
+    this.ballWinners,
     this.onNoteMoment,
     this.progression,
     this.goalTimeline = const [],
@@ -396,6 +403,81 @@ class SummaryPanel extends StatelessWidget {
 
   /// Őrzési párok kártya: melyik védő melyik támadót fogta, mennyi ideig
   /// és milyen szorosan — 2,5 m feletti átlagtávnál laza őrzés jelzéssel.
+  /// Egyéni védekezés kártya: a fal kulcsa (legtöbb blokk) és a
+  /// labdaszerző (legtöbb szerzés) csapatonként — a jelentés Egyéni
+  /// védekezés táblájának kivonata.
+  List<Widget> _defenseMotorCard() {
+    final bl = blocks;
+    final bw = ballWinners;
+    if (bl == null && bw == null) return const [];
+    final sides = [
+      ("home", homeName, AppColors.home),
+      ("away", awayName, AppColors.away),
+    ];
+    List<String> linesOf(String key) {
+      final out = <String>[];
+      final blockers =
+          (((bl?[key] as Map?)?["blockers"] as List?) ?? const [])
+              .cast<Map<String, dynamic>>();
+      if (blockers.isNotEmpty) {
+        final top = blockers.first;
+        final n = ((top["blocks"] as num?) ?? 0).toInt();
+        if (n >= 2) {
+          out.add("Fal kulcsa: ${top["player_id"]}. játékos — $n blokk");
+        }
+      }
+      final winners =
+          (((bw?[key] as Map?)?["players"] as List?) ?? const [])
+              .cast<Map<String, dynamic>>();
+      if (winners.isNotEmpty) {
+        final top = winners.first;
+        final n = ((top["steals"] as num?) ?? 0).toInt();
+        if (n >= 3) {
+          final j = (top["jersey"] as num?)?.toInt();
+          final who =
+              j != null ? "$j-es" : "${top["player_id"]}. játékos";
+          out.add("Labdaszerző: $who — $n szerzés");
+        }
+      }
+      return out;
+    }
+
+    if (sides.every((s) => linesOf(s.$1).isEmpty)) return const [];
+    return [
+      Text("EGYÉNI VÉDEKEZÉS", style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (key, name, color) in sides)
+              if (linesOf(key).isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 4),
+                  child: Text(name,
+                      style: AppText.value
+                          .copyWith(fontSize: 12.5, color: color)),
+                ),
+                for (final line in linesOf(key))
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 4),
+                    child: Text(line,
+                        style: AppText.label.copyWith(fontSize: 12)),
+                  ),
+              ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+    ];
+  }
+
   List<Widget> _markingCard() {
     final mk = marking;
     if (mk == null) return const [];
@@ -644,6 +726,7 @@ class SummaryPanel extends StatelessWidget {
         ..._keyMomentsCard(),
         ..._figuresCard(),
         ..._markingCard(),
+        ..._defenseMotorCard(),
         ..._keyPlayersCard(),
         ..._trainingCard(),
         if (goals.isNotEmpty) ...[
