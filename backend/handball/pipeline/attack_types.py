@@ -472,7 +472,7 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     Visszatérés csapatonként:
       {"attacks", "pivot_attacks", "pivot_goals", "other_goals",
        "pivot_share_pct", "pivot_goal_pct", "other_goal_pct",
-       "pivot_ids"}
+       "pivot_ids", "pivot_goal_ts"}
     — a pct-k None, ha a nevezőjük 0; pivot_ids: a becsült beálló
     track-ek (mezszám híján is stabil kulcs).
     """
@@ -493,7 +493,8 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
              if e.type in (EventType.SHOT, EventType.GOAL)]
 
     out = {side: {"attacks": 0, "pivot_attacks": 0, "pivot_goals": 0,
-                  "other_goals": 0, "pivot_ids": sorted(pivots[side])}
+                  "other_goals": 0, "pivot_ids": sorted(pivots[side]),
+                  "pivot_goal_ts": []}
            for side in ("home", "away")}
     for seq in segment_attacks(match, config):
         side = seq.team.value
@@ -505,14 +506,15 @@ def pivot_usage(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             if h is not None and h.track_id in pivots[side]:
                 touch += 1
         is_pivot = touch >= PIVOT_TOUCH_MIN_FRAMES
-        goal = next((True for (t, tm, g) in shots
-                     if tm == side and g
-                     and seq.start_t <= t <= seq.end_t + tail), False)
+        goal_t = next((t for (t, tm, g) in shots
+                       if tm == side and g
+                       and seq.start_t <= t <= seq.end_t + tail), None)
         if is_pivot:
             rec["pivot_attacks"] += 1
-            if goal:
+            if goal_t is not None:
                 rec["pivot_goals"] += 1
-        elif goal:
+                rec["pivot_goal_ts"].append(goal_t)
+        elif goal_t is not None:
             rec["other_goals"] += 1
 
     for rec in out.values():

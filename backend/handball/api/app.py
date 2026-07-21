@@ -1311,6 +1311,19 @@ def create_app():
                                    for t_bf in best_bf.get("starts", [])]
                     except Exception:
                         pass
+                if "pivot_goal" in types:
+                    # Beállós gólok: a beállón átfutó, gólra váltott
+                    # támadások — a beadás-játék videós visszanézése.
+                    try:
+                        from ..pipeline.attack_types import pivot_usage
+                        pu_cl = pivot_usage(match)
+                        for side in ("home", "away"):
+                            ev += [{"t": t_pg, "type": "pivot_goal",
+                                    "team": side, "label": "beállós gól"}
+                                   for t_pg in
+                                   pu_cl[side]["pivot_goal_ts"]]
+                    except Exception:
+                        pass
                 if "key_moment" in types:
                     # A meccs gerince videóban: a key_moments réteg
                     # pillanataiból egy-egy klip, a címkével a

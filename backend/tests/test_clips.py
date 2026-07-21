@@ -221,3 +221,17 @@ def test_duplicate_moments_deduplicated_and_reported(tmp_path):
                              tmp_path / "ki")
     assert res.count == 2
     assert res.skipped == 1
+
+
+def test_pivot_goal_clip_gets_hungarian_name(tmp_path):
+    """A beállós gól klip-típus magyar fájlnevet kap (beallo-gol)."""
+    video = tmp_path / "meccs.mp4"
+    _make_video(video)
+    m = _match(video)
+    events = [{"t": 60, "type": "pivot_goal", "team": "home",
+               "label": "beállós gól"}]
+    res = export_event_clips(m, events, {"pivot_goal"}, tmp_path / "ki")
+    assert res.count == 1
+    with zipfile.ZipFile(res.zip_path) as z:
+        names = " ".join(z.namelist())
+    assert "beallo-gol" in names
