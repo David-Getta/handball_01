@@ -2784,7 +2784,8 @@ számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
 def season_report_html(team: str, tr: dict, focuses: list[dict],
                        n_matches: int,
                        timeline: list[dict] | None = None,
-                       venue: dict | None = None) -> str:
+                       venue: dict | None = None,
+                       leaders: dict | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
     """
@@ -2822,6 +2823,27 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + _vrow("Hazai", venue.get("home"))
             + _vrow("Idegen", venue.get("away"))
             + "</table>")
+    leaders_html = ""
+    if leaders:
+        cats_ld = (("goals", "Gólkirály", "gól"),
+                   ("saves", "Védés-vezér", "védés"),
+                   ("blocks", "Fal kulcsa", "blokk"),
+                   ("steals", "Labdaszerző", "szerzés"))
+        ld_rows = []
+        for key_ld, title_ld, unit_ld in cats_ld:
+            rows_ld = leaders.get(key_ld) or []
+            if not rows_ld:
+                continue
+            names_ld = " · ".join(
+                f'#{e["jersey"]} ({e["value"]} {unit_ld})'
+                for e in rows_ld)
+            ld_rows.append(f"<tr><td>{title_ld}</td>"
+                           f"<td>{escape(names_ld)}</td></tr>")
+        if ld_rows:
+            leaders_html = (
+                "<h2>A szezon játékosai</h2>"
+                "<table><tr><th>Kategória</th><th>Top 3</th></tr>"
+                + "".join(ld_rows) + "</table>")
     focus_html = ""
     if focuses:
         items = "".join(
@@ -2873,6 +2895,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 </header>
 {timeline_html}
 {venue_html}
+{leaders_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}
 <h2>Összegzés</h2>
