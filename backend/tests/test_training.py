@@ -726,3 +726,25 @@ def test_predictable_seven_taker_triggers_variation_focus():
     tf = training_focus(m)
     titles = [f["title"] for f in tf["home"]]
     assert "Hetes-variáció" in titles
+
+
+def test_training_flags_loose_marking():
+    """29) Ha a leglazább emberfogó 2,5 m+ átlagról őrzi az emberét
+    (50+ kockán át), Emberfogás-tapadás fókusz születik; szoros
+    őrzésnél nem."""
+    def scene(dy):
+        frames = []
+        for t in range(60):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 25.0, 10.0),
+                _pl(20, Team.AWAY, 25.0, 10.0 + dy)],
+                ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        return Match(_meta(), frames)
+
+    out = training_focus(scene(3.0))
+    away = [it for it in out["away"]
+            if it["title"] == "Emberfogás-tapadás"]
+    assert away and "3.0 m-ről őrzi" in away[0]["why"]
+    out2 = training_focus(scene(1.0))
+    assert not any(it["title"] == "Emberfogás-tapadás"
+                   for it in out2["away"])

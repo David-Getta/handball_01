@@ -2078,6 +2078,29 @@ def player_report_html(match, track_id: int) -> str:
             game_items.append(_metric("Blokk", str(n_blk)))
     except Exception:
         pass
+    # Emberfogásod: mennyit őriztél, milyen szorosan, és kit fogtál
+    # a leggyakrabban — az őrzési párok rétegből.
+    try:
+        from .defense import marking_pairs
+        mk_pr = marking_pairs(match)
+        rec_m = next((d_ for d_ in mk_pr[row["team"]]["defenders"]
+                      if d_["defender"] in tids), None)
+        if rec_m:
+            game_items.append(_metric(
+                "Emberfogás (őrzés-idő)",
+                f"{rec_m['frames'] / fps:.0f} s · átl. "
+                f"{rec_m['avg_dist_m']:.1f} m"))
+            pr_m = next((p_ for p_ in mk_pr[row["team"]]["pairs"]
+                         if p_["defender"] in tids), None)
+            if pr_m is not None:
+                aj_m = pr_m["attacker_jersey"]
+                alab_m = (f"{aj_m}-es" if aj_m is not None
+                          else f"{pr_m['attacker']}. játékos")
+                game_items.append(_metric(
+                    "Leggyakoribb őrzötted",
+                    f"{alab_m} ({pr_m['share_pct']:.0f}%)"))
+    except Exception:
+        pass
     seven_dirs: dict = {}
     try:
         from .rules import seven_meter_outcomes
@@ -2218,6 +2241,18 @@ def player_report_html(match, track_id: int) -> str:
                 f"Fegyelem: {n_susp_t} kiállítás — a betörőt tested "
                 "helyzetével lassítsd, ne fogással: a következő 2 perc "
                 "a csapatnak gólokba kerül.")
+    except Exception:
+        pass
+    try:
+        from .defense import MARK_LOOSE_M, marking_pairs
+        rec_mk = next((d_ for d_ in
+                       marking_pairs(match)[row["team"]]["defenders"]
+                       if d_["defender"] in tids), None)
+        if rec_mk and rec_mk["frames"] >= 50                 and rec_mk["avg_dist_m"] >= MARK_LOOSE_M:
+            tips.append(
+                f"Emberfogás: átlag {rec_mk['avg_dist_m']:.1f} m-re "
+                "álltál az őrzöttedtől — egy-egy ellen tapadj "
+                "karnyújtásnyira, a lövőt ne engedd felugrani.")
     except Exception:
         pass
     try:
