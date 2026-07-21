@@ -2785,7 +2785,8 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
                        n_matches: int,
                        timeline: list[dict] | None = None,
                        venue: dict | None = None,
-                       leaders: dict | None = None) -> str:
+                       leaders: dict | None = None,
+                       opponents: list[dict] | None = None) -> str:
     """Szezon-riport: a csapat szezonja egy oldalon — automatikus
     időszak-bontású fejlődés-tábla + visszatérő edzés-fókuszok.
     """
@@ -2823,6 +2824,20 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             + _vrow("Hazai", venue.get("home"))
             + _vrow("Idegen", venue.get("away"))
             + "</table>")
+    opponents_html = ""
+    if opponents:
+        opp_rows = "".join(
+            f"<tr><td>{escape(str(o.get('opponent') or ''))}</td>"
+            f'<td class="num">{o["matches"]}</td>'
+            f'<td class="num">{o["w"]} / {o["d"]} / {o["l"]}</td>'
+            f'<td class="num">{o["gf"]} – {o["ga"]}</td></tr>'
+            for o in opponents)
+        opponents_html = (
+            "<h2>Ellenfél-mérleg</h2>"
+            "<table><tr><th>Ellenfél</th>"
+            '<th class="num">Meccs</th>'
+            '<th class="num">Gy / D / V</th>'
+            '<th class="num">Gólok</th></tr>' + opp_rows + "</table>")
     leaders_html = ""
     if leaders:
         cats_ld = (("goals", "Gólkirály", "gól"),
@@ -2896,6 +2911,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 </header>
 {timeline_html}
 {venue_html}
+{opponents_html}
 {leaders_html}
 <h2>Fejlődés a szezonon belül</h2>
 {table}

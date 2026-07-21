@@ -172,6 +172,12 @@ def test_season_report_endpoint():
     assert "Szimu Vendég" in r.text
     # Hazai vs idegen mérleg-szakasz (mindkét meccs hazai volt).
     assert "Hazai vs idegen" in r.text
+    # Ellenfél-mérleg: a két közös meccs egy sorba összegződik.
+    assert "Ellenfél-mérleg" in r.text
+    import re as _re
+    row_o = _re.search(r"<tr><td>Szimu Vendég</td>"
+                       r'<td class="num">(\d+)</td>', r.text)
+    assert row_o and int(row_o.group(1)) == 2
     # A rövid (5 mp-es) sim-meccseken nincs toplista-adat — a szakasz
     # ilyenkor elegánsan elmarad (lásd a dedikált leaders-tesztet).
     assert "A szezon játékosai" not in r.text
