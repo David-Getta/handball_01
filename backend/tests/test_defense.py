@@ -234,3 +234,50 @@ def test_transition_recovery_measures_slow_return():
     assert rec["transitions"] >= 1
     assert rec["avg_s"] is not None and rec["avg_s"] >= 5.0
     assert rec["slow"] >= 1
+
+
+def test_marking_pairs_identifies_defender_assignments():
+    """A támadóhoz legközelebbi védő adja az őrzési párt; a túl messzi
+    (MARK_MAX_DIST_M-en kívüli) védő nem kap párt, a laza pár pedig a
+    loosest mezőbe kerül."""
+    from handball.models.tracking import Ball, Frame, Match
+    from handball.pipeline.defense import marking_pairs
+
+    frames = []
+    for t in range(30):
+        frames.append(Frame(t=t, players=[
+            # Hazai támadók (a labda az 1-esnél).
+            _pl(1, Team.HOME, 25.0, 10.0),
+            _pl(2, Team.HOME, 25.0, 4.0),
+            # Vendég védők: a 20-as szorosan az 1-esen, a 21-es lazán
+            # (3 m) a 2-esen, a 22-es mindenkitől messze.
+            _pl(20, Team.AWAY, 25.0, 11.0),
+            _pl(21, Team.AWAY, 25.0, 7.0),
+            _pl(22, Team.AWAY, 38.0, 18.0)],
+            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+    res = marking_pairs(Match(_meta(), frames))
+    assert res["home"]["pairs"] == []          # a hazai nem védekezett
+    pairs = {p["defender"]: p for p in res["away"]["pairs"]}
+    assert set(pairs) == {20, 21}              # a 22-es nem őrzött senkit
+    assert pairs[20]["attacker"] == 1
+    assert abs(pairs[20]["avg_dist_m"] - 1.0) < 0.05
+    assert pairs[20]["share_pct"] == 100.0
+    assert pairs[21]["attacker"] == 2
+    assert abs(pairs[21]["avg_dist_m"] - 3.0) < 0.05
+    # A leglazább pár a 3 m-es őrzés.
+    assert res["away"]["loosest"]["defender"] == 21
+
+
+def test_marking_pairs_needs_min_frames():
+    """MARK_MIN_FRAMES-nél rövidebb együttállás nem lesz pár."""
+    from handball.models.tracking import Ball, Frame, Match
+    from handball.pipeline.defense import MARK_MIN_FRAMES, marking_pairs
+
+    frames = []
+    for t in range(MARK_MIN_FRAMES - 5):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 25.0, 10.0),
+            _pl(20, Team.AWAY, 25.0, 11.0)],
+            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+    res = marking_pairs(Match(_meta(), frames))
+    assert res["away"]["pairs"] == []

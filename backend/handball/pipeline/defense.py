@@ -419,3 +419,100 @@ def transition_recovery(match, config=None) -> dict:
                         if rec["transitions"] else None)
         rec["sum_s"] = round(rec["sum_s"], 1)
     return out
+
+
+# Őrzési párok: kockánként a labdás csapat mezőnyjátékosaihoz rendeljük a
+# legközelebbi védőt; MARK_MAX_DIST_M-en túl nem számít őrzésnek, a páros
+# pedig csak MARK_MIN_FRAMES kockától kerül a listába (1 mp @ 25 fps).
+MARK_MAX_DIST_M = 3.5
+MARK_MIN_FRAMES = 25
+MARK_LOOSE_M = 2.5
+
+
+def marking_pairs(match, config=None) -> dict:
+    """Őrzési párok: ki kit fogott a védekezésben.
+
+    Kockánként (amikor az ellenfélnél a labda) minden TÁMADÓ mezőny-
+    játékoshoz megkeressük a legközelebbi VÉDŐ mezőnyjátékost; ha
+    MARK_MAX_DIST_M-en belül van, a párost számoljuk és a távolságot
+    összegezzük. Védőnként a leggyakoribb "őrzöttje" adja a párt — így
+    látszik, ki kit fogott, és milyen szorosan.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal):
+      {"pairs": [{"defender", "defender_jersey", "attacker",
+                  "attacker_jersey", "frames", "share_pct",
+                  "avg_dist_m"}], "loosest": pár|None}
+    — share_pct: a védő őrzés-kockáinak hány %-a jutott erre a támadóra;
+    loosest: a legnagyobb átlagtávú pár (MARK_LOOSE_M felett laza őrzés).
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    jersey: dict[int, int] = {}
+    # (védő track, támadó track) → [kockák, táv-összeg], védőnként összes.
+    acc: dict[str, dict[tuple[int, int], list[float]]] = {
+        "home": {}, "away": {}}
+    def_frames: dict[str, dict[int, int]] = {"home": {}, "away": {}}
+
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        def_team = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        attackers = [p for p in f.players
+                     if p.team == holder.team and p.role != "kapus"]
+        defenders = [p for p in f.players
+                     if p.team == def_team and p.role != "kapus"]
+        if not attackers or not defenders:
+            continue
+        side = def_team.value
+        for a in attackers:
+            best = min(defenders,
+                       key=lambda d: math.hypot(d.x - a.x, d.y - a.y))
+            dist = math.hypot(best.x - a.x, best.y - a.y)
+            if dist > MARK_MAX_DIST_M:
+                continue
+            rec = acc[side].setdefault((best.track_id, a.track_id),
+                                       [0, 0.0])
+            rec[0] += 1
+            rec[1] += dist
+            def_frames[side][best.track_id] = (
+                def_frames[side].get(best.track_id, 0) + 1)
+
+    out = {}
+    for side in ("home", "away"):
+        # Védőnként a leggyakoribb őrzöttje adja a párt.
+        best_of: dict[int, tuple[tuple[int, int], list[float]]] = {}
+        for key, rec in acc[side].items():
+            cur = best_of.get(key[0])
+            if cur is None or rec[0] > cur[1][0]:
+                best_of[key[0]] = (key, rec)
+        pairs = []
+        for dt, (key, rec) in best_of.items():
+            if rec[0] < MARK_MIN_FRAMES:
+                continue
+            total = def_frames[side].get(dt, 0)
+            pairs.append({
+                "defender": dt,
+                "defender_jersey": jersey.get(dt),
+                "attacker": key[1],
+                "attacker_jersey": jersey.get(key[1]),
+                "frames": rec[0],
+                "share_pct": round(100.0 * rec[0] / total, 1)
+                if total else 0.0,
+                "avg_dist_m": round(rec[1] / rec[0], 2),
+            })
+        pairs.sort(key=lambda p_: -p_["frames"])
+        out[side] = {
+            "pairs": pairs,
+            "loosest": (max(pairs, key=lambda p_: p_["avg_dist_m"])
+                        if pairs else None),
+        }
+    return out
