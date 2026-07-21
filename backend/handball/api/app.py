@@ -1973,6 +1973,16 @@ def create_app():
                 pivot_away = pu_lib["away"]["pivot_share_pct"]
         except Exception:
             pass
+        pass_home = pass_away = None
+        try:
+            from ..pipeline.attack_types import pass_chains
+            pc_lib = pass_chains(m)
+            if pc_lib["home"]["attacks"] >= 5:
+                pass_home = pc_lib["home"]["avg_passes"]
+            if pc_lib["away"]["attacks"] >= 5:
+                pass_away = pc_lib["away"]["avg_passes"]
+        except Exception:
+            pass
         out = {
             "match_id": m.meta.match_id,
             "home_team": m.meta.home_team,
@@ -2006,6 +2016,8 @@ def create_app():
             "xg_saved_away": xg_saved_away,
             "pivot_share_home": pivot_home,
             "pivot_share_away": pivot_away,
+            "pass_avg_home": pass_home,
+            "pass_avg_away": pass_away,
         }
         _summary_cache[m.meta.match_id] = (key, out)
         return out
