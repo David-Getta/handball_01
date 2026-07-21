@@ -182,3 +182,26 @@ def test_rotation_depth_counts_used_and_regulars():
     labels = [p["label"] for p in rec["players"]]
     assert len(labels) == 2
     assert rec["players"][0]["share_pct"] == 100.0
+
+
+def test_rotation_depth_on_sliced_match_first_half_picture():
+    """A rész-meccsre (első félidő) számolt rotáció a félidei állapotot
+    adja: a csak a 2. félidőben beálló játékos nem szivárog vissza."""
+    from handball.pipeline.stats import rotation_depth
+
+    total = 200
+    frames = []
+    for t in range(total):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=5.0)]
+        if t >= 100:  # a 2-es csak a "második félidőben" áll be
+            players.append(PlayerPosition(track_id=2, team=Team.HOME,
+                                          x=22.0, y=8.0))
+        frames.append(Frame(t=t, players=players))
+    m = Match(meta=MatchMeta(match_id="rf", home_team="H",
+                             away_team="A", fps=25.0), frames=frames)
+    sub = Match(meta=m.meta, frames=[f for f in m.frames if f.t < 100])
+    fh = rotation_depth(sub)["home"]
+    assert fh["used"] == 1           # az első félidőben csak az 1-es
+    full = rotation_depth(m)["home"]
+    assert full["used"] == 2         # a teljes képben már ketten

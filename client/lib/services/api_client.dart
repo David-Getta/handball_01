@@ -350,6 +350,16 @@ class ApiClient {
     return out;
   }
 
+  /// Csapat-összegzés nyersen (GET /matches/{id}/team-stats) — az élő
+  /// nézet a félidei rotáció-képet (rotation_fh) olvassa belőle.
+  Future<Map<String, dynamic>> fetchTeamStats(String matchId) async {
+    final resp = await http
+        .get(Uri.parse("$baseUrl/matches/$matchId/team-stats"))
+        .timeout(const Duration(seconds: 8));
+    if (resp.statusCode != 200) return const {};
+    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+  }
+
   /// Lövés-sebességek (GET /matches/{id}/events → "shot_speeds"):
   /// csapatonkénti átlag/max km/h + a meccs leggyorsabb lövése.
   Future<Map<String, dynamic>> fetchShotSpeeds(String matchId) async {
