@@ -514,6 +514,29 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
     return {"title": "Játékkép és tempó", "body": body + poss_line + pass_line}
 
 
+def _rotation_sentence(match: Match, home: str, away: str) -> str:
+    """Rotáció-mélység mondat: szűk vagy széles paddal ment-e a meccs."""
+    out = ""
+    try:
+        from .stats import rotation_depth
+        rd = rotation_depth(match)
+        for side, name in (("home", home), ("away", away)):
+            rec = rd[side]
+            if rec["used"] < 6:
+                continue
+            if rec["used"] <= 8:
+                out += (f" A(z) {name} szűk rotációval játszott "
+                        f"({rec['used']} bevetett játékos, "
+                        f"{rec['regulars']} alapember) — a hajrában "
+                        "fáradás jöhet.")
+            elif rec["used"] >= 11:
+                out += (f" A(z) {name} széles paddal forgatott "
+                        f"({rec['used']} bevetett játékos).")
+    except Exception:
+        pass
+    return out
+
+
 def _intensity_section(match: Match, home: str, away: str) -> tuple[dict | None, list[str]]:
     """Kezdés vs hajrá: az első és utolsó harmad átlag-intenzitása csapatonként."""
     windows = compute_intensity_timeline(match)
@@ -548,6 +571,7 @@ def _intensity_section(match: Match, home: str, away: str) -> tuple[dict | None,
     if not parts:
         return None, highlights
     body = "Kezdés és hajrá összevetése: " + "; ".join(parts) + "."
+    body += _rotation_sentence(match, home, away)
     return {"title": "Intenzitás", "body": body}, highlights
 
 

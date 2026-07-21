@@ -1388,6 +1388,20 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _bl_txt("home"), _bl_txt("away")))
         except Exception:
             pass
+        # Rotáció sora: bevetett játékosok (alapemberek) csapatonként.
+        try:
+            from .stats import rotation_depth
+            _rd = rotation_depth(match)
+            if any(_rd[s_]["used"] >= 6 for s_ in ("home", "away")):
+                def _rd_txt(side):
+                    r = _rd[side]
+                    if r["used"] < 6:
+                        return "—"
+                    return f'{r["used"]} ({r["regulars"]} alapember)'
+                rows.append(("Bevetett játékos",
+                             _rd_txt("home"), _rd_txt("away")))
+        except Exception:
+            pass
         # Passz-lánc sora: átlagos passz-szám támadásonként.
         try:
             from .attack_types import pass_chains
