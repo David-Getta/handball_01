@@ -1279,6 +1279,72 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                                      + escape(" · ".join(tops)) + "</p>")
             except Exception:
                 pass
+        # Egyéni védekezés: blokk + labdaszerzés + őrzés egy táblában
+        # — ki mennyit tett hozzá a védekezéshez, játékosonként.
+        try:
+            from .defense import ball_winners, detect_blocks, marking_pairs
+            blk_pd = detect_blocks(match)
+            bw_pd = ball_winners(match)
+            mk_pd = marking_pairs(match)
+            fps_pd = match.meta.fps if match.meta.fps > 0 else 25.0
+            jersey_pd: dict = {}
+            for fr_ in match.frames:
+                for p_ in fr_.players:
+                    if (p_.jersey_number is not None
+                            and p_.track_id not in jersey_pd):
+                        jersey_pd[p_.track_id] = p_.jersey_number
+            pd_rows = []
+            for side, name in (("home", home), ("away", away)):
+                acc_pd: dict = {}
+
+                def _rec(tid):
+                    return acc_pd.setdefault(
+                        tid, {"blocks": 0, "steals": 0,
+                              "mark_s": 0.0, "mark_d": None})
+                for e_ in blk_pd[side].get("events", []):
+                    if e_.get("player_id") is not None:
+                        _rec(e_["player_id"])["blocks"] += 1
+                for w_ in bw_pd[side]["players"]:
+                    _rec(w_["player_id"])["steals"] += w_["steals"]
+                for d_ in mk_pd[side]["defenders"]:
+                    r_ = _rec(d_["defender"])
+                    r_["mark_s"] += d_["frames"] / fps_pd
+                    r_["mark_d"] = d_["avg_dist_m"]
+                ranked = sorted(
+                    acc_pd.items(),
+                    key=lambda kv: -(kv[1]["blocks"] * 2
+                                     + kv[1]["steals"] * 2
+                                     + kv[1]["mark_s"] / 60.0))[:4]
+                for tid, r_ in ranked:
+                    if (not r_["blocks"] and not r_["steals"]
+                            and r_["mark_s"] < 10.0):
+                        continue
+                    j_ = jersey_pd.get(tid)
+                    lab_ = (f"{j_}-es" if j_ is not None
+                            else f"{tid}. játékos")
+                    mark_c = (f'{r_["mark_s"]:.0f} mp'
+                              + (f' · {r_["mark_d"]:.1f} m'
+                                 if r_["mark_d"] is not None else "")
+                              if r_["mark_s"] >= 10.0 else "—")
+                    pd_rows.append(
+                        f"<tr><td>{escape(name)}</td>"
+                        f"<td>{escape(lab_)}</td>"
+                        f'<td class="num">{r_["blocks"] or "—"}</td>'
+                        f'<td class="num">{r_["steals"] or "—"}</td>'
+                        f'<td class="num">{mark_c}</td></tr>')
+            if pd_rows:
+                defense_html += (
+                    "<h2>Egyéni védekezés</h2>"
+                    "<table><tr><th>Csapat</th><th>Játékos</th>"
+                    '<th class="num">Blokk</th>'
+                    '<th class="num">Labdaszerzés</th>'
+                    '<th class="num">Őrzés (idő · átl. táv)</th></tr>'
+                    + "".join(pd_rows) + "</table>"
+                    + '<p class="note">A védekezés három egyéni jele '
+                      'egy helyen: blokk, labdaszerzés és emberfogás. '
+                      'Csapatonként a legaktívabb négy védő.</p>')
+        except Exception:
+            pass
         # Őrzési párok: ki kit fogott, milyen szorosan (védőnként a
         # leggyakoribb őrzött, max 4 pár csapatonként) — akkor is van
         # értelme, ha kapott lövésből kevés volt.
