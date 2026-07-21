@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#482)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#489)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -212,6 +212,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   másodikra") (#480).
 - **Hazai vs idegen**: a szezon-riport pályaválasztás szerinti
   mérleg-táblát kap (meccsek, Gy/D/V, gólok). (#481)
+- **Labdaszerzők**: új réteg — csapatváltásos birtokos-váltásnál az új
+  birtokos kapja a jóváírást; API, csomag, összefoglaló-mondat,
+  játékos-lap metrika (#483), felderítés-profil + "rövid, biztos
+  passz" kulcs + csempe + szerzés-klipek (#484).
+- **Egyéni védekezés egy helyen**: blokk + labdaszerzés + emberfogás
+  közös táblában a jelentésben (a legaktívabb négy védő, #485) és
+  kivonat-kártyán az appban (#486).
+- **Szezon-toplisták**: gólkirály / védés-vezér / fal kulcsa /
+  labdaszerző a teljes könyvtárból, mezszám-alapú összegzéssel — új
+  /library/leaders végpont + dashboard-kártya (#487), és a csapatra
+  szűrve "A szezon játékosai" szakasz a szezon-riportban (#488).
 - **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
   kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
   csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
