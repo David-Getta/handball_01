@@ -312,3 +312,23 @@ def test_player_season_html_marking_column():
     pts2 = [dict(p, mark_s=None, mark_dist=None) for p in pts]
     html2 = player_season_html("Mi", 4, pts2)
     assert "Őrzés" not in html2
+
+
+def test_h2h_report_html_scorers_section():
+    """A Ki viszi a meccseket szakasz a megadott gólfelelősöket hozza;
+    scorers nélkül a szakasz elmarad."""
+    from handball.pipeline.report_html import h2h_report_html
+    stats = {"matches": 2, "wins_a": 1, "draws": 0, "wins_b": 1,
+             "goals_a": 5, "goals_b": 4}
+    timeline = [{"date": "2026-01-10", "score": "3–2",
+                 "headline": "Szoros meccs."}]
+    html = h2h_report_html(
+        "Mi", "Ok", stats, timeline,
+        scorers={"Mi": [{"jersey": 7, "goals": 5}],
+                 "Ok": [{"jersey": 9, "goals": 4},
+                        {"jersey": 3, "goals": 2}]})
+    assert "Ki viszi a meccseket" in html
+    assert "#7 (5 gól)" in html
+    assert "#9 (4 gól) · #3 (2 gól)" in html
+    html2 = h2h_report_html("Mi", "Ok", stats, timeline)
+    assert "Ki viszi a meccseket" not in html2
