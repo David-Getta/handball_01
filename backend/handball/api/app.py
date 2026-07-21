@@ -1736,6 +1736,46 @@ def create_app():
                 "score": f"{g_a} – {g_b}",
                 "headline": summ_.get("headline"),
             })
+        # Ki viszi a meccseket: a közös meccsek gólfelelősei
+        # csapatonként (mezszám-alapú összegzés) — hibatűrően.
+        scorers = None
+        try:
+            sc_acc: dict = {}
+            for date_, m_ in entries:
+                jersey_of: dict = {}
+                team_of: dict = {}
+                for fr in m_.frames:
+                    for p in fr.players:
+                        if p.jersey_number is not None:
+                            jersey_of.setdefault(p.track_id,
+                                                 p.jersey_number)
+                        team_of.setdefault(
+                            p.track_id, getattr(p.team, "value", p.team))
+                tn_ = {"home": m_.meta.home_team,
+                       "away": m_.meta.away_team}
+                from ..pipeline.xg import match_xg
+                for r_ in match_xg(m_).get("shooters", []):
+                    if not r_["goals"]:
+                        continue
+                    j_ = jersey_of.get(r_["player_id"])
+                    t_ = tn_.get(team_of.get(r_["player_id"]))
+                    if j_ is None or not t_:
+                        continue
+                    sc_acc[(t_, j_)] = (sc_acc.get((t_, j_), 0)
+                                        + r_["goals"])
+            if sc_acc:
+                scorers = {}
+                for tname in (team_a, team_b):
+                    rows_sc = sorted(
+                        ((j, n) for (t_, j), n in sc_acc.items()
+                         if t_ == tname), key=lambda kv: -kv[1])[:3]
+                    if rows_sc:
+                        scorers[tname] = [
+                            {"jersey": j, "goals": n}
+                            for j, n in rows_sc]
+                scorers = scorers or None
+        except Exception:
+            scorers = None
         # Meccsterv a visszavágóra: a LEGUTÓBBI közös meccs profiljai
         # keresztezve, az A csapat szemszögéből — hibatűrően.
         matchup = None
@@ -1752,7 +1792,8 @@ def create_app():
             matchup = None
         from ..pipeline.report_html import h2h_report_html
         return HTMLResponse(content=h2h_report_html(
-            team_a, team_b, stats, timeline, matchup=matchup))
+            team_a, team_b, stats, timeline, matchup=matchup,
+            scorers=scorers))
 
     @app.get("/season/report")
     def get_season_report(team: str):

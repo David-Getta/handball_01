@@ -2926,7 +2926,8 @@ legalább két meccsen előjött — nem egyszeri kisiklás.</footer>
 
 def h2h_report_html(team_a: str, team_b: str, stats: dict,
                     timeline: list[dict],
-                    matchup: list[str] | None = None) -> str:
+                    matchup: list[str] | None = None,
+                    scorers: dict | None = None) -> str:
     """Egymás ellen: a két csapat egymás elleni mérlege a könyvtárból
     — győzelmi mérleg, gól-mérleg és meccs-lista főcímekkel.
     """
@@ -2935,6 +2936,19 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
         f'<td class="num">{escape(str(e.get("score") or ""))}</td>'
         f"<td>{escape(str(e.get('headline') or '—'))}</td></tr>"
         for e in timeline)
+    scorers_html = ""
+    if scorers:
+        sc_rows = []
+        for tname, rows_sc in scorers.items():
+            names_sc = " · ".join(
+                f'#{e["jersey"]} ({e["goals"]} gól)' for e in rows_sc)
+            sc_rows.append(f"<tr><td>{escape(str(tname))}</td>"
+                           f"<td>{escape(names_sc)}</td></tr>")
+        scorers_html = (
+            "<h2>Ki viszi a meccseket (a közös meccsek "
+            "gólfelelősei)</h2>"
+            "<table><tr><th>Csapat</th><th>Top gólszerzők</th></tr>"
+            + "".join(sc_rows) + "</table>")
     matchup_html = ""
     if matchup:
         items = "".join(f"<li>{escape(p_)}</li>" for p_ in matchup)
@@ -2993,6 +3007,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 <h2>Meccsről meccsre</h2>
 <table><tr><th>Dátum</th><th class="num">Eredmény</th>
 <th>Mi történt</th></tr>{rows}</table>
+{scorers_html}
 {matchup_html}
 <footer>A visszavágó-készüléshez: a legutóbbi meccs csomagjában ott a
 meccsterv.txt, a felderítő képernyőn pedig a több-meccses
