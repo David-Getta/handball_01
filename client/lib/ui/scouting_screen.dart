@@ -696,6 +696,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${top.key} · ${share.toStringAsFixed(0)}%";
   }
 
+  // Passz-lánc: átlagos passz-szám + a legjobb gólarányú lánc-hossz
+  // (6+ támadásból; a backend-kulcsokkal azonos küszöbök).
+  String? _passChain(Map<String, dynamic> r) {
+    final attacks = ((r["pass_attacks"] as num?) ?? 0).toInt();
+    final total = ((r["pass_total"] as num?) ?? 0).toInt();
+    if (attacks < 6) return null;
+    var txt = "átl. ${(total / attacks).toStringAsFixed(1)} passz";
+    final buckets = (r["pass_buckets"] as Map?)?.cast<String, dynamic>();
+    String? bestLab;
+    double bestPct = 0;
+    for (final e in (buckets ?? const {}).entries) {
+      final m = (e.value as Map).cast<String, dynamic>();
+      final a = ((m["attacks"] as num?) ?? 0).toInt();
+      final g = ((m["goals"] as num?) ?? 0).toInt();
+      if (a < 4 || g == 0) continue;
+      final pct = 100.0 * g / a;
+      if (bestLab == null || pct > bestPct) {
+        bestLab = e.key;
+        bestPct = pct;
+      }
+    }
+    if (bestLab != null && bestPct >= 40.0) {
+      txt += " · top: $bestLab";
+    }
+    return txt;
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -919,6 +946,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Tapadó emberfogó", _tightMarker(r)!],
       if (_pivotUsage(r) != null) ["Beálló-terhelés", _pivotUsage(r)!],
       if (_breakLane(r) != null) ["Betörés-sáv", _breakLane(r)!],
+      if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

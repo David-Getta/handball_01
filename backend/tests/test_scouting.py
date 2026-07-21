@@ -2141,3 +2141,34 @@ def test_break_lanes_merge_keys_and_rule16():
                            defensive_pressure_m=1.2)
     assert not any("lépj ki korábban" in p_
                    for p_ in matchup_plan(tight, comb))
+
+
+def test_pass_chain_merge_keys_and_rule17():
+    """A passz-vödrök meccsek közt összegződnek; a gyors első hullám
+    kulcsa és a 17. szabály (villámtámadás × gyenge visszazárás) a
+    küszöbökhöz kötött."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan)
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        pass_attacks=5, pass_total=8,
+                        pass_buckets={"0–2 passz": {"attacks": 3,
+                                                    "goals": 2}})
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        pass_attacks=5, pass_total=10,
+                        pass_buckets={"0–2 passz": {"attacks": 2,
+                                                    "goals": 1},
+                                      "6+ passz": {"attacks": 3,
+                                                   "goals": 0}})
+    comb = combine_reports([r1, r2])
+    assert comb.pass_attacks == 10 and comb.pass_total == 18
+    assert comb.pass_buckets["0–2 passz"] == {"attacks": 5, "goals": 3}
+    _, _, keys = _coach_keys(comb)
+    assert any("gyors első hullámból élnek" in k for k in keys)
+    own = ScoutingReport(team="home", team_name="Mi",
+                         transition_goals_against=2)
+    plan = matchup_plan(own, comb)
+    assert any("villámtámadásból" in p_ for p_ in plan)
+    # Jó visszazárásnál a 17. szabály hallgat.
+    ok_def = ScoutingReport(team="home", team_name="Mi")
+    assert not any("villámtámadásból" in p_
+                   for p_ in matchup_plan(ok_def, comb))
