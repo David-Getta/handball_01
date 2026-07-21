@@ -249,3 +249,21 @@ def test_player_season_html_goalkeeper_columns():
                      "gk_saves": None, "gk_prevented": None}]
     html2 = player_season_html("Mi", 7, field_points)
     assert "Védés összesen" not in html2 and "GSAx" not in html2
+
+
+def test_h2h_report_html_matchup_section():
+    """Az egymás elleni riportban a meccsterv-szakasz csak akkor jelenik
+    meg, ha van kereszt-szabályból jött javaslat; ilyenkor a listát is
+    kirajzolja A csapat szemszögéből."""
+    from handball.pipeline.report_html import h2h_report_html
+    stats = {"matches": 2, "wins_a": 1, "draws": 0, "wins_b": 1,
+             "goals_a": 5, "goals_b": 4}
+    timeline = [{"date": "2026-01-10", "score": "3–2",
+                 "headline": "Szoros meccs."}]
+    html = h2h_report_html("Mi", "Ok", stats, timeline,
+                           matchup=["Támadd a szélső védőt."])
+    assert "Meccsterv a visszavágóra" in html
+    assert "Mi szemszögéből" in html
+    assert "Támadd a szélső védőt." in html
+    html2 = h2h_report_html("Mi", "Ok", stats, timeline)
+    assert "Meccsterv a visszavágóra" not in html2
