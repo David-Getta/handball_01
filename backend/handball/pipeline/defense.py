@@ -427,6 +427,7 @@ def transition_recovery(match, config=None) -> dict:
 MARK_MAX_DIST_M = 3.5
 MARK_MIN_FRAMES = 25
 MARK_LOOSE_M = 2.5
+MARK_TIGHT_M = 1.5
 
 
 def marking_pairs(match, config=None) -> dict:
