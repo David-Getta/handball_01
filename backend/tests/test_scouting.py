@@ -2111,3 +2111,33 @@ def test_trend_includes_pivot_metric():
     row = next(r_ for r_ in tr["metrics"]
                if r_["label"] == "Beállós támadás / meccs")
     assert row["older"] == 2.0 and row["newer"] == 4.0
+
+
+def test_break_lanes_merge_keys_and_rule16():
+    """A betörés-sávok meccsek közt összegződnek; a kulcs 40%+
+    koncentrációnál, a 16. szabály laza fallal párosítva szól."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan)
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        break_entries=4,
+                        break_lanes={"közép": {"entries": 3, "goals": 1},
+                                     "bal szél": {"entries": 1,
+                                                  "goals": 0}})
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        break_entries=4,
+                        break_lanes={"közép": {"entries": 3,
+                                               "goals": 2}})
+    comb = combine_reports([r1, r2])
+    assert comb.break_entries == 8
+    assert comb.break_lanes["közép"] == {"entries": 6, "goals": 3}
+    _, _, keys = _coach_keys(comb)
+    assert any("közép sávban jön" in k for k in keys)
+    own = ScoutingReport(team="home", team_name="Mi",
+                         defensive_pressure_m=2.4)
+    plan = matchup_plan(own, comb)
+    assert any("lépj ki korábban" in p_ for p_ in plan)
+    # Szoros fallal a 16. szabály hallgat.
+    tight = ScoutingReport(team="home", team_name="Mi",
+                           defensive_pressure_m=1.2)
+    assert not any("lépj ki korábban" in p_
+                   for p_ in matchup_plan(tight, comb))
