@@ -105,3 +105,20 @@ def test_summary_includes_trend_fields():
         assert k in d
     if d["xg_home"] is not None:
         assert d["xg_home"] >= 0 and d["xg_away"] >= 0
+
+
+def test_library_leaders_endpoint():
+    """A szezon-toplisták végpont mezszám alapján összegez a teljes
+    könyvtárból; minden kategória lista, value szerint csökkenő."""
+    client, ids = _client_with_matches(2)
+    r = client.get("/library/leaders")
+    assert r.status_code == 200
+    data = r.json()
+    for key in ("goals", "blocks", "steals", "saves"):
+        assert key in data and isinstance(data[key], list)
+        vals = [e["value"] for e in data[key]]
+        assert vals == sorted(vals, reverse=True)
+        for e in data[key]:
+            assert e["team"] and isinstance(e["jersey"], int)
+            assert e["value"] >= 1
+        assert len(data[key]) <= 5

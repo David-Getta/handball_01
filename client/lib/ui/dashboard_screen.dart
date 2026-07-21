@@ -38,6 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Szezon-összkép (GET /library/summary) — hibánál null, a kártyák a
   // helyi számokra esnek vissza. Meccsenkénti kivonat id szerint.
   Map<String, dynamic>? _summary;
+  Map<String, dynamic>? _leaders;
   Map<String, Map<String, dynamic>> _perMatch = {};
   // Visszatérő edzés-fókuszok csapatonként (a könyvtár-összesítésből).
   Map<String, dynamic> _seasonFocus = {};
@@ -441,6 +442,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() {
         _summary = s;
+        // Toplisták külön, nem blokkolóan.
+        _api.fetchLibraryLeaders().then((r) {
+          if (mounted && r.isNotEmpty) setState(() => _leaders = r);
+        }).catchError((_) {});
         // Szezon-fókusz külön, nem blokkolóan (nagy könyvtárnál lassabb).
         _api.fetchLibraryTrainingFocus().then((r) {
           if (mounted) {
@@ -1409,6 +1414,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Szezon-trend: helyzetminőség (xG) meccsről meccsre — látszik,
             // merre tart a csapat (legalább 2 xG-s meccsből rajzolódik ki).
             ..._seasonTrend(),
+            ..._leadersCard(),
             // Visszatérő gyengeségek: ami több meccsen is előjött.
             ..._seasonFocusCard(),
             // Folyamatban lévő feldolgozások (sor): élő állapot + megszakítás.
@@ -1867,6 +1873,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ],
     );
+  }
+
+  /// Szezon-toplisták kártya: gól/blokk/szerzés/védés vezérei a teljes
+  /// könyvtárból (top 3 kategóriánként; üres könyvtárnál nincs kártya).
+  List<Widget> _leadersCard() {
+    final l = _leaders;
+    if (l == null) return const [];
+    final cats = [
+      ("goals", "Gólkirály", "gól"),
+      ("saves", "Védés-vezér", "védés"),
+      ("blocks", "Fal kulcsa", "blokk"),
+      ("steals", "Labdaszerző", "szerzés"),
+    ];
+    final blocksW = <Widget>[];
+    for (final (key, title, unit) in cats) {
+      final rows = ((l[key] as List?) ?? const [])
+          .cast<Map<String, dynamic>>();
+      if (rows.isEmpty) continue;
+      blocksW.add(Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title.toUpperCase(),
+                style: AppText.label
+                    .copyWith(fontSize: 10.5, letterSpacing: 0.6)),
+            const SizedBox(height: 6),
+            for (final r in rows.take(3))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                    "${r["team"]} #${r["jersey"]} — ${r["value"]} $unit",
+                    style: AppText.label.copyWith(fontSize: 12)),
+              ),
+          ],
+        ),
+      ));
+    }
+    if (blocksW.isEmpty) return const [];
+    return [
+      const SizedBox(height: AppSpacing.xl),
+      Container(
+        decoration: AppTheme.card(),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("SZEZON-TOPLISTÁK",
+                style: AppText.label
+                    .copyWith(fontSize: 11, letterSpacing: 0.6)),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < blocksW.length; i++) ...[
+                  if (i > 0) const SizedBox(width: AppSpacing.lg),
+                  blocksW[i],
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 
   /// Szezon-trend kártya: meccsenkénti xG-oszloppár (hazai/vendég) idő-
