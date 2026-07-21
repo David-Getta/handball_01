@@ -2176,6 +2176,11 @@ def create_app():
             res["pressure_finishing"] = pressure_finishing(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.defense import marking_pairs
+            res["marking"] = marking_pairs(match)
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/playmaker")

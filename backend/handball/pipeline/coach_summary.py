@@ -274,6 +274,36 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                 parts.append(sent)
     except Exception:
         pass
+    # Őrzési párok: a legstabilabb pár + a laza őrzés figyelmeztetése.
+    try:
+        from .defense import MARK_LOOSE_M, marking_pairs
+        mk = marking_pairs(match)
+
+        def _mklab(jersey_no, track_id):
+            return (f"{jersey_no}-es" if jersey_no is not None
+                    else f"{track_id}. játékos")
+
+        for side, name in (("home", home), ("away", away)):
+            pairs = mk[side]["pairs"]
+            if not pairs:
+                continue
+            top = pairs[0]
+            parts.append(
+                f"a(z) {name} legstabilabb őrzési párja: a(z) "
+                f"{_mklab(top['defender_jersey'], top['defender'])} fogta "
+                f"a(z) {_mklab(top['attacker_jersey'], top['attacker'])} "
+                f"támadót ({top['share_pct']:.0f}%, átlag "
+                f"{top['avg_dist_m']:.1f} m)")
+            lo = mk[side]["loosest"]
+            if lo and lo["avg_dist_m"] >= MARK_LOOSE_M:
+                highlights.append(
+                    f"{name}: a(z) "
+                    f"{_mklab(lo['defender_jersey'], lo['defender'])} átlag "
+                    f"{lo['avg_dist_m']:.1f} m-ről őrizte a(z) "
+                    f"{_mklab(lo['attacker_jersey'], lo['attacker'])} "
+                    "támadót — laza őrzés, érdemes visszanézni.")
+    except Exception:
+        pass
     # Labdaeladás helye: sok elöl (támadó harmadban) vesztett labda könnyű
     # kontrát ad az ellenfélnek.
     try:

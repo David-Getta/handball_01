@@ -1259,6 +1259,42 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                                      + escape(" · ".join(tops)) + "</p>")
             except Exception:
                 pass
+        # Őrzési párok: ki kit fogott, milyen szorosan (védőnként a
+        # leggyakoribb őrzött, max 4 pár csapatonként) — akkor is van
+        # értelme, ha kapott lövésből kevés volt.
+        try:
+            from .defense import marking_pairs
+            mk = marking_pairs(match)
+            mrows = []
+            for side, name in (("home", home), ("away", away)):
+                for pr_ in mk[side]["pairs"][:4]:
+                    dj = pr_["defender_jersey"]
+                    aj = pr_["attacker_jersey"]
+                    dlab = (f"{dj}-es" if dj is not None
+                            else f"{pr_['defender']}. játékos")
+                    alab = (f"{aj}-es" if aj is not None
+                            else f"{pr_['attacker']}. játékos")
+                    mrows.append(
+                        f"<tr><td>{escape(name)}</td>"
+                        f"<td>{escape(dlab)}</td>"
+                        f"<td>{escape(alab)}</td>"
+                        f'<td class="num">{pr_["share_pct"]:.0f}%</td>'
+                        f'<td class="num">{pr_["avg_dist_m"]:.1f} m'
+                        "</td></tr>")
+            if mrows:
+                defense_html += (
+                    "<h2>Őrzési párok (ki kit fogott)</h2>"
+                    "<table><tr><th>Védekező csapat</th><th>Védő</th>"
+                    "<th>Őrzött támadó</th>"
+                    '<th class="num">Idő-arány</th>'
+                    '<th class="num">Átl. táv</th></tr>'
+                    + "".join(mrows) + "</table>"
+                    + '<p class="note">Idő-arány: a védő őrzés-'
+                      'idejének hány %-a jutott erre a támadóra; '
+                      'átl. táv: átlagosan milyen messze állt tőle. '
+                      '2,5 m felett laza az őrzés.</p>')
+        except Exception:
+            pass
     except Exception:
         pass  # a jelentés e blokk nélkül is teljes
 
