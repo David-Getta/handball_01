@@ -151,3 +151,34 @@ def test_aggregate_same_jersey_different_teams_stay_separate():
     rows = aggregate_by_jersey(stats, {1: "home", 2: "away"},
                                {1: 23, 2: 23}, fps=25.0)
     assert len(rows) == 2
+
+
+def test_rotation_depth_counts_used_and_regulars():
+    """A rotáció-mélység a jelenlét-arányból számol: a végig pályán
+    lévő alapember, a fél-időt játszó bevetett, a beugró (10% alatt)
+    és a kapus nem számít."""
+    from handball.pipeline.stats import rotation_depth
+
+    total = 200
+    frames = []
+    for t in range(total):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=5.0),
+            PlayerPosition(track_id=99, team=Team.HOME, x=1.0, y=10.0,
+                           role="kapus"),
+        ]
+        if t < 60:  # a 2-es a meccs 30%-án van a pályán → bevetett
+            players.append(PlayerPosition(track_id=2, team=Team.HOME,
+                                          x=22.0, y=8.0))
+        if t < 10:  # a 3-as csak beugró (5%) → nem számít
+            players.append(PlayerPosition(track_id=3, team=Team.HOME,
+                                          x=24.0, y=12.0))
+        frames.append(Frame(t=t, players=players))
+    m = Match(meta=MatchMeta(match_id="r", home_team="H",
+                             away_team="A", fps=25.0), frames=frames)
+    rec = rotation_depth(m)["home"]
+    assert rec["used"] == 2          # 1-es + 2-es (kapus és beugró nem)
+    assert rec["regulars"] == 1      # csak az 1-es alapember
+    labels = [p["label"] for p in rec["players"]]
+    assert len(labels) == 2
+    assert rec["players"][0]["share_pct"] == 100.0

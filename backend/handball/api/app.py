@@ -2194,6 +2194,7 @@ def create_app():
             res["pass_chains"] = pass_chains(match)
         except Exception:
             pass
+
         try:
             # Félidei beálló-kép: az élő nézet a szünetben ebből ad
             # "keresd a beadást" jelzést — csak az első félidő
@@ -2478,6 +2479,8 @@ def create_app():
                        lambda: breakthrough_lanes(match))
                 from ..pipeline.attack_types import pass_chains
                 _layer("pass_chains", lambda: pass_chains(match))
+                from ..pipeline.stats import rotation_depth
+                _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.tactics import attack_sides
                 _layer("attack_sides", lambda: attack_sides(match))
                 from ..pipeline.tactics import efficiency_vs_formation
@@ -2794,6 +2797,11 @@ def create_app():
         try:
             from ..pipeline.stats import player_fatigue
             out["player_fatigue"] = player_fatigue(match)
+        except Exception:
+            pass
+        try:
+            from ..pipeline.stats import rotation_depth
+            out["rotation"] = rotation_depth(match)
         except Exception:
             pass
         return out

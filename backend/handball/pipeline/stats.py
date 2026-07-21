@@ -433,3 +433,72 @@ def possession_share(match: Match, config=None) -> dict:
         "contested_pct": round(100.0 * neither / total, 1) if total else 0.0,
     }
     return out
+
+
+# Rotáció-mélység: e felett a jelenlét-arány felett számít "alapembernek"
+# egy játékos, e felett a minimális arány felett "bevetettnek".
+ROTATION_REGULAR_SHARE = 0.5
+ROTATION_USED_SHARE = 0.1
+
+
+def rotation_depth(match, config=None) -> dict:
+    """Rotáció-mélység: hány emberrel játssza a csapat a meccset.
+
+    A mezszám szerint összevont jelenlét-időkből (mért kockák) számol:
+    bevetett = a meccs legalább 10%-án a pályán; alapember = legalább
+    50%-án. A kapus kimarad (az ő ideje nem rotáció-kérdés). Szűk pad
+    (kevés bevetett játékos) fáradáshoz vezet a hajrában — a felderítés
+    és a meccsterv erre építhet.
+
+    Visszatérés csapatonként:
+      {"used", "regulars", "avg_minutes", "players":
+       [{"label", "minutes", "share_pct"}]} — avg_minutes a bevetettek
+    átlagos játékperce; players a bevetettek, idő szerint csökkenően.
+    """
+    from ..models.tracking import Team
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total = len(match.frames)
+    if total == 0:
+        return {side: {"used": 0, "regulars": 0, "avg_minutes": None,
+                       "players": []} for side in ("home", "away")}
+    stats = compute_player_stats(match)
+    team_of: dict = {}
+    jersey_of: dict = {}
+    gk_tracks: set = set()
+    for fr in match.frames:
+        for p in fr.players:
+            team_of.setdefault(p.track_id,
+                               getattr(p.team, "value", p.team))
+            if p.jersey_number is not None:
+                jersey_of.setdefault(p.track_id, p.jersey_number)
+            if p.role == "kapus":
+                gk_tracks.add(p.track_id)
+
+    out = {side: {"used": 0, "regulars": 0, "avg_minutes": None,
+                  "players": []} for side in ("home", "away")}
+    for g in aggregate_by_jersey(stats, team_of, jersey_of, fps=fps):
+        if any(t in gk_tracks for t in g["track_ids"]):
+            continue
+        side = g["team"]
+        if side not in out:
+            continue
+        share = g["measured_frames"] / total
+        if share < ROTATION_USED_SHARE:
+            continue
+        rec = out[side]
+        rec["used"] += 1
+        if share >= ROTATION_REGULAR_SHARE:
+            rec["regulars"] += 1
+        rec["players"].append({
+            "label": g["label"],
+            "minutes": round(g["measured_frames"] / fps / 60.0, 1),
+            "share_pct": round(100.0 * share, 1),
+        })
+    for rec in out.values():
+        rec["players"].sort(key=lambda p_: -p_["minutes"])
+        if rec["used"]:
+            rec["avg_minutes"] = round(
+                sum(p_["minutes"] for p_ in rec["players"])
+                / rec["used"], 1)
+    return out
