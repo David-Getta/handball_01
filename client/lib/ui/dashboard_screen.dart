@@ -1281,6 +1281,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   icon: const Icon(Icons.timeline, color: AppColors.textSecondary),
                   tooltip: "Játékos-fejlődés (mezszám alapján)",
                 ),
+                // Egymás ellen: két csapat közös meccseinek riportja.
+                IconButton(
+                  onPressed: _saveHeadToHead,
+                  icon: const Icon(Icons.compare_arrows,
+                      color: AppColors.textSecondary),
+                  tooltip: "Egymás ellen riport (két csapat)",
+                ),
                 // Szezon-riport: csapat-választás után nyomtatható HTML.
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.assessment_outlined,
@@ -2007,6 +2014,94 @@ szabad lövőt enged: "
         ],
       ),
     );
+  }
+
+  /// Egymás ellen riport: két csapat kiválasztása, letöltés, mentés.
+  Future<void> _saveHeadToHead() async {
+    final teams = <String>{
+      for (final m in _matches) ...[
+        if (m["home_team"] != null) m["home_team"] as String,
+        if (m["away_team"] != null) m["away_team"] as String,
+      ]
+    }.toList()
+      ..sort();
+    if (teams.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Legalább két csapat kell a könyvtárban.")));
+      return;
+    }
+    String? a = teams.first;
+    String? b = teams.length > 1 ? teams[1] : null;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDlg) {
+        DropdownButtonFormField<String> picker(
+                String label, String? value,
+                void Function(String?) onChanged, {String? exclude}) =>
+            DropdownButtonFormField<String>(
+              initialValue: value,
+              decoration: InputDecoration(labelText: label),
+              dropdownColor: AppColors.surfaceAlt,
+              items: [
+                for (final t in teams)
+                  if (t != exclude)
+                    DropdownMenuItem(value: t, child: Text(t)),
+              ],
+              onChanged: (v) => setDlg(() => onChanged(v)),
+            );
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text("Egymás ellen riport"),
+          content: SizedBox(
+            width: 420,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              picker("Csapat (a mérleg szemszöge)", a,
+                  (v) => a = v, exclude: b),
+              const SizedBox(height: AppSpacing.md),
+              picker("Ellenfél", b, (v) => b = v, exclude: a),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Mégse")),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent),
+              onPressed: (a == null || b == null)
+                  ? null
+                  : () => Navigator.pop(ctx, true),
+              child: const Text("Riport"),
+            ),
+          ],
+        );
+      }),
+    );
+    if (ok != true || a == null || b == null || !mounted) return;
+    try {
+      final bytes = await _api.fetchHeadToHead(a!, b!);
+      if (!mounted) return;
+      final safe = "${a}_vs_$b".replaceAll(
+          RegExp(r"[^\wáéíóöőúüűÁÉÍÓÖŐÚÜŰ-]+"), "_");
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: "Egymás ellen riport mentése (HTML)",
+        fileName: "egymas_ellen_$safe.html",
+        type: FileType.custom,
+        allowedExtensions: const ["html"],
+      );
+      if (path == null) return;
+      await File(path).writeAsBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Riport mentve: $path — böngészőből "
+              "nyomtatható")));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Egymás ellen hiba: $e — csak közös meccsel "
+              "rendelkező pároshoz készül riport")));
+    }
   }
 
   /// Szezon-riport letöltése és mentése a választott csapatra.
