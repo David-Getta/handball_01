@@ -588,3 +588,37 @@ def test_wing_finishing_counts_sharp_angle_only():
     assert wf["home"]["goal_pct"] == 100.0
     # A vendég nem lőtt szélsőt.
     assert wf["away"]["shots"] == 0 and wf["away"]["goal_pct"] is None
+
+
+def test_pass_direction_forward_square_back():
+    """A passzokat előre / oldalra / hátra sorolja a kapu-távolság
+    változásából. HAZAI a +x kapura támad."""
+    from handball.pipeline.attack_types import pass_direction
+
+    frames = []
+    t = 0
+
+    def seg(holder_tid, positions, n=6):
+        nonlocal t
+        for _ in range(n):
+            pls = [_pl(tid, Team.HOME, x, y) for (tid, x, y) in positions]
+            bx, by = next((x, y) for (tid, x, y) in positions
+                          if tid == holder_tid)
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+
+    pos = [(1, 25.0, 10.0), (2, 32.0, 6.0), (3, 32.0, 14.0), (4, 26.0, 10.0)]
+    # 1→2 előre (25→32), 2→3 oldalra (32→32), 3→4 hátra (32→26).
+    seg(1, pos)
+    seg(2, pos)
+    seg(3, pos)
+    seg(4, pos)
+    m = Match(_meta(), frames)
+    pd = pass_direction(m)["home"]
+    assert pd["passes"] == 3
+    assert pd["forward"] == 1 and pd["square"] == 1 and pd["back"] == 1
+    assert pd["forward_pct"] == round(100.0 / 3, 1)
+    # Nettó előrehaladás ~ (7 + 0 − 6) / 3 ≈ 0,33 m.
+    assert pd["avg_progress_m"] is not None and pd["avg_progress_m"] > 0
+    assert pass_direction(m)["away"]["passes"] == 0

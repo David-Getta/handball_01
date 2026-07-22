@@ -309,6 +309,12 @@ class ScoutingReport:
     # wing_goals "szélső-függéstől": ez a szög szerinti BEFEJEZÉS-minőség.)
     wing_fin_shots: int = 0
     wing_fin_goals: int = 0
+    # Passz-irány — előre-passzok és összes mért passz, plusz az
+    # előrehaladás-összeg; meccsek közt pontosan összegződnek (előre-arány =
+    # előre / összes; átlag-előrehaladás = összeg / összes).
+    pdir_forward: int = 0
+    pdir_passes: int = 0
+    pdir_prog_sum: float = 0.0
     # Védekezési vonal magassága — a felállt védekezés mélység-összege és a
     # mért kockák száma (átlag = összeg / kockák), meccsek közt pontosan
     # összegződik. Magas fal = felfutó/agresszív, alacsony = mély/passzív.
@@ -1020,6 +1026,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.wing_fin_shots}, {_wing_pct:.0f}%) — a szélső lövést "
                 "rá lehet engedni, befelé zárj a beállóra/átlövőre.")
 
+    # Passz-irány: vertikális (előre) vagy türelmes (oldalra) építkezés.
+    if rep.pdir_passes >= 30:
+        _fwd_pct = 100.0 * rep.pdir_forward / rep.pdir_passes
+        if _fwd_pct >= 45.0:
+            keys.append(
+                f"Vertikálisan játszanak ({_fwd_pct:.0f}% előre-passz) — "
+                "gyorsan visszazárni, a mélységi passzsávokat elvenni.")
+        elif _fwd_pct <= 20.0:
+            keys.append(
+                f"Türelmesen köröztetik a labdát ({_fwd_pct:.0f}% "
+                "előre-passz) — a beállóra és az elzárásokra figyelj, ne "
+                "húzódj szét idő előtt.")
+
     # Védekezési vonal magassága: felfutó fal mögé lefutás/átemelés, mély
     # fal ellen türelmes játék és beálló.
     if rep.defline_frames >= 100:
@@ -1623,6 +1642,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         wf = wing_finishing(match, config)[team.value]
         rep.wing_fin_shots = wf["shots"]
         rep.wing_fin_goals = wf["goals"]
+        from .attack_types import pass_direction
+        pdr = pass_direction(match, config)[team.value]
+        rep.pdir_forward = pdr["forward"]
+        rep.pdir_passes = pdr["passes"]
+        rep.pdir_prog_sum = round(
+            (pdr["avg_progress_m"] or 0.0) * pdr["passes"], 1)
         from .defense import defensive_line_height
         dlh = defensive_line_height(match, config)[team.value]
         if dlh["avg_height_m"] is not None:
@@ -2596,6 +2621,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         wing_fin_goals=sum(r.wing_fin_goals for r in reports),
         defline_sum_m=round(sum(r.defline_sum_m for r in reports), 1),
         defline_frames=sum(r.defline_frames for r in reports),
+        pdir_forward=sum(r.pdir_forward for r in reports),
+        pdir_passes=sum(r.pdir_passes for r in reports),
+        pdir_prog_sum=round(sum(r.pdir_prog_sum for r in reports), 1),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

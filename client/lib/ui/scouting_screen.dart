@@ -847,6 +847,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null; // kiegyensúlyozott — nem kirívó
   }
 
+  // Passz-irány: vertikális (előre) vagy türelmes (oldalra) építkezés
+  // (30+ mért passz). A backend-kulcsokkal azonos küszöb.
+  String? _passDirection(Map<String, dynamic> r) {
+    final passes = ((r["pdir_passes"] as num?) ?? 0).toInt();
+    if (passes < 30) return null;
+    final fwd = ((r["pdir_forward"] as num?) ?? 0).toInt();
+    final pct = 100.0 * fwd / passes;
+    final tag = pct >= 45.0
+        ? "vertikális"
+        : pct <= 20.0
+            ? "türelmes körözés"
+            : null;
+    if (tag == null) return null;
+    return "$tag · ${pct.round()}% előre-passz";
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1119,6 +1135,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_goalPlacement(r) != null) ["Kapu-sarok", _goalPlacement(r)!],
       if (_wingFinishing(r) != null) ["Szélső-játék", _wingFinishing(r)!],
       if (_defLine(r) != null) ["Védekezési vonal", _defLine(r)!],
+      if (_passDirection(r) != null) ["Passz-irány", _passDirection(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

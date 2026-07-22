@@ -51,6 +51,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Passz-irány**: mennyire viszik előre a labdát (vertikális, penetráló
+  játék) vagy oldalra/hátra (türelmes körözés) — a passzoló és a fogadó
+  kapu-távolságából. Összefoglaló, /analyze, csomag, felderítés-profil
+  (count-alapú) + csempe, és a 40. edzés-szabály (vertikális építkezés
+  túl sok oldalpassznál). (#518)
 - **Védekezési vonal magassága**: milyen mélyen (passzív 6-0) vagy magasan
   (felfutó, agresszív 3-2-1) áll a fal — a felállt védekezés átlagos
   mélysége a saját kaputól. Más, mint a védekezési nyomás (az a labdástól
