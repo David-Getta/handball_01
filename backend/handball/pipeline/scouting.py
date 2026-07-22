@@ -297,6 +297,12 @@ class ScoutingReport:
     gk_mid_saves: int = 0
     gk_far_faced: int = 0
     gk_far_saves: int = 0
+    # Kapu-sarok: hova mennek a góljaik (bal/közép/jobb, a lövő szemszögéből)
+    # — gólszámok, meccsek közt pontosan összegződnek. Kiszámítható befejezés
+    # esetén a kapus felkészülhet rá.
+    place_bal: int = 0
+    place_kozep: int = 0
+    place_jobb: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -972,6 +978,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_gk_pct:.0f}% védés, {_gk_sv}/{_gk_fc}) — a "
                 "befejezéseket ebbe a sávba érdemes terelni.")
 
+    # Kapu-sarok: ha a góljaik zöme egy oldalra megy, a mi kapusunk
+    # felkészülhet rá (kiszámítható befejezés).
+    _pl_total = rep.place_bal + rep.place_kozep + rep.place_jobb
+    if _pl_total >= 6:
+        _pl_bands = [("bal alsó/felső", rep.place_bal),
+                     ("középre", rep.place_kozep),
+                     ("jobb alsó/felső", rep.place_jobb)]
+        _pl_dom = max(_pl_bands, key=lambda t: t[1])
+        _pl_share = 100.0 * _pl_dom[1] / _pl_total
+        if _pl_share >= 50.0:
+            keys.append(
+                f"Góljaik {_pl_share:.0f}%-a a(z) {_pl_dom[0]} kapuoldalra "
+                f"megy ({_pl_dom[1]}/{_pl_total}) — a kapusunk erre "
+                "készülhet, kiszámítható a befejezésük.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -1550,6 +1571,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.gk_mid_saves = gsr["mid"]["saves"]
         rep.gk_far_faced = gsr["far"]["faced"]
         rep.gk_far_saves = gsr["far"]["saves"]
+        from .attack_types import goal_placement
+        gp = goal_placement(match, config)[team.value]
+        rep.place_bal = gp["bal"]
+        rep.place_kozep = gp["közép"]
+        rep.place_jobb = gp["jobb"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2510,6 +2536,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gk_mid_saves=sum(r.gk_mid_saves for r in reports),
         gk_far_faced=sum(r.gk_far_faced for r in reports),
         gk_far_saves=sum(r.gk_far_saves for r in reports),
+        place_bal=sum(r.place_bal for r in reports),
+        place_kozep=sum(r.place_kozep for r in reports),
+        place_jobb=sum(r.place_jobb for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

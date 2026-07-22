@@ -506,6 +506,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{b_gsr['saves']}/{b_gsr['faced']}).")
     except Exception:
         pass
+    # Kapu-sarok: hova mennek a gólok (bal/közép/jobb) — kiszámíthatóság.
+    try:
+        from .attack_types import PLACEMENT_MIN_GOALS, goal_placement
+        gp = goal_placement(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gp = gp[side]
+            dom = rec_gp["dominant"]
+            if dom is None or rec_gp["goals"] < PLACEMENT_MIN_GOALS:
+                continue
+            share = round(100.0 * rec_gp[dom] / rec_gp["goals"])
+            if share >= 50:
+                body += (f" A(z) {name} góljainak {share}%-a a(z) {dom} "
+                         "kapuoldalra ment — a kapus erre készülhet.")
+    except Exception:
+        pass
     # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
     try:
         from .attack_types import pass_chains

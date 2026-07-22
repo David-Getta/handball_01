@@ -712,3 +712,75 @@ def shot_ranges(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             dominant = None
         out[side] = {**bands, "total_shots": total, "dominant": dominant}
     return out
+
+
+# Egy oldal "dominánssá" nyilvánításához ennyi gól kell — kevesebből a
+# kapuoldal-eloszlás zajos.
+PLACEMENT_MIN_GOALS = 4
+
+
+def goal_placement(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Kapu-sarok: a gólok a kapu MELYIK oldalára mennek (bal/közép/jobb),
+    a lövő szemszögéből.
+
+    Minden gólnál megkeressük, hol lépi át a labda a gólvonalat (y a kapu
+    száján belül), és a kaput három függőleges harmadra osztva soroljuk be
+    — a lövő nézőpontjához igazítva (a két kapu tükrözve). Ebből látszik a
+    csapat befejezés-szokása: ha kiszámítható (egy oldalra megy a gólok
+    zöme), a kapus felkészülhet rá, a támadó pedig változatosságot gyakorol.
+
+    Visszatérés csapatonként:
+      {"bal", "közép", "jobb", "goals", "dominant"} — a három oldal
+    gólszáma, goals az összes bekönyvelt gól, dominant a legtöbbet kapó
+    oldal (elég góllal: PLACEMENT_MIN_GOALS), None, ha nincs ilyen.
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_LENGTH_M
+    from .event_detection import (GOAL_LOOKAHEAD, GOAL_TOL_M, EventType,
+                                  _GOAL_Y_HIGH, _GOAL_Y_LOW, detect_shots)
+
+    config = config or TacticsConfig()
+    lo, hi = _GOAL_Y_LOW, _GOAL_Y_HIGH
+    span = (hi - lo) or 1.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    def _side_of_goal(e) -> Optional[str]:
+        goal_x = config.attacks_toward_x(e.team)
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            return None
+        end = min(len(match.frames), i0 + GOAL_LOOKAHEAD)
+        for j in range(i0, end):
+            b = match.frames[j].ball
+            if b is None:
+                continue
+            if abs(b.x - goal_x) <= GOAL_TOL_M and lo <= b.y <= hi:
+                rel = (b.y - lo) / span  # 0 = alsó y, 1 = felső y
+                # A lövő szemszögéből a "bal" a +x kapunál a felső y, a 0-s
+                # kapunál az alsó y — a két kaput tükrözzük.
+                leftness = rel if goal_x >= COURT_LENGTH_M / 2 else 1.0 - rel
+                if leftness >= 2.0 / 3.0:
+                    return "bal"
+                if leftness <= 1.0 / 3.0:
+                    return "jobb"
+                return "közép"
+        return None
+
+    tally = {s: {"bal": 0, "közép": 0, "jobb": 0} for s in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        side = _side_of_goal(e)
+        if side is not None:
+            tally[e.team.value][side] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        t = tally[s]
+        total = t["bal"] + t["közép"] + t["jobb"]
+        dom = (max(("bal", "közép", "jobb"), key=lambda k: t[k])
+               if total >= PLACEMENT_MIN_GOALS else None)
+        if dom is not None and t[dom] == 0:
+            dom = None
+        out[s] = {**t, "goals": total, "dominant": dom}
+    return out

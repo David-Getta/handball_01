@@ -515,3 +515,41 @@ def test_shot_ranges_buckets_by_distance():
     # A vendég nem lőtt — üres profil, domináns sáv nélkül.
     assert sr["away"]["total_shots"] == 0
     assert sr["away"]["dominant"] is None
+
+
+def _corner_goal(t0, cross_y):
+    """HAZAI gól a +x kapura, a labda a megadott y-on lépi át a gólvonalat
+    (a kapu szája y ∈ [8,5; 11,5]): felső y → bal, alsó y → jobb (a lövő
+    szemszögéből)."""
+    frames = []
+    sx = 33.0
+    for i in range(9):
+        bx = min(sx + 1.6 * (i + 1), 40.0)
+        by = 10.0 + (cross_y - 10.0) * min(1.0, i / 6.0)
+        frames.append(Frame(t=t0 + i, players=[_pl(1, Team.HOME, sx, 10.0)],
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+    return frames
+
+
+def test_goal_placement_buckets_by_corner():
+    """A gólokat a gólvonal-átlépés y-ja alapján bal/közép/jobb kapuoldalra
+    sorolja (a lövő szemszögéből); elég góllal domináns oldalt is ad."""
+    from handball.pipeline.attack_types import goal_placement
+
+    frames = []
+    # 3 gól a bal (felső y), 1 a jobb (alsó y), 1 középre.
+    plan = [11.2, 11.2, 11.2, 9.0, 10.0]
+    for cy in plan:
+        frames += _corner_goal(frames[-1].t + 1 if frames else 0, cy)
+        t = frames[-1].t + 1
+        for i in range(20):  # szünet a debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    m = Match(_meta(), frames)
+    gp = goal_placement(m)["home"]
+    assert gp["goals"] == 5
+    assert gp["bal"] == 3 and gp["jobb"] == 1 and gp["közép"] == 1
+    assert gp["dominant"] == "bal"
+    # A vendég nem szerzett gólt.
+    assert goal_placement(m)["away"]["goals"] == 0
+    assert goal_placement(m)["away"]["dominant"] is None
