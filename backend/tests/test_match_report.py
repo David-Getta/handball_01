@@ -133,6 +133,35 @@ def test_report_includes_finishing_profile_when_shots_exist():
     assert "Befejezés-profil" not in match_report_html(empty, {}, [], None)
 
 
+def test_report_includes_defensive_line_row():
+    """Felállt védekezésnél a csapatmutatók között megjelenik a védekezési
+    vonal-magasság sora."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team)
+
+    def pl(tid, team, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0,
+                              role=role)
+
+    frames = []
+    for i in range(150):
+        players = [
+            pl(1, Team.AWAY, 8.0, 10.0),   # labdás támadó a hazai térfélen
+            pl(2, Team.AWAY, 12.0, 6.0),
+            pl(10, Team.HOME, 9.0, 7.0),   # hazai felfutó fal ~9 m-re (kapu x=0)
+            pl(11, Team.HOME, 9.0, 13.0),
+            pl(12, Team.HOME, 10.0, 10.0),
+            pl(9, Team.HOME, 0.5, 10.0, role="kapus"),
+        ]
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="r", home_team="H", away_team="A", fps=25.0),
+              frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Védekezési vonal (magasság)" in html
+
+
 def test_report_team_metrics_has_slow_attack_row():
     """Elég támadásnál megjelenik az elhúzódó-támadás sor."""
     m = simulate_ground_truth(duration_s=60, fps=25.0, seed=7)

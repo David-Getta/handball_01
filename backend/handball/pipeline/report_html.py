@@ -1545,6 +1545,44 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _gp_txt("home"), _gp_txt("away")))
         except Exception:
             pass
+        # Védekezési vonal sora: mély (passzív) vs felfutó (agresszív) fal.
+        try:
+            from .defense import defensive_line_height
+            _dl = defensive_line_height(match)
+            if any(_dl[s_]["avg_height_m"] is not None
+                   for s_ in ("home", "away")):
+                def _dl_txt(side):
+                    r = _dl[side]
+                    if r["avg_height_m"] is None:
+                        return "—"
+                    st = r["style"]
+                    return (f'{r["avg_height_m"]:.1f} m'
+                            + (f' ({st})' if st and
+                               st != "kiegyensúlyozott" else ""))
+                rows.append(("Védekezési vonal (magasság)",
+                             _dl_txt("home"), _dl_txt("away")))
+        except Exception:
+            pass
+        # Kapus gyenge sávja sora: melyik lövés-távolságra véd a legkevésbé.
+        try:
+            from .goalkeeper import GK_RANGE_MIN_FACED, gk_save_ranges
+            _gsr = gk_save_ranges(match)
+            _gsr_lbl = {"close": "közeli", "mid": "közép", "far": "távoli"}
+
+            def _gsr_txt(side):
+                r = _gsr[side]
+                wb = r["weak_band"]
+                if wb is None:
+                    return "—"
+                b = r[wb]
+                if b["faced"] < GK_RANGE_MIN_FACED or b["save_pct"] is None:
+                    return "—"
+                return f'{_gsr_lbl[wb]} ({b["save_pct"]:.0f}% véd.)'
+            if _gsr_txt("home") != "—" or _gsr_txt("away") != "—":
+                rows.append(("Kapus gyenge sávja",
+                             _gsr_txt("home"), _gsr_txt("away")))
+        except Exception:
+            pass
         # Passz-lánc sora: átlagos passz-szám támadásonként.
         try:
             from .attack_types import pass_chains
