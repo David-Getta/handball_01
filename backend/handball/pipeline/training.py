@@ -945,4 +945,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 42) Labdabiztonság: ha egy játékosunk feltűnően sok labdát elveszít
+    # (4+ eladás, és a csapat eladásainak jó része tőle), névre szóló
+    # labdabiztonság-gyakorlás.
+    try:
+        from .defense import turnover_players
+        tp42 = turnover_players(match, config)
+        for side in ("home", "away"):
+            rec42 = tp42[side]
+            if rec42["total"] < 6 or not rec42["players"]:
+                continue
+            top42 = rec42["players"][0]
+            if top42["losses"] < 4 \
+                    or top42["losses"] / rec42["total"] < 0.35:
+                continue
+            who42 = (f"{top42['jersey']}-es" if top42["jersey"] is not None
+                     else f"{top42['player_id']}. játékos")
+            add(side, "támadás", "Labdabiztonság",
+                f"a(z) {who42} veszíti a legtöbb labdát "
+                f"({top42['losses']} eladás a csapat {rec42['total']}-ből) "
+                "— rá fognak presselni",
+                "labdabiztonság-gyakorlat névre szólóan: átvétel nyomás "
+                "alatt, testes fedezés, döntéshozatal 1-1-ben; kikényszerí"
+                "tett présben rövid, biztos megoldások")
+    except Exception:
+        pass
+
     return out

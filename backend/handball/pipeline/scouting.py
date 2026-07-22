@@ -271,6 +271,9 @@ class ScoutingReport:
     # Labdaszerzőik: [{"player_id", "steals"}] — ki szerzi a labdákat;
     # játékosonként meccsek közt pontosan összegezhető.
     ball_winners: list = field(default_factory=list)
+    # Labdaeladók: [{"player_id", "losses"}] — kinek a leggyengébb a
+    # labdabiztonsága; (játékos) párokként meccsek közt összegződik.
+    turnover_players: list = field(default_factory=list)
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -946,6 +949,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A(z) {top_bw['player_id']}-es elcsípi a labdákat — "
                 "az ő zónájában rövid, biztos passz; a hosszú "
                 "keresztpasszt nála ne erőltesd.")
+
+    # Labdaeladójuk: a leggyengébb labdabiztonságú játékos — rá érdemes
+    # presselni, provokálni az eladást.
+    if rep.turnover_players:
+        top_to = rep.turnover_players[0]
+        if top_to["losses"] >= 4:
+            keys.append(
+                f"A(z) {top_to['player_id']}-es a leggyengébb "
+                f"labdabiztonságú ({top_to['losses']} eladás) — rá "
+                "presselj, zárd a passzsávjait, provokáld az eladást a "
+                "gyors indításhoz.")
 
     # Átmenet-támadás: ha sok labdaszerzést gyorsan gólra váltanak,
     # a labdabiztonság a kulcs ellenük.
@@ -1628,6 +1642,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                            else w["player_id"]),
              "steals": w["steals"]}
             for w in ball_winners(match, config)[team.value]["players"]]
+        from .defense import turnover_players
+        rep.turnover_players = [
+            {"player_id": (w["jersey"] if w["jersey"] is not None
+                           else w["player_id"]),
+             "losses": w["losses"]}
+            for w in turnover_players(match, config)[team.value]["players"]]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2179,6 +2199,17 @@ def _merge_ball_winners(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_turnover_players(reports) -> list:
+    """Labdaeladónkénti darabszámok pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for w in (r.turnover_players or []):
+            tally[w["player_id"]] = (tally.get(w["player_id"], 0)
+                                     + int(w["losses"]))
+    return [{"player_id": pid, "losses": n}
+            for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
@@ -2624,6 +2655,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
                                   for r in reports),
         rotation_matches=sum(r.rotation_matches for r in reports),
         ball_winners=_merge_ball_winners(reports),
+        turnover_players=_merge_turnover_players(reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

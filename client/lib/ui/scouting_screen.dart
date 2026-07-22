@@ -896,6 +896,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${top["player_id"]}-es · $n szerzés";
   }
 
+  // Labdaeladó: a leggyengébb labdabiztonságú játékos (4+ eladás) — rá
+  // érdemes presselni. A backend-kulcsokkal azonos küszöb.
+  String? _turnoverPlayer(Map<String, dynamic> r) {
+    final list = (r["turnover_players"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    final top = list.first as Map<String, dynamic>;
+    final n = ((top["losses"] as num?) ?? 0).toInt();
+    if (n < 4) return null;
+    return "${top["player_id"]}-es · $n eladás";
+  }
+
   // Kapus-típus: kint álló vagy vonalon maradó kapus (100+ kocka) —
   // a backend-kulcsokkal azonos küszöbök.
   String? _gkDepth(Map<String, dynamic> r) {
@@ -1149,6 +1160,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
+      if (_turnoverPlayer(r) != null)
+        ["Labdaeladó", _turnoverPlayer(r)!],
       if (_gkDepth(r) != null) ["Kapus-típus", _gkDepth(r)!],
       if (_transOffense(r) != null)
         ["Átmenet-támadás", _transOffense(r)!],
