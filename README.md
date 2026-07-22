@@ -47,27 +47,31 @@ tartalma a CHANGELOG-ban):
 - **Feldolgozás**: YOLO + ByteTrack követés, kézi 4-sarkos kalibráció
   méter-térbe, pásztázás-kompenzáció, csapat-szétválasztás, kapus- és
   mezszám-felismerés; megszakítás-biztos (checkpoint, folytatás).
-- **AI-elemzés**: 40+ magyarázható réteg — események (gól/lövés/passz/
-  labdaeladás), xG és ziccerek, védekezés-kép, blokkok, momentum
-  (sorozatok, fordulópont, vezetés-váltások, hajrá, gólcsend), kondíció
-  és játékos-fáradás, passz- és gólpassz-hálózat, poszt-becslés,
-  hetesek iránnyal, kapusonkénti GSAx, fegyelem (kiülők/kiharcolók),
-  szünet utáni kezdés, előny-kezelés, cserék, időkérések. Minden réteg
-  magyar edzői nyelven indokol.
+- **AI-elemzés**: 50+ magyarázható réteg — események (gól/lövés/passz/
+  labdaeladás), xG és ziccerek, védekezés-kép (blokkok, őrzési párok,
+  labdaszerzők, betörés-folyosók), momentum (sorozatok, fordulópont,
+  vezetés-váltások, hajrá, gólcsend), kondíció, fáradás és
+  rotáció-mélység, passz- és gólpassz-hálózat, passz-láncok,
+  beálló-terhelés, poszt-becslés, hetesek iránnyal, kapusonkénti GSAx
+  és kapus-kimozdulás, fegyelem (kiülők/kiharcolók), szünet utáni
+  kezdés, előny-kezelés, cserék, időkérések. Minden réteg magyar
+  edzői nyelven indokol.
 - **Felderítés és tervezés**: több-meccses ellenfél-profil pontos
-  összegzéssel, edzői kulcsok, meccsterv-illesztés (10 páros szabály),
-  fejlődés-követés trenddel és nyomtatható riporttal, edzés-fókusz
-  (26 szabály, szezon-szintű visszatérő gyengeségekkel).
-- **Kimenetek**: edzői összefoglaló a meccs történetével, nyomtatható
-  meccs- és felderítő jelentés, játékos-lapok (kiosztható egyéni
-  riport "Mire figyelj" javaslatokkal), kulcs-pillanatok öt felületen
-  (app-kártya, txt, API, klip-csomag, jelentés-szekció), Excel-kész
-  CSV, teljes meccs-csomag zip.
+  összegzéssel, edzői kulcsok, meccsterv-illesztés (19 páros szabály),
+  fejlődés-követés trenddel, edzés-fókusz (32 szabály, szezon-szintű
+  visszatérő gyengeségekkel), élő jelzések a padnak (félidei
+  emberfogás/beálló/rotáció-kép, hajrá-protokoll).
+- **Kimenetek**: edzői összefoglaló a meccs történetével, nyolc
+  nyomtatható riport (meccs, felderítő, játékos-lap, szezon
+  játékos-lap, fejlődés, szezon — hazai/idegen és ellenfél-mérleggel,
+  egymás ellen — visszavágó-meccstervvel, toplisták), tematikus
+  klip-csomagok (kulcs-pillanatoktól a beállós gólokig), Excel-kész
+  CSV, teljes meccs-csomag zip, szezon-toplisták a kezdőlapon.
 - **Új bemenetek (előkészítve)**: TV-közvetítés előfeldolgozás
   (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
   (`POST /matches/fuse`) és lidar-finomítás — részletek a
   [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
-- **Minőség**: 600+ automata teszt; réteg-megbízhatósági önjelentés
+- **Minőség**: 670+ automata teszt; réteg-megbízhatósági önjelentés
   (mihez van elég minta az adott meccsen).
 
 ## Elv
