@@ -12,14 +12,29 @@
 ; backend_launcher.dart keresi.
 
 #define AppName "Sport Machine"
+; A verzió a fordító-parancsból jön (ISCC /DAppVersion=...); ha nincs
+; megadva, biztonságos alapérték. Az app SAJÁT verziója a
+; client/lib/version.dart-ból jön — ez itt csak a telepítő adatlapjához kell.
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
 #define AppExe "handball_client.exe"
 ; A build kimenetek a repo gyökeréhez képest:
 #define FlutterRelease "..\client\build\windows\x64\runner\Release"
 #define EngineDir "..\dist\handball_backend"
 
 [Setup]
+; Stabil azonosító — a felhasználói mappába való, helyben-frissülő
+; telepítéshez (minden kiadás ugyanoda kerül, nem duplázódik).
+AppId={{7C3B2A16-5E44-4E1F-9B7A-SPORTMACHINE01}}
 AppName={#AppName}
-AppVersion=0.1.0
+AppVersion={#AppVersion}
+; FELHASZNÁLÓI telepítés — NEM kér rendszergazdát, így az app "Frissítés
+; most" gombja csendben (/SILENT) is le tudja futtatni. Az {autopf} ilyenkor
+; a felhasználó helyi Programs mappájára képződik le, a parancsikonok is
+; felhasználói szintre kerülnek.
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
 DefaultDirName={autopf}\SportMachine
 DefaultGroupName={#AppName}
 OutputDir=..\dist\installer
@@ -28,8 +43,6 @@ Compression=lzma2
 SolidCompression=yes
 DisableProgramGroupPage=yes
 ArchitecturesInstallIn64BitMode=x64
-; Nem kell rendszergazda, ha felhasználói mappába telepít:
-PrivilegesRequiredOverridesAllowed=dialog commandline
 
 [Languages]
 Name: "hu"; MessagesFile: "compiler:Languages\Hungarian.isl"
@@ -49,4 +62,4 @@ Name: "desktopicon"; Description: "Parancsikon az asztalra"; GroupDescription: "
 
 [Run]
 ; Telepítés után rögtön indíthatja.
-Filename: "{app}\{#AppExe}"; Description: "{#AppName} indítása"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Description: "{#AppName} indítása"; Flags: nowait postinstall
