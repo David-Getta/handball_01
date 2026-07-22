@@ -2210,6 +2210,18 @@ def matchup_plan(own: "ScoutingReport",
             "lövés után NE reklamálj, az első két hazafutó lépés "
             "kötelező mindenkinek.")
 
+    # 19) Az ő kint álló kapusuk × a ti kontra-játékotok: az indulás
+    # utáni első átemelést vállalni kell.
+    if (opp.gk_depth_frames >= 100
+            and opp.gk_depth_sum_m / opp.gk_depth_frames >= 1.5
+            and own.fast_break_pct >= 10.0):
+        depth19 = opp.gk_depth_sum_m / opp.gk_depth_frames
+        plan.append(
+            f"Kapusuk kint áll (átlag {depth19:.1f} m-re a gólvonaltól), "
+            f"ti pedig sokat indultok ({own.fast_break_pct:.0f}% gyors "
+            "indítás) — kontránál az első átemelést vállalni KELL, még "
+            "félpályáról is: vagy gól, vagy visszazavarja a kapust.")
+
     # 18) Az ő szűk paduk × a ti széles rotációtok: a tempó a fegyver.
     if opp.rotation_matches and own.rotation_matches:
         opp_used = opp.rotation_used_sum / opp.rotation_matches

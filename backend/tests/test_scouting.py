@@ -2225,3 +2225,29 @@ def test_ball_winners_merge_and_key():
                          ball_winners=[{"player_id": 3, "steals": 2}])
     _, _, k2 = _coach_keys(few)
     assert not any("labdaszerző" in k for k in k2)
+
+
+def test_gk_depth_merge_keys_and_rule19():
+    """A kapus-mélység súlyozott átlaga meccsek közt pontosan
+    összegződik; a kint álló kapus kulcsot ad, a 19. szabály csak
+    kontra-erős saját csapattal szól."""
+    from handball.pipeline.scouting import (_coach_keys, combine_reports,
+                                            matchup_plan)
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        gk_depth_sum_m=200.0, gk_depth_frames=100)
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        gk_depth_sum_m=160.0, gk_depth_frames=100)
+    comb = combine_reports([r1, r2])
+    assert comb.gk_depth_frames == 200
+    assert abs(comb.gk_depth_sum_m - 360.0) < 0.01  # átlag 1,8 m
+    _, _, keys = _coach_keys(comb)
+    assert any("átemelés és a lob" in k for k in keys)
+    own = ScoutingReport(team="home", team_name="Mi",
+                         fast_break_pct=15.0)
+    plan = matchup_plan(own, comb)
+    assert any("átemelést vállalni KELL" in p_ for p_ in plan)
+    # Kontra nélkül a 19. szabály hallgat.
+    slow = ScoutingReport(team="home", team_name="Mi",
+                          fast_break_pct=4.0)
+    assert not any("átemelést vállalni" in p_
+                   for p_ in matchup_plan(slow, comb))

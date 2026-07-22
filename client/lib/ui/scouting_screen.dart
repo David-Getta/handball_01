@@ -747,6 +747,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${top["player_id"]}-es · $n szerzés";
   }
 
+  // Kapus-típus: kint álló vagy vonalon maradó kapus (100+ kocka) —
+  // a backend-kulcsokkal azonos küszöbök.
+  String? _gkDepth(Map<String, dynamic> r) {
+    final frames = ((r["gk_depth_frames"] as num?) ?? 0).toInt();
+    if (frames < 100) return null;
+    final avg =
+        (((r["gk_depth_sum_m"] as num?) ?? 0).toDouble()) / frames;
+    if (avg >= 1.5) {
+      return "kint álló · átl. ${avg.toStringAsFixed(1)} m";
+    }
+    if (avg <= 0.8) {
+      return "vonalon maradó · átl. ${avg.toStringAsFixed(1)} m";
+    }
+    return null;
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -973,6 +989,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
+      if (_gkDepth(r) != null) ["Kapus-típus", _gkDepth(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],
