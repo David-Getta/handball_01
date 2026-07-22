@@ -332,3 +332,21 @@ def test_h2h_report_html_scorers_section():
     assert "#9 (4 gól) · #3 (2 gól)" in html
     html2 = h2h_report_html("Mi", "Ok", stats, timeline)
     assert "Ki viszi a meccseket" not in html2
+
+
+def test_scouting_report_break_lanes_table():
+    """A felderítő jelentés Betörés-sávjaik táblát hoz (5+ betöréstől),
+    aránnyal és gólszámmal; kevés betörésnél a tábla elmarad."""
+    from handball.pipeline.report_html import scouting_report_html
+    rep = _rep(break_entries=8,
+               break_lanes={"közép": {"entries": 5, "goals": 3},
+                            "bal szél": {"entries": 3, "goals": 0}})
+    html = scouting_report_html(rep)
+    assert "Betörés-sávjaik" in html
+    assert "5 \n(62%)" in html or "5 (62%)" in html
+    assert "közép" in html and "bal szél" in html
+    html2 = scouting_report_html(_rep(break_entries=3,
+                                      break_lanes={"közép":
+                                                   {"entries": 3,
+                                                    "goals": 1}}))
+    assert "Betörés-sávjaik" not in html2
