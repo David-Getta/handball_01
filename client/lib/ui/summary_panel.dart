@@ -774,9 +774,9 @@ class SummaryPanel extends StatelessWidget {
         ],
         Text("FÁZIS-MEGOSZLÁS", style: AppText.sectionLabel),
         const SizedBox(height: AppSpacing.sm),
-        _bar("Hazai támadás", summary.phasePercentages[Phase.homeAttack] ?? 0, AppColors.home),
-        _bar("Vendég támadás", summary.phasePercentages[Phase.awayAttack] ?? 0, AppColors.away),
-        _bar("Átmenet", summary.phasePercentages[Phase.transition] ?? 0, AppColors.textSecondary),
+        _labelBar("Hazai támadás", summary.phasePercentages[Phase.homeAttack] ?? 0, AppColors.home),
+        _labelBar("Vendég támadás", summary.phasePercentages[Phase.awayAttack] ?? 0, AppColors.away),
+        _labelBar("Átmenet", summary.phasePercentages[Phase.transition] ?? 0, AppColors.textSecondary),
 
         const SizedBox(height: AppSpacing.xl),
         Text("VÉDEKEZÉSI FORMA", style: AppText.sectionLabel),
@@ -812,7 +812,7 @@ class SummaryPanel extends StatelessWidget {
         ),
       );
 
-  Widget _bar(String label, double pct, Color color) {
+  Widget _labelBar(String label, double pct, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Column(

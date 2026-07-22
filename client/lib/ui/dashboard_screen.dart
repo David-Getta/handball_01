@@ -1974,12 +1974,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Tooltip(
                     message: "${m["home_team"]} ${m["goals_home"]} : "
                         "${m["goals_away"]} ${m["away_team"]}"
-                        "${(m["date"] as String?)?.isNotEmpty == true ? " · ${m["date"]}" : ""}
-"
+                        "${(m["date"] as String?)?.isNotEmpty == true ? " · ${m["date"]}" : ""}\n"
                         "xG: ${(m["xg_home"] as num).toStringAsFixed(1)} – "
                         "${(m["xg_away"] as num).toStringAsFixed(1)}"
-                        "${m["free_pct_home"] != null ? "
-szabad lövőt enged: "
+                        "${m["free_pct_home"] != null ? "\nszabad lövőt enged: "
                             "H ${(m["free_pct_home"] as num).toStringAsFixed(0)}% · "
                             "V ${((m["free_pct_away"] as num?) ?? 0).toStringAsFixed(0)}%" : ""}",
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
