@@ -360,3 +360,34 @@ def test_ball_winners_credit_new_holder():
     assert res["away"]["players"][0]["player_id"] == 20
     assert res["away"]["ts"] and res["away"]["ts"][0]["player_id"] == 20
     assert res["home"]["total"] == 0
+
+
+def test_defensive_line_height_high_vs_deep():
+    """Felfutó fal (a védők ~9 m-re a saját kaputól) magas vonalat, mély
+    fal (~5 m) alacsonyat ad; a labdás a védő térfelén birtokol."""
+    from handball.pipeline.defense import defensive_line_height
+
+    def scene(def_depth):
+        # A HAZAI védekezik a saját kapujánál (x=0); a VENDÉG a hazai
+        # térfélen birtokol. A hazai védők def_depth m-re a 0-s kaputól.
+        frames = []
+        for t in range(150):
+            players = [
+                _pl(1, Team.AWAY, 8.0, 10.0),               # labdás támadó
+                _pl(2, Team.AWAY, 12.0, 6.0),
+                _pl(10, Team.HOME, def_depth, 7.0),         # hazai védők
+                _pl(11, Team.HOME, def_depth, 13.0),
+                _pl(12, Team.HOME, def_depth + 0.5, 10.0),
+                _pl(9, Team.HOME, 0.5, 10.0, role="kapus"),
+            ]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+        return Match(_meta(), frames)
+
+    high = defensive_line_height(scene(9.0))["home"]
+    deep = defensive_line_height(scene(5.0))["home"]
+    assert high["avg_height_m"] > deep["avg_height_m"]
+    assert high["style"] == "felfutó (agresszív)"
+    assert deep["style"] == "mély (passzív)"
+    # A kapus nem számít bele a vonal-magasságba.
+    assert high["frames"] == 150

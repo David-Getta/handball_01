@@ -861,4 +861,35 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 39) Védekezési vonal: ha felfutó/agresszív falat húzunk, a mögöttes
+    # teret kell tudni zárni (visszafutás), mély falnál a türelmes felállt
+    # védekezést és a beálló-őrzést gyakorolni.
+    try:
+        from .defense import (DEF_LINE_DEEP_M, DEF_LINE_HIGH_M,
+                              DEF_LINE_MIN_FRAMES, defensive_line_height)
+        dlh39 = defensive_line_height(match, config)
+        for side in ("home", "away"):
+            rec39 = dlh39[side]
+            if rec39["avg_height_m"] is None \
+                    or rec39["frames"] < DEF_LINE_MIN_FRAMES:
+                continue
+            avg39 = rec39["avg_height_m"]
+            if avg39 >= DEF_LINE_HIGH_M:
+                add(side, "védekezés", "Felfutó fal — mögöttes tér",
+                    f"felfutó, agresszív fal (átlag {avg39:.1f} m-re a "
+                    "kaputól) — a hátatok mögötti tér és a lefutás a "
+                    "kockázat",
+                    "kilépés + visszafutás játék: a felső védő kilép a "
+                    "lövőre, a szomszéd azonnal zár mögé; 3-2 elleni "
+                    "visszafutás túlszámban, kommunikációval")
+            elif avg39 <= DEF_LINE_DEEP_M:
+                add(side, "védekezés", "Mély fal — aktív kilépés",
+                    f"mély, passzív fal (átlag {avg39:.1f} m-re a kaputól) "
+                    "— a távoli lövést túl könnyen engeditek",
+                    "aktív 6-0/5-1 kilépés-gyakorlat: időzített kilépés az "
+                    "átlövőre és visszazárás a beállóra, a mélység "
+                    "megtartásával")
+    except Exception:
+        pass
+
     return out

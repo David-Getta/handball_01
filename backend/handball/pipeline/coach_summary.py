@@ -242,6 +242,19 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
     except Exception:
         pass
 
+    # Védekezési vonal magassága: mély (passzív) vagy felfutó (agresszív) fal.
+    try:
+        from .defense import defensive_line_height
+        dlh = defensive_line_height(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dlh = dlh[side]
+            if rec_dlh["style"] in ("felfutó (agresszív)", "mély (passzív)"):
+                parts.append(
+                    f"a(z) {name} {rec_dlh['style']} falat húzott "
+                    f"(átlag {rec_dlh['avg_height_m']:.1f} m-re a kaputól)")
+    except Exception:
+        pass
+
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (visszazárás).
     try:
         from .defense import transition_defense
