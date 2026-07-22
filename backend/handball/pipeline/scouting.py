@@ -315,6 +315,11 @@ class ScoutingReport:
     pdir_forward: int = 0
     pdir_passes: int = 0
     pdir_prog_sum: float = 0.0
+    # Gólpassz-forrás: honnan készítik elő a gólokat (szél/közép/hátsó) —
+    # gólpassz-darabszámok, meccsek közt pontosan összegződnek.
+    asrc_szel: int = 0
+    asrc_kozep: int = 0
+    asrc_hatso: int = 0
     # Védekezési vonal magassága — a felállt védekezés mélység-összege és a
     # mért kockák száma (átlag = összeg / kockák), meccsek közt pontosan
     # összegződik. Magas fal = felfutó/agresszív, alacsony = mély/passzív.
@@ -1039,6 +1044,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "előre-passz) — a beállóra és az elzárásokra figyelj, ne "
                 "húzódj szét idő előtt.")
 
+    # Gólpassz-forrás: ha a gól-előkészítés zöme egy helyről jön, azt a
+    # forrást kell elvenni.
+    _asrc_total = rep.asrc_szel + rep.asrc_kozep + rep.asrc_hatso
+    if _asrc_total >= 4:
+        _asrc = [("a szélről (beadás) — a szélső-beadást és a szélső átvételét zárd",
+                  rep.asrc_szel),
+                 ("középről (beálló/betörés-kiadás) — a beálló-őrzés és a betörési sávok zárása",
+                  rep.asrc_kozep),
+                 ("a hátsó sorból (átlövő-kiadás) — az átlövőre kilépés és a passzsáv elvétele",
+                  rep.asrc_hatso)]
+        _asrc_dom = max(_asrc, key=lambda t: t[1])
+        _asrc_share = 100.0 * _asrc_dom[1] / _asrc_total
+        if _asrc_share >= 50.0:
+            keys.append(
+                f"Góljaik {_asrc_share:.0f}%-át {_asrc_dom[0]}.")
+
     # Védekezési vonal magassága: felfutó fal mögé lefutás/átemelés, mély
     # fal ellen türelmes játék és beálló.
     if rep.defline_frames >= 100:
@@ -1648,6 +1669,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.pdir_passes = pdr["passes"]
         rep.pdir_prog_sum = round(
             (pdr["avg_progress_m"] or 0.0) * pdr["passes"], 1)
+        from .attack_types import assist_sources
+        asr = assist_sources(match, config)[team.value]
+        rep.asrc_szel = asr["szél"]
+        rep.asrc_kozep = asr["közép"]
+        rep.asrc_hatso = asr["hátsó"]
         from .defense import defensive_line_height
         dlh = defensive_line_height(match, config)[team.value]
         if dlh["avg_height_m"] is not None:
@@ -2624,6 +2650,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pdir_forward=sum(r.pdir_forward for r in reports),
         pdir_passes=sum(r.pdir_passes for r in reports),
         pdir_prog_sum=round(sum(r.pdir_prog_sum for r in reports), 1),
+        asrc_szel=sum(r.asrc_szel for r in reports),
+        asrc_kozep=sum(r.asrc_kozep for r in reports),
+        asrc_hatso=sum(r.asrc_hatso for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

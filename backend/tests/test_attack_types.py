@@ -622,3 +622,36 @@ def test_pass_direction_forward_square_back():
     # Nettó előrehaladás ~ (7 + 0 − 6) / 3 ≈ 0,33 m.
     assert pd["avg_progress_m"] is not None and pd["avg_progress_m"] > 0
     assert pass_direction(m)["away"]["passes"] == 0
+
+
+def test_assist_sources_classifies_by_zone():
+    """A gólpassz-forrást a passzoló helye alapján zónába sorolja. Egy
+    szélről (y=3) adott gólpassz → 'szél'."""
+    from handball.pipeline.attack_types import assist_sources
+
+    frames = []
+    t = 0
+
+    def add(players, bx, by):
+        nonlocal t
+        frames.append(Frame(t=t,
+                            players=[_pl(tid, Team.HOME, x, y)
+                                     for (tid, x, y) in players],
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    # Passzoló (2) a szélen (35,3) birtokol, majd passzol a lövőnek (1),
+    # aki a +x kapura lő és gólt szerez.
+    for _ in range(4):
+        add([(2, 35.0, 3.0), (1, 34.0, 10.0)], 35.0, 3.0)
+    for _ in range(4):
+        add([(2, 35.0, 3.0), (1, 34.0, 10.0)], 34.0, 10.0)  # PASS 2→1
+    for i in range(9):
+        bx = min(34.0 + 1.6 * (i + 1), 40.0)
+        add([(2, 35.0, 3.0), (1, 34.0, 10.0)], bx, 10.0)     # 1 lő → gól
+    m = Match(_meta(), frames)
+    asr = assist_sources(m)["home"]
+    assert asr["assists"] == 1
+    assert asr["szél"] == 1 and asr["közép"] == 0 and asr["hátsó"] == 0
+    # A vendégnek nincs gólpassza.
+    assert assist_sources(m)["away"]["assists"] == 0

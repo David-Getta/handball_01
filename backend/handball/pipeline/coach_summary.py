@@ -570,6 +570,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "beállóra és az elzárásokra kell figyelni.")
     except Exception:
         pass
+    # Gólpassz-forrás: honnan készítik elő a gólokat (szél/közép/hátsó).
+    try:
+        from .attack_types import ASSIST_SOURCE_MIN, assist_sources
+        asr = assist_sources(match)
+        _asr_label = {"szél": "a szélről (beadás)",
+                      "közép": "középről (beálló/betörés)",
+                      "hátsó": "a hátsó sorból (átlövő-kiadás)"}
+        for side, name in (("home", home), ("away", away)):
+            rec_asr = asr[side]
+            dom = rec_asr["dominant"]
+            if dom is None or rec_asr["assists"] < ASSIST_SOURCE_MIN:
+                continue
+            share = round(100.0 * rec_asr[dom] / rec_asr["assists"])
+            if share >= 50:
+                body += (f" A(z) {name} góljainak előkészítése {share}%-ban "
+                         f"{_asr_label[dom]} jön.")
+    except Exception:
+        pass
     # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
     try:
         from .attack_types import pass_chains

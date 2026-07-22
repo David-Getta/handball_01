@@ -863,6 +863,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "$tag · ${pct.round()}% előre-passz";
   }
 
+  // Gólpassz-forrás: honnan készítik elő a góljaik zömét (szél/közép/
+  // hátsó), 4+ gólpasszból 50%+ egy forrásból. A backend-kulcsokkal azonos
+  // küszöb.
+  String? _assistSource(Map<String, dynamic> r) {
+    final szel = ((r["asrc_szel"] as num?) ?? 0).toInt();
+    final kozep = ((r["asrc_kozep"] as num?) ?? 0).toInt();
+    final hatso = ((r["asrc_hatso"] as num?) ?? 0).toInt();
+    final total = szel + kozep + hatso;
+    if (total < 4) return null;
+    final bands = <List<Object>>[
+      ["szélről", szel],
+      ["középről", kozep],
+      ["hátsó sorból", hatso],
+    ];
+    bands.sort((a, b) => (b[1] as int).compareTo(a[1] as int));
+    final domLbl = bands.first[0] as String;
+    final domN = bands.first[1] as int;
+    final share = 100.0 * domN / total;
+    if (share < 50.0) return null;
+    return "${share.round()}% $domLbl ($domN/$total)";
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1136,6 +1158,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_wingFinishing(r) != null) ["Szélső-játék", _wingFinishing(r)!],
       if (_defLine(r) != null) ["Védekezési vonal", _defLine(r)!],
       if (_passDirection(r) != null) ["Passz-irány", _passDirection(r)!],
+      if (_assistSource(r) != null) ["Gólpassz-forrás", _assistSource(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],
