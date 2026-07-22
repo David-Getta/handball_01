@@ -553,3 +553,38 @@ def test_goal_placement_buckets_by_corner():
     # A vendég nem szerzett gólt.
     assert goal_placement(m)["away"]["goals"] == 0
     assert goal_placement(m)["away"]["dominant"] is None
+
+
+def _wing_or_central_shot(t0, sx, sy, goal=True):
+    """HAZAI lövés a +x kapura a megadott (sx, sy) lövőhelyről."""
+    frames = []
+    for i in range(3):
+        frames.append(Frame(t=t0 + i, players=[_pl(1, Team.HOME, sx, sy)],
+                            ball=Ball(x=sx, y=sy, confidence=1.0)))
+    t = t0 + 3
+    for i in range(9):
+        bx = min(sx + 1.6 * (i + 1), 40.0)
+        by = sy + (10.0 - sy) * min(1.0, i / 6.0) if goal else 5.0
+        frames.append(Frame(t=t + i, players=[_pl(1, Team.HOME, sx, sy)],
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+    return frames
+
+
+def test_wing_finishing_counts_sharp_angle_only():
+    """A szélső (éles szög, közeli) lövéseket számolja, a középsőt nem.
+    A szélső lövő y=3 (|y-10|=7>=6), táv ~8,6 m (<=9) → szélső."""
+    from handball.pipeline.attack_types import wing_finishing
+
+    frames = _wing_or_central_shot(0, 35.0, 3.0, goal=True)  # szélső gól
+    t = frames[-1].t + 1
+    for i in range(20):
+        frames.append(Frame(t=t + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    # Középső lövés (y=10) — NEM szélső.
+    frames += _wing_or_central_shot(frames[-1].t + 1, 33.0, 10.0, goal=True)
+    m = Match(_meta(), frames)
+    wf = wing_finishing(m)
+    assert wf["home"]["shots"] == 1 and wf["home"]["goals"] == 1
+    assert wf["home"]["goal_pct"] == 100.0
+    # A vendég nem lőtt szélsőt.
+    assert wf["away"]["shots"] == 0 and wf["away"]["goal_pct"] is None

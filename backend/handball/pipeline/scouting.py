@@ -303,6 +303,12 @@ class ScoutingReport:
     place_bal: int = 0
     place_kozep: int = 0
     place_jobb: int = 0
+    # Szélső-befejezés — a szélső (éles) szögből leadott lövések/góljaik
+    # darabszáma, meccsek közt pontosan összegződnek (szélső-gólarány =
+    # gól / szélső-lövés). Erős szélső széthúzza a védelmet. (Külön a fenti
+    # wing_goals "szélső-függéstől": ez a szög szerinti BEFEJEZÉS-minőség.)
+    wing_fin_shots: int = 0
+    wing_fin_goals: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -993,6 +999,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"megy ({_pl_dom[1]}/{_pl_total}) — a kapusunk erre "
                 "készülhet, kiszámítható a befejezésük.")
 
+    # Szélső-játék: erős szélső széthúzza a védelmet; gyenge szélsőre
+    # ráengedhető a szög.
+    if rep.wing_fin_shots >= 4:
+        _wing_pct = 100.0 * rep.wing_fin_goals / rep.wing_fin_shots
+        if _wing_pct >= 55.0:
+            keys.append(
+                f"Szélsőik veszélyesek ({rep.wing_fin_goals}/"
+                f"{rep.wing_fin_shots}, {_wing_pct:.0f}% szélső-gólarány) — "
+                "a szélső-védőnek ki kell lépnie és szűkíteni a szöget, a "
+                "beadásokat is figyeld.")
+        elif _wing_pct <= 25.0:
+            keys.append(
+                f"Szélső-befejezésük gyenge ({rep.wing_fin_goals}/"
+                f"{rep.wing_fin_shots}, {_wing_pct:.0f}%) — a szélső lövést "
+                "rá lehet engedni, befelé zárj a beállóra/átlövőre.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -1576,6 +1598,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.place_bal = gp["bal"]
         rep.place_kozep = gp["közép"]
         rep.place_jobb = gp["jobb"]
+        from .attack_types import wing_finishing
+        wf = wing_finishing(match, config)[team.value]
+        rep.wing_fin_shots = wf["shots"]
+        rep.wing_fin_goals = wf["goals"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2539,6 +2565,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         place_bal=sum(r.place_bal for r in reports),
         place_kozep=sum(r.place_kozep for r in reports),
         place_jobb=sum(r.place_jobb for r in reports),
+        wing_fin_shots=sum(r.wing_fin_shots for r in reports),
+        wing_fin_goals=sum(r.wing_fin_goals for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

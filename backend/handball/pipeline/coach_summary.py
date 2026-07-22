@@ -521,6 +521,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "kapuoldalra ment — a kapus erre készülhet.")
     except Exception:
         pass
+    # Szélső-befejezés: mennyire veszélyesek a szélső (éles) szögből.
+    try:
+        from .attack_types import wing_finishing
+        wf = wing_finishing(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wf = wf[side]
+            if rec_wf["shots"] < 3 or rec_wf["goal_pct"] is None:
+                continue
+            if rec_wf["goal_pct"] >= 55.0:
+                body += (f" A(z) {name} szélső-játéka veszélyes "
+                         f"({rec_wf['goals']}/{rec_wf['shots']}, "
+                         f"{rec_wf['goal_pct']:.0f}% szélső-gólarány).")
+            elif rec_wf["goal_pct"] <= 25.0:
+                body += (f" A(z) {name} szélsői gyengén fejeznek be "
+                         f"({rec_wf['goals']}/{rec_wf['shots']}, "
+                         f"{rec_wf['goal_pct']:.0f}%).")
+    except Exception:
+        pass
     # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
     try:
         from .attack_types import pass_chains

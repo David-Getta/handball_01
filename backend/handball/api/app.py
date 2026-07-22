@@ -2443,6 +2443,11 @@ def create_app():
             res["goal_placement"] = goal_placement(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.attack_types import wing_finishing
+            res["wing_finishing"] = wing_finishing(match)
+        except Exception:
+            pass
 
         try:
             # Félidei beálló-kép: az élő nézet a szünetben ebből ad
@@ -2742,6 +2747,8 @@ def create_app():
                 _layer("gk_save_ranges", lambda: gk_save_ranges(match))
                 from ..pipeline.attack_types import goal_placement
                 _layer("goal_placement", lambda: goal_placement(match))
+                from ..pipeline.attack_types import wing_finishing
+                _layer("wing_finishing", lambda: wing_finishing(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
