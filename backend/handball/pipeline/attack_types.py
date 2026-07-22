@@ -834,3 +834,74 @@ def wing_finishing(match: Match, config: Optional[TacticsConfig] = None) -> dict
             "goal_pct": round(100.0 * goals / shots, 1) if shots else None,
         }
     return out
+
+
+# Egy passz akkor "előre" (vagy "hátra"), ha a labda ennyivel közelebb
+# (vagy távolabb) kerül a támadott kapuhoz; a köztes az "oldal" (square).
+PASS_FORWARD_MIN_M = 2.0
+
+
+def pass_direction(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-irány: mennyire viszik ELŐRE a labdát (vertikális, penetráló
+    játék) vagy oldalra/hátra (türelmes körözés).
+
+    Minden passznál a passzoló és a fogadó kapu-távolságából számoljuk az
+    előrehaladást (a támadott kapu felé). Sok előre-passz gyors, vertikális
+    játékot jelez (korán vissza kell zárni); sok oldal-passz türelmes
+    körbejáratást (a beállóra/elzárásokra kell figyelni).
+
+    Visszatérés csapatonként:
+      {"passes", "forward", "square", "back", "forward_pct",
+       "avg_progress_m"} — forward_pct az előre-passzok aránya, avg_progress_m
+    az átlagos előrehaladás méterben (negatív = inkább hátra jár a labda).
+    None a százalék/átlag, ha nincs mérhető passz.
+    """
+    from .event_detection import EventType, detect_possession_changes
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    tally = {s: {"forward": 0, "square": 0, "back": 0, "prog": 0.0, "n": 0}
+             for s in ("home", "away")}
+
+    for e in detect_possession_changes(match, config):
+        if e.type != EventType.PASS:
+            continue
+        rid = (e.detail or {}).get("receiver_id")
+        if rid is None:
+            continue
+        f = by_t.get(e.t)
+        if f is None:
+            continue
+        px = rx = None
+        for p in f.players:
+            if p.track_id == e.player_id:
+                px = p.x
+            elif p.track_id == rid:
+                rx = p.x
+        if px is None or rx is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        prog = abs(px - goal_x) - abs(rx - goal_x)  # > 0 = előre
+        rec = tally[e.team.value]
+        rec["n"] += 1
+        rec["prog"] += prog
+        if prog >= PASS_FORWARD_MIN_M:
+            rec["forward"] += 1
+        elif prog <= -PASS_FORWARD_MIN_M:
+            rec["back"] += 1
+        else:
+            rec["square"] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        t = tally[s]
+        n = t["n"]
+        out[s] = {
+            "passes": n,
+            "forward": t["forward"],
+            "square": t["square"],
+            "back": t["back"],
+            "forward_pct": round(100.0 * t["forward"] / n, 1) if n else None,
+            "avg_progress_m": round(t["prog"] / n, 2) if n else None,
+        }
+    return out

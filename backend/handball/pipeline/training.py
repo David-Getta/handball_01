@@ -892,4 +892,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 40) Vertikális építkezés: ha nagyon türelmesen köröztetünk (30+
+    # passz, 20% alatti előre-passz), a mélységi, penetráló játékot kell
+    # gyakorolni — különben kiszámítható és könnyen védhető a támadás.
+    try:
+        from .attack_types import PASS_FORWARD_MIN_M, pass_direction
+        pd40 = pass_direction(match, config)
+        for side in ("home", "away"):
+            rec40 = pd40[side]
+            if rec40["passes"] < 30 or rec40["forward_pct"] is None \
+                    or rec40["forward_pct"] > 20.0:
+                continue
+            add(side, "támadás", "Vertikális építkezés",
+                f"csak az átadások {rec40['forward_pct']:.0f}%-a visz "
+                "előre — sok az oldalpassz, a támadás kiszámítható és "
+                "könnyen védhető",
+                "mélységi játék gyakorlat: minden 2. átadás legyen előre "
+                f"(min. {PASS_FORWARD_MIN_M:.0f} m nyereség), betörés-utáni "
+                "kiadás, gyors első hullám a lerohanásban")
+    except Exception:
+        pass
+
     return out

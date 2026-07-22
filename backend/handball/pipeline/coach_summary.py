@@ -552,6 +552,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Passz-irány: vertikális (előre) vs türelmes (oldalra) játék.
+    try:
+        from .attack_types import pass_direction
+        pd = pass_direction(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pd = pd[side]
+            if rec_pd["passes"] < 12 or rec_pd["forward_pct"] is None:
+                continue
+            if rec_pd["forward_pct"] >= 45.0:
+                body += (f" A(z) {name} vertikálisan játszik "
+                         f"({rec_pd['forward_pct']:.0f}% előre-passz) — "
+                         "gyorsan kell visszazárni.")
+            elif rec_pd["forward_pct"] <= 20.0:
+                body += (f" A(z) {name} türelmesen körözteti a labdát "
+                         f"({rec_pd['forward_pct']:.0f}% előre-passz) — a "
+                         "beállóra és az elzárásokra kell figyelni.")
+    except Exception:
+        pass
     # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
     try:
         from .attack_types import pass_chains
