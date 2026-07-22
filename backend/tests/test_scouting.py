@@ -2251,3 +2251,22 @@ def test_gk_depth_merge_keys_and_rule19():
                           fast_break_pct=4.0)
     assert not any("átemelést vállalni" in p_
                    for p_ in matchup_plan(slow, comb))
+
+
+def test_transition_offense_merge_and_key():
+    """Az átmenet-támadás darabszámai meccsek közt összegződnek; 4+
+    szerzés / 2+ gyors gól / 30%+ konverziónál kulcs születik."""
+    from handball.pipeline.scouting import _coach_keys, combine_reports
+    r1 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        trans_steals=3, trans_quick_goals=1)
+    r2 = ScoutingReport(team="away", team_name="Ok", matches=1,
+                        trans_steals=2, trans_quick_goals=2)
+    comb = combine_reports([r1, r2])
+    assert comb.trans_steals == 5 and comb.trans_quick_goals == 3
+    _, _, keys = _coach_keys(comb)
+    assert any("gyorsan gólra váltják" in k for k in keys)
+    # Gyenge konverziónál nincs kulcs.
+    weak = ScoutingReport(team="away", team_name="Ok",
+                          trans_steals=10, trans_quick_goals=2)
+    _, _, k2 = _coach_keys(weak)
+    assert not any("gyorsan gólra váltják" in k for k in k2)
