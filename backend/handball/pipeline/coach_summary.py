@@ -445,6 +445,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                 body += "."
     except Exception:
         pass
+    # Átmenet-támadás: labdaszerzés → gyors gól hatékonysága.
+    try:
+        from .attack_types import transition_offense
+        to_ = transition_offense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_to = to_[side]
+            if rec_to["steals"] >= 3 and rec_to["quick_goals"] >= 2:
+                body += (f" A(z) {name} a labdaszerzéseit gyorsan "
+                         f"gólra váltja ({rec_to['quick_goals']}/"
+                         f"{rec_to['steals']}, átlag "
+                         f"{rec_to['avg_s']:.0f} mp a szerzéstől a "
+                         "gólig) — erős kontra-játék.")
+    except Exception:
+        pass
     # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
     try:
         from .attack_types import pass_chains

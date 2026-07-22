@@ -595,3 +595,55 @@ def pass_chains(match: Match, config: Optional[TacticsConfig] = None) -> dict:
         if best is not None and best[1] > 0:
             rec["best_bucket"] = best[0]
     return out
+
+
+# Átmenet-támadás: a labdaszerzés után ennyi mp-en belül esett gólt
+# számítjuk a szerzésből fakadó gyors gólnak.
+TRANSITION_GOAL_WINDOW_S = 10.0
+
+
+def transition_offense(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Átmenet-támadás: a labdaszerzésből mennyi gyors gól születik.
+
+    A ball_winners szerzés-pillanataihoz (ts) párosítjuk az adott
+    csapat TRANSITION_GOAL_WINDOW_S-en belüli első gólját — így látszik,
+    mennyire fordítják a labdaszerzést azonnali gólra (a kontra-játék
+    hatékonysága a szerző oldalról).
+
+    Visszatérés csapatonként:
+      {"steals", "quick_goals", "conv_pct", "avg_s"} — conv_pct a
+    gólra váltott szerzések aránya; avg_s a szerzéstől a gólig eltelt
+    átlagidő (None, ha nincs gyors gól).
+    """
+    from .defense import ball_winners
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(TRANSITION_GOAL_WINDOW_S * fps)
+    goals = [(e.t, e.team.value)
+             for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    bw = ball_winners(match, config)
+
+    out = {}
+    for side in ("home", "away"):
+        steals = bw[side]["ts"]
+        quick = 0
+        sum_s = 0.0
+        for st in steals:
+            t0 = st["t"]
+            gt = next((t for (t, tm) in goals
+                       if tm == side and t0 < t <= t0 + win), None)
+            if gt is not None:
+                quick += 1
+                sum_s += (gt - t0) / fps
+        n = len(steals)
+        out[side] = {
+            "steals": n,
+            "quick_goals": quick,
+            "conv_pct": round(100.0 * quick / n, 1) if n else None,
+            "avg_s": round(sum_s / quick, 1) if quick else None,
+        }
+    return out
