@@ -485,6 +485,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
             body += sent_sr + "."
     except Exception:
         pass
+    # Kapus távolság szerint: melyik sávból sebezhető (védési arány).
+    try:
+        from .goalkeeper import GK_RANGE_MIN_FACED, gk_save_ranges
+        gsr = gk_save_ranges(match)
+        _gsr_label = {"close": "közeli", "mid": "közép-távoli",
+                      "far": "távoli"}
+        for side, name in (("home", home), ("away", away)):
+            rec_gsr = gsr[side]
+            wb = rec_gsr["weak_band"]
+            if wb is None:
+                continue
+            b_gsr = rec_gsr[wb]
+            if b_gsr["faced"] < GK_RANGE_MIN_FACED \
+                    or b_gsr["save_pct"] is None:
+                continue
+            body += (f" A(z) {name} kapusa a(z) {_gsr_label[wb]} "
+                     f"lövésekre a leggyengébb "
+                     f"({b_gsr['save_pct']:.0f}% védés, "
+                     f"{b_gsr['saves']}/{b_gsr['faced']}).")
+    except Exception:
+        pass
     # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
     try:
         from .attack_types import pass_chains

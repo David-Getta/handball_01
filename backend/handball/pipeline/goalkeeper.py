@@ -600,3 +600,72 @@ def gk_positioning(match, config=None) -> dict:
         out[team.value] = {"avg_depth_m": avg, "frames": n,
                            "style": style}
     return out
+
+
+# Egy sáv "megbízhatóságához" ennyi kaputra érkező lövés kell — kevesebből
+# a védési arány zajos, nem mondunk róla ítéletet.
+GK_RANGE_MIN_FACED = 3
+
+
+def gk_save_ranges(match, config=None) -> dict:
+    """Kapus védés-hatékonyság lövés-távolság szerint: melyik távolságból
+    sebezhető a kapus.
+
+    Csapatonként (a VÉDŐ oldal = akinek a kapusa a kapuban van) a rá KAPUTra
+    érkezett lövéseket (gól + védés; a mellé/blokk nem kaputra megy) a lövő
+    kapu-távolsága alapján közeli / közép / távoli sávba sorolja, és
+    sávonként számol védési arányt. A lövő távolságát és a kimenetelt a
+    match_xg adja; a sáv-küszöbök azonosak a lövés-távolság réteggel.
+
+    Visszatérés csapatonként:
+      {"close"/"mid"/"far": {"faced", "saves", "save_pct"},
+       "on_target", "weak_band"} — weak_band a legrosszabb védési arányú
+    sáv (elég lövéssel: GK_RANGE_MIN_FACED), None, ha nincs ilyen.
+    """
+    import math
+
+    from .attack_types import SHOT_RANGE_CLOSE_M, SHOT_RANGE_MID_M
+    from .calibration import COURT_WIDTH_M
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    goal_cy = COURT_WIDTH_M / 2.0
+    xg = match_xg(match, config)
+
+    def _band(x: float, y: float, shooter_team: str) -> str:
+        from ..models.tracking import Team
+        goal_x = config.attacks_toward_x(
+            Team.HOME if shooter_team == "home" else Team.AWAY)
+        dist = math.hypot(x - goal_x, y - goal_cy)
+        if dist <= SHOT_RANGE_CLOSE_M:
+            return "close"
+        if dist <= SHOT_RANGE_MID_M:
+            return "mid"
+        return "far"
+
+    out: dict = {}
+    for side in ("home", "away"):
+        bands = {b: {"faced": 0, "saves": 0} for b in ("close", "mid", "far")}
+        for sh in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if sh["team"] == side:
+                continue
+            outcome = sh["outcome"]
+            if outcome not in ("goal", "save"):
+                continue  # mellé/blokk: nem kaputra érkezett
+            b = _band(sh["x"], sh["y"], sh["team"])
+            bands[b]["faced"] += 1
+            if outcome == "save":
+                bands[b]["saves"] += 1
+        on_target = sum(bands[b]["faced"] for b in bands)
+        for b in bands:
+            n = bands[b]["faced"]
+            bands[b]["save_pct"] = (round(100.0 * bands[b]["saves"] / n, 1)
+                                    if n else None)
+        # A leggyengébb sáv (elég lövéssel) — itt sebezhető a kapus.
+        cand = [b for b in ("close", "mid", "far")
+                if bands[b]["faced"] >= GK_RANGE_MIN_FACED]
+        weak = min(cand, key=lambda b: bands[b]["save_pct"]) if cand else None
+        out[side] = {**bands, "on_target": on_target, "weak_band": weak}
+    return out

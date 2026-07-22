@@ -760,6 +760,38 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null; // kiegyensúlyozott eloszlás — nem kirívó
   }
 
+  // Kapusuk gyenge sávja: melyik lövés-távolságra véd a legkevésbé
+  // (legalább 4 kaputra érkezett lövés, 50% alatti védés) — ide érdemes
+  // lőni. A backend-kulcsokkal azonos küszöb.
+  String? _gkWeakRange(Map<String, dynamic> r) {
+    final bands = <List<Object>>[
+      ["közelről", (r["gk_close_faced"] as num?) ?? 0,
+        (r["gk_close_saves"] as num?) ?? 0],
+      ["közép-távból", (r["gk_mid_faced"] as num?) ?? 0,
+        (r["gk_mid_saves"] as num?) ?? 0],
+      ["távolról", (r["gk_far_faced"] as num?) ?? 0,
+        (r["gk_far_saves"] as num?) ?? 0],
+    ];
+    String? worstLbl;
+    double worstPct = 100.0;
+    int worstFaced = 0, worstSaves = 0;
+    for (final b in bands) {
+      final faced = (b[1] as num).toInt();
+      final saves = (b[2] as num).toInt();
+      if (faced < 4) continue;
+      final pct = 100.0 * saves / faced;
+      if (pct < worstPct) {
+        worstPct = pct;
+        worstLbl = b[0] as String;
+        worstFaced = faced;
+        worstSaves = saves;
+      }
+    }
+    if (worstLbl == null || worstPct >= 50.0) return null;
+    return "$worstLbl gyenge · ${worstPct.round()}% védés "
+        "($worstSaves/$worstFaced)";
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1028,6 +1060,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_transOffense(r) != null)
         ["Átmenet-támadás", _transOffense(r)!],
       if (_shotRange(r) != null) ["Lövés-távolság", _shotRange(r)!],
+      if (_gkWeakRange(r) != null) ["Kapus gyenge sávja", _gkWeakRange(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],
