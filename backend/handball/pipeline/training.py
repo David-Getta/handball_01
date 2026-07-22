@@ -784,4 +784,35 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 36) Kapus-védés sáv szerint: ha a SAJÁT kapusunk egy távolság-sávra
+    # feltűnően gyenge (elég kaputra érkezett lövés, 50% alatti védés), azt
+    # a sávot kell célzottan gyakorolni.
+    try:
+        from .goalkeeper import GK_RANGE_MIN_FACED, gk_save_ranges
+        gsr36 = gk_save_ranges(match, config)
+        _drill36 = {
+            "close": "közeli lövés-védés: lábmunka és reflex a 6-os "
+                     "vonalról, beálló- és szélső-szögek zárása",
+            "mid": "közép-távoli lövés-védés: kéz-láb koordináció, a "
+                   "test-vonal tartása, kilépés a lövőre",
+            "far": "átlövés-védés: felső sarkok olvasása, blokk mögötti "
+                   "helyezkedés a védőfallal összehangolva",
+        }
+        _lbl36 = {"close": "közeli", "mid": "közép-távoli", "far": "távoli"}
+        for side in ("home", "away"):
+            wb36 = gsr36[side]["weak_band"]
+            if wb36 is None:
+                continue
+            b36 = gsr36[side][wb36]
+            if b36["faced"] < GK_RANGE_MIN_FACED or b36["save_pct"] is None \
+                    or b36["save_pct"] >= 50.0:
+                continue
+            add(side, "kapus", "Kapus-védés sáv szerint",
+                f"a kapus a(z) {_lbl36[wb36]} lövésekre gyenge "
+                f"({b36['save_pct']:.0f}% védés, {b36['saves']}/"
+                f"{b36['faced']})",
+                _drill36[wb36])
+    except Exception:
+        pass
+
     return out

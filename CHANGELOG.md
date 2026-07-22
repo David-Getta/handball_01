@@ -51,6 +51,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Kapus védés-hatékonyság távolság szerint**: melyik lövés-sávra
+  (közeli/közép/távoli) a leggyengébb a kapus — a rá kaputra érkezett
+  lövések védési aránya sávonként. Összefoglaló, /analyze, csomag,
+  felderítés-profil (count-alapú, "ide tereld a befejezéseket" kulcs) +
+  csempe, és a 36. edzés-szabály (saját kapus gyenge sávjának célzott
+  gyakorlása). (#514)
 - **Lövés-távolság profil**: honnan lő és honnan gólozik a csapat —
   közeli (beálló/szélső) / közép / távoli (átlövés) sávok lövés- és
   gólszámmal, sávonkénti gólaránnyal; összefoglaló-mondat, /analyze API,

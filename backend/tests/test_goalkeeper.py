@@ -499,3 +499,55 @@ def test_gk_positioning_styles():
     assert res["away"]["style"] == "vonalon maradó"
     short = Match(m.meta, m.frames[:50])
     assert gk_positioning(short)["home"]["avg_depth_m"] is None
+
+
+def _range_shot(t0, sx, save=False):
+    """HAZAI lövés a +x (vendég) kapura: a lövő végig sx-nél áll (a
+    kapu-táv innen jön), a labda onnan a kapuig gyorsul. save=True →
+    a vendég kapus a kapuban áll és a labda nála (38,6) áll meg."""
+    from handball.models.tracking import Ball
+    frames = []
+    for i in range(3):
+        pls = [PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=10.0,
+                              source=PositionSource.MEASURED, confidence=1.0)]
+        if save:
+            pls.append(PlayerPosition(track_id=99, team=Team.AWAY, x=39.2,
+                                      y=10.0, source=PositionSource.MEASURED,
+                                      confidence=1.0, role="kapus"))
+        frames.append(Frame(t=t0 + i, players=pls,
+                            ball=Ball(x=sx, y=10.0, confidence=1.0)))
+    t = t0 + 3
+    for i in range(9):
+        bx = min(sx + 1.6 * (i + 1), 38.6 if save else 40.0)
+        pls = [PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=10.0,
+                              source=PositionSource.MEASURED, confidence=1.0)]
+        if save:
+            pls.append(PlayerPosition(track_id=99, team=Team.AWAY, x=39.2,
+                                      y=10.0, source=PositionSource.MEASURED,
+                                      confidence=1.0, role="kapus"))
+        frames.append(Frame(t=t + i, players=pls,
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+    return frames
+
+
+def test_gk_save_ranges_by_distance():
+    """A VÉDŐ oldal kapusára érkezett lövéseket a lövő kapu-távja alapján
+    sávba sorolja, és sávonként számol védési arányt. Egy távoli gól + egy
+    távoli védés → a vendég kapus távoli sávja 50% (2-ből 1)."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_save_ranges
+
+    frames = _range_shot(0, 29.0, save=False)  # távoli gól (~11 m)
+    t = frames[-1].t + 1
+    for i in range(25):  # szünet a debounce-hoz
+        frames.append(Frame(t=t + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _range_shot(frames[-1].t + 1, 29.0, save=True)  # távoli védés
+    m = _match(frames)
+    away = gk_save_ranges(m)["away"]
+    assert away["far"]["faced"] == 2 and away["far"]["saves"] == 1
+    assert away["far"]["save_pct"] == 50.0
+    assert away["on_target"] == 2
+    assert away["close"]["faced"] == 0 and away["close"]["save_pct"] is None
+    # A hazai kapusát nem érte lövés (a hazai támadott).
+    assert gk_save_ranges(m)["home"]["on_target"] == 0

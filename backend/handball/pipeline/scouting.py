@@ -287,6 +287,16 @@ class ScoutingReport:
     sr_mid_goals: int = 0
     sr_far_shots: int = 0
     sr_far_goals: int = 0
+    # Kapusuk védése lövés-távolság szerint — kaputra érkezett lövés/védés
+    # darabszámok, meccsek közt pontosan összegződnek (védési arány = védés
+    # / kaputra érkezett lövés az adott sávban). A gyenge sáv a támadásnak
+    # fogódzó: onnan érdemes lőni.
+    gk_close_faced: int = 0
+    gk_close_saves: int = 0
+    gk_mid_faced: int = 0
+    gk_mid_saves: int = 0
+    gk_far_faced: int = 0
+    gk_far_saves: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -943,6 +953,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "betörés) esik — a 6-os védelmét kell megerősíteni, "
                 "beálló-őrzés és a betörési sávok zárása a kulcs.")
 
+    # Kapusuk gyenge sávja: ahol a legkevésbé véd, oda érdemes lőni.
+    _gk_bands = [
+        ("close", "közelről (beálló/szélső/betörés)",
+         rep.gk_close_faced, rep.gk_close_saves),
+        ("mid", "közép-távból", rep.gk_mid_faced, rep.gk_mid_saves),
+        ("far", "távolról (átlövés)", rep.gk_far_faced, rep.gk_far_saves),
+    ]
+    _gk_cand = [(lbl, fc, sv) for (_k, lbl, fc, sv) in _gk_bands if fc >= 4]
+    if _gk_cand:
+        _gk_worst = min(_gk_cand, key=lambda t: t[2] / t[1])
+        _gk_lbl, _gk_fc, _gk_sv = _gk_worst
+        _gk_pct = 100.0 * _gk_sv / _gk_fc
+        # Csak akkor emeljük ki, ha tényleg gyenge (50% alatti védés).
+        if _gk_pct < 50.0:
+            keys.append(
+                f"Kapusuk a(z) {_gk_lbl} lövésekre a leggyengébb "
+                f"({_gk_pct:.0f}% védés, {_gk_sv}/{_gk_fc}) — a "
+                "befejezéseket ebbe a sávba érdemes terelni.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -1513,6 +1542,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sr_mid_goals = sr["mid"]["goals"]
         rep.sr_far_shots = sr["far"]["shots"]
         rep.sr_far_goals = sr["far"]["goals"]
+        from .goalkeeper import gk_save_ranges
+        gsr = gk_save_ranges(match, config)[team.value]
+        rep.gk_close_faced = gsr["close"]["faced"]
+        rep.gk_close_saves = gsr["close"]["saves"]
+        rep.gk_mid_faced = gsr["mid"]["faced"]
+        rep.gk_mid_saves = gsr["mid"]["saves"]
+        rep.gk_far_faced = gsr["far"]["faced"]
+        rep.gk_far_saves = gsr["far"]["saves"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2467,6 +2504,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sr_mid_goals=sum(r.sr_mid_goals for r in reports),
         sr_far_shots=sum(r.sr_far_shots for r in reports),
         sr_far_goals=sum(r.sr_far_goals for r in reports),
+        gk_close_faced=sum(r.gk_close_faced for r in reports),
+        gk_close_saves=sum(r.gk_close_saves for r in reports),
+        gk_mid_faced=sum(r.gk_mid_faced for r in reports),
+        gk_mid_saves=sum(r.gk_mid_saves for r in reports),
+        gk_far_faced=sum(r.gk_far_faced for r in reports),
+        gk_far_saves=sum(r.gk_far_saves for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
