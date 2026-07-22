@@ -1484,6 +1484,24 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                              _rd_txt("home"), _rd_txt("away")))
         except Exception:
             pass
+        # Kapus-kimozdulás sora: kint álló / vonalon maradó + átlagtáv.
+        try:
+            from .goalkeeper import gk_positioning
+            _gp = gk_positioning(match)
+            if any(_gp[s_]["avg_depth_m"] is not None
+                   for s_ in ("home", "away")):
+                def _gp_txt(side):
+                    r = _gp[side]
+                    if r["avg_depth_m"] is None:
+                        return "—"
+                    st = r["style"]
+                    return (f'{r["avg_depth_m"]:.1f} m'
+                            + (f' ({st})' if st and
+                               st != "kiegyensúlyozott" else ""))
+                rows.append(("Kapus-kimozdulás",
+                             _gp_txt("home"), _gp_txt("away")))
+        except Exception:
+            pass
         # Passz-lánc sora: átlagos passz-szám támadásonként.
         try:
             from .attack_types import pass_chains

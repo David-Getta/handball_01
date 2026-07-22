@@ -1105,3 +1105,28 @@ def test_report_individual_defense_table():
                [Frame(t=0, players=[pl(1, Team.HOME, 20.0, 10.0)])])
     html2 = match_report_html(m2, {}, [], None)
     assert "Egyéni védekezés" not in html2
+
+
+def test_report_gk_positioning_row():
+    """A Csapat-mutatók táblában megjelenik a Kapus-kimozdulás sor, ha
+    van kapus-jelölés elég mért kockával."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import match_report_html
+
+    def pl(tid, team, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              role=role, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = [Frame(t=t, players=[
+        pl(1, Team.HOME, 2.5, 10.0, role="kapus"),
+        pl(2, Team.AWAY, 39.5, 10.0, role="kapus"),
+        pl(3, Team.HOME, 20.0, 8.0)],
+        ball=Ball(x=20.0, y=8.0, confidence=1.0)) for t in range(120)]
+    m = Match(MatchMeta(match_id="gpr", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Kapus-kimozdulás" in html
+    assert "kint álló" in html  # a 2,5 m-re álló hazai kapus
