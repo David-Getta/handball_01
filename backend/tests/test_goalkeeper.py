@@ -472,3 +472,30 @@ def test_empty_net_context_trailing():
     assert rec["windows"] == 1
     assert rec["trailing"] == 1
     assert rec["endgame"] == 0   # rövid felvétel: nincs hajrá-jelölés
+
+
+def test_gk_positioning_styles():
+    """A kint álló kapus (2,5 m) "kint álló", a vonalon lévő (0,5 m)
+    "vonalon maradó"; kevés kockánál None."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.goalkeeper import gk_positioning
+
+    def gk(team, x):
+        return PlayerPosition(track_id=1 if team == Team.HOME else 2,
+                              team=team, x=x, y=10.0, role="kapus",
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = [Frame(t=t, players=[gk(Team.HOME, 2.5),
+                                  gk(Team.AWAY, 39.5)])
+              for t in range(120)]
+    m = Match(MatchMeta(match_id="gp", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    res = gk_positioning(m)
+    assert res["home"]["style"] == "kint álló"
+    assert abs(res["home"]["avg_depth_m"] - 2.5) < 0.05
+    assert res["away"]["style"] == "vonalon maradó"
+    short = Match(m.meta, m.frames[:50])
+    assert gk_positioning(short)["home"]["avg_depth_m"] is None

@@ -747,6 +747,19 @@ def _goalkeepers_section(match: Match, home: str, away: str) -> dict | None:
             z, p = min(cand, key=lambda kv: kv[1])
             sent += f"; leggyengébb zónája: {z} ({p:.0f}% védés)"
         parts.append(sent)
+    # Kimozdulás-stílus: kint álló vagy vonalon maradó kapus.
+    try:
+        from .goalkeeper import gk_positioning
+        gp = gk_positioning(match)
+        for key, name in (("home", home), ("away", away)):
+            rec_gp = gp.get(key) or {}
+            if rec_gp.get("style") in ("kint álló", "vonalon maradó"):
+                parts.append(
+                    f"a(z) {name} kapusa {rec_gp['style']} típus "
+                    f"(átlag {rec_gp['avg_depth_m']:.1f} m-re a "
+                    "gólvonaltól)")
+    except Exception:
+        pass
     if not parts:
         return None
     return {"title": "Kapusok", "body": "; ".join(parts).capitalize() + "."}
