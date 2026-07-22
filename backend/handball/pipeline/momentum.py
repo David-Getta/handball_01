@@ -337,6 +337,53 @@ def clutch_performance(match: Match, config=None) -> dict:
     }
 
 
+def clutch_scorers(match: Match, config=None) -> dict:
+    """Hajrá-emberek: KI szerzi a gólokat a meccs utolsó CLUTCH_WINDOW_S
+    másodpercében — kire adjuk a labdát a hajrában, illetve kire kell a
+    hajrában fokozottan figyelni.
+
+    A clutch_performance csapat-mérlegének egyéni bontása: a hajrá-ablakban
+    esett gólokat a lövőnek írjuk jóvá. Rövid felvételen (CLUTCH_MIN_
+    DURATION_S alatt) üres.
+
+    Visszatérés csapatonként:
+      {"players": [{"player_id", "jersey", "goals"}], "total"} — a
+    hajrá-gólok szerint csökkenően."""
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total = len(match.frames)
+    out = {s: {"players": [], "total": 0} for s in ("home", "away")}
+    if total / fps < CLUTCH_MIN_DURATION_S or total == 0:
+        return out
+    end_t = match.frames[-1].t
+    win_start = end_t - CLUTCH_WINDOW_S * fps
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        if e.t < win_start:
+            continue
+        side = e.team.value
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+
+    for s in ("home", "away"):
+        players = [{"player_id": tid, "jersey": jersey.get(tid), "goals": n}
+                   for tid, n in sorted(tally[s].items(),
+                                        key=lambda kv: -kv[1])]
+        out[s] = {"players": players, "total": sum(tally[s].values())}
+    return out
+
+
 def halftime_score(match: Match, config=None,
                    half_t: int | None = None) -> dict | None:
     """Félidei állás a felismert gólokból és a félidő-határból.

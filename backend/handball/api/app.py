@@ -2501,9 +2501,10 @@ def create_app():
         címkelista: a sorozat LEHETSÉGES OKAI (emberelőny, 7 a 6,
         az ellenfél védekezés-váltása / tempó-esése)."""
         from ..pipeline.momentum import (annotate_runs, clutch_performance,
-                                         goal_droughts, goal_responses,
-                                         halftime_score, score_progression,
-                                         scoring_timeline, win_probability)
+                                         clutch_scorers, goal_droughts,
+                                         goal_responses, halftime_score,
+                                         score_progression, scoring_timeline,
+                                         win_probability)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -2511,6 +2512,7 @@ def create_app():
                 "progression": score_progression(match),
                 "timeline": scoring_timeline(match),
                 "clutch": clutch_performance(match),
+                "clutch_scorers": clutch_scorers(match),
                 "droughts": goal_droughts(match),
                 "halftime": halftime_score(match),
                 "responses": goal_responses(match),
@@ -2795,6 +2797,8 @@ def create_app():
                 _layer("progression", lambda: score_progression(match))
                 from ..pipeline.momentum import clutch_performance
                 _layer("clutch", lambda: clutch_performance(match))
+                from ..pipeline.momentum import clutch_scorers
+                _layer("clutch_scorers", lambda: clutch_scorers(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

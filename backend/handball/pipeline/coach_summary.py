@@ -349,6 +349,24 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                     f"{who_tp} ({top_tp['losses']} eladás)")
     except Exception:
         pass
+    # Hajrá-emberek: ki szerzi a gólokat a meccs végén.
+    try:
+        from .momentum import clutch_scorers
+        cs = clutch_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cs = cs[side]
+            if rec_cs["total"] < 2 or not rec_cs["players"]:
+                continue
+            top_cs = rec_cs["players"][0]
+            if top_cs["goals"] >= 2:
+                who_cs = (f"{top_cs['jersey']}-es"
+                          if top_cs["jersey"] is not None
+                          else f"{top_cs['player_id']}. játékos")
+                parts.append(
+                    f"a(z) {name} hajrá-embere a(z) {who_cs} "
+                    f"({top_cs['goals']} gól az utolsó percekben)")
+    except Exception:
+        pass
     # Őrzési párok: a legstabilabb pár + a laza őrzés figyelmeztetése.
     try:
         from .defense import MARK_LOOSE_M, marking_pairs

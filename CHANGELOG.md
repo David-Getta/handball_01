@@ -51,6 +51,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Hajrá-emberek**: KI szerzi a gólokat a meccs utolsó perceiben — a
+  hajrá-teljesítmény egyéni bontása (kire adjuk a labdát / kire figyeljünk
+  a végén). Összefoglaló, /analyze, csomag, felderítés-profil (mezszám-
+  alapú összegzés) + „a hajrában rá figyelj" kulcs + csempe. (#523)
 - **Labdaeladók**: KI veszíti el a legtöbbször a labdát — a labdabiztonság
   egyéni mutatója (a labdaszerzők és a labdaeladás-zónák párja: ki veszít).
   Összefoglaló, /analyze, csomag, felderítés-profil (mezszám-alapú

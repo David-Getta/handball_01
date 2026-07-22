@@ -907,6 +907,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${top["player_id"]}-es · $n eladás";
   }
 
+  // Hajrá-ember: aki a meccs végén gólt szerez (2+ hajrá-gól) — rá a
+  // hajrában fokozott figyelem. A backend-kulcsokkal azonos küszöb.
+  String? _clutchScorer(Map<String, dynamic> r) {
+    final list = (r["clutch_scorers"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    final top = list.first as Map<String, dynamic>;
+    final n = ((top["goals"] as num?) ?? 0).toInt();
+    if (n < 2) return null;
+    return "${top["player_id"]}-es · $n hajrá-gól";
+  }
+
   // Kapus-típus: kint álló vagy vonalon maradó kapus (100+ kocka) —
   // a backend-kulcsokkal azonos küszöbök.
   String? _gkDepth(Map<String, dynamic> r) {
@@ -1162,6 +1173,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
         ["Labdaeladó", _turnoverPlayer(r)!],
+      if (_clutchScorer(r) != null) ["Hajrá-ember", _clutchScorer(r)!],
       if (_gkDepth(r) != null) ["Kapus-típus", _gkDepth(r)!],
       if (_transOffense(r) != null)
         ["Átmenet-támadás", _transOffense(r)!],

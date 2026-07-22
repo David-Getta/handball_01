@@ -85,7 +85,7 @@ def test_package_without_video_contains_report_and_csv():
                 "gk_save_ranges", "goal_placement",
                 "wing_finishing", "defensive_line_height",
                 "pass_direction", "assist_sources",
-                "turnover_players"):
+                "turnover_players", "clutch_scorers"):
         assert key in analyses, key
     # Az edzésterv pontosan akkor van a csomagban, ha van fókusz.
     tf_pkg = analyses.get("training") or {}
