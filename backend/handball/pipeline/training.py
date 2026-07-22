@@ -913,4 +913,36 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 41) Gól-előkészítés változatossága: ha a gólpasszaink zöme (4+
+    # gólpasszból 60%+) egyetlen forrásból (szél/közép/hátsó) jön, a
+    # támadás kiszámítható — több irányból kell tudni gólt előkészíteni.
+    try:
+        from .attack_types import ASSIST_SOURCE_MIN, assist_sources
+        asr41 = assist_sources(match, config)
+        _drill41 = {
+            "szél": "több csatorna: a szél mellé beálló-leadás és átlövő-"
+                    "csel, hogy ne csak a beadásra épüljön a gól",
+            "közép": "külső befejezés: átlövés és szélső-beadás gyakorlása, "
+                     "hogy ne csak a beállóra/betörésre menjen minden",
+            "hátsó": "belső játék: beálló-leadás, betörés és szélső-beadás, "
+                     "hogy ne csak az átlövő-kiadás készítse a gólt",
+        }
+        _lbl41 = {"szél": "a szélről", "közép": "középről",
+                  "hátsó": "a hátsó sorból"}
+        for side in ("home", "away"):
+            rec41 = asr41[side]
+            dom41 = rec41["dominant"]
+            if dom41 is None or rec41["assists"] < max(ASSIST_SOURCE_MIN, 4):
+                continue
+            share41 = 100.0 * rec41[dom41] / rec41["assists"]
+            if share41 < 60.0:
+                continue
+            add(side, "támadás", "Gól-előkészítés változatossága",
+                f"a gólpasszaink {share41:.0f}%-a {_lbl41[dom41]} jön — "
+                "kiszámítható a gól-előkészítés, egy forrás elvételével "
+                "megfogható",
+                _drill41[dom41])
+    except Exception:
+        pass
+
     return out

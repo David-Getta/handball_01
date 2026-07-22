@@ -905,3 +905,86 @@ def pass_direction(match: Match, config: Optional[TacticsConfig] = None) -> dict
             "avg_progress_m": round(t["prog"] / n, 2) if n else None,
         }
     return out
+
+
+# Gólpassz-forrás zóna-küszöbök: oldalra ennyivel a kapu-középtől = szél;
+# a kaputól ennyivel + középen = hátsó (átlövő); egyébként közép (beálló/
+# betörés-kiadás). Egy domináns forráshoz ennyi gólpassz kell.
+ASSIST_WING_LATERAL_M = 6.0
+ASSIST_BACK_DIST_M = 9.0
+ASSIST_SOURCE_MIN = 3
+
+
+def assist_sources(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-forrás: honnan készítik elő a gólokat — szélről (beadás),
+    a hátsó sorból (átlövő-kiadás) vagy középről (beálló/betörés-kiadás).
+
+    Minden gólpasszos gólnál a passzoló helyét vesszük a passz pillanatában,
+    és a kapu-középtől mért oldal-, illetve kapu-távolsága alapján zónába
+    soroljuk. Ebből látszik a csapat GÓL-ELŐKÉSZÍTÉSI mintája (más, mint az
+    assziszt-háló, ami a ki-kinek kérdést nézi).
+
+    Visszatérés csapatonként:
+      {"szél", "közép", "hátsó", "assists", "dominant"} — a három forrás
+    gólpassz-száma, assists az összes bekönyvelt gólpassz, dominant a
+    legtöbbet adó forrás (elég adattal: ASSIST_SOURCE_MIN), None egyébként.
+    """
+    import math
+
+    from .calibration import COURT_WIDTH_M
+    from .event_detection import (ASSIST_WINDOW_S, EventType, detect_events)
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = ASSIST_WINDOW_S * fps
+    cy = COURT_WIDTH_M / 2.0
+    by_t = {f.t: f for f in match.frames}
+    events = detect_events(match, config)
+    passes = [e for e in events if e.type == EventType.PASS]
+
+    tally = {s: {"szél": 0, "közép": 0, "hátsó": 0} for s in ("home", "away")}
+    for g in events:
+        if g.type != EventType.GOAL or g.player_id is None:
+            continue
+        aid = (g.detail or {}).get("assist_id")
+        if aid is None:
+            continue
+        # A gólpassz megkeresése (az utolsó illő passz a gól előtt).
+        best = None
+        for p in passes:
+            if not (0 <= g.t - p.t <= win) or p.team != g.team:
+                continue
+            if p.player_id != aid:
+                continue
+            if (p.detail or {}).get("receiver_id") != g.player_id:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        f = by_t.get(best.t)
+        if f is None:
+            continue
+        pos = next((pp for pp in f.players if pp.track_id == aid), None)
+        if pos is None:
+            continue
+        goal_x = config.attacks_toward_x(g.team)
+        dist = math.hypot(pos.x - goal_x, pos.y - cy)
+        if abs(pos.y - cy) >= ASSIST_WING_LATERAL_M:
+            zone = "szél"
+        elif dist >= ASSIST_BACK_DIST_M:
+            zone = "hátsó"
+        else:
+            zone = "közép"
+        tally[g.team.value][zone] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        t = tally[s]
+        total = t["szél"] + t["közép"] + t["hátsó"]
+        dom = (max(("szél", "közép", "hátsó"), key=lambda k: t[k])
+               if total >= ASSIST_SOURCE_MIN else None)
+        if dom is not None and t[dom] == 0:
+            dom = None
+        out[s] = {**t, "assists": total, "dominant": dom}
+    return out

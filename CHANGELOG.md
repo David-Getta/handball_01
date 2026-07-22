@@ -51,6 +51,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Gólpassz-forrás**: honnan készítik elő a gólokat — szélről (beadás),
+  középről (beálló/betörés) vagy a hátsó sorból (átlövő-kiadás); a
+  gólpasszoló helye a passz pillanatában. Más, mint az assziszt-háló (az
+  ki-kinek). Összefoglaló, /analyze, csomag, felderítés-profil
+  (count-alapú) + csempe, és a 41. edzés-szabály (gól-előkészítés
+  változatossága). (#519)
 - **Passz-irány**: mennyire viszik előre a labdát (vertikális, penetráló
   játék) vagy oldalra/hátra (türelmes körözés) — a passzoló és a fogadó
   kapu-távolságából. Összefoglaló, /analyze, csomag, felderítés-profil
