@@ -237,6 +237,18 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
     // is megjelennek (azonos adatok a szezon-lappal).
     final isGk = _points.any(
         (p) => ((p["gk_on_target"] as num?)?.toInt() ?? 0) > 0);
+    // Emberfogás-mód: ha bármely meccsen van mért őrzés, az Őrzés
+    // oszlop is megjelenik (azonos adatok a szezon-lappal).
+    final hasMark = _points.any(
+        (p) => ((p["mark_s"] as num?)?.toDouble() ?? 0) > 0);
+    final markS = _points.fold(
+        0.0, (s, p) => s + ((p["mark_s"] as num?)?.toDouble() ?? 0.0));
+    final markWeighted = _points.fold(
+        0.0,
+        (s, p) =>
+            s +
+            ((p["mark_dist"] as num?)?.toDouble() ?? 0.0) *
+                ((p["mark_s"] as num?)?.toDouble() ?? 0.0));
     final gkOn = _points.fold(
         0, (s, p) => s + ((p["gk_on_target"] as num?)?.toInt() ?? 0));
     final gkSaves = _points.fold(
@@ -259,6 +271,9 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           _chip("védés: $gkSaves/$gkOn "
               "(${(100.0 * gkSaves / gkOn).toStringAsFixed(0)}%) · GSAx: "
               "${gkPrev >= 0 ? "+" : ""}${gkPrev.toStringAsFixed(1)}"),
+        if (hasMark && markS > 0)
+          _chip("őrzés: ${markS.toStringAsFixed(0)} mp · átl. "
+              "${(markWeighted / markS).toStringAsFixed(1)} m"),
       ]),
       const SizedBox(height: AppSpacing.lg),
       // Fejléc + meccsenkénti sorok (táv-csíkkal — a forma ránézésre látszik).
@@ -274,10 +289,11 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           _cell("xG ±", 52),
           if (isGk) _cell("védés", 52),
           if (isGk) _cell("GSAx", 50),
+          if (hasMark) _cell("őrzés", 66),
           _cell("perc", 44),
         ]),
       ),
-      ..._points.map((p) => _row(p, maxDist, isGk)),
+      ..._points.map((p) => _row(p, maxDist, isGk, hasMark)),
     ];
   }
 
@@ -297,7 +313,8 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
           textAlign: TextAlign.right,
           style: AppText.label.copyWith(fontSize: 10, color: AppColors.textFaint)));
 
-  Widget _row(Map<String, dynamic> p, double maxDist, bool isGk) {
+  Widget _row(Map<String, dynamic> p, double maxDist, bool isGk,
+      bool hasMark) {
     final dist = (p["distance_m"] as num?)?.toDouble() ?? 0.0;
     final frac = maxDist > 0 ? (dist / maxDist).clamp(0.0, 1.0) : 0.0;
     final date = (p["date"] as String?) ?? "";
@@ -394,6 +411,30 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
                         fontSize: 13, color: color));
               })),
         ],
+        // Emberfogás-cella: őrzés-idő + átlagtáv (ha van mért őrzés).
+        if (hasMark)
+          SizedBox(
+              width: 66,
+              child: Builder(builder: (_) {
+                final ms = (p["mark_s"] as num?)?.toDouble();
+                final md = (p["mark_dist"] as num?)?.toDouble();
+                if (ms == null || ms <= 0) {
+                  return Text("—",
+                      textAlign: TextAlign.right,
+                      style: AppText.label.copyWith(
+                          fontSize: 13, color: AppColors.textFaint));
+                }
+                final loose = md != null && md >= 2.5;
+                return Text(
+                    "${ms.toStringAsFixed(0)}s·"
+                    "${md == null ? "?" : md.toStringAsFixed(1)}m",
+                    textAlign: TextAlign.right,
+                    style: AppText.label.copyWith(
+                        fontSize: 13,
+                        color: loose
+                            ? AppColors.gold
+                            : AppColors.textPrimary));
+              })),
         SizedBox(
             width: 44,
             child: Text("${p["minutes"] ?? "-"}",
