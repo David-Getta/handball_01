@@ -792,6 +792,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "($worstSaves/$worstFaced)";
   }
 
+  // Kapu-sarok: hova megy a góljaik zöme (bal/közép/jobb, a lövő
+  // szemszögéből) — 6+ gólból 50%+ egy oldalra. A backend-kulcsokkal
+  // azonos küszöb; a kapus felkészülhet rá.
+  String? _goalPlacement(Map<String, dynamic> r) {
+    final bal = ((r["place_bal"] as num?) ?? 0).toInt();
+    final kozep = ((r["place_kozep"] as num?) ?? 0).toInt();
+    final jobb = ((r["place_jobb"] as num?) ?? 0).toInt();
+    final total = bal + kozep + jobb;
+    if (total < 6) return null;
+    final bands = <List<Object>>[
+      ["bal", bal],
+      ["közép", kozep],
+      ["jobb", jobb],
+    ];
+    bands.sort((a, b) => (b[1] as int).compareTo(a[1] as int));
+    final domLbl = bands.first[0] as String;
+    final domN = bands.first[1] as int;
+    final share = 100.0 * domN / total;
+    if (share < 50.0) return null;
+    return "${share.round()}% $domLbl kapuoldal ($domN/$total)";
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1061,6 +1083,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Átmenet-támadás", _transOffense(r)!],
       if (_shotRange(r) != null) ["Lövés-távolság", _shotRange(r)!],
       if (_gkWeakRange(r) != null) ["Kapus gyenge sávja", _gkWeakRange(r)!],
+      if (_goalPlacement(r) != null) ["Kapu-sarok", _goalPlacement(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

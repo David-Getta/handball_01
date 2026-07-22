@@ -815,4 +815,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 37) Befejezés-változatosság: ha a góljaink zöme (6+ gólból 55%+)
+    # ugyanarra a kapuoldalra megy, kiszámíthatóak vagyunk — a
+    # hely-változtatást kell gyakorolni.
+    try:
+        from .attack_types import goal_placement
+        gp37 = goal_placement(match, config)
+        _lbl37 = {"bal": "bal", "közép": "középső", "jobb": "jobb"}
+        for side in ("home", "away"):
+            rec37 = gp37[side]
+            dom37 = rec37["dominant"]
+            if dom37 is None or rec37["goals"] < 6:
+                continue
+            share37 = 100.0 * rec37[dom37] / rec37["goals"]
+            if share37 < 55.0:
+                continue
+            add(side, "támadás", "Befejezés-változatosság",
+                f"a góljaink {share37:.0f}%-a a(z) {_lbl37[dom37]} "
+                "kapuoldalra megy — kiszámítható a befejezés, a kapus "
+                "felkészülhet rá",
+                "célzott-lövés játék: felváltva a négy sarokba és "
+                "középre kapussal, a kapus mozgásának olvasása; "
+                "büntető-kör, ha kétszer egymás után ugyanoda lősz")
+    except Exception:
+        pass
+
     return out

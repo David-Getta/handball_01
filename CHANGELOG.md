@@ -51,6 +51,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Kapu-sarok (befejezés-hely)**: a gólok a kapu melyik oldalára mennek
+  (bal/közép/jobb, a lövő szemszögéből) — a gólvonal-átlépés y-jából. Ha a
+  góljaik zöme egy oldalra megy, kiszámíthatóak: a kapus felkészülhet.
+  Összefoglaló, /analyze, csomag, felderítés-profil (count-alapú) +
+  csempe, és a 37. edzés-szabály (befejezés-változatosság). (#515)
 - **Kapus védés-hatékonyság távolság szerint**: melyik lövés-sávra
   (közeli/közép/távoli) a leggyengébb a kapus — a rá kaputra érkezett
   lövések védési aránya sávonként. Összefoglaló, /analyze, csomag,
