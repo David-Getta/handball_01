@@ -520,6 +520,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   rétegekből. (#118, #131)
 
 ### Export és jelentés
+- **Befejezés-profil a meccsjelentésben**: új tábla a lövés-rétegekből —
+  távolság (közeli/közép/távoli, gólaránnyal), szélső-befejezés és a
+  domináns kapu-sarok, csapatonként; addig ezek csak az összefoglaló
+  szövegben voltak. (#521)
 - **Klip-export bővítés**: hetes/időkérés/csere/jegyzet-klipek, a
   jegyzet szövegével a fájlnévben. (#113, #122)
 - **Meccs-csomag**: minden elemzés géppel olvasható JSON-ban +

@@ -998,6 +998,49 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 '<th class="num">Gól</th></tr>'
                 + "".join(orows) + "</table>")
 
+        # Befejezés-profil: honnan (távolság), milyen szögből (szélső) és
+        # hova (kapu-sarok) fejeznek be — a lövés-rétegek egy táblában.
+        from .attack_types import (goal_placement, shot_ranges,
+                                    wing_finishing)
+        srp = shot_ranges(match)
+        gpp = goal_placement(match)
+        wfp = wing_finishing(match)
+
+        def _band_cell(rec):
+            n = rec["shots"]
+            p = rec["goal_pct"]
+            return f"{n}" + (f" ({p:.0f}%)" if p is not None else "")
+
+        frows = []
+        for side, name in (("home", home), ("away", away)):
+            sr = srp[side]
+            if sr["total_shots"] < 1:
+                continue
+            gp = gpp[side]
+            wf = wfp[side]
+            dom = gp["dominant"]
+            placement = (f"{dom} ({round(100 * gp[dom] / gp['goals'])}%)"
+                         if dom and gp["goals"] else "—")
+            wing = "—"
+            if wf["shots"]:
+                wing = f"{wf['goals']}/{wf['shots']}"
+                if wf["goal_pct"] is not None:
+                    wing += f" ({wf['goal_pct']:.0f}%)"
+            frows.append(
+                f"<tr><td>{escape(name)}</td>"
+                f'<td class="num">{_band_cell(sr["close"])}</td>'
+                f'<td class="num">{_band_cell(sr["mid"])}</td>'
+                f'<td class="num">{_band_cell(sr["far"])}</td>'
+                f'<td class="num">{wing}</td>'
+                f"<td>{escape(placement)}</td></tr>")
+        if frows:
+            parts_html.append(
+                "<h2>Befejezés-profil (távolság · szélső · kapu-sarok)</h2>"
+                '<table><tr><th>Csapat</th><th class="num">Közeli</th>'
+                '<th class="num">Közép</th><th class="num">Távoli</th>'
+                '<th class="num">Szélső</th><th>Kapu-sarok</th></tr>'
+                + "".join(frows) + "</table>")
+
         from .goalkeeper import detect_empty_net
         empty = detect_empty_net(match)
         if empty:

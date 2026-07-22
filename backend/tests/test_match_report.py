@@ -107,6 +107,32 @@ def test_report_includes_attack_mix_section():
     assert "Támadás-mix (típus szerint)" in html
 
 
+def test_report_includes_finishing_profile_when_shots_exist():
+    """Ha van felismert lövés, a Befejezés-profil tábla bekerül (távolság,
+    szélső, kapu-sarok); lövés nélkül elmarad."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team)
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0)
+
+    frames = [Frame(t=i, players=[pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0))
+              for i in range(3)]
+    for i in range(9):
+        bx = min(33.0 + 1.6 * (i + 1), 40.0)
+        frames.append(Frame(t=3 + i, players=[pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="r", home_team="H", away_team="A", fps=25.0),
+              frames)
+    html = match_report_html(m, {}, detect_events(m), None)
+    assert "Befejezés-profil" in html
+    # Lövés nélküli (üres) meccsen nincs ilyen szakasz.
+    empty = Match(m.meta, [Frame(t=0, players=[], ball=None)])
+    assert "Befejezés-profil" not in match_report_html(empty, {}, [], None)
+
+
 def test_report_team_metrics_has_slow_attack_row():
     """Elég támadásnál megjelenik az elhúzódó-támadás sor."""
     m = simulate_ground_truth(duration_s=60, fps=25.0, seed=7)
