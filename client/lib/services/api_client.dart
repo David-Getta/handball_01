@@ -383,15 +383,6 @@ class ApiClient {
     return json["job_id"] as String;
   }
 
-  /// Egy job állapota (GET /jobs/{id}) — a klipvágás haladásához.
-  Future<Map<String, dynamic>> fetchJob(String jobId) async {
-    final resp = await http.get(Uri.parse("$baseUrl/jobs/$jobId"));
-    if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült a job lekérése: HTTP ${resp.statusCode}");
-    }
-    return jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
-  }
-
   /// A kész klip-csomag (zip) letöltése bájtokként.
   Future<List<int>> fetchClipsZip(String matchId) async {
     final resp = await http
