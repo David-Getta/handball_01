@@ -133,8 +133,11 @@ class UpdateService {
   /// Hálózati/API hibánál (pl. privát repó → 404) kivételt dob, hogy a kézi
   /// ellenőrzés érdemi hibaüzenetet tudjon mutatni.
   Future<UpdateInfo?> check() async {
+    // Fejlesztői build ("0.0.0-dev") — a "0.0.0" beparse-olódna, ezért itt
+    // külön kizárjuk, hogy fejlesztésben ne villogjon frissítés-sáv.
+    if (appVersion.contains("-dev")) return null;
     final current = _parse(appVersion);
-    if (current == null) return null; // fejlesztői build — nincs mit frissíteni
+    if (current == null) return null; // értelmezhetetlen verzió — nincs mit tenni
 
     final asset = _assetName;
     if (asset == null) return null;
@@ -269,6 +272,16 @@ class UpdateService {
   /// macOS: kicsomagolás → az .app csomag cseréje → újraindítás.
   /// A cserét egy leválasztott shell végzi, MIUTÁN ez a folyamat kilépett
   /// (futó programot nem lehet biztonságosan felülírni).
+  ///
+  /// FONTOS – App Translocation: ha a felhasználó a letöltött (karanténos)
+  /// appot a Letöltések mappából indítja, a macOS egy VÉLETLEN, ÍRÁSVÉDETT
+  /// helyről futtatja (`/private/var/folders/.../AppTranslocation/...`). Ekkor
+  /// a `Platform.resolvedExecutable` erre az efemer másolatra mutat, így a
+  /// helyben-csere csendben elbukik, és újraindításkor a Finder megint a régi
+  /// appot nyitja meg — a frissítés-sáv sosem tűnik el. Ilyenkor (és ha nem
+  /// .app-ból futunk) a kanonikus `/Applications` mappába telepítünk, és onnan
+  /// indítunk újra. A csere-szkript naplót ír, hogy a hiba diagnosztizálható
+  /// legyen, ne némán vesszen el.
   Future<void> _installMacOS(File zip, Directory tmp) async {
     final extractDir = "${tmp.path}${Platform.pathSeparator}extracted";
     final r = await Process.run(
@@ -290,29 +303,64 @@ class UpdateService {
     }
 
     // A jelenlegi .app útvonala: .../SportMachine.app/Contents/MacOS/exe
-    final appPath =
-        File(Platform.resolvedExecutable).parent.parent.parent.path;
-    if (!appPath.endsWith(".app")) {
-      throw Exception("Nem .app csomagból fut az alkalmazás ($appPath) — "
-          "a csere kihagyva.");
+    final resolved = Platform.resolvedExecutable;
+    final appPath = File(resolved).parent.parent.parent.path;
+
+    // Translocation felismerése: ilyenkor a futó útvonal írásvédett és efemer,
+    // a helyben-csere értelmetlen. Akkor is a kanonikus helyre telepítünk, ha
+    // valamiért nem .app-ból futunk.
+    final translocated = resolved.contains("/AppTranslocation/");
+    final String targetApp;
+    if (translocated || !appPath.endsWith(".app")) {
+      final appBundleName = newApp.split(Platform.pathSeparator).last;
+      targetApp = "/Applications/$appBundleName";
+    } else {
+      targetApp = appPath;
     }
 
+    // Karantén-törlés a ÚJ appról MÁR MOST, a csere előtt — így a következő
+    // indításnál nem translocálódik újra, és a beágyazott motort sem blokkolja
+    // a Gatekeeper (tünet lenne: "Connection refused").
+    await Process.run(
+        "/usr/bin/xattr", ["-dr", "com.apple.quarantine", newApp]);
+
+    // Napló a felhasználó adatmappájába — ha a csere elbukik, legyen nyoma.
+    final logPath =
+        "${_supportDir()}${Platform.pathSeparator}update.log";
+    await File(logPath).parent.create(recursive: true);
+
     // Leválasztott csere-szkript: vár, töröl, másol, KARANTÉN-TÖRLÉS,
-    // újraindít. A karantén-attribútum eltávolítása nélkül a Gatekeeper a
-    // beágyazott motort csendben blokkolhatná (tünet: "Connection refused").
+    // újraindít. Mindent naplóz. $0 = cél .app, $1 = új .app, $2 = napló.
     await Process.start(
       "/bin/bash",
       [
         "-c",
-        'sleep 1; rm -rf "\$0"; /usr/bin/ditto "\$1" "\$0"; '
+        'exec >> "\$2" 2>&1; echo "==== \$(date) frissítés indul → \$0 ===="; '
+            'sleep 1; rm -rf "\$0"; '
+            'if /usr/bin/ditto "\$1" "\$0"; then echo "telepítve: \$0"; '
+            'else echo "HIBA: a másolás nem sikerült (\$0 – jogosultság?)"; fi; '
             '/usr/bin/xattr -dr com.apple.quarantine "\$0" 2>/dev/null; '
-            'open "\$0"',
-        appPath,
+            'open "\$0" || echo "HIBA: az indítás nem sikerült"',
+        targetApp,
         newApp,
+        logPath,
       ],
       mode: ProcessStartMode.detached,
     );
     exit(0);
+  }
+
+  /// A SportMachine felhasználói adatmappája (naplóhoz, tokenhez).
+  static String _supportDir() {
+    final home = Platform.environment["HOME"] ?? "";
+    if (Platform.isWindows) {
+      final base =
+          Platform.environment["LOCALAPPDATA"] ?? "$home\\AppData\\Local";
+      return "$base\\SportMachine";
+    } else if (Platform.isMacOS) {
+      return "$home/Library/Application Support/SportMachine";
+    }
+    return "$home/.local/share/sportmachine";
   }
 
   /// Windows: az Inno Setup telepítő csendes futtatása — az bezárja az appot,
