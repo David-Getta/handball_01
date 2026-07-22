@@ -2204,6 +2204,18 @@ def player_report_html(match, track_id: int) -> str:
                     gk_items.append(_metric(
                         "Indítás (átlag a felezőig)",
                         f"{orec['avg_s']:.1f} s · {lab}"))
+                # Kimozdulás-stílus: a csapat kapusának átlagos
+                # gólvonal-távolsága (kint álló / vonalon maradó).
+                try:
+                    from .goalkeeper import gk_positioning
+                    gp_rec = gk_positioning(match).get(gk_side) or {}
+                    if gp_rec.get("style"):
+                        gk_items.append(_metric(
+                            "Kimozdulás",
+                            f"{gp_rec['avg_depth_m']:.1f} m · "
+                            f"{gp_rec['style']}"))
+                except Exception:
+                    pass
                 # A kapott hetesek irány-képe: merre lőtték ellened.
                 try:
                     from .rules import (SEVEN_DIR_HU as hu_d,

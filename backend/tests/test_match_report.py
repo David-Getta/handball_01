@@ -1130,3 +1130,28 @@ def test_report_gk_positioning_row():
     html = match_report_html(m, {}, [], None)
     assert "Kapus-kimozdulás" in html
     assert "kint álló" in html  # a 2,5 m-re álló hazai kapus
+
+
+def test_player_report_gk_positioning_metric():
+    """A kapus lapján megjelenik a Kimozdulás-mutató (átlagtáv +
+    stílus), ha elég mért kockával rendelkezik."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def pl(tid, team, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              role=role, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = [Frame(t=t, players=[
+        pl(1, Team.HOME, 2.5, 10.0, role="kapus"),
+        pl(2, Team.AWAY, 39.5, 10.0, role="kapus"),
+        pl(3, Team.HOME, 20.0, 8.0)],
+        ball=Ball(x=20.0, y=8.0, confidence=1.0)) for t in range(120)]
+    m = Match(MatchMeta(match_id="pgp", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = player_report_html(m, 1)  # a hazai kapus
+    assert "Kimozdulás" in html
+    assert "kint álló" in html  # 2,5 m-re a gólvonaltól
