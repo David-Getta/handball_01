@@ -235,6 +235,53 @@ def turnover_zones(match, config=None) -> dict:
     return out
 
 
+def turnover_players(match, config=None) -> dict:
+    """Labdaeladók: KI veszíti el a legtöbbször a labdát — a labdabiztonság
+    egyéni mutatója.
+
+    A labdaeladás-eseményekhez (detect_events, ahol a lövés-környéki
+    eladások már ki vannak szűrve) a labdát ELVESZTŐ játékost írjuk jóvá.
+    A kapust kihagyjuk (a kapus "eladása" jellemzően lövés/kidobás). A
+    turnover_zones (HOL) és a ball_winners (KI szerez) párja: ez a KI veszít.
+
+    Visszatérés csapatonként:
+      {"total", "players": [{"player_id", "jersey", "losses"}], "ts":
+       [{"t", "player_id"}]} — players a labdaeladások szerint csökkenően;
+    ts a pillanatok (klip-exporthoz)."""
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    jersey: dict[int, int] = {}
+    gk_tracks: set = set()
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+            if p.role == "kapus":
+                gk_tracks.add(p.track_id)
+
+    tally: dict[str, dict[int, int]] = {"home": {}, "away": {}}
+    ts: dict[str, list] = {"home": [], "away": []}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        if e.player_id in gk_tracks:
+            continue
+        side = e.team.value
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+        ts[side].append({"t": e.t, "player_id": e.player_id})
+
+    out = {}
+    for side in ("home", "away"):
+        players = [{"player_id": tid, "jersey": jersey.get(tid),
+                    "losses": n}
+                   for tid, n in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        out[side] = {"total": sum(tally[side].values()),
+                     "players": players, "ts": ts[side]}
+    return out
+
+
 # Blokk-felismerés: lövés-szerű labdarepülés (gyors, kapu felé), ami a
 # mezőnyben egy védőnél hirtelen visszafordul — mielőtt a kapu-zónába érne
 # (ott már kapus-védés lenne). A lövés-detektor ezt nem látja, mert a

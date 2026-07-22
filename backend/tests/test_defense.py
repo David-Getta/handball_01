@@ -391,3 +391,28 @@ def test_defensive_line_height_high_vs_deep():
     assert deep["style"] == "mély (passzív)"
     # A kapus nem számít bele a vonal-magasságba.
     assert high["frames"] == 150
+
+
+def test_turnover_players_credits_the_loser():
+    """A labdaeladás a labdát ELVESZTŐ játékosnak számít; a kapus kimarad."""
+    from handball.pipeline.defense import turnover_players
+
+    frames = []
+    t = 0
+    # HAZAI 7-es birtokol középen, majd a VENDÉG 11-es szerzi meg → a 7-es
+    # eladása (lövéstől távol, hogy ne szűrődjön ki).
+    for _ in range(4):
+        frames.append(Frame(t=t, players=[_pl(7, Team.HOME, 20.0, 10.0),
+                                          _pl(11, Team.AWAY, 20.5, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(4):
+        frames.append(Frame(t=t, players=[_pl(7, Team.HOME, 20.0, 10.0),
+                                          _pl(11, Team.AWAY, 20.5, 10.0)],
+                            ball=Ball(x=20.5, y=10.0, confidence=1.0)))
+        t += 1
+    tp = turnover_players(Match(_meta(), frames))
+    assert tp["home"]["total"] == 1
+    assert tp["home"]["players"][0]["player_id"] == 7
+    assert tp["home"]["players"][0]["losses"] == 1
+    assert tp["away"]["total"] == 0

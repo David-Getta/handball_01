@@ -2578,6 +2578,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import turnover_players
+            res["turnover_players"] = turnover_players(match)
+        except Exception:
+            pass
+        try:
             # Félidei emberfogás-kép: az élő nézet a szünetben ebből ad
             # "szorosabb tapadást a másodikra" jelzést (jövőbe nézés
             # nélkül — csak az első félidő kockáiból).
@@ -2775,6 +2780,8 @@ def create_app():
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
                 _layer("ball_winners", lambda: ball_winners(match))
+                from ..pipeline.defense import turnover_players
+                _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning
                 _layer("gk_positioning", lambda: gk_positioning(match))
                 from ..pipeline.tactics import attack_sides

@@ -51,6 +51,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Labdaeladók**: KI veszíti el a legtöbbször a labdát — a labdabiztonság
+  egyéni mutatója (a labdaszerzők és a labdaeladás-zónák párja: ki veszít).
+  Összefoglaló, /analyze, csomag, felderítés-profil (mezszám-alapú
+  összegzés) + „rá presselj" kulcs + csempe, és a 42. edzés-szabály
+  (névre szóló labdabiztonság). (#520)
 - **Gólpassz-forrás**: honnan készítik elő a gólokat — szélről (beadás),
   középről (beálló/betörés) vagy a hátsó sorból (átlövő-kiadás); a
   gólpasszoló helye a passz pillanatában. Más, mint az assziszt-háló (az

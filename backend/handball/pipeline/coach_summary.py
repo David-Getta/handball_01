@@ -331,6 +331,24 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
                     f"{rec_bw['total']} szerzéséből)")
     except Exception:
         pass
+    # Labdaeladók: kinek a leggyengébb a labdabiztonsága.
+    try:
+        from .defense import turnover_players
+        tp = turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tp = tp[side]
+            if rec_tp["total"] < 4 or not rec_tp["players"]:
+                continue
+            top_tp = rec_tp["players"][0]
+            if top_tp["losses"] >= 4:
+                who_tp = (f"{top_tp['jersey']}-es"
+                          if top_tp["jersey"] is not None
+                          else f"{top_tp['player_id']}. játékos")
+                parts.append(
+                    f"a(z) {name} leggyengébb labdabiztonságú játékosa a(z) "
+                    f"{who_tp} ({top_tp['losses']} eladás)")
+    except Exception:
+        pass
     # Őrzési párok: a legstabilabb pár + a laza őrzés figyelmeztetése.
     try:
         from .defense import MARK_LOOSE_M, marking_pairs
