@@ -859,3 +859,30 @@ def test_training_flags_unproductive_long_chains():
     out = tf32(scene())
     items = [it for it in out["home"] if it["title"] == "Passz-lánc"]
     assert items and "terméketlenek" in items[0]["why"]
+
+
+def test_training_flags_gk_positioning():
+    """33) A túl kint álló kapus (2 m+) Kapus-helyezkedés fókuszt kap;
+    a vonalon maradó nem."""
+    from handball.models.tracking import PlayerPosition
+    from handball.pipeline.training import training_focus as tf33
+
+    def scene(gk_x):
+        frames = []
+        for t in range(120):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=gk_x,
+                               y=10.0, role="kapus",
+                               source=PositionSource.MEASURED,
+                               confidence=1.0),
+                _pl(2, Team.AWAY, 39.5, 10.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return Match(_meta(), frames)
+
+    out = tf33(scene(2.5))
+    items = [it for it in out["home"]
+             if it["title"] == "Kapus-helyezkedés"]
+    assert items and "m-re áll ki" in items[0]["why"]
+    out2 = tf33(scene(0.4))
+    assert not any(it["title"] == "Kapus-helyezkedés"
+                   for it in out2["home"])

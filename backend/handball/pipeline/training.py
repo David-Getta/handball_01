@@ -687,6 +687,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 33) Kapus-helyezkedés: ha a saját kapus túl kint áll (átlag 1,5 m+
+    # a gólvonaltól), az átemelés ellen sebezhető — helyezkedés-gyakorlat.
+    try:
+        from .goalkeeper import gk_positioning
+        gp33 = gk_positioning(match, config)
+        for side in ("home", "away"):
+            rec33 = gp33[side]
+            if rec33["avg_depth_m"] is None:
+                continue
+            if rec33["avg_depth_m"] >= 1.5:
+                add(side, "kapus", "Kapus-helyezkedés",
+                    f"a kapus átlag {rec33['avg_depth_m']:.1f} m-re áll "
+                    "ki a gólvonaltól — az átemelés és a lob ellen "
+                    "sebezhető, főleg kontránál",
+                    "kapus-helyezkedés gyakorlat: gyors visszalépés a "
+                    "vonalra átemelés-veszélynél, mélység-igazítás a "
+                    "lövő távolságához, kontra-visszatérés")
+    except Exception:
+        pass
+
     # 29) Emberfogás-tapadás: ha van lazán őrző védőnk (a leglazább
     # emberfogó 2,5 m+ átlagtávról kíséri az emberét), az egy-egy
     # elleni védekezést kell gyakorolni — névre szólóan.
