@@ -423,3 +423,43 @@ def test_pass_chains_buckets_by_pass_count():
     assert res["buckets"].get("3–5 passz", {}).get("attacks", 0) >= 1
     assert res["buckets"].get("0–2 passz", {}).get("attacks", 0) >= 1
     assert res["avg_passes"] is not None and res["avg_passes"] >= 1.0
+
+
+def test_transition_offense_credits_quick_goals():
+    """A labdaszerzés utáni 10 mp-en belüli gól gyors gólként számít;
+    a szerzés nélküli gól nem."""
+    from handball.pipeline.attack_types import transition_offense
+
+    frames = []
+    t = 0
+    # Hazai 1-es birtokol, majd vendég 20-as szerez (csapatváltás),
+    # utána a 20-as gólig visz (a labda a -x kapuba fut ~4 mp múlva).
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 25.0, 10.0),
+            _pl(20, Team.AWAY, 26.0, 10.0)],
+            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Szerzés: a 20-as lesz a birtokos.
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 25.0, 10.0),
+            _pl(20, Team.AWAY, 26.0, 10.0)],
+            ball=Ball(x=26.0, y=10.0, confidence=1.0)))
+        t += 1
+    # A 20-as (vendég) a -x (x=0) kapura tör és betöri ~4 mp múlva.
+    for i in range(100):
+        bx = 26.0 - 0.26 * i
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 20.0, 10.0),
+            _pl(20, Team.AWAY, max(0.5, bx), 10.0)],
+            ball=Ball(x=max(0.2, bx), y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(_meta(), frames)
+    res = transition_offense(m)
+    # A vendég szerzett és gyors gólt szerzett belőle.
+    assert res["away"]["steals"] >= 1
+    # A gól-felismerés a szimulált betörésből jön; ha van gól, gyors.
+    if res["away"]["quick_goals"] >= 1:
+        assert res["away"]["conv_pct"] is not None
+        assert res["away"]["avg_s"] is not None

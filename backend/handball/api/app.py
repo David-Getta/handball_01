@@ -2423,6 +2423,11 @@ def create_app():
             res["pass_chains"] = pass_chains(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.attack_types import transition_offense
+            res["transition_offense"] = transition_offense(match)
+        except Exception:
+            pass
 
         try:
             # Félidei beálló-kép: az élő nézet a szünetben ebből ad
@@ -2713,6 +2718,9 @@ def create_app():
                        lambda: breakthrough_lanes(match))
                 from ..pipeline.attack_types import pass_chains
                 _layer("pass_chains", lambda: pass_chains(match))
+                from ..pipeline.attack_types import transition_offense
+                _layer("transition_offense",
+                       lambda: transition_offense(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
