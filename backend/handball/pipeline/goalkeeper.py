@@ -551,3 +551,52 @@ def empty_net_context(match: Match, config=None) -> dict:
                 - EN_ENDGAME_WINDOW_MIN * 60.0 * fps):
             rec["endgame"] += 1
     return out
+
+
+# Kapus-kimozdulás: e felett az átlagos kapu-távolság felett "kint
+# álló" a kapus (átemelhető), ez alatt "vonalon maradó".
+GK_DEPTH_OUT_M = 1.5
+GK_DEPTH_MIN_FRAMES = 100
+
+
+def gk_positioning(match, config=None) -> dict:
+    """Kapus-kimozdulás: milyen mélyen áll a kapus a kapuja előtt.
+
+    Kockánként a kapus-jelölésű játékos távolsága a SAJÁT kapu
+    közepétől (x-irányban a gólvonaltól, y-ban a kapu-középtől) — a
+    kint álló kapus az átemelés/lob ellen sebezhető, a vonalon maradó
+    a közeli lövésnél ad nagyobb felületet.
+
+    Visszatérés csapatonként: {"avg_depth_m", "frames", "style"}
+    — style: "kint álló" / "vonalon maradó" / "kiegyensúlyozott";
+    avg_depth_m None, ha nincs elég mért kocka (GK_DEPTH_MIN_FRAMES).
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    acc = {Team.HOME: [0.0, 0], Team.AWAY: [0.0, 0]}
+    for f in match.frames:
+        for p in f.players:
+            if p.role != "kapus":
+                continue
+            own_x = config.own_goal_x(p.team)
+            d = math.hypot(p.x - own_x, p.y - 10.0)
+            acc[p.team][0] += d
+            acc[p.team][1] += 1
+    out = {}
+    for team in (Team.HOME, Team.AWAY):
+        total, n = acc[team]
+        if n < GK_DEPTH_MIN_FRAMES:
+            out[team.value] = {"avg_depth_m": None, "frames": n,
+                               "style": None}
+            continue
+        avg = round(total / n, 2)
+        style = ("kint álló" if avg >= GK_DEPTH_OUT_M
+                 else "vonalon maradó" if avg <= 0.8
+                 else "kiegyensúlyozott")
+        out[team.value] = {"avg_depth_m": avg, "frames": n,
+                           "style": style}
+    return out

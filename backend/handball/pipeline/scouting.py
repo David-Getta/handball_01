@@ -271,6 +271,10 @@ class ScoutingReport:
     # Labdaszerzőik: [{"player_id", "steals"}] — ki szerzi a labdákat;
     # játékosonként meccsek közt pontosan összegezhető.
     ball_winners: list = field(default_factory=list)
+    # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
+    # meccsek közt pontosan összegződik).
+    gk_depth_sum_m: float = 0.0
+    gk_depth_frames: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -893,6 +897,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "az ő zónájában rövid, biztos passz; a hosszú "
                 "keresztpasszt nála ne erőltesd.")
 
+    # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
+    # maradó ellen a lepattanóra kell menni.
+    if rep.gk_depth_frames >= 100:
+        gk_depth = rep.gk_depth_sum_m / rep.gk_depth_frames
+        if gk_depth >= 1.5:
+            keys.append(
+                f"Kapusuk kint áll (átlag {gk_depth:.1f} m-re a "
+                "gólvonaltól) — az átemelés és a lob a fegyver, főleg "
+                "kontránál.")
+        elif gk_depth <= 0.8:
+            keys.append(
+                f"Kapusuk a vonalon marad (átlag {gk_depth:.1f} m) — "
+                "közelről a felső sarkok nyílnak, és minden lepattanóra "
+                "rá kell mozdulni.")
+
     # Lövési zónák: ha egy zóna dominál (a lövések ≥40%-a, legalább 3 lövésből),
     # konkrét védekezési kulcsot adunk rá.
     total_shots = sum(z["shots"] for z in rep.shot_zones.values())
@@ -1430,6 +1449,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                            else w["player_id"]),
              "steals": w["steals"]}
             for w in ball_winners(match, config)[team.value]["players"]]
+        from .goalkeeper import gk_positioning
+        gp = gk_positioning(match, config)[team.value]
+        if gp["avg_depth_m"] is not None:
+            rep.gk_depth_sum_m = round(
+                gp["avg_depth_m"] * gp["frames"], 1)
+            rep.gk_depth_frames = gp["frames"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2362,6 +2387,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
                                   for r in reports),
         rotation_matches=sum(r.rotation_matches for r in reports),
         ball_winners=_merge_ball_winners(reports),
+        gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
+        gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

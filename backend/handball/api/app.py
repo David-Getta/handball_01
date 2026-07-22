@@ -2382,6 +2382,11 @@ def create_app():
             res["xg_saved"] = xg_saved(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.goalkeeper import gk_positioning
+            res["positioning"] = gk_positioning(match)
+        except Exception:
+            pass
         return res
 
     @app.get("/matches/{match_id}/rules")
@@ -2712,6 +2717,8 @@ def create_app():
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
                 _layer("ball_winners", lambda: ball_winners(match))
+                from ..pipeline.goalkeeper import gk_positioning
+                _layer("gk_positioning", lambda: gk_positioning(match))
                 from ..pipeline.tactics import attack_sides
                 _layer("attack_sides", lambda: attack_sides(match))
                 from ..pipeline.tactics import efficiency_vs_formation
