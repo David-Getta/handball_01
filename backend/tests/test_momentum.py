@@ -315,6 +315,43 @@ def test_clutch_unavailable_on_short_clip():
     assert clutch_performance(m) == {"available": False}
 
 
+def test_clutch_scorers_credits_late_shooter():
+    """Elég hosszú felvételen a hajrá-ablakban esett gólt a lövőnek írja
+    jóvá; rövid klipen üres."""
+    from handball.pipeline.momentum import (CLUTCH_MIN_DURATION_S,
+                                            clutch_scorers)
+    fps = 25.0
+
+    def pl(tid, x, y, j=None):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0,
+                              jersey_number=j)
+
+    frames = []
+    t = 0
+    for _ in range(int((CLUTCH_MIN_DURATION_S + 30) * fps)):
+        frames.append(Frame(t=t, players=[pl(7, 20.0, 10.0, 7)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Hajrá-gól a 7-es lövőtől a +x kapura.
+    for _ in range(3):
+        frames.append(Frame(t=t, players=[pl(7, 33.0, 10.0, 7)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(9):
+        bx = min(33.0 + 1.6 * (i + 1), 40.0)
+        frames.append(Frame(t=t, players=[pl(7, 33.0, 10.0, 7)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        t += 1
+    cs = clutch_scorers(Match(_meta(), frames))
+    assert cs["home"]["total"] == 1
+    assert cs["home"]["players"][0]["player_id"] == 7
+    assert cs["home"]["players"][0]["goals"] == 1
+    # Rövid klipen üres.
+    short = _match_from_goals("HH")
+    assert clutch_scorers(short)["home"]["total"] == 0
+
+
 def test_halftime_score_counts_first_half_goals():
     """H, A az 500. kocka előtt, H utána; half_t=500 → félidei állás 1-1."""
     from handball.pipeline.momentum import halftime_score
