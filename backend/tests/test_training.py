@@ -886,3 +886,41 @@ def test_training_flags_gk_positioning():
     out2 = tf33(scene(0.4))
     assert not any(it["title"] == "Kapus-helyezkedés"
                    for it in out2["home"])
+
+
+def test_training_flags_weak_transition_finish():
+    """34) Sok labdaszerzés gyenge kontra-konverzióval Kontra-befejezés
+    fókuszt ad."""
+    from handball.models.tracking import Ball, Frame, Match
+    from handball.pipeline.training import training_focus as tf34
+
+    # 5 hazai→vendég labdaszerzés, gól nélkül (a labda a középen marad).
+    frames = []
+    t = 0
+    for _ in range(5):
+        # Hazai birtokol.
+        for _ in range(15):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 25.0, 10.0),
+                _pl(20, Team.AWAY, 26.0, 10.0)],
+                ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Vendég szerez, de nem szerez gólt (a labda középen marad).
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 25.0, 10.0),
+                _pl(20, Team.AWAY, 20.0, 10.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Vissza hazai birtoklásba (újabb szerzés-lehetőség).
+        for _ in range(15):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 25.0, 10.0),
+                _pl(20, Team.AWAY, 26.0, 10.0)],
+                ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+            t += 1
+    m = Match(_meta(), frames)
+    out = tf34(m)
+    items = [it for it in out["away"]
+             if it["title"] == "Kontra-befejezés"]
+    assert items and "gyors gól" in items[0]["why"]

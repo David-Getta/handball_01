@@ -707,6 +707,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 34) Kontra-befejezés: ha a csapat sok labdát szerez, de alig
+    # váltja gyors gólra (4+ szerzés, 20% alatti konverzió), a
+    # lerohanás-befejezést kell gyakorolni.
+    try:
+        from .attack_types import transition_offense
+        to34 = transition_offense(match, config)
+        for side in ("home", "away"):
+            rec34 = to34[side]
+            if rec34["steals"] < 4:
+                continue
+            conv34 = 100.0 * rec34["quick_goals"] / rec34["steals"]
+            if conv34 <= 20.0:
+                add(side, "támadás", "Kontra-befejezés",
+                    f"{rec34['steals']} labdaszerzésből csak "
+                    f"{rec34['quick_goals']} lett gyors gól "
+                    f"({conv34:.0f}%) — a megszerzett labda nem fordul "
+                    "azonnali gólra",
+                    "lerohanás-befejezés gyakorlat: 2-1 és 3-2 "
+                    "túlszám kapura futásból, gyors első passz a "
+                    "szerzés után, higgadt befejezés kapussal")
+    except Exception:
+        pass
+
     # 29) Emberfogás-tapadás: ha van lazán őrző védőnk (a leglazább
     # emberfogó 2,5 m+ átlagtávról kíséri az emberét), az egy-egy
     # elleni védekezést kell gyakorolni — névre szólóan.
