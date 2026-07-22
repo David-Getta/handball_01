@@ -122,8 +122,11 @@ def test_fuse_endpoint_creates_new_match(tmp_path):
     """A POST /matches/fuse két nézetből új meccset tesz a könyvtárba,
     amin a szokásos végpontok futnak."""
     import os
+
+    import pytest
     os.environ["HANDBALL_DATA_DIR"] = str(tmp_path)
-    from fastapi.testclient import TestClient
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
     from handball.api.app import create_app
 
     app = TestClient(create_app())

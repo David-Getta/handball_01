@@ -74,9 +74,11 @@ def test_health_full_checklist():
     import os
     import tempfile
 
-    os.environ["HANDBALL_DATA_DIR"] = tempfile.mkdtemp(prefix="hb_health_")
-    from fastapi.testclient import TestClient
+    import pytest
 
+    os.environ["HANDBALL_DATA_DIR"] = tempfile.mkdtemp(prefix="hb_health_")
+    TestClient = pytest.importorskip(
+        "fastapi.testclient", reason="fastapi nincs telepítve").TestClient
     from handball.api.app import create_app
     client = TestClient(create_app())
     r = client.get("/health/full")
