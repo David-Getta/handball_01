@@ -757,4 +757,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 35) Lövésválasztás: ha a csapat sokat lő távolról (átlövés), de
+    # gyenge a gólarány (5+ távoli lövés, a lövések 40%+-a távoli,
+    # 25% alatti gólarány), a lövésválasztást és az átlövő-technikát
+    # kell gyakorolni.
+    try:
+        from .attack_types import shot_ranges
+        sr35 = shot_ranges(match, config)
+        for side in ("home", "away"):
+            rec35 = sr35[side]
+            far35 = rec35["far"]
+            if far35["shots"] < 5 or rec35["total_shots"] < 1:
+                continue
+            far_pct35 = 100.0 * far35["shots"] / rec35["total_shots"]
+            goal_pct35 = far35["goal_pct"]
+            if goal_pct35 is None or goal_pct35 > 25.0 or far_pct35 < 40.0:
+                continue
+            add(side, "támadás", "Lövésválasztás",
+                f"a lövések {far_pct35:.0f}%-a távolról esik, de a "
+                f"távoli gólarány csak {goal_pct35:.0f}% — sok az "
+                "alacsony esélyű átlövés",
+                "lövésválasztás-játék: átlövés csak tiszta helyzetben, "
+                "különben még egy lejátszás a beállóra/betörésre; "
+                "átlövő-technika kapussal, blokk fölött/mellett, "
+                "felugrásból pontos sarokra")
+    except Exception:
+        pass
+
     return out

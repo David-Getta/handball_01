@@ -459,6 +459,32 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "gólig) — erős kontra-játék.")
     except Exception:
         pass
+    # Lövés-távolság: honnan lő a csapat, és megéri-e (gólarány sávonként).
+    try:
+        from .attack_types import shot_ranges
+        sr = shot_ranges(match)
+        _sr_label = {"close": "közelről", "mid": "közép-távból",
+                     "far": "távolról"}
+        for side, name in (("home", home), ("away", away)):
+            rec_sr = sr[side]
+            if rec_sr["total_shots"] < 5 or rec_sr["dominant"] is None:
+                continue
+            dom = rec_sr["dominant"]
+            b_sr = rec_sr[dom]
+            share = round(100.0 * b_sr["shots"] / rec_sr["total_shots"])
+            sent_sr = (f" A(z) {name} lövéseinek {share}%-a "
+                       f"{_sr_label[dom]} esett")
+            if b_sr["goal_pct"] is not None:
+                sent_sr += f" ({b_sr['goal_pct']:.0f}% gólarány)"
+            # Ha távolról lő sokat, de gyenge a gólarány, ez fogódzó a
+            # védekező félnek (kifelé zárni) és a támadónak (jobb helyzet).
+            if dom == "far" and b_sr["goal_pct"] is not None \
+                    and b_sr["goal_pct"] < 25.0:
+                sent_sr += " — az átlövés gólarány gyenge, jobb helyzeteket"\
+                    " érdemes keresni"
+            body += sent_sr + "."
+    except Exception:
+        pass
     # Passz-lánc: átlagos passz-szám + a legjobb lánc-hossz ítélete.
     try:
         from .attack_types import pass_chains

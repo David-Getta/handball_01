@@ -647,3 +647,68 @@ def transition_offense(match: Match,
             "avg_s": round(sum_s / quick, 1) if quick else None,
         }
     return out
+
+
+# Lövés-távolság sávok (a kapu közepétől mért méter). A kézilabdás
+# alapmegosztás: közeli (beálló/szélső, a 6-os környéke), közép (tipikus
+# beállásos lövés), távoli (átlövés, hátsó sor).
+SHOT_RANGE_CLOSE_M = 7.0    # eddig: "közeli"
+SHOT_RANGE_MID_M = 9.5      # eddig: "közép"; efölött "távoli"
+
+
+def shot_ranges(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Lövés-távolság profil: honnan lő és honnan szerez gólt a csapat.
+
+    Minden lövést a lövő (vagy a labda) kapu-középtől mért távolsága alapján
+    három sávba sorol — "close" (<= SHOT_RANGE_CLOSE_M m), "mid"
+    (<= SHOT_RANGE_MID_M m), "far" (efölött) — és sávonként számolja a
+    lövéseket, gólokat és a gólarányt. A match_xg lövés-listáját használja
+    újra (ott már megvan minden lövés helye és kimenetele).
+
+    Visszatérés csapatonként:
+      {"close"/"mid"/"far": {"shots", "goals", "goal_pct"},
+       "total_shots", "dominant"} — dominant a legtöbb lövést adó sáv
+    (None, ha nincs lövés). goal_pct None üres sávnál.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    goal_cy = COURT_WIDTH_M / 2.0
+    xg = match_xg(match, config)
+
+    def _band(x: float, y: float, team: str) -> str:
+        goal_x = config.attacks_toward_x(
+            Team.HOME if team == "home" else Team.AWAY)
+        dist = math.hypot(x - goal_x, y - goal_cy)
+        if dist <= SHOT_RANGE_CLOSE_M:
+            return "close"
+        if dist <= SHOT_RANGE_MID_M:
+            return "mid"
+        return "far"
+
+    out: dict = {}
+    for side in ("home", "away"):
+        bands = {b: {"shots": 0, "goals": 0} for b in ("close", "mid", "far")}
+        for sh in xg["shots"]:
+            if sh["team"] != side:
+                continue
+            b = _band(sh["x"], sh["y"], side)
+            bands[b]["shots"] += 1
+            if sh["outcome"] == "goal":
+                bands[b]["goals"] += 1
+        total = sum(bands[b]["shots"] for b in bands)
+        for b in bands:
+            n = bands[b]["shots"]
+            bands[b]["goal_pct"] = (round(100.0 * bands[b]["goals"] / n, 1)
+                                    if n else None)
+        dominant = max(("close", "mid", "far"),
+                       key=lambda b: bands[b]["shots"]) if total else None
+        # Ha nincs lövés, a "dominant" ne egy 0-s sávot nevezzen meg.
+        if dominant is not None and bands[dominant]["shots"] == 0:
+            dominant = None
+        out[side] = {**bands, "total_shots": total, "dominant": dominant}
+    return out

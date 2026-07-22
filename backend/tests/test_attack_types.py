@@ -463,3 +463,55 @@ def test_transition_offense_credits_quick_goals():
     if res["away"]["quick_goals"] >= 1:
         assert res["away"]["conv_pct"] is not None
         assert res["away"]["avg_s"] is not None
+
+
+def _home_shot(t0, sx, goal=True):
+    """Egy HAZAI lövés a +x kapura: a lövő (1-es) végig sx-nél áll, a labda
+    onnan a kapuig gyorsul. sx a lövő kapu-középtől mért távolságát adja
+    (a kapu (40, 10)): sx=34 → ~6 m (közeli), 31,5 → ~8,5 m (közép),
+    29 → ~11 m (távoli). goal=False → a labda a kapufák mellé (y=5) megy."""
+    frames = []
+    for i in range(3):  # a lövő birtokolja a labdát (hogy lövőként ismerje fel)
+        frames.append(Frame(t=t0 + i, players=[_pl(1, Team.HOME, sx, 10.0)],
+                            ball=Ball(x=sx, y=10.0, confidence=1.0)))
+    t = t0 + 3
+    for i in range(8):
+        bx = min(sx + 1.5 * (i + 1), 40.0)
+        frames.append(Frame(t=t + i, players=[_pl(1, Team.HOME, sx, 10.0)],
+                            ball=Ball(x=bx, y=(10.0 if goal else 5.0),
+                                      confidence=1.0)))
+    return frames
+
+
+def test_shot_ranges_buckets_by_distance():
+    """A lövéseket a lövő kapu-távja alapján közeli / közép / távoli sávba
+    sorolja, sávonként lövés- és gólszámmal, és a domináns sávot adja."""
+    from handball.pipeline.attack_types import shot_ranges
+
+    frames = _home_shot(0, 34.0, goal=True)         # közeli, gól
+    t = frames[-1].t + 1
+    for i in range(20):  # szünet: a labda középen, hogy a debounce nulláz
+        frames.append(Frame(t=t + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    t2 = frames[-1].t + 1
+    frames += _home_shot(t2, 31.5, goal=True)        # közép, gól
+    t3 = frames[-1].t + 1
+    for i in range(20):
+        frames.append(Frame(t=t3 + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    t4 = frames[-1].t + 1
+    frames += _home_shot(t4, 29.0, goal=False)       # távoli, mellé
+
+    m = Match(_meta(), frames)
+    sr = shot_ranges(m)
+    home = sr["home"]
+    assert home["total_shots"] == 3
+    assert home["close"]["shots"] == 1 and home["close"]["goals"] == 1
+    assert home["mid"]["shots"] == 1 and home["mid"]["goals"] == 1
+    assert home["far"]["shots"] == 1 and home["far"]["goals"] == 0
+    assert home["close"]["goal_pct"] == 100.0
+    assert home["far"]["goal_pct"] == 0.0
+    assert home["dominant"] in ("close", "mid", "far")
+    # A vendég nem lőtt — üres profil, domináns sáv nélkül.
+    assert sr["away"]["total_shots"] == 0
+    assert sr["away"]["dominant"] is None

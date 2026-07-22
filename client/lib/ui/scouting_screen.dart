@@ -736,6 +736,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "(${reg.toStringAsFixed(0)} alapember) · $tag";
   }
 
+  // Lövés-távolság profil: melyik sávból lő a legtöbbet, milyen
+  // gólaránnyal (8+ lövés kell hozzá; a backend-kulcsokkal azonos küszöb).
+  String? _shotRange(Map<String, dynamic> r) {
+    final close = ((r["sr_close_shots"] as num?) ?? 0).toInt();
+    final mid = ((r["sr_mid_shots"] as num?) ?? 0).toInt();
+    final far = ((r["sr_far_shots"] as num?) ?? 0).toInt();
+    final total = close + mid + far;
+    if (total < 8) return null;
+    final closeG = ((r["sr_close_goals"] as num?) ?? 0).toInt();
+    final farG = ((r["sr_far_goals"] as num?) ?? 0).toInt();
+    final farShare = 100.0 * far / total;
+    final closeShare = 100.0 * close / total;
+    if (farShare >= 45.0) {
+      final pct = far > 0 ? " · ${(100.0 * farG / far).round()}% gól" : "";
+      return "${farShare.round()}% távoli (átlövés)$pct";
+    }
+    if (closeShare >= 45.0) {
+      final pct =
+          close > 0 ? " · ${(100.0 * closeG / close).round()}% gól" : "";
+      return "${closeShare.round()}% közeli (beálló/szélső)$pct";
+    }
+    return null; // kiegyensúlyozott eloszlás — nem kirívó
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1003,6 +1027,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_gkDepth(r) != null) ["Kapus-típus", _gkDepth(r)!],
       if (_transOffense(r) != null)
         ["Átmenet-támadás", _transOffense(r)!],
+      if (_shotRange(r) != null) ["Lövés-távolság", _shotRange(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

@@ -279,6 +279,14 @@ class ScoutingReport:
     # közt pontosan összegződnek (konverzió = gyors gól / szerzés).
     trans_steals: int = 0
     trans_quick_goals: int = 0
+    # Lövés-távolság sávok — lövés/gól darabszámok, meccsek közt pontosan
+    # összegződnek (gólarány sávonként = gól / lövés a teljes mintán).
+    sr_close_shots: int = 0
+    sr_close_goals: int = 0
+    sr_mid_shots: int = 0
+    sr_mid_goals: int = 0
+    sr_far_shots: int = 0
+    sr_far_goals: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -913,6 +921,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "kockázatos keresztpasszt ne vállalj, és lövés után "
                 "azonnal zárj vissza.")
 
+    # Lövés-távolság profil: honnan lő a legtöbbet — a védekezés
+    # súlypontjához (kifelé zárni az átlövőkre vagy a 6-ost erősíteni).
+    _sr_total = rep.sr_close_shots + rep.sr_mid_shots + rep.sr_far_shots
+    if _sr_total >= 8:
+        _far_share = 100.0 * rep.sr_far_shots / _sr_total
+        _close_share = 100.0 * rep.sr_close_shots / _sr_total
+        _far_pct = (100.0 * rep.sr_far_goals / rep.sr_far_shots
+                    if rep.sr_far_shots else 0.0)
+        if _far_share >= 45.0:
+            s_sr = f"Lövéseik {_far_share:.0f}%-a távolról (átlövés) esik"
+            if rep.sr_far_shots:
+                s_sr += f", {_far_pct:.0f}%-os gólaránnyal"
+            s_sr += " — lépj ki az átlövőkre és blokkolj; "
+            s_sr += ("gyenge a távoli gólarányuk, a kapus dolgozhat"
+                     if _far_pct < 25.0 else "erős átlövők, aktív blokk kell")
+            keys.append(s_sr + ".")
+        elif _close_share >= 45.0:
+            keys.append(
+                f"Lövéseik {_close_share:.0f}%-a közelről (beálló/szélső, "
+                "betörés) esik — a 6-os védelmét kell megerősíteni, "
+                "beálló-őrzés és a betörési sávok zárása a kulcs.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -1475,6 +1505,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         to_ = transition_offense(match, config)[team.value]
         rep.trans_steals = to_["steals"]
         rep.trans_quick_goals = to_["quick_goals"]
+        from .attack_types import shot_ranges
+        sr = shot_ranges(match, config)[team.value]
+        rep.sr_close_shots = sr["close"]["shots"]
+        rep.sr_close_goals = sr["close"]["goals"]
+        rep.sr_mid_shots = sr["mid"]["shots"]
+        rep.sr_mid_goals = sr["mid"]["goals"]
+        rep.sr_far_shots = sr["far"]["shots"]
+        rep.sr_far_goals = sr["far"]["goals"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2423,6 +2461,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
         trans_quick_goals=sum(r.trans_quick_goals for r in reports),
+        sr_close_shots=sum(r.sr_close_shots for r in reports),
+        sr_close_goals=sum(r.sr_close_goals for r in reports),
+        sr_mid_shots=sum(r.sr_mid_shots for r in reports),
+        sr_mid_goals=sum(r.sr_mid_goals for r in reports),
+        sr_far_shots=sum(r.sr_far_shots for r in reports),
+        sr_far_goals=sum(r.sr_far_goals for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

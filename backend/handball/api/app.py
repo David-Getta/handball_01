@@ -2428,6 +2428,11 @@ def create_app():
             res["transition_offense"] = transition_offense(match)
         except Exception:
             pass
+        try:
+            from ..pipeline.attack_types import shot_ranges
+            res["shot_ranges"] = shot_ranges(match)
+        except Exception:
+            pass
 
         try:
             # Félidei beálló-kép: az élő nézet a szünetben ebből ad
@@ -2721,6 +2726,8 @@ def create_app():
                 from ..pipeline.attack_types import transition_offense
                 _layer("transition_offense",
                        lambda: transition_offense(match))
+                from ..pipeline.attack_types import shot_ranges
+                _layer("shot_ranges", lambda: shot_ranges(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
