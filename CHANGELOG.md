@@ -51,6 +51,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Védekezési vonal magassága**: milyen mélyen (passzív 6-0) vagy magasan
+  (felfutó, agresszív 3-2-1) áll a fal — a felállt védekezés átlagos
+  mélysége a saját kaputól. Más, mint a védekezési nyomás (az a labdástól
+  mért táv). Összefoglaló, /analyze, csomag, felderítés-profil (count-alapú)
+  + csempe, és a 39. edzés-szabály (felfutó falnál mögöttes tér zárása,
+  mély falnál aktív kilépés). (#517)
 - **Szélső-befejezés**: a szélső (éles) szögből, közelről leadott lövések
   gólaránya — erős szélső széthúzza a védelmet, gyengére ráengedhető a
   szög. Összefoglaló, /analyze, csomag, felderítés-profil (count-alapú,

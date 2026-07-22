@@ -831,6 +831,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "$tag · ${pct.round()}% ($goals/$shots)";
   }
 
+  // Védekezési vonal magassága: felfutó (agresszív) vagy mély (passzív)
+  // fal — a felállt védekezés átlagos mélysége a saját kaputól (100+ mért
+  // kocka). A backend-kulcsokkal azonos küszöb.
+  String? _defLine(Map<String, dynamic> r) {
+    final frames = ((r["defline_frames"] as num?) ?? 0).toInt();
+    if (frames < 100) return null;
+    final avg = ((r["defline_sum_m"] as num?) ?? 0).toDouble() / frames;
+    if (avg >= 8.5) {
+      return "felfutó (agresszív) · ${avg.toStringAsFixed(1)} m";
+    }
+    if (avg <= 6.5) {
+      return "mély (passzív) · ${avg.toStringAsFixed(1)} m";
+    }
+    return null; // kiegyensúlyozott — nem kirívó
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1102,6 +1118,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_gkWeakRange(r) != null) ["Kapus gyenge sávja", _gkWeakRange(r)!],
       if (_goalPlacement(r) != null) ["Kapu-sarok", _goalPlacement(r)!],
       if (_wingFinishing(r) != null) ["Szélső-játék", _wingFinishing(r)!],
+      if (_defLine(r) != null) ["Védekezési vonal", _defLine(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

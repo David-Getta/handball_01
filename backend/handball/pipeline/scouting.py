@@ -309,6 +309,11 @@ class ScoutingReport:
     # wing_goals "szélső-függéstől": ez a szög szerinti BEFEJEZÉS-minőség.)
     wing_fin_shots: int = 0
     wing_fin_goals: int = 0
+    # Védekezési vonal magassága — a felállt védekezés mélység-összege és a
+    # mért kockák száma (átlag = összeg / kockák), meccsek közt pontosan
+    # összegződik. Magas fal = felfutó/agresszív, alacsony = mély/passzív.
+    defline_sum_m: float = 0.0
+    defline_frames: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -1015,6 +1020,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.wing_fin_shots}, {_wing_pct:.0f}%) — a szélső lövést "
                 "rá lehet engedni, befelé zárj a beállóra/átlövőre.")
 
+    # Védekezési vonal magassága: felfutó fal mögé lefutás/átemelés, mély
+    # fal ellen türelmes játék és beálló.
+    if rep.defline_frames >= 100:
+        _dl = rep.defline_sum_m / rep.defline_frames
+        from .defense import DEF_LINE_DEEP_M, DEF_LINE_HIGH_M
+        if _dl >= DEF_LINE_HIGH_M:
+            keys.append(
+                f"Felfutó, agresszív falat húznak (átlag {_dl:.1f} m-re a "
+                "kaputól) — a hátuk mögötti tér a fegyver: lefutás, "
+                "átemelés, gyors indítás, egy az egy elleni betörés.")
+        elif _dl <= DEF_LINE_DEEP_M:
+            keys.append(
+                f"Mélyen, passzívan védekeznek (átlag {_dl:.1f} m-re a "
+                "kaputól) — türelmes felállt játék, a beálló mozgatása és "
+                "a távoli lövés kényszerítése töri meg őket.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -1602,6 +1623,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         wf = wing_finishing(match, config)[team.value]
         rep.wing_fin_shots = wf["shots"]
         rep.wing_fin_goals = wf["goals"]
+        from .defense import defensive_line_height
+        dlh = defensive_line_height(match, config)[team.value]
+        if dlh["avg_height_m"] is not None:
+            rep.defline_sum_m = round(
+                dlh["avg_height_m"] * dlh["frames"], 1)
+            rep.defline_frames = dlh["frames"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2567,6 +2594,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         place_jobb=sum(r.place_jobb for r in reports),
         wing_fin_shots=sum(r.wing_fin_shots for r in reports),
         wing_fin_goals=sum(r.wing_fin_goals for r in reports),
+        defline_sum_m=round(sum(r.defline_sum_m for r in reports), 1),
+        defline_frames=sum(r.defline_frames for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),

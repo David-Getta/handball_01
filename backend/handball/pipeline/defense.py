@@ -348,6 +348,66 @@ def defensive_pressure(match, config=None) -> dict:
     return out
 
 
+# Védekezési vonal magassága: efölött felfutó/agresszív (3-2-1 jelleg), ez
+# alatt mély/passzív (6-0 jelleg) fal; ennyi mért kocka kell az ítélethez.
+DEF_LINE_HIGH_M = 8.5
+DEF_LINE_DEEP_M = 6.5
+DEF_LINE_MIN_FRAMES = 100
+
+
+def defensive_line_height(match, config=None) -> dict:
+    """Védekezési vonal magassága: milyen mélyen vagy magasan áll a fal.
+
+    Amikor a csapat védekezik (az ellenfél a csapat saját térfelén
+    birtokol), a védő mezőnyjátékosok átlagos távolsága a SAJÁT
+    gólvonaltól — kicsi = mély, passzív fal (6-0 jelleg, a 6-os környékén),
+    nagy = felfutó, agresszív védekezés (3-2-1 jelleg, kilépő védőkkel). Ez
+    más, mint a védekezési NYOMÁS (az a labdástól mért távolság): itt a fal
+    HELYE a saját kapuhoz képest a kérdés.
+
+    Visszatérés csapatonként (a védekező csapaté):
+      {"avg_height_m", "frames", "style"} — style: "mély (passzív)" /
+    "felfutó (agresszív)" / "kiegyensúlyozott"; avg_height_m None, ha nincs
+    elég mért kocka (DEF_LINE_MIN_FRAMES).
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    acc = {Team.HOME: [0.0, 0], Team.AWAY: [0.0, 0]}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén van.
+        if abs(holder.x - own_x) > half:
+            continue
+        depths = [abs(p.x - own_x) for p in f.players
+                  if p.team == deff and p.role != "kapus"
+                  and abs(p.x - own_x) <= half]
+        if depths:
+            acc[deff][0] += sum(depths) / len(depths)
+            acc[deff][1] += 1
+
+    out = {}
+    for team in (Team.HOME, Team.AWAY):
+        total, n = acc[team]
+        if n < DEF_LINE_MIN_FRAMES:
+            out[team.value] = {"avg_height_m": None, "frames": n,
+                               "style": None}
+            continue
+        avg = round(total / n, 2)
+        style = ("felfutó (agresszív)" if avg >= DEF_LINE_HIGH_M
+                 else "mély (passzív)" if avg <= DEF_LINE_DEEP_M
+                 else "kiegyensúlyozott")
+        out[team.value] = {"avg_height_m": avg, "frames": n, "style": style}
+    return out
+
+
 # Visszarendeződés: ennyi védőnek kell a saját térfélen lennie, hogy a
 # védelmet "visszaértnek" tekintsük; a mérést ennyi mp-nél levágjuk.
 RECOVERY_DEFENDERS = 4
