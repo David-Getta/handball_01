@@ -26,6 +26,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 ## Kiadatlan — a következő kiadás felé (a v0.1.18 óta)
 
 ### Megbízhatóság — nem veszik el munka
+- **macOS auto-frissítés javítása**: a „Frissítés most" a Letöltésekből
+  indított (karanténos) appnál csendben elbukott (App Translocation) —
+  most a kanonikus /Applications mappába telepít, előre letörli a
+  karantént, és naplót ír a diagnózishoz. (#510)
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
   elmenti (nem dob el órákat). (#89)
 - **Bezárás-védelem**: az app bezárásakor a futó feldolgozás rendezetten
@@ -47,6 +51,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Lövés-távolság profil**: honnan lő és honnan gólozik a csapat —
+  közeli (beálló/szélső) / közép / távoli (átlövés) sávok lövés- és
+  gólszámmal, sávonkénti gólaránnyal; összefoglaló-mondat, /analyze API,
+  csomag-réteg, felderítés-profil + "kifelé zárni az átlövőkre" /
+  "6-ost erősíteni" kulcsok + csempe, és a 35. edzés-szabály
+  (lövésválasztás gyenge távoli gólaránynál). (#511)
+- **Átmenet-támadás**: a labdaszerzésből mennyi gyors gól lesz
+  (konverzió + átlagidő a szerzéstől a gólig) — összefoglaló, /analyze,
+  csomag, felderítés-profil + kulcs + csempe, 34. edzés-szabály
+  (kontra-befejezés). (#507–#509)
 - **Helyzetminőség (xG)**: minden lövés értéke a helyéből; csapat- és
   lövőnkénti várható gól, befejezés-hatékonyság — a lövéstérképen, az
   összefoglalóban, a jelentésben, a felderítésben és a játékos-trendben.
