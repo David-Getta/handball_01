@@ -520,6 +520,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   rétegekből. (#118, #131)
 
 ### Export és jelentés
+- **Védekezés-mutatók a jelentésben**: a csapatmutató-táblába bekerül a
+  védekezési vonal magassága (mély/felfutó) és a kapus gyenge lövés-sávja
+  — a két új védekezés-réteg most a nyomtatható jelentésben is. (#522)
 - **Befejezés-profil a meccsjelentésben**: új tábla a lövés-rétegekből —
   távolság (közeli/közép/távoli, gólaránnyal), szélső-befejezés és a
   domináns kapu-sarok, csapatonként; addig ezek csak az összefoglaló
