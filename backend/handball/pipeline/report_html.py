@@ -220,6 +220,22 @@ def scouting_report_html(rep: ScoutingReport,
                            '<th class="num">Őrzés-kocka</th>'
                            '<th class="num">Átl. táv</th></tr>'
                            + "".join(mark_rows) + "</table>")
+        # Betörés-sávjaik: hol lépnek be a 9 m-en belülre — a
+        # sáv-védelem felkészüléséhez (5+ betöréstől).
+        if rep.break_entries >= 5 and rep.break_lanes:
+            lane_rows = []
+            for lane9, v9 in rep.break_lanes.items():
+                share9 = 100.0 * v9["entries"] / rep.break_entries
+                lane_rows.append(
+                    f"<tr><td>{escape(str(lane9))}</td>"
+                    f'<td class="num">{v9["entries"]} '
+                    f"({share9:.0f}%)</td>"
+                    f'<td class="num">{v9["goals"]}</td></tr>')
+            roles_html += ("<h2>Betörés-sávjaik</h2><table>"
+                           "<tr><th>Sáv</th>"
+                           '<th class="num">Betörés</th>'
+                           '<th class="num">Gól belőle</th></tr>'
+                           + "".join(lane_rows) + "</table>")
     except Exception:
         pass
 
