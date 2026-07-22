@@ -3,7 +3,7 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#489)
+## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#496)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
@@ -222,7 +222,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Szezon-toplisták**: gólkirály / védés-vezér / fal kulcsa /
   labdaszerző a teljes könyvtárból, mezszám-alapú összegzéssel — új
   /library/leaders végpont + dashboard-kártya (#487), és a csapatra
-  szűrve "A szezon játékosai" szakasz a szezon-riportban (#488).
+  szűrve "A szezon játékosai" szakasz a szezon-riportban (#488);
+  ötödik kategóriaként Gólpassz-vezér (#490).
+- **Élő hajrá-protokoll**: szoros állásnál az utolsó 5 perc kezdetén
+  jelzés a padnak (időkérés-terv, hetes-dobó, 7 a 6 döntés). (#491)
+- **Riport-bővítések**: Ellenfél-mérleg tábla a szezon-riportban
+  (#492), "Ki viszi a meccseket" gólfelelős-tábla az Egymás ellen
+  riportban (#493), Betörés-sávjaik tábla a felderítőben (#495).
+- **Őrzés a fejlődés-képernyőn**: szezon-chip + meccsenkénti Őrzés
+  cella laza-jelzéssel a játékos-fejlődés nézetben. (#494)
 - **Támadás-szélesség**: szélesen vagy szűken támadnak-e — új réteg
   kulcsokkal, jelentés-sorral, csempével, összefoglaló-mondattal,
   csomag-réteggel és a 12. meccsterv-szabállyal (széles játék ×
