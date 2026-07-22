@@ -763,6 +763,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Átmenet-támadás: labdaszerzés → gyors gól konverzió (4+ szerzés,
+  // 2+ gyors gól, 30%+) — a backend-kulcsokkal azonos küszöb.
+  String? _transOffense(Map<String, dynamic> r) {
+    final steals = ((r["trans_steals"] as num?) ?? 0).toInt();
+    final quick = ((r["trans_quick_goals"] as num?) ?? 0).toInt();
+    if (steals < 4 || quick < 2) return null;
+    final conv = 100.0 * quick / steals;
+    if (conv < 30.0) return null;
+    return "$quick/$steals · ${conv.toStringAsFixed(0)}% gyors gól";
+  }
+
   // Kontra-befejező: a legtöbb lerohanás-gólt szerző játékos (2+ gól).
   String? _fbFinisher(Map<String, dynamic> r) {
     final list = (r["fb_finishers"] as List?) ?? const [];
@@ -990,6 +1001,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_gkDepth(r) != null) ["Kapus-típus", _gkDepth(r)!],
+      if (_transOffense(r) != null)
+        ["Átmenet-támadás", _transOffense(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

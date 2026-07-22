@@ -275,6 +275,10 @@ class ScoutingReport:
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
     gk_depth_frames: int = 0
+    # Átmenet-támadásuk: szerzések + gyors gólok — darabszámok, meccsek
+    # közt pontosan összegződnek (konverzió = gyors gól / szerzés).
+    trans_steals: int = 0
+    trans_quick_goals: int = 0
     # Hány kiállítást szedett össze a csapat (felismert emberhátrányok)
     # — meccsek közt összegződik, a trendben meccsenkénti átlag.
     suspensions: int = 0
@@ -897,6 +901,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "az ő zónájában rövid, biztos passz; a hosszú "
                 "keresztpasszt nála ne erőltesd.")
 
+    # Átmenet-támadás: ha sok labdaszerzést gyorsan gólra váltanak,
+    # a labdabiztonság a kulcs ellenük.
+    if rep.trans_steals >= 4 and rep.trans_quick_goals >= 2:
+        conv = 100.0 * rep.trans_quick_goals / rep.trans_steals
+        if conv >= 30.0:
+            keys.append(
+                f"A labdaszerzéseiket gyorsan gólra váltják "
+                f"({rep.trans_quick_goals}/{rep.trans_steals}, "
+                f"{conv:.0f}%) — labdabiztonság a saját térfélen, "
+                "kockázatos keresztpasszt ne vállalj, és lövés után "
+                "azonnal zárj vissza.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -1455,6 +1471,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.gk_depth_sum_m = round(
                 gp["avg_depth_m"] * gp["frames"], 1)
             rep.gk_depth_frames = gp["frames"]
+        from .attack_types import transition_offense
+        to_ = transition_offense(match, config)[team.value]
+        rep.trans_steals = to_["steals"]
+        rep.trans_quick_goals = to_["quick_goals"]
         from .rules import detect_powerplay
         rep.suspensions = sum(
             1 for w in detect_powerplay(match)
@@ -2401,6 +2421,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ball_winners=_merge_ball_winners(reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
+        trans_steals=sum(r.trans_steals for r in reports),
+        trans_quick_goals=sum(r.trans_quick_goals for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
