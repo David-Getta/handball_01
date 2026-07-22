@@ -840,4 +840,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 38) Szélső-befejezés: ha a szélső (éles) szögből gyengén fejeznek be
+    # (4+ szélső-lövés, 30% alatti gólarány), a szélső-befejezést kell
+    # gyakorolni.
+    try:
+        from .attack_types import wing_finishing
+        wf38 = wing_finishing(match, config)
+        for side in ("home", "away"):
+            rec38 = wf38[side]
+            if rec38["shots"] < 4 or rec38["goal_pct"] is None \
+                    or rec38["goal_pct"] > 30.0:
+                continue
+            add(side, "támadás", "Szélső-befejezés",
+                f"a szélső szögből csak {rec38['goal_pct']:.0f}% a "
+                f"gólarány ({rec38['goals']}/{rec38['shots']}) — az éles "
+                "szög nincs kihasználva",
+                "szélső-befejezés gyakorlat: felugrásos lövés a hosszú "
+                "sarokba és a kapus lába közé, ejtés a kilépő kapus fölött, "
+                "beadás-befejezés a szélről 1-1 kapussal")
+    except Exception:
+        pass
+
     return out

@@ -51,6 +51,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **Szélső-befejezés**: a szélső (éles) szögből, közelről leadott lövések
+  gólaránya — erős szélső széthúzza a védelmet, gyengére ráengedhető a
+  szög. Összefoglaló, /analyze, csomag, felderítés-profil (count-alapú,
+  külön a "szélső-függéstől") + csempe, és a 38. edzés-szabály
+  (szélső-befejezés gyakorlása). (#516)
 - **Kapu-sarok (befejezés-hely)**: a gólok a kapu melyik oldalára mennek
   (bal/közép/jobb, a lövő szemszögéből) — a gólvonal-átlépés y-jából. Ha a
   góljaik zöme egy oldalra megy, kiszámíthatóak: a kapus felkészülhet.

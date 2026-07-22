@@ -814,6 +814,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${share.round()}% $domLbl kapuoldal ($domN/$total)";
   }
 
+  // Szélső-befejezés: a szélső (éles) szögből leadott lövések gólaránya
+  // (4+ szélső-lövés) — erős vagy gyenge szélső-játék. A backend-kulcsokkal
+  // azonos küszöb.
+  String? _wingFinishing(Map<String, dynamic> r) {
+    final shots = ((r["wing_fin_shots"] as num?) ?? 0).toInt();
+    final goals = ((r["wing_fin_goals"] as num?) ?? 0).toInt();
+    if (shots < 4) return null;
+    final pct = 100.0 * goals / shots;
+    final tag = pct >= 55.0
+        ? "veszélyes"
+        : pct <= 25.0
+            ? "gyenge"
+            : null;
+    if (tag == null) return null;
+    return "$tag · ${pct.round()}% ($goals/$shots)";
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1084,6 +1101,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_shotRange(r) != null) ["Lövés-távolság", _shotRange(r)!],
       if (_gkWeakRange(r) != null) ["Kapus gyenge sávja", _gkWeakRange(r)!],
       if (_goalPlacement(r) != null) ["Kapu-sarok", _goalPlacement(r)!],
+      if (_wingFinishing(r) != null) ["Szélső-játék", _wingFinishing(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],

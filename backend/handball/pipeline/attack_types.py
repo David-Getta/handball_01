@@ -784,3 +784,53 @@ def goal_placement(match: Match, config: Optional[TacticsConfig] = None) -> dict
             dom = None
         out[s] = {**t, "goals": total, "dominant": dom}
     return out
+
+
+# Szélső-lövés: a kapu-középtől oldalra legalább ennyivel (éles szög) ÉS a
+# kaputól legfeljebb ennyire (a szélső a 6-os környékéről fejez be).
+WING_LATERAL_M = 6.0
+WING_MAX_DIST_M = 9.0
+
+
+def wing_finishing(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Szélső-befejezés: a szélső (éles) szögből, közelről leadott lövések
+    és góljaik hatékonysága.
+
+    A szélső poszt a legélesebb szögből fejez be: a kapu-középtől oldalra
+    legalább WING_LATERAL_M-re és a kaputól legfeljebb WING_MAX_DIST_M-re
+    leadott lövéseket számoljuk (a lövő helyéből, a match_xg-ből). Erős
+    szélső-játék széthúzza a védelmet; gyenge szélső-befejezésnél a védő
+    ráengedheti a szöget.
+
+    Visszatérés csapatonként: {"shots", "goals", "goal_pct"} — goal_pct
+    None, ha nem volt szélső-lövés.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    xg = match_xg(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        goal_x = config.attacks_toward_x(
+            Team.HOME if side == "home" else Team.AWAY)
+        shots = goals = 0
+        for sh in xg["shots"]:
+            if sh["team"] != side:
+                continue
+            dist = math.hypot(sh["x"] - goal_x, sh["y"] - cy)
+            if abs(sh["y"] - cy) >= WING_LATERAL_M and dist <= WING_MAX_DIST_M:
+                shots += 1
+                if sh["outcome"] == "goal":
+                    goals += 1
+        out[side] = {
+            "shots": shots,
+            "goals": goals,
+            "goal_pct": round(100.0 * goals / shots, 1) if shots else None,
+        }
+    return out
