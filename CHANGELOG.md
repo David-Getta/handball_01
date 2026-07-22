@@ -462,6 +462,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   geometria). (#240)
 
 ### Kliens-élmény
+- **Kalibráció összenézet egymás mellett**: a hatpontos egészpályás
+  finomhangolás a bekalibrált bal és jobb térfelet a SAJÁT képkockáján,
+  egymás mellett mutatja (nem egy közösre laposítva) — a felezővonal a két
+  kártya közös éle, mindkét fél külön húzható. (#512)
+- **„Csak a befejezetlenek" szűrő**: a Meccs-könyvtárban egy koppintással
+  előjönnek a részleges (megkezdett, de be nem fejezett) elemzések —
+  folytatásra vagy törlésre; a chip mutatja a darabszámot. (#513)
 - **Meccs-sztori idővonal**: gólok, sorozatok, emberelőnyök, 7 a 6,
   hetesek, cserék, időkérések egy sávon a lejátszó felett. (#104, #107,
   #108)
