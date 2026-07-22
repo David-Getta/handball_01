@@ -135,6 +135,20 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     Offset(0.92, 0.78), Offset(0.50, 0.82), Offset(0.08, 0.78),
   ];
 
+  // ÖSSZENÉZET EGYMÁS MELLETT: a már bekalibrált BAL és JOBB térfél a SAJÁT
+  // képkockáján, egymás mellett — így pontosan az látszik, amit a feldolgozás
+  // is használ (a két fél külön kockán is lehet). Mindkét fél 4 pontja a
+  // saját kártyáján húzható; a felezővonal a bal kártya jobb / a jobb kártya
+  // bal éle.
+  Uint8List? _leftBytes, _rightBytes;
+  Size? _leftImgSize, _rightImgSize;
+  // A két térfél 4-4 sarka VÁSZON-arányban (0..1), a saját kártyáján belül.
+  // Bal: távoli-bal, felező-távoli, felező-közeli, közeli-bal.
+  // Jobb: felező-távoli, távoli-jobb, közeli-jobb, felező-közeli.
+  List<Offset> _leftQuad = const [];
+  List<Offset> _rightQuad = const [];
+  int? _dragLeft, _dragRight;
+
   /// Az éppen szerkesztett pontlista (4 sarok VAGY a 6 pontos összenézet).
   List<Offset> get _activePts => _fineTune ? _six : _corners;
 
@@ -196,7 +210,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: _frameCard()),
+                Expanded(child: _fineTune ? _fineCards() : _frameCard()),
                 const SizedBox(width: AppSpacing.lg),
                 SizedBox(width: 280, child: _sidePanel()),
               ],
@@ -290,6 +304,143 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     );
   }
 
+  /// ÖSSZENÉZET: a bekalibrált bal és jobb térfél SAJÁT képkockája egymás
+  /// mellett — a felezővonal a bal kártya jobb és a jobb kártya bal éle.
+  Widget _fineCards() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: _halfCard(
+            side: "left",
+            bytes: _leftBytes,
+            quad: _leftQuad,
+            label: _savedLeft != null
+                ? "BAL FÉL · ${_savedLeft!.startFrame}. kocka"
+                : "BAL FÉL",
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: _halfCard(
+            side: "right",
+            bytes: _rightBytes,
+            quad: _rightQuad,
+            label: _savedRight != null
+                ? "JOBB FÉL · ${_savedRight!.startFrame}. kocka"
+                : "JOBB FÉL",
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Egy térfél kártyája: a saját képkockája a bekalibrált négyszöggel;
+  /// a 4 pont (2 valódi sarok + a felezővonal két vége) itt is húzható.
+  Widget _halfCard({
+    required String side,
+    required Uint8List? bytes,
+    required List<Offset> quad,
+    required String label,
+  }) {
+    return Container(
+      decoration: AppTheme.card(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+            child: Text(label, style: AppText.sectionLabel),
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final size = Size(c.maxWidth, c.maxHeight);
+                final pts = [
+                  for (final f in quad)
+                    Offset(f.dx * size.width, f.dy * size.height)
+                ];
+                return GestureDetector(
+                  onPanStart: (d) => _fineDragStart(side, pts, d.localPosition),
+                  onPanUpdate: (d) =>
+                      _fineDragUpdate(side, size, d.localPosition),
+                  onPanEnd: (_) => _fineDragEnd(side),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: size.width * _margin,
+                          vertical: size.height * _margin,
+                        ),
+                        child: bytes != null
+                            ? Image.memory(bytes,
+                                fit: BoxFit.fill, gaplessPlayback: true)
+                            : _placeholder(),
+                      ),
+                      CustomPaint(
+                        painter: _CalibPainter(pts,
+                            region: side,
+                            rotate: false,
+                            margin: _margin,
+                            fine: false,
+                            drawBackground: bytes == null),
+                        size: size,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _fineDragStart(String side, List<Offset> pts, Offset local) {
+    double best = 32;
+    int? idx;
+    for (int i = 0; i < pts.length; i++) {
+      final dist = (pts[i] - local).distance;
+      if (dist < best) {
+        best = dist;
+        idx = i;
+      }
+    }
+    if (side == "left") {
+      _dragLeft = idx;
+    } else {
+      _dragRight = idx;
+    }
+  }
+
+  void _fineDragUpdate(String side, Size size, Offset local) {
+    final idx = side == "left" ? _dragLeft : _dragRight;
+    if (idx == null) return;
+    setState(() {
+      final q = [...(side == "left" ? _leftQuad : _rightQuad)];
+      q[idx] = Offset(
+        (local.dx / size.width).clamp(0.0, 1.0),
+        (local.dy / size.height).clamp(0.0, 1.0),
+      );
+      if (side == "left") {
+        _leftQuad = q;
+      } else {
+        _rightQuad = q;
+      }
+    });
+  }
+
+  void _fineDragEnd(String side) {
+    if (side == "left") {
+      _dragLeft = null;
+    } else {
+      _dragRight = null;
+    }
+  }
+
   Widget _sidePanel() {
     return Container(
       decoration: AppTheme.card(),
@@ -297,6 +448,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (!_fineTune) ...[
           Text("KÉPKOCKA", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           // Léptetés a videóban: válassz olyan képkockát, ahol a bejelölendő
@@ -346,7 +498,6 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             ),
           ]),
           const SizedBox(height: AppSpacing.md),
-          if (!_fineTune) ...[
           Text("TERÜLET", style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           // Ha csak az egyik térfél látszik a képen, a 4 pontot a TÉRFÉL
@@ -383,16 +534,9 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           ]),
           ],
           const SizedBox(height: AppSpacing.md),
-          Text(_fineTune ? "PONTOK (ÖSSZENÉZET)" : "SARKOK", style: AppText.sectionLabel),
-          const SizedBox(height: AppSpacing.sm),
-          if (_fineTune) ...[
-            _cornerRow("Távoli-bal", 0),
-            _cornerRow("Felező-távoli", 1),
-            _cornerRow("Távoli-jobb", 2),
-            _cornerRow("Közeli-jobb", 3),
-            _cornerRow("Felező-közeli", 4),
-            _cornerRow("Közeli-bal", 5),
-          ] else ...[
+          if (!_fineTune) ...[
+            Text("SARKOK", style: AppText.sectionLabel),
+            const SizedBox(height: AppSpacing.sm),
             _cornerRow("Távoli-bal", 0),
             _cornerRow("Távoli-jobb", 1),
             _cornerRow("Közeli-jobb", 2),
@@ -401,9 +545,10 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           const Spacer(),
           Text(
             _fineTune
-                ? "ÖSSZENÉZET: a teljes pálya 6 ponttal — a 4 sarok ÉS a "
-                    "felezővonal két vége is húzható. Mindkét fél modellje "
-                    "élőben illeszkedik."
+                ? "ÖSSZENÉZET: a bal és a jobb térfél a SAJÁT bekalibrált "
+                    "képkockáján, egymás mellett — a felezővonal a bal kártya "
+                    "jobb és a jobb kártya bal éle. Mindkét fél 4 pontja a "
+                    "saját képén húzható."
                 : _region == "full"
                     ? "Tipp: ha csak az egyik térfél látszik a képen, válaszd a "
                         "Bal/Jobb fél gombot — a pontokat a térfél sarkaira húzd "
@@ -483,7 +628,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                     foregroundColor: AppColors.gold,
                     side: const BorderSide(color: AppColors.gold)),
                 icon: const Icon(Icons.join_full, size: 18),
-                label: const Text("Összenézet: 6 pontos finomhangolás"),
+                label: const Text("Összenézet: a két térfél egymás mellett"),
               ),
             ],
             // Térfél-kalibrációnál: visszatérés az elmentett felekkel.
@@ -615,54 +760,86 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
             "képkockára), vagy nyomd meg a Kész gombot.")));
   }
 
-  /// Belépés az ÖSSZENÉZETBE: a 6 pont a mentett bal/jobb kalibrációból áll
-  /// össze (a felezővonal két vége a két oldal jelölésének átlaga).
-  void _enterFineTune() {
+  /// Belépés az ÖSSZENÉZETBE: a bekalibrált bal és jobb térfél a SAJÁT
+  /// képkockáján, egymás mellett. Betöltjük mindkét fél képkockáját, és a
+  /// mentett négyszögeket a saját kártyájuk vászon-arányára váltjuk.
+  Future<void> _enterFineTune() async {
     final l = _savedLeft, r = _savedRight;
     if (l == null || r == null) return;
-    final w = _frameSize?.width ?? 1920.0;
-    final h = _frameSize?.height ?? 1080.0;
-    Offset toCanvas(List<int> p) => Offset(
-        _margin + p[0] / w * (1 - 2 * _margin),
-        _margin + p[1] / h * (1 - 2 * _margin));
-    Offset mid(Offset a, Offset b) =>
-        Offset((a.dx + b.dx) / 2, (a.dy + b.dy) / 2);
+
+    // A mentett pixel-sarkokat a saját kép méretével vászon-arányra váltjuk.
+    Offset toCanvas(List<int> p, Size? sz) {
+      final w = sz?.width ?? _frameSize?.width ?? 1920.0;
+      final h = sz?.height ?? _frameSize?.height ?? 1080.0;
+      return Offset(_margin + p[0] / w * (1 - 2 * _margin),
+          _margin + p[1] / h * (1 - 2 * _margin));
+    }
+
     setState(() {
-      _six = [
-        toCanvas(l.corners[0]), // távoli-bal
-        mid(toCanvas(l.corners[1]), toCanvas(r.corners[0])), // felező-távoli
-        toCanvas(r.corners[1]), // távoli-jobb
-        toCanvas(r.corners[2]), // közeli-jobb
-        mid(toCanvas(l.corners[2]), toCanvas(r.corners[3])), // felező-közeli
-        toCanvas(l.corners[3]), // közeli-bal
-      ];
       _fineTune = true;
       _saved = false;
+      // Azonnal megjelenítjük a négyszögeket a jelenlegi kép méretével; a
+      // képek és pontos méretek betöltés után frissülnek.
+      _leftBytes = null;
+      _rightBytes = null;
+      _leftImgSize = null;
+      _rightImgSize = null;
+      _leftQuad = [for (final c in l.corners) toCanvas(c, _frameSize)];
+      _rightQuad = [for (final c in r.corners) toCanvas(c, _frameSize)];
     });
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Összenézet: a 4 sarok ÉS a felezővonal két vége is "
-            "húzható. Ha a két felet külön képkockán jelölted, léptess olyan "
-            "kockára, ahol az egész pálya látszik.")));
+    if (widget.videoPath == null) return; // nincs videó → marad a helyőrző
+
+    final api = ApiClient(baseUrl: widget.baseUrl);
+    Future<(Uint8List, Size)?> load(int t) async {
+      try {
+        final bytes = await api.fetchReferenceFrame(widget.videoPath!, t: t);
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        final img = frame.image;
+        return (bytes, Size(img.width.toDouble(), img.height.toDouble()));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final lres = await load(l.startFrame);
+    final rres = await load(r.startFrame);
+    if (!mounted || !_fineTune) return;
+    setState(() {
+      if (lres != null) {
+        _leftBytes = lres.$1;
+        _leftImgSize = lres.$2;
+        _leftQuad = [for (final c in l.corners) toCanvas(c, lres.$2)];
+      }
+      if (rres != null) {
+        _rightBytes = rres.$1;
+        _rightImgSize = rres.$2;
+        _rightQuad = [for (final c in r.corners) toCanvas(c, rres.$2)];
+      }
+    });
   }
 
-  /// Az összenézet mentése: a 6 pontból KÉT térfél-kalibráció készül
-  /// (ugyanarra a képkockára), és visszatérünk a feltöltő képernyőre.
+  /// Az összenézet mentése: a KÉT térfél a SAJÁT képkockájával (startFrame)
+  /// tér vissza — pontosan az, amit a feldolgozás félenként használ.
   void _finishFine() {
-    final w = _frameSize?.width ?? 1920.0;
-    final h = _frameSize?.height ?? 1080.0;
-    double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
-    List<int> px(Offset o) =>
-        [(toImg(o.dx) * w).round(), (toImg(o.dy) * h).round()];
-    final fl = px(_six[0]), mf = px(_six[1]), fr = px(_six[2]);
-    final nr = px(_six[3]), mn = px(_six[4]), nl = px(_six[5]);
-    Navigator.of(context).pop(CalibrationSet([
-      // Bal fél: távoli-bal, felező-távoli, felező-közeli, közeli-bal.
-      CalibrationResult(corners: [fl, mf, mn, nl], region: "left",
-          rotate: false, startFrame: _frameIdx),
-      // Jobb fél: felező-távoli, távoli-jobb, közeli-jobb, felező-közeli.
-      CalibrationResult(corners: [mf, fr, nr, mn], region: "right",
-          rotate: false, startFrame: _frameIdx),
-    ]));
+    List<int> px(Offset o, Size? sz) {
+      final w = sz?.width ?? _frameSize?.width ?? 1920.0;
+      final h = sz?.height ?? _frameSize?.height ?? 1080.0;
+      double toImg(double v) => (v - _margin) / (1 - 2 * _margin);
+      return [(toImg(o.dx) * w).round(), (toImg(o.dy) * h).round()];
+    }
+
+    final items = [
+      CalibrationResult(
+          corners: [for (final o in _leftQuad) px(o, _leftImgSize)],
+          region: "left", rotate: false,
+          startFrame: _savedLeft?.startFrame ?? _frameIdx),
+      CalibrationResult(
+          corners: [for (final o in _rightQuad) px(o, _rightImgSize)],
+          region: "right", rotate: false,
+          startFrame: _savedRight?.startFrame ?? _frameIdx),
+    ]..sort((a, b) => a.startFrame.compareTo(b.startFrame));
+    Navigator.of(context).pop(CalibrationSet(items));
   }
 
   /// Visszatérés az elmentett térfél-kalibrációkkal (1 vagy 2 bejegyzés).
