@@ -3,7 +3,27 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan — a v0.1.18 tartalma (a v0.1.17 óta, PR #57–#496)
+## v0.1.18 — kiadva (2026-07-22, PR #57–#505)
+
+> Kiadás-jegyzet: a telepítő-buildet a legfrissebb stabil Flutterre
+> (3.44.7) állás három ponton is elakasztotta; mind javítva —
+> védtelen fastapi-import a CI-tesztekben (#499), három kliens
+> fordítási hiba (törött string literál + két duplikált metódus,
+> #502), és az AppExitResponse API-elmozdulás (#504, verzió-független
+> onDetach-alapú kilépés-mentésre váltva). A kiadás Windows- és
+> macOS-telepítővel felkerült a Releases oldalra.
+
+### A záró körök (a v0.1.17 → v0.1.18 lezárásig)
+- **Kapus-kimozdulás**: kint álló (átemelhető) vs vonalon maradó kapus
+  — réteg, edzői összefoglaló, /goalkeepers API, csomag, felderítés-
+  profil + kulcsok + csempe + 19. meccsterv-szabály (kint álló kapus ×
+  kontra), 33. edzés-szabály, meccsjelentés-sor, kapus- és játékos-lap.
+  (#497, #498, #501, #503, #505)
+- **README-frissítés**: a Hol tartunk szakasz a valós számokra (50+
+  réteg, 19 meccsterv- és 32 edzés-szabály, 8 riport, 670+ teszt).
+  (#500)
+
+## Kiadatlan — a következő kiadás felé (a v0.1.18 óta)
 
 ### Megbízhatóság — nem veszik el munka
 - **Szelíd megszakítás**: a Megszakítás gomb az addig feldolgozott részt
