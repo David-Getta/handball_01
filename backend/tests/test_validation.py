@@ -88,3 +88,23 @@ def test_validation_ignores_unknown_types_and_tolerance():
     res = validate_events(m, truth, tol_s=3.0)
     g = res["by_type"]["goal"]
     assert g["tp"] == 0 and g["fp"] == 1 and g["fn"] == 1
+
+
+def test_validation_verdict_pass_and_fail():
+    """A verdikt a cél-küszöbökhöz méri az összesített eredményt."""
+    m = _match_one_goal()
+    # Tökéletes egyezés (1 felismert = 1 kézi) → MEGFELEL.
+    good = validate_events(m, [{"t_s": 0.4, "type": "gól", "team": "home"}])
+    assert good["overall"]["recall"] == 1.0
+    assert good["verdict"]["pass"] is True
+    assert "MEGFELEL" in good["verdict"]["text"]
+    # Fele kimarad → GYENGE.
+    bad = validate_events(m, [
+        {"t_s": 0.4, "type": "gól", "team": "home"},
+        {"t_s": 30.0, "type": "gól", "team": "home"}])
+    assert bad["verdict"]["pass"] is False
+    assert "GYENGE" in bad["verdict"]["text"]
+    # Üres minta → nincs ítélet.
+    empty = validate_events(Match(_meta(), [Frame(t=0, players=[], ball=None)]),
+                            [])
+    assert empty["verdict"]["pass"] is None
