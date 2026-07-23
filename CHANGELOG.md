@@ -524,6 +524,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   rétegekből. (#118, #131)
 
 ### Export és jelentés
+- **Játékos-lap bővítés**: a játékos-lapra bekerül a Labdaeladás
+  (labdabiztonság) és a Hajrá-gól (a meccs végén szerzett gól) mutató —
+  a két új egyéni réteg most a nyomtatható lapon is. (#524)
 - **Védekezés-mutatók a jelentésben**: a csapatmutató-táblába bekerül a
   védekezési vonal magassága (mély/felfutó) és a kapus gyenge lövés-sávja
   — a két új védekezés-réteg most a nyomtatható jelentésben is. (#522)

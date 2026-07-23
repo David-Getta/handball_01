@@ -2394,6 +2394,26 @@ def player_report_html(match, track_id: int) -> str:
             game_items.append(_metric("Labdaszerzés", str(n_bw)))
     except Exception:
         pass
+    # Labdaeladás: a játékos elvesztett labdái (labdabiztonság).
+    try:
+        from .defense import turnover_players
+        tp_pl = turnover_players(match)[row["team"]]
+        n_tp = sum(p_["losses"] for p_ in tp_pl["players"]
+                   if p_["player_id"] in tids)
+        if n_tp:
+            game_items.append(_metric("Labdaeladás", str(n_tp)))
+    except Exception:
+        pass
+    # Hajrá-gól: a játékos góljai a meccs utolsó perceiben.
+    try:
+        from .momentum import clutch_scorers
+        cs_pl = clutch_scorers(match)[row["team"]]
+        n_cs = sum(p_["goals"] for p_ in cs_pl["players"]
+                   if p_["player_id"] in tids)
+        if n_cs:
+            game_items.append(_metric("Hajrá-gól", str(n_cs)))
+    except Exception:
+        pass
     # Beálló-szerep: ha a játékos a becsült beálló, a csapat beállós
     # támadás-mérlege az ő lapjára tartozik.
     try:
