@@ -41,25 +41,29 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
   demóval is fut). Lásd [`client/README.md`](client/README.md).
 
 ## Hol tartunk
-A rendszer **működő, telepíthető alkalmazás** (v0.1.17 kiadva; a v0.1.18
-tartalma a CHANGELOG-ban):
+A rendszer **működő, telepíthető alkalmazás** (v0.1.18 kiadva Windows- és
+macOS-telepítővel; a fejlemények a CHANGELOG-ban):
 
 - **Feldolgozás**: YOLO + ByteTrack követés, kézi 4-sarkos kalibráció
-  méter-térbe, pásztázás-kompenzáció, csapat-szétválasztás, kapus- és
+  méter-térbe (a hatpontos összenézet a két bekalibrált térfelet egymás
+  mellett mutatja), pásztázás-kompenzáció, csapat-szétválasztás, kapus- és
   mezszám-felismerés; megszakítás-biztos (checkpoint, folytatás).
-- **AI-elemzés**: 50+ magyarázható réteg — események (gól/lövés/passz/
-  labdaeladás), xG és ziccerek, védekezés-kép (blokkok, őrzési párok,
-  labdaszerzők, betörés-folyosók), momentum (sorozatok, fordulópont,
-  vezetés-váltások, hajrá, gólcsend), kondíció, fáradás és
-  rotáció-mélység, passz- és gólpassz-hálózat, passz-láncok,
-  beálló-terhelés, poszt-becslés, hetesek iránnyal, kapusonkénti GSAx
-  és kapus-kimozdulás, fegyelem (kiülők/kiharcolók), szünet utáni
-  kezdés, előny-kezelés, cserék, időkérések. Minden réteg magyar
-  edzői nyelven indokol.
+- **AI-elemzés**: ~70 magyarázható réteg — események (gól/lövés/passz/
+  labdaeladás), xG és ziccerek, **befejezés-profil** (lövés-távolság,
+  kapu-sarok, szélső-hatékonyság, kapus gyenge sávja), **építkezés**
+  (passz-irány, gólpassz-forrás, passz-láncok, beálló-terhelés),
+  védekezés-kép (blokkok, őrzési párok, labdaszerzők, labdaeladók,
+  betörés-folyosók, védekezési vonal magassága, nyomás), momentum
+  (sorozatok, fordulópont, vezetés-váltások, hajrá-emberek, gólcsend),
+  kondíció, fáradás és rotáció-mélység, passz- és gólpassz-hálózat,
+  poszt-becslés, hetesek iránnyal, kapusonkénti GSAx és kapus-kimozdulás,
+  átmenet-támadás/-védekezés, fegyelem (kiülők/kiharcolók), szünet utáni
+  kezdés, előny-kezelés, cserék, időkérések. Minden réteg magyar edzői
+  nyelven indokol.
 - **Felderítés és tervezés**: több-meccses ellenfél-profil pontos
-  összegzéssel, edzői kulcsok, meccsterv-illesztés (19 páros szabály),
-  fejlődés-követés trenddel, edzés-fókusz (32 szabály, szezon-szintű
-  visszatérő gyengeségekkel), élő jelzések a padnak (félidei
+  (count-alapú) összegzéssel, edzői kulcsok, meccsterv-illesztés (19 páros
+  szabály), fejlődés-követés trenddel, edzés-fókusz (42 szabály,
+  szezon-szintű visszatérő gyengeségekkel), élő jelzések a padnak (félidei
   emberfogás/beálló/rotáció-kép, hajrá-protokoll).
 - **Kimenetek**: edzői összefoglaló a meccs történetével, nyolc
   nyomtatható riport (meccs, felderítő, játékos-lap, szezon
@@ -71,7 +75,7 @@ tartalma a CHANGELOG-ban):
   (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
   (`POST /matches/fuse`) és lidar-finomítás — részletek a
   [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
-- **Minőség**: 670+ automata teszt; réteg-megbízhatósági önjelentés
+- **Minőség**: 690+ automata teszt; réteg-megbízhatósági önjelentés
   (mihez van elég minta az adott meccsen).
 
 ## Elv
