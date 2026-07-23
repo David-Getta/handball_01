@@ -212,6 +212,26 @@ class _LiveScreenState extends State<LiveScreen> {
                   "${dist.toStringAsFixed(1)} m-ről őrizte az emberét — "
                   "a második félidőre szorosabb tapadást kérj.")));
         }
+        // Félidei labdaeladók: ki szórja a labdát — présre őt a másodikra.
+        final to = (d["turnover_players_fh"] as Map?)?.cast<String, dynamic>();
+        if (to != null) {
+          for (final side in ["home", "away"]) {
+            final rec = (to[side] as Map?)?.cast<String, dynamic>();
+            final list = (rec?["players"] as List?) ?? const [];
+            if (list.isEmpty) continue;
+            final top = list.first as Map<String, dynamic>;
+            final n = ((top["losses"] as num?) ?? 0).toInt();
+            if (n < 3) continue;
+            final j = (top["jersey"] as num?)?.toInt();
+            final who = j != null ? "$j-es" : "#${top["player_id"]}";
+            final team = names[side] ?? "";
+            out.add(_FeedEntry(
+                atFrame,
+                Suggestion(4, "taktika",
+                    "Félidei kép ($team): a(z) $who eddig $n labdát "
+                    "vesztett — a másodikra présre őt, zárd a passzsávjait.")));
+          }
+        }
       }
     } catch (_) {}
     // Félidei beálló-kép: ha az első félidőben alig ment a beállón át

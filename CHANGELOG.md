@@ -504,6 +504,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   geometria). (#240)
 
 ### Kliens-élmény
+- **Élő félidei labdaeladó-jelzés**: a szünetben megnevezi, ki szórta a
+  legtöbb labdát az első félidőben — présre őt a másodikra, zárd a
+  passzsávjait. (#527)
 - **Élő félidei passz-irány jelzés**: a szünetben szól, ha az ellenfél
   nagyon vertikálisan (zárj vissza gyorsabban) vagy nagyon türelmesen (a
   beállóra figyelj) épített az első félidőben — csak az addigi kockákból,
