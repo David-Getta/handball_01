@@ -2489,6 +2489,11 @@ def create_app():
                 from ..pipeline.attack_types import goal_placement
                 res["goal_placement_fh"] = {"until_frame": ht,
                                             **goal_placement(sub)}
+                # Félidei szélső-játék: ha a szélsőik veszélyesek, a
+                # szélső-védő kilépés-fegyelme a második félidő kulcsa.
+                from ..pipeline.attack_types import wing_finishing
+                res["wing_finishing_fh"] = {"until_frame": ht,
+                                            **wing_finishing(sub)}
         except Exception:
             pass
         return res
