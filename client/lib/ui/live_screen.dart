@@ -290,6 +290,27 @@ class _LiveScreenState extends State<LiveScreen> {
                     "az elzárásokra figyelj, ne húzódj szét idő előtt.")));
           }
         }
+        // Félidei kapu-sarok: hova mennek a góljaik — a kapus rá készülhet.
+        final gp = (a["goal_placement_fh"] as Map?)?.cast<String, dynamic>();
+        if (gp != null) {
+          for (final side in ["home", "away"]) {
+            final rec = (gp[side] as Map?)?.cast<String, dynamic>();
+            if (rec == null) continue;
+            final goals = ((rec["goals"] as num?) ?? 0).toInt();
+            final dom = rec["dominant"] as String?;
+            if (dom == null || goals < 3) continue;
+            final domN = ((rec[dom] as num?) ?? 0).toInt();
+            final share = 100.0 * domN / goals;
+            if (share < 50.0) continue;
+            final team = names[side] ?? "";
+            out.add(_FeedEntry(
+                atFrame,
+                Suggestion(4, "taktika",
+                    "Félidei kép ($team): góljaik ${share.toStringAsFixed(0)}%-a "
+                    "a(z) $dom kapuoldalra ment — a kapus erre az oldalra "
+                    "készüljön a másodikban.")));
+          }
+        }
       }
     } catch (_) {}
     // Félidei rotáció-kép: ha az első félidőt szűk kerettel nyomta

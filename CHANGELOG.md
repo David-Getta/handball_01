@@ -504,6 +504,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   geometria). (#240)
 
 ### Kliens-élmény
+- **Élő félidei kapu-sarok jelzés**: a szünetben szól, ha az ellenfél
+  góljainak zöme egy kapuoldalra ment — a kapus erre az oldalra
+  készülhet a másodikban. (#528)
 - **Élő félidei labdaeladó-jelzés**: a szünetben megnevezi, ki szórta a
   legtöbb labdát az első félidőben — présre őt a másodikra, zárd a
   passzsávjait. (#527)
