@@ -23,7 +23,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   réteg, 19 meccsterv- és 32 edzés-szabály, 8 riport, 670+ teszt).
   (#500)
 
-## Kiadatlan — a következő kiadás felé (a v0.1.18 óta)
+## Kiadatlan — a következő kiadás felé (a v0.1.19 óta)
+
+_(Még nincs bejegyzés — a v0.1.19 kiadás után indul.)_
+
+## v0.1.19 — kiadva (2026-07-23, PR #506–#534)
+
+> Kiadás-jegyzet: a befejezés-elemzés négy új dimenzióval bővült
+> (lövés-távolság, kapu-sarok, szélső-hatékonyság, kapus gyenge sávja), az
+> építkezés kettővel (passz-irány, gólpassz-forrás), a védekezés az egyéni
+> labdaeladókkal és a fal-magassággal; hat friss élő félidei jelzés a
+> padnak, és egy teljes, valós felvételre szabott pontosság-validációs
+> eszköztár (sablon → mérés → MEGFELEL/GYENGE ítélet → megosztható riport).
+> A macOS auto-frissítés App Translocation-javítása (#510) is ebben a
+> kiadásban él — ezt a verziót egyszer kézzel telepítve a jövőbeli
+> frissítés magától lefut. Windows- és macOS-telepítővel a Releases oldalon.
 
 ### Megbízhatóság — nem veszik el munka
 - **Pontosság-validáció valós felvételen**: új `POST /matches/{id}/validate`
