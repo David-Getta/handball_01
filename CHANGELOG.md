@@ -25,7 +25,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
-_(Még nincs bejegyzés — a v0.1.20 kiadás után indul.)_
+- **Második roham (lepattanó-visszaszerzés)**: a kimaradt (védett/mellé)
+  lövés után a támadó visszaszerzi-e a labdát és újra lő-e, mielőtt az
+  ellenfél lőne — a "harc a lepattanóért" agresszivitása és a második
+  esélyek gólaránya. Egy réteg, sok felület: `second_chance` motor,
+  edzői összefoglaló-jelzés, meccsjelentés (Befejezés-profil új oszlop),
+  /analyze + meccs-csomag, felderítés-profil (kulcs + csempe), két
+  meccsterv-szabály (gyenge lepattanó-harcuk × a ti kontrátok; erős
+  lepattanó-harcuk × a ti blokkoló faluk), 43. edzés-szabály,
+  trend-mutató (második roham/meccs).
 
 ## v0.1.20 — kiadva (2026-07-23, PR #535–#541)
 

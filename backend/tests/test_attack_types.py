@@ -590,6 +590,46 @@ def test_wing_finishing_counts_sharp_angle_only():
     assert wf["away"]["shots"] == 0 and wf["away"]["goal_pct"] is None
 
 
+def test_second_chance_counts_offensive_rebounds():
+    """A saját, gólt nem érő lövés után az ablakon belüli ÚJABB saját lövést
+    megnyert lepattanónak (második roham) veszi; a folytatás gólja második
+    esélyből szerzett gól. A távoli (ablakon kívüli) kimaradás nem az."""
+    from handball.pipeline.attack_types import second_chance
+
+    # A: kimaradt lövés → rövid szünettel B: gól (A második rohama, gól).
+    frames = _home_shot(0, 31.5, goal=False)
+    t = frames[-1].t + 1
+    for i in range(12):  # rövid szünet (debounce-nulláz, de ablakon belül)
+        frames.append(Frame(t=t + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _home_shot(frames[-1].t + 1, 33.0, goal=True)
+    # Hosszú szünet (> 6 s), hogy a következő kimaradás önálló legyen.
+    t = frames[-1].t + 1
+    for i in range(200):
+        frames.append(Frame(t=t + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    # C: magányos kimaradt lövés — nincs ablakon belüli folytatás.
+    frames += _home_shot(frames[-1].t + 1, 31.5, goal=False)
+    t = frames[-1].t + 1
+    for i in range(200):
+        frames.append(Frame(t=t + i, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    # D: még egy magányos kimaradt lövés.
+    frames += _home_shot(frames[-1].t + 1, 31.5, goal=False)
+
+    m = Match(_meta(), frames)
+    sc = second_chance(m)
+    home = sc["home"]
+    assert home["misses"] == 3          # A, C, D
+    assert home["second_chances"] == 1  # csak A-t követi saját lövés az ablakban
+    assert home["second_goals"] == 1    # a folytatás (B) gól volt
+    assert home["rebound_pct"] == round(100.0 / 3.0, 1)
+    assert home["convert_pct"] == 100.0
+    # A vendég nem lőtt — üres, arány nélkül.
+    assert sc["away"]["misses"] == 0
+    assert sc["away"]["rebound_pct"] is None
+
+
 def test_pass_direction_forward_square_back():
     """A passzokat előre / oldalra / hátra sorolja a kapu-távolság
     változásából. HAZAI a +x kapura támad."""

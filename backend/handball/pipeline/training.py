@@ -971,4 +971,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 43) Második roham: ha a kimaradt lövések (6+) után ritkán megyünk a
+    # lepattanóra (8% alatt), a második esélyeket adjuk el — a beállós
+    # lepattanó-harcot és a lövés utáni bemozgást kell gyakorolni.
+    try:
+        from .attack_types import SECOND_CHANCE_MIN, second_chance
+        sc43 = second_chance(match, config)
+        for side in ("home", "away"):
+            rec43 = sc43[side]
+            if rec43["misses"] < max(6, SECOND_CHANCE_MIN) \
+                    or rec43["rebound_pct"] is None \
+                    or rec43["rebound_pct"] > 8.0:
+                continue
+            add(side, "támadás", "Második roham",
+                f"a kimaradt lövések után csak {rec43['rebound_pct']:.0f}%-ban "
+                f"szerezzük vissza a lepattanót ({rec43['second_chances']}/"
+                f"{rec43['misses']}) — a második esélyeket eldobjuk",
+                "lepattanó-gyakorlat: beálló és szélső bemozgás a lövés "
+                "pillanatában, kiharcolt lepattanó után azonnali második "
+                "befejezés; lövés-blokk után a támadó visszaszerzés 1-1-ben")
+    except Exception:
+        pass
+
     return out
