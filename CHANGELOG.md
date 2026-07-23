@@ -33,6 +33,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   a most indított munkával megy tovább. (#538)
 
 ### Kliens-élmény
+- **„Elemzéseim" fül — befejezett/befejezetlen szétválasztva**: a könyvtár
+  fejlécében egy dedikált, mindig látható szegmens-fül (Mind · Befejezett ·
+  Befejezetlen, darabszámmal) — a korábbi elemzések egy koppintással,
+  külön a kész és a folytatásra/törlésre váró munkák. (#539)
 - **Átnevezés: handball_client → SportMachine**: a kiadott app és
   telepítő fájlneve mostantól `SportMachine.app` (macOS) és
   `SportMachine.exe` (Windows), a macOS menüsor/Finder név „Sport Machine".
