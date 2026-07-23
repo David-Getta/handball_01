@@ -31,8 +31,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   eseménylistához (gólok/lövések időbélyeggel) hasonlítja a motor kimenetét,
   és precizitás/visszahívás/F1 értéket ad típusonként. A válasz edző-
   olvasható **ítéletet** is ad (MEGFELEL/GYENGE) a cél-küszöbökhöz mérve
-  (visszahívás ≥90%, precizitás ≥85%). Ez a piaci validáció mérőeszköze —
-  a szimulált benchmark mellé a valós footage mérése. (#529, #530)
+  (visszahívás ≥90%, precizitás ≥85%). Megosztható, nyomtatható HTML-riport
+  is kérhető (`{"format":"html"}`) a pilot go/no-go döntéshez. Ez a piaci
+  validáció mérőeszköze — a szimulált benchmark mellé a valós footage
+  mérése. (#529, #530, #531)
 - **macOS auto-frissítés javítása**: a „Frissítés most" a Letöltésekből
   indított (karanténos) appnál csendben elbukott (App Translocation) —
   most a kanonikus /Applications mappába telepít, előre letörli a

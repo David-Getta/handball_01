@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from handball.models.tracking import (
     Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
 )
-from handball.pipeline.validation import validate_events
+from handball.pipeline.validation import (
+    validate_events, validation_report_html)
 
 
 def _meta(fps=25.0):
@@ -108,3 +109,18 @@ def test_validation_verdict_pass_and_fail():
     empty = validate_events(Match(_meta(), [Frame(t=0, players=[], ball=None)]),
                             [])
     assert empty["verdict"]["pass"] is None
+
+
+def test_validation_report_html_renders():
+    """A HTML-riport tartalmazza az ítéletet, a csapatokat és a táblát;
+    a beszúrt szöveg escape-elve kerül be."""
+    m = _match_one_goal()
+    res = validate_events(m, [{"t_s": 0.4, "type": "gól", "team": "home"}])
+    html = validation_report_html(res, "Hazai<b>", "Vendég")
+    assert "<!DOCTYPE html>" in html
+    assert "Pontosság-validáció" in html
+    assert "MEGFELEL" in html
+    assert "Visszahívás" in html and "Precizitás" in html
+    assert "Összesen" in html
+    # A csapatnév escape-elve (nincs nyers <b>).
+    assert "Hazai<b>" not in html and "Hazai&lt;b&gt;" in html
