@@ -885,6 +885,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "${share.round()}% $domLbl ($domN/$total)";
   }
 
+  // Második roham: a kimaradt lövések utáni lepattanó-visszaszerzés aránya
+  // (6+ kimaradás; a backend-kulcsokkal azonos küszöb). Csak a kirívó
+  // (harcolnak / nem mennek rá) érdekes.
+  String? _secondChance(Map<String, dynamic> r) {
+    final misses = ((r["sc_misses"] as num?) ?? 0).toInt();
+    if (misses < 6) return null;
+    final second = ((r["sc_second"] as num?) ?? 0).toInt();
+    final goals = ((r["sc_goals"] as num?) ?? 0).toInt();
+    final pct = 100.0 * second / misses;
+    if (pct >= 25.0) {
+      final g = goals > 0 ? " · $goals gól" : "";
+      return "${pct.round()}% visszaszerzés ($second/$misses)$g · harcol";
+    }
+    if (pct <= 8.0) {
+      return "${pct.round()}% visszaszerzés ($second/$misses) · nem megy rá";
+    }
+    return null;
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1181,6 +1200,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_gkWeakRange(r) != null) ["Kapus gyenge sávja", _gkWeakRange(r)!],
       if (_goalPlacement(r) != null) ["Kapu-sarok", _goalPlacement(r)!],
       if (_wingFinishing(r) != null) ["Szélső-játék", _wingFinishing(r)!],
+      if (_secondChance(r) != null) ["Második roham", _secondChance(r)!],
       if (_defLine(r) != null) ["Védekezési vonal", _defLine(r)!],
       if (_passDirection(r) != null) ["Passz-irány", _passDirection(r)!],
       if (_assistSource(r) != null) ["Gólpassz-forrás", _assistSource(r)!],

@@ -326,6 +326,13 @@ class ScoutingReport:
     asrc_szel: int = 0
     asrc_kozep: int = 0
     asrc_hatso: int = 0
+    # Második roham / lepattanó-visszaszerzés: a nem gólos lövések (misses),
+    # az ezek után megnyert második rohamok (second_chances) és ezekből a
+    # gólok (second_goals) — darabszámok, meccsek közt pontosan összegződnek
+    # (visszaszerzési arány = second / misses; gólarány = goals / second).
+    sc_misses: int = 0
+    sc_second: int = 0
+    sc_goals: int = 0
     # Védekezési vonal magassága — a felállt védekezés mélység-összege és a
     # mért kockák száma (átlag = összeg / kockák), meccsek közt pontosan
     # összegződik. Magas fal = felfutó/agresszív, alacsony = mély/passzív.
@@ -1087,6 +1094,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(
                 f"Góljaik {_asrc_share:.0f}%-át {_asrc_dom[0]}.")
 
+    # Második roham: mennyire harcolnak a kimaradt lövés utáni lepattanóért.
+    if rep.sc_misses >= 6:
+        _sc_pct = 100.0 * rep.sc_second / rep.sc_misses
+        if _sc_pct >= 25.0:
+            _sc_g = (f", ebből {rep.sc_goals} gól" if rep.sc_goals else "")
+            keys.append(
+                f"Harcolnak a lepattanóért ({rep.sc_second}/{rep.sc_misses} "
+                f"kimaradás után újra lőnek, {_sc_pct:.0f}%{_sc_g}) — a lövés "
+                "után is fogd le a beállót és tisztázd a lepattanót, ne fordulj "
+                "ki idő előtt.")
+        elif _sc_pct <= 8.0:
+            keys.append(
+                f"A kimaradt lövések után nem mennek a lepattanóra "
+                f"({_sc_pct:.0f}%) — a védés/blokk után azonnal indíthatsz "
+                "gyors ellentámadást.")
+
     # Védekezési vonal magassága: felfutó fal mögé lefutás/átemelés, mély
     # fal ellen türelmes játék és beálló.
     if rep.defline_frames >= 100:
@@ -1713,6 +1736,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.asrc_szel = asr["szél"]
         rep.asrc_kozep = asr["közép"]
         rep.asrc_hatso = asr["hátsó"]
+        from .attack_types import second_chance
+        scr = second_chance(match, config)[team.value]
+        rep.sc_misses = scr["misses"]
+        rep.sc_second = scr["second_chances"]
+        rep.sc_goals = scr["second_goals"]
         from .defense import defensive_line_height
         dlh = defensive_line_height(match, config)[team.value]
         if dlh["avg_height_m"] is not None:
@@ -2533,6 +2561,30 @@ def matchup_plan(own: "ScoutingReport",
                 "távoli lövés) — erre a meccsre élesítsétek az átlövést, "
                 "keressétek bátran a távoli befejezést.")
 
+    # 21) Az ő gyenge lepattanó-harcuk × a ti kontra-erőtök: a védett/blokkolt
+    # lövésük után azonnal indulni kell, mert nem mennek a lepattanóra.
+    if (opp.sc_misses >= 6
+            and 100.0 * opp.sc_second / opp.sc_misses <= 8.0
+            and own.fast_break_pct >= 10.0):
+        opp_reb = 100.0 * opp.sc_second / opp.sc_misses
+        plan.append(
+            f"A kimaradt lövéseik után alig mennek a lepattanóra "
+            f"({opp_reb:.0f}%), ti pedig sokat indultok "
+            f"({own.fast_break_pct:.0f}% gyors indítás) — a védés/blokk a ti "
+            "kontrátok rajtja: a kapus és a szélső azonnal indul, nem várunk.")
+
+    # 22) Az ő erős lepattanó-harcuk × a ti blokkoló faluk: a blokk után a
+    # laza labdát BE kell fogni, különben második esélyt adtok.
+    if (opp.sc_misses >= 6
+            and 100.0 * opp.sc_second / opp.sc_misses >= 25.0
+            and own.blocks >= 3):
+        opp_reb2 = 100.0 * opp.sc_second / opp.sc_misses
+        plan.append(
+            f"Harcolnak a lepattanóért ({opp_reb2:.0f}% második roham), ti "
+            f"pedig sokat blokkoltok ({own.blocks} blokk) — a blokk után a "
+            "laza labdát be kell fogni, nem elég megpattintani: a beállót "
+            "fogd le, a szélső záródjon a rövid lepattanóra.")
+
     return plan
 
 
@@ -2730,6 +2782,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         asrc_szel=sum(r.asrc_szel for r in reports),
         asrc_kozep=sum(r.asrc_kozep for r in reports),
         asrc_hatso=sum(r.asrc_hatso for r in reports),
+        sc_misses=sum(r.sc_misses for r in reports),
+        sc_second=sum(r.sc_second for r in reports),
+        sc_goals=sum(r.sc_goals for r in reports),
         suspensions=sum(r.suspensions for r in reports),
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
@@ -3154,6 +3209,9 @@ _TREND_METRICS = [
     ("suspensions", "Kiállítás / meccs", "", False, True),
     # Beálló-terhelés: beállós támadás meccsenként (irány-semleges).
     ("pivot_attacks", "Beállós támadás / meccs", "", None, True),
+    # Második roham: kimaradt lövés után visszaszerzett lepattanó
+    # meccsenként (több = agresszívabb harc a lepattanóért = jobb).
+    ("sc_second", "Második roham / meccs", "", True, True),
 ]
 
 
@@ -3171,7 +3229,7 @@ def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
     # mutatót kihagyjuk, hogy ne látsszon hamis javulásnak/romlásnak.
     optional = {"possession_pct", "defensive_pressure_m",
                 "gk_big_saves", "gk_outlet_fast", "gk_xg_saved",
-                "gk_xg_prevented", "pivot_attacks"}
+                "gk_xg_prevented", "pivot_attacks", "sc_second"}
     for field_name, label, unit, up_is_better, per_match in _TREND_METRICS:
         a = float(getattr(older, field_name))
         b = float(getattr(newer, field_name))

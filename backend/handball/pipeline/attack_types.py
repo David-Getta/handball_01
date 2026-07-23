@@ -988,3 +988,71 @@ def assist_sources(match: Match, config: Optional[TacticsConfig] = None) -> dict
             dom = None
         out[s] = {**t, "assists": total, "dominant": dom}
     return out
+
+
+# Második roham: a saját, gólt NEM érő lövés után ekkora időn belül leadott
+# ÚJABB saját lövés számít lepattanó-visszaszerzésnek (offenzív lepattanó →
+# második esély). Ennyi mért kimaradás kell az edzői ítélethez.
+SECOND_CHANCE_WINDOW_S = 6.0
+SECOND_CHANCE_MIN = 3
+
+
+def second_chance(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Második roham / lepattanó-visszaszerzés: a saját, gólt NEM érő lövés
+    (védés vagy mellé) után a támadó visszaszerzi-e a labdát és újra lő-e —
+    mielőtt az ellenfél lőne.
+
+    A lövés-eseményekből (detect_shots) dolgozunk: minden nem gólos lövés egy
+    lepattanó-LEHETŐSÉG. Ha ugyanaz a csapat SECOND_CHANCE_WINDOW_S-en belül
+    úgy lő újra, hogy közben az ellenfél nem lőtt, azt megnyert második
+    rohamnak vesszük; ha a folytatás gól, második esélyből szerzett gól. Ez a
+    csapat "harc a lepattanóért" agresszivitását és a második esélyek
+    kihasználását méri — záráskor a felállt védelem ellen a lepattanó dönt.
+
+    Visszatérés csapatonként:
+      {"misses", "second_chances", "second_goals", "rebound_pct",
+       "convert_pct"} — misses a lepattanó-lehetőségek (nem gólos lövések),
+    second_chances a megnyert második rohamok, second_goals ezekből a gólok,
+    rebound_pct a visszaszerzési arány (%), convert_pct a második esélyek
+    gólaránya (%). A százalékok None, ha nincs elég adat.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = SECOND_CHANCE_WINDOW_S * fps
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    tally = {s: {"misses": 0, "second_chances": 0, "second_goals": 0}
+             for s in ("home", "away")}
+    for i, e in enumerate(shots):
+        if e.type == EventType.GOAL:
+            continue  # gól: a támadás lezárult, nincs lepattanó
+        side = e.team.value
+        tally[side]["misses"] += 1
+        # A következő lövés az ablakon belül: ha a SAJÁT csapaté (és közben az
+        # ellenfél nem lőtt), az a megnyert lepattanó.
+        for nxt in shots[i + 1:]:
+            if nxt.t - e.t > win:
+                break
+            if nxt.team != e.team:
+                break  # az ellenfél lőtt előbb — elveszett a lepattanó
+            tally[side]["second_chances"] += 1
+            if nxt.type == EventType.GOAL:
+                tally[side]["second_goals"] += 1
+            break
+
+    def _pct(n, d):
+        return round(100.0 * n / d, 1) if d > 0 else None
+
+    out: dict = {}
+    for s in ("home", "away"):
+        t = tally[s]
+        out[s] = {
+            **t,
+            "rebound_pct": (_pct(t["second_chances"], t["misses"])
+                            if t["misses"] >= SECOND_CHANCE_MIN else None),
+            "convert_pct": _pct(t["second_goals"], t["second_chances"]),
+        }
+    return out

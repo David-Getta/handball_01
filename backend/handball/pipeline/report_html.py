@@ -1000,11 +1000,12 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
 
         # Befejezés-profil: honnan (távolság), milyen szögből (szélső) és
         # hova (kapu-sarok) fejeznek be — a lövés-rétegek egy táblában.
-        from .attack_types import (goal_placement, shot_ranges,
+        from .attack_types import (goal_placement, second_chance, shot_ranges,
                                     wing_finishing)
         srp = shot_ranges(match)
         gpp = goal_placement(match)
         wfp = wing_finishing(match)
+        scp = second_chance(match)
 
         def _band_cell(rec):
             n = rec["shots"]
@@ -1026,19 +1027,27 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 wing = f"{wf['goals']}/{wf['shots']}"
                 if wf["goal_pct"] is not None:
                     wing += f" ({wf['goal_pct']:.0f}%)"
+            sc = scp[side]
+            second = "—"
+            if sc["rebound_pct"] is not None:
+                second = (f"{sc['second_chances']}/{sc['misses']} "
+                          f"({sc['rebound_pct']:.0f}%)")
             frows.append(
                 f"<tr><td>{escape(name)}</td>"
                 f'<td class="num">{_band_cell(sr["close"])}</td>'
                 f'<td class="num">{_band_cell(sr["mid"])}</td>'
                 f'<td class="num">{_band_cell(sr["far"])}</td>'
                 f'<td class="num">{wing}</td>'
-                f"<td>{escape(placement)}</td></tr>")
+                f"<td>{escape(placement)}</td>"
+                f'<td class="num">{escape(second)}</td></tr>')
         if frows:
             parts_html.append(
-                "<h2>Befejezés-profil (távolság · szélső · kapu-sarok)</h2>"
+                "<h2>Befejezés-profil "
+                "(távolság · szélső · kapu-sarok · lepattanó)</h2>"
                 '<table><tr><th>Csapat</th><th class="num">Közeli</th>'
                 '<th class="num">Közép</th><th class="num">Távoli</th>'
-                '<th class="num">Szélső</th><th>Kapu-sarok</th></tr>'
+                '<th class="num">Szélső</th><th>Kapu-sarok</th>'
+                '<th class="num">Második roham</th></tr>'
                 + "".join(frows) + "</table>")
 
         from .goalkeeper import detect_empty_net

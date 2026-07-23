@@ -2484,6 +2484,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import second_chance
+            res["second_chance"] = second_chance(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -2874,6 +2879,8 @@ def create_app():
                 _layer("pass_direction", lambda: pass_direction(match))
                 from ..pipeline.attack_types import assist_sources
                 _layer("assist_sources", lambda: assist_sources(match))
+                from ..pipeline.attack_types import second_chance
+                _layer("second_chance", lambda: second_chance(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -588,6 +588,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Második roham: mennyire harcolnak a lepattanóért (offenzív lepattanó).
+    try:
+        from .attack_types import SECOND_CHANCE_MIN, second_chance
+        sc = second_chance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sc = sc[side]
+            if rec_sc["misses"] < SECOND_CHANCE_MIN \
+                    or rec_sc["rebound_pct"] is None:
+                continue
+            if rec_sc["rebound_pct"] >= 25.0:
+                body += (f" A(z) {name} harcol a lepattanóért "
+                         f"({rec_sc['second_chances']}/{rec_sc['misses']} "
+                         f"kimaradás után újra lő, "
+                         f"{rec_sc['rebound_pct']:.0f}%) — a lövés után is "
+                         "le kell fogni a beállót és tisztázni a lepattanót.")
+            elif rec_sc["rebound_pct"] <= 8.0:
+                body += (f" A(z) {name} a kimaradt lövések után nem megy a "
+                         f"lepattanóra ({rec_sc['rebound_pct']:.0f}%) — a "
+                         "gyors indítás ellenük kifizetődő.")
+    except Exception:
+        pass
     # Passz-irány: vertikális (előre) vs türelmes (oldalra) játék.
     try:
         from .attack_types import pass_direction
