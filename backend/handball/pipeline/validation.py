@@ -38,6 +38,67 @@ _TYPE_MAP = {
     "s": "shot",
 }
 
+# Csapat-címkék (magyar és angol) → belső oldal.
+_TEAM_MAP = {
+    "hazai": "home", "home": "home", "h": "home",
+    "vendég": "away", "vendeg": "away", "away": "away", "a": "away",
+}
+
+
+def _parse_time(s: str):
+    """Idő másodpercben: elfogad tizedes mp-et (42.0) és óra:perc:mp
+    alakot is (1:23, 01:23, 1:02:03). Hibás/üres → None."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    if ":" in s:
+        bits = s.split(":")
+        try:
+            total = 0.0
+            for b in bits:
+                total = total * 60.0 + float(b)
+            return total
+        except ValueError:
+            return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def parse_truth_csv(text: str) -> list:
+    """Kézi ground-truth beolvasása CSV/TSV szövegből — az edzők
+    táblázatból dolgoznak, nem JSON-ból.
+
+    Soronként: `idő, típus[, csapat]` (vessző, pontosvessző vagy tab
+    elválasztóval). Az idő tizedes mp vagy mm:ss; a típus és a csapat
+    magyarul és angolul is jó. A fejléc-sor (nem-szám első cella) és a
+    `#`-kezdetű sorok kimaradnak.
+
+    Visszatérés: validate_events-nek átadható lista
+    [{"t_s", "type", "team"}].
+    """
+    import re
+
+    out: list = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [c.strip() for c in re.split(r"[;,\t]", line)]
+        if len(parts) < 2:
+            continue
+        t = _parse_time(parts[0])
+        if t is None:  # fejléc vagy hibás sor
+            continue
+        if _TYPE_MAP.get(parts[1].strip().lower()) is None:
+            continue
+        team = None
+        if len(parts) >= 3 and parts[2].strip():
+            team = _TEAM_MAP.get(parts[2].strip().lower())
+        out.append({"t_s": t, "type": parts[1].strip(), "team": team})
+    return out
+
 
 def _prf(tp: int, fp: int, fn: int) -> dict:
     """Precizitás / visszahívás / F1 egy TP-FP-FN hármasból."""
