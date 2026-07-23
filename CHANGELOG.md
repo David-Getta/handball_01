@@ -23,7 +23,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   réteg, 19 meccsterv- és 32 edzés-szabály, 8 riport, 670+ teszt).
   (#500)
 
-## Kiadatlan — a következő kiadás felé (a v0.1.19 óta)
+## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
+
+_(Még nincs bejegyzés — a v0.1.20 kiadás után indul.)_
+
+## v0.1.20 — kiadva (2026-07-23, PR #535–#541)
+
+> Kiadás-jegyzet: névváltás — a kiadott app és telepítő mostantól
+> **SportMachine** (macOS app, Windows telepítő, ablak-címsor). Új
+> munkafolyamat: az újonnan indított elemzés azonnal fut (LIFO sor + a
+> futó feldolgozás szelíd félretétele), és egy dedikált „Elemzéseim" fül
+> a befejezett/befejezetlen elemzéseket szétválasztva mutatja. A
+> pontosság-validáció parancssorból (offline pilot-mérés) is elérhető, egy
+> friss élő félidei (szélső) jelzéssel együtt. Windows- és
+> macOS-telepítővel a Releases oldalon.
 
 ### Megbízhatóság — nem veszik el munka
 - **Validáció parancssorból**: `python -m scripts.validate_match
