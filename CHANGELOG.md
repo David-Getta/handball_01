@@ -64,6 +64,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   (csomagok, modell, írási jog, tárhely, kodek). (#127)
 
 ### AI-elemzés — új rétegek
+- **20. meccsterv-szabály**: az ő kapusuk gyenge a távoli lövésekre × a ti
+  távoli lövés-erőtök → „élesítsétek az átlövést" (a kapus-sáv és a
+  lövés-távolság rétegek párosítása). (#534)
 - **Hajrá-emberek**: KI szerzi a gólokat a meccs utolsó perceiben — a
   hajrá-teljesítmény egyéni bontása (kire adjuk a labdát / kire figyeljünk
   a végén). Összefoglaló, /analyze, csomag, felderítés-profil (mezszám-

@@ -2003,6 +2003,28 @@ def test_matchup_plan_width_rule():
                    for p_ in plan2)
 
 
+def test_matchup_plan_far_keeper_rule():
+    """20. szabály: az ő kapusuk gyenge a távolira × a mi távoli
+    lövés-erőnk — páros-feltételes."""
+    from handball.pipeline.scouting import matchup_plan
+    own = ScoutingReport(team="home", team_name="Mi",
+                         sr_close_shots=2, sr_mid_shots=1, sr_far_shots=6)
+    opp = ScoutingReport(team="away", team_name="Ok",
+                         gk_far_faced=6, gk_far_saves=2)  # 33% távoli védés
+    plan = matchup_plan(own, opp)
+    assert any("távoli lövésekre gyenge" in p_ for p_ in plan)
+    # Ha alig lövünk kintről, a szabály nem szólal meg.
+    few = ScoutingReport(team="home", team_name="Mi",
+                         sr_close_shots=8, sr_far_shots=1)
+    assert not any("távoli lövésekre gyenge" in p_
+                   for p_ in matchup_plan(few, opp))
+    # Ha a kapusuk jól véd a távolira, szintén nem.
+    good_gk = ScoutingReport(team="away", team_name="Ok",
+                             gk_far_faced=6, gk_far_saves=5)
+    assert not any("távoli lövésekre gyenge" in p_
+                   for p_ in matchup_plan(own, good_gk))
+
+
 def test_markers_merge_and_matchup_loose_rule():
     """Az emberfogó-számok (kockák + táv-összeg) meccsek közt pontosan
     összegződnek; a 13. meccsterv-szabály a laza emberfogóra csak a

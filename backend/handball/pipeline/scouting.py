@@ -2519,6 +2519,20 @@ def matchup_plan(own: "ScoutingReport",
                 "az első perctől: a második félidő közepére nyílik "
                 "az olló, ott kell elmenni.")
 
+    # 20) Az ő kapusuk gyenge a távolira × a ti távoli lövés-erőtök.
+    if opp.gk_far_faced >= 4 and opp.gk_far_saves / opp.gk_far_faced <= 0.40:
+        own_sr_total = (own.sr_close_shots + own.sr_mid_shots
+                        + own.sr_far_shots)
+        own_far_pct = (own.sr_far_shots / own_sr_total
+                       if own_sr_total else 0.0)
+        if own.sr_far_shots >= 5 and own_far_pct >= 0.30:
+            opp_far_save = 100.0 * opp.gk_far_saves / opp.gk_far_faced
+            plan.append(
+                f"Kapusuk a távoli lövésekre gyenge ({opp_far_save:.0f}% "
+                f"védés), ti pedig sokat lőtök kintről ({own.sr_far_shots} "
+                "távoli lövés) — erre a meccsre élesítsétek az átlövést, "
+                "keressétek bátran a távoli befejezést.")
+
     return plan
 
 
