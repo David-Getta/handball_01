@@ -26,6 +26,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 ## Kiadatlan — a következő kiadás felé (a v0.1.19 óta)
 
 ### Kliens-élmény
+- **Átnevezés: handball_client → SportMachine**: a kiadott app és
+  telepítő fájlneve mostantól `SportMachine.app` (macOS) és
+  `SportMachine.exe` (Windows), a macOS menüsor/Finder név „Sport Machine".
+  A kód névfüggetlen (a frissítő .app-ot mintára keres, a motor a
+  resolvedExecutable-ből dolgozik), ezért az auto-frissítés változatlanul
+  működik. A következő kiadástól (0.1.20) él. (#537)
 - **Élő félidei szélső-jelzés**: a szünetben szól, ha az ellenfél szélsői
   veszélyesek voltak az első félidőben — a szélső-védő lépjen ki, szűkítse
   a szöget a másodikban. (#536)

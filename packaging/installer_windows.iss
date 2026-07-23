@@ -18,7 +18,7 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
-#define AppExe "handball_client.exe"
+#define AppExe "SportMachine.exe"
 ; A build kimenetek a repo gyökeréhez képest:
 #define FlutterRelease "..\client\build\windows\x64\runner\Release"
 #define EngineDir "..\dist\handball_backend"

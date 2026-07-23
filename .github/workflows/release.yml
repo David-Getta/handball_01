@@ -128,10 +128,14 @@ jobs:
           Set-Content -Path lib\version.dart -Value "const String appVersion = `"$v`";"
           Get-Content lib\version.dart
       - name: Flutter build (Windows release)
+        shell: pwsh
         working-directory: client
         run: |
           flutter pub get
           flutter build windows --release
+          # A futtatható átnevezése SportMachine.exe-re — ezt indítja a
+          # telepítő parancsikonja (a DLL-ek/data a névtől függetlenül töltődnek).
+          Rename-Item "build\windows\x64\runner\Release\handball_client.exe" "SportMachine.exe"
 
       # ---- Telepítő (Inno Setup) ----
       - name: Inno Setup telepítése
@@ -229,6 +233,14 @@ jobs:
         run: |
           /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/Release.entitlements
           /usr/libexec/PlistBuddy -c "Set :com.apple.security.app-sandbox false" macos/Runner/DebugProfile.entitlements
+      - name: App-név beállítása (Sport Machine)
+        # A menüsorban/Finderben látható név — best effort (nem töri a buildet).
+        working-directory: client
+        run: |
+          PL=macos/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName Sport Machine" "$PL" || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Sport Machine" "$PL" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Sport Machine" "$PL" || true
       - name: Verziószám beírása (automatikus frissítéshez)
         # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
         # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.
@@ -247,7 +259,12 @@ jobs:
         # backend_launcher keresi. A beágyazás után a csomagot újra alá kell írni
         # (ad-hoc; Apple Developer aláírás/notarizálás később).
         run: |
-          APP="client/build/macos/Build/Products/Release/handball_client.app"
+          RAW="client/build/macos/Build/Products/Release/handball_client.app"
+          # Az .app csomagot SportMachine.app-ra nevezzük — ez látszik a
+          # Finderben és a /Applications-ben (a belső futtatható neve nem
+          # számít, a Gatekeeper/launch az Info.plist-ből dolgozik).
+          APP="client/build/macos/Build/Products/Release/SportMachine.app"
+          mv "$RAW" "$APP"
           test -d "$APP"
           mkdir -p "$APP/Contents/Resources/engine"
           cp -R dist/handball_backend/. "$APP/Contents/Resources/engine/"
