@@ -993,4 +993,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 44) Kezdés: ha a meccs nyitányát rendre elveszítjük (a korai — első 6
+    # gólos — mérleg 2+ góllal negatív), a koncentrált, tervezett kezdést
+    # kell gyakorolni (bemelegített első támadások, kész nyitó-figurák).
+    try:
+        from .momentum import opening_profile
+        op44 = opening_profile(match, config)
+        for side in ("home", "away"):
+            rec44 = op44[side]
+            if rec44["scores_first"] is None \
+                    or rec44["early_goals_seen"] < 4:
+                continue
+            if rec44["early_for"] - rec44["early_against"] > -2:
+                continue
+            add(side, "támadás", "Kezdés",
+                f"a meccs nyitányát elveszítjük (korai mérleg "
+                f"{rec44['early_for']}–{rec44['early_against']} az első "
+                "gólokban) — lassan lendülünk játékba",
+                "tervezett kezdés: alaposan bemelegített első támadások, "
+                "2-3 begyakorolt nyitó-figura az első percekre, és "
+                "koncentrációs rutin az első sípszótól (ne kelljen "
+                "'belerázódni' a meccsbe)")
+    except Exception:
+        pass
+
     return out

@@ -617,6 +617,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "$f–$a · $verdict";
   }
 
+  // Kezdés-profil: milyen arányban szerzik a meccs első gólját + a korai
+  // (első 6 gól) mérleg — 3+ mért meccsnél, a kirívó kezdés érdekes (a
+  // felderítési kulccsal azonos küszöb).
+  String? _opening(Map<String, dynamic> r) {
+    final n = ((r["open_first_matches"] as num?) ?? 0).toInt();
+    if (n < 3) return null;
+    final yes = ((r["open_first_yes"] as num?) ?? 0).toInt();
+    final f = ((r["open_for"] as num?) ?? 0).toInt();
+    final a = ((r["open_against"] as num?) ?? 0).toInt();
+    final rate = 100.0 * yes / n;
+    final bal = f - a;
+    if (rate >= 65.0 || bal >= 3) {
+      return "${rate.round()}% nyitógól ($f–$a korai) · erős kezdők";
+    }
+    if (rate <= 35.0 || bal <= -3) {
+      return "${rate.round()}% nyitógól ($f–$a korai) · lassan kezdenek";
+    }
+    return null;
+  }
+
   // Fegyelem: aki rendre kiül (2+ kiállítás) — támadható egy-egyben.
   String? _discipline(Map<String, dynamic> r) {
     final list = (r["susp_players"] as List?) ?? const [];
@@ -1205,6 +1225,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_passDirection(r) != null) ["Passz-irány", _passDirection(r)!],
       if (_assistSource(r) != null) ["Gólpassz-forrás", _assistSource(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],
+      if (_opening(r) != null) ["Kezdés", _opening(r)!],
       if (_leadPace(r) != null) ["Előny-kezelés", _leadPace(r)!],
       if (_bestFigure(r) != null) ["Fő figura", _bestFigure(r)!],
       if (_attackWidth(r) != null)

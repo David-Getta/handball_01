@@ -346,6 +346,14 @@ class ScoutingReport:
     restart_for: int = 0
     restart_against: int = 0
     restart_matches: int = 0
+    # Kezdés-profil (a meccs nyitánya, gól-sorrendből): hányszor szerezte a
+    # csapat a meccs első gólját, hány gólos meccsen mérhető ez, és a korai
+    # ablak (első 6 gól) dobott/kapott gólmérlege — meccsek közt pontosan
+    # összegződik (nyitógól-arány = first_yes / first_matches).
+    open_first_yes: int = 0
+    open_first_matches: int = 0
+    open_for: int = 0
+    open_against: int = 0
     # Támadás-szélesség: mérhető kockák + összterjedelem — meccsek
     # közt összegződik, az átlag visszaszámolható.
     width_frames: int = 0
@@ -1289,6 +1297,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.restart_against} az első 5 percben) — a 2. "
                 "félidő eleje ellenük kiemelt figyelmet kér: kész "
                 "tervvel gyertek ki az öltözőből.")
+    # Kezdés-profil: milyen a meccs nyitánya — gyorsan vezetést szereznek-e.
+    if rep.open_first_matches >= 3:
+        _of_rate = 100.0 * rep.open_first_yes / rep.open_first_matches
+        _of_bal = rep.open_for - rep.open_against
+        if _of_rate >= 65.0 or _of_bal >= 3:
+            keys.append(
+                f"Erős kezdők: a meccsek {_of_rate:.0f}%-ában ők szerzik az "
+                f"első gólt (korai mérleg {rep.open_for}–{rep.open_against}) — "
+                "az első percektől koncentrálj, ne engedd, hogy elhúzzanak; a "
+                "nyitógólért külön meg kell küzdeni.")
+        elif _of_rate <= 35.0 or _of_bal <= -3:
+            keys.append(
+                f"Lassan kezdenek: csak a meccsek {_of_rate:.0f}%-ában övék az "
+                f"első gól (korai mérleg {rep.open_for}–{rep.open_against}) — "
+                "menj rájuk az elején, a korai előny megtörheti a tervüket.")
     # Visszarendeződés: lassú védelem ellen a gyors indítás a fegyver.
     if rep.rec_transitions >= 4:
         rec_avg = rep.rec_sum_s / rep.rec_transitions
@@ -1758,6 +1781,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.restart_for = shs[team.value]
             rep.restart_against = shs[other]
             rep.restart_matches = 1
+        from .momentum import opening_profile
+        opr = opening_profile(match, config)[team.value]
+        if opr["scores_first"] is not None:
+            rep.open_first_matches = 1
+            rep.open_first_yes = 1 if opr["scores_first"] else 0
+            rep.open_for = opr["early_for"]
+            rep.open_against = opr["early_against"]
         from .attack_types import attack_width
         aw = attack_width(match, config)[team.value]
         rep.width_frames = aw["frames"]
@@ -2585,6 +2615,20 @@ def matchup_plan(own: "ScoutingReport",
             "laza labdát be kell fogni, nem elég megpattintani: a beállót "
             "fogd le, a szélső záródjon a rövid lepattanóra.")
 
+    # 23) Az ő lassú kezdésük × a ti jó kezdésetek: a meccs nyitánya a ti
+    # ablakotok — az első percekben kell elhúzni.
+    if (opp.open_first_matches >= 3 and own.open_first_matches >= 3):
+        opp_rate = 100.0 * opp.open_first_yes / opp.open_first_matches
+        own_rate = 100.0 * own.open_first_yes / own.open_first_matches
+        opp_slow = opp_rate <= 35.0 or (opp.open_for - opp.open_against) <= -3
+        own_fast = own_rate >= 65.0 or (own.open_for - own.open_against) >= 3
+        if opp_slow and own_fast:
+            plan.append(
+                f"Ők lassan kezdenek (a meccsek {opp_rate:.0f}%-ában övék az "
+                f"első gól), ti pedig jól ({own_rate:.0f}%) — a meccs nyitánya "
+                "a ti ablakotok: kész nyitó-figurákkal, magas tempóval menjetek "
+                "rájuk az első perctől, a korai előny megtöri a tervüket.")
+
     return plan
 
 
@@ -2789,6 +2833,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
         restart_matches=sum(r.restart_matches for r in reports),
+        open_first_yes=sum(r.open_first_yes for r in reports),
+        open_first_matches=sum(r.open_first_matches for r in reports),
+        open_for=sum(r.open_for for r in reports),
+        open_against=sum(r.open_against for r in reports),
         width_frames=sum(r.width_frames for r in reports),
         width_sum_m=round(sum(r.width_sum_m for r in reports), 1),
         best_fig_attacks=max(reports,
@@ -3212,6 +3260,9 @@ _TREND_METRICS = [
     # Második roham: kimaradt lövés után visszaszerzett lepattanó
     # meccsenként (több = agresszívabb harc a lepattanóért = jobb).
     ("sc_second", "Második roham / meccs", "", True, True),
+    # Kezdés: milyen arányban szerzik a meccs első gólját (jó kezdés =
+    # gyorsan a saját tempójukat kényszerítik rá az ellenfélre = jobb).
+    ("open_first_yes", "Nyitógól-arány", "", True, True),
 ]
 
 
@@ -3229,7 +3280,8 @@ def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
     # mutatót kihagyjuk, hogy ne látsszon hamis javulásnak/romlásnak.
     optional = {"possession_pct", "defensive_pressure_m",
                 "gk_big_saves", "gk_outlet_fast", "gk_xg_saved",
-                "gk_xg_prevented", "pivot_attacks", "sc_second"}
+                "gk_xg_prevented", "pivot_attacks", "sc_second",
+                "open_first_yes"}
     for field_name, label, unit, up_is_better, per_match in _TREND_METRICS:
         a = float(getattr(older, field_name))
         b = float(getattr(newer, field_name))

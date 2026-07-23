@@ -1880,6 +1880,25 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                          f'{cb_txt}{cl_txt}{tp_txt}</div>')
     except Exception:
         pass
+    # Kezdés-profil: a meccs nyitánya — ki ütött először, milyen korai állás.
+    open_line = ""
+    try:
+        from .momentum import opening_profile
+        op = opening_profile(match)
+        oh = op["home"]
+        if oh["scores_first"] is not None and oh["early_goals_seen"] >= 4:
+            first_name = home if oh["scores_first"] else away
+            d_open = oh["early_for"] - oh["early_against"]
+            hi_o = max(oh["early_for"], oh["early_against"])
+            lo_o = min(oh["early_for"], oh["early_against"])
+            lead_name = home if d_open >= 0 else away
+            bal = (f' · korai állás: {escape(lead_name)} {hi_o}–{lo_o}'
+                   if abs(d_open) >= 2 else ' · kiegyenlített nyitány')
+            open_line = (f'<div class="sub">Első gól: {escape(first_name)}'
+                         f'{bal}</div>')
+    except Exception:
+        pass
+    prog_line += open_line
     # A meccs története egy bekezdésben — ugyanaz a szöveg, mint az
     # edzői összefoglaló nyitó-szekciója.
     story_html = ""

@@ -25,6 +25,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Kezdés-profil (nyitógól + korai állás)**: ki szerzi a meccs első
+  gólját és milyen a korai (első 6 gól) mérleg — csak a gól-sorrendből,
+  abszolút idő nélkül, ezért rövid felvételen is stabil (más, mint a
+  félidő-mérleg vagy a szünet-kezdés). Egy réteg, sok felület:
+  `opening_profile` motor, /momentum + meccs-csomag, meccs-történet
+  mondat + meccsjelentés-sor, felderítés-profil (kulcs + csempe),
+  23. meccsterv-szabály (lassú kezdésük × a ti jó kezdésetek),
+  44. edzés-szabály (tervezett kezdés), trend-mutató (nyitógól-arány).
 - **Második roham (lepattanó-visszaszerzés)**: a kimaradt (védett/mellé)
   lövés után a támadó visszaszerzi-e a labdát és újra lő-e, mielőtt az
   ellenfél lőne — a "harc a lepattanóért" agresszivitása és a második

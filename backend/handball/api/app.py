@@ -2596,8 +2596,8 @@ def create_app():
         from ..pipeline.momentum import (annotate_runs, clutch_performance,
                                          clutch_scorers, goal_droughts,
                                          goal_responses, halftime_score,
-                                         score_progression, scoring_timeline,
-                                         win_probability)
+                                         opening_profile, score_progression,
+                                         scoring_timeline, win_probability)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
@@ -2609,6 +2609,7 @@ def create_app():
                 "droughts": goal_droughts(match),
                 "halftime": halftime_score(match),
                 "responses": goal_responses(match),
+                "opening": opening_profile(match),
                 "win_prob": win_probability(match)}
 
     @app.get("/matches/{match_id}/xg")
@@ -2908,6 +2909,8 @@ def create_app():
                 _layer("halftime", lambda: halftime_score(match))
                 from ..pipeline.momentum import goal_responses
                 _layer("responses", lambda: goal_responses(match))
+                from ..pipeline.momentum import opening_profile
+                _layer("opening", lambda: opening_profile(match))
                 from ..pipeline.momentum import win_probability
                 _layer("win_prob", lambda: win_probability(match))
                 from ..pipeline.goalkeeper import goalkeeper_timeline
