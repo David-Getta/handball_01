@@ -2526,7 +2526,13 @@ def create_app():
             tol_s = float(tol) if tol is not None else 3.0
         except (TypeError, ValueError):
             tol_s = 3.0
-        return validate_events(match, truth, tol_s=tol_s)
+        res = validate_events(match, truth, tol_s=tol_s)
+        if str(body.get("format") or "").lower() == "html":
+            from fastapi.responses import HTMLResponse
+            from ..pipeline.validation import validation_report_html
+            return HTMLResponse(content=validation_report_html(
+                res, match.meta.home_team, match.meta.away_team))
+        return res
 
     @app.get("/matches/{match_id}/momentum")
     def get_momentum(match_id: str):

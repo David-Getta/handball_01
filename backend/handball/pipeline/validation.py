@@ -151,3 +151,75 @@ def validate_events(match: Match, truth: list,
         "overall": overall,
         "verdict": _verdict(overall),
     }
+
+
+def validation_report_html(res: dict, home_team: str = "",
+                           away_team: str = "") -> str:
+    """A validáció eredményéből megosztható, nyomtatható HTML-oldal — a
+    pilot go/no-go döntéshez. Ítélet-sáv + esemény-típusonkénti tábla."""
+    from html import escape
+
+    v = res.get("verdict") or {}
+    passed = v.get("pass")
+    banner_bg = ("#12683f" if passed
+                 else "#8f2f2f" if passed is False else "#4a4a4a")
+
+    def _pct(x):
+        return "—" if x is None else f"{x * 100:.0f}%"
+
+    _labels = {"goal": "Gól", "shot": "Lövés"}
+    rows = []
+    for ty in ("goal", "shot"):
+        r = (res.get("by_type") or {}).get(ty) or {}
+        rows.append(
+            f"<tr><td>{escape(_labels[ty])}</td>"
+            f'<td class="num">{r.get("tp", 0)}</td>'
+            f'<td class="num">{r.get("fp", 0)}</td>'
+            f'<td class="num">{r.get("fn", 0)}</td>'
+            f'<td class="num">{_pct(r.get("precision"))}</td>'
+            f'<td class="num">{_pct(r.get("recall"))}</td>'
+            f'<td class="num">{_pct(r.get("f1"))}</td></tr>')
+    ov = res.get("overall") or {}
+    rows.append(
+        f'<tr class="tot"><td>Összesen</td>'
+        f'<td class="num">{ov.get("tp", 0)}</td>'
+        f'<td class="num">{ov.get("fp", 0)}</td>'
+        f'<td class="num">{ov.get("fn", 0)}</td>'
+        f'<td class="num">{_pct(ov.get("precision"))}</td>'
+        f'<td class="num">{_pct(ov.get("recall"))}</td>'
+        f'<td class="num">{_pct(ov.get("f1"))}</td></tr>')
+
+    teams = (f"{escape(home_team)} – {escape(away_team)}"
+             if home_team or away_team else "")
+    return (
+        "<!DOCTYPE html><html lang=\"hu\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, "
+        "initial-scale=1\"><title>Pontosság-validáció</title><style>"
+        "body{font-family:system-ui,Arial,sans-serif;max-width:720px;"
+        "margin:2rem auto;padding:0 1rem;color:#1c2530;}"
+        "h1{font-size:1.4rem;}"
+        ".teams{color:#666;margin:-.4rem 0 1.2rem;}"
+        f".banner{{background:{banner_bg};color:#fff;padding:1rem 1.2rem;"
+        "border-radius:10px;font-weight:600;margin:1rem 0 1.4rem;}"
+        "table{border-collapse:collapse;width:100%;font-size:.95rem;}"
+        "th,td{padding:.55rem .7rem;border-bottom:1px solid #e2e2e2;"
+        "text-align:left;}"
+        "th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;"
+        "color:#777;}"
+        ".num{text-align:right;font-variant-numeric:tabular-nums;}"
+        ".tot{font-weight:700;background:#f6f4ee;}"
+        ".foot{color:#888;font-size:.8rem;margin-top:1.4rem;}"
+        "</style></head><body>"
+        "<h1>Pontosság-validáció</h1>"
+        + (f'<div class="teams">{teams}</div>' if teams else "")
+        + f'<div class="banner">{escape(v.get("text", ""))}</div>'
+        "<table><tr><th>Esemény</th><th class=\"num\">Talált (TP)</th>"
+        "<th class=\"num\">Téves (FP)</th><th class=\"num\">Kimaradt (FN)</th>"
+        "<th class=\"num\">Precizitás</th><th class=\"num\">Visszahívás</th>"
+        "<th class=\"num\">F1</th></tr>"
+        + "".join(rows)
+        + "</table>"
+        f'<div class="foot">Idő-tűrés: {res.get("tol_s", "")} mp. '
+        "A TP a kézi listával párosított felismerés; az FP téves felismerés; "
+        "az FN a kimaradt (kézi listában van, de nem ismerte fel).</div>"
+        "</body></html>")
