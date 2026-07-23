@@ -2504,6 +2504,30 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"windows": detect_empty_net(match)}
 
+    @app.post("/matches/{match_id}/validate")
+    def validate_match(match_id: str, body: dict):
+        """Pontosság-validáció KÉZI ground-truth ellen — a motor és a
+        valóság egyezését méri egy valós felvételen.
+
+        Törzs: {"truth": [{"t_s": mp, "type": "gól"/"lövés", "team"?}],
+                "tol_s"?: 3.0}.
+        Visszaadja a precizitás/visszahívás/F1 értékeket esemény-típusonként
+        és összesítve (tp/fp/fn bontással)."""
+        from ..pipeline.validation import validate_events
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        truth = body.get("truth")
+        if not isinstance(truth, list):
+            raise HTTPException(status_code=400,
+                                detail="truth list required")
+        tol = body.get("tol_s")
+        try:
+            tol_s = float(tol) if tol is not None else 3.0
+        except (TypeError, ValueError):
+            tol_s = 3.0
+        return validate_events(match, truth, tol_s=tol_s)
+
     @app.get("/matches/{match_id}/momentum")
     def get_momentum(match_id: str):
         """Gól-sorozatok (momentum): válasz nélküli szériák a felismert
