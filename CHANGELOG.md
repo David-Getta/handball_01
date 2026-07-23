@@ -504,6 +504,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   geometria). (#240)
 
 ### Kliens-élmény
+- **Élő félidei passz-irány jelzés**: a szünetben szól, ha az ellenfél
+  nagyon vertikálisan (zárj vissza gyorsabban) vagy nagyon türelmesen (a
+  beállóra figyelj) épített az első félidőben — csak az addigi kockákból,
+  a marking/pivot/rotáció félidei képek mellé. (#526)
 - **Kalibráció összenézet egymás mellett**: a hatpontos egészpályás
   finomhangolás a bekalibrált bal és jobb térfelet a SAJÁT képkockáján,
   egymás mellett mutatja (nem egy közösre laposítva) — a felezővonal a két

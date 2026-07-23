@@ -240,6 +240,38 @@ class _LiveScreenState extends State<LiveScreen> {
         }
       }
     } catch (_) {}
+    // Félidei passz-irány: ha az ellenfél nagyon vertikálisan vagy nagyon
+    // türelmesen épít az első félidőben, a szünetben szól — mit zárjunk.
+    try {
+      final a = await _api.fetchAttacks(matchId);
+      final fh = (a["pass_direction_fh"] as Map?)?.cast<String, dynamic>();
+      if (fh != null) {
+        final atFrame = ((fh["until_frame"] as num?) ?? 0).toInt();
+        for (final side in ["home", "away"]) {
+          final rec = (fh[side] as Map?)?.cast<String, dynamic>();
+          if (rec == null) continue;
+          final passes = ((rec["passes"] as num?) ?? 0).toInt();
+          final fwd = (rec["forward_pct"] as num?)?.toDouble();
+          if (passes < 12 || fwd == null) continue;
+          final team = names[side] ?? "";
+          if (fwd >= 45.0) {
+            out.add(_FeedEntry(
+                atFrame,
+                Suggestion(4, "taktika",
+                    "Félidei kép ($team): vertikálisan játszanak "
+                    "(${fwd.toStringAsFixed(0)}% előre-passz) — a másodikban "
+                    "zárj vissza gyorsabban, vedd el a mélységi passzt.")));
+          } else if (fwd <= 20.0) {
+            out.add(_FeedEntry(
+                atFrame,
+                Suggestion(4, "taktika",
+                    "Félidei kép ($team): türelmesen köröznek "
+                    "(${fwd.toStringAsFixed(0)}% előre-passz) — a beállóra és "
+                    "az elzárásokra figyelj, ne húzódj szét idő előtt.")));
+          }
+        }
+      }
+    } catch (_) {}
     // Félidei rotáció-kép: ha az első félidőt szűk kerettel nyomta
     // végig a csapat, a szünetben szól — a hajrá-fáradás megelőzhető.
     try {
