@@ -2504,6 +2504,17 @@ def create_app():
             raise HTTPException(status_code=404, detail="match not found")
         return {"windows": detect_empty_net(match)}
 
+    @app.get("/matches/{match_id}/validate-template")
+    def validate_template(match_id: str):
+        """Pontosság-ellenőrző CSV-sablon a felismert eseményekből — a coach
+        ezt javítja, majd a /validate végpontra adja vissza (truth_csv)."""
+        from fastapi.responses import PlainTextResponse
+        from ..pipeline.validation import validation_template_csv
+        match = _store.get(match_id)
+        if match is None:
+            raise HTTPException(status_code=404, detail="match not found")
+        return PlainTextResponse(content=validation_template_csv(match))
+
     @app.post("/matches/{match_id}/validate")
     def validate_match(match_id: str, body: dict):
         """Pontosság-validáció KÉZI ground-truth ellen — a motor és a

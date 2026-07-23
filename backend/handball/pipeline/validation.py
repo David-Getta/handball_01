@@ -141,6 +141,40 @@ def _verdict(overall: dict) -> dict:
     return {"pass": passed, "text": status + ": " + ", ".join(parts) + "."}
 
 
+def validation_template_csv(match: Match,
+                            config: Optional[TacticsConfig] = None) -> str:
+    """Pontosság-ellenőrző CSV-sablon a MOTOR által felismert eseményekből.
+
+    A coach ezt tölti le, javítja (törli a téveseket, hozzáírja a
+    kimaradtakat), és visszaadja a validációnak — így nem nulláról kell
+    gépelnie. A sorok: `mm:ss, típus, csapat` (magyar címkékkel), időrendben.
+    """
+    from .event_detection import detect_events
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    ty_hu = {"goal": "gól", "shot": "lövés"}
+    team_hu = {"home": "hazai", "away": "vendég"}
+
+    rows = []
+    for ev in detect_events(match, config):
+        v = getattr(ev.type, "value", ev.type)
+        if v not in ("goal", "shot"):
+            continue
+        s = ev.t / fps
+        clock = f"{int(s // 60)}:{int(s % 60):02d}"
+        team = team_hu.get(getattr(ev.team, "value", ev.team), "")
+        rows.append(f"{clock}, {ty_hu[v]}, {team}")
+
+    header = (
+        "# Pontosság-ellenőrző sablon — a motor által felismert események.\n"
+        "# Javítsd: töröld a TÉVES sorokat, add hozzá a KIMARADT "
+        "gólokat/lövéseket,\n"
+        "# majd add vissza a /validate végpontra (truth_csv mező).\n"
+        "# ido(perc:mp), tipus (gól/lövés), csapat (hazai/vendég)\n")
+    return header + "\n".join(rows) + ("\n" if rows else "")
+
+
 def validate_events(match: Match, truth: list,
                     tol_s: float = VALIDATION_TOL_S,
                     config: Optional[TacticsConfig] = None) -> dict:
