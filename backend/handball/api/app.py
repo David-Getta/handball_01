@@ -2478,6 +2478,12 @@ def create_app():
                          [f for f in match.frames if f.t <= ht])
                 res["pivot_fh"] = {"until_frame": ht,
                                    **pivot_usage(sub)}
+                # Félidei passz-irány: vertikális vagy türelmes építkezés —
+                # az élő nézet a szünetben ebből ad "zárj vissza" / "a
+                # beállóra figyelj" jelzést (csak az első félidő kockáiból).
+                from ..pipeline.attack_types import pass_direction
+                res["pass_direction_fh"] = {"until_frame": ht,
+                                            **pass_direction(sub)}
         except Exception:
             pass
         return res
