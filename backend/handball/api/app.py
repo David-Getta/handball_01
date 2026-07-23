@@ -495,6 +495,14 @@ def create_app():
                "video": Path(path).name}
         _jobs[job_id] = job
         _job_params[job_id] = body
+        # Új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi) feldolgozást
+        # szelíden félretesszük — az addig feldolgozott rész elmentődik
+        # (befejezetlen elemzésként a könyvtárba kerül, később folytatható),
+        # és a sor rögtön a most indított munkával megy tovább.
+        for other in _jobs.values():
+            if other["job_id"] != job_id and other["status"] == "running":
+                other["cancel"] = True
+                other["preempted"] = True
         _job_queue.put(job_id)
         _ensure_worker()
         return {"job_id": job_id, "match_id": match_id}
@@ -505,7 +513,9 @@ def create_app():
     # kezdőképernyő mutatja a sor állapotát (GET /jobs).
     import queue as _queue_mod
     import threading as _threading
-    _job_queue: "_queue_mod.Queue[str]" = _queue_mod.Queue()
+    # LIFO: a LEGÚJABB sorba tett elemzés fut következőnek — így egy új
+    # kérés nem áll be a korábbiak mögé, hanem előreveszi magát.
+    _job_queue: "_queue_mod.LifoQueue[str]" = _queue_mod.LifoQueue()
     _job_params: dict[str, dict] = {}
     _worker_flag = {"started": False}
 
@@ -547,7 +557,11 @@ def create_app():
                 job["progress"] = round(float(prog), 3)
                 # Leállítás-kérés közben jelezzük, hogy a befejezés fut.
                 if job.get("cancel"):
-                    msg = f"leállítás — az eddigi rész mentése… ({msg})"
+                    if job.get("preempted"):
+                        msg = ("félretéve az újabb elemzés miatt — az eddigi "
+                               f"rész mentése… ({msg})")
+                    else:
+                        msg = f"leállítás — az eddigi rész mentése… ({msg})"
                 job["message"] = msg
 
             try:
@@ -584,18 +598,29 @@ def create_app():
                     checkpoint_save=lambda m: app.state.put_match(m),
                 )
                 cancelled = bool(job.pop("cancel", False))
+                preempted = bool(job.pop("preempted", False))
                 if cancelled and not match.frames:
                     # Annyira korán állították le, hogy nincs mit menteni.
                     job["status"] = "cancelled"
-                    job["message"] = "megszakítva (nem készült feldolgozott kocka)"
+                    job["message"] = (
+                        "félretéve az újabb elemzés miatt (még nem készült "
+                        "feldolgozott kocka)" if preempted
+                        else "megszakítva (nem készült feldolgozott kocka)")
                 else:
                     app.state.put_match(match)
                     job["status"] = "done"
                     job["progress"] = 1.0
-                    job["message"] = (
-                        f"megszakítva — az addig feldolgozott rész elmentve "
-                        f"({len(match.frames)} kocka)" if cancelled
-                        else f"kész ({len(match.frames)} frame)")
+                    if cancelled and preempted:
+                        job["message"] = (
+                            "félretéve az újabb elemzés miatt — az addigi "
+                            f"rész elmentve, később folytatható "
+                            f"({len(match.frames)} kocka)")
+                    elif cancelled:
+                        job["message"] = (
+                            "megszakítva — az addig feldolgozott rész elmentve "
+                            f"({len(match.frames)} kocka)")
+                    else:
+                        job["message"] = f"kész ({len(match.frames)} frame)"
             except Exception as e:  # a hibát a kliensnek is megmutatjuk
                 msg = str(e)
                 # A nyers zlib-hiba ("Error -3 ... incorrect header check")

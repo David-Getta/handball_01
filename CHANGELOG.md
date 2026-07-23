@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.19 óta)
 
+### Megbízhatóság — nem veszik el munka
+- **Új elemzés azonnal indul**: a feldolgozási sor LIFO — a legújabb kérés
+  fut következőnek, nem áll be a korábbiak mögé. Ráadásul ha épp fut egy
+  (korábbi) feldolgozás, azt a rendszer szelíden félreteszi (az addigi
+  rész elmentődik befejezetlen elemzésként, később folytatható), és rögtön
+  a most indított munkával megy tovább. (#538)
+
 ### Kliens-élmény
 - **Átnevezés: handball_client → SportMachine**: a kiadott app és
   telepítő fájlneve mostantól `SportMachine.app` (macOS) és
