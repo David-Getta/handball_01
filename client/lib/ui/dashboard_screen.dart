@@ -46,9 +46,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Könyvtár-kereső: csapatnévre / meccs-azonosítóra szűr.
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = "";
-  // Gyorsszűrő: csak a befejezetlen (részleges) elemzések — hogy egy
-  // koppintással előjöjjenek a folytatásra/törlésre várók.
-  bool _onlyPartial = false;
+  // "Elemzéseim" könyvtár-fül állapota: mind / befejezett / befejezetlen —
+  // egy koppintással külön a kész és a folytatásra/törlésre váró elemzések.
+  String _libFilter = "all";
 
   // Feldolgozási sor: a futó/sorban álló munkák a kezdőlapon is látszanak,
   // és amíg van aktív munka, pár másodpercenként frissülnek.
@@ -1250,10 +1250,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int get _partialCount =>
       _matches.where((m) => (m["partial"] as bool?) ?? false).length;
 
-  /// A kereső- és állapot-szűrésnek megfelelő meccsek (üres szűrőnél mind).
+  /// Hány befejezett (nem részleges) elemzés van a könyvtárban.
+  int get _doneCount =>
+      _matches.where((m) => !((m["partial"] as bool?) ?? false)).length;
+
+  /// A kereső- és állapot-szűrésnek megfelelő meccsek. A _libFilter az
+  /// "Elemzéseim" fül állapota: "all" | "done" (befejezett) | "partial"
+  /// (befejezetlen).
   List<Map<String, dynamic>> get _filteredMatches {
     bool hit(Map<String, dynamic> m) {
-      if (_onlyPartial && !((m["partial"] as bool?) ?? false)) return false;
+      final partial = (m["partial"] as bool?) ?? false;
+      if (_libFilter == "partial" && !partial) return false;
+      if (_libFilter == "done" && partial) return false;
       if (_query.isEmpty) return true;
       final hay = "${m["match_id"]} ${m["home_team"] ?? ""} "
               "${m["away_team"] ?? ""}"
@@ -1437,7 +1445,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
             const SizedBox(height: AppSpacing.xl),
             Row(children: [
-              Text("Meccs-könyvtár", style: AppText.value.copyWith(fontSize: 17)),
+              Text("Elemzéseim", style: AppText.value.copyWith(fontSize: 17)),
+              const SizedBox(width: AppSpacing.lg),
+              // Dedikált fül: mind / befejezett / befejezetlen — a korábbi
+              // elemzések egy koppintással, szétválasztva.
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact),
+                segments: [
+                  ButtonSegment(
+                      value: "all",
+                      label: Text("Mind (${_matches.length})")),
+                  ButtonSegment(
+                      value: "done",
+                      label: Text("Befejezett ($_doneCount)")),
+                  ButtonSegment(
+                      value: "partial",
+                      label: Text("Befejezetlen ($_partialCount)")),
+                ],
+                selected: {_libFilter},
+                onSelectionChanged: (s) =>
+                    setState(() => _libFilter = s.first),
+              ),
               const SizedBox(width: AppSpacing.lg),
               // Gyorskereső: csapatnévre vagy azonosítóra szűr, élőben.
               SizedBox(
@@ -1483,35 +1513,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       PopupMenuItem(value: t, child: Text(t)),
                   ],
                 ),
-              // Gyorsszűrő: csak a befejezetlen (részleges) elemzések. Akkor
-              // jelenik meg, ha van ilyen — VAGY ha a szűrő épp aktív (hogy
-              // mindig ki lehessen kapcsolni, akkor is, ha közben elfogytak).
-              if (_partialCount > 0 || _onlyPartial) ...[
-                const SizedBox(width: AppSpacing.sm),
-                FilterChip(
-                  selected: _onlyPartial,
-                  onSelected: (v) => setState(() => _onlyPartial = v),
-                  showCheckmark: false,
-                  avatar: Icon(Icons.hourglass_bottom,
-                      size: 15,
-                      color: _onlyPartial
-                          ? AppColors.onAccent
-                          : AppColors.gold),
-                  label: Text("Csak a befejezetlenek ($_partialCount)"),
-                  labelStyle: AppText.label.copyWith(
-                      fontSize: 12,
-                      color: _onlyPartial
-                          ? AppColors.onAccent
-                          : AppColors.textPrimary),
-                  backgroundColor: AppColors.surface,
-                  selectedColor: AppColors.gold,
-                  side: BorderSide(
-                      color: _onlyPartial
-                          ? AppColors.gold
-                          : AppColors.gold.withOpacity(0.5)),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
               const Spacer(),
               // Több meccsből egyesített ellenfél-jelentés (zajmentesebb profil).
               OutlinedButton.icon(
@@ -1592,11 +1593,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _firstStepsCard()
             else if (_filteredMatches.isEmpty)
               _notice(Icons.search_off, "Nincs találat",
-                  _onlyPartial && _query.isEmpty
-                      ? "Nincs befejezetlen (részleges) elemzés — minden "
-                          "kész van."
-                      : "Nincs a keresésre (\"$_query\") illő meccs a "
-                          "könyvtárban.")
+                  _query.isNotEmpty
+                      ? "Nincs a keresésre (\"$_query\") illő elemzés."
+                      : _libFilter == "partial"
+                          ? "Nincs befejezetlen elemzés — minden kész van."
+                          : _libFilter == "done"
+                              ? "Még nincs befejezett elemzés."
+                              : "Nincs elemzés a könyvtárban.")
             else
               for (final m in _filteredMatches) ...[
                 _matchCard(m),
