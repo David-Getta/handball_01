@@ -16,6 +16,20 @@ from __future__ import annotations
 import os
 import sys
 
+# Natív OpenMP-ütközés elleni védelem — MÉG a nehéz importok (torch, OpenCV,
+# numpy) ELŐTT kell beállítani, különben késő. A becsomagolt (PyInstaller)
+# macOS-kiadásban a PyTorch libiomp5-je és az OpenCV/numpy libomp-ja
+# ütközhet; az OpenMP ilyenkor abort()-ol az első nehéz numerikus hívásnál
+# (kalibráció/detektálás), és a motor-folyamat CSENDBEN meghal — a kliens
+# csak "Connection refused"-öt lát. A KMP_DUPLICATE_LIB_OK engedi a
+# párhuzamos futásidőt (nem csökkenti a szálszámot, így a sebességet sem).
+# Az MPS-fallback pedig a nem támogatott Apple-GPU műveleteket CPU-ra tereli
+# ahelyett, hogy elszállna. Csak akkor állítjuk be, ha a felhasználó nem
+# adott meg mást (setdefault).
+for _k, _v in (("KMP_DUPLICATE_LIB_OK", "TRUE"),
+               ("PYTORCH_ENABLE_MPS_FALLBACK", "1")):
+    os.environ.setdefault(_k, _v)
+
 
 def _ensure_streams() -> None:
     """Ablak nélküli (windowed) csomagolt futásnál nincs stdout/stderr — ilyenkor
