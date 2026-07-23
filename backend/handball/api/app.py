@@ -2484,6 +2484,11 @@ def create_app():
                 from ..pipeline.attack_types import pass_direction
                 res["pass_direction_fh"] = {"until_frame": ht,
                                             **pass_direction(sub)}
+                # Félidei kapu-sarok: hova mennek a góljaik — a kapus a
+                # szünetben ebből készülhet a domináns oldalra.
+                from ..pipeline.attack_types import goal_placement
+                res["goal_placement_fh"] = {"until_frame": ht,
+                                            **goal_placement(sub)}
         except Exception:
             pass
         return res
