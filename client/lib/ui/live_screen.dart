@@ -311,6 +311,25 @@ class _LiveScreenState extends State<LiveScreen> {
                     "készüljön a másodikban.")));
           }
         }
+        // Félidei szélső-játék: ha a szélsőik veszélyesek, a szélső-védő
+        // kilépés-fegyelme a második félidő kulcsa.
+        final wf = (a["wing_finishing_fh"] as Map?)?.cast<String, dynamic>();
+        if (wf != null) {
+          for (final side in ["home", "away"]) {
+            final rec = (wf[side] as Map?)?.cast<String, dynamic>();
+            if (rec == null) continue;
+            final shots = ((rec["shots"] as num?) ?? 0).toInt();
+            final pct = (rec["goal_pct"] as num?)?.toDouble();
+            if (shots < 3 || pct == null || pct < 55.0) continue;
+            final team = names[side] ?? "";
+            out.add(_FeedEntry(
+                atFrame,
+                Suggestion(4, "taktika",
+                    "Félidei kép ($team): szélsőik veszélyesek "
+                    "(${pct.toStringAsFixed(0)}% szélső-gólarány) — a "
+                    "szélső-védő lépjen ki, szűkítse a szöget a másodikban.")));
+          }
+        }
       }
     } catch (_) {}
     // Félidei rotáció-kép: ha az első félidőt szűk kerettel nyomta

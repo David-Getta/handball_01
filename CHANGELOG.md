@@ -25,7 +25,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.19 óta)
 
-_(Még nincs bejegyzés — a v0.1.19 kiadás után indul.)_
+### Kliens-élmény
+- **Élő félidei szélső-jelzés**: a szünetben szól, ha az ellenfél szélsői
+  veszélyesek voltak az első félidőben — a szélső-védő lépjen ki, szűkítse
+  a szöget a másodikban. (#536)
 
 ## v0.1.19 — kiadva (2026-07-23, PR #506–#534)
 
