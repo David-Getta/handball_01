@@ -2600,6 +2600,14 @@ def create_app():
             if ht is not None:
                 res["marking_fh"] = {"until_frame": ht,
                                      **marking_pairs(match, until_t=ht)}
+                # Félidei labdaeladók: ki szórja a labdát — a másodikra
+                # présre őt (csak az első félidő kockáiból).
+                from ..models.tracking import Match as _M
+                from ..pipeline.defense import turnover_players
+                sub = _M(match.meta,
+                         [f for f in match.frames if f.t <= ht])
+                res["turnover_players_fh"] = {"until_frame": ht,
+                                              **turnover_players(sub)}
         except Exception:
             pass
         return res
