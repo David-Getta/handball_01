@@ -284,6 +284,29 @@ def test_score_progression_no_goals():
     assert p["biggest_lead"] == {"home": 0, "away": 0}
 
 
+def test_opening_profile_first_scorer_and_early_score():
+    """A A A H H H H → a vendég szerzi az első gólt, és a meccs első 6
+    góljából (AAAHHH) a vendég 3–3-ra áll a hazaival; a 7. gól már nem
+    számít a korai ablakba."""
+    from handball.pipeline.momentum import opening_profile
+    op = opening_profile(_match_from_goals("AAAHHHH"))
+    assert op["away"]["scores_first"] is True
+    assert op["home"]["scores_first"] is False
+    assert op["home"]["early_goals_seen"] == 6      # a 7. gól kimarad
+    assert op["home"]["early_for"] == 3 and op["home"]["early_against"] == 3
+    assert op["away"]["early_for"] == 3 and op["away"]["early_against"] == 3
+
+
+def test_opening_profile_no_goals_none():
+    """Gól nélkül a nyitógól ismeretlen (None), a korai ablak üres."""
+    from handball.pipeline.momentum import opening_profile
+    m = Match(_meta(), [Frame(t=i, players=[], ball=None) for i in range(10)])
+    op = opening_profile(m)
+    assert op["home"]["scores_first"] is None
+    assert op["home"]["early_goals_seen"] == 0
+    assert op["home"]["early_for"] == 0
+
+
 def test_clutch_performance_last_window():
     """20 perces felvétel: 1-1 gól az elején, a hajrában (utolsó 5 perc)
     2 hazai gól → close hajrá, hazai 2-0 hajrá-mérleg."""

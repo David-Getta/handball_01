@@ -1108,6 +1108,26 @@ def _story_section(match: Match, home: str, away: str) -> dict | None:
     except Exception:
         pass
     body += "."
+    # A nyitány: ki szerezte az első gólt és milyen volt a korai állás.
+    try:
+        from .momentum import opening_profile
+        op = opening_profile(match)
+        oh = op["home"]
+        if oh["scores_first"] is not None and oh["early_goals_seen"] >= 4:
+            first_name = home if oh["scores_first"] else away
+            d_open = oh["early_for"] - oh["early_against"]
+            if abs(d_open) >= 2:
+                hi_o = max(oh["early_for"], oh["early_against"])
+                lo_o = min(oh["early_for"], oh["early_against"])
+                lead_name = home if d_open > 0 else away
+                body += (f" A(z) {first_name} szerezte az első gólt, és a "
+                         f"korai szakasz a(z) {lead_name} kezében volt "
+                         f"({hi_o}–{lo_o}).")
+            else:
+                body += (f" A(z) {first_name} szerezte az első gólt, de a "
+                         "nyitány kiegyenlített volt.")
+    except Exception:
+        pass
     bl = prog.get("biggest_lead") or {}
     top_lead = max(bl.get("home", 0), bl.get("away", 0))
     if top_lead >= 3:

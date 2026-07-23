@@ -288,6 +288,56 @@ def score_progression(match: Match, config=None) -> dict:
     }
 
 
+# Kezdés-profil: a meccs ELSŐ ennyi (összesített) góljából áll a "korai
+# állás" — abszolút idő nélkül, csak a gól-sorrendből, ezért rövid/részleges
+# felvételen is stabil.
+OPENING_EARLY_GOALS = 6
+
+
+def opening_profile(match: Match, config=None,
+                    early_goals: int = OPENING_EARLY_GOALS) -> dict:
+    """Kezdés-profil: ki szerzi a meccs ELSŐ gólját, és milyen a korai állás.
+
+    A meccs nyitánya beszédes: a gyorsan vezetést szerző csapat rákényszeríti
+    a saját tempóját, a lassan induló ellen a korai előny megtörheti a
+    tervét. Csak a felismert gólok SORRENDJÉBŐL dolgozunk (abszolút idő
+    nélkül) — ezért rövid vagy részleges felvételen is stabil, más, mint a
+    félidő-mérleg (egész 1. félidő) vagy a szünet-kezdés (2. félidő eleje).
+
+    - scores_first: az adott csapat szerezte-e a meccs első gólját
+      (None, ha egy gól sincs);
+    - early_for / early_against: a csapat és az ellenfél góljai a meccs
+      első `early_goals` (összesített) góljából;
+    - early_goals_seen: hány gólt néztünk (a korai ablak tényleges hossza).
+
+    Visszatérés csapatonként a fenti kulcsokkal.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    goals = sorted((e.t, e.team) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    first_scorer = goals[0][1].value if goals else None
+    window = goals[:max(0, early_goals)]
+    cnt = {"home": 0, "away": 0}
+    for (_t, team) in window:
+        cnt[team.value] += 1
+    seen = len(window)
+
+    out: dict = {}
+    for s in ("home", "away"):
+        other = "away" if s == "home" else "home"
+        out[s] = {
+            "scores_first": (first_scorer == s
+                             if first_scorer is not None else None),
+            "early_for": cnt[s],
+            "early_against": cnt[other],
+            "early_goals_seen": seen,
+        }
+    return out
+
+
 # Hajrá-elemzés: az utolsó ennyi másodperc számít "hajrának", és csak
 # ennél hosszabb felvételen értelmezzük (rövid klipnél az egész a "hajrá").
 CLUTCH_WINDOW_S = 300.0
