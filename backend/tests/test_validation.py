@@ -11,7 +11,8 @@ from handball.models.tracking import (
     Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
 )
 from handball.pipeline.validation import (
-    parse_truth_csv, validate_events, validation_report_html)
+    parse_truth_csv, validate_events, validation_report_html,
+    validation_template_csv)
 
 
 def _meta(fps=25.0):
@@ -145,3 +146,18 @@ def test_parse_truth_csv_formats():
     m = _match_one_goal()
     res = validate_events(m, parse_truth_csv("0:00, gól, hazai"))
     assert res["by_type"]["goal"]["tp"] == 1
+
+
+def test_validation_template_round_trips():
+    """A felismert eseményekből generált sablon vissza-beolvasva a saját
+    meccsre tökéletes egyezést ad (a coach kiindulópontja)."""
+    m = _match_one_goal()
+    csv = validation_template_csv(m)
+    assert csv.startswith("#")               # magyarázó fejléc
+    assert "gól" in csv                       # a felismert gól sora
+    truth = parse_truth_csv(csv)
+    assert len(truth) >= 1
+    res = validate_events(m, truth)
+    # A sablon a motor kimenete → önmagára nézve nincs FP és nincs FN.
+    assert res["overall"]["fp"] == 0 and res["overall"]["fn"] == 0
+    assert res["verdict"]["pass"] is True

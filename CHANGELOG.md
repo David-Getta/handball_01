@@ -33,10 +33,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   olvasható **ítéletet** is ad (MEGFELEL/GYENGE) a cél-küszöbökhöz mérve
   (visszahívás ≥90%, precizitás ≥85%). A kézi lista CSV/TSV-ből is
   beolvasható (`truth_csv`) — mm:ss idő és magyar címkék is jók, hogy az
-  edző táblázatból dolgozhasson. Megosztható, nyomtatható HTML-riport is
-  kérhető (`{"format":"html"}`) a pilot go/no-go döntéshez. Ez a piaci
-  validáció mérőeszköze — a szimulált benchmark mellé a valós footage
-  mérése. (#529–#532)
+  edző táblázatból dolgozhasson. A `GET /matches/{id}/validate-template` a
+  felismert eseményekből előtöltött CSV-sablont ad — a coach ezt JAVÍTJA
+  (nem nulláról gépeli), majd visszaadja. Megosztható, nyomtatható
+  HTML-riport is kérhető (`{"format":"html"}`) a pilot go/no-go döntéshez.
+  Ez a piaci validáció mérőeszköze — a szimulált benchmark mellé a valós
+  footage mérése. (#529–#533)
 - **macOS auto-frissítés javítása**: a „Frissítés most" a Letöltésekből
   indított (karanténos) appnál csendben elbukott (App Translocation) —
   most a kanonikus /Applications mappába telepít, előre letörli a
