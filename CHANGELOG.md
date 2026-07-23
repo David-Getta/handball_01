@@ -29,9 +29,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **Pontosság-validáció valós felvételen**: új `POST /matches/{id}/validate`
   végpont + `validation.validate_events` — egy edző által kitölthető kézi
   eseménylistához (gólok/lövések időbélyeggel) hasonlítja a motor kimenetét,
-  és precizitás/visszahívás/F1 értéket ad típusonként. Ez a piaci validáció
-  („egyezik-e a motor a valósággal?") mérőeszköze — a szimulált benchmark
-  mellé a valós footage mérése. (#529)
+  és precizitás/visszahívás/F1 értéket ad típusonként. A válasz edző-
+  olvasható **ítéletet** is ad (MEGFELEL/GYENGE) a cél-küszöbökhöz mérve
+  (visszahívás ≥90%, precizitás ≥85%). Ez a piaci validáció mérőeszköze —
+  a szimulált benchmark mellé a valós footage mérése. (#529, #530)
 - **macOS auto-frissítés javítása**: a „Frissítés most" a Letöltésekből
   indított (karanténos) appnál csendben elbukott (App Translocation) —
   most a kanonikus /Applications mappába telepít, előre letörli a

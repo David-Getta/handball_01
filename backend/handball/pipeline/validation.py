@@ -26,6 +26,11 @@ from .tactics import TacticsConfig
 # Egy felismert és egy kézi esemény ennyi másodpercen belül számít egyezőnek.
 VALIDATION_TOL_S = 3.0
 
+# Cél-küszöbök az ítélethez (a stratégia kill-kritériuma): efölött a motor
+# eseményfelismerése "elég a taktikai döntéshez".
+VALIDATION_TARGET_RECALL = 0.90
+VALIDATION_TARGET_PRECISION = 0.85
+
 # Kézi címkék → belső típus (magyar és angol elfogadva).
 _TYPE_MAP = {
     "gól": "goal", "gol": "goal", "goal": "goal", "g": "goal",
@@ -50,6 +55,29 @@ def _prf(tp: int, fp: int, fn: int) -> dict:
         "recall": round(rec, 3) if rec is not None else None,
         "f1": round(f1, 3) if f1 is not None else None,
     }
+
+
+def _verdict(overall: dict) -> dict:
+    """Edző-olvasható ítélet az összesített precizitás/visszahívásból, a
+    cél-küszöbökhöz mérve. {"pass": bool|None, "text": "..."}."""
+    prec = overall["precision"]
+    rec = overall["recall"]
+    if prec is None and rec is None:
+        return {"pass": None,
+                "text": "Nincs elég adat az ítélethez (üres a minta)."}
+    ok_rec = rec is not None and rec >= VALIDATION_TARGET_RECALL
+    ok_prec = prec is not None and prec >= VALIDATION_TARGET_PRECISION
+    passed = bool(ok_rec and ok_prec)
+    parts = []
+    if rec is not None:
+        parts.append(f"visszahívás {rec * 100:.0f}% "
+                     f"(cél ≥{VALIDATION_TARGET_RECALL * 100:.0f}%)")
+    if prec is not None:
+        parts.append(f"precizitás {prec * 100:.0f}% "
+                     f"(cél ≥{VALIDATION_TARGET_PRECISION * 100:.0f}%)")
+    status = ("MEGFELEL — a felismerés elég a taktikai döntéshez" if passed
+              else "GYENGE — a felismerés még nem elég megbízható")
+    return {"pass": passed, "text": status + ": " + ", ".join(parts) + "."}
 
 
 def validate_events(match: Match, truth: list,
@@ -116,8 +144,10 @@ def validate_events(match: Match, truth: list,
     tp = sum(by_type[t]["tp"] for t in by_type)
     fp = sum(by_type[t]["fp"] for t in by_type)
     fn = sum(by_type[t]["fn"] for t in by_type)
+    overall = _prf(tp, fp, fn)
     return {
         "tol_s": tol_s,
         "by_type": by_type,
-        "overall": _prf(tp, fp, fn),
+        "overall": overall,
+        "verdict": _verdict(overall),
     }
