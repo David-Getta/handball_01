@@ -2510,7 +2510,9 @@ def create_app():
         valóság egyezését méri egy valós felvételen.
 
         Törzs: {"truth": [{"t_s": mp, "type": "gól"/"lövés", "team"?}],
-                "tol_s"?: 3.0}.
+                "tol_s"?: 3.0, "format"?: "html"}. A "truth" helyett
+        "truth_csv" (szöveg) is megadható — soronként `idő, típus[, csapat]`,
+        mm:ss idő és magyar címkék is jók.
         Visszaadja a precizitás/visszahívás/F1 értékeket esemény-típusonként
         és összesítve (tp/fp/fn bontással)."""
         from ..pipeline.validation import validate_events
@@ -2518,9 +2520,13 @@ def create_app():
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
         truth = body.get("truth")
+        if truth is None and isinstance(body.get("truth_csv"), str):
+            from ..pipeline.validation import parse_truth_csv
+            truth = parse_truth_csv(body["truth_csv"])
         if not isinstance(truth, list):
-            raise HTTPException(status_code=400,
-                                detail="truth list required")
+            raise HTTPException(
+                status_code=400,
+                detail="truth list or truth_csv string required")
         tol = body.get("tol_s")
         try:
             tol_s = float(tol) if tol is not None else 3.0

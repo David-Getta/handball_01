@@ -11,7 +11,7 @@ from handball.models.tracking import (
     Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team,
 )
 from handball.pipeline.validation import (
-    validate_events, validation_report_html)
+    parse_truth_csv, validate_events, validation_report_html)
 
 
 def _meta(fps=25.0):
@@ -124,3 +124,24 @@ def test_validation_report_html_renders():
     assert "Összesen" in html
     # A csapatnév escape-elve (nincs nyers <b>).
     assert "Hazai<b>" not in html and "Hazai&lt;b&gt;" in html
+
+
+def test_parse_truth_csv_formats():
+    """A CSV-beolvasó elfogadja a mm:ss időt, a magyar címkéket, a fejlécet
+    kihagyja, és validate_events-nek átadható listát ad."""
+    csv = (
+        "ido,tipus,csapat\n"        # fejléc — kimarad
+        "0:42, gól, hazai\n"        # mm:ss + magyar → 42 mp, home
+        "75.5; lövés; vendég\n"     # pontosvessző + tizedes → away
+        "# megjegyzés\n"            # komment — kimarad
+        "1:02:03, gól\n"            # óra:perc:mp, csapat nélkül
+        "rossz sor\n")             # nincs érvényes idő — kimarad
+    truth = parse_truth_csv(csv)
+    assert len(truth) == 3
+    assert truth[0] == {"t_s": 42.0, "type": "gól", "team": "home"}
+    assert truth[1]["t_s"] == 75.5 and truth[1]["team"] == "away"
+    assert truth[2]["t_s"] == 3723.0 and truth[2]["team"] is None
+    # Az eredmény tényleg átmegy a validate_events-en (csak típus-egyezésre).
+    m = _match_one_goal()
+    res = validate_events(m, parse_truth_csv("0:00, gól, hazai"))
+    assert res["by_type"]["goal"]["tp"] == 1
