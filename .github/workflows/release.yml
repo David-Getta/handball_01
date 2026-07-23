@@ -115,8 +115,16 @@ jobs:
           channel: stable
           cache: true
       - name: Windows platform-váz generálása (a repo csak a lib/-et tartalmazza)
+        shell: pwsh
         working-directory: client
-        run: flutter create . --platforms=windows --project-name handball_client
+        run: |
+          flutter create . --platforms=windows --project-name handball_client
+          # Az ablak-címsor neve "Sport Machine" (a generált futtató a
+          # projekt-nevet írná ide) — best effort, nem töri a buildet.
+          $mc = "windows\runner\main.cpp"
+          if (Test-Path $mc) {
+            (Get-Content $mc) -replace 'L"handball_client"', 'L"Sport Machine"' | Set-Content $mc
+          }
       - name: Verziószám beírása (automatikus frissítéshez)
         # A kiadott app "tudja" a saját verzióját — ehhez képest nézi a
         # GitHub Releases-t, hogy van-e újabb. Fejlesztésben "0.0.0-dev" marad.
