@@ -1210,3 +1210,32 @@ def test_player_report_gk_positioning_metric():
     html = player_report_html(m, 1)  # a hazai kapus
     assert "Kimozdulás" in html
     assert "kint álló" in html  # 2,5 m-re a gólvonaltól
+
+
+def test_player_report_shows_turnovers():
+    """A játékos-lapon megjelenik a Labdaeladás mutató, ha a játékos
+    elveszít labdát."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team)
+    from handball.pipeline.report_html import player_report_html
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0)
+
+    frames = []
+    t = 0
+    # HAZAI 1-es birtokol, majd a VENDÉG 20-as szerzi meg → 1-es eladása.
+    for _ in range(6):
+        frames.append(Frame(t=t, players=[pl(1, Team.HOME, 20.0, 10.0),
+                                          pl(20, Team.AWAY, 20.5, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(6):
+        frames.append(Frame(t=t, players=[pl(1, Team.HOME, 20.0, 10.0),
+                                          pl(20, Team.AWAY, 20.5, 10.0)],
+                            ball=Ball(x=20.5, y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="pc", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    assert "Labdaeladás" in player_report_html(m, 1)
