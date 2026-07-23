@@ -161,3 +161,29 @@ def test_validation_template_round_trips():
     # A sablon a motor kimenete → önmagára nézve nincs FP és nincs FN.
     assert res["overall"]["fp"] == 0 and res["overall"]["fn"] == 0
     assert res["verdict"]["pass"] is True
+
+
+def test_validate_match_cli(tmp_path, capsys):
+    """A parancssori eszköz betölti a mentett meccset + a CSV-t, kiírja az
+    ítéletet, HTML-riportot ír, és a go/no-go kilépőkódot adja."""
+    import json as _json
+
+    from scripts.validate_match import main
+
+    m = _match_one_goal()
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+    csv = tmp_path / "truth.csv"
+    csv.write_text("ido,tipus,csapat\n0:00, gól, hazai\n", encoding="utf-8")
+    out = tmp_path / "riport.html"
+
+    code = main([str(mj), str(csv), "--out", str(out)])
+    printed = capsys.readouterr().out
+    assert code == 0                          # MEGFELEL → 0
+    assert "MEGFELEL" in printed
+    assert "Összesen" in printed
+    assert out.exists() and "Pontosság-validáció" in out.read_text(
+        encoding="utf-8")
+
+    # Hiányzó fájl → 2-es hibakód.
+    assert main([str(tmp_path / "nincs.json"), str(csv)]) == 2

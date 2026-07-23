@@ -26,6 +26,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 ## Kiadatlan — a következő kiadás felé (a v0.1.19 óta)
 
 ### Megbízhatóság — nem veszik el munka
+- **Validáció parancssorból**: `python -m scripts.validate_match
+  <meccs.json> <igazsag.csv> [--out riport.html]` — a pilot-operátor
+  offline (szerver nélkül) méri a felismerés pontosságát a coach
+  CSV-jéhez képest; kiírja az ítéletet és go/no-go kilépőkódot ad
+  (0 = MEGFELEL). (#541)
 - **Új elemzés azonnal indul**: a feldolgozási sor LIFO — a legújabb kérés
   fut következőnek, nem áll be a korábbiak mögé. Ráadásul ha épp fut egy
   (korábbi) feldolgozás, azt a rendszer szelíden félreteszi (az addigi
