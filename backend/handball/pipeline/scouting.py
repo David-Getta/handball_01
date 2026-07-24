@@ -318,6 +318,11 @@ class ScoutingReport:
     # (arány = blk_for / blk_attempts).
     blk_for: int = 0
     blk_attempts: int = 0
+    # Szerzés-magasság (letámadás-jel): összes labdaszerzés + ebből az elöl
+    # (a saját támadó térfélen) történtek — meccsek közt pontosan
+    # összegződik (elöl-arány = high / steals).
+    steal_n: int = 0
+    steal_high: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1077,6 +1082,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Szerzés-magasság: ha elöl (letámadásból) szereznek sokat, a
+    # kihozatalunknak készen kell állnia; ha csak hátul, elöl nem zavarnak.
+    if rep.steal_n >= 4:
+        _st_pct = 100.0 * rep.steal_high / rep.steal_n
+        if _st_pct >= 35.0:
+            keys.append(
+                f"A szerzéseik {_st_pct:.0f}%-a ELÖL, letámadásból jön "
+                f"({rep.steal_high}/{rep.steal_n}) — a labdakihozatalt "
+                "készítsd elő: rövid, biztos passzok hátul, a kapus is "
+                "játékban, szelep a szélen.")
+        elif _st_pct <= 10.0 and rep.steal_n >= 6:
+            keys.append(
+                f"Elöl nem zavarnak (a szerzéseik csak {_st_pct:.0f}%-a "
+                "elöl) — a hátsó építkezésed nyugodt lehet: időt hagynak "
+                "a felállásra és a figura-indításra.")
 
     # Falba lövés: ha a lövéseik nagy része blokkon akad el, rosszul
     # előkészített lövésekkel élnek — a fegyelmezett blokk-fal megfogja őket.
@@ -1918,6 +1939,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         brrec = blocked_shot_rate(match, config)[team.value]
         rep.blk_for = brrec["blocked"]
         rep.blk_attempts = brrec["attempts"]
+        from .defense import steal_height
+        strec = steal_height(match, config)[team.value]
+        rep.steal_n = strec["steals"]
+        rep.steal_high = strec["high_steals"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2966,6 +2991,20 @@ def matchup_plan(own: "ScoutingReport",
             "párosítás a falatoknak áll: minden átlövésbe beleállni, a "
             "blokk után pedig azonnal indulni.")
 
+    # 32) Az ő letámadásuk × a ti hátul ragadó birtoklásotok: a kihozatal
+    # ellenük külön felkészülést kér.
+    if (opp.steal_n >= 4
+            and 100.0 * opp.steal_high / opp.steal_n >= 35.0
+            and own.tilt_frames >= 100
+            and 100.0 * own.tilt_opp / own.tilt_frames <= 50.0):
+        _st32 = 100.0 * opp.steal_high / opp.steal_n
+        plan.append(
+            f"A szerzéseik {_st32:.0f}%-a elöl, letámadásból jön, a ti "
+            "birtoklásotok pedig amúgy is hátul ragad "
+            f"({100.0 * own.tilt_opp / own.tilt_frames:.0f}% elöl) — a "
+            "kihozatal ellenük külön terv: kapus játékban, rövid "
+            "kijátszás létszámfölénnyel, hosszú szelep a szélsőnek.")
+
     return plan
 
 
@@ -3146,6 +3185,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
         blk_for=sum(r.blk_for for r in reports),
         blk_attempts=sum(r.blk_attempts for r in reports),
+        steal_n=sum(r.steal_n for r in reports),
+        steal_high=sum(r.steal_high for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

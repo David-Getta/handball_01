@@ -1200,4 +1200,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 53) Szerzés-magasság: ha a szerzéseink kizárólag hátul születnek
+    # (6+ szerzésből 10% alatti elöl-arány), a letámadás mint fegyver
+    # hiányzik — az elöl-zavarást kell gyakorolni.
+    try:
+        from .defense import STEAL_HEIGHT_MIN, steal_height
+        st53 = steal_height(match, config)
+        for side in ("home", "away"):
+            rec53 = st53[side]
+            if rec53["high_pct"] is None \
+                    or rec53["steals"] < max(6, STEAL_HEIGHT_MIN) \
+                    or rec53["high_pct"] > 10.0:
+                continue
+            add(side, "védekezés", "Letámadás",
+                f"a szerzéseink csak {rec53['high_pct']:.0f}%-a születik "
+                f"elöl ({rec53['high_steals']}/{rec53['steals']}) — az "
+                "ellenfél építkezését nem zavarjuk",
+                "letámadás-gyakorlás: 2-3 perces magas-prés szakaszok "
+                "(a passzsáv elvétele, a visszapassz provokálása), "
+                "jelre induló váltás mély falra; kis pályás 3-3 prés-játék "
+                "szerzés-pontokkal")
+    except Exception:
+        pass
+
     return out

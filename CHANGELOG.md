@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Szerzés-magasság (letámadás-jel)**: HOL szerez labdát a csapat
+  — az elöl (a saját támadó térfélen) született szerzés a letámadás
+  terméke (35%+ = élő prés), a csak-hátul szerzés passzív elöl-játék.
+  Egy réteg, sok felület: `steal_height` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (kulcs + csempe),
+  32. meccsterv-szabály (az ő letámadásuk × a ti hátul ragadó
+  birtoklásotok), 53. edzés-szabály (letámadás-gyakorlás).
 - **Meccsjelentés: Csapat-profil tábla**: az öt stílus-réteg
   (területi fölény, passz-tempó, fal-szélesség, támogatás-távolság,
   falba lövés) ítéletei egy táblában — a meccs "ujjlenyomata"
