@@ -27,7 +27,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 _(Még nincs bejegyzés — a v0.1.21 kiadás után indul.)_
 
-## v0.1.21 — kiadva (2026-07-24, PR #543–#560)
+## v0.1.21 — kiadva (2026-07-24, PR #543–#561)
 
 > Kiadás-jegyzet: a legfontosabb a macOS-javítás — a feldolgozás többé
 > nem szállhat el csendben ~2%-nál ("Connection refused"): a motor
@@ -39,7 +39,10 @@ _(Még nincs bejegyzés — a v0.1.21 kiadás után indul.)_
 
 ### A v0.1.21 körei
 
-- **Felderítő narratíva stílus-jegyekkel**: az "Így támadnak"
+- **Felderítő narratíva stílus- és fal-jegyekkel**: az "Így
+  támadnak" és a "Védekezésük" szakasz az új rétegekből is
+  mesél — tömör/széthúzott fal, ziccert engedő vs kiszorító
+  védekezés, letámadó szerzések; illetve az "Így támadnak"
   bevezető az új rétegekből is mesél — pörgetett/álló labdajáratás,
   hosszú-passzos (elfogható) játék, elöl nyomó vs hátul ragadó
   birtoklás.
