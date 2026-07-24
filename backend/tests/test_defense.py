@@ -188,6 +188,44 @@ def test_detect_blocks_credits_defender():
     assert b["home"]["blocks"] == 0
 
 
+def test_blocked_shot_rate_attacking_side():
+    """4 hazai lövés akad el a vendég védőn (+1 tiszta lövés) → a HAZAI
+    támadás blokk-aránya 4/5 = 80%; kevés blokknál nincs ítélet."""
+    from handball.pipeline.defense import blocked_shot_rate
+
+    frames = []
+    t = 0
+    shooter = _pl(1, Team.HOME, 28.0, 10.0)
+    blocker = _pl(20, Team.AWAY, 32.5, 10.0)
+    # 4 blokkolt lövés (a labda a védőn fordul vissza), köztük szünetekkel.
+    for _ in range(4):
+        for x in (29.0, 30.2, 31.4, 32.4, 31.0, 29.5, 28.0):
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _i in range(40):  # szünet (blokk-cooldown + lövés-debounce)
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    # 1 tiszta (védő nélküli) gól — ez a "shots" oldalt adja.
+    for i in range(3):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(8):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+
+    br = blocked_shot_rate(Match(_meta(), frames))
+    h = br["home"]
+    assert h["blocked"] == 4 and h["shots"] >= 1
+    assert h["blocked_pct"] is not None and h["blocked_pct"] >= 20.0
+    # A vendégnek nincs blokkolt lövése → nincs ítélet.
+    assert br["away"]["blocked"] == 0 and br["away"]["blocked_pct"] is None
+
+
 def test_defensive_pressure_tight_vs_loose():
     """Szoros védő (1 m) kisebb nyomás-átlagot ad, mint a laza (6 m)."""
     from handball.pipeline.defense import defensive_pressure
