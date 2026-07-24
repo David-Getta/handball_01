@@ -25,6 +25,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
+- **Hibajavítás — a beragadt feldolgozás magától kilép és ment**:
+  az elakadás-őrszem mellé motor-oldali védő került — ha a
+  videó-olvasó/detektáló 3 percig nem ad új kockát, a feldolgozás
+  megszakítja a várakozást, az addig kész rész teljes utómunkával,
+  befejezetlen meccsként mentődik (a könyvtárból folytatható), a
+  státusz pedig elmondja, mi történt.
 - **Hibajavítás — beragadó feldolgozás (elakadás-őrszem + OpenCV
   szál-korlát)**: a feldolgozás egyes videóknál egy fix kockánál
   csendben megállhatott (a kijelzés örökké a friss becslést

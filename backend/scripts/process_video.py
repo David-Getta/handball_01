@@ -287,9 +287,60 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                           classes=person_ids + ball_ids, imgsz=1920, conf=0.05,
                           device=device,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
+
+    # ELAKADÁS-VÉDŐ: a kocka-generátort külön szál húzza, a feldolgozó
+    # időkorlátos sorból olvas. Ha a videó-olvasás/detektálás natív szinten
+    # beragad egy pozíciónál (terepen látott hiba: a haladás egy fix kockánál
+    # örökre megáll), a várakozás STALL_ABORT_S után megszakad, és az addig
+    # kész rész normál utómunkával, RÉSZLEGES meccsként mentődik — a végtelen
+    # csendes állás helyett.
+    import queue as _queue_mod
+    import threading as _threading_mod
+    STALL_ABORT_S = 180.0
+    _frame_q = _queue_mod.Queue(maxsize=8)
+    _SENTINEL = object()
+    _abandon = {"x": False}
+    stall = {"hit": False}
+
+    def _produce():
+        try:
+            for _item in results:
+                while not _abandon["x"]:
+                    try:
+                        _frame_q.put(_item, timeout=1.0)
+                        break
+                    except _queue_mod.Full:
+                        continue
+                if _abandon["x"]:
+                    break
+        except Exception as _e:  # az olvasó hibája nem dönti a folyamatot
+            print(f"FIGYELEM: a videó-olvasó hibával leállt: {_e}")
+        finally:
+            try:
+                _frame_q.put_nowait(_SENTINEL)
+            except _queue_mod.Full:
+                pass  # a fogyasztó már kilépett — nincs kinek jelezni
+
+    _producer = _threading_mod.Thread(target=_produce, daemon=True)
+    _producer.start()
+
+    def _timed_frames():
+        while True:
+            try:
+                item = _frame_q.get(timeout=STALL_ABORT_S)
+            except _queue_mod.Empty:
+                stall["hit"] = True
+                print(f"FIGYELEM: {int(STALL_ABORT_S)} mp-e nem érkezik új "
+                      "kocka a videó-olvasóból — a feldolgozás elakadt; az "
+                      "addig kész rész feldolgozva mentődik.")
+                return
+            if item is _SENTINEL:
+                return
+            yield item
+
     kept = 0
     skipped_dark = 0
-    for fi, r in enumerate(results):
+    for fi, r in enumerate(_timed_frames()):
         # Szelíd leállítás: a hívó (pl. a Megszakítás gomb) jelzésére a
         # detektálás megáll, de az ADDIG feldolgozott kockák megmaradnak —
         # az utómunka lefut rájuk, és az eredmény elmentődik.
@@ -377,7 +428,14 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pan_tracker is not None:
         tx, ty = pan_tracker.translation
         print(f"pásztázás-követés: össz-elmozdulás a végére: ({tx:.0f}, {ty:.0f}) px")
-    return raw, all_colors
+    # A termelő-szál elengedése: ha még él (korai break / plafon), jelezzük,
+    # hogy nincs több fogyasztó, és kihúzunk egy elemet, hogy felébredjen.
+    _abandon["x"] = True
+    try:
+        _frame_q.get_nowait()
+    except _queue_mod.Empty:
+        pass
+    return stall["hit"]
 
 
 class _SimpleTracker:
@@ -774,19 +832,28 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
             except Exception as e:  # a mentés hibája nem állíthatja le a futást
                 print(f"FIGYELEM: részeredmény-mentés nem sikerült: {e}")
 
+    stalled = False
     if weights:
         # Pásztázás-követés csak kalibrációval együtt értelmes (ahhoz igazítunk).
-        _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
-                      court_poly, start=start, skip_dark=skip_dark,
-                      on_frame=on_frame, pan=bool(calib_list),
-                      jersey_voter=jersey_voter, stop_check=stop_check,
-                      raw_out=raw, colors_out=all_colors)
+        stalled = bool(_process_yolo(
+            video_path, weights, stride, max_frames, imgsz, conf,
+            court_poly, start=start, skip_dark=skip_dark,
+            on_frame=on_frame, pan=bool(calib_list),
+            jersey_voter=jersey_voter, stop_check=stop_check,
+            raw_out=raw, colors_out=all_colors))
     else:
         _process_hog(video_path, stride, max_frames, stop_check=stop_check,
                      raw_out=raw, colors_out=all_colors, on_frame=on_frame,
                      start=start)
     stopped = bool(stop_check is not None and stop_check())
-    match = _finalize(raw, all_colors, partial=stopped)
+    if stalled:
+        # A beragadt olvasás megszakítva — a job-üzenet is mondja el, hogy
+        # az eredmény részleges, és a könyvtárból folytatható.
+        report("B", 0.75,
+               f"a videó-olvasás elakadt {len(raw)} kocka után — az addigi "
+               "rész feldolgozva, a meccs befejezetlenként mentve "
+               "(a könyvtárból folytatható)")
+    match = _finalize(raw, all_colors, partial=stopped or stalled)
 
     if out_path:  # CLI: fájlba is írjuk; a szerver közvetlenül a Match-et használja
         with open(out_path, "w", encoding="utf-8") as f:
