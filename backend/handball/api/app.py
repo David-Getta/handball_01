@@ -2544,6 +2544,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stoppages import timeout_record
+            res["timeout_record"] = timeout_record(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -2972,6 +2977,8 @@ def create_app():
                 _layer("shot_timing", lambda: shot_timing(match))
                 from ..pipeline.defense import pressure_fade
                 _layer("pressure_fade", lambda: pressure_fade(match))
+                from ..pipeline.stoppages import timeout_record
+                _layer("timeout_record", lambda: timeout_record(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

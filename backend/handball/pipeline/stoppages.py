@@ -145,3 +145,32 @@ def timeout_effects(match: Match,
                                   else "nem hozott fordulatot")
         out.append(rec)
     return out
+
+
+def timeout_record(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés-mérleg csapatonként: hányszor működött a "mentő" időkérés.
+
+    A timeout_effects ítéleteit összegzi a KÉRŐ csapat szerint: broke =
+    megtörte a kapott gól-sorozatot, failed = nem hozott fordulatot. Több
+    meccsen összegezve kirajzolódik, érdemes-e tartani az időkérésüktől
+    (rendre rendezi a soraikat), vagy hatástalan (a megkezdett sorozat
+    utána is tolható).
+
+    Visszatérés csapatonként: {"timeouts", "broke", "failed"} — timeouts
+    az összes felismert időkérésük (ítélet nélkülieket is beleértve).
+    """
+    config = config or TacticsConfig()
+    out = {s: {"timeouts": 0, "broke": 0, "failed": 0}
+           for s in ("home", "away")}
+    for st in timeout_effects(match, config):
+        team = st.get("likely_team")
+        if st.get("kind") != "időkérés" or team not in out:
+            continue
+        rec = out[team]
+        rec["timeouts"] += 1
+        if st.get("verdict") == "megtörte a sorozatot":
+            rec["broke"] += 1
+        elif st.get("verdict") == "nem hozott fordulatot":
+            rec["failed"] += 1
+    return out

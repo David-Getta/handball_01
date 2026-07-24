@@ -342,6 +342,11 @@ class ScoutingReport:
     prf_fh_n: int = 0
     prf_sh_sum_m: float = 0.0
     prf_sh_n: int = 0
+    # Időkérés-mérleg: felismert időkéréseik + ebből a sorozatot megtörő
+    # (broke) és a fordulatot nem hozó (failed) — meccsek közt összegződik.
+    to_n: int = 0
+    to_broke: int = 0
+    to_failed: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1101,6 +1106,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Időkérés-mérleg: működik-e a "mentő" időkérésük.
+    if rep.to_broke + rep.to_failed >= 2:
+        if rep.to_broke > rep.to_failed:
+            keys.append(
+                f"Az időkérésük működik ({rep.to_broke}/"
+                f"{rep.to_broke + rep.to_failed} megtörte a sorozatot) — ha "
+                "sorozatban vagy, számíts rá: legyen kész az időkérés "
+                "UTÁNI első támadásod, hogy a lendület megmaradjon.")
+        elif rep.to_failed > rep.to_broke:
+            keys.append(
+                f"Az időkérésük hatástalan ({rep.to_failed}/"
+                f"{rep.to_broke + rep.to_failed} nem hozott fordulatot) — a "
+                "megkezdett sorozatot az időkérésük után is tolhatod, ne "
+                "állj le tőle.")
 
     # Védekezés-fellazulás: ha a faluk a 2. félidőre lazul, a hajrát kell
     # megtolni ellenük; ha szorosabbra vált, az elején kell előnyt szerezni.
@@ -2035,6 +2055,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         if prfrec["sh_m"] is not None:
             rep.prf_sh_sum_m = round(prfrec["sh_m"] * prfrec["sh_frames"], 1)
             rep.prf_sh_n = prfrec["sh_frames"]
+        from .stoppages import timeout_record
+        torec = timeout_record(match, config)[team.value]
+        rep.to_n = torec["timeouts"]
+        rep.to_broke = torec["broke"]
+        rep.to_failed = torec["failed"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -3141,6 +3166,16 @@ def matchup_plan(own: "ScoutingReport",
             "időzítsd: az ő fáradó faluk + a ti hajrátok döntheti el a "
             "meccset.")
 
+    # 36) Az ő hatástalan időkérésük × a ti sorozat-képességetek: a
+    # lendületed az időkérésükön is átér.
+    if (opp.to_failed >= 2 and opp.to_failed > opp.to_broke
+            and own.goals >= 10):
+        plan.append(
+            f"Az időkérésük rendre hatástalan ({opp.to_failed} nem hozott "
+            "fordulatot) — ha sorozatban vagytok, az időkérésük ne "
+            "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
+            "figurákkal gyertek vissza, a lendület a tiétek marad.")
+
     return plan
 
 
@@ -3333,6 +3368,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_fh_n=sum(r.prf_fh_n for r in reports),
         prf_sh_sum_m=round(sum(r.prf_sh_sum_m for r in reports), 1),
         prf_sh_n=sum(r.prf_sh_n for r in reports),
+        to_n=sum(r.to_n for r in reports),
+        to_broke=sum(r.to_broke for r in reports),
+        to_failed=sum(r.to_failed for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

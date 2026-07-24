@@ -924,6 +924,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Időkérés-mérleg: működik-e a "mentő" időkérésük (2+ ítéletes
+  // időkérésnél; a backend-kulcsokkal azonos küszöb).
+  String? _timeoutRecord(Map<String, dynamic> r) {
+    final broke = ((r["to_broke"] as num?) ?? 0).toInt();
+    final failed = ((r["to_failed"] as num?) ?? 0).toInt();
+    final total = broke + failed;
+    if (total < 2) return null;
+    if (broke > failed) {
+      return "$broke/$total megtöri a sorozatot · működik";
+    }
+    if (failed > broke) {
+      return "$failed/$total fordulat nélkül · hatástalan";
+    }
+    return null;
+  }
+
   // Védekezés-fellazulás: a nyomás-átlag változása a 2. félidőre
   // (félidőnként 100+ mért kockánál; a backend-kulcsokkal azonos küszöb).
   String? _pressureFade(Map<String, dynamic> r) {
@@ -1439,6 +1455,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_shotTiming(r) != null) ["Lövés-időzítés", _shotTiming(r)!],
       if (_pressureFade(r) != null)
         ["Védekezés-fellazulás", _pressureFade(r)!],
+      if (_timeoutRecord(r) != null)
+        ["Időkérés-mérleg", _timeoutRecord(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
