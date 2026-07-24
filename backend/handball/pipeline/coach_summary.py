@@ -1300,6 +1300,25 @@ def _momentum_section(match: Match, home: str, away: str) -> tuple[dict | None, 
                 highlights.append(
                     f"{other}: {cb} gólos előny ment el — nézd vissza, hol "
                     "fordult a meccs (időkérés, cserék, védekezés-váltás).")
+    # Elengedett vezetés fordulás nélkül (a végén döntetlen, vagy a
+    # hátrányból egalizáló csapat nem került vezetésbe) — a fordítás-ág
+    # ezt nem említi, pedig edzői tanulság.
+    try:
+        from .momentum import lead_protection
+        lp = lead_protection(match)
+        names = {"home": home, "away": away}
+        for side in ("home", "away"):
+            rec_lp = lp[side]
+            other_cb = (prog or {}).get("comeback", {}).get(
+                "away" if side == "home" else "home", 0)
+            if rec_lp["blown"] and other_cb < 3:
+                vege = ("döntetlen lett a vége"
+                        if rec_lp["final_margin"] == 0
+                        else "a végén mégis kikapott")
+                body += (f" A(z) {names[side]} {rec_lp['max_lead']} gólos "
+                         f"vezetést engedett el — {vege}.")
+    except Exception:
+        pass
     return {"title": "Sorozatok", "body": body.strip()}, highlights
 
 

@@ -338,6 +338,48 @@ def opening_profile(match: Match, config=None,
     return out
 
 
+# Előny-őrzés: ekkora (gólnyi) vezetéstől beszélünk "ellépésről" — az
+# ennél kisebb ingadozás a meccs normál hullámzása.
+LEAD_HELD_MIN = 3
+
+
+def lead_protection(match: Match, config=None,
+                    lead_min: int = LEAD_HELD_MIN) -> dict:
+    """Előny-őrzés: a meccs közbeni legnagyobb vezetés vs a végeredmény.
+
+    A gól-idővonalból csapatonként kiszámoljuk a meccs közben elért
+    LEGNAGYOBB vezetést és a záró különbséget. Aki `lead_min`+ gólos
+    előnyt is elenged (a végén nem nyer), az mentálisan törékeny —
+    ellene hátrányban sem szabad feladni; aki az ellépett előnyt mindig
+    megtartja, azt nem szabad hagyni ellépni.
+
+    Visszatérés csapatonként:
+    - max_lead: a meccs közbeni legnagyobb vezetés (0, ha sosem vezetett);
+    - final_margin: záró gólkülönbség (negatív = vereség);
+    - led: elérte-e a `lead_min` gólos vezetést;
+    - blown: led ÉS a végén nem nyert (elengedett vezetés);
+    - verdict: None (nem volt `lead_min`+ vezetés) / "megtartotta" /
+      "elengedte".
+    """
+    prog = score_progression(match, config)
+    fh, fa = prog["final"]
+
+    out: dict = {}
+    for side, final in (("home", fh - fa), ("away", fa - fh)):
+        max_lead = prog["biggest_lead"][side]
+        led = max_lead >= lead_min
+        blown = led and final <= 0
+        out[side] = {
+            "max_lead": max_lead,
+            "final_margin": final,
+            "led": led,
+            "blown": blown,
+            "verdict": (None if not led
+                        else ("elengedte" if blown else "megtartotta")),
+        }
+    return out
+
+
 # Hajrá-elemzés: az utolsó ennyi másodperc számít "hajrának", és csak
 # ennél hosszabb felvételen értelmezzük (rövid klipnél az egész a "hajrá").
 CLUTCH_WINDOW_S = 300.0

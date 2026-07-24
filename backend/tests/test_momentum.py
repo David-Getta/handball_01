@@ -484,3 +484,27 @@ def test_scoring_timeline_empty():
     from handball.pipeline.momentum import scoring_timeline
     m = Match(_meta(), [])
     assert scoring_timeline(m)["buckets"] == []
+
+
+def test_lead_protection_blown_and_held():
+    """A hazai 3-0-ra ellép, majd 3-4-re kikap → elengedett vezetés; a
+    vendég fordít és nyer → az ő (1 gólos) előnye küszöb alatti."""
+    from handball.pipeline.momentum import lead_protection
+    m = _match_from_goals("HHHAAAA")
+    lp = lead_protection(m)
+    h = lp["home"]
+    assert h["max_lead"] == 3 and h["final_margin"] == -1
+    assert h["led"] and h["blown"] and h["verdict"] == "elengedte"
+    a = lp["away"]
+    assert a["max_lead"] == 1 and not a["led"] and a["verdict"] is None
+
+    # Megtartott előny: 4-1-es győzelem 3+ gólos ellépéssel.
+    lp2 = lead_protection(_match_from_goals("HHHAH"))
+    h2 = lp2["home"]
+    assert h2["led"] and not h2["blown"] and h2["verdict"] == "megtartotta"
+
+
+def test_lead_protection_no_goals():
+    from handball.pipeline.momentum import lead_protection
+    lp = lead_protection(Match(_meta(), []))
+    assert lp["home"]["max_lead"] == 0 and lp["home"]["verdict"] is None

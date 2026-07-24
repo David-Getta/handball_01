@@ -359,6 +359,11 @@ class ScoutingReport:
     gsf_fh_saves: int = 0
     gsf_sh_faced: int = 0
     gsf_sh_saves: int = 0
+    # Előny-őrzés: hány meccsen léptek el 3+ góllal, abból hányszor
+    # engedték el (a végén nem nyertek) — darabszámok, összegződnek.
+    lp_led: int = 0
+    lp_blown: int = 0
+    lp_biggest: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1134,6 +1139,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
                 f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
                 "már csak a kidolgozott ziccer megy be neki.")
+
+    # Előny-őrzés: aki 3+ gólos vezetést is elenged, az ellen sosem
+    # szabad feladni; aki mindig megtartja, azt nem szabad hagyni ellépni.
+    if rep.lp_led >= 1:
+        if rep.lp_blown >= 1:
+            keys.append(
+                f"3+ gólos vezetést is elengednek ({rep.lp_led} ellépésből "
+                f"{rep.lp_blown} ment el, volt {rep.lp_biggest} gólos is) — "
+                "hátrányban SE adjátok fel, ez a csapat visszahozható.")
+        elif rep.lp_led >= 2:
+            keys.append(
+                f"Amit megfognak, megtartják: {rep.lp_led} meccsen léptek "
+                "el 3+ góllal, és egyet sem engedtek el — nem szabad "
+                "hagyni őket ellépni, mert onnan nincs visszaút.")
 
     # Labdabiztonság-esés: ha a 2. félidőre nő az eladás-ütemük, a hajrában
     # kell rájuk presselni — ott törékeny a kezük.
@@ -2114,6 +2133,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.gsf_fh_saves = gsfrec["fh_saves"]
             rep.gsf_sh_faced = gsfrec["sh_faced"]
             rep.gsf_sh_saves = gsfrec["sh_saves"]
+        from .momentum import lead_protection
+        lprec = lead_protection(match, config)[team.value]
+        if lprec["led"]:
+            rep.lp_led = 1
+            rep.lp_blown = 1 if lprec["blown"] else 0
+            rep.lp_biggest = lprec["max_lead"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -3230,6 +3255,17 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 39) Az ő elengedett vezetéseik × a ti hajrá-erőtök: hátrányban is
+    # türelmesen kell játszani — ez a csapat a végén elereszti a meccset.
+    if (opp.lp_blown >= 1 and own.clutch_matches >= 1
+            and own.clutch_goals_for > own.clutch_goals_against):
+        plan.append(
+            f"Vezetést is elengednek ({opp.lp_led} db 3+ gólos ellépésből "
+            f"{opp.lp_blown} ment el), ti pedig erősek vagytok a hajrában "
+            f"({own.clutch_goals_for}–{own.clutch_goals_against}) — ha "
+            "hátrányba kerültök, ne kapkodjatok: türelmes játékkal a "
+            "meccs végén visszajön, ők pedig görcsölni kezdenek.")
+
     # 38) Az ő 2. félidőre eső kapusuk × a ti hajrá-erőtök: a meccs végén
     # a lövéseitek dupla eséllyel mennek be.
     if (opp.gsf_fh_faced >= 4 and opp.gsf_sh_faced >= 4
@@ -3463,6 +3499,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gsf_fh_saves=sum(r.gsf_fh_saves for r in reports),
         gsf_sh_faced=sum(r.gsf_sh_faced for r in reports),
         gsf_sh_saves=sum(r.gsf_sh_saves for r in reports),
+        lp_led=sum(r.lp_led for r in reports),
+        lp_blown=sum(r.lp_blown for r in reports),
+        lp_biggest=max((r.lp_biggest for r in reports), default=0),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
