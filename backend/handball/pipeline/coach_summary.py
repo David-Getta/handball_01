@@ -602,6 +602,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Passz-hossz: direkt (hosszú) vagy rövid kombinációs passzjáték.
+    try:
+        from .event_detection import PLEN_LONG_PCT, pass_length
+        plc = pass_length(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pl = plc[side]
+            if rec_pl["long_pct"] is None:
+                continue
+            if rec_pl["long_pct"] >= PLEN_LONG_PCT:
+                body += (f" A(z) {name} passzainak {rec_pl['long_pct']:.0f}%-a "
+                         f"hosszú (átlag {rec_pl['avg_m']:.0f} m) — direkt, "
+                         "kockázatos passzjáték.")
+    except Exception:
+        pass
     # Szerzés-magasság: hol születtek a labdaszerzések (letámadás-jel).
     try:
         from .defense import STEAL_HIGH_PCT, steal_height

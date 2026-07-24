@@ -335,6 +335,61 @@ def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict
     return result
 
 
+# Passz-hossz: ennyi mért passz kell az ítélethez; e fölött "hosszú" a
+# passz, és ekkora hosszú-arány jelent direkt (kockázatos) passzjátékot.
+PLEN_MIN_PASSES = 15
+PLEN_LONG_M = 10.0
+PLEN_LONG_PCT = 30.0
+
+
+def pass_length(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-hossz profil: rövid kombinációs vagy hosszú, direkt passzjáték.
+
+    Minden felismert passznál a passzoló és a fogadó távolságát mérjük a
+    passz pillanatában. A sok hosszú passz (PLEN_LONG_M fölött) direkt,
+    kockázatos játékot jelez — a passzsávra ülve elfogható; a rövid
+    passzos kombináció présállóbb, de lassabban ér kaput.
+
+    Visszatérés csapatonként:
+      {"passes", "avg_m", "long_passes", "long_pct"} — a mért passzok
+    száma, átlaghossza, a hosszúak száma és aránya; avg_m/long_pct None,
+    ha passes < PLEN_MIN_PASSES.
+    """
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    acc = {"home": [0, 0.0, 0], "away": [0, 0.0, 0]}  # n, összeg, hosszú
+    for e in detect_events(match, config):
+        if e.type != EventType.PASS or e.player_id is None:
+            continue
+        rid = (e.detail or {}).get("receiver_id")
+        f = by_t.get(e.t)
+        if rid is None or f is None:
+            continue
+        passer = next((p for p in f.players if p.track_id == e.player_id),
+                      None)
+        receiver = next((p for p in f.players if p.track_id == rid), None)
+        if passer is None or receiver is None:
+            continue
+        d = math.hypot(receiver.x - passer.x, receiver.y - passer.y)
+        rec = acc[e.team.value]
+        rec[0] += 1
+        rec[1] += d
+        if d >= PLEN_LONG_M:
+            rec[2] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        n, total, long_n = acc[s]
+        ok = n >= PLEN_MIN_PASSES
+        out[s] = {
+            "passes": n,
+            "avg_m": round(total / n, 1) if ok else None,
+            "long_passes": long_n,
+            "long_pct": round(100.0 * long_n / n, 1) if ok else None,
+        }
+    return out
+
+
 # Lövés-sebesség: hihetőségi plafon (követési hiba fölötte) és a
 # sebesség-méréshez nézett ablak a lövés-esemény után (kockában).
 SHOT_SPEED_MAX_MS = 45.0     # ~160 km/h fölött mérési hiba

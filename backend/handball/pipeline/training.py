@@ -1223,4 +1223,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 54) Passz-hossz: ha hosszú passzokra épül a játékunk (15+ passzból
+    # 30%+ 10 m fölötti) ÉS sokat adunk el, a passz-szerkezetet kell
+    # biztonságosabbra hangolni.
+    try:
+        from .event_detection import (PLEN_LONG_PCT, PLEN_MIN_PASSES,
+                                      pass_length)
+        pl54 = pass_length(match, config)
+        for side in ("home", "away"):
+            rec54 = pl54[side]
+            if rec54["long_pct"] is None \
+                    or rec54["passes"] < PLEN_MIN_PASSES \
+                    or rec54["long_pct"] < PLEN_LONG_PCT:
+                continue
+            # Csak akkor javaslat, ha az eladások is jelzik a kockázatot.
+            from .defense import turnover_zones
+            tz54 = turnover_zones(match, config)[side]
+            if tz54["total"] < 6:
+                continue
+            add(side, "támadás", "Passz-szerkezet",
+                f"a passzaink {rec54['long_pct']:.0f}%-a hosszú (10 m+), és "
+                f"{tz54['total']} labdát adtunk el — a hosszú labda a fő "
+                "kockázati forrásunk",
+                "passz-szerkezet gyakorlás: hosszú passz csak tiszta "
+                "sávba (a védő mögé, nem mellé), egyébként két rövidből "
+                "épülő oldalváltás; passz-után-mozgás, hogy mindig legyen "
+                "rövid opció")
+    except Exception:
+        pass
+
     return out

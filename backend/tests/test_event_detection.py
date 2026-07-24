@@ -350,6 +350,49 @@ def test_shot_speed_fade_second_half_drop():
     assert shot_speed_fade(short)["home"]["drop_pct"] is None
 
 
+def test_pass_length_short_vs_long():
+    """16 passz egy 5 m-es és egy 12 m-es cél közt felváltva → ~8,5 m átlag,
+    50% hosszú-arány; kevés passznál nincs ítélet."""
+    from handball.pipeline.event_detection import pass_length
+
+    frames = []
+    t = 0
+    pos = {1: (20.0, 10.0), 2: (25.0, 10.0), 3: (20.0, 10.0)}
+    # 1→2 rövid (5 m), 2→1 rövid, 1→3... a 3-as 12 m-re: hosszú váltások.
+    seq = []
+    for _ in range(8):
+        seq += [(1, 2), (2, 1)]      # rövid oda-vissza
+    long_pos = {1: (20.0, 10.0), 4: (32.0, 10.0)}
+    for _ in range(8):
+        seq += [(1, 4), (4, 1)]      # hosszú oda-vissza (12 m)
+    # Rövid szakasz.
+    cur = {1: (20.0, 10.0), 2: (25.0, 10.0)}
+    for (frm, to) in seq[:16]:
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, *cur[1]), _pl(2, Team.HOME, *cur[2])],
+                ball=Ball(x=cur[frm][0], y=cur[frm][1], confidence=1.0)))
+            t += 1
+    # Hosszú szakasz.
+    for (frm, to) in seq[16:]:
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, *long_pos[1]), _pl(4, Team.HOME,
+                                                     *long_pos[4])],
+                ball=Ball(x=long_pos[frm][0], y=long_pos[frm][1],
+                          confidence=1.0)))
+            t += 1
+
+    pl_ = pass_length(Match(_meta(), frames))
+    h = pl_["home"]
+    assert h["passes"] >= 15
+    assert h["avg_m"] is not None and 5.0 < h["avg_m"] < 12.0
+    assert h["long_passes"] >= 8
+    assert h["long_pct"] is not None and h["long_pct"] >= 30.0
+    # A vendégnek nincs passza → nincs ítélet.
+    assert pl_["away"]["avg_m"] is None
+
+
 def test_pass_network_pairs_and_hubs():
     """3 passz 1→2 és 1 passz 2→3: a fő pár az 1→2, a hub az 1-es vagy
     a 2-es (mindkettő 4 passzban érintett — a 2-esé: 3 kapott + 1 adott)."""
