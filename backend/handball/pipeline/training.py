@@ -1322,4 +1322,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 58) Labdabiztonság-esés: ha a 2. félidőre érdemben nő az eladás-
+    # ütemünk (+0,2/perc), a fáradt kéz labdabiztonságát kell építeni.
+    try:
+        from .defense import TURNOVER_FADE_RISE_PER_MIN, turnover_fade
+        tf58 = turnover_fade(match, config)
+        for side in ("home", "away"):
+            rec58 = tf58[side]
+            if rec58["rise_per_min"] is None \
+                    or rec58["rise_per_min"] < TURNOVER_FADE_RISE_PER_MIN:
+                continue
+            add(side, "támadás", "Labdabiztonság fáradtan",
+                f"a 2. félidőre megnő az eladás-ütemünk "
+                f"({rec58['fh_per_min']:.1f} → {rec58['sh_per_min']:.1f} "
+                "eladás/perc birtoklás) — fáradtan kienged a kezünk",
+                "labdabiztonság fáradtan: passz- és átvétel-gyakorlatok "
+                "kör-edzés UTÁN (magas pulzuson), kétlabdás járatás, "
+                "présnyomásos 5-5 a edzés végén; a hajrá-felállásban a "
+                "legbiztosabb kezű játékosok kapják a labdát")
+    except Exception:
+        pass
+
     return out

@@ -924,6 +924,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Labdabiztonság-esés: az eladás-ütem változása a 2. félidőre
+  // (félidőnként 2+ perc mért birtoklásnál; a backend-kulccsal azonos
+  // küszöb) — csak a kirívó romlás érdekes.
+  String? _turnoverFade(Map<String, dynamic> r) {
+    final fhPoss = ((r["tof_fh_poss_s"] as num?) ?? 0).toDouble();
+    final shPoss = ((r["tof_sh_poss_s"] as num?) ?? 0).toDouble();
+    if (fhPoss < 120.0 || shPoss < 120.0) return null;
+    final fhTo = ((r["tof_fh_to"] as num?) ?? 0).toInt();
+    final shTo = ((r["tof_sh_to"] as num?) ?? 0).toInt();
+    final fh = 60.0 * fhTo / fhPoss;
+    final sh = 60.0 * shTo / shPoss;
+    if (sh - fh < 0.2) return null;
+    return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} "
+        "eladás/perc · a 2. félidőben kienged";
+  }
+
   // Időkérés-mérleg: működik-e a "mentő" időkérésük (2+ ítéletes
   // időkérésnél; a backend-kulcsokkal azonos küszöb).
   String? _timeoutRecord(Map<String, dynamic> r) {
@@ -1457,6 +1473,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Védekezés-fellazulás", _pressureFade(r)!],
       if (_timeoutRecord(r) != null)
         ["Időkérés-mérleg", _timeoutRecord(r)!],
+      if (_turnoverFade(r) != null)
+        ["Labdabiztonság-esés", _turnoverFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

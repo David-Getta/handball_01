@@ -582,3 +582,48 @@ def test_pressure_fade_looser_second_half():
     # Félidő nélkül (rövid felvétel) nincs ítélet.
     short = pressure_fade(Match(_meta(), press_frames(0, 10, 1.0)))
     assert short["home"]["loosen_m"] is None
+
+
+def test_turnover_fade_rate_rises_second_half():
+    """Az 1. félidőben 1, a 2.-ban 4 eladás azonos birtoklás-idő mellett →
+    az eladás-ütem érdemben nő; félidő-jel nélkül nincs ítélet."""
+    from handball.pipeline.defense import turnover_fade
+
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def possession_with_turnovers(seconds, n_turnovers):
+        # HAZAI birtoklás `seconds` hosszan; közben n_turnovers eladás
+        # (a labda rövid időre a vendég 20-ashoz kerül, majd vissza).
+        nonlocal t
+        total = int(seconds * fps)
+        slot = total // max(1, n_turnovers + 1)
+        for i in range(total):
+            steal = n_turnovers and i % slot == slot - 1 \
+                and i // slot < n_turnovers
+            holder_away = bool(steal)
+            hx = 20.0
+            players = [_pl(1, Team.HOME, hx, 10.0),
+                       _pl(20, Team.AWAY, hx + 0.6, 10.0)]
+            bx = hx + (0.6 if holder_away else 0.0)
+            for _ in range(6 if steal else 1):
+                frames.append(Frame(t=t, players=players,
+                                    ball=Ball(x=bx, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+
+    possession_with_turnovers(150, 1)          # 1. félidő: 1 eladás
+    for _ in range(int(90 * fps)):             # szünet
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    possession_with_turnovers(150, 4)          # 2. félidő: 4 eladás
+
+    tf = turnover_fade(Match(_meta(), frames))
+    h = tf["home"]
+    assert h["fh_per_min"] is not None and h["sh_per_min"] is not None
+    assert h["sh_to"] > h["fh_to"]
+    assert h["rise_per_min"] is not None and h["rise_per_min"] >= 0.2
+    # Félidő nélkül nincs ítélet.
+    short = turnover_fade(Match(_meta(), frames[:1000]))
+    assert short["home"]["rise_per_min"] is None

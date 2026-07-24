@@ -398,6 +398,67 @@ def blocked_shot_rate(match, config=None) -> dict:
     return out
 
 
+# Labdabiztonság-esés: félidőnként ennyi mért birtoklás-idő kell, és ekkora
+# (eladás/perc) romlás számít fáradás-/koncentráció-jelnek a 2. félidőre.
+TURNOVER_FADE_MIN_POSS_S = 120.0
+TURNOVER_FADE_RISE_PER_MIN = 0.2
+
+
+def turnover_fade(match, config=None) -> dict:
+    """Labdabiztonság-esés: az eladás-ütem változása az 1. és a 2. félidő
+    között — a koncentráció/fáradás harmadik jele.
+
+    Félidőnként a labdaeladásokat a SAJÁT birtoklás-időre vetítjük
+    (eladás/perc), így az ütem-különbség nem torzít. Ha a 2. félidei ütem
+    érdemben (TURNOVER_FADE_RISE_PER_MIN) magasabb, a csapat keze a meccs
+    végére "kienged" — a hajrában a labdabiztonsága törékeny; ha javul, a
+    hajrában is rendezett marad. A lövőerő-esés és a védekezés-fellazulás
+    mellett a fáradás-kép harmadik pillére.
+
+    Visszatérés csapatonként:
+      {"fh_to", "fh_poss_s", "sh_to", "sh_poss_s", "fh_per_min",
+       "sh_per_min", "rise_per_min"} — félidőnkénti eladások és mért
+    birtoklás-idő; a per-perc ütemek és a változás None, ha nincs
+    félidő-jel vagy kevés a mért birtoklás (TURNOVER_FADE_MIN_POSS_S).
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+    from .tactics import possession_team
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    empty = {"fh_to": 0, "fh_poss_s": 0.0, "sh_to": 0, "sh_poss_s": 0.0,
+             "fh_per_min": None, "sh_per_min": None, "rise_per_min": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    for f in match.frames:
+        team = possession_team(f, config)
+        if team is None:
+            continue
+        key = "fh_poss_s" if f.t <= ht else "sh_poss_s"
+        out[team.value][key] += 1.0 / fps
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER:
+            continue
+        key = "fh_to" if e.t <= ht else "sh_to"
+        out[e.team.value][key] += 1
+    for s in ("home", "away"):
+        rec = out[s]
+        rec["fh_poss_s"] = round(rec["fh_poss_s"], 1)
+        rec["sh_poss_s"] = round(rec["sh_poss_s"], 1)
+        if rec["fh_poss_s"] >= TURNOVER_FADE_MIN_POSS_S \
+                and rec["sh_poss_s"] >= TURNOVER_FADE_MIN_POSS_S:
+            rec["fh_per_min"] = round(60.0 * rec["fh_to"]
+                                      / rec["fh_poss_s"], 2)
+            rec["sh_per_min"] = round(60.0 * rec["sh_to"]
+                                      / rec["sh_poss_s"], 2)
+            rec["rise_per_min"] = round(rec["sh_per_min"]
+                                        - rec["fh_per_min"], 2)
+    return out
+
+
 # Védekezés-fellazulás: félidőnként ennyi mért kocka kell, és ekkora
 # (méteres) lazulás számít fáradás-jelnek a 2. félidőre.
 PRESSURE_FADE_MIN_FRAMES = 100
