@@ -101,6 +101,59 @@ def ball_holder(frame: Frame, config: TacticsConfig) -> Optional[PlayerPosition]
     return nearest
 
 
+# Támogatás-távolság: ennyi labdás kocka kell az ítélethez; a legközelebbi
+# társ e fölött "izolált" labdás, ez alatt szoros a támogatás.
+SUPPORT_MIN_FRAMES = 100
+SUPPORT_ISO_M = 7.0
+SUPPORT_TIGHT_M = 4.0
+
+
+def support_distance(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Támogatás-távolság (izoláció-jel): milyen messze van a labdás
+    játékostól a LEGKÖZELEBBI társa.
+
+    Minden kockán, ahol azonosított labdabirtokos van, megmérjük a
+    legközelebbi saját csapattárs távolságát. Ha a labdás rendre magára
+    marad (nagy átlag, sok izolált kocka), a présjáték működik ellene —
+    kényszerített egyéni megoldások és eladások jönnek; ha a támogatás
+    szoros, a rövid passzos kijátszás pörög, a prés kockázatos ellene.
+
+    Visszatérés csapatonként:
+      {"frames", "avg_m", "iso_frames", "iso_pct"} — a mért labdás kockák
+    száma, a legközelebbi társ átlagtávolsága, az izolált (SUPPORT_ISO_M+)
+    kockák száma és aránya. avg_m/iso_pct None, ha frames < SUPPORT_MIN_FRAMES.
+    """
+    config = config or TacticsConfig()
+    acc = {"home": [0, 0.0, 0], "away": [0, 0.0, 0]}  # n, összeg, izolált
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        mates = [p for p in f.players
+                 if p.team == holder.team and p.track_id != holder.track_id]
+        if not mates:
+            continue
+        d = min(math.hypot(p.x - holder.x, p.y - holder.y) for p in mates)
+        rec = acc[holder.team.value]
+        rec[0] += 1
+        rec[1] += d
+        if d >= SUPPORT_ISO_M:
+            rec[2] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        n, total, iso = acc[s]
+        ok = n >= SUPPORT_MIN_FRAMES
+        out[s] = {
+            "frames": n,
+            "avg_m": round(total / n, 2) if ok else None,
+            "iso_frames": iso,
+            "iso_pct": round(100.0 * iso / n, 1) if ok else None,
+        }
+    return out
+
+
 def evaluate_options(frame: Frame, holder: PlayerPosition,
                      config: Optional[TacticsConfig] = None) -> list[Option]:
     """A labdás játékos összes opciója értékkel: lövés + passz minden csapattárshoz."""

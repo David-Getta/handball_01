@@ -288,6 +288,13 @@ class ScoutingReport:
     # meccsek közt pontosan összegződik; a fő gólszerző részesedése
     # (gólfüggés) a teljes mintából számolható vissza.
     scorer_goals: list = field(default_factory=list)
+    # Támogatás-távolság (izoláció-jel): a mért labdás kockák száma, a
+    # legközelebbi társ táv-összege (m) és az izolált kockák száma —
+    # meccsek közt pontosan összegződik (átlag = összeg / kockák,
+    # izolált-arány = izolált / kockák).
+    sup_frames: int = 0
+    sup_sum_m: float = 0.0
+    sup_iso: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1027,6 +1034,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
 
+    # Támogatás-távolság: magára hagyott labdás ellen a prés működik;
+    # szoros támogatás ellen a prés kockázatos (kijátsszák).
+    if rep.sup_frames >= 100 and rep.sup_sum_m > 0:
+        _sup_avg = rep.sup_sum_m / rep.sup_frames
+        _sup_iso_pct = 100.0 * rep.sup_iso / rep.sup_frames
+        if _sup_avg >= 7.0 or _sup_iso_pct >= 35.0:
+            keys.append(
+                f"A labdás játékosuk rendre magára marad (a legközelebbi "
+                f"társ átlag {_sup_avg:.1f} m-re, az idő "
+                f"{_sup_iso_pct:.0f}%-ában izolált) — a prés működik "
+                "ellenük: letámadással kényszeríts egyéni megoldásokat "
+                "és eladásokat.")
+        elif _sup_avg <= 4.0:
+            keys.append(
+                f"Szorosan támogatják a labdást (átlag {_sup_avg:.1f} m a "
+                "legközelebbi társ) — a prés kockázatos ellenük, rövid "
+                "passzokkal kijátsszák: inkább zárt, fegyelmezett fal.")
+
     # Hajrá-emberük: aki a meccs végén gólt szerez — rá a hajrában
     # fokozott figyelem, akár emberfogás.
     if rep.clutch_scorers:
@@ -1764,6 +1789,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         from .event_detection import goal_concentration
         rep.scorer_goals = list(
             goal_concentration(match, config)[team.value]["scorers"])
+        from .decisions import support_distance
+        suprec = support_distance(match, config)[team.value]
+        rep.sup_frames = suprec["frames"]
+        if suprec["avg_m"] is not None:
+            rep.sup_sum_m = round(suprec["avg_m"] * suprec["frames"], 1)
+            rep.sup_iso = suprec["iso_frames"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2731,6 +2762,19 @@ def matchup_plan(own: "ScoutingReport",
                 "párosítás adja magát: ő fogja a fő gólszerzőt akár emberfogva, "
                 "és az egész támadójátékuk megfojtható.")
 
+    # 26) Az ő izolált labdásuk × a ti labdaszerzésből élő támadásotok:
+    # a letámadás ellenük közvetlenül gólt ér.
+    if (opp.sup_frames >= 100 and opp.sup_sum_m > 0
+            and opp.sup_iso / opp.sup_frames >= 0.35
+            and own.trans_steals >= 4 and own.trans_quick_goals >= 2):
+        _i26 = 100.0 * opp.sup_iso / opp.sup_frames
+        plan.append(
+            f"A labdásuk az idő {_i26:.0f}%-ában magára marad, ti pedig a "
+            f"szerzéseiteket gyorsan gólra váltjátok "
+            f"({own.trans_quick_goals}/{own.trans_steals}) — magas "
+            "letámadás az első perctől: az izolált labdás az eladásaival "
+            "a ti kontráitokat fogja etetni.")
+
     return plan
 
 
@@ -2900,6 +2944,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         turnover_players=_merge_turnover_players(reports),
         clutch_scorers=_merge_clutch_scorers(reports),
         scorer_goals=_merge_scorer_goals(reports),
+        sup_frames=sum(r.sup_frames for r in reports),
+        sup_sum_m=round(sum(r.sup_sum_m for r in reports), 1),
+        sup_iso=sum(r.sup_iso for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

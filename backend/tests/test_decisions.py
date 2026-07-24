@@ -102,6 +102,38 @@ def test_detect_passes_holder_change():
     assert passes[0].passer_id == 1 and passes[0].receiver_id == 2
 
 
+def test_support_distance_tight_vs_isolated():
+    """Szoros támogatás (társ ~3 m-re) → kis átlag, 0% izolált; magára
+    hagyott labdás (társ ~9 m-re) → nagy átlag, 100% izolált. Kevés mért
+    kockánál (< 100) nincs ítélet."""
+    from handball.pipeline.decisions import support_distance
+
+    tight_pos = {1: (22.0, 10.0), 2: (24.5, 11.0)}   # társ ~2,7 m
+    iso_pos = {1: (22.0, 10.0), 2: (30.0, 15.0)}     # társ ~9,4 m
+
+    frames = [_hold_frames(1, tight_pos, t) for t in range(120)]
+    m = Match(MatchMeta(match_id="t", home_team="A", away_team="B", fps=25),
+              frames)
+    sup = support_distance(m)["home"]
+    assert sup["frames"] == 120
+    assert sup["avg_m"] is not None and sup["avg_m"] < 4.0
+    assert sup["iso_pct"] == 0.0
+
+    frames = [_hold_frames(1, iso_pos, t) for t in range(120)]
+    m = Match(MatchMeta(match_id="t", home_team="A", away_team="B", fps=25),
+              frames)
+    sup = support_distance(m)["home"]
+    assert sup["avg_m"] is not None and sup["avg_m"] > 7.0
+    assert sup["iso_pct"] == 100.0
+
+    # Kevés minta → nincs ítélet (de a kocka-szám látszik).
+    short = Match(MatchMeta(match_id="t", home_team="A", away_team="B",
+                            fps=25),
+                  [_hold_frames(1, tight_pos, t) for t in range(10)])
+    sup = support_distance(short)["home"]
+    assert sup["frames"] == 10 and sup["avg_m"] is None
+
+
 def test_analyze_player_optimal_when_passing_to_best():
     """Ha a játékos a legjobb opcióhoz (szabad beálló) passzol → optimal_rate=1."""
     pos = {1: (22.0, 10.0), 2: (35.0, 10.0), 3: (20.0, 2.0)}
