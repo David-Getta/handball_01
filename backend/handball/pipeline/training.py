@@ -1130,4 +1130,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 50) Engedett lövésminőség: ha a falunk átlagosan nagy értékű (ziccer-
+    # közeli) lövéseket enged (8+ kapott lövésből 0,38+ xG/lövés), a
+    # helyzet-megelőzést kell gyakorolni — a kapus egyedül kevés.
+    try:
+        from .defense import defense_analysis
+        da50 = defense_analysis(match, config)
+        for side in ("home", "away"):
+            rec50 = da50[side]
+            n50 = rec50["shots_against"]
+            if n50 < 8:
+                continue
+            avg50 = float(rec50["xg_against"]) / n50
+            if avg50 < 0.38:
+                continue
+            add(side, "védekezés", "Ziccer-megelőzés",
+                f"a kapott lövéseink átlagos értéke magas ({avg50:.2f} "
+                "xG/lövés) — a falunk nagy helyzetekbe engedi az ellenfelet",
+                "ziccer-megelőzés: a betörési sávok zárása (segítő védő "
+                "korai becsúszása), beálló-fogás testtel, a szélső-beadás "
+                "levegőben történő megzavarása; a fal együtt mozog, hogy "
+                "lövés csak kintről, nyomás alatt jöhessen")
+    except Exception:
+        pass
+
     return out
