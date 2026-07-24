@@ -2514,6 +2514,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.tactics import pass_tempo
+            res["pass_tempo"] = pass_tempo(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -2919,6 +2924,8 @@ def create_app():
                 _layer("field_tilt", lambda: field_tilt(match))
                 from ..pipeline.defense import defensive_width
                 _layer("defensive_width", lambda: defensive_width(match))
+                from ..pipeline.tactics import pass_tempo
+                _layer("pass_tempo", lambda: pass_tempo(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

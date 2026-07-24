@@ -602,6 +602,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Passz-tempó: pörgetett vagy álló labdajáratás.
+    try:
+        from .tactics import PT_FAST_PER_MIN, PT_SLOW_PER_MIN, pass_tempo
+        ptc = pass_tempo(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pt = ptc[side]
+            if rec_pt["per_min"] is None:
+                continue
+            if rec_pt["per_min"] >= PT_FAST_PER_MIN:
+                body += (f" A(z) {name} pörgette a labdát (átlag "
+                         f"{rec_pt['per_min']:.0f} passz/perc) — a mozgó "
+                         "labda folyamatosan dolgoztatta a falat.")
+            elif rec_pt["per_min"] <= PT_SLOW_PER_MIN:
+                body += (f" A(z) {name} állva járatta a labdát "
+                         f"({rec_pt['per_min']:.0f} passz/perc) — a "
+                         "védelem békében felállhatott ellene.")
+    except Exception:
+        pass
     # Területi fölény: hol zajlott a birtoklás (elöl nyomás / hátul ragadás).
     try:
         from .tactics import TILT_HIGH_PCT, TILT_LOW_PCT, field_tilt

@@ -924,6 +924,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Passz-tempó: passz/perc a saját birtoklásra vetítve (2+ perc mért
+  // birtoklásnál; a backend-kulcsokkal azonos küszöbök) — a kirívó
+  // (pörgetett / álló járatás) érdekes.
+  String? _passTempo(Map<String, dynamic> r) {
+    final poss = ((r["pt_poss_s"] as num?) ?? 0).toDouble();
+    if (poss < 120.0) return null;
+    final passes = ((r["pt_passes"] as num?) ?? 0).toInt();
+    final perMin = 60.0 * passes / poss;
+    if (perMin >= 22.0) {
+      return "${perMin.round()} passz/perc · pörgetik";
+    }
+    if (perMin <= 12.0) {
+      return "${perMin.round()} passz/perc · állva járatják";
+    }
+    return null;
+  }
+
   // Engedett lövésminőség: a kapott lövések átlagos xG-je (8+ kapott
   // lövésnél; a backend-kulcsokkal azonos küszöbök) — a kirívó (ziccert
   // enged / kiszorít) érdekes.
@@ -1324,6 +1341,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_pivotUsage(r) != null) ["Beálló-terhelés", _pivotUsage(r)!],
       if (_breakLane(r) != null) ["Betörés-sáv", _breakLane(r)!],
       if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
+      if (_passTempo(r) != null) ["Passz-tempó", _passTempo(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

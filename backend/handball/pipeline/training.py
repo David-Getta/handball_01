@@ -1154,4 +1154,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 51) Passz-tempó: ha állva, lassan járatjuk a labdát (12 passz/perc
+    # alatt), a fal békében felállhat ellenünk — a labdajáratás sebességét
+    # kell növelni.
+    try:
+        from .tactics import (PT_MIN_POSS_S, PT_SLOW_PER_MIN, pass_tempo)
+        pt51 = pass_tempo(match, config)
+        for side in ("home", "away"):
+            rec51 = pt51[side]
+            if rec51["per_min"] is None \
+                    or rec51["poss_s"] < PT_MIN_POSS_S \
+                    or rec51["per_min"] > PT_SLOW_PER_MIN:
+                continue
+            add(side, "támadás", "Labdajáratás-tempó",
+                f"állva járatjuk a labdát ({rec51['per_min']:.0f} "
+                "passz/perc) — a fal békében felállhat, kiszámíthatóak "
+                "vagyunk",
+                "tempó-gyakorlás: kétérintéses járatás-játék (max 1 mp a "
+                "labdával), oldalváltás 3 passzon belül kötelezően, "
+                "passz-után-mozgás (give-and-go) minden átadásnál; "
+                "büntető-kör, ha a labda megáll")
+    except Exception:
+        pass
+
     return out

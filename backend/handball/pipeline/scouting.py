@@ -309,6 +309,10 @@ class ScoutingReport:
     # összeg / kockák). Tömör fal = szélek nyitva; széthúzott = közép nyitva.
     defw_sum_m: float = 0.0
     defw_frames: int = 0
+    # Passz-tempó (labdajáratás): passzok + mért birtoklás-idő (mp) —
+    # meccsek közt pontosan összegződik (passz/perc = 60·passz/idő).
+    pt_passes: int = 0
+    pt_poss_s: float = 0.0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1068,6 +1072,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Passz-tempó: pörgetett labdajáratás fárasztja a falat; lassú, álló
+    # járatás mellett a védelem békében felállhat.
+    if rep.pt_poss_s >= 120.0 and rep.pt_passes > 0:
+        _pt = 60.0 * rep.pt_passes / rep.pt_poss_s
+        if _pt >= 22.0:
+            keys.append(
+                f"Pörgetik a labdát (átlag {_pt:.0f} passz/perc a "
+                "birtoklásukban) — a falad sokat fog mozogni: fegyelmezett "
+                "záródás és váltás-kommunikáció kell, különben megnyílik "
+                "a rés.")
+        elif _pt <= 12.0:
+            keys.append(
+                f"Lassan, állva járatják a labdát ({_pt:.0f} passz/perc) — "
+                "kiszámítható támadójáték: a falad békében felállhat, és "
+                "a passzsávokra rá lehet ülni labdaszerzésért.")
 
     # Területi fölény: hol zajlik a birtoklásuk — elöl nyomnak, vagy a
     # saját térfelükön ragadnak (kihozási gond → letámadható).
@@ -1871,6 +1891,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.defw_sum_m = round(
                 dwrec["avg_width_m"] * dwrec["frames"], 1)
             rep.defw_frames = dwrec["frames"]
+        from .tactics import pass_tempo
+        ptrec = pass_tempo(match, config)[team.value]
+        rep.pt_passes = ptrec["passes"]
+        rep.pt_poss_s = ptrec["poss_s"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2895,6 +2919,18 @@ def matchup_plan(own: "ScoutingReport",
                 "türelmes betörős/beállós játékkal minden támadásból nagy "
                 "helyzet hozható ki ellenük.")
 
+    # 30) Az ő lassú labdajáratásuk × a ti labdaszerző védekezésetek: a
+    # passzsávokra ráülve az álló járatás eladásokká válik.
+    if (opp.pt_poss_s >= 120.0 and opp.pt_passes > 0
+            and 60.0 * opp.pt_passes / opp.pt_poss_s <= 12.0
+            and own.trans_steals >= 4):
+        _pt30 = 60.0 * opp.pt_passes / opp.pt_poss_s
+        plan.append(
+            f"Lassan, állva járatják a labdát ({_pt30:.0f} passz/perc), ti "
+            f"pedig éltek a labdaszerzésből ({own.trans_steals} szerzés) — "
+            "üljetek rá a kiszámítható passzsávokra: az álló járatásból "
+            "szerzett labda azonnali kontra.")
+
     return plan
 
 
@@ -3071,6 +3107,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tilt_opp=sum(r.tilt_opp for r in reports),
         defw_sum_m=round(sum(r.defw_sum_m for r in reports), 1),
         defw_frames=sum(r.defw_frames for r in reports),
+        pt_passes=sum(r.pt_passes for r in reports),
+        pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
