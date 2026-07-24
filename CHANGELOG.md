@@ -23,7 +23,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   réteg, 19 meccsterv- és 32 edzés-szabály, 8 riport, 670+ teszt).
   (#500)
 
-## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
+## Kiadatlan (a v0.1.21 óta)
+
+_(Még nincs bejegyzés — a v0.1.21 kiadás után indul.)_
+
+## v0.1.21 — kiadva (2026-07-24, PR #543–#557)
+
+> Kiadás-jegyzet: a legfontosabb a macOS-javítás — a feldolgozás többé
+> nem szállhat el csendben ~2%-nál ("Connection refused"): a motor
+> belépési pontja a natív OpenMP-ütközést induláskor hatástalanítja
+> (#545). Mellé tizenegy új elemzés-réteg érkezett (mind a megszokott
+> "egy réteg, sok felület" bekötéssel), a meccsjelentés új Csapat-profil
+> táblát kapott, és az élő nézet két új félidei jelzést. Windows- és
+> macOS-telepítővel a Releases oldalon.
+
+### A v0.1.21 körei
 
 - **Élő félidei letámadás- és lepattanó-jel**: a szünetben a pad két
   új "félidei kép" jelzést kap az 1. félidő adataiból — ha az
