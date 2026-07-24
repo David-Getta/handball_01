@@ -41,8 +41,8 @@ bejárható meccsek és élő meccskövetés javaslatokkal.
   demóval is fut). Lásd [`client/README.md`](client/README.md).
 
 ## Hol tartunk
-A rendszer **működő, telepíthető alkalmazás** (v0.1.18 kiadva Windows- és
-macOS-telepítővel; a fejlemények a CHANGELOG-ban):
+A rendszer **működő, telepíthető alkalmazás** (v0.1.20 kiadva Windows- és
+macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
 
 - **Feldolgozás**: YOLO + ByteTrack követés, kézi 4-sarkos kalibráció
   méter-térbe (a hatpontos összenézet a két bekalibrált térfelet egymás
@@ -58,11 +58,14 @@ macOS-telepítővel; a fejlemények a CHANGELOG-ban):
   kondíció, fáradás és rotáció-mélység, passz- és gólpassz-hálózat,
   poszt-becslés, hetesek iránnyal, kapusonkénti GSAx és kapus-kimozdulás,
   átmenet-támadás/-védekezés, fegyelem (kiülők/kiharcolók), szünet utáni
-  kezdés, előny-kezelés, cserék, időkérések. Minden réteg magyar edzői
-  nyelven indokol.
+  kezdés, előny-kezelés, cserék, időkérések, valamint az újabb rétegek:
+  második roham (lepattanó-harc), kezdés-profil (nyitógól), lövőerő-esés,
+  gól-koncentráció, támogatás-távolság (izoláció), területi fölény,
+  fal-szélesség, engedett lövésminőség, passz-tempó, falba lövés.
+  Minden réteg magyar edzői nyelven indokol.
 - **Felderítés és tervezés**: több-meccses ellenfél-profil pontos
-  (count-alapú) összegzéssel, edzői kulcsok, meccsterv-illesztés (19 páros
-  szabály), fejlődés-követés trenddel, edzés-fókusz (42 szabály,
+  (count-alapú) összegzéssel, edzői kulcsok, meccsterv-illesztés (31 páros
+  szabály), fejlődés-követés trenddel, edzés-fókusz (52 szabály,
   szezon-szintű visszatérő gyengeségekkel), élő jelzések a padnak (félidei
   emberfogás/beálló/rotáció-kép, hajrá-protokoll).
 - **Kimenetek**: edzői összefoglaló a meccs történetével, nyolc
@@ -75,7 +78,8 @@ macOS-telepítővel; a fejlemények a CHANGELOG-ban):
   (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
   (`POST /matches/fuse`) és lidar-finomítás — részletek a
   [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
-- **Minőség**: 690+ automata teszt; réteg-megbízhatósági önjelentés
+- **Minőség**: 710+ automata teszt; pontosság-validáció kézi eseménylista
+  ellen (API + parancssori eszköz); réteg-megbízhatósági önjelentés
   (mihez van elég minta az adott meccsen).
 
 ## Elv
