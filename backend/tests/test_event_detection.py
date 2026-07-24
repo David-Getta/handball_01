@@ -260,6 +260,63 @@ def test_shot_speeds_measures_ball_velocity():
     assert r["teams"]["away"]["n"] == 0
 
 
+def test_shot_speed_fade_second_half_drop():
+    """Az 1. félidőben gyors (~144 km/h), a 2.-ban lassú (~45 km/h) lövések:
+    a lövőerő-esés kimutatja a százalékos lassulást; félidő-jel nélkül None."""
+    from handball.pipeline.event_detection import shot_speed_fade
+
+    fps = 25.0
+
+    def idle(t0, seconds):
+        # Aktív "állójáték": 6 mért játékos + labda középen — a félidő-
+        # érzékelő ezt NEM látja szünetnek.
+        fr = []
+        for i in range(int(seconds * fps)):
+            fr.append(Frame(t=t0 + i,
+                            players=[_pl(10 + k, Team.HOME, 15.0 + k, 6.0 + k)
+                                     for k in range(6)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    def shot(t0, step):
+        # Egy hazai lövés a +x kapura: a labda `step` m/kockával repül.
+        fr = [Frame(t=t0 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0))
+              for i in range(3)]
+        for i in range(8):
+            bx = min(33.0 + step * (i + 1), 40.0)
+            fr.append(Frame(t=t0 + 3 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = []
+    # 1. félidő: 3 gyors lövés (1,6 m/kocka = 40 m/s = 144 km/h) állójátékkal.
+    for _ in range(3):
+        frames += idle(len(frames), 20)
+        frames += shot(len(frames), 1.6)
+    frames += idle(len(frames), 15)
+    # Szünet: 90 mp üres pálya a felvétel közepén.
+    frames += [Frame(t=len(frames) + i, players=[], ball=None)
+               for i in range(int(90 * fps))]
+    # 2. félidő: 3 lassú lövés (0,5 m/kocka = 12,5 m/s = 45 km/h).
+    for _ in range(3):
+        frames += idle(len(frames), 20)
+        frames += shot(len(frames), 0.5)
+    frames += idle(len(frames), 15)
+
+    m = Match(_meta(), frames)
+    fade = shot_speed_fade(m)
+    h = fade["home"]
+    assert h["fh_n"] == 3 and h["sh_n"] == 3
+    assert h["fh_avg_kmh"] > h["sh_avg_kmh"]
+    assert h["drop_pct"] is not None and h["drop_pct"] >= 8.0
+    # A vendég nem lőtt — nincs ítélet.
+    assert fade["away"]["drop_pct"] is None
+    # Félidő-jel nélkül (rövid, szünet nélküli felvétel) nincs ítélet.
+    short = Match(_meta(), shot(0, 1.6))
+    assert shot_speed_fade(short)["home"]["drop_pct"] is None
+
+
 def test_pass_network_pairs_and_hubs():
     """3 passz 1→2 és 1 passz 2→3: a fő pár az 1→2, a hub az 1-es vagy
     a 2-es (mindkettő 4 passzban érintett — a 2-esé: 3 kapott + 1 adott)."""

@@ -340,6 +340,56 @@ def shot_speeds(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return {"shots": out_shots, "teams": teams, "fastest": fastest}
 
 
+# Lövőerő-esés (fáradás-jel): félidőnként legalább ennyi mért lövés kell az
+# összevetéshez, és ekkora (%-os) átlagsebesség-esés számít jelzésnek.
+FADE_MIN_SHOTS = 3
+FADE_DROP_PCT = 8.0
+
+
+def shot_speed_fade(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Lövőerő-esés: a lövés-sebesség változása az 1. és a 2. félidő között —
+    a fáradás egyik legobjektívebb jele.
+
+    A mért lövés-sebességeket (shot_speeds) a felismert félidő (detect_halftime)
+    mentén két csoportra bontjuk, és csapatonként összevetjük az átlagokat.
+    Ha a 2. félidei átlag érdemben (FADE_DROP_PCT%) alacsonyabb, a csapat
+    lövőereje fárad — a hajrában puhábbak a lövései; ha nő, frissen pörgetik
+    a végét (mély rotáció / jó kondíció).
+
+    Visszatérés csapatonként:
+      {"fh_n", "fh_avg_kmh", "sh_n", "sh_avg_kmh", "drop_pct"} — az 1./2.
+    félidei mért lövésszám és átlagsebesség; drop_pct a százalékos esés
+    (pozitív = lassul, negatív = gyorsul), None, ha nincs elég mért lövés
+    (félidőnként FADE_MIN_SHOTS) vagy nincs félidő-jel.
+    """
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_n": 0, "fh_avg_kmh": 0.0, "sh_n": 0, "sh_avg_kmh": 0.0,
+             "drop_pct": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    shots = shot_speeds(match, config)["shots"]
+    for side in ("home", "away"):
+        fh = [s_["speed_kmh"] for s_ in shots
+              if s_["team"] == side and s_["t"] <= ht]
+        sh = [s_["speed_kmh"] for s_ in shots
+              if s_["team"] == side and s_["t"] > ht]
+        rec = out[side]
+        rec["fh_n"] = len(fh)
+        rec["sh_n"] = len(sh)
+        rec["fh_avg_kmh"] = round(sum(fh) / len(fh), 1) if fh else 0.0
+        rec["sh_avg_kmh"] = round(sum(sh) / len(sh), 1) if sh else 0.0
+        if len(fh) >= FADE_MIN_SHOTS and len(sh) >= FADE_MIN_SHOTS \
+                and rec["fh_avg_kmh"] > 0:
+            rec["drop_pct"] = round(
+                100.0 * (rec["fh_avg_kmh"] - rec["sh_avg_kmh"])
+                / rec["fh_avg_kmh"], 1)
+    return out
+
+
 def pass_network(match: Match, config: Optional[TacticsConfig] = None,
                  top: int = 5) -> dict:
     """Passz-hálózat: ki kinek adogat — a játékszervezés fő tengelye.

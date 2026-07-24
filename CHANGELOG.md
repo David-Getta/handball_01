@@ -25,6 +25,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Lövőerő-esés (fáradás-jel)**: a lövés-sebesség 1. vs 2. félidei
+  átlagának összevetése — ha a hajrára érdemben (8%+) lassulnak a
+  lövések, a csapat fárad; ha nőnek, mély a rotáció. Egy réteg, sok
+  felület: `shot_speed_fade` motor, edzői összefoglaló (Intenzitás
+  szakasz), /analyze + meccs-csomag, felderítés-profil (kulcs + csempe),
+  24. meccsterv-szabály (az ő fáradásuk × a ti rotációtok), 45.
+  edzés-szabály (lövőerő-állóképesség).
+- **Hibajavítás — a motor csendben elszállt feldolgozás közben (macOS)**:
+  a becsomagolt kiadásban a PyTorch és az OpenCV/numpy natív
+  OpenMP-futásideje ütközhetett, és a motor az első nehéz számításnál
+  (kalibráció) `abort()`-tal meghalt — a kliens csak "Connection
+  refused"-öt látott ~2%-nál. A motor belépési pontja most minden nehéz
+  import előtt beállítja a `KMP_DUPLICATE_LIB_OK=TRUE`-t és a
+  `PYTORCH_ENABLE_MPS_FALLBACK=1`-et. (#545)
 - **Kezdés-profil (nyitógól + korai állás)**: ki szerzi a meccs első
   gólját és milyen a korai (első 6 gól) mérleg — csak a gól-sorrendből,
   abszolút idő nélkül, ezért rövid felvételen is stabil (más, mint a

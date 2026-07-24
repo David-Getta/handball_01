@@ -791,6 +791,28 @@ def _intensity_section(match: Match, home: str, away: str) -> tuple[dict | None,
     if not parts:
         return None, highlights
     body = "Kezdés és hajrá összevetése: " + "; ".join(parts) + "."
+    # Lövőerő-esés: a lövés-sebesség félidők közti változása (fáradás-jel,
+    # a futás-intenzitástól független második mérőszám).
+    try:
+        from .event_detection import FADE_DROP_PCT, shot_speed_fade
+        fade = shot_speed_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_f = fade[side]
+            if rec_f["drop_pct"] is None:
+                continue
+            if rec_f["drop_pct"] >= FADE_DROP_PCT:
+                body += (f" A(z) {name} lövőereje a 2. félidőre "
+                         f"{rec_f['drop_pct']:.0f}%-ot esett "
+                         f"({rec_f['fh_avg_kmh']:.0f} → "
+                         f"{rec_f['sh_avg_kmh']:.0f} km/h) — a hajrában "
+                         "puhábbak a lövései.")
+            elif rec_f["drop_pct"] <= -FADE_DROP_PCT:
+                body += (f" A(z) {name} lövőereje a 2. félidőben nőtt "
+                         f"({rec_f['fh_avg_kmh']:.0f} → "
+                         f"{rec_f['sh_avg_kmh']:.0f} km/h) — frissen "
+                         "pörgetik a hajrát.")
+    except Exception:
+        pass
     body += _rotation_sentence(match, home, away)
     return {"title": "Intenzitás", "body": body}, highlights
 

@@ -122,6 +122,13 @@ class ScoutingReport:
     shot_speed_n: int = 0
     shot_speed_sum_kmh: float = 0.0
     shot_speed_max_kmh: float = 0.0
+    # Lövőerő-esés (fáradás-jel): a mért lövések félidőnkénti darabszáma és
+    # sebesség-összege (km/h) — meccsek közt pontosan összegződik, az 1./2.
+    # félidei átlag és az esés (%) bármikor visszaszámolható.
+    ssf_fh_n: int = 0
+    ssf_fh_sum_kmh: float = 0.0
+    ssf_sh_n: int = 0
+    ssf_sh_sum_kmh: float = 0.0
     # Nyomás alatti befejezés: szabad/fedezett lövéseik és góljaik.
     fin_free_shots: int = 0
     fin_free_goals: int = 0
@@ -735,6 +742,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Nagy erejű lövőik vannak (átlag {avg:.0f} km/h, "
                 f"csúcs {rep.shot_speed_max_kmh:.0f}) — a kapus reakcióra "
                 "nem építhetsz: blokk és korai zavarás kell.")
+
+    # Lövőerő-esés: ha a 2. félidőre rendre lassulnak a lövéseik, a hajrában
+    # a kapus többet fog belőlük — a meccs vége ellenük dolgozik.
+    if rep.ssf_fh_n >= 5 and rep.ssf_sh_n >= 5 and rep.ssf_fh_sum_kmh > 0:
+        _f_fh = rep.ssf_fh_sum_kmh / rep.ssf_fh_n
+        _f_sh = rep.ssf_sh_sum_kmh / rep.ssf_sh_n
+        _f_drop = 100.0 * (_f_fh - _f_sh) / _f_fh
+        if _f_drop >= 8.0:
+            keys.append(
+                f"A 2. félidőre esik a lövőerejük ({_f_fh:.0f} → "
+                f"{_f_sh:.0f} km/h, −{_f_drop:.0f}%) — fáradnak: a hajrában "
+                "a kapusod bátran vállalhat, és a ti frissességetek "
+                "(rotáció) dönthet.")
+        elif _f_drop <= -8.0:
+            keys.append(
+                f"A 2. félidőben még nő is a lövőerejük ({_f_fh:.0f} → "
+                f"{_f_sh:.0f} km/h) — mély a rotációjuk: a hajrát nem "
+                "lehet kivárásra játszani ellenük.")
 
     # Félidő-minta: melyik félidőben erősebbek (halmozott mérlegből).
     fh_diff = rep.fh_goals_for - rep.fh_goals_against
@@ -1935,6 +1960,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.shot_speed_n = sprec["n"]
         rep.shot_speed_sum_kmh = round(sprec["avg_kmh"] * sprec["n"], 1)
         rep.shot_speed_max_kmh = sprec["max_kmh"]
+        from .event_detection import shot_speed_fade
+        fdrec = shot_speed_fade(match, config)[team.value]
+        rep.ssf_fh_n = fdrec["fh_n"]
+        rep.ssf_fh_sum_kmh = round(fdrec["fh_avg_kmh"] * fdrec["fh_n"], 1)
+        rep.ssf_sh_n = fdrec["sh_n"]
+        rep.ssf_sh_sum_kmh = round(fdrec["sh_avg_kmh"] * fdrec["sh_n"], 1)
         from .momentum import halftime_score, score_progression
         hs = halftime_score(match, config)
         if hs is not None:
@@ -2629,6 +2660,22 @@ def matchup_plan(own: "ScoutingReport",
                 "a ti ablakotok: kész nyitó-figurákkal, magas tempóval menjetek "
                 "rájuk az első perctől, a korai előny megtöri a tervüket.")
 
+    # 24) Az ő 2. félidei lövőerő-esésük × a ti működő rotációtok: a hajrát
+    # tempóval kell vinni — a fáradó lövéseiket a kapus fogja.
+    if (opp.ssf_fh_n >= 5 and opp.ssf_sh_n >= 5 and opp.ssf_fh_sum_kmh > 0
+            and own.rotation_matches and own.sub_rotations >= 2):
+        _mf_fh = opp.ssf_fh_sum_kmh / opp.ssf_fh_n
+        _mf_sh = opp.ssf_sh_sum_kmh / opp.ssf_sh_n
+        _mf_drop = 100.0 * (_mf_fh - _mf_sh) / _mf_fh
+        own_used24 = own.rotation_used_sum / own.rotation_matches
+        if _mf_drop >= 8.0 and own_used24 >= 9.0:
+            plan.append(
+                f"A 2. félidőre esik a lövőerejük ({_mf_fh:.0f} → "
+                f"{_mf_sh:.0f} km/h), ti pedig szélesen forogtok "
+                f"(átlag {own_used24:.0f} ember) — a hajrát vigyétek "
+                "tempóval: az ő lövéseik puhulnak, a ti friss lábaitok "
+                "döntenek; a kapusotok a végén bátran vállalhat.")
+
     return plan
 
 
@@ -2883,6 +2930,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         response_sum_s=round(sum(r.response_sum_s for r in reports), 1),
         shot_speed_sum_kmh=round(sum(r.shot_speed_sum_kmh
                                      for r in reports), 1),
+        ssf_fh_n=sum(r.ssf_fh_n for r in reports),
+        ssf_fh_sum_kmh=round(sum(r.ssf_fh_sum_kmh for r in reports), 1),
+        ssf_sh_n=sum(r.ssf_sh_n for r in reports),
+        ssf_sh_sum_kmh=round(sum(r.ssf_sh_sum_kmh for r in reports), 1),
         shot_speed_max_kmh=max((r.shot_speed_max_kmh for r in reports),
                                default=0.0),
         possession_pct=round(
