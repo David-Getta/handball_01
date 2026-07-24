@@ -215,6 +215,16 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     import numpy as np
     import cv2
+    # Az OpenCV saját szál-poolja a PyTorch OpenMP-futásidejével ütközve
+    # (különösen a becsomagolt macOS-kiadásban, ahol két OpenMP él egymás
+    # mellett) ritkán BERAGADHAT egy kockán — a feldolgozás ilyenkor
+    # csendben megáll egy fix pozíciónál. Az OpenCV-t egy szálra fogjuk:
+    # az általunk használt műveletei (cvtColor, kivágások) olcsók, a
+    # videó-dekódolást pedig az ffmpeg saját szálai viszik.
+    try:
+        cv2.setNumThreads(1)
+    except Exception:
+        pass
     from ultralytics import YOLO
     resolved = _resolve_weights(weights)
     try:

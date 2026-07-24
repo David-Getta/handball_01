@@ -553,8 +553,12 @@ def create_app():
             # lefut, és a részleges eredmény ELMENTŐDIK — órákig tartó
             # feldolgozásnál a Megszakítás nem dobja el az elvégzett munkát.
             def cb(stage, prog, msg):
+                import time as _t
                 job["stage"] = stage
                 job["progress"] = round(float(prog), 3)
+                # Szívverés az elakadás-őrszemhez: mikor volt utoljára
+                # TÉNYLEGES előrelépés (a GET /jobs ebből számol stall-jelet).
+                job["heartbeat"] = _t.time()
                 # Leállítás-kérés közben jelezzük, hogy a befejezés fut.
                 if job.get("cancel"):
                     if job.get("preempted"):
@@ -684,10 +688,28 @@ def create_app():
 
     @app.get("/jobs/{job_id}")
     def job_status(job_id: str):
-        """Egy feldolgozási munka állapota (stage/progress/message/status/error)."""
+        """Egy feldolgozási munka állapota (stage/progress/message/status/error).
+
+        Elakadás-őrszem: ha a futó munka szívverése (utolsó tényleges
+        előrelépés) régebbi, mint STALL_WARN_S, az üzenethez figyelmeztetés
+        kerül — a kliens így nem mutat örökké friss becslést egy beragadt
+        feldolgozásra, és a felhasználó tudja, hogy érdemes megszakítani
+        (az addigi rész mentésre kerül)."""
+        import time as _t
         job = _jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
+        STALL_WARN_S = 120.0
+        hb = job.get("heartbeat")
+        if job.get("status") == "running" and hb:
+            stalled_s = _t.time() - hb
+            if stalled_s >= STALL_WARN_S:
+                mins = int(stalled_s // 60)
+                base = (job.get("message") or "").split(" — FIGYELEM:")[0]
+                job["message"] = (
+                    f"{base} — FIGYELEM: {mins} perce nincs előrelépés. A "
+                    "feldolgozás elakadhatott ennél a videó-résznél; a "
+                    "Megszakítás menti az addig kész részt.")
         return job
 
     @app.post("/jobs/{job_id}/cancel")
