@@ -1056,3 +1056,67 @@ def second_chance(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             "convert_pct": _pct(t["second_goals"], t["second_chances"]),
         }
     return out
+
+
+# Lövés-időzítés: legalább ennyi lőtt támadás kell az ítélethez; ennyi mp-en
+# belüli lövés "korai" (első hullám), és ekkora korai-arány jelent első-
+# hullám lövő csapatot; a kivárókat a magas átlagidő jelzi.
+SHTIM_MIN_SHOTS = 5
+SHTIM_EARLY_S = 8.0
+SHTIM_EARLY_PCT = 45.0
+SHTIM_LATE_AVG_S = 22.0
+
+
+def shot_timing(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Lövés-időzítés: MIKOR lőnek a támadáson belül — első hullámban
+    (korai) vagy kivárva.
+
+    Minden lövéssel záruló támadás-szakasznál a szakasz kezdete és a lövés
+    közti időt mérjük. A korai lövők (SHTIM_EARLY_PCT%+ lövés az első
+    SHTIM_EARLY_S mp-ben) az első hullámból élnek — a visszarendeződés és
+    az első-hullám védekezés kritikus ellenük; a kivárók (magas átlagidő)
+    a felállt fal hibájára és a passzív-jel előtti utolsó pillanatra
+    játszanak. Más, mint a támadás-hossz (az a teljes szakaszt méri,
+    lövés nélkül is).
+
+    Visszatérés csapatonként:
+      {"shots", "avg_s", "early", "early_pct"} — a mért (lövéssel záruló)
+    támadások száma, az átlagos lövésig-idő, a korai lövések száma és
+    aránya; avg_s/early_pct None, ha shots < SHTIM_MIN_SHOTS.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    segs = segment_attacks(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+    acc = {"home": [0, 0.0, 0], "away": [0, 0.0, 0]}  # n, összeg, korai
+    for e in shots:
+        # A lövés a szakaszon belül vagy közvetlenül utána (rátoldás)
+        # csapódik le — mint az attack_efficiency párosításánál.
+        seg = next((s_ for s_ in segs
+                    if s_.team == e.team
+                    and s_.start_t <= e.t <= s_.end_t + tail),
+                   None)
+        if seg is None:
+            continue
+        dt = (e.t - seg.start_t) / fps
+        rec = acc[e.team.value]
+        rec[0] += 1
+        rec[1] += dt
+        if dt <= SHTIM_EARLY_S:
+            rec[2] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        n, total, early = acc[s]
+        ok = n >= SHTIM_MIN_SHOTS
+        out[s] = {
+            "shots": n,
+            "avg_s": round(total / n, 1) if ok else None,
+            "early": early,
+            "early_pct": round(100.0 * early / n, 1) if ok else None,
+        }
+    return out

@@ -602,6 +602,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Lövés-időzítés: első hullámból lövő vagy kiváró csapat.
+    try:
+        from .attack_types import (SHTIM_EARLY_PCT, SHTIM_LATE_AVG_S,
+                                   shot_timing)
+        shc = shot_timing(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sh = shc[side]
+            if rec_sh["early_pct"] is None:
+                continue
+            if rec_sh["early_pct"] >= SHTIM_EARLY_PCT:
+                body += (f" A(z) {name} lövéseinek {rec_sh['early_pct']:.0f}%-a "
+                         "a támadás első 8 mp-éből jött — első hullámból "
+                         "élő csapat.")
+            elif rec_sh["avg_s"] is not None \
+                    and rec_sh["avg_s"] >= SHTIM_LATE_AVG_S:
+                body += (f" A(z) {name} kivárt a lövésekkel (átlag "
+                         f"{rec_sh['avg_s']:.0f} mp a támadásban) — a "
+                         "felállt fal hibájára játszott.")
+    except Exception:
+        pass
     # Passz-hossz: direkt (hosszú) vagy rövid kombinációs passzjáték.
     try:
         from .event_detection import PLEN_LONG_PCT, pass_length

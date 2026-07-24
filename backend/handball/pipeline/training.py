@@ -1252,4 +1252,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 55) Lövés-időzítés: ha rendre kivárunk (5+ lőtt támadásból 22+ mp-es
+    # átlag lövésig-idő), a támadás-lezárást kell gyakorolni — a passzív
+    # jel és a kapkodás ellenünk dolgozik.
+    try:
+        from .attack_types import (SHTIM_LATE_AVG_S, SHTIM_MIN_SHOTS,
+                                   shot_timing)
+        st55 = shot_timing(match, config)
+        for side in ("home", "away"):
+            rec55 = st55[side]
+            if rec55["avg_s"] is None \
+                    or rec55["shots"] < SHTIM_MIN_SHOTS \
+                    or rec55["avg_s"] < SHTIM_LATE_AVG_S:
+                continue
+            add(side, "támadás", "Támadás-lezárás",
+                f"átlag {rec55['avg_s']:.0f} mp után jutunk lövésig — a "
+                "támadásaink elhúzódnak, a passzív jel és a kényszerű "
+                "lövés fenyeget",
+                "támadás-lezárás gyakorlás: 25 mp-es órával játszott "
+                "támadások (le kell zárni előtte), a 15. mp-től kötelező "
+                "befejezés-kezdeményezés (betörés/elzárás-lövés), és "
+                "kész 'utolsó 5 mp' figura a kényszerhelyzetre")
+    except Exception:
+        pass
+
     return out
