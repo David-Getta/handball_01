@@ -284,6 +284,10 @@ class ScoutingReport:
     # Hajrá-emberek: [{"player_id", "goals"}] — ki szerzi a gólokat a meccs
     # végén; meccsek közt összegződik.
     clutch_scorers: list = field(default_factory=list)
+    # Gól-koncentráció: lövőnkénti gólszámok [{player_id, goals}] —
+    # meccsek közt pontosan összegződik; a fő gólszerző részesedése
+    # (gólfüggés) a teljes mintából számolható vissza.
+    scorer_goals: list = field(default_factory=list)
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1003,6 +1007,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"labdabiztonságú ({top_to['losses']} eladás) — rá "
                 "presselj, zárd a passzsávjait, provokáld az eladást a "
                 "gyors indításhoz.")
+
+    # Gól-koncentráció: ha a góljaik zöme egy embertől jön, az ő
+    # kikapcsolása az egész támadójátékukat megfojtja; ha elosztott,
+    # csak a csapatszintű védekezés működik.
+    _sg_total = sum(w["goals"] for w in (rep.scorer_goals or []))
+    if _sg_total >= 5 and rep.scorer_goals:
+        _sg_top = rep.scorer_goals[0]
+        _sg_share = 100.0 * _sg_top["goals"] / _sg_total
+        if _sg_share >= 40.0:
+            keys.append(
+                f"Góljaik {_sg_share:.0f}%-át a(z) {_sg_top['player_id']}-es "
+                f"szerzi ({_sg_top['goals']}/{_sg_total}) — egy emberre épül "
+                "a támadójátékuk: az ő kikapcsolása (szoros őrzés, korai "
+                "kilépés, akár emberfogás) a meccs kulcsa.")
+        elif _sg_share <= 25.0 and len(rep.scorer_goals) >= 4:
+            keys.append(
+                f"A gólszerzésük elosztott (a fő lövőjük is csak "
+                f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
+                "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
 
     # Hajrá-emberük: aki a meccs végén gólt szerez — rá a hajrában
     # fokozott figyelem, akár emberfogás.
@@ -1738,6 +1761,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                            else w["player_id"]),
              "goals": w["goals"]}
             for w in clutch_scorers(match, config)[team.value]["players"]]
+        from .event_detection import goal_concentration
+        rep.scorer_goals = list(
+            goal_concentration(match, config)[team.value]["scorers"])
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2329,6 +2355,17 @@ def _merge_clutch_scorers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_scorer_goals(reports) -> list:
+    """Lövőnkénti gólszámok (gól-koncentráció) pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for w in (r.scorer_goals or []):
+            tally[w["player_id"]] = (tally.get(w["player_id"], 0)
+                                     + int(w["goals"]))
+    return [{"player_id": pid, "goals": n}
+            for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_seven_takers(reports) -> list:
     """Hetes-dobónkénti kísérlet/gól/irány számok pontos összegzése."""
     tally: dict = {}
@@ -2676,6 +2713,24 @@ def matchup_plan(own: "ScoutingReport",
                 "tempóval: az ő lövéseik puhulnak, a ti friss lábaitok "
                 "döntenek; a kapusotok a végén bátran vállalhat.")
 
+    # 25) Az ő gólfüggésük × a ti tapadó emberfogótok: a fő gólszerzőjükre
+    # a legjobb védőt kell állítani — egy emberen múlik a támadójátékuk.
+    _pg_total = sum(w["goals"] for w in (opp.scorer_goals or []))
+    if _pg_total >= 5 and opp.scorer_goals and own.markers:
+        _pg_top = opp.scorer_goals[0]
+        _pg_share = 100.0 * _pg_top["goals"] / _pg_total
+        tight25 = min(own.markers,
+                      key=lambda m_: m_["dist_sum"] / m_["frames"])
+        tight25_avg = tight25["dist_sum"] / tight25["frames"]
+        if _pg_share >= 40.0 and tight25["frames"] >= 50 \
+                and tight25_avg <= 1.5:
+            plan.append(
+                f"Góljaik {_pg_share:.0f}%-át a(z) {_pg_top['player_id']}-es "
+                f"szerzi, nálatok pedig a(z) {tight25['player_id']}-es a "
+                f"tapadó emberfogó (átlag {tight25_avg:.1f} m) — ez a "
+                "párosítás adja magát: ő fogja a fő gólszerzőt akár emberfogva, "
+                "és az egész támadójátékuk megfojtható.")
+
     return plan
 
 
@@ -2844,6 +2899,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ball_winners=_merge_ball_winners(reports),
         turnover_players=_merge_turnover_players(reports),
         clutch_scorers=_merge_clutch_scorers(reports),
+        scorer_goals=_merge_scorer_goals(reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

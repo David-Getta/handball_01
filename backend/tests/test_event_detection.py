@@ -244,6 +244,39 @@ def test_assist_network_pairs_and_leaders():
     assert net["leaders"][0]["player_id"] == 1 and net["leaders"][0]["assists"] == 2
 
 
+def test_goal_concentration_top_share():
+    """6 hazai gólból 4-et az 1-es szerez (67%) → koncentrált gólszerzés;
+    kevés gólnál (vendég: 0) nincs ítélet."""
+    from handball.pipeline.event_detection import goal_concentration
+
+    def goal(t0, shooter):
+        fr = [Frame(t=t0 + i, players=[_pl(shooter, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0))
+              for i in range(3)]
+        for i in range(8):
+            fr.append(Frame(t=t0 + 3 + i,
+                            players=[_pl(shooter, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+        return fr
+
+    frames = []
+    for shooter in (1, 1, 1, 1, 2, 3):
+        frames += goal(len(frames), shooter)
+        t = len(frames)
+        for i in range(20):  # szünet a debounce-nak
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+
+    gc = goal_concentration(Match(_meta(), frames))
+    h = gc["home"]
+    assert h["goals"] == 6
+    assert h["scorers"][0]["player_id"] == 1 and h["scorers"][0]["goals"] == 4
+    assert h["top_share_pct"] is not None and h["top_share_pct"] >= 40.0
+    assert h["concentrated"] is True
+    assert gc["away"]["goals"] == 0 and gc["away"]["concentrated"] is None
+
+
 def test_shot_speeds_measures_ball_velocity():
     """1 m/kocka a kapu felé 25 fps-en = 25 m/s = 90 km/h."""
     from handball.pipeline.event_detection import shot_speeds
