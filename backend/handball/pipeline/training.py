@@ -1084,4 +1084,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 48) Területi fölény: ha a birtoklásunk a saját térfelünkön ragad
+    # (45% alatti elöl-arány), a labdakihozatalt kell gyakorolni — prés
+    # ellen nem jutunk el a kapuig.
+    try:
+        from .tactics import TILT_LOW_PCT, TILT_MIN_FRAMES, field_tilt
+        ft48 = field_tilt(match, config)
+        for side in ("home", "away"):
+            rec48 = ft48[side]
+            if rec48["tilt_pct"] is None \
+                    or rec48["frames"] < TILT_MIN_FRAMES \
+                    or rec48["tilt_pct"] > TILT_LOW_PCT:
+                continue
+            add(side, "támadás", "Labdakihozatal",
+                f"a birtoklásunk csak {rec48['tilt_pct']:.0f}%-ban zajlik az "
+                "ellenfél térfelén — a saját térfelünkön ragadunk, a prés "
+                "megfog minket",
+                "kihozatal-gyakorlás prés ellen: kapus + 3 hátsó ember "
+                "kijátszás létszámhátrányban, hosszú indítás a szélsőnek "
+                "mint szelep, és a középső átlövő visszalépő segítsége; "
+                "cél: 10 mp alatt átérni a félpályán")
+    except Exception:
+        pass
+
     return out

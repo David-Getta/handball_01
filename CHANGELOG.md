@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Területi fölény (field tilt)**: a birtoklás mekkora része zajlik az
+  ellenfél térfelén — elöl nyomó csapat (65%+) vs a saját térfelén
+  ragadó, kihozási gondokkal küzdő (45% alatt). Egy réteg, sok felület:
+  `field_tilt` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kulcs + csempe), 27. meccsterv-szabály (az ő hátul
+  ragadó birtoklásuk × a ti szoros védekezésetek), 48. edzés-szabály
+  (labdakihozatal prés ellen).
 - **Támogatás-távolság (izoláció-jel)**: milyen messze van a labdás
   játékostól a legközelebbi társa — magára hagyott labdás ellen a prés
   működik (kényszerített egyéni megoldások), szoros támogatás ellen
