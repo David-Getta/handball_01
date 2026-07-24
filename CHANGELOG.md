@@ -25,6 +25,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Élő félidei letámadás- és lepattanó-jel**: a szünetben a pad két
+  új "félidei kép" jelzést kap az 1. félidő adataiból — ha az
+  ellenfél elöl, letámadásból szerez (35%+), a kihozatalt kell
+  előkészíteni; ha harcol a lepattanóért (25%+ második roham), a
+  lövés utáni lezárás a kulcs. (/analyze `steal_height_fh` +
+  `second_chance_fh` + élő nézet.)
 - **Szerzés-magasság (letámadás-jel)**: HOL szerez labdát a csapat
   — az elöl (a saját támadó térfélen) született szerzés a letámadás
   terméke (35%+ = élő prés), a csak-hátul szerzés passzív elöl-játék.
