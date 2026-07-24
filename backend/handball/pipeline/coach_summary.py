@@ -602,6 +602,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Szerzés-magasság: hol születtek a labdaszerzések (letámadás-jel).
+    try:
+        from .defense import STEAL_HIGH_PCT, steal_height
+        stc = steal_height(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_st = stc[side]
+            if rec_st["high_pct"] is None:
+                continue
+            if rec_st["high_pct"] >= STEAL_HIGH_PCT:
+                body += (f" A(z) {name} szerzéseinek "
+                         f"{rec_st['high_pct']:.0f}%-a elöl, letámadásból "
+                         f"született ({rec_st['high_steals']}/"
+                         f"{rec_st['steals']}) — a présük élő fegyver.")
+    except Exception:
+        pass
     # Falba lövés: a lövés-kísérletek blokkon elakadó hányada.
     try:
         from .defense import (BLOCKED_HIGH_PCT, BLOCKED_MIN,

@@ -834,6 +834,60 @@ def breakthrough_lanes(match, config=None) -> dict:
     return out
 
 
+# Szerzés-magasság: ennyi szerzés kell az ítélethez; e fölötti elöl-arány
+# jelenti, hogy a letámadás élő fegyver.
+STEAL_HEIGHT_MIN = 4
+STEAL_HIGH_PCT = 35.0
+
+
+def steal_height(match, config=None) -> dict:
+    """Labdaszerzés-magasság (letámadás-jel): HOL szerez labdát a csapat.
+
+    Minden labdaszerzésnél (az ellenfél labdaeladása) megnézzük, a pálya
+    melyik felén történt a SZERZŐ csapat szemszögéből: az ELÖL (a saját
+    támadó térfélen, az ellenfél építkezése közben) szerzett labda a
+    letámadás terméke — és azonnali helyzetet ér; a hátul szerzett a
+    felállt védekezésé. Ez kiegészíti a ball_winners-t (KI szerez) és a
+    trans_steals-t (mire váltják): itt a HOL a kérdés.
+
+    Visszatérés csapatonként (a SZERZŐ oldal):
+      {"steals", "high_steals", "high_pct"} — összes mért szerzés, ebből
+    az elöl történtek, és az arány (%). high_pct None, ha steals <
+    STEAL_HEIGHT_MIN.
+    """
+    from .event_detection import EventType, detect_events
+    from .tactics import COURT_LENGTH_M
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    mid = COURT_LENGTH_M / 2.0
+    acc = {"home": [0, 0], "away": [0, 0]}  # szerzés, elöl-szerzés
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER:
+            continue
+        gaining = Team.AWAY if e.team == Team.HOME else Team.HOME
+        f = by_t.get(e.t)
+        if f is None or f.ball is None:
+            continue
+        rec = acc[gaining.value]
+        rec[0] += 1
+        goal_x = config.attacks_toward_x(gaining)
+        in_front = (f.ball.x > mid) if goal_x > mid else (f.ball.x < mid)
+        if in_front:
+            rec[1] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        n, high = acc[s]
+        out[s] = {
+            "steals": n,
+            "high_steals": high,
+            "high_pct": (round(100.0 * high / n, 1)
+                         if n >= STEAL_HEIGHT_MIN else None),
+        }
+    return out
+
+
 def ball_winners(match, config=None) -> dict:
     """Labdaszerzők: birtokos-váltásnál (csapatváltás) az ÚJ birtokos
     kapja a labdaszerzés-jóváírást — ki a védekezés motorja.

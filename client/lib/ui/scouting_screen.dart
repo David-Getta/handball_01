@@ -924,6 +924,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szerzés-magasság: az elöl (letámadásból) született szerzések aránya
+  // (4+ szerzésnél; a backend-kulcsokkal azonos küszöbök).
+  String? _stealHeight(Map<String, dynamic> r) {
+    final n = ((r["steal_n"] as num?) ?? 0).toInt();
+    if (n < 4) return null;
+    final high = ((r["steal_high"] as num?) ?? 0).toInt();
+    final pct = 100.0 * high / n;
+    if (pct >= 35.0) {
+      return "${pct.round()}% elöl ($high/$n) · élő letámadás";
+    }
+    if (pct <= 10.0 && n >= 6) {
+      return "${pct.round()}% elöl · elöl nem zavarnak";
+    }
+    return null;
+  }
+
   // Falba lövés: a lövés-kísérletek blokkon elakadó hányada (4+ blokknál;
   // a backend-kulcsokkal azonos küszöb) — csak a kirívó érdekes.
   String? _blockedRate(Map<String, dynamic> r) {
@@ -1355,6 +1371,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
       if (_passTempo(r) != null) ["Passz-tempó", _passTempo(r)!],
       if (_blockedRate(r) != null) ["Falba lövés", _blockedRate(r)!],
+      if (_stealHeight(r) != null)
+        ["Szerzés-magasság", _stealHeight(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -488,3 +488,52 @@ def test_turnover_players_credits_the_loser():
     assert tp["home"]["players"][0]["player_id"] == 7
     assert tp["home"]["players"][0]["losses"] == 1
     assert tp["away"]["total"] == 0
+
+
+def test_steal_height_front_vs_back():
+    """Elöl (a szerző támadó térfelén) történt szerzés magas, a hátsó nem;
+    kevés szerzésnél nincs ítélet."""
+    from handball.pipeline.defense import steal_height
+
+    frames = []
+    t = 0
+
+    def steal_at(x):
+        # A HAZAI 1-es birtokol x-nél, majd a VENDÉG 20-as szerzi meg
+        # (labda átkerül hozzá) → vendég szerzés az x pozíción.
+        nonlocal t
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, x, 10.0),
+                _pl(20, Team.AWAY, x + 0.5, 10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, x, 10.0),
+                _pl(20, Team.AWAY, x + 0.5, 10.0)],
+                ball=Ball(x=x + 0.5, y=10.0, confidence=1.0)))
+            t += 1
+        # Vissza az 1-eshez, hogy új szerzés jöhessen.
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, x, 10.0),
+                _pl(20, Team.AWAY, x + 0.5, 10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    # A VENDÉG a -x (x=0) kapura támad → az ő "elöl"-je az x < 20 térfél.
+    for _ in range(3):
+        steal_at(10.0)   # elöl szerzett (letámadás)
+    for _ in range(2):
+        steal_at(30.0)   # hátul szerzett
+    sh = steal_height(Match(_meta(), frames))
+    a = sh["away"]
+    assert a["steals"] >= 4
+    assert a["high_steals"] >= 3
+    assert a["high_pct"] is not None and a["high_pct"] >= 35.0
+    # A visszapasszok a HAZAI szerzései: x=10 nekik hátul (a +x kapura
+    # támadnak), x=30 elöl → 2/5 elöl-szerzés, 40%.
+    h = sh["home"]
+    assert h["steals"] == 5 and h["high_steals"] == 2
+    assert h["high_pct"] == 40.0
