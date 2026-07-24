@@ -537,3 +537,48 @@ def test_steal_height_front_vs_back():
     h = sh["home"]
     assert h["steals"] == 5 and h["high_steals"] == 2
     assert h["high_pct"] == 40.0
+
+
+def test_pressure_fade_looser_second_half():
+    """Az 1. félidőben szoros (1 m), a 2.-ban laza (3 m) őrzés → ~2 m
+    fellazulás; félidő-jel nélkül nincs ítélet."""
+    from handball.pipeline.defense import pressure_fade
+
+    fps = 25.0
+
+    def press_frames(t0, seconds, def_dist):
+        # A VENDÉG birtokol (labdás a 11-es), a HAZAI védő def_dist m-re.
+        fr = []
+        for i in range(int(seconds * fps)):
+            players = [
+                _pl(11, Team.AWAY, 15.0, 10.0),
+                _pl(12, Team.AWAY, 18.0, 6.0),
+                _pl(13, Team.AWAY, 18.0, 14.0),
+                _pl(14, Team.AWAY, 12.0, 10.0),
+                _pl(15, Team.AWAY, 20.0, 8.0),
+                _pl(16, Team.AWAY, 20.0, 12.0),
+                _pl(1, Team.HOME, 15.0, 10.0 + def_dist),
+                _pl(2, Team.HOME, 10.0, 6.0),
+                _pl(3, Team.HOME, 10.0, 14.0),
+                _pl(4, Team.HOME, 8.0, 10.0),
+                _pl(5, Team.HOME, 6.0, 8.0),
+                _pl(6, Team.HOME, 6.0, 12.0),
+            ]
+            fr.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=15.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = press_frames(0, 60, 1.0)                      # 1. félidő: szoros
+    t = len(frames)
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * fps))]              # szünet
+    t = len(frames)
+    frames += press_frames(t, 60, 3.0)                     # 2. félidő: laza
+
+    pf = pressure_fade(Match(_meta(), frames))
+    h = pf["home"]
+    assert h["fh_m"] is not None and h["sh_m"] is not None
+    assert h["loosen_m"] is not None and h["loosen_m"] >= 1.5
+    # Félidő nélkül (rövid felvétel) nincs ítélet.
+    short = pressure_fade(Match(_meta(), press_frames(0, 10, 1.0)))
+    assert short["home"]["loosen_m"] is None

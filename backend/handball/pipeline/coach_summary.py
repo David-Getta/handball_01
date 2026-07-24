@@ -602,6 +602,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Védekezés-fellazulás: a fal szorossága a 2. félidőre.
+    try:
+        from .defense import PRESSURE_FADE_LOOSEN_M, pressure_fade
+        pfc = pressure_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pf = pfc[side]
+            if rec_pf["loosen_m"] is None:
+                continue
+            if rec_pf["loosen_m"] >= PRESSURE_FADE_LOOSEN_M:
+                body += (f" A(z) {name} védekezése a 2. félidőre fellazult "
+                         f"(átlag {rec_pf['fh_m']:.1f} → {rec_pf['sh_m']:.1f} "
+                         "m a labdástól) — a hajrában nyíltak a rések.")
+            elif rec_pf["loosen_m"] <= -PRESSURE_FADE_LOOSEN_M:
+                body += (f" A(z) {name} a 2. félidőre szorosabbra húzta a "
+                         f"védekezést ({rec_pf['fh_m']:.1f} → "
+                         f"{rec_pf['sh_m']:.1f} m).")
+    except Exception:
+        pass
     # Lövés-időzítés: első hullámból lövő vagy kiváró csapat.
     try:
         from .attack_types import (SHTIM_EARLY_PCT, SHTIM_LATE_AVG_S,

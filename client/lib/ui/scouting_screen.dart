@@ -924,6 +924,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Védekezés-fellazulás: a nyomás-átlag változása a 2. félidőre
+  // (félidőnként 100+ mért kockánál; a backend-kulcsokkal azonos küszöb).
+  String? _pressureFade(Map<String, dynamic> r) {
+    final fhN = ((r["prf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["prf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 100 || shN < 100) return null;
+    final fhSum = ((r["prf_fh_sum_m"] as num?) ?? 0).toDouble();
+    final shSum = ((r["prf_sh_sum_m"] as num?) ?? 0).toDouble();
+    if (fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    final d = sh - fh;
+    if (d >= 0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· a 2. félidőre fellazul";
+    }
+    if (d <= -0.5) {
+      return "${fh.toStringAsFixed(1)} → ${sh.toStringAsFixed(1)} m "
+          "· a hajrára szorosodik";
+    }
+    return null;
+  }
+
   // Lövés-időzítés: az első hullámból lövők vs kivárók (5+ lőtt
   // támadásnál; a backend-kulcsokkal azonos küszöbök).
   String? _shotTiming(Map<String, dynamic> r) {
@@ -1414,6 +1437,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szerzés-magasság", _stealHeight(r)!],
       if (_passLength(r) != null) ["Passz-hossz", _passLength(r)!],
       if (_shotTiming(r) != null) ["Lövés-időzítés", _shotTiming(r)!],
+      if (_pressureFade(r) != null)
+        ["Védekezés-fellazulás", _pressureFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

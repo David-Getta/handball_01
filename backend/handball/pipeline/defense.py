@@ -398,6 +398,55 @@ def blocked_shot_rate(match, config=None) -> dict:
     return out
 
 
+# Védekezés-fellazulás: félidőnként ennyi mért kocka kell, és ekkora
+# (méteres) lazulás számít fáradás-jelnek a 2. félidőre.
+PRESSURE_FADE_MIN_FRAMES = 100
+PRESSURE_FADE_LOOSEN_M = 0.5
+
+
+def pressure_fade(match, config=None) -> dict:
+    """Védekezés-fellazulás: a védekezési nyomás változása az 1. és a 2.
+    félidő között — a fal fáradásának jele.
+
+    A védekezési nyomást (a labdás támadó és a legközelebbi védő átlagos
+    távolsága) a felismert félidő mentén két részre bontva mérjük. Ha a 2.
+    félidei átlag érdemben (PRESSURE_FADE_LOOSEN_M) nagyobb, a fal
+    fellazul a meccs végére — a hajrában több lesz a szabad lövő; ha
+    szorosabbra vált, a csapat a hajrában húzza meg a védekezést. A
+    lövőerő-esés (shot_speed_fade) védekezés-oldali párja.
+
+    Visszatérés csapatonként (a védekező csapaté):
+      {"fh_m", "fh_frames", "sh_m", "sh_frames", "loosen_m"} — az 1./2.
+    félidei átlagnyomás és kockaszám; loosen_m a változás (pozitív =
+    lazul), None, ha nincs félidő-jel vagy kevés a mért kocka.
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_m": None, "fh_frames": 0, "sh_m": None, "sh_frames": 0,
+             "loosen_m": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    fh = defensive_pressure(
+        _M(match.meta, [f for f in match.frames if f.t <= ht]), config)
+    sh = defensive_pressure(
+        _M(match.meta, [f for f in match.frames if f.t > ht]), config)
+    for s in ("home", "away"):
+        rec = out[s]
+        rec["fh_m"] = fh[s]["avg_pressure_m"]
+        rec["fh_frames"] = fh[s]["frames"]
+        rec["sh_m"] = sh[s]["avg_pressure_m"]
+        rec["sh_frames"] = sh[s]["frames"]
+        if (rec["fh_m"] is not None and rec["sh_m"] is not None
+                and rec["fh_frames"] >= PRESSURE_FADE_MIN_FRAMES
+                and rec["sh_frames"] >= PRESSURE_FADE_MIN_FRAMES):
+            rec["loosen_m"] = round(rec["sh_m"] - rec["fh_m"], 2)
+    return out
+
+
 def defensive_pressure(match, config=None) -> dict:
     """Védekezési nyomás: mennyire szorosan védekezik egy csapat.
 
