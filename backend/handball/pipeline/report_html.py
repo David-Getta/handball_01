@@ -1050,6 +1050,57 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 '<th class="num">Második roham</th></tr>'
                 + "".join(frows) + "</table>")
 
+        # Csapat-profil: a stílus-rétegek ítéletei egy táblában (területi
+        # fölény, passz-tempó, fal-szélesség, izoláció, falba lövés) — a
+        # meccs "ujjlenyomata" csapatonként, edzői címkékkel.
+        try:
+            from .decisions import support_distance
+            from .defense import blocked_shot_rate, defensive_width
+            from .tactics import field_tilt, pass_tempo
+            ftp = field_tilt(match)
+            ptp = pass_tempo(match)
+            dwp = defensive_width(match)
+            sdp = support_distance(match)
+            brp = blocked_shot_rate(match)
+
+            def _cell(val):
+                return val if val is not None else "—"
+
+            prows = []
+            for side, name in (("home", home), ("away", away)):
+                tilt = ftp[side]["tilt_pct"]
+                tempo = ptp[side]["per_min"]
+                width = dwp[side]["avg_width_m"]
+                sup = sdp[side]["avg_m"]
+                blk = brp[side]["blocked_pct"]
+                cells = [
+                    f"{tilt:.0f}% elöl" if tilt is not None else None,
+                    f"{tempo:.0f} passz/perc" if tempo is not None else None,
+                    (f"{width:.0f} m ({dwp[side]['style']})"
+                     if width is not None else None),
+                    f"társ átl. {sup:.1f} m" if sup is not None else None,
+                    f"{blk:.0f}% blokkon" if blk is not None else None,
+                ]
+                if all(c is None for c in cells):
+                    continue
+                prows.append(
+                    f"<tr><td>{escape(name)}</td>"
+                    + "".join(f'<td class="num">{escape(_cell(c))}</td>'
+                              for c in cells)
+                    + "</tr>")
+            if prows:
+                parts_html.append(
+                    "<h2>Csapat-profil (stílus-jellemzők)</h2>"
+                    '<table><tr><th>Csapat</th>'
+                    '<th class="num">Területi fölény</th>'
+                    '<th class="num">Passz-tempó</th>'
+                    '<th class="num">Fal-szélesség</th>'
+                    '<th class="num">Támogatás</th>'
+                    '<th class="num">Falba lövés</th></tr>'
+                    + "".join(prows) + "</table>")
+        except Exception:
+            pass
+
         from .goalkeeper import detect_empty_net
         empty = detect_empty_net(match)
         if empty:
