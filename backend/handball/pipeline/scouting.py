@@ -295,6 +295,10 @@ class ScoutingReport:
     sup_frames: int = 0
     sup_sum_m: float = 0.0
     sup_iso: int = 0
+    # Területi fölény (field tilt): birtokos kockák + ebből az ellenfél
+    # térfelén lévők — meccsek közt pontosan összegződik (tilt = opp/összes).
+    tilt_frames: int = 0
+    tilt_opp: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1033,6 +1037,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Területi fölény: hol zajlik a birtoklásuk — elöl nyomnak, vagy a
+    # saját térfelükön ragadnak (kihozási gond → letámadható).
+    if rep.tilt_frames >= 100:
+        _tilt = 100.0 * rep.tilt_opp / rep.tilt_frames
+        if _tilt >= 65.0:
+            keys.append(
+                f"A birtoklásuk {_tilt:.0f}%-a az ellenfél térfelén zajlik — "
+                "elöl nyomnak: mély, türelmes fal kell, és a mögöttes "
+                "terület a kontráidé.")
+        elif _tilt <= 45.0:
+            keys.append(
+                f"A birtoklásuk a saját térfelükön ragad (csak {_tilt:.0f}% "
+                "elöl) — kihozási gondjaik vannak: told fel a letámadást, "
+                "már a kapus-indításnál zavarj.")
 
     # Támogatás-távolság: magára hagyott labdás ellen a prés működik;
     # szoros támogatás ellen a prés kockázatos (kijátsszák).
@@ -1795,6 +1814,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         if suprec["avg_m"] is not None:
             rep.sup_sum_m = round(suprec["avg_m"] * suprec["frames"], 1)
             rep.sup_iso = suprec["iso_frames"]
+        from .tactics import field_tilt
+        ftrec = field_tilt(match, config)[team.value]
+        rep.tilt_frames = ftrec["frames"]
+        rep.tilt_opp = ftrec["opp_half_frames"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2775,6 +2798,19 @@ def matchup_plan(own: "ScoutingReport",
             "letámadás az első perctől: az izolált labdás az eladásaival "
             "a ti kontráitokat fogja etetni.")
 
+    # 27) Az ő hátul ragadó birtoklásuk × a ti szoros védekezésetek: a
+    # feltolt letámadás a saját térfelükre szögezi őket.
+    if (opp.tilt_frames >= 100
+            and 100.0 * opp.tilt_opp / opp.tilt_frames <= 45.0
+            and 0.0 < own.defensive_pressure_m <= 1.6):
+        _t27 = 100.0 * opp.tilt_opp / opp.tilt_frames
+        plan.append(
+            f"A birtoklásuk a saját térfelükön ragad (csak {_t27:.0f}% "
+            f"elöl), ti pedig szorosan védekeztek (átlag "
+            f"{own.defensive_pressure_m:.1f} m) — told fel az egész "
+            "csapatot: a letámadásod a saját kapujuk elé szögezi őket, "
+            "és minden szerzés ziccert ér.")
+
     return plan
 
 
@@ -2947,6 +2983,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sup_frames=sum(r.sup_frames for r in reports),
         sup_sum_m=round(sum(r.sup_sum_m for r in reports), 1),
         sup_iso=sum(r.sup_iso for r in reports),
+        tilt_frames=sum(r.tilt_frames for r in reports),
+        tilt_opp=sum(r.tilt_opp for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

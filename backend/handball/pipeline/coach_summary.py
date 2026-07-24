@@ -588,6 +588,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Területi fölény: hol zajlott a birtoklás (elöl nyomás / hátul ragadás).
+    try:
+        from .tactics import TILT_HIGH_PCT, TILT_LOW_PCT, field_tilt
+        ft = field_tilt(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ft = ft[side]
+            if rec_ft["tilt_pct"] is None:
+                continue
+            if rec_ft["tilt_pct"] >= TILT_HIGH_PCT:
+                body += (f" A(z) {name} birtoklásának "
+                         f"{rec_ft['tilt_pct']:.0f}%-a az ellenfél térfelén "
+                         "zajlott — területi fölényben játszott.")
+            elif rec_ft["tilt_pct"] <= TILT_LOW_PCT:
+                body += (f" A(z) {name} birtoklása a saját térfelén ragadt "
+                         f"(csak {rec_ft['tilt_pct']:.0f}% elöl) — a "
+                         "kihozatal akadozott.")
+    except Exception:
+        pass
     # Támogatás-távolság: magára marad-e a labdás (prés-sebezhetőség).
     try:
         from .decisions import SUPPORT_ISO_M, support_distance

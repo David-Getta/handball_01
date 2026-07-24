@@ -276,3 +276,20 @@ def test_efficiency_vs_formation_buckets_by_defense():
     assert ef["home"]["6-0"]["goals"] == 1
     assert ef["home"]["6-0"]["goal_pct"] == 100.0
     assert ef["away"] == {}
+
+
+def test_field_tilt_opponent_half_share():
+    """A HAZAI birtoklás 120 kockából 90-szer az ellenfél (x>20) térfelén →
+    75% területi fölény; a vendégnek nincs elég birtokos kockája → None."""
+    from handball.pipeline.tactics import field_tilt
+
+    frames = []
+    for t in range(120):
+        x = 30.0 if t < 90 else 10.0  # 90 kocka elöl, 30 hátul
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x, 10.0)],
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    ft = field_tilt(Match(_meta(), frames))
+    h = ft["home"]
+    assert h["frames"] == 120 and h["opp_half_frames"] == 90
+    assert h["tilt_pct"] == 75.0
+    assert ft["away"]["frames"] == 0 and ft["away"]["tilt_pct"] is None

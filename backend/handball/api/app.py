@@ -2504,6 +2504,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.tactics import field_tilt
+            res["field_tilt"] = field_tilt(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -2905,6 +2910,8 @@ def create_app():
                 from ..pipeline.decisions import support_distance
                 _layer("support_distance",
                        lambda: support_distance(match))
+                from ..pipeline.tactics import field_tilt
+                _layer("field_tilt", lambda: field_tilt(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

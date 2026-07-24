@@ -493,3 +493,50 @@ def _formation_label(back: int, mid: int, high: int) -> str:
             return "3-3"
     # Nem tipikus / nem 6 védő: leíró címke a sávokkal.
     return f"{back}-{mid}-{high} (hátsó-közép-előre)"
+
+
+# Területi fölény: ennyi birtokos kocka kell az ítélethez; e fölött a csapat
+# az ellenfél térfelére szorítja a játékot, ez alatt a saját térfelére szorul.
+TILT_MIN_FRAMES = 100
+TILT_HIGH_PCT = 65.0
+TILT_LOW_PCT = 45.0
+
+
+def field_tilt(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Területi fölény (field tilt): a csapat labdabirtoklásának mekkora
+    része zajlik az ELLENFÉL térfelén.
+
+    Nem azt méri, MENNYIT birtokolja a labdát (possession), hanem hogy HOL:
+    a magas arány azt jelenti, hogy a csapat az ellenfél kapuja elé szorítja
+    a játékot (területi nyomás), az alacsony azt, hogy a birtoklása a saját
+    térfelén ragad (kihozási gondok / prés alatt van).
+
+    Visszatérés csapatonként:
+      {"frames", "opp_half_frames", "tilt_pct"} — a birtokos kockák száma,
+    ebből az ellenfél térfelén lévők, és az arány (%). tilt_pct None, ha
+    frames < TILT_MIN_FRAMES.
+    """
+    config = config or TacticsConfig()
+    mid = COURT_LENGTH_M / 2.0
+    acc = {"home": [0, 0], "away": [0, 0]}  # birtokos kocka, ellenfél-térfél
+    for f in match.frames:
+        team = possession_team(f, config)
+        if team is None or f.ball is None:
+            continue
+        rec = acc[team.value]
+        rec[0] += 1
+        goal_x = config.attacks_toward_x(team)
+        in_opp = (f.ball.x > mid) if goal_x > mid else (f.ball.x < mid)
+        if in_opp:
+            rec[1] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        n, opp = acc[s]
+        out[s] = {
+            "frames": n,
+            "opp_half_frames": opp,
+            "tilt_pct": (round(100.0 * opp / n, 1)
+                         if n >= TILT_MIN_FRAMES else None),
+        }
+    return out

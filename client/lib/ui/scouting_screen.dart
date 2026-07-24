@@ -924,6 +924,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Területi fölény: a birtoklás mekkora része zajlik az ellenfél térfelén
+  // (100+ birtokos kockánál; a backend-kulcsokkal azonos küszöbök) — a
+  // kirívó (elöl nyomnak / hátul ragadnak) érdekes.
+  String? _fieldTilt(Map<String, dynamic> r) {
+    final n = ((r["tilt_frames"] as num?) ?? 0).toInt();
+    if (n < 100) return null;
+    final opp = ((r["tilt_opp"] as num?) ?? 0).toInt();
+    final pct = 100.0 * opp / n;
+    if (pct >= 65.0) return "${pct.round()}% elöl · területi nyomás";
+    if (pct <= 45.0) return "${pct.round()}% elöl · a saját térfelén ragad";
+    return null;
+  }
+
   // Támogatás-távolság: a labdás legközelebbi társának átlagtávolsága
   // (100+ mért kockánál; a backend-kulcsokkal azonos küszöbök) — a kirívó
   // (izolált labdás / szoros támogatás) érdekes.
@@ -1307,6 +1320,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-koncentráció", _goalConcentration(r)!],
       if (_supportDistance(r) != null)
         ["Támogatás-távolság", _supportDistance(r)!],
+      if (_fieldTilt(r) != null) ["Területi fölény", _fieldTilt(r)!],
       if (_recovery(r) != null) ["Visszaérés", _recovery(r)!],
       if (_postGoals(r) != null) ["Gól-posztok", _postGoals(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
