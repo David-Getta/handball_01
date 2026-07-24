@@ -924,6 +924,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Engedett lövésminőség: a kapott lövések átlagos xG-je (8+ kapott
+  // lövésnél; a backend-kulcsokkal azonos küszöbök) — a kirívó (ziccert
+  // enged / kiszorít) érdekes.
+  String? _allowedXg(Map<String, dynamic> r) {
+    final n = ((r["def_shots_against"] as num?) ?? 0).toInt();
+    if (n < 8) return null;
+    final sum = ((r["xga_sum"] as num?) ?? 0).toDouble();
+    if (sum <= 0) return null;
+    final avg = sum / n;
+    if (avg >= 0.38) {
+      return "${avg.toStringAsFixed(2)} xG/lövés · ziccereket engednek";
+    }
+    if (avg <= 0.22) {
+      return "${avg.toStringAsFixed(2)} xG/lövés · kiszorító fal";
+    }
+    return null;
+  }
+
   // Védelmi tömörség: a fal átlagos y-terjedelme (100+ mért kockánál;
   // a backend-kulcsokkal azonos küszöbök) — tömör fal mellett a szélek,
   // széthúzott mellett a közép nyílik.
@@ -1321,6 +1339,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_secondChance(r) != null) ["Második roham", _secondChance(r)!],
       if (_defLine(r) != null) ["Védekezési vonal", _defLine(r)!],
       if (_defWidth(r) != null) ["Fal-szélesség", _defWidth(r)!],
+      if (_allowedXg(r) != null)
+        ["Engedett lövésminőség", _allowedXg(r)!],
       if (_passDirection(r) != null) ["Passz-irány", _passDirection(r)!],
       if (_assistSource(r) != null) ["Gólpassz-forrás", _assistSource(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],

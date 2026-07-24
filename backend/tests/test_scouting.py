@@ -271,6 +271,24 @@ def test_combine_reports_merges_goalkeeper_stats():
     assert merged.gk_on_target_zones == {"átlövés bal": 5, "jobbszél": 4}
 
 
+def test_coach_keys_flag_allowed_shot_quality():
+    """Magas engedett xG/lövés → 'ziccereket engednek' gyengeség + kulcs;
+    alacsony → 'kiszorító védekezés' erősség. A merge pontosan összegez."""
+    from handball.pipeline.scouting import _coach_keys
+    loose = ScoutingReport(team="away", team_name="Ellenfél KC",
+                           def_shots_against=10, xga_sum=4.2)  # 0,42 xG/lövés
+    _, weaknesses, keys = _coach_keys(loose)
+    assert any("Ziccereket engednek" in w for w in weaknesses)
+    assert any("nagy helyzetig" in k for k in keys)
+    tight = ScoutingReport(team="away", team_name="Ellenfél KC",
+                           def_shots_against=10, xga_sum=1.8)  # 0,18 xG/lövés
+    strengths, _, k2 = _coach_keys(tight)
+    assert any("Kiszorító védekezés" in s for s in strengths)
+    assert any("kiszorít" in k for k in k2)
+    merged = combine_reports([loose, tight])
+    assert merged.def_shots_against == 20 and merged.xga_sum == 6.0
+
+
 def test_coach_keys_flag_front_turnovers():
     """Sok támadó-harmadbeli labdaeladás → gyengeség + 'indíts hosszút'
     kulcs; kevés eladásnál nincs jelzés."""

@@ -84,6 +84,11 @@ class ScoutingReport:
     def_goals_against: int = 0
     def_free_shots: int = 0
     def_zones: dict = field(default_factory=dict)
+    # Engedett lövésminőség: a kapott lövések xG-összege — meccsek közt
+    # pontosan összegződik (átlag engedett xG/lövés = xga_sum /
+    # def_shots_against). Alacsony = kiszorító védekezés (rossz lövéseket
+    # kényszerít), magas = ziccereket enged.
+    xga_sum: float = 0.0
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (%).
     transition_turnovers: int = 0
     transition_goals_against: int = 0
@@ -901,6 +906,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             keys.append(f"A faluk itt lyukas: {worst} "
                         f"({rep.def_zones[worst]['goals']} kapott gól) — "
                         "ide szervezz befejezést.")
+
+    # Engedett lövésminőség: milyen értékű lövéseket enged a faluk.
+    if rep.def_shots_against >= 8 and rep.xga_sum > 0:
+        _xga = rep.xga_sum / rep.def_shots_against
+        if _xga >= 0.38:
+            weaknesses.append(
+                f"Ziccereket engednek (átlag {_xga:.2f} xG/lövés a kapott "
+                "lövéseken) — a faluk mögé be lehet jutni.")
+            keys.append(
+                "Türelmesen a nagy helyzetig: betörésekkel és beálló-"
+                "játékkal ellenük kijön a ziccer — ne elégedj meg a "
+                "távoli lövéssel.")
+        elif _xga <= 0.22:
+            strengths.append(
+                f"Kiszorító védekezés: rossz lövéseket kényszerítenek ki "
+                f"(átlag {_xga:.2f} xG/lövés) — a kapusuk dolgát a faluk "
+                "könnyíti.")
+            keys.append(
+                "A faluk kiszorít — előre eltervezett figurákkal és gyors "
+                "indításokkal kerüld el, hogy rossz szögű lövésekbe "
+                "kényszerülj.")
 
     # Emberfogásuk: a leglazább védő megtámadható oldala.
     if rep.markers:
@@ -2000,6 +2026,7 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.def_goals_against = drec["goals_against"]
         rep.def_free_shots = drec["free_shots"]
         rep.def_zones = {z: dict(v) for z, v in drec["zones"].items()}
+        rep.xga_sum = round(float(drec.get("xg_against", 0.0)), 2)
         from .defense import transition_defense
         trec = transition_defense(match, config)[team.value]
         rep.transition_turnovers = trec["turnovers"]
@@ -2853,6 +2880,21 @@ def matchup_plan(own: "ScoutingReport",
             "terheld a nyitott szélekre: a szélsőitek erre a meccsre a fő "
             "fegyver.")
 
+    # 29) Az ő ziccert engedő faluk × a ti közeli befejezés-erőtök: a
+    # betörős/beállós játék ellenük duplán kifizetődik.
+    if (opp.def_shots_against >= 8 and opp.xga_sum > 0
+            and opp.xga_sum / opp.def_shots_against >= 0.38):
+        own_sr29 = own.sr_close_shots + own.sr_mid_shots + own.sr_far_shots
+        if own.sr_close_shots >= 5 and own_sr29 > 0 \
+                and own.sr_close_shots / own_sr29 >= 0.40:
+            _x29 = opp.xga_sum / opp.def_shots_against
+            plan.append(
+                f"A faluk ziccereket enged (átlag {_x29:.2f} xG/lövés), ti "
+                f"pedig amúgy is közelről éltek (a lövéseitek "
+                f"{100.0 * own.sr_close_shots / own_sr29:.0f}%-a közeli) — "
+                "türelmes betörős/beállós játékkal minden támadásból nagy "
+                "helyzet hozható ki ellenük.")
+
     return plan
 
 
@@ -3088,6 +3130,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         def_shots_against=sum(r.def_shots_against for r in reports),
         def_goals_against=sum(r.def_goals_against for r in reports),
         def_free_shots=sum(r.def_free_shots for r in reports),
+        xga_sum=round(sum(r.xga_sum for r in reports), 2),
         transition_turnovers=sum(r.transition_turnovers for r in reports),
         transition_goals_against=sum(r.transition_goals_against for r in reports),
         turnover_total=sum(r.turnover_total for r in reports),

@@ -25,6 +25,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Engedett lövésminőség (xG/lövés a védekezésben)**: milyen értékű
+  lövéseket enged a fal — ziccert engedő (0,38+ xG/lövés) vs kiszorító
+  (0,22 alatt) védekezés. A meglévő xg_against most meccsek közt is
+  összegződik. Felületek: felderítés-profil (kulcs + csempe),
+  29. meccsterv-szabály (az ő ziccert engedő faluk × a ti közeli
+  befejezés-erőtök), 50. edzés-szabály (ziccer-megelőzés).
 - **Védelmi tömörség (fal-szélesség)**: milyen szélesen áll a védőfal a
   felállt védekezésben — tömör (11 m alatt: a szélek nyitva) vs
   széthúzott (15 m fölött: a közép nyitva). A vonal-magasság melletti
