@@ -24,13 +24,13 @@ másodpercig — ez normális. Utána megnyílik a program.
 
 1. **Töltsd le** a `SportMachine-macOS.zip` fájlt a repo **Releases** oldaláról.
 2. **Kattints rá duplán** — a Mac kicsomagolja, és megjelenik a
-   **handball_client** alkalmazás.
+   **SportMachine** alkalmazás.
 3. **Húzd át** az alkalmazást a **Programok** (Applications) mappába, és onnan
    indítsd.
 4. Első indításnál a Mac szólhat, hogy „ismeretlen fejlesztőtől származik":
    **jobb klikk (vagy Ctrl+kattintás) az ikonon → Megnyitás → Megnyitás**.
    Ezt csak egyszer kell. (Ha „sérült" üzenetet adna: nyiss egy Terminált, és
-   írd be: `xattr -cr /Applications/handball_client.app` — majd indítsd újra.)
+   írd be: `xattr -cr /Applications/SportMachine.app` — majd indítsd újra.)
 5. Első indításkor „Az elemző motor indítása…" képernyő jelenik meg pár
    másodpercig — ez normális.
 
