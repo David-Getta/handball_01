@@ -1062,6 +1062,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return "átl. $avg · csúcs ${peak.toStringAsFixed(0)} km/h";
   }
 
+  // Lövőerő-esés: az 1. és 2. félidei átlag lövés-sebesség összevetése
+  // (félidőnként 5+ mért lövésnél; a backend-kulccsal azonos küszöb) —
+  // csak a kirívó (fáradnak / erősödnek) érdekes.
+  String? _shotFade(Map<String, dynamic> r) {
+    final fhN = ((r["ssf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["ssf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 5 || shN < 5) return null;
+    final fhAvg = ((r["ssf_fh_sum_kmh"] as num?) ?? 0).toDouble() / fhN;
+    final shAvg = ((r["ssf_sh_sum_kmh"] as num?) ?? 0).toDouble() / shN;
+    if (fhAvg <= 0) return null;
+    final drop = 100.0 * (fhAvg - shAvg) / fhAvg;
+    if (drop >= 8.0) {
+      return "${fhAvg.toStringAsFixed(0)} → ${shAvg.toStringAsFixed(0)} km/h "
+          "(−${drop.round()}%) · fáradnak";
+    }
+    if (drop <= -8.0) {
+      return "${fhAvg.toStringAsFixed(0)} → ${shAvg.toStringAsFixed(0)} km/h "
+          "· a hajrában erősödnek";
+    }
+    return null;
+  }
+
   /// Támadás-oldal megoszlás: "bal 55% · közép 30% · jobb 15%" — csak
   /// elég támadó-kockánál (250+, ~10 mp).
   String? _attackSides(Map<String, dynamic> r) {
@@ -1241,6 +1263,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],
       if (_halfPattern(r) != null) ["Félidő-mérleg", _halfPattern(r)!],
       if (_shotPower(r) != null) ["Lövés-erő", _shotPower(r)!],
+      if (_shotFade(r) != null) ["Lövőerő-esés", _shotFade(r)!],
       if (_attackSides(r) != null) ["Támadás-oldal", _attackSides(r)!],
       if (_weakFormation(r) != null)
         ["Ez a fal fogja meg őket", _weakFormation(r)!],

@@ -1017,4 +1017,24 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 45) Lövőerő-esés: ha a 2. félidőre érdemben lassulnak a lövéseink
+    # (fáradás-jel), lövőerő-állóképességet kell építeni.
+    try:
+        from .event_detection import FADE_DROP_PCT, shot_speed_fade
+        sf45 = shot_speed_fade(match, config)
+        for side in ("home", "away"):
+            rec45 = sf45[side]
+            if rec45["drop_pct"] is None or rec45["drop_pct"] < FADE_DROP_PCT:
+                continue
+            add(side, "kondíció", "Lövőerő-állóképesség",
+                f"a lövés-sebességünk a 2. félidőre {rec45['drop_pct']:.0f}%-ot "
+                f"esik ({rec45['fh_avg_kmh']:.0f} → {rec45['sh_avg_kmh']:.0f} "
+                "km/h) — fáradó karral fejezzük be a meccset",
+                "lövőerő-állóképesség: kapura lövés sorozatban FÁRADT "
+                "állapotban (kör-edzés után azonnal), erős-kar munka "
+                "(medicinlabda-dobások), és a hajrá-lövők tudatos "
+                "pihentetése a meccs közepén")
+    except Exception:
+        pass
+
     return out
