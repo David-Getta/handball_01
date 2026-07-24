@@ -299,6 +299,11 @@ class ScoutingReport:
     # térfelén lévők — meccsek közt pontosan összegződik (tilt = opp/összes).
     tilt_frames: int = 0
     tilt_opp: int = 0
+    # Védelmi tömörség (fal-szélesség): a felállt védekezés y-terjedelmének
+    # összege + mért kockák — meccsek közt pontosan összegződik (átlag =
+    # összeg / kockák). Tömör fal = szélek nyitva; széthúzott = közép nyitva.
+    defw_sum_m: float = 0.0
+    defw_frames: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1226,6 +1231,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "kaputól) — türelmes felállt játék, a beálló mozgatása és "
                 "a távoli lövés kényszerítése töri meg őket.")
 
+    # Védelmi tömörség: tömör fal mellett a szélek, széthúzott mellett a
+    # közép nyílik.
+    if rep.defw_frames >= 100 and rep.defw_sum_m > 0:
+        _dw = rep.defw_sum_m / rep.defw_frames
+        from .defense import DEF_WIDTH_NARROW_M, DEF_WIDTH_WIDE_M
+        if _dw <= DEF_WIDTH_NARROW_M:
+            keys.append(
+                f"Tömör, keskeny falat húznak (átlag {_dw:.0f} m széles) — "
+                "a szélek nyitva vannak: gyors oldalváltások, szélső-"
+                "befejezések és beadások ellenük a recept.")
+        elif _dw >= DEF_WIDTH_WIDE_M:
+            keys.append(
+                f"Széthúzott falat húznak (átlag {_dw:.0f} m széles) — a "
+                "közép nyílik: betörés a réseken, beálló-játék és "
+                "elzárás-leválás középen.")
+
     # Kapus-kimozdulás: a kint álló kapus átemelhető, a vonalon
     # maradó ellen a lepattanóra kell menni.
     if rep.gk_depth_frames >= 100:
@@ -1818,6 +1839,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         ftrec = field_tilt(match, config)[team.value]
         rep.tilt_frames = ftrec["frames"]
         rep.tilt_opp = ftrec["opp_half_frames"]
+        from .defense import defensive_width
+        dwrec = defensive_width(match, config)[team.value]
+        if dwrec["avg_width_m"] is not None:
+            rep.defw_sum_m = round(
+                dwrec["avg_width_m"] * dwrec["frames"], 1)
+            rep.defw_frames = dwrec["frames"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2811,6 +2838,21 @@ def matchup_plan(own: "ScoutingReport",
             "csapatot: a letámadásod a saját kapujuk elé szögezi őket, "
             "és minden szerzés ziccert ér.")
 
+    # 28) Az ő tömör faluk × a ti erős szélső-játékotok: a nyitott
+    # szélekre kell terhelni.
+    if (opp.defw_frames >= 100 and opp.defw_sum_m > 0
+            and opp.defw_sum_m / opp.defw_frames <= 11.0
+            and own.wing_fin_shots >= 4
+            and own.wing_fin_goals / own.wing_fin_shots >= 0.5):
+        _w28 = opp.defw_sum_m / opp.defw_frames
+        _wp28 = 100.0 * own.wing_fin_goals / own.wing_fin_shots
+        plan.append(
+            f"Tömör, keskeny falat húznak (átlag {_w28:.0f} m), a ti "
+            f"szélső-befejezésetek pedig erős ({own.wing_fin_goals}/"
+            f"{own.wing_fin_shots}, {_wp28:.0f}%) — gyors oldalváltásokkal "
+            "terheld a nyitott szélekre: a szélsőitek erre a meccsre a fő "
+            "fegyver.")
+
     return plan
 
 
@@ -2985,6 +3027,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sup_iso=sum(r.sup_iso for r in reports),
         tilt_frames=sum(r.tilt_frames for r in reports),
         tilt_opp=sum(r.tilt_opp for r in reports),
+        defw_sum_m=round(sum(r.defw_sum_m for r in reports), 1),
+        defw_frames=sum(r.defw_frames for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

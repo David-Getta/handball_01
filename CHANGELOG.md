@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Védelmi tömörség (fal-szélesség)**: milyen szélesen áll a védőfal a
+  felállt védekezésben — tömör (11 m alatt: a szélek nyitva) vs
+  széthúzott (15 m fölött: a közép nyitva). A vonal-magasság melletti
+  második térbeli fal-jellemző. Egy réteg, sok felület: `defensive_width`
+  motor, edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kulcs + csempe), 28. meccsterv-szabály (az ő tömör faluk × a ti erős
+  szélső-játékotok), 49. edzés-szabály (fal-tömörség gyakorlás).
 - **Területi fölény (field tilt)**: a birtoklás mekkora része zajlik az
   ellenfél térfelén — elöl nyomó csapat (65%+) vs a saját térfelén
   ragadó, kihozási gondokkal küzdő (45% alatt). Egy réteg, sok felület:

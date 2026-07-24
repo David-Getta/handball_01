@@ -393,6 +393,40 @@ def test_defensive_line_height_high_vs_deep():
     assert high["frames"] == 150
 
 
+def test_defensive_width_narrow_vs_wide():
+    """Tömör fal (a védők y-terjedelme ~8 m) keskeny, széthúzott fal
+    (~16 m) széles átlagot ad; a kapus nem számít bele."""
+    from handball.pipeline.defense import defensive_width
+
+    def scene(spread):
+        # A HAZAI védekezik a saját kapujánál (x=0); a VENDÉG a hazai
+        # térfélen birtokol. A hazai védők y-ban `spread` szélesen állnak.
+        lo = 10.0 - spread / 2.0
+        hi = 10.0 + spread / 2.0
+        frames = []
+        for t in range(150):
+            players = [
+                _pl(1, Team.AWAY, 8.0, 10.0),            # labdás támadó
+                _pl(10, Team.HOME, 6.0, lo),             # hazai fal
+                _pl(11, Team.HOME, 6.0, 10.0),
+                _pl(12, Team.HOME, 6.0, hi),
+                _pl(13, Team.HOME, 6.5, 10.0),
+                _pl(9, Team.HOME, 0.5, 19.5, role="kapus"),
+            ]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+        return Match(_meta(), frames)
+
+    narrow = defensive_width(scene(8.0))["home"]
+    wide = defensive_width(scene(16.0))["home"]
+    assert narrow["avg_width_m"] < wide["avg_width_m"]
+    assert narrow["style"] == "tömör (szélek nyitva)"
+    assert wide["style"] == "széthúzott (közép nyitva)"
+    assert narrow["frames"] == 150
+    # A kapus (y=19,5) nem tágítja a falat: a keskeny átlag ~8 m maradt.
+    assert narrow["avg_width_m"] < 9.0
+
+
 def test_turnover_players_credits_the_loser():
     """A labdaeladás a labdát ELVESZTŐ játékosnak számít; a kapus kimarad."""
     from handball.pipeline.defense import turnover_players
