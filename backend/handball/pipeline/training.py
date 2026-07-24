@@ -1107,4 +1107,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 49) Védelmi tömörség: ha a falunk széthúzott (a közép nyitva), a
+    # belső zárást kell gyakorolni — betörésekből és beállóból kapunk.
+    try:
+        from .defense import (DEF_WIDTH_MIN_FRAMES, DEF_WIDTH_WIDE_M,
+                              defensive_width)
+        dw49 = defensive_width(match, config)
+        for side in ("home", "away"):
+            rec49 = dw49[side]
+            if rec49["avg_width_m"] is None \
+                    or rec49["frames"] < DEF_WIDTH_MIN_FRAMES \
+                    or rec49["avg_width_m"] < DEF_WIDTH_WIDE_M:
+                continue
+            add(side, "védekezés", "Fal-tömörség",
+                f"a falunk széthúzott (átlag {rec49['avg_width_m']:.0f} m "
+                "széles) — a közép nyitva: betörésből és beállóból "
+                "kaphatunk",
+                "tömörség-gyakorlás: a fal a labda oldalára záródik "
+                "(labda-oldali segítség), a két belső védő váll-váll "
+                "mellett; árnyék-védekezés szűkülő folyosóval, beálló-"
+                "leválás elleni kommunikáció")
+    except Exception:
+        pass
+
     return out

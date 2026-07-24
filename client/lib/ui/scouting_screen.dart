@@ -924,6 +924,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Védelmi tömörség: a fal átlagos y-terjedelme (100+ mért kockánál;
+  // a backend-kulcsokkal azonos küszöbök) — tömör fal mellett a szélek,
+  // széthúzott mellett a közép nyílik.
+  String? _defWidth(Map<String, dynamic> r) {
+    final n = ((r["defw_frames"] as num?) ?? 0).toInt();
+    if (n < 100) return null;
+    final sum = ((r["defw_sum_m"] as num?) ?? 0).toDouble();
+    if (sum <= 0) return null;
+    final avg = sum / n;
+    if (avg <= 11.0) {
+      return "${avg.toStringAsFixed(0)} m · tömör (a szélek nyitva)";
+    }
+    if (avg >= 15.0) {
+      return "${avg.toStringAsFixed(0)} m · széthúzott (a közép nyitva)";
+    }
+    return null;
+  }
+
   // Területi fölény: a birtoklás mekkora része zajlik az ellenfél térfelén
   // (100+ birtokos kockánál; a backend-kulcsokkal azonos küszöbök) — a
   // kirívó (elöl nyomnak / hátul ragadnak) érdekes.
@@ -1302,6 +1320,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_wingFinishing(r) != null) ["Szélső-játék", _wingFinishing(r)!],
       if (_secondChance(r) != null) ["Második roham", _secondChance(r)!],
       if (_defLine(r) != null) ["Védekezési vonal", _defLine(r)!],
+      if (_defWidth(r) != null) ["Fal-szélesség", _defWidth(r)!],
       if (_passDirection(r) != null) ["Passz-irány", _passDirection(r)!],
       if (_assistSource(r) != null) ["Gólpassz-forrás", _assistSource(r)!],
       if (_restart(r) != null) ["Szünet-kezdés", _restart(r)!],

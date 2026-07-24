@@ -455,6 +455,67 @@ def defensive_line_height(match, config=None) -> dict:
     return out
 
 
+# Védelmi tömörség: ennyi mért kocka és ennyi mért védő kell; a fal e alatt
+# tömör (a szélek nyílnak), e fölött széthúzott (a közép nyílik).
+DEF_WIDTH_MIN_FRAMES = 100
+DEF_WIDTH_MIN_DEFENDERS = 4
+DEF_WIDTH_NARROW_M = 11.0
+DEF_WIDTH_WIDE_M = 15.0
+
+
+def defensive_width(match, config=None) -> dict:
+    """Védelmi tömörség (fal-szélesség): milyen szélesen áll a védőfal.
+
+    Felállt védekezésnél (a labdás a védekező csapat térfelén) a védő
+    mezőnyjátékosok KERESZTIRÁNYÚ (y) terjedelmét mérjük (max − min).
+    Tömör (keskeny) fal a közepet zárja — ellene a szélső játék és a
+    beadás nyílik; széthúzott (széles) fal a szélekre vigyáz — ellene a
+    betörés és a beálló-játék a rés. A vonal-MAGASSÁG (mély/felfutó)
+    mellett ez a fal második térbeli jellemzője.
+
+    Visszatérés csapatonként (a védekező csapaté):
+      {"avg_width_m", "frames", "style"} — style: "tömör (szélek nyitva)" /
+    "széthúzott (közép nyitva)" / "kiegyensúlyozott"; avg_width_m None,
+    ha nincs elég mért kocka (DEF_WIDTH_MIN_FRAMES).
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    acc = {Team.HOME: [0.0, 0], Team.AWAY: [0.0, 0]}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén van.
+        if abs(holder.x - own_x) > half:
+            continue
+        ys = [p.y for p in f.players
+              if p.team == deff and p.role != "kapus"
+              and abs(p.x - own_x) <= half]
+        if len(ys) >= DEF_WIDTH_MIN_DEFENDERS:
+            acc[deff][0] += max(ys) - min(ys)
+            acc[deff][1] += 1
+
+    out = {}
+    for team in (Team.HOME, Team.AWAY):
+        total, n = acc[team]
+        if n < DEF_WIDTH_MIN_FRAMES:
+            out[team.value] = {"avg_width_m": None, "frames": n,
+                               "style": None}
+            continue
+        avg = round(total / n, 2)
+        style = ("széthúzott (közép nyitva)" if avg >= DEF_WIDTH_WIDE_M
+                 else "tömör (szélek nyitva)" if avg <= DEF_WIDTH_NARROW_M
+                 else "kiegyensúlyozott")
+        out[team.value] = {"avg_width_m": avg, "frames": n, "style": style}
+    return out
+
+
 # Visszarendeződés: ennyi védőnek kell a saját térfélen lennie, hogy a
 # védelmet "visszaértnek" tekintsük; a mérést ennyi mp-nél levágjuk.
 RECOVERY_DEFENDERS = 4

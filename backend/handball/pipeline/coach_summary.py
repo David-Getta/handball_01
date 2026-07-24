@@ -255,6 +255,20 @@ def _defense_section(match: Match, home: str, away: str) -> tuple[dict | None, l
     except Exception:
         pass
 
+    # Védelmi tömörség: tömör (szélek nyitva) vagy széthúzott (közép nyitva).
+    try:
+        from .defense import defensive_width
+        dw = defensive_width(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dw = dw[side]
+            if rec_dw["style"] in ("tömör (szélek nyitva)",
+                                   "széthúzott (közép nyitva)"):
+                parts.append(
+                    f"a(z) {name} fala {rec_dw['style']} "
+                    f"(átlag {rec_dw['avg_width_m']:.0f} m széles)")
+    except Exception:
+        pass
+
     # Átmenet-védekezés: gyors kapott gólok labdavesztés után (visszazárás).
     try:
         from .defense import transition_defense
