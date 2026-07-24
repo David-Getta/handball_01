@@ -166,3 +166,50 @@ def test_timeout_without_prior_run_has_no_verdict():
     assert len(effects) == 1
     assert effects[0]["verdict"] is None
     assert effects[0]["conceded_before"] == 0
+
+
+def test_timeout_record_aggregates_verdicts():
+    """A "megtörte" ítéletű hazai időkérés a hazai mérlegben broke-ként
+    jelenik meg; a vendégnek nincs időkérése."""
+    from handball.pipeline.stoppages import timeout_record
+
+    fps = 25.0
+    frames = []
+    t = 0
+    for _ in range(int(20 * fps)):
+        players = _players(t, moving=True)
+        hp = players[0]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+        t += 1
+    for g in _goal_frames(t, toward_home_goal=True):
+        frames.append(g)
+    t = frames[-1].t + 1
+    for _ in range(int(3 * fps)):
+        players = _players(t, moving=True)
+        hp = players[0]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+        t += 1
+    for g in _goal_frames(t, toward_home_goal=True):
+        frames.append(g)
+    t = frames[-1].t + 1
+    for _ in range(int(4 * fps)):
+        players = _players(t, moving=True)
+        hp = players[0]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+        t += 1
+    for _ in range(int(20 * fps)):
+        frames.append(Frame(t=t, players=_players(0, moving=False),
+                            ball=None))
+        t += 1
+    for _ in range(int(30 * fps)):
+        frames.append(Frame(t=t, players=_players(t, moving=True),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+
+    rec = timeout_record(Match(_meta(fps), frames))
+    assert rec["home"]["timeouts"] == 1
+    assert rec["home"]["broke"] == 1 and rec["home"]["failed"] == 0
+    assert rec["away"]["timeouts"] == 0

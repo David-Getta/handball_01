@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
+- **Időkérés-mérleg**: működik-e a "mentő" időkérésük — a
+  sorozatot megtörő vs fordulat nélküli időkérések meccsek közt
+  összegezve. Egy réteg, sok felület: `timeout_record` motor,
+  /analyze + meccs-csomag, felderítés-profil (kulcs + csempe),
+  36. meccsterv-szabály (az ő hatástalan időkérésük × a ti
+  sorozat-képességetek), 57. edzés-szabály (időkérés-
+  forgatókönyv).
 - **Védekezés-fellazulás (fal-fáradás)**: a védekezési nyomás 1. vs
   2. félidei átlagának összevetése — 0,5 m+ lazulás a hajrában
   szabad lövőket jelent, a szorosodó fal kemény hajrát. A

@@ -1301,4 +1301,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 57) Időkérés-forgatókönyv: ha az időkéréseink rendre nem hoznak
+    # fordulatot (2+ hatástalan, és több, mint a sikeres), az időkérés
+    # utáni újraindulást kell begyakorolni.
+    try:
+        from .stoppages import timeout_record
+        tr57 = timeout_record(match, config)
+        for side in ("home", "away"):
+            rec57 = tr57[side]
+            if rec57["failed"] < 2 or rec57["failed"] <= rec57["broke"]:
+                continue
+            add(side, "taktika", "Időkérés-forgatókönyv",
+                f"az időkéréseink nem hoznak fordulatot ({rec57['failed']}/"
+                f"{rec57['broke'] + rec57['failed']} hatástalan) — a "
+                "megszakítás után ugyanúgy kapjuk a gólokat",
+                "időkérés-forgatókönyv: minden időkéréshez KÉSZ első "
+                "védekezés (ki kit fog, milyen fal) és kész első támadás "
+                "(begyakorolt figura); az időkérés utáni 2 percet külön "
+                "gyakorold edzésen sípszóra indítva")
+    except Exception:
+        pass
+
     return out
