@@ -25,6 +25,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Meccsjelentés: Csapat-profil tábla**: az öt stílus-réteg
+  (területi fölény, passz-tempó, fal-szélesség, támogatás-távolság,
+  falba lövés) ítéletei egy táblában — a meccs "ujjlenyomata"
+  csapatonként a nyomtatható jelentésben is.
 - **Falba lövés (támadó-oldali blokk-arány)**: a lövés-kísérletek
   mekkora hányada akad el az ellenfél blokkján (4+ blokkból 20%+ =
   rosszul előkészített, kényszerű lövések). Egy réteg, sok felület:

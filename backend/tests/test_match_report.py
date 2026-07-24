@@ -133,6 +133,34 @@ def test_report_includes_finishing_profile_when_shots_exist():
     assert "Befejezés-profil" not in match_report_html(empty, {}, [], None)
 
 
+def test_report_team_style_profile_table():
+    """A Csapat-profil (stílus-jellemzők) tábla megjelenik, ha legalább
+    egy stílus-réteg mérhető (itt: területi fölény + támogatás-távolság);
+    üres meccsen elmarad."""
+    from handball.models.tracking import (
+        Ball, Frame, Match, MatchMeta, PlayerPosition, PositionSource, Team)
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED, confidence=1.0)
+
+    # 120 kocka hazai birtoklás az ellenfél térfelén (x=30), társsal 3 m-re.
+    frames = [Frame(t=t, players=[pl(1, 30.0, 10.0), pl(2, 32.5, 11.0)],
+                    ball=Ball(x=30.0, y=10.0, confidence=1.0))
+              for t in range(120)]
+    m = Match(MatchMeta(match_id="sp", home_team="H", away_team="A",
+                        fps=25.0), frames)
+    html = match_report_html(m, {}, [], None)
+    assert "Csapat-profil (stílus-jellemzők)" in html
+    assert "% elöl" in html            # területi fölény cella
+    assert "társ átl." in html          # támogatás-távolság cella
+    # Üres meccsen nincs ilyen szakasz.
+    empty = Match(MatchMeta(match_id="sp2", home_team="H", away_team="A",
+                            fps=25.0),
+                  [Frame(t=0, players=[], ball=None)])
+    assert "Csapat-profil" not in match_report_html(empty, {}, [], None)
+
+
 def test_report_includes_defensive_line_row():
     """Felállt védekezésnél a csapatmutatók között megjelenik a védekezési
     vonal-magasság sora."""
