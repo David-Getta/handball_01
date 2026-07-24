@@ -2581,6 +2581,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import lead_protection
+            res["lead_protection"] = lead_protection(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3015,6 +3020,8 @@ def create_app():
                 _layer("turnover_fade", lambda: turnover_fade(match))
                 from ..pipeline.goalkeeper import gk_save_fade
                 _layer("gk_save_fade", lambda: gk_save_fade(match))
+                from ..pipeline.momentum import lead_protection
+                _layer("lead_protection", lambda: lead_protection(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

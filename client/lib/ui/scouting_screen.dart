@@ -942,6 +942,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Előny-őrzés: 3+ gólos ellépéseik sorsa — elengedik-e a vezetést,
+  // vagy mindig megtartják (2+ ellépésnél már beszédes a "megtartja").
+  String? _leadProtection(Map<String, dynamic> r) {
+    final led = ((r["lp_led"] as num?) ?? 0).toInt();
+    if (led < 1) return null;
+    final blown = ((r["lp_blown"] as num?) ?? 0).toInt();
+    final biggest = ((r["lp_biggest"] as num?) ?? 0).toInt();
+    if (blown >= 1) {
+      return "$led ellépésből $blown elengedve (volt $biggest gólos is) · "
+          "sose add fel ellenük";
+    }
+    if (led >= 2) {
+      return "$led ellépés, mind megtartva · nem szabad hagyni ellépni";
+    }
+    return null;
+  }
+
   // Labdabiztonság-esés: az eladás-ütem változása a 2. félidőre
   // (félidőnként 2+ perc mért birtoklásnál; a backend-kulccsal azonos
   // küszöb) — csak a kirívó romlás érdekes.
@@ -1494,6 +1511,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_turnoverFade(r) != null)
         ["Labdabiztonság-esés", _turnoverFade(r)!],
       if (_gkSaveFade(r) != null) ["Kapus-forma", _gkSaveFade(r)!],
+      if (_leadProtection(r) != null) ["Előny-őrzés", _leadProtection(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

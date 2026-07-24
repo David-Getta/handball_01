@@ -25,6 +25,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
+- **Előny-őrzés (elengedett vezetés)**: a meccs közbeni legnagyobb
+  vezetés vs a végeredmény — aki 3+ gólos előnyt is elenged, az
+  ellen sosem szabad feladni; aki mindig megtartja, azt nem szabad
+  hagyni ellépni. Egy réteg, sok felület: `lead_protection` motor
+  (a vezetés-alakulás rétegre építve), edzői összefoglaló (fordulás
+  nélküli elengedés), /analyze + meccs-csomag, felderítés-profil
+  (kulcs + csempe, meccsek közt összegezve), 39. meccsterv-szabály
+  (az ő elengedett vezetéseik × a ti hajrá-erőtök), 60. edzés-
+  szabály (vezetés-menedzsment).
 - **Kapus-forma félidőnként**: a védés-hatékonyság 1. vs 2. félidei
   összevetése — 15+ százalékpontos esés a hajrában verhető kapust
   jelent, a formába lendülő kapust az elején kell büntetni. A

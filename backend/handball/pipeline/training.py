@@ -1343,6 +1343,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 60) Előny-őrzés: ha ezen a meccsen 3+ gólos vezetés ment el, a
+    # vezetés-menedzsment a következő edzés témája.
+    try:
+        from .momentum import lead_protection
+        lp60 = lead_protection(match, config)
+        for side in ("home", "away"):
+            rec60 = lp60[side]
+            if not rec60["blown"]:
+                continue
+            add(side, "taktika", "Előny-őrzés",
+                f"{rec60['max_lead']} gólos vezetés ment el ezen a "
+                "meccsen — a megszerzett előnyt nem tudtuk megtartani",
+                "vezetés-menedzsment: 10 perces játék 3 gólos előnyről "
+                "(a vezető csapat hosszú, türelmes támadásokat játszik, "
+                "cél a hibátlan labdajáratás), időkérés-forgatókönyv az "
+                "olvadó előnyre, és a hajrá-ötös kijelölése előre")
+    except Exception:
+        pass
+
     # 59) Kapus-forma félidőnként: ha a kapusunk a 2. félidőre érdemben
     # esik (15+ százalékpont), a kapus-terhelést és a csere-időzítést kell
     # átgondolni.
