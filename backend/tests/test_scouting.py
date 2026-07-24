@@ -236,6 +236,22 @@ def test_narrative_defense_switching_mentioned():
     assert "5-1" in bodies and "készülj" in bodies
 
 
+def test_narrative_style_traits_mentioned():
+    """A stílus-jegyek (pörgetett járatás, hosszú passzok, hátul ragadó
+    birtoklás) bekerülnek az "Így támadnak" szövegbe."""
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél KC",
+        avg_attack_duration_s=10.0,
+        pt_passes=100, pt_poss_s=240.0,     # 25 passz/perc → pörgetik
+        plen_n=20, plen_sum_m=180.0, plen_long=8,   # 40% hosszú
+        tilt_frames=200, tilt_opp=80,       # 40% elöl → hátul ragad
+    )
+    bodies = " ".join(s["body"] for s in scouting_narrative(rep))
+    assert "pörgetik" in bodies
+    assert "hosszú" in bodies and "elfogható" in bodies
+    assert "kihozási gondok" in bodies
+
+
 def test_narrative_empty_report_degrades():
     """Üres jelentésnél is ad legalább egy ("kevés adat") szekciót."""
     rep = ScoutingReport(team="away", team_name="X")

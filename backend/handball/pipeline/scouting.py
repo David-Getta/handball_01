@@ -3451,6 +3451,28 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
             if int(pr["passes"]) >= 5:
                 body += (f" A játékuk a {pr['from']}. és {pr['to']}. játékos "
                          f"tengelyén megy ({pr['passes']} passz).")
+        # Stílus-jegyek: labdajáratás-tempó, passz-hossz, területi fölény.
+        if rep.pt_poss_s >= 120.0 and rep.pt_passes > 0:
+            _n_pt = 60.0 * rep.pt_passes / rep.pt_poss_s
+            if _n_pt >= 22.0:
+                body += (f" A labdát pörgetik ({_n_pt:.0f} passz/perc) — "
+                         "a fal folyamatos mozgásra kényszerül.")
+            elif _n_pt <= 12.0:
+                body += (f" A labdát állva járatják ({_n_pt:.0f} "
+                         "passz/perc) — kiszámítható építkezés.")
+        if rep.plen_n >= 15 and rep.plen_sum_m > 0:
+            _n_lp = 100.0 * rep.plen_long / rep.plen_n
+            if _n_lp >= 30.0:
+                body += (f" Passzaik {_n_lp:.0f}%-a hosszú — a direkt "
+                         "játékuk elfogható.")
+        if rep.tilt_frames >= 100:
+            _n_ti = 100.0 * rep.tilt_opp / rep.tilt_frames
+            if _n_ti >= 65.0:
+                body += (f" Birtoklásuk {_n_ti:.0f}%-a az ellenfél "
+                         "térfelén zajlik — elöl nyomó csapat.")
+            elif _n_ti <= 45.0:
+                body += (f" Birtoklásuk a saját térfelükön ragad "
+                         f"({_n_ti:.0f}% elöl) — kihozási gondok.")
         # Miből élnek: ha kirajzolódik a fő gól-forrás, elmondjuk.
         ao_n = rep.attack_origins or {}
         tg = sum(v.get("goals", 0) for v in ao_n.values())
