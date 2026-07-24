@@ -3518,7 +3518,7 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
                          f"oldal ({pct:.0f}%).")
         out.append({"title": "Így támadnak", "body": body})
 
-    # Védekezésük: fő forma + váltogatás.
+    # Védekezésük: fő forma + váltogatás + a fal térbeli/minőségi jegyei.
     if rep.defense_distribution:
         items = list(rep.defense_distribution.items())
         main, share = items[0]
@@ -3528,6 +3528,30 @@ def scouting_narrative(rep: ScoutingReport) -> list[dict]:
                      f"({items[1][1]:.0f}%) — készülj mindkettőre.")
         elif share >= 75.0:
             body += " Ragaszkodnak hozzá — egy begyakorolt ellenszer sokat ér."
+        # Fal-szélesség: tömör (szélek nyitva) vagy széthúzott (közép nyitva).
+        if rep.defw_frames >= 100 and rep.defw_sum_m > 0:
+            _n_dw = rep.defw_sum_m / rep.defw_frames
+            if _n_dw <= 11.0:
+                body += (f" A faluk tömör (átlag {_n_dw:.0f} m széles) — "
+                         "a szélek nyitva.")
+            elif _n_dw >= 15.0:
+                body += (f" A faluk széthúzott (átlag {_n_dw:.0f} m) — "
+                         "a közép nyílik.")
+        # Engedett lövésminőség: ziccert engedő vagy kiszorító fal.
+        if rep.def_shots_against >= 8 and rep.xga_sum > 0:
+            _n_xga = rep.xga_sum / rep.def_shots_against
+            if _n_xga >= 0.38:
+                body += (f" Ziccereket engednek (átlag {_n_xga:.2f} "
+                         "xG/lövés) — türelemmel nagy helyzetig lehet jutni.")
+            elif _n_xga <= 0.22:
+                body += (f" Kiszorító fal (átlag {_n_xga:.2f} xG/lövés) — "
+                         "rossz lövésekbe kényszerítenek.")
+        # Szerzés-magasság: elöl zavaró (letámadó) vagy passzív elöl-játék.
+        if rep.steal_n >= 4:
+            _n_st = 100.0 * rep.steal_high / rep.steal_n
+            if _n_st >= 35.0:
+                body += (f" Szerzéseik {_n_st:.0f}%-a elöl, letámadásból "
+                         "jön — a kihozatalodat készítsd elő.")
         out.append({"title": "Védekezésük", "body": body})
 
     # Félidő-minta: a felismert szünetű meccsek félidőnkénti mérlegéből.

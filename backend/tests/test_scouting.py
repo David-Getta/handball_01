@@ -252,6 +252,22 @@ def test_narrative_style_traits_mentioned():
     assert "kihozási gondok" in bodies
 
 
+def test_narrative_defense_traits_mentioned():
+    """A védekezés-szakasz az új fal-jegyeket is hozza: tömör fal,
+    ziccert engedő védekezés, elöl-szerzés (letámadás)."""
+    rep = ScoutingReport(
+        team="away", team_name="Ellenfél KC",
+        defense_distribution={"6-0": 80.0},
+        defw_frames=150, defw_sum_m=1500.0,      # 10 m → tömör
+        def_shots_against=10, xga_sum=4.0,        # 0,40 xG/lövés → ziccer
+        steal_n=6, steal_high=3,                  # 50% elöl → letámadás
+    )
+    bodies = " ".join(s["body"] for s in scouting_narrative(rep))
+    assert "tömör" in bodies and "szélek nyitva" in bodies
+    assert "Ziccereket engednek" in bodies
+    assert "letámadásból" in bodies
+
+
 def test_narrative_empty_report_degrades():
     """Üres jelentésnél is ad legalább egy ("kevés adat") szekciót."""
     rep = ScoutingReport(team="away", team_name="X")
