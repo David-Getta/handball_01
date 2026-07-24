@@ -2564,6 +2564,16 @@ def create_app():
                 from ..pipeline.attack_types import wing_finishing
                 res["wing_finishing_fh"] = {"until_frame": ht,
                                             **wing_finishing(sub)}
+                # Félidei letámadás-kép: ha az ellenfél elöl szerez, a 2.
+                # félidőre a kihozatalt kell előkészíteni.
+                from ..pipeline.defense import steal_height
+                res["steal_height_fh"] = {"until_frame": ht,
+                                          **steal_height(sub)}
+                # Félidei lepattanó-kép: ha harcolnak a második rohamért,
+                # a lövés utáni lezárás a szünet utáni kulcs.
+                from ..pipeline.attack_types import second_chance
+                res["second_chance_fh"] = {"until_frame": ht,
+                                           **second_chance(sub)}
         except Exception:
             pass
         return res

@@ -330,6 +330,42 @@ class _LiveScreenState extends State<LiveScreen> {
                     "szélső-védő lépjen ki, szűkítse a szöget a másodikban.")));
           }
         }
+        // Félidei letámadás-kép: ha az ellenfél elöl szerez, a 2. félidőre
+        // a kihozatalt kell előkészíteni.
+        final st = (a["steal_height_fh"] as Map?)?.cast<String, dynamic>();
+        if (st != null) {
+          for (final side in ["home", "away"]) {
+            final rec = (st[side] as Map?)?.cast<String, dynamic>();
+            if (rec == null) continue;
+            final pct = (rec["high_pct"] as num?)?.toDouble();
+            if (pct == null || pct < 35.0) continue;
+            final team = names[side] ?? "";
+            out.add(_FeedEntry(
+                atFrame,
+                Suggestion(4, "taktika",
+                    "Félidei kép ($team): elöl, letámadásból szereznek "
+                    "(${pct.toStringAsFixed(0)}%) — a másodikban a kihozatal "
+                    "kész tervvel menjen: kapus játékban, szelep a szélen.")));
+          }
+        }
+        // Félidei lepattanó-kép: ha harcolnak a második rohamért, a lövés
+        // utáni lezárás a szünet utáni kulcs.
+        final sc = (a["second_chance_fh"] as Map?)?.cast<String, dynamic>();
+        if (sc != null) {
+          for (final side in ["home", "away"]) {
+            final rec = (sc[side] as Map?)?.cast<String, dynamic>();
+            if (rec == null) continue;
+            final pct = (rec["rebound_pct"] as num?)?.toDouble();
+            if (pct == null || pct < 25.0) continue;
+            final team = names[side] ?? "";
+            out.add(_FeedEntry(
+                atFrame,
+                Suggestion(4, "taktika",
+                    "Félidei kép ($team): harcolnak a lepattanóért "
+                    "(${pct.toStringAsFixed(0)}% második roham) — lövésük "
+                    "után is fogd le a beállót, tisztázd a lepattanót.")));
+          }
+        }
       }
     } catch (_) {}
     // Félidei rotáció-kép: ha az első félidőt szűk kerettel nyomta
