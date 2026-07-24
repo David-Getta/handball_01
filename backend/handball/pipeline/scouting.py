@@ -335,6 +335,13 @@ class ScoutingReport:
     shtim_n: int = 0
     shtim_sum_s: float = 0.0
     shtim_early: int = 0
+    # Védekezés-fellazulás: a védekezési nyomás félidőnkénti táv-összege és
+    # kockaszáma — meccsek közt pontosan összegződik (félidei átlag =
+    # összeg / kockák; lazulás = 2. félidei átlag − 1. félidei átlag).
+    prf_fh_sum_m: float = 0.0
+    prf_fh_n: int = 0
+    prf_sh_sum_m: float = 0.0
+    prf_sh_n: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1094,6 +1101,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Védekezés-fellazulás: ha a faluk a 2. félidőre lazul, a hajrát kell
+    # megtolni ellenük; ha szorosabbra vált, az elején kell előnyt szerezni.
+    if rep.prf_fh_n >= 100 and rep.prf_sh_n >= 100 \
+            and rep.prf_fh_sum_m > 0 and rep.prf_sh_sum_m > 0:
+        _prf_fh = rep.prf_fh_sum_m / rep.prf_fh_n
+        _prf_sh = rep.prf_sh_sum_m / rep.prf_sh_n
+        _prf_d = _prf_sh - _prf_fh
+        if _prf_d >= 0.5:
+            keys.append(
+                f"A védekezésük a 2. félidőre fellazul (átlag "
+                f"{_prf_fh:.1f} → {_prf_sh:.1f} m a labdástól) — a hajrában "
+                "nyílnak a rések: a meccs végét toljátok meg, ott jön a "
+                "szabad lövő.")
+        elif _prf_d <= -0.5:
+            keys.append(
+                f"A 2. félidőre szorosabbra húzzák a védekezést "
+                f"({_prf_fh:.1f} → {_prf_sh:.1f} m) — az előnyt az első "
+                "félidőben kell megszerezni, a hajrájuk kemény.")
 
     # Lövés-időzítés: az első hullámból élő lövők ellen a visszarendeződés,
     # a kivárók ellen a türelmes fal a kulcs.
@@ -2001,6 +2027,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         if shrec["avg_s"] is not None:
             rep.shtim_sum_s = round(shrec["avg_s"] * shrec["shots"], 1)
             rep.shtim_early = shrec["early"]
+        from .defense import pressure_fade
+        prfrec = pressure_fade(match, config)[team.value]
+        if prfrec["fh_m"] is not None:
+            rep.prf_fh_sum_m = round(prfrec["fh_m"] * prfrec["fh_frames"], 1)
+            rep.prf_fh_n = prfrec["fh_frames"]
+        if prfrec["sh_m"] is not None:
+            rep.prf_sh_sum_m = round(prfrec["sh_m"] * prfrec["sh_frames"], 1)
+            rep.prf_sh_n = prfrec["sh_frames"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -3089,6 +3123,24 @@ def matchup_plan(own: "ScoutingReport",
             "lövés utáni első két hazafutó lépés kötelező mindenkinek, "
             "különben az első hullámuk büntet.")
 
+    # 35) Az ő fellazuló faluk × a ti hajrá-erőtök: a meccs vége a ti
+    # ablakotok — oda kell időzíteni a friss lábakat.
+    if (opp.prf_fh_n >= 100 and opp.prf_sh_n >= 100
+            and opp.prf_fh_sum_m > 0 and opp.prf_sh_sum_m > 0
+            and opp.prf_sh_sum_m / opp.prf_sh_n
+            - opp.prf_fh_sum_m / opp.prf_fh_n >= 0.5
+            and own.clutch_matches >= 1
+            and own.clutch_goals_for > own.clutch_goals_against):
+        _p35_fh = opp.prf_fh_sum_m / opp.prf_fh_n
+        _p35_sh = opp.prf_sh_sum_m / opp.prf_sh_n
+        plan.append(
+            f"A védekezésük a 2. félidőre fellazul ({_p35_fh:.1f} → "
+            f"{_p35_sh:.1f} m), ti pedig jók vagytok a hajrában "
+            f"({own.clutch_goals_for}–{own.clutch_goals_against} a "
+            "meccsek végén) — a friss átlövőt a második félidő közepére "
+            "időzítsd: az ő fáradó faluk + a ti hajrátok döntheti el a "
+            "meccset.")
+
     return plan
 
 
@@ -3277,6 +3329,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         shtim_n=sum(r.shtim_n for r in reports),
         shtim_sum_s=round(sum(r.shtim_sum_s for r in reports), 1),
         shtim_early=sum(r.shtim_early for r in reports),
+        prf_fh_sum_m=round(sum(r.prf_fh_sum_m for r in reports), 1),
+        prf_fh_n=sum(r.prf_fh_n for r in reports),
+        prf_sh_sum_m=round(sum(r.prf_sh_sum_m for r in reports), 1),
+        prf_sh_n=sum(r.prf_sh_n for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

@@ -1276,4 +1276,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 56) Védekezés-fellazulás: ha a falunk a 2. félidőre érdemben lazul
+    # (0,5 m+), a védekezés-állóképességet és a hajrá-fegyelmet kell
+    # építeni — a meccs végi szabad lövők ebből születnek.
+    try:
+        from .defense import (PRESSURE_FADE_LOOSEN_M,
+                              PRESSURE_FADE_MIN_FRAMES, pressure_fade)
+        pf56 = pressure_fade(match, config)
+        for side in ("home", "away"):
+            rec56 = pf56[side]
+            if rec56["loosen_m"] is None \
+                    or rec56["fh_frames"] < PRESSURE_FADE_MIN_FRAMES \
+                    or rec56["loosen_m"] < PRESSURE_FADE_LOOSEN_M:
+                continue
+            add(side, "védekezés", "Védekezés-állóképesség",
+                f"a falunk a 2. félidőre fellazul (átlag "
+                f"{rec56['fh_m']:.1f} → {rec56['sh_m']:.1f} m a labdástól) "
+                "— a hajrában szabad lövőket hagyunk",
+                "védekezés-állóképesség: hosszú (3-4 perces) folyamatos "
+                "védekezés-szakaszok fáradtan (kör-edzés után), kilépés-"
+                "visszazárás sorozatban, és a hajrá-fegyelem rögzítése — "
+                "az utolsó 10 percben plusz kommunikáció, korábbi "
+                "védő-csere")
+    except Exception:
+        pass
+
     return out

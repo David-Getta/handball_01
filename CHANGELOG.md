@@ -25,6 +25,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
+- **Védekezés-fellazulás (fal-fáradás)**: a védekezési nyomás 1. vs
+  2. félidei átlagának összevetése — 0,5 m+ lazulás a hajrában
+  szabad lövőket jelent, a szorosodó fal kemény hajrát. A
+  lövőerő-esés védekezés-oldali párja. Egy réteg, sok felület:
+  `pressure_fade` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 35. meccsterv-
+  szabály (az ő fellazuló faluk × a ti hajrá-erőtök), 56. edzés-
+  szabály (védekezés-állóképesség).
 - **Lövés-időzítés (első hullám vs kivárás)**: MIKOR lőnek a
   támadáson belül — az első hullámból élő csapat (45%+ lövés az első
   8 mp-ben) ellen a visszarendeződés, a kivárók (22+ mp átlag) ellen

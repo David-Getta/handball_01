@@ -2539,6 +2539,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import pressure_fade
+            res["pressure_fade"] = pressure_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -2965,6 +2970,8 @@ def create_app():
                 _layer("pass_length", lambda: pass_length(match))
                 from ..pipeline.attack_types import shot_timing
                 _layer("shot_timing", lambda: shot_timing(match))
+                from ..pipeline.defense import pressure_fade
+                _layer("pressure_fade", lambda: pressure_fade(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
