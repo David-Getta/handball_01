@@ -669,3 +669,53 @@ def gk_save_ranges(match, config=None) -> dict:
         weak = min(cand, key=lambda b: bands[b]["save_pct"]) if cand else None
         out[side] = {**bands, "on_target": on_target, "weak_band": weak}
     return out
+
+
+# Kapus-forma félidőnként: félidőnként ennyi kapura tartó lövés kell, és
+# ekkora (százalékpontos) védés-esés számít fáradás-/forma-jelnek.
+GK_FADE_MIN_ON_TARGET = 4
+GK_FADE_DROP_PP = 15.0
+
+
+def gk_save_fade(match: Match, config=None) -> dict:
+    """Kapus-forma félidőnként: a védés-hatékonyság változása az 1. és a
+    2. félidő között — a fáradás-kép kapus-oldali tagja.
+
+    A kapus-teljesítményt (goalkeeper_stats) a felismert félidő mentén
+    kettévágott fél-meccseken számoljuk. Ha a 2. félidei védés% érdemben
+    (GK_FADE_DROP_PP százalékponttal) alacsonyabb, a kapus a hajrára esik
+    — akkor kell bátran lőni rá; ha nő, a meccs végére lendül formába.
+
+    Visszatérés csapatonként (a védekező csapat kapusáé):
+      {"fh_faced", "fh_saves", "sh_faced", "sh_saves", "drop_pp"} — a
+    félidőnkénti kapura tartó lövések és védések; drop_pp a védés%
+    esése (pozitív = romlik), None, ha nincs félidő-jel vagy kevés a
+    minta (félidőnként GK_FADE_MIN_ON_TARGET kapura tartó lövés).
+    """
+    from ..models.tracking import Match as _M
+    from .halftime import detect_halftime
+
+    empty = {"fh_faced": 0, "fh_saves": 0, "sh_faced": 0, "sh_saves": 0,
+             "drop_pp": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    fh = goalkeeper_stats(
+        _M(match.meta, [f for f in match.frames if f.t <= ht]), config)
+    sh = goalkeeper_stats(
+        _M(match.meta, [f for f in match.frames if f.t > ht]), config)
+    for s in ("home", "away"):
+        rec = out[s]
+        f_rec = fh.get(s) or {}
+        s_rec = sh.get(s) or {}
+        rec["fh_faced"] = int(f_rec.get("on_target", 0))
+        rec["fh_saves"] = int(f_rec.get("saves", 0))
+        rec["sh_faced"] = int(s_rec.get("on_target", 0))
+        rec["sh_saves"] = int(s_rec.get("saves", 0))
+        if rec["fh_faced"] >= GK_FADE_MIN_ON_TARGET \
+                and rec["sh_faced"] >= GK_FADE_MIN_ON_TARGET:
+            fh_pct = 100.0 * rec["fh_saves"] / rec["fh_faced"]
+            sh_pct = 100.0 * rec["sh_saves"] / rec["sh_faced"]
+            rec["drop_pp"] = round(fh_pct - sh_pct, 1)
+    return out

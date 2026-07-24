@@ -1343,4 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 59) Kapus-forma félidőnként: ha a kapusunk a 2. félidőre érdemben
+    # esik (15+ százalékpont), a kapus-terhelést és a csere-időzítést kell
+    # átgondolni.
+    try:
+        from .goalkeeper import GK_FADE_DROP_PP, gk_save_fade
+        gf59 = gk_save_fade(match, config)
+        for side in ("home", "away"):
+            rec59 = gf59[side]
+            if rec59["drop_pp"] is None \
+                    or rec59["drop_pp"] < GK_FADE_DROP_PP:
+                continue
+            _f59 = 100.0 * rec59["fh_saves"] / rec59["fh_faced"]
+            _s59 = 100.0 * rec59["sh_saves"] / rec59["sh_faced"]
+            add(side, "védekezés", "Kapus-terhelés",
+                f"a kapusunk védés-hatékonysága a 2. félidőre esik "
+                f"({_f59:.0f}% → {_s59:.0f}%) — a hajrára elfogy",
+                "kapus-terhelés kezelése: tervezett kapuscsere a 2. félidő "
+                "elején/közepén (a friss szem is előny), a kapus-bemelegítő "
+                "rutin megismétlése a szünetben, és lövő-sorozatos "
+                "reakció-gyakorlat fáradt állapotban az edzés végén")
+    except Exception:
+        pass
+
     return out

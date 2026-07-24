@@ -353,6 +353,12 @@ class ScoutingReport:
     tof_fh_poss_s: float = 0.0
     tof_sh_to: int = 0
     tof_sh_poss_s: float = 0.0
+    # Kapus-forma félidőnként: félidőnkénti kapura tartó lövések + védések
+    # — meccsek közt pontosan összegződik (védés% félidőnként visszaszámolható).
+    gsf_fh_faced: int = 0
+    gsf_fh_saves: int = 0
+    gsf_sh_faced: int = 0
+    gsf_sh_saves: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1112,6 +1118,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Kapus-forma félidőnként: ha a kapusuk a 2. félidőre esik, a hajrában
+    # kell bátran lőni rá; ha akkor lendül formába, az elején kell büntetni.
+    if rep.gsf_fh_faced >= 4 and rep.gsf_sh_faced >= 4:
+        _gsf_fh = 100.0 * rep.gsf_fh_saves / rep.gsf_fh_faced
+        _gsf_sh = 100.0 * rep.gsf_sh_saves / rep.gsf_sh_faced
+        if _gsf_fh - _gsf_sh >= 15.0:
+            keys.append(
+                f"A kapusuk a 2. félidőre esik ({_gsf_fh:.0f}% → "
+                f"{_gsf_sh:.0f}% védés) — a hajrában lőjetek rá bátran, "
+                "ott már nem tartja a korai formáját.")
+        elif _gsf_sh - _gsf_fh >= 15.0:
+            keys.append(
+                f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
+                f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
+                "már csak a kidolgozott ziccer megy be neki.")
 
     # Labdabiztonság-esés: ha a 2. félidőre nő az eladás-ütemük, a hajrában
     # kell rájuk presselni — ott törékeny a kezük.
@@ -2085,6 +2107,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.tof_fh_poss_s = tofrec["fh_poss_s"]
             rep.tof_sh_to = tofrec["sh_to"]
             rep.tof_sh_poss_s = tofrec["sh_poss_s"]
+        from .goalkeeper import gk_save_fade
+        gsfrec = gk_save_fade(match, config)[team.value]
+        if gsfrec["drop_pp"] is not None:
+            rep.gsf_fh_faced = gsfrec["fh_faced"]
+            rep.gsf_fh_saves = gsfrec["fh_saves"]
+            rep.gsf_sh_faced = gsfrec["sh_faced"]
+            rep.gsf_sh_saves = gsfrec["sh_saves"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -3201,6 +3230,21 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 38) Az ő 2. félidőre eső kapusuk × a ti hajrá-erőtök: a meccs végén
+    # a lövéseitek dupla eséllyel mennek be.
+    if (opp.gsf_fh_faced >= 4 and opp.gsf_sh_faced >= 4
+            and own.clutch_matches >= 1
+            and own.clutch_goals_for > own.clutch_goals_against):
+        _g38_fh = 100.0 * opp.gsf_fh_saves / opp.gsf_fh_faced
+        _g38_sh = 100.0 * opp.gsf_sh_saves / opp.gsf_sh_faced
+        if _g38_fh - _g38_sh >= 15.0:
+            plan.append(
+                f"A kapusuk a 2. félidőre esik ({_g38_fh:.0f}% → "
+                f"{_g38_sh:.0f}% védés), ti pedig jók vagytok a hajrában "
+                f"({own.clutch_goals_for}–{own.clutch_goals_against}) — a "
+                "meccs végén vállaljátok bátran a lövést: ott a kapusuk "
+                "már nem ment meg mindent.")
+
     # 37) Az ő 2. félidei eladás-dömpingjük × a ti szerzés-gólgépetek: a
     # présnyomást a meccs második felére kell időzíteni.
     if (opp.tof_fh_poss_s >= 120.0 and opp.tof_sh_poss_s >= 120.0
@@ -3415,6 +3459,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tof_fh_poss_s=round(sum(r.tof_fh_poss_s for r in reports), 1),
         tof_sh_to=sum(r.tof_sh_to for r in reports),
         tof_sh_poss_s=round(sum(r.tof_sh_poss_s for r in reports), 1),
+        gsf_fh_faced=sum(r.gsf_fh_faced for r in reports),
+        gsf_fh_saves=sum(r.gsf_fh_saves for r in reports),
+        gsf_sh_faced=sum(r.gsf_sh_faced for r in reports),
+        gsf_sh_saves=sum(r.gsf_sh_saves for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

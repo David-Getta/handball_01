@@ -924,6 +924,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapus-forma félidőnként: a védés% változása a 2. félidőre
+  // (félidőnként 4+ kapura tartó lövésnél; a backend-kulccsal azonos
+  // küszöb) — csak a kirívó (esik / formába lendül) érdekes.
+  String? _gkSaveFade(Map<String, dynamic> r) {
+    final fhFaced = ((r["gsf_fh_faced"] as num?) ?? 0).toInt();
+    final shFaced = ((r["gsf_sh_faced"] as num?) ?? 0).toInt();
+    if (fhFaced < 4 || shFaced < 4) return null;
+    final fh = 100.0 * ((r["gsf_fh_saves"] as num?) ?? 0).toInt() / fhFaced;
+    final sh = 100.0 * ((r["gsf_sh_saves"] as num?) ?? 0).toInt() / shFaced;
+    if (fh - sh >= 15.0) {
+      return "${fh.round()}% → ${sh.round()}% védés · a 2. félidőre esik";
+    }
+    if (sh - fh >= 15.0) {
+      return "${fh.round()}% → ${sh.round()}% védés · formába lendül";
+    }
+    return null;
+  }
+
   // Labdabiztonság-esés: az eladás-ütem változása a 2. félidőre
   // (félidőnként 2+ perc mért birtoklásnál; a backend-kulccsal azonos
   // küszöb) — csak a kirívó romlás érdekes.
@@ -1475,6 +1493,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés-mérleg", _timeoutRecord(r)!],
       if (_turnoverFade(r) != null)
         ["Labdabiztonság-esés", _turnoverFade(r)!],
+      if (_gkSaveFade(r) != null) ["Kapus-forma", _gkSaveFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

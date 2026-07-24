@@ -551,3 +551,59 @@ def test_gk_save_ranges_by_distance():
     assert away["close"]["faced"] == 0 and away["close"]["save_pct"] is None
     # A hazai kapusát nem érte lövés (a hazai támadott).
     assert gk_save_ranges(m)["home"]["on_target"] == 0
+
+
+def test_gk_save_fade_drop_second_half():
+    """Az 1. félidőben 4/4 védés, a 2.-ban 0/4 → a védés% 100 ponttal
+    esik; félidő-jel nélkül nincs ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_save_fade
+
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def shots(n, save):
+        nonlocal t
+        for _ in range(n):
+            frames.extend(_shot_sequence(t, gk_track=9, save=save))
+            t = frames[-1].t + 1
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def active(seconds):
+        # Aktív játék 12 mért játékossal — a félidő-érzékelő ezt nem
+        # látja szünetnek.
+        nonlocal t
+        for i in range(int(seconds * fps)):
+            players = [PlayerPosition(track_id=100 + k, team=Team.HOME,
+                                      x=12.0 + k, y=4.0 + k,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0) for k in range(6)]
+            players += [PlayerPosition(track_id=200 + k, team=Team.AWAY,
+                                       x=26.0 + k, y=4.0 + k,
+                                       source=PositionSource.MEASURED,
+                                       confidence=1.0) for k in range(6)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    active(40)
+    shots(4, save=True)      # 1. félidő: 4 védés
+    active(40)
+    for _ in range(int(90 * fps)):  # szünet
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    active(40)
+    shots(4, save=False)     # 2. félidő: 4 kapott gól
+    active(40)
+
+    fade = gk_save_fade(_match(frames))
+    a = fade["away"]
+    assert a["fh_faced"] == 4 and a["fh_saves"] == 4
+    assert a["sh_faced"] == 4 and a["sh_saves"] == 0
+    assert a["drop_pp"] is not None and a["drop_pp"] >= 15.0
+    # Félidő nélkül nincs ítélet.
+    short = gk_save_fade(_match(frames[:2000]))
+    assert short["away"]["drop_pp"] is None
