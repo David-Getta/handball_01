@@ -27,7 +27,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 _(Még nincs bejegyzés — a v0.1.21 kiadás után indul.)_
 
-## v0.1.21 — kiadva (2026-07-24, PR #543–#559)
+## v0.1.21 — kiadva (2026-07-24, PR #543–#560)
 
 > Kiadás-jegyzet: a legfontosabb a macOS-javítás — a feldolgozás többé
 > nem szállhat el csendben ~2%-nál ("Connection refused"): a motor
@@ -39,6 +39,10 @@ _(Még nincs bejegyzés — a v0.1.21 kiadás után indul.)_
 
 ### A v0.1.21 körei
 
+- **Felderítő narratíva stílus-jegyekkel**: az "Így támadnak"
+  bevezető az új rétegekből is mesél — pörgetett/álló labdajáratás,
+  hosszú-passzos (elfogható) játék, elöl nyomó vs hátul ragadó
+  birtoklás.
 - **Passz-hossz profil**: rövid kombinációs vagy hosszú, direkt
   passzjáték — a sok hosszú passz (15+ passzból 30%+ 10 m fölötti)
   elfogható és kontra-forrás, a rövid kombináció présálló. Egy
