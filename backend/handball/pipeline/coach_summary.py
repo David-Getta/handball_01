@@ -602,6 +602,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Kapus-forma félidőnként: esik vagy formába lendül a 2. félidőre.
+    try:
+        from .goalkeeper import GK_FADE_DROP_PP, gk_save_fade
+        gfc = gk_save_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gf = gfc[side]
+            if rec_gf["drop_pp"] is None:
+                continue
+            _gf_fh = 100.0 * rec_gf["fh_saves"] / rec_gf["fh_faced"]
+            _gf_sh = 100.0 * rec_gf["sh_saves"] / rec_gf["sh_faced"]
+            if rec_gf["drop_pp"] >= GK_FADE_DROP_PP:
+                body += (f" A(z) {name} kapusa a 2. félidőre esett "
+                         f"({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
+            elif rec_gf["drop_pp"] <= -GK_FADE_DROP_PP:
+                body += (f" A(z) {name} kapusa a 2. félidőre lendült "
+                         f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
+    except Exception:
+        pass
     # Labdabiztonság-esés: az eladás-ütem változása a 2. félidőre.
     try:
         from .defense import TURNOVER_FADE_RISE_PER_MIN, turnover_fade

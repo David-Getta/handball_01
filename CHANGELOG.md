@@ -25,6 +25,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
+- **Kapus-forma félidőnként**: a védés-hatékonyság 1. vs 2. félidei
+  összevetése — 15+ százalékpontos esés a hajrában verhető kapust
+  jelent, a formába lendülő kapust az elején kell büntetni. A
+  fáradás-kép negyedik (kapus-oldali) tagja. Egy réteg, sok
+  felület: `gk_save_fade` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 38. meccsterv-
+  szabály (az ő eső kapusuk × a ti hajrá-erőtök), 59. edzés-
+  szabály (kapus-terhelés, tervezett kapuscsere).
 - **Hibajavítás — a beragadt feldolgozás magától kilép és ment**:
   az elakadás-őrszem mellé motor-oldali védő került — ha a
   videó-olvasó/detektáló 3 percig nem ad új kockát, a feldolgozás
