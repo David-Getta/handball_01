@@ -25,6 +25,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
+- **Hibajavítás — beragadó feldolgozás (elakadás-őrszem + OpenCV
+  szál-korlát)**: a feldolgozás egyes videóknál egy fix kockánál
+  csendben megállhatott (a kijelzés örökké a friss becslést
+  mutatta). Mostantól (1) a job-státusz szívverést követ, és 2 perc
+  előrelépés nélkül a kliens FIGYELEM-üzenetet kap (a Megszakítás
+  menti az addig kész részt); (2) az OpenCV egy szálra fogva fut a
+  detektálás alatt — a PyTorch OpenMP-jével való ritka natív
+  ütközés (beragadás-gyanús ok) kizárva.
 - **Labdabiztonság-esés (fáradó kéz)**: az eladás-ütem 1. vs 2.
   félidei összevetése a birtoklás-időre vetítve — +0,2 eladás/perc
   romlás a hajrában törékeny labdabiztonságot jelez. A fáradás-kép
