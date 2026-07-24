@@ -1059,4 +1059,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 47) Támogatás-távolság: ha a labdásunk rendre magára marad (átlag 7 m+
+    # vagy 35%+ izolált kocka), a présjáték szétszed minket — a labda
+    # melletti bemozgást kell gyakorolni.
+    try:
+        from .decisions import (SUPPORT_ISO_M, SUPPORT_MIN_FRAMES,
+                                support_distance)
+        sd47 = support_distance(match, config)
+        for side in ("home", "away"):
+            rec47 = sd47[side]
+            if rec47["avg_m"] is None or rec47["frames"] < SUPPORT_MIN_FRAMES:
+                continue
+            if rec47["avg_m"] < SUPPORT_ISO_M and rec47["iso_pct"] < 35.0:
+                continue
+            add(side, "támadás", "Támogató mozgás",
+                f"a labdás játékosunk magára marad (a legközelebbi társ "
+                f"átlag {rec47['avg_m']:.1f} m-re, az idő "
+                f"{rec47['iso_pct']:.0f}%-ában izolált) — présben nincs "
+                "passzopciónk",
+                "támogató bemozgás gyakorlás: a labda melletti két játékos "
+                "mindig passztávolságban (4-5 m), üres oldali beindulás a "
+                "labdás felé présnél; 3-2-1 létszámfölényes kijátszás "
+                "présnyomás alatt")
+    except Exception:
+        pass
+
     return out

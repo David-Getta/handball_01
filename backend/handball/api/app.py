@@ -2499,6 +2499,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import support_distance
+            res["support_distance"] = support_distance(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -2897,6 +2902,9 @@ def create_app():
                 from ..pipeline.event_detection import goal_concentration
                 _layer("goal_concentration",
                        lambda: goal_concentration(match))
+                from ..pipeline.decisions import support_distance
+                _layer("support_distance",
+                       lambda: support_distance(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

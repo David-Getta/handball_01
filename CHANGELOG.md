@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Támogatás-távolság (izoláció-jel)**: milyen messze van a labdás
+  játékostól a legközelebbi társa — magára hagyott labdás ellen a prés
+  működik (kényszerített egyéni megoldások), szoros támogatás ellen
+  kockázatos. Egy réteg, sok felület: `support_distance` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kulcs +
+  csempe), 26. meccsterv-szabály (az ő izolált labdásuk × a ti
+  labdaszerzésből élő támadásotok), 47. edzés-szabály (támogató mozgás).
 - **Gól-koncentráció (gólfüggés)**: egy emberre épül-e a csapat
   gólszerzése — a fő gólszerző részesedése a gólokból (40%+ = az ő
   kikapcsolása a meccs kulcsa; elosztott = csapat-védekezés kell). Egy

@@ -924,6 +924,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Támogatás-távolság: a labdás legközelebbi társának átlagtávolsága
+  // (100+ mért kockánál; a backend-kulcsokkal azonos küszöbök) — a kirívó
+  // (izolált labdás / szoros támogatás) érdekes.
+  String? _supportDistance(Map<String, dynamic> r) {
+    final n = ((r["sup_frames"] as num?) ?? 0).toInt();
+    if (n < 100) return null;
+    final sum = ((r["sup_sum_m"] as num?) ?? 0).toDouble();
+    if (sum <= 0) return null;
+    final iso = ((r["sup_iso"] as num?) ?? 0).toInt();
+    final avg = sum / n;
+    final isoPct = 100.0 * iso / n;
+    if (avg >= 7.0 || isoPct >= 35.0) {
+      return "átl. ${avg.toStringAsFixed(1)} m · ${isoPct.round()}% izolált "
+          "· présre érzékeny";
+    }
+    if (avg <= 4.0) {
+      return "átl. ${avg.toStringAsFixed(1)} m · szoros támogatás";
+    }
+    return null;
+  }
+
   // Gól-koncentráció: a fő gólszerző részesedése (5+ azonosított gólnál;
   // a backend-kulcsokkal azonos küszöbök) — a kirívó (egy emberre épülő
   // vagy nagyon elosztott) gólszerzés érdekes.
@@ -1284,6 +1305,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_goalSource(r) != null) ["Gól-forrás", _goalSource(r)!],
       if (_goalConcentration(r) != null)
         ["Gól-koncentráció", _goalConcentration(r)!],
+      if (_supportDistance(r) != null)
+        ["Támogatás-távolság", _supportDistance(r)!],
       if (_recovery(r) != null) ["Visszaérés", _recovery(r)!],
       if (_postGoals(r) != null) ["Gól-posztok", _postGoals(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],

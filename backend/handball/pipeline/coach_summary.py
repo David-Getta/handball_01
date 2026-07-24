@@ -588,6 +588,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Támogatás-távolság: magára marad-e a labdás (prés-sebezhetőség).
+    try:
+        from .decisions import SUPPORT_ISO_M, support_distance
+        sd = support_distance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sd = sd[side]
+            if rec_sd["avg_m"] is None:
+                continue
+            if rec_sd["avg_m"] >= SUPPORT_ISO_M or rec_sd["iso_pct"] >= 35.0:
+                body += (f" A(z) {name} labdás játékosa gyakran magára marad "
+                         f"(a legközelebbi társ átlag {rec_sd['avg_m']:.1f} "
+                         f"m-re) — a prés működhet ellene.")
+    except Exception:
+        pass
     # Gól-koncentráció: egy emberre épül-e a gólszerzés.
     try:
         from .event_detection import goal_concentration
