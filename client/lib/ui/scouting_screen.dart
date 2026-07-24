@@ -924,6 +924,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Passz-hossz: a hosszú (10 m+) passzok aránya és az átlaghossz (15+
+  // mért passznál; a backend-kulcsokkal azonos küszöbök).
+  String? _passLength(Map<String, dynamic> r) {
+    final n = ((r["plen_n"] as num?) ?? 0).toInt();
+    if (n < 15) return null;
+    final sum = ((r["plen_sum_m"] as num?) ?? 0).toDouble();
+    if (sum <= 0) return null;
+    final longN = ((r["plen_long"] as num?) ?? 0).toInt();
+    final avg = sum / n;
+    final longPct = 100.0 * longN / n;
+    if (longPct >= 30.0) {
+      return "${longPct.round()}% hosszú (átl. ${avg.toStringAsFixed(0)} m) "
+          "· elfogható";
+    }
+    if (avg <= 6.0) {
+      return "átl. ${avg.toStringAsFixed(0)} m · rövid kombináció";
+    }
+    return null;
+  }
+
   // Szerzés-magasság: az elöl (letámadásból) született szerzések aránya
   // (4+ szerzésnél; a backend-kulcsokkal azonos küszöbök).
   String? _stealHeight(Map<String, dynamic> r) {
@@ -1373,6 +1393,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_blockedRate(r) != null) ["Falba lövés", _blockedRate(r)!],
       if (_stealHeight(r) != null)
         ["Szerzés-magasság", _stealHeight(r)!],
+      if (_passLength(r) != null) ["Passz-hossz", _passLength(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

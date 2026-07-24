@@ -323,6 +323,12 @@ class ScoutingReport:
     # összegződik (elöl-arány = high / steals).
     steal_n: int = 0
     steal_high: int = 0
+    # Passz-hossz profil: mért passzok + hossz-összeg (m) + hosszú (10 m+)
+    # passzok — meccsek közt pontosan összegződik (átlag = összeg / darab,
+    # hosszú-arány = hosszú / darab).
+    plen_n: int = 0
+    plen_sum_m: float = 0.0
+    plen_long: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1082,6 +1088,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Passz-hossz: a hosszú-passzos, direkt játék elfogható; a rövid
+    # kombináció présálló, de lassú.
+    if rep.plen_n >= 15 and rep.plen_sum_m > 0:
+        _pl_long_pct = 100.0 * rep.plen_long / rep.plen_n
+        _pl_avg = rep.plen_sum_m / rep.plen_n
+        if _pl_long_pct >= 30.0:
+            keys.append(
+                f"Hosszú passzokkal játszanak (a passzaik {_pl_long_pct:.0f}%-a "
+                f"10 m fölötti, átlag {_pl_avg:.0f} m) — ülj rá a "
+                "passzsávokra: a hosszú labda elfogható, és belőle azonnali "
+                "kontra jön.")
+        elif _pl_avg <= 6.0:
+            keys.append(
+                f"Rövid, biztonsági passzokkal kombinálnak (átlag "
+                f"{_pl_avg:.0f} m) — a présre nehezen fognak hibázni: "
+                "türelmes, zárt fal és a beálló-kapcsolat elvágása kell.")
 
     # Szerzés-magasság: ha elöl (letámadásból) szereznek sokat, a
     # kihozatalunknak készen kell állnia; ha csak hátul, elöl nem zavarnak.
@@ -1943,6 +1966,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         strec = steal_height(match, config)[team.value]
         rep.steal_n = strec["steals"]
         rep.steal_high = strec["high_steals"]
+        from .event_detection import pass_length
+        plrec = pass_length(match, config)[team.value]
+        rep.plen_n = plrec["passes"]
+        if plrec["avg_m"] is not None:
+            rep.plen_sum_m = round(plrec["avg_m"] * plrec["passes"], 1)
+            rep.plen_long = plrec["long_passes"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -3005,6 +3034,18 @@ def matchup_plan(own: "ScoutingReport",
             "kihozatal ellenük külön terv: kapus játékban, rövid "
             "kijátszás létszámfölénnyel, hosszú szelep a szélsőnek.")
 
+    # 33) Az ő hosszú-passzos játékuk × a ti labdaszerzőitek: a passzsáv-
+    # ülés ellenük közvetlen kontra-forrás.
+    if (opp.plen_n >= 15 and opp.plen_sum_m > 0
+            and 100.0 * opp.plen_long / opp.plen_n >= 30.0
+            and own.trans_steals >= 4):
+        _pl33 = 100.0 * opp.plen_long / opp.plen_n
+        plan.append(
+            f"A passzaik {_pl33:.0f}%-a hosszú (10 m+), ti pedig éltek a "
+            f"labdaszerzésből ({own.trans_steals} szerzés) — a hosszú "
+            "passzsávokra ültetett védőitek elfogásai adják majd a "
+            "legolcsóbb góljaitokat.")
+
     return plan
 
 
@@ -3187,6 +3228,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         blk_attempts=sum(r.blk_attempts for r in reports),
         steal_n=sum(r.steal_n for r in reports),
         steal_high=sum(r.steal_high for r in reports),
+        plen_n=sum(r.plen_n for r in reports),
+        plen_sum_m=round(sum(r.plen_sum_m for r in reports), 1),
+        plen_long=sum(r.plen_long for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
