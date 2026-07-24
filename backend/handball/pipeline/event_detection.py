@@ -254,6 +254,53 @@ def event_counts(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return {"total": len(events), "by_type": by_type}
 
 
+# Gól-koncentráció: legalább ennyi azonosított lövőjű gól kell az ítélethez,
+# és ekkora részesedés számít "egy emberre épülő" gólszerzésnek.
+CONC_MIN_GOALS = 5
+CONC_TOP_SHARE_PCT = 40.0
+
+
+def goal_concentration(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Gól-koncentráció (gólfüggés): mennyire épül EGY emberre a csapat
+    gólszerzése.
+
+    A felismert gólok lövő szerinti eloszlásából számoljuk a fő gólszerző
+    részesedését. Ha a gólok nagy hányada (CONC_TOP_SHARE_PCT%) egy
+    játékostól jön, az ő kikapcsolása (szoros emberfogás, korai kilépés)
+    az egész támadójátékot megfojtja; ha a gólok elosztottak, csak a
+    csapatszintű védekezés működik ellenük.
+
+    Visszatérés csapatonként:
+      {"goals", "scorers": [{"player_id","goals"}] (gólszám szerint),
+       "top_share_pct", "concentrated"} — goals az azonosított lövőjű
+    gólok száma; top_share_pct a fő gólszerző részesedése (None, ha
+    goals < CONC_MIN_GOALS); concentrated True/False/None ítélet.
+    """
+    config = config or TacticsConfig()
+    tally: dict[str, dict[int, int]] = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        side = tally[e.team.value]
+        side[e.player_id] = side.get(e.player_id, 0) + 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        scorers = [{"player_id": p, "goals": n}
+                   for p, n in sorted(tally[s].items(), key=lambda kv: -kv[1])]
+        total = sum(r["goals"] for r in scorers)
+        if total >= CONC_MIN_GOALS and scorers:
+            share = round(100.0 * scorers[0]["goals"] / total, 1)
+            conc = share >= CONC_TOP_SHARE_PCT
+        else:
+            share = None
+            conc = None
+        out[s] = {"goals": total, "scorers": scorers,
+                  "top_share_pct": share, "concentrated": conc}
+    return out
+
+
 def assist_network(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """Gólpassz-hálózat: ki kinek készíti elő a gólokat.
 

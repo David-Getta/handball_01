@@ -924,6 +924,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Gól-koncentráció: a fő gólszerző részesedése (5+ azonosított gólnál;
+  // a backend-kulcsokkal azonos küszöbök) — a kirívó (egy emberre épülő
+  // vagy nagyon elosztott) gólszerzés érdekes.
+  String? _goalConcentration(Map<String, dynamic> r) {
+    final list = (r["scorer_goals"] as List?) ?? const [];
+    if (list.isEmpty) return null;
+    var total = 0;
+    for (final w in list) {
+      total += (((w as Map)["goals"] as num?) ?? 0).toInt();
+    }
+    if (total < 5) return null;
+    final top = list.first as Map<String, dynamic>;
+    final topGoals = ((top["goals"] as num?) ?? 0).toInt();
+    final share = 100.0 * topGoals / total;
+    if (share >= 40.0) {
+      return "${top["player_id"]}-es · ${share.round()}% "
+          "($topGoals/$total) · egy emberre épül";
+    }
+    if (share <= 25.0 && list.length >= 4) {
+      return "elosztott (top ${share.round()}%) · csapat-védekezés kell";
+    }
+    return null;
+  }
+
   // Labdaszerző: a legtöbb szerzést hozó játékos (3+ szerzés) — a
   // backend-kulcsokkal azonos küszöb.
   String? _ballWinner(Map<String, dynamic> r) {
@@ -1258,6 +1282,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_pace(r) != null) ["Tempó", _pace(r)!],
       if (_gkXg(r) != null) ["Kapus-xG", _gkXg(r)!],
       if (_goalSource(r) != null) ["Gól-forrás", _goalSource(r)!],
+      if (_goalConcentration(r) != null)
+        ["Gól-koncentráció", _goalConcentration(r)!],
       if (_recovery(r) != null) ["Visszaérés", _recovery(r)!],
       if (_postGoals(r) != null) ["Gól-posztok", _postGoals(r)!],
       if (_bigChances(r) != null) ["Ziccer-mérleg", _bigChances(r)!],

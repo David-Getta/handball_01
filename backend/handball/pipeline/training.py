@@ -1037,4 +1037,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 46) Gól-koncentráció: ha a góljaink zöme (5+ gólból 40%+) egy embertől
+    # jön, az ellenfél őt fogja kikapcsolni — másodlagos befejezőket kell
+    # építeni, hogy a csapat ne álljon le vele együtt.
+    try:
+        from .event_detection import goal_concentration
+        gc46 = goal_concentration(match, config)
+        for side in ("home", "away"):
+            rec46 = gc46[side]
+            if not rec46["concentrated"]:
+                continue
+            top46 = rec46["scorers"][0]
+            add(side, "támadás", "Gól-eloszlás",
+                f"a góljaink {rec46['top_share_pct']:.0f}%-át egy játékos "
+                f"(a {top46['player_id']}. jelű) szerzi — ha őt lefogják, "
+                "leáll a támadójátékunk",
+                "másodlagos befejezők építése: a fő lövő elzáróként/"
+                "előkészítőként is játsszon (2. hullám lövések), a szélsők "
+                "és a beálló kapjanak kidolgozott befejezés-helyzeteket; "
+                "gyakorlás emberfogás ellen, amikor a fő lövő ki van véve")
+    except Exception:
+        pass
+
     return out

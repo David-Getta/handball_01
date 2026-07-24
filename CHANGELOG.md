@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Gól-koncentráció (gólfüggés)**: egy emberre épül-e a csapat
+  gólszerzése — a fő gólszerző részesedése a gólokból (40%+ = az ő
+  kikapcsolása a meccs kulcsa; elosztott = csapat-védekezés kell). Egy
+  réteg, sok felület: `goal_concentration` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (kulcs + csempe),
+  25. meccsterv-szabály (az ő gólfüggésük × a ti tapadó emberfogótok),
+  46. edzés-szabály (másodlagos befejezők építése).
 - **Lövőerő-esés (fáradás-jel)**: a lövés-sebesség 1. vs 2. félidei
   átlagának összevetése — ha a hajrára érdemben (8%+) lassulnak a
   lövések, a csapat fárad; ha nőnek, mély a rotáció. Egy réteg, sok

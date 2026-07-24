@@ -588,6 +588,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Gól-koncentráció: egy emberre épül-e a gólszerzés.
+    try:
+        from .event_detection import goal_concentration
+        gc = goal_concentration(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gc = gc[side]
+            if not rec_gc["concentrated"]:
+                continue
+            top_gc = rec_gc["scorers"][0]
+            body += (f" A(z) {name} góljainak {rec_gc['top_share_pct']:.0f}%-a "
+                     f"egy játékostól (a {top_gc['player_id']}. jelűtől) jön "
+                     "— az ő kikapcsolása az egész támadójátékot megfojtja.")
+    except Exception:
+        pass
     # Második roham: mennyire harcolnak a lepattanóért (offenzív lepattanó).
     try:
         from .attack_types import SECOND_CHANCE_MIN, second_chance
