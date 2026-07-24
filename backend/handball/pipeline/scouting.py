@@ -347,6 +347,12 @@ class ScoutingReport:
     to_n: int = 0
     to_broke: int = 0
     to_failed: int = 0
+    # Labdabiztonság-esés: félidőnkénti eladások + mért birtoklás-idő (mp)
+    # — meccsek közt pontosan összegződik (ütem = 60·eladás/idő).
+    tof_fh_to: int = 0
+    tof_fh_poss_s: float = 0.0
+    tof_sh_to: int = 0
+    tof_sh_poss_s: float = 0.0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1106,6 +1112,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Labdabiztonság-esés: ha a 2. félidőre nő az eladás-ütemük, a hajrában
+    # kell rájuk presselni — ott törékeny a kezük.
+    if rep.tof_fh_poss_s >= 120.0 and rep.tof_sh_poss_s >= 120.0:
+        _tof_fh = 60.0 * rep.tof_fh_to / rep.tof_fh_poss_s
+        _tof_sh = 60.0 * rep.tof_sh_to / rep.tof_sh_poss_s
+        if _tof_sh - _tof_fh >= 0.2:
+            keys.append(
+                f"A 2. félidőre megnő az eladás-ütemük ({_tof_fh:.1f} → "
+                f"{_tof_sh:.1f} eladás/perc birtoklás) — a hajrában "
+                "törékeny a labdabiztonságuk: a présnyomást a meccs "
+                "második felére időzítsd.")
 
     # Időkérés-mérleg: működik-e a "mentő" időkérésük.
     if rep.to_broke + rep.to_failed >= 2:
@@ -2060,6 +2078,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.to_n = torec["timeouts"]
         rep.to_broke = torec["broke"]
         rep.to_failed = torec["failed"]
+        from .defense import turnover_fade
+        tofrec = turnover_fade(match, config)[team.value]
+        if tofrec["rise_per_min"] is not None:
+            rep.tof_fh_to = tofrec["fh_to"]
+            rep.tof_fh_poss_s = tofrec["fh_poss_s"]
+            rep.tof_sh_to = tofrec["sh_to"]
+            rep.tof_sh_poss_s = tofrec["sh_poss_s"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -3176,6 +3201,21 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 37) Az ő 2. félidei eladás-dömpingjük × a ti szerzés-gólgépetek: a
+    # présnyomást a meccs második felére kell időzíteni.
+    if (opp.tof_fh_poss_s >= 120.0 and opp.tof_sh_poss_s >= 120.0
+            and own.trans_steals >= 4 and own.trans_quick_goals >= 2):
+        _t37_fh = 60.0 * opp.tof_fh_to / opp.tof_fh_poss_s
+        _t37_sh = 60.0 * opp.tof_sh_to / opp.tof_sh_poss_s
+        if _t37_sh - _t37_fh >= 0.2:
+            plan.append(
+                f"A 2. félidőre megugrik az eladás-ütemük ({_t37_fh:.1f} → "
+                f"{_t37_sh:.1f} eladás/perc), ti pedig a szerzéseiteket "
+                f"gólra váltjátok ({own.trans_quick_goals}/"
+                f"{own.trans_steals}) — a présnyomást a második félidőre "
+                "időzítsd: ott dől be a labdabiztonságuk, és onnan jönnek "
+                "az olcsó gólok.")
+
     return plan
 
 
@@ -3371,6 +3411,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         to_n=sum(r.to_n for r in reports),
         to_broke=sum(r.to_broke for r in reports),
         to_failed=sum(r.to_failed for r in reports),
+        tof_fh_to=sum(r.tof_fh_to for r in reports),
+        tof_fh_poss_s=round(sum(r.tof_fh_poss_s for r in reports), 1),
+        tof_sh_to=sum(r.tof_sh_to for r in reports),
+        tof_sh_poss_s=round(sum(r.tof_sh_poss_s for r in reports), 1),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

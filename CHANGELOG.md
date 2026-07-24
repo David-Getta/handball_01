@@ -25,6 +25,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
+- **Labdabiztonság-esés (fáradó kéz)**: az eladás-ütem 1. vs 2.
+  félidei összevetése a birtoklás-időre vetítve — +0,2 eladás/perc
+  romlás a hajrában törékeny labdabiztonságot jelez. A fáradás-kép
+  harmadik pillére (lövőerő + fal-nyomás mellett). Egy réteg, sok
+  felület: `turnover_fade` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 37. meccsterv-
+  szabály (az ő 2. félidei eladás-dömpingjük × a ti szerzés-
+  gólgépetek), 58. edzés-szabály (labdabiztonság fáradtan).
 - **Időkérés-mérleg**: működik-e a "mentő" időkérésük — a
   sorozatot megtörő vs fordulat nélküli időkérések meccsek közt
   összegezve. Egy réteg, sok felület: `timeout_record` motor,

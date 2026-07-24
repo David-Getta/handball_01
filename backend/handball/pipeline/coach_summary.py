@@ -602,6 +602,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Labdabiztonság-esés: az eladás-ütem változása a 2. félidőre.
+    try:
+        from .defense import TURNOVER_FADE_RISE_PER_MIN, turnover_fade
+        tfc = turnover_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tf = tfc[side]
+            if rec_tf["rise_per_min"] is None:
+                continue
+            if rec_tf["rise_per_min"] >= TURNOVER_FADE_RISE_PER_MIN:
+                body += (f" A(z) {name} eladás-üteme a 2. félidőre megnőtt "
+                         f"({rec_tf['fh_per_min']:.1f} → "
+                         f"{rec_tf['sh_per_min']:.1f} eladás/perc) — "
+                         "fáradtan kiengedett a keze.")
+    except Exception:
+        pass
     # Védekezés-fellazulás: a fal szorossága a 2. félidőre.
     try:
         from .defense import PRESSURE_FADE_LOOSEN_M, pressure_fade
