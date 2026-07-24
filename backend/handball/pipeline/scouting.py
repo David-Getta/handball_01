@@ -313,6 +313,11 @@ class ScoutingReport:
     # meccsek közt pontosan összegződik (passz/perc = 60·passz/idő).
     pt_passes: int = 0
     pt_poss_s: float = 0.0
+    # Falba lövés (támadó-oldali blokk-arány): az ellenfél blokkjai ellenük
+    # + összes lövés-kísérlet — meccsek közt pontosan összegződik
+    # (arány = blk_for / blk_attempts).
+    blk_for: int = 0
+    blk_attempts: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1072,6 +1077,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A gólszerzésük elosztott (a fő lövőjük is csak "
                 f"{_sg_share:.0f}%) — nincs kit kikapcsolni: csapatszintű, "
                 "fegyelmezett fal kell ellenük, nem egy-egy párharc.")
+
+    # Falba lövés: ha a lövéseik nagy része blokkon akad el, rosszul
+    # előkészített lövésekkel élnek — a fegyelmezett blokk-fal megfogja őket.
+    if rep.blk_for >= 4 and rep.blk_attempts > 0:
+        _blk_pct = 100.0 * rep.blk_for / rep.blk_attempts
+        if _blk_pct >= 20.0:
+            weaknesses.append(
+                f"A lövés-kísérleteik {_blk_pct:.0f}%-a blokkon akad el "
+                f"({rep.blk_for}/{rep.blk_attempts}) — rosszul előkészített, "
+                "kényszerű lövésekbe hajszolhatók.")
+            keys.append(
+                "Álljatok bele a lövéseikbe: a fegyelmezett kétkezes blokk "
+                "ellenük kiemelt fegyver — a falba lőnek, ha nincs idejük "
+                "elzárással tisztát csinálni.")
 
     # Passz-tempó: pörgetett labdajáratás fárasztja a falat; lassú, álló
     # járatás mellett a védelem békében felállhat.
@@ -1895,6 +1914,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         ptrec = pass_tempo(match, config)[team.value]
         rep.pt_passes = ptrec["passes"]
         rep.pt_poss_s = ptrec["poss_s"]
+        from .defense import blocked_shot_rate
+        brrec = blocked_shot_rate(match, config)[team.value]
+        rep.blk_for = brrec["blocked"]
+        rep.blk_attempts = brrec["attempts"]
         from .goalkeeper import gk_positioning
         gp = gk_positioning(match, config)[team.value]
         if gp["avg_depth_m"] is not None:
@@ -2931,6 +2954,18 @@ def matchup_plan(own: "ScoutingReport",
             "üljetek rá a kiszámítható passzsávokra: az álló járatásból "
             "szerzett labda azonnali kontra.")
 
+    # 31) Az ő falba lövő támadásuk × a ti blokkoló falatok: a blokk
+    # ellenük nem mellékes — a fő fegyver.
+    if (opp.blk_for >= 4 and opp.blk_attempts > 0
+            and 100.0 * opp.blk_for / opp.blk_attempts >= 20.0
+            and own.blocks >= 3):
+        _b31 = 100.0 * opp.blk_for / opp.blk_attempts
+        plan.append(
+            f"A lövés-kísérleteik {_b31:.0f}%-a blokkon akad el, ti pedig "
+            f"amúgy is sokat blokkoltok ({own.blocks} blokk) — ez a "
+            "párosítás a falatoknak áll: minden átlövésbe beleállni, a "
+            "blokk után pedig azonnal indulni.")
+
     return plan
 
 
@@ -3109,6 +3144,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         defw_frames=sum(r.defw_frames for r in reports),
         pt_passes=sum(r.pt_passes for r in reports),
         pt_poss_s=round(sum(r.pt_poss_s for r in reports), 1),
+        blk_for=sum(r.blk_for for r in reports),
+        blk_attempts=sum(r.blk_attempts for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

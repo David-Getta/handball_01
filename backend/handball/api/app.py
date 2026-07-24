@@ -2519,6 +2519,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import blocked_shot_rate
+            res["blocked_shot_rate"] = blocked_shot_rate(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -2926,6 +2931,9 @@ def create_app():
                 _layer("defensive_width", lambda: defensive_width(match))
                 from ..pipeline.tactics import pass_tempo
                 _layer("pass_tempo", lambda: pass_tempo(match))
+                from ..pipeline.defense import blocked_shot_rate
+                _layer("blocked_shot_rate",
+                       lambda: blocked_shot_rate(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

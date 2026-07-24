@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Falba lövés (támadó-oldali blokk-arány)**: a lövés-kísérletek
+  mekkora hányada akad el az ellenfél blokkján (4+ blokkból 20%+ =
+  rosszul előkészített, kényszerű lövések). Egy réteg, sok felület:
+  `blocked_shot_rate` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (gyengeség + kulcs + csempe),
+  31. meccsterv-szabály (az ő falba lövő támadásuk × a ti blokkoló
+  falatok), 52. edzés-szabály (lövés-előkészítés).
 - **Passz-tempó (labdajáratás sebessége)**: hány passz jut a saját
   birtoklás egy percére — pörgetett (22+/perc: dolgoztatja a falat) vs
   álló járatás (12 alatt: a védelem békében felállhat). Egy réteg, sok

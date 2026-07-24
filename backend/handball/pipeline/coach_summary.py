@@ -602,6 +602,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_wf['goal_pct']:.0f}%).")
     except Exception:
         pass
+    # Falba lövés: a lövés-kísérletek blokkon elakadó hányada.
+    try:
+        from .defense import (BLOCKED_HIGH_PCT, BLOCKED_MIN,
+                              blocked_shot_rate)
+        brc = blocked_shot_rate(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_br = brc[side]
+            if rec_br["blocked"] < BLOCKED_MIN \
+                    or rec_br["blocked_pct"] is None:
+                continue
+            if rec_br["blocked_pct"] >= BLOCKED_HIGH_PCT:
+                body += (f" A(z) {name} lövés-kísérleteinek "
+                         f"{rec_br['blocked_pct']:.0f}%-a blokkon akadt el "
+                         f"({rec_br['blocked']}/{rec_br['attempts']}) — "
+                         "kényszerű, rosszul előkészített lövések.")
+    except Exception:
+        pass
     # Passz-tempó: pörgetett vagy álló labdajáratás.
     try:
         from .tactics import PT_FAST_PER_MIN, PT_SLOW_PER_MIN, pass_tempo

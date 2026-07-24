@@ -924,6 +924,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Falba lövés: a lövés-kísérletek blokkon elakadó hányada (4+ blokknál;
+  // a backend-kulcsokkal azonos küszöb) — csak a kirívó érdekes.
+  String? _blockedRate(Map<String, dynamic> r) {
+    final blocked = ((r["blk_for"] as num?) ?? 0).toInt();
+    final attempts = ((r["blk_attempts"] as num?) ?? 0).toInt();
+    if (blocked < 4 || attempts <= 0) return null;
+    final pct = 100.0 * blocked / attempts;
+    if (pct < 20.0) return null;
+    return "${pct.round()}% blokkon akad el ($blocked/$attempts) · "
+        "falba lőnek";
+  }
+
   // Passz-tempó: passz/perc a saját birtoklásra vetítve (2+ perc mért
   // birtoklásnál; a backend-kulcsokkal azonos küszöbök) — a kirívó
   // (pörgetett / álló járatás) érdekes.
@@ -1342,6 +1354,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_breakLane(r) != null) ["Betörés-sáv", _breakLane(r)!],
       if (_passChain(r) != null) ["Passz-lánc", _passChain(r)!],
       if (_passTempo(r) != null) ["Passz-tempó", _passTempo(r)!],
+      if (_blockedRate(r) != null) ["Falba lövés", _blockedRate(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

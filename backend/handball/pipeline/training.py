@@ -1177,4 +1177,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 52) Falba lövés: ha a lövéseink nagy része (4+ blokkból 20%+) az
+    # ellenfél blokkján akad el, a lövés-előkészítést kell gyakorolni.
+    try:
+        from .defense import (BLOCKED_HIGH_PCT, BLOCKED_MIN,
+                              blocked_shot_rate)
+        br52 = blocked_shot_rate(match, config)
+        for side in ("home", "away"):
+            rec52 = br52[side]
+            if rec52["blocked"] < BLOCKED_MIN \
+                    or rec52["blocked_pct"] is None \
+                    or rec52["blocked_pct"] < BLOCKED_HIGH_PCT:
+                continue
+            add(side, "támadás", "Lövés-előkészítés",
+                f"a lövés-kísérleteink {rec52['blocked_pct']:.0f}%-a "
+                f"blokkon akad el ({rec52['blocked']}/"
+                f"{rec52['attempts']}) — a falba lövünk",
+                "lövés-előkészítés: elzárás a lövő elé (a blokkolót "
+                "kivenni), lövőcsel után elmozdulás egy fél lépéssel, "
+                "átemelés/bevetődés mint alternatíva; átlövés CSAK "
+                "tiszta helyzetből — falba lövésért büntető-kör")
+    except Exception:
+        pass
+
     return out

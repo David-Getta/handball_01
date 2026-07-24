@@ -354,6 +354,50 @@ def detect_blocks(match, config=None) -> dict:
     return out
 
 
+# Falba lövés: ennyi blokkolt lövés kell az ítélethez, és ekkora arány
+# számít "falba lövő" (rosszul előkészített lövésű) támadójátéknak.
+BLOCKED_MIN = 4
+BLOCKED_HIGH_PCT = 20.0
+
+
+def blocked_shot_rate(match, config=None) -> dict:
+    """Falba lövés (támadó-oldali blokk-arány): a csapat lövés-kísérleteinek
+    mekkora hányada akad el az ellenfél mezőnyvédőjén.
+
+    A blokk a VÉDŐ oldalán erény (detect_blocks) — ugyanez a támadó oldalán
+    tünet: a sok blokkolt lövés rosszul előkészített, kényszerű lövéseket
+    jelez (nincs elzárás, nincs lövőcsel, rossz szögből lőnek a falba).
+
+    Visszatérés csapatonként (a TÁMADÓ csapaté):
+      {"blocked", "shots", "attempts", "blocked_pct"} — blocked az ellenfél
+    blokkjai ellenük, shots a kapu felé elmenő (felismert) lövéseik,
+    attempts a kettő összege; blocked_pct None, ha blocked < BLOCKED_MIN.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    blocks = detect_blocks(match, config)
+    shots = {"home": 0, "away": 0}
+    for e in detect_shots(match, config):
+        if e.type in (EventType.SHOT, EventType.GOAL):
+            shots[e.team.value] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        other = "away" if s == "home" else "home"
+        blocked = blocks[other]["blocks"]  # az ellenfél blokkjai = ellenünk
+        attempts = shots[s] + blocked
+        out[s] = {
+            "blocked": blocked,
+            "shots": shots[s],
+            "attempts": attempts,
+            "blocked_pct": (round(100.0 * blocked / attempts, 1)
+                            if blocked >= BLOCKED_MIN and attempts > 0
+                            else None),
+        }
+    return out
+
+
 def defensive_pressure(match, config=None) -> dict:
     """Védekezési nyomás: mennyire szorosan védekezik egy csapat.
 
