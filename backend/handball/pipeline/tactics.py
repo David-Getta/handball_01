@@ -540,3 +540,54 @@ def field_tilt(match: Match, config: Optional[TacticsConfig] = None) -> dict:
                          if n >= TILT_MIN_FRAMES else None),
         }
     return out
+
+
+# Passz-tempó: legalább ennyi mért birtoklás-idő kell az ítélethez; a
+# percenkénti passzszám e fölött pörgetett, ez alatt lassú labdajáratás.
+PT_MIN_POSS_S = 120.0
+PT_FAST_PER_MIN = 22.0
+PT_SLOW_PER_MIN = 12.0
+
+
+def pass_tempo(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-tempó (labdajáratás sebessége): hány passz jut a SAJÁT
+    birtoklás egy percére.
+
+    Nem a meccs-tempót (támadás/perc) és nem a támadás-hosszt méri, hanem
+    hogy a csapat a labdát MOZGATJA-e: a pörgetett labdajáratás (magas
+    passz/perc) széthúzza és megmozgatja a falat, a lassú, álló járatás
+    kiszámíthatóvá teszi a támadást — a védelem békében felállhat.
+
+    Visszatérés csapatonként:
+      {"passes", "poss_s", "per_min", "label"} — a felismert passzok
+    száma, a mért birtoklás-idő (mp), a percenkénti passzszám és a címke
+    ("pörgetett" / "lassú" / "közepes"); per_min/label None, ha a mért
+    birtoklás-idő kevesebb, mint PT_MIN_POSS_S.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    poss_frames = {"home": 0, "away": 0}
+    for f in match.frames:
+        team = possession_team(f, config)
+        if team is not None:
+            poss_frames[team.value] += 1
+    passes = {"home": 0, "away": 0}
+    for e in detect_events(match, config):
+        if e.type == EventType.PASS:
+            passes[e.team.value] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        poss_s = poss_frames[s] / fps
+        rec = {"passes": passes[s], "poss_s": round(poss_s, 1),
+               "per_min": None, "label": None}
+        if poss_s >= PT_MIN_POSS_S:
+            per_min = 60.0 * passes[s] / poss_s
+            rec["per_min"] = round(per_min, 1)
+            rec["label"] = ("pörgetett" if per_min >= PT_FAST_PER_MIN
+                            else "lassú" if per_min <= PT_SLOW_PER_MIN
+                            else "közepes")
+        out[s] = rec
+    return out

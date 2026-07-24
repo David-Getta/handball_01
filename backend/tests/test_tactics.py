@@ -293,3 +293,35 @@ def test_field_tilt_opponent_half_share():
     assert h["frames"] == 120 and h["opp_half_frames"] == 90
     assert h["tilt_pct"] == 75.0
     assert ft["away"]["frames"] == 0 and ft["away"]["tilt_pct"] is None
+
+
+def test_pass_tempo_counts_passes_per_possession_minute():
+    """3 perc hazai birtoklás alatt 70 passz → ~23/perc, "pörgetett";
+    rövid mérésnél (2 perc alatt) nincs ítélet."""
+    from handball.pipeline.tactics import pass_tempo
+
+    frames = []
+    t = 0
+    # 70 passz-kör: a labda 1-es ↔ 2-es közt vált (mindkettő HAZAI), a
+    # köztes kockák kitöltik a ~2 perc birtoklást (3150 kocka 25 fps-en).
+    for k in range(70):
+        holder, other = (1, 2) if k % 2 == 0 else (2, 1)
+        pos = {1: (22.0, 8.0), 2: (28.0, 12.0)}
+        for _ in range(45):  # ~1,8 mp birtoklás passzonként
+            hx, hy = pos[holder]
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, *pos[1]), _pl(2, Team.HOME, *pos[2])],
+                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+    m = Match(_meta(), frames)
+    pt = pass_tempo(m)
+    h = pt["home"]
+    assert h["poss_s"] >= 120.0
+    assert h["passes"] >= 60
+    assert h["per_min"] is not None and h["per_min"] >= 22.0
+    assert h["label"] == "pörgetett"
+    # A vendégnek nincs birtoklása → nincs ítélet.
+    assert pt["away"]["per_min"] is None
+
+    short = Match(_meta(), frames[:1000])  # 40 mp — kevés a méréshez
+    assert pass_tempo(short)["home"]["per_min"] is None

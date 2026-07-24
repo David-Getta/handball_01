@@ -25,6 +25,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan — a következő kiadás felé (a v0.1.20 óta)
 
+- **Passz-tempó (labdajáratás sebessége)**: hány passz jut a saját
+  birtoklás egy percére — pörgetett (22+/perc: dolgoztatja a falat) vs
+  álló járatás (12 alatt: a védelem békében felállhat). Egy réteg, sok
+  felület: `pass_tempo` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 30. meccsterv-
+  szabály (az ő álló járatásuk × a ti labdaszerzésetek), 51. edzés-
+  szabály (tempó-gyakorlás).
 - **Engedett lövésminőség (xG/lövés a védekezésben)**: milyen értékű
   lövéseket enged a fal — ziccert engedő (0,38+ xG/lövés) vs kiszorító
   (0,22 alatt) védekezés. A meglévő xg_against most meccsek közt is
