@@ -695,3 +695,39 @@ def test_assist_sources_classifies_by_zone():
     assert asr["szél"] == 1 and asr["közép"] == 0 and asr["hátsó"] == 0
     # A vendégnek nincs gólpassza.
     assert assist_sources(m)["away"]["assists"] == 0
+
+
+def test_shot_timing_early_vs_waiting():
+    """5 lőtt támadás: 3 korai (a támadás ~5. mp-ében lő) és 2 kivárt
+    (~20 mp után) → 60% korai arány; kevés lövésnél nincs ítélet."""
+    from handball.pipeline.attack_types import shot_timing
+
+    frames = []
+
+    def attack_then_shot(seconds):
+        # HAZAI támadás `seconds` hosszan a kapu előteréig, majd lövés (gól).
+        t0 = len(frames)
+        frames.extend(_attack_frames(t0, seconds, 22.0, 33.0))
+        t = len(frames)
+        for i in range(8):
+            bx = min(33.0 + 1.5 * (i + 1), 40.0)
+            frames.append(Frame(t=t + i,
+                                players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+        t = len(frames)
+        for i in range(60):  # szünet: se labda, se játékos (szakasz-határ)
+            frames.append(Frame(t=t + i, players=[], ball=None))
+
+    for _ in range(3):
+        attack_then_shot(5.0)    # korai lövés (~5 mp)
+    for _ in range(2):
+        attack_then_shot(20.0)   # kivárt lövés (~20 mp)
+
+    st = shot_timing(Match(_meta(), frames))
+    h = st["home"]
+    assert h["shots"] == 5
+    assert h["early"] == 3
+    assert h["early_pct"] == 60.0
+    assert h["avg_s"] is not None and 8.0 < h["avg_s"] < 20.0
+    # A vendég nem lőtt → nincs ítélet.
+    assert st["away"]["early_pct"] is None

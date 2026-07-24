@@ -924,6 +924,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Lövés-időzítés: az első hullámból lövők vs kivárók (5+ lőtt
+  // támadásnál; a backend-kulcsokkal azonos küszöbök).
+  String? _shotTiming(Map<String, dynamic> r) {
+    final n = ((r["shtim_n"] as num?) ?? 0).toInt();
+    if (n < 5) return null;
+    final sum = ((r["shtim_sum_s"] as num?) ?? 0).toDouble();
+    if (sum <= 0) return null;
+    final early = ((r["shtim_early"] as num?) ?? 0).toInt();
+    final earlyPct = 100.0 * early / n;
+    final avg = sum / n;
+    if (earlyPct >= 45.0) {
+      return "${earlyPct.round()}% az első 8 mp-ben · első hullám";
+    }
+    if (avg >= 22.0) {
+      return "átl. ${avg.toStringAsFixed(0)} mp a lövésig · kivárók";
+    }
+    return null;
+  }
+
   // Passz-hossz: a hosszú (10 m+) passzok aránya és az átlaghossz (15+
   // mért passznál; a backend-kulcsokkal azonos küszöbök).
   String? _passLength(Map<String, dynamic> r) {
@@ -1394,6 +1413,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_stealHeight(r) != null)
         ["Szerzés-magasság", _stealHeight(r)!],
       if (_passLength(r) != null) ["Passz-hossz", _passLength(r)!],
+      if (_shotTiming(r) != null) ["Lövés-időzítés", _shotTiming(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

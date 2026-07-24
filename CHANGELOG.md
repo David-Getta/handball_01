@@ -25,7 +25,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.21 óta)
 
-_(Még nincs bejegyzés — a v0.1.21 kiadás után indul.)_
+- **Lövés-időzítés (első hullám vs kivárás)**: MIKOR lőnek a
+  támadáson belül — az első hullámból élő csapat (45%+ lövés az első
+  8 mp-ben) ellen a visszarendeződés, a kivárók (22+ mp átlag) ellen
+  a türelmes fal a kulcs. Egy réteg, sok felület: `shot_timing`
+  motor, edzői összefoglaló, /analyze + meccs-csomag, felderítés-
+  profil (kulcs + csempe), 34. meccsterv-szabály (az ő első-hullám
+  lövéseik × a ti lassú visszaérésetek), 55. edzés-szabály
+  (támadás-lezárás).
 
 ## v0.1.21 — kiadva (2026-07-24, PR #543–#561)
 
