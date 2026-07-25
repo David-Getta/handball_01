@@ -620,6 +620,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Tempó-esés: a támadás-ütem érdemi lassulása a 2. félidőre.
+    try:
+        from .attack_types import PACE_FADE_DROP_PER_MIN, team_pace_fade
+        tpfc = team_pace_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tp = tpfc[side]
+            if rec_tp["drop_per_min"] is None \
+                    or rec_tp["drop_per_min"] < PACE_FADE_DROP_PER_MIN:
+                continue
+            _tp_fh = rec_tp["fh_attacks"] / rec_tp["fh_min"]
+            _tp_sh = rec_tp["sh_attacks"] / rec_tp["sh_min"]
+            body += (f" A(z) {name} tempója a 2. félidőre esett "
+                     f"({_tp_fh:.1f} → {_tp_sh:.1f} támadás/perc) — "
+                     "elfogyott a láb.")
+    except Exception:
+        pass
     # Kihagyott ziccer ára: a kihagyás után fél percen belül jött a
     # büntetés a túloldalon.
     try:

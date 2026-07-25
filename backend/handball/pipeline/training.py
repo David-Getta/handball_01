@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 68) Tempó-esés: ha a 2. félidőre érdemben esik a támadás/perc,
+    # elfogy a láb — a futó-állóképesség és a rotáció a téma.
+    try:
+        from .attack_types import PACE_FADE_DROP_PER_MIN, team_pace_fade
+        tpf68 = team_pace_fade(match, config)
+        for side in ("home", "away"):
+            rec68 = tpf68[side]
+            if rec68["drop_per_min"] is None \
+                    or rec68["drop_per_min"] < PACE_FADE_DROP_PER_MIN:
+                continue
+            _t68_fh = rec68["fh_attacks"] / rec68["fh_min"]
+            _t68_sh = rec68["sh_attacks"] / rec68["sh_min"]
+            add(side, "kondíció", "Tempó-állóképesség",
+                f"a támadás-ütemünk a 2. félidőre esik ({_t68_fh:.1f} → "
+                f"{_t68_sh:.1f} támadás/perc) — elfogy a láb",
+                "tempó-állóképesség: intervallum-futás kézilabda-"
+                "specifikusan (pálya-hossz sprintek gyors középkezdésből), "
+                "6 a 6 elleni hosszú szakaszok a tempó tartásával, és a "
+                "rotáció tudatos szélesítése — a szünet utáni első 10 "
+                "percre friss láb menjen")
+    except Exception:
+        pass
+
     # 67) Kihagyott ziccer ára: ha a kihagyásainkat rendre azonnal
     # büntetik, a kihagyás utáni visszarendeződés a téma.
     try:

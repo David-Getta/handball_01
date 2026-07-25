@@ -731,3 +731,34 @@ def test_shot_timing_early_vs_waiting():
     assert h["avg_s"] is not None and 8.0 < h["avg_s"] < 20.0
     # A vendég nem lőtt → nincs ítélet.
     assert st["away"]["early_pct"] is None
+
+
+def test_team_pace_fade_needs_halftime_and_minutes():
+    """Félidő-jellel és 8+ perces felekkel a drop számolódik (támadás
+    nélkül 0,0); félidő-jel nélkül vagy rövid féllel None."""
+    from handball.pipeline.attack_types import team_pace_fade
+
+    def active(t0, seconds):
+        frames = []
+        for i in range(int(seconds * 25)):
+            players = [_pl(100 + k, Team.HOME, 12.0 + k, 4.0 + k)
+                       for k in range(4)]
+            players += [_pl(200 + k, Team.AWAY, 26.0 + k, 4.0 + k)
+                        for k in range(4)]
+            frames.append(Frame(t=t0 + i, players=players,
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return frames
+
+    frames = active(0, 510)
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(90 * 25))]
+    t = frames[-1].t + 1
+    frames += active(t, 510)
+    tpf = team_pace_fade(Match(_meta(), frames))
+    assert tpf["home"]["drop_per_min"] == 0.0
+    assert tpf["home"]["fh_min"] >= 8.0
+
+    # Félidő-jel nélkül nincs ítélet.
+    no_ht = team_pace_fade(Match(_meta(), active(0, 300)))
+    assert no_ht["home"]["drop_per_min"] is None

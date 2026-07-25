@@ -392,6 +392,12 @@ class ScoutingReport:
     # kihagyások — darabszámok, összegződnek.
     bcp_misses: int = 0
     bcp_punished: int = 0
+    # Tempó-esés: félidőnkénti támadás-darab + mért perc — meccsek közt
+    # pontosan összegződik (ütem = darab / perc).
+    tpf_fh_attacks: int = 0
+    tpf_fh_min: float = 0.0
+    tpf_sh_attacks: int = 0
+    tpf_sh_min: float = 0.0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1185,6 +1191,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "indítás-jeletek: ilyenkor fejben még a helyzetnél "
                 "vannak, AZONNAL játsszátok meg a gyors középkezdést "
                 "vagy a kidobást.")
+
+    # Tempó-esés: akinek a 2. félidőre elfogy a lába, az ellen a 2.
+    # félidőben tempót KELL emelni.
+    if rep.tpf_fh_min >= 8.0 and rep.tpf_sh_min >= 8.0:
+        _tpf_fh = rep.tpf_fh_attacks / rep.tpf_fh_min
+        _tpf_sh = rep.tpf_sh_attacks / rep.tpf_sh_min
+        if _tpf_fh - _tpf_sh >= 0.2:
+            keys.append(
+                f"A 2. félidőre elfogy a lábuk ({_tpf_fh:.1f} → "
+                f"{_tpf_sh:.1f} támadás/perc) — a 2. félidőben tempót "
+                "KELL emelni ellenük: gyors középkezdés, futó kézi, a "
+                "friss lábak a szünet utánra; a lassú leforgás az ő "
+                "meccsük.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2288,6 +2307,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         bcprec = miss_punishment(match, config)[team.value]
         rep.bcp_misses = bcprec["misses"]
         rep.bcp_punished = bcprec["punished"]
+        from .attack_types import team_pace_fade
+        tpfrec = team_pace_fade(match, config)[team.value]
+        rep.tpf_fh_attacks = tpfrec["fh_attacks"]
+        rep.tpf_fh_min = tpfrec["fh_min"]
+        rep.tpf_sh_attacks = tpfrec["sh_attacks"]
+        rep.tpf_sh_min = tpfrec["sh_min"]
         from .goalkeeper import gk_change_effect
         gkcrec = gk_change_effect(match, config)[team.value]
         if gkcrec["changes"]:
@@ -3450,6 +3475,23 @@ def matchup_plan(own: "ScoutingReport",
             f"{own.trans_steals} szerzésből) — minden kihagyásuk után "
             "azonnali indítás: a kapus kezéből első passz előre.")
 
+    # 47) Az ő elfogyó lábuk × a ti bírt tempótok: a 2. félidő a ti
+    # ablakotok — futni kell, amikor ők már nem tudnak.
+    if (opp.tpf_fh_min >= 8.0 and opp.tpf_sh_min >= 8.0
+            and own.tpf_fh_min >= 8.0 and own.tpf_sh_min >= 8.0
+            and opp.tpf_fh_attacks / opp.tpf_fh_min
+            - opp.tpf_sh_attacks / opp.tpf_sh_min >= 0.2
+            and own.tpf_fh_attacks / own.tpf_fh_min
+            - own.tpf_sh_attacks / own.tpf_sh_min <= 0.0):
+        _p47_fh = opp.tpf_fh_attacks / opp.tpf_fh_min
+        _p47_sh = opp.tpf_sh_attacks / opp.tpf_sh_min
+        plan.append(
+            f"A 2. félidőre elfogy a lábuk ({_p47_fh:.1f} → "
+            f"{_p47_sh:.1f} támadás/perc), a ti tempótok viszont kitart "
+            "— a szünet után azonnal tempót fel: gyors középkezdés "
+            "minden gól után, futó kézi, és a friss lábakat a 2. "
+            "félidőre időzítsd; a fáradó láb ellen a tempó a kés.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -3796,6 +3838,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gkc_post_saves=sum(r.gkc_post_saves for r in reports),
         bcp_misses=sum(r.bcp_misses for r in reports),
         bcp_punished=sum(r.bcp_punished for r in reports),
+        tpf_fh_attacks=sum(r.tpf_fh_attacks for r in reports),
+        tpf_fh_min=round(sum(r.tpf_fh_min for r in reports), 1),
+        tpf_sh_attacks=sum(r.tpf_sh_attacks for r in reports),
+        tpf_sh_min=round(sum(r.tpf_sh_min for r in reports), 1),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

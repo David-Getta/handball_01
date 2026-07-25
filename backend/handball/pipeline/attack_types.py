@@ -316,6 +316,52 @@ def match_pace(match: Match,
             "halves": halves}
 
 
+# Tempó-esés: ennyi mért perc kell félidőnként, és ekkora támadás/perc
+# esés számít érdeminek (a láb fáradása — kevesebb támadást futnak).
+PACE_FADE_MIN_HALF_MIN = 8.0
+PACE_FADE_DROP_PER_MIN = 0.2
+
+
+def team_pace_fade(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Tempó-esés: a csapat támadás/perc mutatója az 1. vs 2. félidőben.
+
+    A fáradás-kép "láb" tagja: akinek a 2. félidőre érdemben esik a
+    támadás-üteme, az már nem bírja futni a meccset — ellene a 2.
+    félidőben tempót KELL emelni; akinek nő, az a hajrára kapcsol.
+
+    Visszatérés csapatonként: {"fh_attacks", "fh_min", "sh_attacks",
+    "sh_min", "drop_per_min"} — drop_per_min a támadás/perc esése
+    (pozitív = lassul), None félidő-jel vagy kevés játékperc
+    (félidőnként PACE_FADE_MIN_HALF_MIN) esetén.
+    """
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_attacks": 0, "fh_min": 0.0, "sh_attacks": 0,
+             "sh_min": 0.0, "drop_per_min": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None or not match.frames:
+        return out
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    fh_min = ht / fps / 60.0
+    sh_min = (match.frames[-1].t - ht) / fps / 60.0
+    seqs = list(segment_attacks(match, config))
+    for side in ("home", "away"):
+        rec = out[side]
+        own = [s for s in seqs if s.team.value == side]
+        rec["fh_attacks"] = sum(1 for s in own if s.start_t <= ht)
+        rec["sh_attacks"] = len(own) - rec["fh_attacks"]
+        rec["fh_min"] = round(fh_min, 1)
+        rec["sh_min"] = round(sh_min, 1)
+        if fh_min >= PACE_FADE_MIN_HALF_MIN \
+                and sh_min >= PACE_FADE_MIN_HALF_MIN:
+            rec["drop_per_min"] = round(
+                rec["fh_attacks"] / fh_min - rec["sh_attacks"] / sh_min, 2)
+    return out
+
+
 # Támadás-eredet: az előzmény-esemény legfeljebb ennyi másodperccel a
 # támadás kezdete előtt számít bele az eredet-címkébe.
 ORIGIN_LOOKBACK_S = 8.0

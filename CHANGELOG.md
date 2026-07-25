@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Tempó-esés (elfogyó láb)**: a csapat támadás/perc mutatója az
+  1. vs 2. félidőben, a felismert félidő mentén. Akinél a 2. félidőre
+  érdemben (0,2 támadás/perc+) esik az ütem, az már nem bírja futni a
+  meccset — ellene a szünet után tempót KELL emelni; akinek kitart, az
+  a hajrára kapcsol. A fáradás-kép hatodik tagja: lövőerő, fal, kéz,
+  kapus és fej után a láb. Egy réteg, sok felület: `team_pace_fade`
+  motor, edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kulcs + csempe), 47. meccsterv-szabály (az ő elfogyó lábuk × a ti
+  bírt tempótok), 68. edzés-szabály (tempó-állóképesség, rotáció).
 - **Kihagyott ziccer ára**: a kihagyott nagy helyzet utáni fél percen
   belüli kapott gól — a klasszikus "a kihagyott helyzet a túloldalon
   gól". Akinél a kihagyást rendre azonnali büntetés követi, ott a
