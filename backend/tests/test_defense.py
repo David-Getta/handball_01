@@ -792,3 +792,32 @@ def test_conceded_side_bias_mirrors_attack_side():
     # Kevés kapott szélső-sávos lövés: nincs ítélet.
     few = conceded_side_bias(Match(_meta(), _shot(0, 16.0)))
     assert few["away"]["weak_side"] is None
+
+
+def test_wall_gaps_flags_leaky_wall():
+    """A vendég fala az idő felében 7 m-es rést hagy, a másik felében
+    kompakt → 50%-os rés-arány; kevés falkockánál nincs ítélet."""
+    from handball.pipeline.defense import wall_gaps
+
+    def _frame(t, wall_ys):
+        players = [_pl(1, Team.HOME, 30.0, 10.0)]  # labdás hazai támadó
+        players += [_pl(10 + i, Team.AWAY, 35.0, y)
+                    for i, y in enumerate(wall_ys)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=30.0, y=10.0, confidence=1.0))
+
+    leaky = [2.0, 4.0, 6.0, 8.0, 10.0, 17.0]       # max rés 7 m
+    compact = [4.0, 6.4, 8.8, 11.2, 13.6, 16.0]    # max rés 2,4 m
+    frames = [_frame(t, leaky) for t in range(150)]
+    frames += [_frame(150 + t, compact) for t in range(150)]
+
+    wg = wall_gaps(Match(_meta(), frames))
+    a = wg["away"]
+    assert a["frames"] == 300 and a["wide"] == 150
+    assert a["share_pct"] is not None
+    assert abs(a["share_pct"] - 50.0) < 0.1
+    assert wg["home"]["share_pct"] is None  # a hazai nem védekezett
+
+    # Kevés falkocka: nincs ítélet.
+    few = wall_gaps(Match(_meta(), frames[:50]))
+    assert few["away"]["share_pct"] is None

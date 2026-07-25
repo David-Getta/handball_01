@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Fal-rés**: mekkora réseket hagy a rendezett védőfal — a
+  betörés-folyosó a következményt méri (hol törnek be), ez az okot.
+  Rendezett védekezésben a fal szomszédos védői közti legnagyobb
+  rést nézzük: akinél a falkockák 40%+ részében 3,5 m-nél nagyobb a
+  rés (100+ mért kockából, legalább 4 fős falnál, kapus nélkül), az
+  ellen a betörés és a beúszó beálló a terv; saját olvasatban a
+  zárás-távolság tartása a téma. Egy réteg, sok felület: `wall_gaps`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kulcs + csempe), 67. meccsterv-szabály (az ő
+  réses faluk × a ti betörés-játékotok), 88. edzés-szabály
+  (zárás-távolság, rés-zárás játék a 6-oson).
 - **Gólcsend-anatómia**: a leghosszabb gólcsend alatt lő-e a csapat
   — a gólcsend (goal_droughts) csak azt mondja, meddig, ez azt, hogy
   MIÉRT. A "kihagyós" csendben (0,8+ lövés/perc) a helyzet megvan,

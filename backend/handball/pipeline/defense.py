@@ -1243,3 +1243,70 @@ def conceded_side_bias(match, config=None) -> dict:
                 rec["weak_pct"] = round(pct, 1)
         out[side] = rec
     return out
+
+
+# Fal-rés: rendezett védekezésben ekkora szomszéd-távolság már rés; a
+# saját kaputól ennyin belül állók számítanak falnak; ennyi mért
+# falkockától ítélünk, és e részarány felett réses a fal.
+WALL_GAP_M = 3.5
+WALL_GAP_DEPTH_M = 12.0
+WALL_GAP_MIN_FRAMES = 100
+WALL_GAP_SHARE_PCT = 40.0
+
+
+def wall_gaps(match, config=None) -> dict:
+    """Fal-rés: mekkora réseket hagy a rendezett védőfal.
+
+    A betörés-folyosó (breakthrough_lanes) a következményt méri — hol
+    törnek be; ez az okot: rendezett védekezésben (az ellenfél
+    szervezett támadása alatt) mekkora a legnagyobb rés a fal
+    szomszédos védői között. Akinek a falában a kockák 40%+ részében
+    3,5 m-nél nagyobb rés tátong, az ellen a betörés és a beúszó
+    beálló a terv; a saját edzésnek a zárás-távolság tartása a témája.
+
+    Csak a mért, kapus nélküli, a saját kaputól WALL_GAP_DEPTH_M-en
+    belüli védőket számoljuk, és legalább 4 fős falat ítélünk meg.
+
+    Visszatérés csapatonként: {"frames", "wide", "share_pct",
+    "avg_gap_m"} — share_pct/avg_gap_m None, ha kevés
+    (WALL_GAP_MIN_FRAMES alatti) a mért falkocka.
+    """
+    from ..models.tracking import PositionSource, Team
+    from .tactics import Phase, TacticsConfig, classify_phase
+
+    config = config or TacticsConfig()
+    counts = {"home": {"frames": 0, "wide": 0, "gap_sum": 0.0},
+              "away": {"frames": 0, "wide": 0, "gap_sum": 0.0}}
+    plan = (("home", Team.HOME, Phase.AWAY_ATTACK),
+            ("away", Team.AWAY, Phase.HOME_ATTACK))
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        for side, team, needed in plan:
+            if ph != needed:
+                continue
+            gx = config.own_goal_x(team)
+            wall = sorted(
+                p.y for p in f.players
+                if p.team == team and p.source == PositionSource.MEASURED
+                and p.role != "kapus" and abs(p.x - gx) <= WALL_GAP_DEPTH_M)
+            if len(wall) < 4:
+                continue
+            gap = max(b - a for a, b in zip(wall, wall[1:]))
+            rec = counts[side]
+            rec["frames"] += 1
+            rec["gap_sum"] += gap
+            if gap >= WALL_GAP_M:
+                rec["wide"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        enough = rec["frames"] >= WALL_GAP_MIN_FRAMES
+        out[side] = {
+            "frames": rec["frames"],
+            "wide": rec["wide"],
+            "share_pct": (round(100.0 * rec["wide"] / rec["frames"], 1)
+                          if enough else None),
+            "avg_gap_m": (round(rec["gap_sum"] / rec["frames"], 2)
+                          if enough else None),
+        }
+    return out

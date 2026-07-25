@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 88) Fal-rés: ha a rendezett falunk réseket hagy, a betörés és a
+    # beúszó beálló ellenünk terv — a zárás-távolság a téma.
+    try:
+        from .defense import (WALL_GAP_M, WALL_GAP_MIN_FRAMES,
+                              WALL_GAP_SHARE_PCT, wall_gaps)
+        wg88 = wall_gaps(match, config)
+        for side in ("home", "away"):
+            rec88 = wg88[side]
+            if rec88["share_pct"] is None \
+                    or rec88["frames"] < WALL_GAP_MIN_FRAMES \
+                    or rec88["share_pct"] < WALL_GAP_SHARE_PCT:
+                continue
+            add(side, "védekezés", "Zárás-távolság a falban",
+                f"a falunk réses: a rendezett védekezésünk kockáinak "
+                f"{rec88['share_pct']:.0f}%-ában {WALL_GAP_M:.1f} m-nél "
+                f"nagyobb rés volt a szomszéd védők között (átlagos "
+                f"legnagyobb rés {rec88['avg_gap_m']:.1f} m) — a "
+                "betörő és a beúszó beálló ezt bünteti",
+                "zárás-távolság: fal-mozgás labda-oldalra karnyújtás-"
+                "ellenőrzéssel (a szomszédok érjenek össze kilépésnél), "
+                "kereszt elleni átadás-átvétel hangos kommunikációval, "
+                "és 2-2 elleni rés-zárás játék a 6-oson")
+    except Exception:
+        pass
+
     # 87) Gólcsend-anatómia: a néma csend szervezés-gond (lövésig sem
     # jutunk), a kihagyós csend befejezés-gond — más-más edzés-téma.
     try:

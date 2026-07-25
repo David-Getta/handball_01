@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Fal-rés: réses volt-e a rendezett fal.
+    try:
+        from .defense import WALL_GAP_M, WALL_GAP_SHARE_PCT, wall_gaps
+        wgc = wall_gaps(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wg = wgc[side]
+            if rec_wg["share_pct"] is None \
+                    or rec_wg["share_pct"] < WALL_GAP_SHARE_PCT:
+                continue
+            body += (f" A(z) {name} fala réses volt: a rendezett "
+                     f"védekezésük kockáinak {rec_wg['share_pct']:.0f}"
+                     f"%-ában {WALL_GAP_M:.1f} m-nél nagyobb rés "
+                     "tátongott a szomszéd védők között.")
+    except Exception:
+        pass
     # Gólcsend-anatómia: kihagyós vagy néma volt a leghosszabb csend.
     try:
         from .momentum import drought_anatomy

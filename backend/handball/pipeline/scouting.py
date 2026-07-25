@@ -492,6 +492,10 @@ class ScoutingReport:
     # (ütem = shots / (s/60)).
     da_drought_s: float = 0.0
     da_shots: int = 0
+    # Fal-rés: mért falkockák + ebből a réses (3,5 m+ szomszéd-táv)
+    # kockák — darabszámok, meccsek közt összegződnek.
+    wg_frames: int = 0
+    wg_wide: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1417,6 +1421,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Fal-rés: réses a rendezett faluk — betörés és beúszás ellene.
+    if rep.wg_frames >= 100:
+        _wg_share = 100.0 * rep.wg_wide / rep.wg_frames
+        if _wg_share >= 40.0:
+            keys.append(
+                f"A faluk réses: a rendezett védekezésük kockáinak "
+                f"{_wg_share:.0f}%-ában 3,5 m-nél nagyobb rés van a "
+                "szomszéd védők között — betörésekkel és beúszó "
+                "beállóval támadjátok a réseket, a kereszt-mozgás "
+                "szét is húzza őket.")
 
     # Gólcsend-anatómia: néma vagy kihagyós a leghosszabb csendjük.
     if rep.da_drought_s >= 300.0:
@@ -2784,6 +2799,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         darec = drought_anatomy(match, config)[team.value]
         rep.da_drought_s = darec["drought_s"]
         rep.da_shots = darec["shots"]
+        from .defense import wall_gaps
+        wgrec = wall_gaps(match, config)[team.value]
+        rep.wg_frames = wgrec["frames"]
+        rep.wg_wide = wgrec["wide"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4061,6 +4080,18 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 67) Az ő réses faluk × a ti betörés-játékotok: a rés pont annak
+    # a fegyvernek kedvez, amivel ti a legtöbbet éltek.
+    if (opp.wg_frames >= 100 and own.break_entries >= 8
+            and 100.0 * opp.wg_wide / opp.wg_frames >= 40.0):
+        plan.append(
+            f"A faluk réses (a rendezett védekezésük kockáinak "
+            f"{100.0 * opp.wg_wide / opp.wg_frames:.0f}%-ában 3,5 m+ "
+            f"rés), ti pedig sokat éltek betörésből "
+            f"({own.break_entries} betörés) — az egy az egy elleni "
+            "betörés ellenük nem kockázat, hanem a terv: a rést "
+            "támadó betörő mögé beúszó beálló, és kész a ziccer.")
+
     # 66) Az ő néma gólcsendjük × a ti elöl-szerző presszetek: ha
     # egyszer megfogtátok őket, a pressz tartva tartja a csendet.
     if (opp.da_drought_s >= 300.0 and own.steal_n >= 8
@@ -4632,6 +4663,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         csb_right=sum(r.csb_right for r in reports),
         da_drought_s=sum(r.da_drought_s for r in reports),
         da_shots=sum(r.da_shots for r in reports),
+        wg_frames=sum(r.wg_frames for r in reports),
+        wg_wide=sum(r.wg_wide for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

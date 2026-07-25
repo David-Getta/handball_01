@@ -1137,6 +1137,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Fal-rés: a réses (3,5 m+ szomszéd-táv) falkockák aránya (100+
+  // mért falkockánál, 40%+ aránynál; a backend-kulccsal azonos
+  // küszöbök).
+  String? _wallGaps(Map<String, dynamic> r) {
+    final frames = ((r["wg_frames"] as num?) ?? 0).toInt();
+    final wide = ((r["wg_wide"] as num?) ?? 0).toInt();
+    if (frames < 100) return null;
+    final pct = 100.0 * wide / frames;
+    if (pct < 40.0) return null;
+    return "réses fal: a rendezett védekezésük "
+        "${pct.toStringAsFixed(0)}%-ában 3,5 m+ rés · betörés + "
+        "beúszó beálló";
+  }
+
   // Gólcsend-anatómia: a leghosszabb gólcsendek lövés-üteme (5+ perc
   // össz-csendnél; 0,3/perc alatt néma, 0,8/perc felett kihagyós; a
   // backend-kulccsal azonos küszöbök).
@@ -2003,6 +2017,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Engedett-oldal", _concededSide(r)!],
       if (_droughtAnatomy(r) != null)
         ["Gólcsend-anatómia", _droughtAnatomy(r)!],
+      if (_wallGaps(r) != null)
+        ["Fal-rés", _wallGaps(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
