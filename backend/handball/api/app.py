@@ -2618,6 +2618,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import miss_punishment
+            res["miss_punishment"] = miss_punishment(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3070,6 +3075,8 @@ def create_app():
                 from ..pipeline.goalkeeper import gk_change_effect
                 _layer("gk_change_effect",
                        lambda: gk_change_effect(match))
+                from ..pipeline.xg import miss_punishment
+                _layer("miss_punishment", lambda: miss_punishment(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

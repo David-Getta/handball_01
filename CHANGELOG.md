@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Kihagyott ziccer ára**: a kihagyott nagy helyzet utáni fél percen
+  belüli kapott gól — a klasszikus "a kihagyott helyzet a túloldalon
+  gól". Akinél a kihagyást rendre azonnali büntetés követi, ott a
+  kihagyás utáni fejlógatás a baj (a visszarendeződés a téma); az
+  ellenfél olvasata: minden kihagyásuk indítás-jel. Egy réteg, sok
+  felület: `miss_punishment` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 46. meccsterv-
+  szabály (az ő kihagyás utáni zavaruk × a ti gyors átmenetetek),
+  67. edzés-szabály (kihagyás utáni visszarendeződés).
 - **Kapuscsere-hatás**: segít-e a kapuscsere — az első csere
   előtti vs utáni védés% összevetése. Akinél a csere rendre
   fordít, ott a lövő-terv a második kapusra is kell; akinél nem

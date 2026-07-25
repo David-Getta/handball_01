@@ -221,3 +221,36 @@ def test_xg_prevented_balances_faced_and_conceded():
     assert abs(rec["prevented"] - (rec["faced_xg"] - 1)) < 1e-6
     # A hazai oldalon nem történt semmi.
     assert xg_prevented(Match(_meta(), frames))["home"]["faced_xg"] == 0.0
+
+
+def test_miss_punishment_counts_quick_goals_after_miss():
+    """3 hazai ziccer-kihagyásból az elsőt fél percen belüli vendég-gól
+    bünteti → 33%; kevés kihagyásnál nincs ítélet."""
+    from handball.pipeline.xg import miss_punishment
+
+    def _miss(t0):
+        fr = []
+        for i in range(7):
+            fr.append(Frame(
+                t=t0 + i,
+                players=[_pl(1, Team.HOME, 37.0, 10.0)],
+                ball=Ball(x=min(37.4 + 0.6 * i, 40.0), y=10.0 - i * 1.0,
+                          confidence=1.0)))
+        fr.append(Frame(t=t0 + 8, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = _miss(0)
+    for i in range(8):  # vendég-gól a -x kapuba, ~8 mp-re a kihagyástól
+        frames.append(Frame(t=200 + i, players=[],
+                            ball=Ball(x=max(6.4 - i, 0.0), y=10.0,
+                                      confidence=1.0)))
+    frames.append(Frame(t=210, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _miss(3000)
+    frames += _miss(6000)
+    mp = miss_punishment(Match(_meta(), frames))
+    h = mp["home"]
+    assert h["misses"] == 3 and h["punished"] == 1
+    assert abs(h["rate_pct"] - 33.3) < 0.1
+    assert mp["away"]["misses"] == 0 and mp["away"]["rate_pct"] is None

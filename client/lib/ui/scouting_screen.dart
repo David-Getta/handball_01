@@ -959,6 +959,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kihagyott ziccer ára: a kihagyás után fél percen belül kapott gólok
+  // aránya (4+ kihagyásnál; a backend-kulccsal azonos küszöb).
+  String? _missPunishment(Map<String, dynamic> r) {
+    final misses = ((r["bcp_misses"] as num?) ?? 0).toInt();
+    if (misses < 4) return null;
+    final punished = ((r["bcp_punished"] as num?) ?? 0).toInt();
+    if (100.0 * punished / misses >= 40.0) {
+      return "$misses kihagyott ziccerből $punished után gyors büntetés · "
+          "a kihagyásuk indítás-jel";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1618,6 +1631,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_sevenDefense(r) != null) ["Hetes-védés", _sevenDefense(r)!],
       if (_gkChangeEffect(r) != null)
         ["Kapuscsere-hatás", _gkChangeEffect(r)!],
+      if (_missPunishment(r) != null)
+        ["Kihagyott ziccer ára", _missPunishment(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

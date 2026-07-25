@@ -388,6 +388,10 @@ class ScoutingReport:
     gkc_pre_saves: int = 0
     gkc_post_faced: int = 0
     gkc_post_saves: int = 0
+    # Kihagyott ziccer ára: kihagyások + fél percen belül büntetett
+    # kihagyások — darabszámok, összegződnek.
+    bcp_misses: int = 0
+    bcp_punished: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1168,6 +1172,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
                 f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
                 "már csak a kidolgozott ziccer megy be neki.")
+
+    # Kihagyott ziccer ára: ha a kihagyásaik után rendre gyors büntetést
+    # kapnak, a kihagyásuk a ti indítás-jeletek.
+    if rep.bcp_misses >= 4:
+        _bcp_rate = 100.0 * rep.bcp_punished / rep.bcp_misses
+        if _bcp_rate >= 40.0:
+            keys.append(
+                f"A kihagyott ziccereik megbosszulják magukat: "
+                f"{rep.bcp_misses} kihagyásból {rep.bcp_punished} után "
+                "fél percen belül gólt kaptak — a kihagyásuk a ti "
+                "indítás-jeletek: ilyenkor fejben még a helyzetnél "
+                "vannak, AZONNAL játsszátok meg a gyors középkezdést "
+                "vagy a kidobást.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2267,6 +2284,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         s7drec = seven_meter_defense(match, config)[team.value]
         rep.s7d_faced = s7drec["faced"]
         rep.s7d_saved = s7drec["saved"]
+        from .xg import miss_punishment
+        bcprec = miss_punishment(match, config)[team.value]
+        rep.bcp_misses = bcprec["misses"]
+        rep.bcp_punished = bcprec["punished"]
         from .goalkeeper import gk_change_effect
         gkcrec = gk_change_effect(match, config)[team.value]
         if gkcrec["changes"]:
@@ -3416,6 +3437,19 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 46) Az ő kihagyás utáni zavaruk × a ti gyors átmenetetek: minden
+    # kihagyott ziccerük indítás-jel.
+    if (opp.bcp_misses >= 4
+            and 100.0 * opp.bcp_punished / opp.bcp_misses >= 40.0
+            and own.trans_steals >= 3 and own.trans_quick_goals >= 2):
+        plan.append(
+            f"Kihagyott ziccer után zavartak ({opp.bcp_misses} "
+            f"kihagyásból {opp.bcp_punished} után fél percen belül "
+            f"büntetést kaptak), ti pedig jól váltjátok gólra a gyors "
+            f"átmenetet ({own.trans_quick_goals} gyors gól "
+            f"{own.trans_steals} szerzésből) — minden kihagyásuk után "
+            "azonnali indítás: a kapus kezéből első passz előre.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -3760,6 +3794,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gkc_pre_saves=sum(r.gkc_pre_saves for r in reports),
         gkc_post_faced=sum(r.gkc_post_faced for r in reports),
         gkc_post_saves=sum(r.gkc_post_saves for r in reports),
+        bcp_misses=sum(r.bcp_misses for r in reports),
+        bcp_punished=sum(r.bcp_punished for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

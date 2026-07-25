@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 67) Kihagyott ziccer ára: ha a kihagyásainkat rendre azonnal
+    # büntetik, a kihagyás utáni visszarendeződés a téma.
+    try:
+        from .xg import miss_punishment
+        mp67 = miss_punishment(match, config)
+        for side in ("home", "away"):
+            rec67 = mp67[side]
+            if rec67["rate_pct"] is None or rec67["rate_pct"] < 40.0 \
+                    or rec67["punished"] < 2:
+                continue
+            add(side, "védekezés", "Kihagyás utáni fejtartás",
+                f"{rec67['misses']} kihagyott ziccerünkből "
+                f"{rec67['punished']} után fél percen belül gólt kaptunk "
+                "— a kihagyás után áll a csapat",
+                "kihagyás utáni visszarendeződés: helyzet-kihagyás után "
+                "AZONNALI védekezés-gyakorlat (a lövő is visszazár), a "
+                "'következő labda' szabály hangosítása (a hibán nem "
+                "rágódunk), és kontra-elhárítás kihagyott lövés utáni "
+                "kidobásból")
+    except Exception:
+        pass
+
     # 66) Kapuscsere-hatás: ha a csere sem segített (mindkét kapus
     # nehéz napja), a kapus-alapok és a fal-kapus összhang a téma.
     try:

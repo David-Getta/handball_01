@@ -620,6 +620,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Kihagyott ziccer ára: a kihagyás után fél percen belül jött a
+    # büntetés a túloldalon.
+    try:
+        from .xg import miss_punishment
+        mpc = miss_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_mp = mpc[side]
+            if rec_mp["punished"] >= 2:
+                body += (f" A(z) {name} kihagyott ziccerei megbosszulták "
+                         f"magukat: {rec_mp['misses']} kihagyásból "
+                         f"{rec_mp['punished']} után fél percen belül a "
+                         "túloldalon volt a labda a kapuban.")
+    except Exception:
+        pass
     # Kapuscsere-hatás: fordított-e a csere.
     try:
         from .goalkeeper import GK_CHANGE_DELTA_PP, gk_change_effect

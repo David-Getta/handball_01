@@ -150,6 +150,56 @@ def missed_big_chances(match: Match,
     return out
 
 
+# Kihagyott ziccer ára: az ennyi másodpercen belül kapott gól számít a
+# kihagyás azonnali büntetésének; és ennyi kihagyástól ítélünk arányt.
+MISS_PUNISH_QUICK_S = 40.0
+MISS_PUNISH_MIN = 3
+
+
+def miss_punishment(match: Match,
+                    config: Optional[TacticsConfig] = None,
+                    quick_s: float = MISS_PUNISH_QUICK_S) -> dict:
+    """Kihagyott ziccer ára: a kihagyott nagy helyzet utáni gyors kapott gól.
+
+    A klasszikus: "a kihagyott helyzet a túloldalon gól". Minden
+    kihagyott ziccer (missed_big_chances) után megnézzük, kapott-e a
+    csapat `quick_s` másodpercen belül gólt. A magas arány a kihagyás
+    utáni fejlógatás jele — kihagyott helyzet után a visszarendeződésre
+    külön figyelni kell; az ellenfél olvasata: az ő kihagyásuk után
+    azonnal indítani kell.
+
+    Visszatérés csapatonként: {"misses", "punished", "rate_pct"} —
+    rate_pct None, ha kevés (MISS_PUNISH_MIN alatti) a kihagyás.
+    """
+    from .event_detection import EventType, detect_shots
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(quick_s * fps)
+    goals = sorted((e.t, e.team.value) for e in
+                   detect_shots(match, config or TacticsConfig())
+                   if e.type == EventType.GOAL)
+
+    out = {}
+    counts = {"home": {"misses": 0, "punished": 0},
+              "away": {"misses": 0, "punished": 0}}
+    for miss in missed_big_chances(match, config):
+        side = miss["team"]
+        other = "away" if side == "home" else "home"
+        counts[side]["misses"] += 1
+        if any(gs == other and 0 <= gt - miss["t"] <= win
+               for (gt, gs) in goals):
+            counts[side]["punished"] += 1
+    for side in ("home", "away"):
+        rec = counts[side]
+        out[side] = {
+            "misses": rec["misses"],
+            "punished": rec["punished"],
+            "rate_pct": (round(100.0 * rec["punished"] / rec["misses"], 1)
+                         if rec["misses"] >= MISS_PUNISH_MIN else None),
+        }
+    return out
+
+
 def big_saves(match: Match,
               config: Optional[TacticsConfig] = None) -> list[dict]:
     """Bravúr-védések: nagy értékű (xG >= BIG_CHANCE_XG) helyzet, amit a
