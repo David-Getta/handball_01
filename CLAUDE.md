@@ -68,7 +68,7 @@ viheti el a többit. Tartsd ezt a stílust.
 
 Réteg-commit után frissítsd ITT: meccsterv-szabály következő száma,
 edzés-szabály következő száma. A README "Hol tartunk" teszt-számát
-(jelenleg 735) elég kiadáskor frissíteni.
+(jelenleg 745+) elég kiadáskor frissíteni.
 
 ## Commit-stílus
 

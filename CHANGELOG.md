@@ -3,7 +3,27 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.22 óta)
+## Kiadatlan (a v0.1.23 óta)
+
+## v0.1.23 — kiadva (2026-07-25)
+
+> Kiadás-jegyzet: húsz új elemzés-réteg egyetlen körben — mind a
+> megszokott "egy réteg, sok felület" bekötéssel (motor, edzői
+> összefoglaló, /analyze + meccs-csomag, felderítés-profil,
+> meccsterv- és edzés-szabály, kliens-csempe, teszt). A nagy témák: a
+> kiszámíthatóság-profil (oldal-részrehajlás, ritmus-egyhangúság,
+> lövő-koncentráció), a labdabiztonság két új olvasata
+> (eladás-időzítés, pressz-tűrés), a mentális profil kibővülése
+> (holtpont-mérleg, sorozat-törés, bravúr utáni lendület, félidei
+> fordítás, gól utáni elalvás, szoros meccs-mérleg, félidő-zárás),
+> a fáradás-kép új tagjai (tempó-esés, befejezés-esés,
+> fegyelem-esés), valamint kapus-témák (hetes-védés,
+> kapuscsere-hatás, kapus-gyengeoldal). Emellett bekerült a
+> fejlesztési recept (CLAUDE.md): az új rétegek innentől checklist
+> alapján készülnek. A meccsterv 59, az edzés-fókusz 80 szabálynál
+> jár; a backend csomag 747 teszttel zöld.
+
+### A v0.1.23 körei
 
 - **Pressz-tűrés**: labdabiztonság testközeli védő mellett vs
   szabadon — a nyomás alatti befejezés (pressure_finishing) passz-
