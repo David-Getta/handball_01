@@ -362,6 +362,52 @@ def team_pace_fade(match: Match,
     return out
 
 
+# Ritmus-egyhangúság: ennyi támadástól ítélünk, és e relatív szórás
+# (szórás/átlag) alatt számít kiszámíthatónak a támadás-hossz.
+RHYTHM_MIN_ATTACKS = 10
+RHYTHM_CV_LOW = 0.35
+
+
+def attack_rhythm(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Ritmus-egyhangúság: mennyire egyforma hosszúak a támadások.
+
+    A kiszámíthatóság idő-olvasata: akinek minden támadása nagyjából
+    ugyanannyi ideig tart, annak belső órája van — a védekezés ráállhat
+    az órára: az átlagidő előtt pár másodperccel időzített
+    letámadás/kettőzés rendre a lövés-előkészítést töri meg. A
+    változatos ritmusú csapat ellen órára játszani nem lehet.
+
+    Visszatérés csapatonként: {"n", "sum_s", "sumsq_s", "avg_s",
+    "sd_s", "cv"} — az összeg-mezők meccsek közt összegezhetők (az
+    átlag/szórás belőlük visszaszámolható); avg_s/sd_s/cv None, ha
+    kevés (RHYTHM_MIN_ATTACKS alatti) a támadás.
+    """
+    import math
+
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    durs = {"home": [], "away": []}
+    for seq in segment_attacks(match, config):
+        durs[seq.team.value].append((seq.end_t - seq.start_t) / fps)
+    out = {}
+    for side in ("home", "away"):
+        d = durs[side]
+        rec = {"n": len(d), "sum_s": round(sum(d), 1),
+               "sumsq_s": round(sum(x * x for x in d), 1),
+               "avg_s": None, "sd_s": None, "cv": None}
+        if len(d) >= RHYTHM_MIN_ATTACKS:
+            avg = sum(d) / len(d)
+            var = max(0.0, sum(x * x for x in d) / len(d) - avg * avg)
+            rec["avg_s"] = round(avg, 1)
+            rec["sd_s"] = round(math.sqrt(var), 1)
+            rec["cv"] = round(math.sqrt(var) / avg, 2) if avg > 0 else None
+        out[side] = rec
+    return out
+
+
 # Oldal-részrehajlás: a szélső-sáv határa a pálya-középvonaltól (m),
 # ennyi szélső-sávos lövéstől ítélünk, és ekkora többség számít
 # részrehajlásnak.

@@ -650,6 +650,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "túloldalon volt a labda a kapuban.")
     except Exception:
         pass
+    # Ritmus-egyhangúság: belső órán járó, kiszámítható támadás-hossz.
+    try:
+        from .attack_types import RHYTHM_CV_LOW, attack_rhythm
+        arc = attack_rhythm(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ar = arc[side]
+            if rec_ar["cv"] is None or rec_ar["cv"] > RHYTHM_CV_LOW:
+                continue
+            body += (f" A(z) {name} belső órán támadott (átlag "
+                     f"{rec_ar['avg_s']:.0f} mp, ±{rec_ar['sd_s']:.0f}) "
+                     "— a ritmusa kiszámítható volt.")
+    except Exception:
+        pass
     # Oldal-részrehajlás: fél-oldalas támadás — eltolható fal.
     try:
         from .attack_types import attack_side_bias

@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Ritmus-egyhangúság**: mennyire egyforma hosszúak a támadások — a
+  kiszámíthatóság idő-olvasata. Akinek belső órája van (a
+  támadás-hossz relatív szórása kicsi), arra a védekezés ráállhat: az
+  átlagidő előtt pár másodperccel időzített kettőzés/letámadás rendre
+  a lövés-előkészítést töri meg; saját olvasatban a tudatos
+  ritmus-váltás a téma. A szórás összeg + négyzetösszeg tárolással
+  meccsek közt is pontosan számolódik. Egy réteg, sok felület:
+  `attack_rhythm` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kulcs + csempe), 55. meccsterv-szabály (az ő
+  belső órájuk × a ti labdaszerzésetek), 76. edzés-szabály
+  (ritmus-váltás, kevert tempójú sorozatok).
 - **Oldal-részrehajlás**: a lövések a támadás melyik oldaláról jönnek
   (bal/közép/jobb, a támadó bal keze felőli oldal a "bal") — a
   kiszámíthatóság térbeli olvasata. Akinek a szélső-sávos lövései

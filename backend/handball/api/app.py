@@ -2663,6 +2663,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import attack_rhythm
+            res["attack_rhythm"] = attack_rhythm(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3136,6 +3141,8 @@ def create_app():
                 from ..pipeline.attack_types import attack_side_bias
                 _layer("attack_side_bias",
                        lambda: attack_side_bias(match))
+                from ..pipeline.attack_types import attack_rhythm
+                _layer("attack_rhythm", lambda: attack_rhythm(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

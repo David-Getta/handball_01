@@ -6,6 +6,7 @@
 library;
 
 import "dart:io";
+import "dart:math";
 
 import "package:file_picker/file_picker.dart";
 import "package:flutter/foundation.dart" show kIsWeb;
@@ -1104,6 +1105,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "oldalról · told el a falat";
   }
 
+  // Ritmus-egyhangúság: a támadás-hossz relatív szórása (12+
+  // támadásnál; a backend-kulccsal azonos küszöbök).
+  String? _attackRhythm(Map<String, dynamic> r) {
+    final n = ((r["ar_n"] as num?) ?? 0).toInt();
+    final sum = ((r["ar_sum_s"] as num?) ?? 0).toDouble();
+    final sumsq = ((r["ar_sumsq_s"] as num?) ?? 0).toDouble();
+    if (n < 12 || sum <= 0) return null;
+    final avg = sum / n;
+    var variance = sumsq / n - avg * avg;
+    if (variance < 0) variance = 0;
+    final sd = sqrt(variance);
+    if (avg > 0 && sd / avg <= 0.35) {
+      return "belső óra: átlag ${avg.toStringAsFixed(0)} mp "
+          "(±${sd.toStringAsFixed(0)}) · időzített kettőzés";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1780,6 +1799,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Célzás-pontosság", _shotAccuracy(r)!],
       if (_sideBias(r) != null)
         ["Oldal-részrehajlás", _sideBias(r)!],
+      if (_attackRhythm(r) != null)
+        ["Ritmus-egyhangúság", _attackRhythm(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

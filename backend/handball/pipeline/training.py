@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 76) Ritmus-egyhangúság: ha belső órán játszunk, az ellenfél
+    # ráállhat — a tudatos ritmus-váltás a téma.
+    try:
+        from .attack_types import (RHYTHM_CV_LOW, RHYTHM_MIN_ATTACKS,
+                                   attack_rhythm)
+        ar76 = attack_rhythm(match, config)
+        for side in ("home", "away"):
+            rec76 = ar76[side]
+            if rec76["cv"] is None \
+                    or rec76["n"] < RHYTHM_MIN_ATTACKS + 2 \
+                    or rec76["cv"] > RHYTHM_CV_LOW:
+                continue
+            add(side, "támadás", "Ritmus-váltás",
+                f"belső órán támadunk (átlag {rec76['avg_s']:.0f} mp, "
+                f"±{rec76['sd_s']:.0f}) — az ellenfél ráállhat az "
+                "óránkra",
+                "ritmus-váltás: kevert tempójú támadás-sorozatok "
+                "edzésen (gyors első hullám / hosszú kivárás felváltva, "
+                "a padról jelezve), és a figurák indítás-idejének "
+                "tudatos variálása, hogy a lövés-perc ne legyen "
+                "kiszámítható")
+    except Exception:
+        pass
+
     # 75) Oldal-részrehajlás: ha a támadásunk fél-oldalas, ellenünk
     # eltolt fallal védekeznek — az oldal-egyensúly a téma.
     try:

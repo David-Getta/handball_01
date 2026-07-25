@@ -432,6 +432,11 @@ class ScoutingReport:
     sb_left: int = 0
     sb_center: int = 0
     sb_right: int = 0
+    # Ritmus-egyhangúság: támadás-darab + hossz-összeg + négyzetösszeg
+    # — összegekből az átlag/szórás meccsek közt visszaszámolható.
+    ar_n: int = 0
+    ar_sum_s: float = 0.0
+    ar_sumsq_s: float = 0.0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1344,6 +1349,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "el a falat arra az oldalra, a segítő védő előre "
                 "csúszhat, a gyenge oldali szélsőjük felől pedig "
                 "kockázat nélkül lehet zárni.")
+
+    # Ritmus-egyhangúság: a belső órájukra rá lehet állni.
+    if rep.ar_n >= 12 and rep.ar_sum_s > 0:
+        _ar_avg = rep.ar_sum_s / rep.ar_n
+        _ar_var = max(0.0, rep.ar_sumsq_s / rep.ar_n - _ar_avg * _ar_avg)
+        _ar_sd = _ar_var ** 0.5
+        if _ar_avg > 0 and _ar_sd / _ar_avg <= 0.35:
+            keys.append(
+                f"Belső órán támadnak: átlag {_ar_avg:.0f} mp, alig "
+                f"±{_ar_sd:.0f} szórással — az órájukra rá lehet állni: "
+                f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
+                "időzített kettőzés/letámadás rendre a "
+                "lövés-előkészítésüket töri meg.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2507,6 +2525,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sb_left = sbrec["left"]
         rep.sb_center = sbrec["center"]
         rep.sb_right = sbrec["right"]
+        from .attack_types import attack_rhythm
+        arrec = attack_rhythm(match, config)[team.value]
+        rep.ar_n = arrec["n"]
+        rep.ar_sum_s = arrec["sum_s"]
+        rep.ar_sumsq_s = arrec["sumsq_s"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3768,6 +3791,22 @@ def matchup_plan(own: "ScoutingReport",
             "a megszokott lövő-sávjukban dupla kéz vár, és a blokk "
             "onnan már kontra-indítás.")
 
+    # 55) Az ő belső órájuk × a ti labdaszerzésetek: az időzített
+    # kettőzés a leggyengébb pillanatukban ér oda.
+    if (opp.ar_n >= 12 and opp.ar_sum_s > 0
+            and own.trans_steals >= 5):
+        _p55_avg = opp.ar_sum_s / opp.ar_n
+        _p55_var = max(0.0, opp.ar_sumsq_s / opp.ar_n
+                       - _p55_avg * _p55_avg)
+        if _p55_avg > 0 and (_p55_var ** 0.5) / _p55_avg <= 0.35:
+            plan.append(
+                f"Belső órán támadnak (átlag {_p55_avg:.0f} mp, "
+                f"±{_p55_var ** 0.5:.0f}), ti pedig jó labdaszerzők "
+                f"vagytok ({own.trans_steals} szerzés) — állítsatok "
+                f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
+                "jöjjön az időzített kettőzés a labdásra, pont a "
+                "lövés-előkészítésük pillanatában.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -4138,6 +4177,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sb_left=sum(r.sb_left for r in reports),
         sb_center=sum(r.sb_center for r in reports),
         sb_right=sum(r.sb_right for r in reports),
+        ar_n=sum(r.ar_n for r in reports),
+        ar_sum_s=round(sum(r.ar_sum_s for r in reports), 1),
+        ar_sumsq_s=round(sum(r.ar_sumsq_s for r in reports), 1),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

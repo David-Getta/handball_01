@@ -796,3 +796,34 @@ def test_attack_side_bias_flags_one_sided_attack():
     # Kevés szélső-sávos lövés: nincs ítélet.
     few = attack_side_bias(Match(_meta(), _shot(0, 16.0)))
     assert few["home"]["bias_side"] is None
+
+
+def test_attack_rhythm_flags_metronome_offense():
+    """12 egyforma (20 mp-es) hazai támadás → cv ~0, kiszámítható óra;
+    kevés támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import attack_rhythm
+
+    def _neutral(t0, seconds=4.0):
+        players = [_pl(50 + k, Team.HOME if k < 4 else Team.AWAY,
+                       8.0 + 3.0 * k, 4.0 + (k % 4)) for k in range(8)]
+        return [Frame(t=t0 + i, players=players,
+                      ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                for i in range(int(seconds * 25))]
+
+    frames = []
+    t = 0
+    for _ in range(12):
+        frames += _attack_frames(t, 20.0, 24.0, 36.0)
+        t = frames[-1].t + 1
+        frames += _neutral(t)
+        t = frames[-1].t + 1
+    ar = attack_rhythm(Match(_meta(), frames))
+    h = ar["home"]
+    assert h["n"] == 12
+    assert h["avg_s"] is not None and 18.0 <= h["avg_s"] <= 21.0
+    assert h["cv"] is not None and h["cv"] <= 0.1
+
+    # Kevés támadás: nincs ítélet.
+    few = attack_rhythm(Match(_meta(), _attack_frames(0, 20.0, 24.0,
+                                                      36.0)))
+    assert few["home"]["n"] >= 1 and few["home"]["cv"] is None
