@@ -368,6 +368,10 @@ class ScoutingReport:
     # — darabszámok, összegződnek.
     disc_fh_susp: int = 0
     disc_sh_susp: int = 0
+    # Gól utáni elalvás: saját gólok + fél percen belül visszakapott
+    # válasz-gólok — darabszámok, összegződnek.
+    pgl_goals: int = 0
+    pgl_quick: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1143,6 +1147,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
                 f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
                 "már csak a kidolgozott ziccer megy be neki.")
+
+    # Gól utáni elalvás: ha a góljaik után rendre bejön az azonnali
+    # válasz, a középkezdésük utáni első támadás a ti nagy esélyetek.
+    if rep.pgl_goals >= 5:
+        _pgl_rate = 100.0 * rep.pgl_quick / rep.pgl_goals
+        if _pgl_rate >= 40.0:
+            keys.append(
+                f"Gól után elalszanak: a góljaik {_pgl_rate:.0f}%-ára fél "
+                f"percen belül jött válasz ({rep.pgl_goals} gólból "
+                f"{rep.pgl_quick}) — a középkezdésük után AZONNAL "
+                "támadjatok, ott a legpuhább a visszarendeződésük.")
+        elif _pgl_rate <= 10.0 and rep.pgl_goals >= 10:
+            keys.append(
+                f"Gól után nem alszanak el ({rep.pgl_goals} góljukból csak "
+                f"{rep.pgl_quick} után jött gyors válasz) — a középkezdés "
+                "utáni kapkodó gyorsindítás ellenük eladott labda.")
 
     # Fegyelem-esés: akinek a kiállításai a hajrában jönnek, az ellen a
     # meccs végén kell bevinni az egy-egy párharcokat.
@@ -2156,6 +2176,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         dfrec = discipline_fade(match, config)[team.value]
         rep.disc_fh_susp = dfrec["fh_susp"]
         rep.disc_sh_susp = dfrec["sh_susp"]
+        from .momentum import post_goal_lapses
+        pglrec = post_goal_lapses(match, config)[team.value]
+        rep.pgl_goals = pglrec["goals"]
+        rep.pgl_quick = pglrec["quick_replies"]
         from .momentum import lead_protection
         lprec = lead_protection(match, config)[team.value]
         if lprec["led"]:
@@ -3278,6 +3302,21 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 41) Az ő gól utáni elalvásuk × a ti gyors válaszotok: minden kapott
+    # gólra azonnali válasz jöhet — a középkezdésük után kell rohanni.
+    if (opp.pgl_goals >= 5
+            and 100.0 * opp.pgl_quick / opp.pgl_goals >= 40.0
+            and own.response_n >= 4
+            and own.response_sum_s / own.response_n <= 60.0):
+        _g41_rate = 100.0 * opp.pgl_quick / opp.pgl_goals
+        _g41_resp = own.response_sum_s / own.response_n
+        plan.append(
+            f"Gól után elalszanak (a góljaik {_g41_rate:.0f}%-ára fél "
+            f"percen belül jött válasz), ti pedig gyorsan válaszoltok "
+            f"(átlag {_g41_resp:.0f} mp) — minden kapott gól után a "
+            "középkezdésükre AZONNAL menjetek rá: az ő góljuk ne lendület "
+            "legyen nekik, hanem a ti következő gólotok előszobája.")
+
     # 40) Az ő hajrá-kiállításaik × a ti emberelőny-játékotok: a meccs
     # végén emberelőny várható — előre gyakorolt figurával kell büntetni.
     if (opp.disc_fh_susp + opp.disc_sh_susp >= 3
@@ -3541,6 +3580,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         lp_biggest=max((r.lp_biggest for r in reports), default=0),
         disc_fh_susp=sum(r.disc_fh_susp for r in reports),
         disc_sh_susp=sum(r.disc_sh_susp for r in reports),
+        pgl_goals=sum(r.pgl_goals for r in reports),
+        pgl_quick=sum(r.pgl_quick for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

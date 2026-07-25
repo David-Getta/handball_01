@@ -620,6 +620,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Gól utáni elalvás: a saját gólra rendre azonnali válasz érkezik.
+    try:
+        from .momentum import post_goal_lapses
+        pglc = post_goal_lapses(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pg = pglc[side]
+            if rec_pg["rate_pct"] is not None and rec_pg["rate_pct"] >= 40.0 \
+                    and rec_pg["quick_replies"] >= 2:
+                body += (f" A(z) {name} góljaira rendre azonnali válasz "
+                         f"jött ({rec_pg['goals']} góljából "
+                         f"{rec_pg['quick_replies']} után fél percen belül) "
+                         "— a középkezdés utáni visszarendeződés hagyott "
+                         "kívánnivalót.")
+    except Exception:
+        pass
     # Fegyelem-esés: a kiállítások félidőnkénti sűrűsödése.
     try:
         from .rules import discipline_fade
