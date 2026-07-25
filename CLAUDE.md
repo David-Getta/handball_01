@@ -1,0 +1,79 @@
+# CLAUDE.md — fejlesztési recept
+
+Ez a fájl a leggyorsabb fejlesztési út leírása. Új elemző réteg
+hozzáadásakor NE a kódbázisból derítsd vissza a mintát — kövesd az
+alábbi checklistet, és minta gyanánt nézd meg a legutóbbi
+"…: egy réteg, sok felület" commitot (`git log --oneline`).
+
+## A projekt egy mondatban
+
+Kézilabda videó-elemző: Python backend (`backend/handball/`, FastAPI +
+pipeline-rétegek a `Tracking`/`Match` adatmodellen) + Flutter kliens
+(`client/`). Minden elemzés magyar edzői nyelven indokol.
+
+## Parancsok
+
+```bash
+# Teljes backend teszt (kb. 80 mp) — commit előtt kötelező:
+cd backend && python3 -m pytest -q
+
+# Gyors kör fejlesztés közben (csak az érintett fájlok):
+cd backend && python3 -m pytest tests/test_xg.py -q
+
+# Dart-ellenőrzés (nincs Flutter a gépen — zárójel-egyensúly):
+awk 'BEGIN{b=0} {n=gsub(/\{/,"x"); m=gsub(/\}/,"x"); b+=n-m} \
+  END{print "braces: "b}' client/lib/ui/scouting_screen.dart   # 0 a jó
+```
+
+## Új réteg receptje: "egy réteg, sok felület"
+
+Egy réteg = egy commit. A commit-üzenet mintája a git-történetben.
+Sorrendben (kb. 200–280 sor összesen):
+
+1. **Motor** — új függvény a témába vágó pipeline-modulban
+   (`xg.py`, `attack_types.py`, `defense.py`, `goalkeeper.py`, …).
+   - Küszöbök modul-szintű NAGYBETŰS konstansban, magyar kommenttel.
+   - Magyar docstring: mit mér, mit jelent edzőileg, mit ad vissza.
+   - Csapatonkénti dict: `{"home": {...}, "away": {...}}`; kevés
+     mintánál `None` ítélet (sose hallgatólagos 0).
+2. **API** (`api/app.py`) — KÉT helyre:
+   - `/analyze` válasz: `try/except` blokk, `res["reteg_nev"] = ...`,
+   - meccs-csomag: `_layer("reteg_nev", lambda: fn(match))`.
+3. **Edzői összefoglaló** (`pipeline/coach_summary.py`,
+   `_style_section`) — egy mondat `try/except`-ben, a motor
+   konstansával azonos küszöb.
+4. **Felderítés** (`pipeline/scouting.py`) — ÖT pont:
+   - `ScoutingReport` mezők: CSAK darabszám/összeg alapú tárolás
+     (arány sose), hogy meccsek közt pontosan összegződjön,
+   - `_coach_keys`: edzői kulcs (mit tegyen ellene a saját csapat),
+   - `scout_team`: mezők kitöltése a motorból,
+   - `matchup_plan`: új sorszámozott páros szabály (az ő gyengéjük ×
+     a ti erősségetek) — a KÖVETKEZŐ szám: 48,
+   - `combine_reports`: a mezők összegzése.
+5. **Edzés-fókusz** (`pipeline/training.py`, `training_focus`) — új
+   sorszámozott szabály, az újak felülre — a KÖVETKEZŐ szám: 69.
+6. **Kliens** (`client/lib/ui/scouting_screen.dart`) — `_xxx(r)`
+   helper (a backenddel azonos küszöbök, kommentben jelezve) + csempe
+   a listában.
+7. **Teszt** (`backend/tests/test_<modul>.py`) — legalább egy: a
+   pozitív eset + a "kevés minta → None" eset.
+8. **CHANGELOG.md** — bejegyzés a "Kiadatlan" lista TETEJÉRE, a
+   meglévő stílusban (mit mér, edzői olvasat, felület-lista).
+
+A helyi importok (`from .xg import ...` a függvényen belül) és a
+`try/except`-tel izolált felületek szándékosak: egy réteg hibája nem
+viheti el a többit. Tartsd ezt a stílust.
+
+## Számláló-frissítés (recept végén)
+
+Réteg-commit után frissítsd ITT: meccsterv-szabály következő száma,
+edzés-szabály következő száma. A README "Hol tartunk" teszt-számát
+(jelenleg 735) elég kiadáskor frissíteni.
+
+## Commit-stílus
+
+- Cím: `<Réteg magyar neve>: egy réteg, sok felület`.
+- Törzs: Új réteg (mit mér + edzői olvasat), Motor, Felületek
+  (felsorolás), Teszt + "A teljes backend csomag zöld (N teszt)."
+- Commit előtt: teljes pytest zöld + Dart zárójel-egyensúly 0.
+- A munkaág: `claude/handball-ai-analysis-9dq1a2` — oda push.
