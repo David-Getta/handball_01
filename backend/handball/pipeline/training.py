@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 65) Hetes-védés: ha a kapusunk a rá dobott heteseket rendre kapja,
+    # a hetes-készülés a kapus-edzés témája.
+    try:
+        from .rules import seven_meter_defense
+        s7d65 = seven_meter_defense(match, config)
+        for side in ("home", "away"):
+            rec65 = s7d65[side]
+            if rec65["faced"] < 2 or rec65["saved"] > 0:
+                continue
+            add(side, "védekezés", "Hetes-védés",
+                f"a kapusunk mind a {rec65['faced']} kapura tartó hetest "
+                "kapta — a hetes ellenünk most kész gól",
+                "kapus hetes-készülés: a következő ellenfél dobóinak "
+                "sarok-statisztikája (felderítő-jelentésből), "
+                "hetes-sorozat edzésen fáradt lövőkkel (meccs-szimuláció), "
+                "és a kapus késleltetett mozdulat-időzítésének "
+                "gyakorlása videó-visszajelzéssel")
+    except Exception:
+        pass
+
     # 64) Félidő-zárás: ha a szünet előtti perceket érdemben elvesztettük,
     # az 1. félidő végi koncentráció a téma.
     try:

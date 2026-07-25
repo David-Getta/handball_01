@@ -959,6 +959,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hetes-védés: a kapusuk mérlege a kapura tartó hetesekből (3+
+  // hetesnél; a backend-kulccsal azonos küszöbök).
+  String? _sevenDefense(Map<String, dynamic> r) {
+    final faced = ((r["s7d_faced"] as num?) ?? 0).toInt();
+    if (faced < 3) return null;
+    final saved = ((r["s7d_saved"] as num?) ?? 0).toInt();
+    if (100.0 * saved / faced >= 40.0) {
+      return "$faced kapura tartó hetesből $saved fogás · hetest fog";
+    }
+    if (saved == 0 && faced >= 4) {
+      return "$faced hetesből 0 fogás · a kiharcolt hetes kész gól";
+    }
+    return null;
+  }
+
   // Félidő-zárás: a szünet előtti 5 perc gól-mérlege (a backend-kulccsal
   // azonos, 3 gólos különbség-küszöbbel).
   String? _firstHalfClose(Map<String, dynamic> r) {
@@ -1579,6 +1594,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_closeGames(r) != null) ["Szoros meccsek", _closeGames(r)!],
       if (_firstHalfClose(r) != null)
         ["Félidő-zárás", _firstHalfClose(r)!],
+      if (_sevenDefense(r) != null) ["Hetes-védés", _sevenDefense(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -620,6 +620,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Hetes-védés: a 2+ fogott hetes külön említést érdemel.
+    try:
+        from .rules import seven_meter_defense
+        s7d = seven_meter_defense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_s7 = s7d[side]
+            if rec_s7["saved"] >= 2:
+                body += (f" A(z) {name} kapusa {rec_s7['saved']} hetest "
+                         f"is megfogott ({rec_s7['faced']} kapura tartóból) "
+                         "— extra mentések a legnagyobb nyomás alatt.")
+    except Exception:
+        pass
     # Félidő-zárás: ki nyerte a szünet előtti perceket.
     try:
         from .halftime import first_half_close
