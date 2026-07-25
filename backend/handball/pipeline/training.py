@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 62) Gól utáni elalvás: ha a góljaink után rendre azonnali választ
+    # kapunk, a középkezdés elleni visszarendeződés a téma.
+    try:
+        from .momentum import post_goal_lapses
+        pgl62 = post_goal_lapses(match, config)
+        for side in ("home", "away"):
+            rec62 = pgl62[side]
+            if rec62["rate_pct"] is None or rec62["rate_pct"] < 40.0 \
+                    or rec62["quick_replies"] < 2:
+                continue
+            add(side, "védekezés", "Koncentráció gól után",
+                f"a góljaink {rec62['rate_pct']:.0f}%-ára fél percen belül "
+                f"jött válasz ({rec62['goals']} gólból "
+                f"{rec62['quick_replies']}) — a középkezdés után elalszunk",
+                "gól utáni visszarendeződés: gólöröm-szimuláció után "
+                "azonnali középkezdés elleni védekezés (6-0-ba érés "
+                "időre), a gólszerző NEM eshet ki a visszafutásból, és "
+                "kijelölt 'ébresztő' hang a pályán (ki szól, ki irányít)")
+    except Exception:
+        pass
+
     # 61) Fegyelem-esés: ha a kiállításaink a 2. félidőre sűrűsödnek,
     # a fáradt védekezés-technika a téma — a hajrában nem szabad
     # emberhátrányba kerülni.

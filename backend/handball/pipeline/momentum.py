@@ -599,6 +599,54 @@ def goal_responses(match: Match, config=None) -> dict:
     return out
 
 
+# Gól utáni elalvás: az ennyi másodpercen belül érkező ellenfél-gól
+# számít "azonnali válasznak" — a középkezdés utáni koncentráció-hiba.
+POST_GOAL_QUICK_S = 40.0
+# Ennyi saját góltól ítélünk arányt.
+POST_GOAL_MIN_GOALS = 3
+
+
+def post_goal_lapses(match: Match, config=None,
+                     quick_s: float = POST_GOAL_QUICK_S) -> dict:
+    """Gól utáni elalvás: a saját gól után azonnal visszakapott gólok.
+
+    A válasz-idő réteg (goal_responses) párja, a másik irányból: nem az
+    érdekel, milyen gyorsan válaszolunk a kapott gólra, hanem hogy a
+    SAJÁT góljaink után hányszor kapunk `quick_s` másodpercen belül
+    azonnali választ. A sok gyors visszakapott gól a középkezdés utáni
+    elalvás jele — a szerzett előny rendre azonnal elolvad.
+
+    Visszatérés csapatonként: {"goals", "quick_replies", "rate_pct"} —
+    rate_pct None, ha kevés (POST_GOAL_MIN_GOALS alatti) a saját gól.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    scored = {"home": 0, "away": 0}
+    quick = {"home": 0, "away": 0}
+    for (t1, s1), (t2, s2) in zip(goals, goals[1:]):
+        scored[s1] += 1
+        if s2 != s1 and (t2 - t1) / fps <= quick_s:
+            quick[s1] += 1
+    if goals:
+        scored[goals[-1][1]] += 1
+
+    out = {}
+    for side in ("home", "away"):
+        out[side] = {
+            "goals": scored[side],
+            "quick_replies": quick[side],
+            "rate_pct": (round(100.0 * quick[side] / scored[side], 1)
+                         if scored[side] >= POST_GOAL_MIN_GOALS else None),
+        }
+    return out
+
+
 def goal_droughts(match: Match, config=None) -> dict:
     """Gólcsend: a leghosszabb saját gól nélküli időszak csapatonként.
 

@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Gól utáni elalvás**: a saját gólokra fél percen belül
+  visszakapott válasz-gólok aránya — a 40%+ a középkezdés utáni
+  elalvás jele (a szerzett előny rendre azonnal elolvad), ellenük
+  a középkezdés utáni azonnali letámadás a kulcs. A válasz-idő
+  réteg párja a másik irányból. Egy réteg, sok felület:
+  `post_goal_lapses` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 41. meccsterv-
+  szabály (az ő elalvásuk × a ti gyors válaszotok), 62. edzés-
+  szabály (gól utáni visszarendeződés).
 - **Fegyelem-esés (fáradó fej)**: a kiállítások félidőnkénti
   eloszlása — akinek a hajrában jönnek a kiállításai, az fáradtan
   szabálytalankodik: ott emberelőny várható ellene. A fáradás-kép

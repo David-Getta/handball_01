@@ -959,6 +959,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Gól utáni elalvás: a saját gólokra fél percen belül visszakapott
+  // válasz-gólok aránya (5+ gólnál; a backend-kulccsal azonos küszöb).
+  String? _postGoalLapses(Map<String, dynamic> r) {
+    final goals = ((r["pgl_goals"] as num?) ?? 0).toInt();
+    if (goals < 5) return null;
+    final quick = ((r["pgl_quick"] as num?) ?? 0).toInt();
+    final rate = 100.0 * quick / goals;
+    if (rate >= 40.0) {
+      return "$goals góljából $quick után jött azonnali válasz "
+          "(${rate.round()}%) · gól után elalszanak";
+    }
+    if (rate <= 10.0 && goals >= 10) {
+      return "$goals góljából csak $quick gyors válasz · gól után is "
+          "ébren vannak";
+    }
+    return null;
+  }
+
   // Fegyelem-esés: a kiállítások félidőnkénti eloszlása (3+ kiállításnál
   // és 2+ többletnél; a backend-kulccsal azonos küszöb).
   String? _disciplineFade(Map<String, dynamic> r) {
@@ -1527,6 +1545,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_leadProtection(r) != null) ["Előny-őrzés", _leadProtection(r)!],
       if (_disciplineFade(r) != null)
         ["Fegyelem-esés", _disciplineFade(r)!],
+      if (_postGoalLapses(r) != null)
+        ["Gól utáni elalvás", _postGoalLapses(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

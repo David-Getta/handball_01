@@ -508,3 +508,28 @@ def test_lead_protection_no_goals():
     from handball.pipeline.momentum import lead_protection
     lp = lead_protection(Match(_meta(), []))
     assert lp["home"]["max_lead"] == 0 and lp["home"]["verdict"] is None
+
+
+def test_post_goal_lapses_quick_reply_counted():
+    """A hazai 3 góljából egyre jön 10 mp-en belüli válasz → 33%; a
+    vendégnek kevés a gólja az ítélethez."""
+    from handball.pipeline.momentum import post_goal_lapses
+
+    frames = []
+    for t0, ch in ((0, "H"), (250, "A"), (2000, "H"), (3000, "H"),
+                   (8000, "A")):
+        frames += _goal(t0, toward_home_goal=(ch == "A"))
+        frames.append(Frame(t=frames[-1].t + 1, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    pgl = post_goal_lapses(Match(_meta(), frames))
+    h = pgl["home"]
+    assert h["goals"] == 3 and h["quick_replies"] == 1
+    assert abs(h["rate_pct"] - 33.3) < 0.1
+    a = pgl["away"]
+    assert a["goals"] == 2 and a["rate_pct"] is None
+
+
+def test_post_goal_lapses_no_goals():
+    from handball.pipeline.momentum import post_goal_lapses
+    pgl = post_goal_lapses(Match(_meta(), []))
+    assert pgl["home"]["goals"] == 0 and pgl["home"]["rate_pct"] is None
