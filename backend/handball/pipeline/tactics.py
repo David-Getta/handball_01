@@ -644,3 +644,80 @@ def pass_tempo(match: Match, config: Optional[TacticsConfig] = None) -> dict:
                             else "közepes")
         out[s] = rec
     return out
+
+
+# Támadó-mozgás: szervezett támadásban ennyi mért játékos-másodperctől
+# ítélünk; ez alatti átlagsebesség álló, e feletti mozgásos támadás;
+# az irreálisan nagy elmozdulás track-ugrás, kihagyjuk.
+ATTACK_MOTION_MIN_S = 120.0
+ATTACK_MOTION_STATIC_MPS = 0.9
+ATTACK_MOTION_FLUID_MPS = 1.6
+_MOTION_MAX_MPS = 9.0
+
+
+def attack_motion(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Támadó-mozgás: álló vagy mozgásos a szervezett támadás.
+
+    Az "álló kézilabda" a védő álma: ha a támadók labda nélkül nem
+    mozognak, a fal nem kényszerül döntésekre — a kilépés, a
+    letámadás kockázat nélkül vállalható ellene. A mozgásos (keresztek,
+    elfutások, beúszások) támadás ellen viszont a fegyelmezett
+    átadás-átvétel a kulcs, nem az emberkövetés. Szervezett támadásban
+    mérjük a támadó mezőnyjátékosok átlagsebességét (kapus és
+    becsült pozíciók nélkül, track-ugrás szűréssel).
+
+    Visszatérés csapatonként: {"dist_m", "time_s", "avg_mps",
+    "style"} — avg_mps/style None, ha kevés (ATTACK_MOTION_MIN_S
+    alatti játékos-másodperc) a minta; a style "álló" / "mozgásos" /
+    None (köztes).
+    """
+    from ..models.tracking import PositionSource
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    sums = {"home": {"dist": 0.0, "time": 0.0},
+            "away": {"dist": 0.0, "time": 0.0}}
+    prev = None
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        side = ("home" if ph == Phase.HOME_ATTACK
+                else "away" if ph == Phase.AWAY_ATTACK else None)
+        if prev is not None and side is not None:
+            dt = (f.t - prev.t) / fps
+            if 0.0 < dt <= 0.5:
+                team = Team.HOME if side == "home" else Team.AWAY
+                prev_pos = {
+                    p.track_id: (p.x, p.y) for p in prev.players
+                    if p.team == team
+                    and p.source == PositionSource.MEASURED
+                    and p.role != "kapus"}
+                for p in f.players:
+                    if (p.team != team
+                            or p.source != PositionSource.MEASURED
+                            or p.role == "kapus"):
+                        continue
+                    pp = prev_pos.get(p.track_id)
+                    if pp is None:
+                        continue
+                    d = math.hypot(p.x - pp[0], p.y - pp[1])
+                    if d / dt > _MOTION_MAX_MPS:
+                        continue
+                    sums[side]["dist"] += d
+                    sums[side]["time"] += dt
+        prev = f
+    out = {}
+    for side in ("home", "away"):
+        rec = sums[side]
+        r = {"dist_m": round(rec["dist"], 1),
+             "time_s": round(rec["time"], 1),
+             "avg_mps": None, "style": None}
+        if rec["time"] >= ATTACK_MOTION_MIN_S:
+            avg = rec["dist"] / rec["time"]
+            r["avg_mps"] = round(avg, 2)
+            if avg <= ATTACK_MOTION_STATIC_MPS:
+                r["style"] = "álló"
+            elif avg >= ATTACK_MOTION_FLUID_MPS:
+                r["style"] = "mozgásos"
+        out[side] = r
+    return out

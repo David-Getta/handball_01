@@ -1137,6 +1137,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Támadó-mozgás: átlagsebesség szervezett támadásban (120+ mért
+  // játékos-másodpercnél; 0,9 m/s alatt álló, 1,6 felett mozgásos;
+  // a backend-kulccsal azonos küszöbök).
+  String? _attackMotion(Map<String, dynamic> r) {
+    final dist = ((r["am_dist_m"] as num?) ?? 0).toDouble();
+    final time = ((r["am_time_s"] as num?) ?? 0).toDouble();
+    if (time < 120.0) return null;
+    final avg = dist / time;
+    if (avg <= 0.9) {
+      return "álló támadás: átlag ${avg.toStringAsFixed(1)} m/s · "
+          "lépj ki bátran, segítség nem jön";
+    }
+    if (avg >= 1.6) {
+      return "mozgásos támadás (${avg.toStringAsFixed(1)} m/s): "
+          "keresztek, elfutások · átadás-átvétel, ne kövess embert";
+    }
+    return null;
+  }
+
   // Fal-rés: a réses (3,5 m+ szomszéd-táv) falkockák aránya (100+
   // mért falkockánál, 40%+ aránynál; a backend-kulccsal azonos
   // küszöbök).
@@ -2019,6 +2038,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gólcsend-anatómia", _droughtAnatomy(r)!],
       if (_wallGaps(r) != null)
         ["Fal-rés", _wallGaps(r)!],
+      if (_attackMotion(r) != null)
+        ["Támadó-mozgás", _attackMotion(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

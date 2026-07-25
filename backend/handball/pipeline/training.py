@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 89) Támadó-mozgás: ha áll a támadásunk, a védő ingyen léphet ki
+    # ránk — a labda nélküli mozgás (passzolj és fuss) a téma.
+    try:
+        from .tactics import (ATTACK_MOTION_MIN_S,
+                              ATTACK_MOTION_STATIC_MPS, attack_motion)
+        am89 = attack_motion(match, config)
+        for side in ("home", "away"):
+            rec89 = am89[side]
+            if rec89["style"] != "álló" \
+                    or rec89["time_s"] < ATTACK_MOTION_MIN_S \
+                    or rec89["avg_mps"] > ATTACK_MOTION_STATIC_MPS:
+                continue
+            add(side, "támadás", "Labda nélküli mozgás",
+                f"áll a támadásunk: szervezett támadásban átlag "
+                f"{rec89['avg_mps']:.1f} m/s-mal mozgunk — az álló "
+                "támadóra a védő kockázat nélkül kiléphet, a "
+                "kilépés ellenünk ingyen van",
+                "passzolj és fuss: minden passz után kötelező elfutás "
+                "(a passz utáni megállás hibának számít a "
+                "kisjátékban), kereszt- és beúszás-minták "
+                "sorozatban, és 6 a 6 elleni játék 'mozgás-szabállyal' "
+                "— aki 3 mp-ig egy helyben áll, labdát veszt")
+    except Exception:
+        pass
+
     # 88) Fal-rés: ha a rendezett falunk réseket hagy, a betörés és a
     # beúszó beálló ellenünk terv — a zárás-távolság a téma.
     try:

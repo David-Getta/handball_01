@@ -365,3 +365,43 @@ def test_tilt_fade_flags_second_half_retreat():
     # Félidő-jel nélkül nincs ítélet.
     short = tilt_fade(Match(_meta(), frames[:2000]))
     assert short["home"]["drop_pp"] is None
+
+
+def test_attack_motion_separates_static_and_fluid():
+    """A hazai támadói cikcakkban futnak (~2 m/s), a vendégéi állnak →
+    mozgásos vs álló ítélet; kevés mintánál nincs ítélet."""
+    from handball.pipeline.tactics import attack_motion
+
+    fps = 25.0
+    frames = []
+    t = 0
+
+    # Hazai szervezett támadás: 5 játékos együtt cikcakkozik y-ban.
+    off = 0.0
+    for i in range(1000):
+        direction = 1.0 if (i // 25) % 2 == 0 else -1.0
+        off += 0.08 * direction
+        players = [_pl(k, Team.HOME, 30.0, base + off)
+                   for k, base in ((1, 10.0), (2, 4.0), (3, 7.0),
+                                   (4, 13.0), (5, 16.0))]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=30.0, y=10.0 + off,
+                                      confidence=1.0)))
+        t += 1
+
+    # Vendég szervezett támadás: mindenki áll.
+    away = [_pl(10 + k, Team.AWAY, 10.0, 4.0 + 3.0 * k)
+            for k in range(5)]
+    for _ in range(1000):
+        frames.append(Frame(t=t, players=away,
+                            ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+        t += 1
+
+    am = attack_motion(Match(_meta(), frames))
+    h, a = am["home"], am["away"]
+    assert h["style"] == "mozgásos" and h["avg_mps"] >= 1.6
+    assert a["style"] == "álló" and a["avg_mps"] <= 0.2
+
+    # Kevés minta: nincs ítélet.
+    few = attack_motion(Match(_meta(), frames[:200]))
+    assert few["home"]["style"] is None

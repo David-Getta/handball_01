@@ -663,6 +663,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Támadó-mozgás: álló vagy mozgásos volt a szervezett támadás.
+    try:
+        from .tactics import attack_motion
+        amc = attack_motion(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_am = amc[side]
+            if rec_am["style"] is None:
+                continue
+            if rec_am["style"] == "álló":
+                body += (f" A(z) {name} támadása állt: szervezett "
+                         f"támadásban átlag {rec_am['avg_mps']:.1f} "
+                         "m/s-mal mozogtak — labda nélkül alig volt "
+                         "elfutás.")
+            else:
+                body += (f" A(z) {name} támadása mozgásos volt "
+                         f"(átlag {rec_am['avg_mps']:.1f} m/s "
+                         "szervezett támadásban).")
+    except Exception:
+        pass
     # Fal-rés: réses volt-e a rendezett fal.
     try:
         from .defense import WALL_GAP_M, WALL_GAP_SHARE_PCT, wall_gaps

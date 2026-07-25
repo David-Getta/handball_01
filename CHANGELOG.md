@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Támadó-mozgás**: álló vagy mozgásos a szervezett támadás — a
+  támadó mezőnyjátékosok átlagsebessége szervezett támadásban (kapus
+  és becsült pozíciók nélkül, track-ugrás szűréssel, 120+ mért
+  játékos-másodpercből). Az "álló kézilabda" (0,9 m/s alatt) a védő
+  álma: ellene a kilépés kockázat nélkül vállalható; a mozgásos (1,6
+  m/s felett) ellen a fegyelmezett átadás-átvétel a kulcs. Egy réteg,
+  sok felület: `attack_motion` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 68.
+  meccsterv-szabály (az ő álló támadásuk × a ti kilépős
+  védekezésetek), 89. edzés-szabály (passzolj és fuss,
+  mozgás-szabályos 6 a 6).
 - **Fal-rés**: mekkora réseket hagy a rendezett védőfal — a
   betörés-folyosó a következményt méri (hol törnek be), ez az okot.
   Rendezett védekezésben a fal szomszédos védői közti legnagyobb

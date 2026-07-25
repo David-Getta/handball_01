@@ -496,6 +496,11 @@ class ScoutingReport:
     # kockák — darabszámok, meccsek közt összegződnek.
     wg_frames: int = 0
     wg_wide: int = 0
+    # Támadó-mozgás: szervezett támadásban megtett út + mért
+    # játékos-idő — összegek, meccsek közt összeadódnak
+    # (átlagsebesség = dist / time).
+    am_dist_m: float = 0.0
+    am_time_s: float = 0.0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1421,6 +1426,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Támadó-mozgás: az álló támadás ellen kockázat nélkül léphettek
+    # ki; a mozgásos ellen a fegyelmezett átadás-átvétel a kulcs.
+    if rep.am_time_s >= 120.0:
+        _am_avg = rep.am_dist_m / rep.am_time_s
+        if _am_avg <= 0.9:
+            keys.append(
+                f"Álló a támadásuk: szervezett támadásban átlag "
+                f"{_am_avg:.1f} m/s-mal mozognak, labda nélkül alig "
+                "futnak el — lépjetek ki bátran a labdásra, a statikus "
+                "támadót a kilépés megöli, segíteni nem jön senki.")
+        elif _am_avg >= 1.6:
+            keys.append(
+                f"Mozgásos a támadásuk (átlag {_am_avg:.1f} m/s): "
+                "keresztek, elfutások, beúszások — NE kövessetek "
+                "embert: fegyelmezett átadás-átvétel, a fal maradjon "
+                "rendezett, és hangos kommunikáció a váltásoknál.")
 
     # Fal-rés: réses a rendezett faluk — betörés és beúszás ellene.
     if rep.wg_frames >= 100:
@@ -2803,6 +2825,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         wgrec = wall_gaps(match, config)[team.value]
         rep.wg_frames = wgrec["frames"]
         rep.wg_wide = wgrec["wide"]
+        from .tactics import attack_motion
+        amrec = attack_motion(match, config)[team.value]
+        rep.am_dist_m = amrec["dist_m"]
+        rep.am_time_s = amrec["time_s"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4080,6 +4106,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 68) Az ő álló támadásuk × a ti kilépős védekezésetek: a
+    # statikus támadó a kilépő védőnek nem tud válaszolni.
+    if (opp.am_time_s >= 120.0 and own.defensive_pressure_m
+            and own.def_shots_against >= 4
+            and opp.am_dist_m / opp.am_time_s <= 0.9
+            and own.defensive_pressure_m <= 1.3):
+        plan.append(
+            f"A támadásuk áll (átlag "
+            f"{opp.am_dist_m / opp.am_time_s:.1f} m/s szervezett "
+            f"támadásban), ti pedig eleve szorosan, kilépve védekeztek "
+            f"(átlag {own.defensive_pressure_m:.1f} m a labdásra) — "
+            "toljátok fel a kilépést nyugodtan: az álló támadó "
+            "mellől nem mozdul el senki, a segítség nem érkezik, a "
+            "presszetek ingyen van.")
+
     # 67) Az ő réses faluk × a ti betörés-játékotok: a rés pont annak
     # a fegyvernek kedvez, amivel ti a legtöbbet éltek.
     if (opp.wg_frames >= 100 and own.break_entries >= 8
@@ -4665,6 +4706,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         da_shots=sum(r.da_shots for r in reports),
         wg_frames=sum(r.wg_frames for r in reports),
         wg_wide=sum(r.wg_wide for r in reports),
+        am_dist_m=sum(r.am_dist_m for r in reports),
+        am_time_s=sum(r.am_time_s for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
