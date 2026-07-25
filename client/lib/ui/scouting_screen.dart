@@ -959,6 +959,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
+  // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
+  String? _gkChangeEffect(Map<String, dynamic> r) {
+    final ch = ((r["gkc_changes"] as num?) ?? 0).toInt();
+    final preF = ((r["gkc_pre_faced"] as num?) ?? 0).toInt();
+    final postF = ((r["gkc_post_faced"] as num?) ?? 0).toInt();
+    if (ch < 2 || preF < 4 || postF < 4) return null;
+    final pre = 100.0 * ((r["gkc_pre_saves"] as num?) ?? 0).toInt() / preF;
+    final post =
+        100.0 * ((r["gkc_post_saves"] as num?) ?? 0).toInt() / postF;
+    if (post - pre >= 15.0) {
+      return "${pre.round()}% → ${post.round()}% védés a cserék után · "
+          "a csere bejön";
+    }
+    if (pre - post >= 15.0) {
+      return "${pre.round()}% → ${post.round()}% védés a cserék után · "
+          "nincs mentőöv";
+    }
+    return null;
+  }
+
   // Hetes-védés: a kapusuk mérlege a kapura tartó hetesekből (3+
   // hetesnél; a backend-kulccsal azonos küszöbök).
   String? _sevenDefense(Map<String, dynamic> r) {
@@ -1595,6 +1616,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_firstHalfClose(r) != null)
         ["Félidő-zárás", _firstHalfClose(r)!],
       if (_sevenDefense(r) != null) ["Hetes-védés", _sevenDefense(r)!],
+      if (_gkChangeEffect(r) != null)
+        ["Kapuscsere-hatás", _gkChangeEffect(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

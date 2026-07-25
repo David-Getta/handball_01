@@ -620,6 +620,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Kapuscsere-hatás: fordított-e a csere.
+    try:
+        from .goalkeeper import GK_CHANGE_DELTA_PP, gk_change_effect
+        gce = gk_change_effect(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gc = gce[side]
+            if rec_gc["delta_pp"] is None:
+                continue
+            _gc_pre = 100.0 * rec_gc["pre_saves"] / rec_gc["pre_faced"]
+            _gc_post = 100.0 * rec_gc["post_saves"] / rec_gc["post_faced"]
+            if rec_gc["delta_pp"] >= GK_CHANGE_DELTA_PP:
+                body += (f" A(z) {name} kapuscseréje fordított "
+                         f"({_gc_pre:.0f}% → {_gc_post:.0f}% védés a "
+                         "csere után).")
+            elif rec_gc["delta_pp"] <= -GK_CHANGE_DELTA_PP:
+                body += (f" A(z) {name} kapuscseréje sem segített "
+                         f"({_gc_pre:.0f}% → {_gc_post:.0f}% védés a "
+                         "csere után).")
+    except Exception:
+        pass
     # Hetes-védés: a 2+ fogott hetes külön említést érdemel.
     try:
         from .rules import seven_meter_defense
