@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 64) Félidő-zárás: ha a szünet előtti perceket érdemben elvesztettük,
+    # az 1. félidő végi koncentráció a téma.
+    try:
+        from .halftime import first_half_close
+        fhc64 = first_half_close(match, config)
+        if fhc64 is not None:
+            for side in ("home", "away"):
+                other = "away" if side == "home" else "home"
+                if fhc64[other] - fhc64[side] < 2:
+                    continue
+                add(side, "taktika", "Félidő-zárás",
+                    f"a szünet előtti 5 percet {fhc64[side]}–"
+                    f"{fhc64[other]}-ra elvesztettük — a félidő végére "
+                    "elfogy a fókusz",
+                    "az 1. félidő zárásának begyakorlása: az edzés-meccs "
+                    "utolsó 5 perce mindig 'félidő-hajrá' (kihirdetett "
+                    "állással), az utolsó támadás mindig kidolgozott "
+                    "figurából, és a falban hangos, névre szóló "
+                    "vezénylés a fáradó szakaszban")
+    except Exception:
+        pass
+
     # 63) Szoros vereség: ha ez a meccs 1-2 gólon úszott el, a
     # hajrá-forgatókönyv a következő edzés témája.
     try:

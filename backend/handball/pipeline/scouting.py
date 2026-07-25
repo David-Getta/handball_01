@@ -446,6 +446,11 @@ class ScoutingReport:
     restart_for: int = 0
     restart_against: int = 0
     restart_matches: int = 0
+    # A félidő-zárás (az 1. félidő utolsó 5 perce): dobott/kapott gólok +
+    # hány meccsen volt mérhető félidő-jel — összegződik.
+    fhc_for: int = 0
+    fhc_against: int = 0
+    fhc_matches: int = 0
     # Kezdés-profil (a meccs nyitánya, gól-sorrendből): hányszor szerezte a
     # csapat a meccs első gólját, hány gólos meccsen mérhető ez, és a korai
     # ablak (első 6 gól) dobott/kapott gólmérlege — meccsek közt pontosan
@@ -1707,6 +1712,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.restart_against} az első 5 percben) — a 2. "
                 "félidő eleje ellenük kiemelt figyelmet kér: kész "
                 "tervvel gyertek ki az öltözőből.")
+    # A félidő-zárás: ki üt utoljára a szünet előtt.
+    if rep.fhc_matches >= 1:
+        d_fhc = rep.fhc_against - rep.fhc_for
+        if d_fhc >= 3:
+            keys.append(
+                f"Az 1. félidő hajráját elengedik: a szünet előtti 5 "
+                f"percben a mérlegük {rep.fhc_for}–{rep.fhc_against} — "
+                "a félidő végén nyomjatok rá, ott olcsó gólok vannak, "
+                "és a lendület is veletek megy az öltözőbe.")
+        elif d_fhc <= -3:
+            keys.append(
+                f"A félidő-zárásuk erős ({rep.fhc_for}–{rep.fhc_against} "
+                "a szünet előtti 5 percben) — a félidő utolsó perceiben "
+                "TILOS kiengedni: náluk ott szokott eldőlni a lendület.")
     # Kezdés-profil: milyen a meccs nyitánya — gyorsan vezetést szereznek-e.
     if rep.open_first_matches >= 3:
         _of_rate = 100.0 * rep.open_first_yes / rep.open_first_matches
@@ -2283,6 +2302,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.restart_for = shs[team.value]
             rep.restart_against = shs[other]
             rep.restart_matches = 1
+        from .halftime import first_half_close
+        fhcr = first_half_close(match, config)
+        if fhcr is not None:
+            other = "away" if team.value == "home" else "home"
+            rep.fhc_for = fhcr[team.value]
+            rep.fhc_against = fhcr[other]
+            rep.fhc_matches = 1
         from .momentum import opening_profile
         opr = opening_profile(match, config)[team.value]
         if opr["scores_first"] is not None:
@@ -3331,6 +3357,19 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 43) Az ő elengedett félidő-zárásuk × a ti erős zárásotok: a szünet
+    # előtti 5 perc a ti terepetek — dupla lendület az öltözőbe.
+    if (opp.fhc_matches >= 1 and own.fhc_matches >= 1
+            and opp.fhc_against - opp.fhc_for >= 3
+            and own.fhc_for > own.fhc_against):
+        plan.append(
+            f"Az 1. félidő hajráját elengedik ({opp.fhc_for}–"
+            f"{opp.fhc_against} a szünet előtti 5 percben), ti pedig "
+            f"erősen zártok ({own.fhc_for}–{own.fhc_against}) — a félidő "
+            "utolsó 5 percére időzítsetek egy tempó-emelést: onnan "
+            "lendülettel mentek az öltözőbe, ők pedig fejben már a "
+            "szünetben lesznek.")
+
     # 42) Az ő szoros-meccs gyengeségük × a ti hajrá-erőtök: a meccset
     # szoros hajrába kell vinni — ott ők megroppannak, ti nem.
     if (opp.cg_losses >= 2 and opp.cg_losses >= 2 * opp.cg_wins
@@ -3662,6 +3701,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         restart_for=sum(r.restart_for for r in reports),
         restart_against=sum(r.restart_against for r in reports),
         restart_matches=sum(r.restart_matches for r in reports),
+        fhc_for=sum(r.fhc_for for r in reports),
+        fhc_against=sum(r.fhc_against for r in reports),
+        fhc_matches=sum(r.fhc_matches for r in reports),
         open_first_yes=sum(r.open_first_yes for r in reports),
         open_first_matches=sum(r.open_first_matches for r in reports),
         open_for=sum(r.open_for for r in reports),

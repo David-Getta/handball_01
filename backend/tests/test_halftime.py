@@ -132,3 +132,31 @@ def test_second_half_start_counts_goals():
     no_ht = Match(_meta(), _play_frames(0, 240, home_x=12.0,
                                         away_x=26.0))
     assert second_half_start(no_ht) is None
+
+
+def test_first_half_close_counts_goals_before_break():
+    """A szünet előtti 5 perc góljai csapatonként; félidő-jel nélkül
+    None."""
+    from handball.pipeline.halftime import first_half_close
+
+    frames = _play_frames(0, 90, home_x=12.0, away_x=26.0)
+    t = len(frames)
+    for i in range(8):  # hazai gól a szünet előtt (a +x kapuba)
+        frames.append(Frame(t=t + i,
+                            players=[_pl(100, Team.HOME, 33.5, 10.0)],
+                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                      confidence=1.0)))
+    t += 8
+    frames += _play_frames(t, 30, home_x=12.0, away_x=26.0)
+    t = frames[-1].t + 1
+    frames += _break_frames(t, 90)
+    t = frames[-1].t + 1
+    frames += _play_frames(t, 120, home_x=12.0, away_x=26.0)
+    m = Match(_meta(), frames)
+    rec = first_half_close(m)
+    assert rec is not None
+    assert rec["home"] >= 1 and rec["away"] == 0
+
+    no_ht = Match(_meta(), _play_frames(0, 240, home_x=12.0,
+                                        away_x=26.0))
+    assert first_half_close(no_ht) is None
