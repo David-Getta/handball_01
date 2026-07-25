@@ -254,3 +254,38 @@ def test_miss_punishment_counts_quick_goals_after_miss():
     assert h["misses"] == 3 and h["punished"] == 1
     assert abs(h["rate_pct"] - 33.3) < 0.1
     assert mp["away"]["misses"] == 0 and mp["away"]["rate_pct"] is None
+
+
+def test_big_save_momentum_counts_quick_goals_after_save():
+    """3 vendég-bravúrból az elsőt fél percen belüli vendég-gól követi
+    → 33%; kevés bravúrnál nincs ítélet."""
+    from handball.pipeline.xg import big_save_momentum
+
+    def _saved(t0):
+        fr = []
+        gk = _pl(30, Team.AWAY, 39.0, 10.0)
+        gk.role = "kapus"
+        for i in range(8):
+            fr.append(Frame(
+                t=t0 + i,
+                players=[_pl(1, Team.HOME, 37.0, 10.0), gk],
+                ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                          confidence=1.0)))
+        fr.append(Frame(t=t0 + 9, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = _saved(0)
+    for i in range(8):  # vendég-gól a -x kapuba, ~8 mp-re a bravúrtól
+        frames.append(Frame(t=200 + i, players=[],
+                            ball=Ball(x=max(6.4 - i, 0.0), y=10.0,
+                                      confidence=1.0)))
+    frames.append(Frame(t=210, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    frames += _saved(3000)
+    frames += _saved(6000)
+    bsm = big_save_momentum(Match(_meta(), frames))
+    a = bsm["away"]
+    assert a["saves"] == 3 and a["sparked"] == 1
+    assert abs(a["rate_pct"] - 33.3) < 0.1
+    assert bsm["home"]["saves"] == 0 and bsm["home"]["rate_pct"] is None

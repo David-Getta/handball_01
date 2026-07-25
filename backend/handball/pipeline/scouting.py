@@ -413,6 +413,10 @@ class ScoutingReport:
     rn_made_goals: int = 0
     rn_suffered: int = 0
     rn_suffered_goals: int = 0
+    # Bravúr utáni lendület: nagy védések + gyorsan góllá váltott
+    # bravúrok — darabszámok, összegződnek.
+    bsm_saves: int = 0
+    bsm_sparked: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1268,6 +1272,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"elszenvedett sorozat, átlag {_rn_avg:.1f} gól) — "
                 "sorozattal nem ölöd meg őket: a meccset végig kell "
                 "játszani, az előnyt apránként kell összerakni.")
+
+    # Bravúr utáni lendület: mennyibe kerül ellenük a rossz lövés.
+    if rep.bsm_saves >= 4:
+        _bsm_rate = 100.0 * rep.bsm_sparked / rep.bsm_saves
+        if _bsm_rate >= 40.0:
+            keys.append(
+                f"A kapusbravúrjuk indítás ({rep.bsm_saves} nagy "
+                f"védésből {rep.bsm_sparked} után fél percen belül gólt "
+                "szereztek) — a rossz lövés ellenük kontra: válogassátok "
+                "meg a befejezést, és a lövő is azonnal zárjon vissza.")
+        elif _bsm_rate == 0.0:
+            keys.append(
+                f"A bravúr náluk elhal ({rep.bsm_saves} nagy védésből "
+                "egyet sem váltottak gyors gólra) — a kapusuk megfog, de "
+                "nem büntet: a merész lövésnek nincs kontra-ára, fel "
+                "lehet vállalni.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2411,6 +2431,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.rn_made_goals = rnrec["made_goals"]
         rep.rn_suffered = rnrec["suffered"]
         rep.rn_suffered_goals = rnrec["suffered_goals"]
+        from .xg import big_save_momentum
+        bsmrec = big_save_momentum(match, config)[team.value]
+        rep.bsm_saves = bsmrec["saves"]
+        rep.bsm_sparked = bsmrec["sparked"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3614,6 +3638,18 @@ def matchup_plan(own: "ScoutingReport",
             "középkezdés, és az ő időkérésük után is a megkezdett "
             "nyomás — a 3-0-jukból náluk 5-6-0 lesz.")
 
+    # 51) Az ő elhaló bravúrjuk × a ti gyors visszarendeződésetek: a
+    # merész lövésnek ellenük nincs ára.
+    if (opp.bsm_saves >= 4 and opp.bsm_sparked == 0
+            and own.rec_transitions >= 3
+            and own.rec_sum_s / own.rec_transitions <= 4.0):
+        plan.append(
+            f"A bravúr náluk elhal ({opp.bsm_saves} nagy védésből 0 "
+            f"gyors gól), ti pedig gyorsan értek vissza (átlag "
+            f"{own.rec_sum_s / own.rec_transitions:.1f} mp) — a merész "
+            "lövést fel lehet vállalni: a kapusuk megfoghatja, de "
+            "kontra nem jön belőle, ti addig visszaértek.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -3973,6 +4009,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rn_made_goals=sum(r.rn_made_goals for r in reports),
         rn_suffered=sum(r.rn_suffered for r in reports),
         rn_suffered_goals=sum(r.rn_suffered_goals for r in reports),
+        bsm_saves=sum(r.bsm_saves for r in reports),
+        bsm_sparked=sum(r.bsm_sparked for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

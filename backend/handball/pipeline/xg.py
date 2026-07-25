@@ -200,6 +200,57 @@ def miss_punishment(match: Match,
     return out
 
 
+# Bravúr utáni lendület: az ennyi másodpercen belül szerzett gól számít
+# a nagy védés azonnali kamatoztatásának; és ennyi bravúrtól ítélünk.
+BIG_SAVE_SPARK_S = 40.0
+BIG_SAVE_SPARK_MIN = 3
+
+
+def big_save_momentum(match: Match,
+                      config: Optional[TacticsConfig] = None,
+                      quick_s: float = BIG_SAVE_SPARK_S) -> dict:
+    """Bravúr utáni lendület: a nagy védés után jön-e gyors gól elöl.
+
+    A kihagyott ziccer ára (miss_punishment) védés-oldali tükre: minden
+    bravúr-védés (big_saves) után megnézzük, szerzett-e a VÉDŐ csapat
+    `quick_s` másodpercen belül gólt. A magas arány azt jelenti, hogy a
+    kapus náluk indítás: a rossz lövés ellenük kontra — a lövést meg
+    kell válogatni, bravúr után azonnali visszarendeződés kell. Az
+    alacsony arány: a bravúr náluk elhal — a kapus megfog, de nem
+    büntet, a merész lövésnek nincs kontra-ára.
+
+    Visszatérés csapatonként (a VÉDÉST jegyző oldalon): {"saves",
+    "sparked", "rate_pct"} — rate_pct None, ha kevés
+    (BIG_SAVE_SPARK_MIN alatti) a bravúr.
+    """
+    from .event_detection import EventType, detect_shots
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(quick_s * fps)
+    goals = sorted((e.t, e.team.value) for e in
+                   detect_shots(match, config or TacticsConfig())
+                   if e.type == EventType.GOAL)
+
+    counts = {"home": {"saves": 0, "sparked": 0},
+              "away": {"saves": 0, "sparked": 0}}
+    for sv in big_saves(match, config):
+        saver = "away" if sv["team"] == "home" else "home"
+        counts[saver]["saves"] += 1
+        if any(gs == saver and 0 <= gt - sv["t"] <= win
+               for (gt, gs) in goals):
+            counts[saver]["sparked"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        out[side] = {
+            "saves": rec["saves"],
+            "sparked": rec["sparked"],
+            "rate_pct": (round(100.0 * rec["sparked"] / rec["saves"], 1)
+                         if rec["saves"] >= BIG_SAVE_SPARK_MIN else None),
+        }
+    return out
+
+
 def big_saves(match: Match,
               config: Optional[TacticsConfig] = None) -> list[dict]:
     """Bravúr-védések: nagy értékű (xG >= BIG_CHANCE_XG) helyzet, amit a

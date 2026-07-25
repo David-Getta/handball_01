@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Bravúr utáni lendület**: a nagy védés után jön-e gyors gól elöl —
+  a kihagyott ziccer ára védés-oldali tükre. Akinél a bravúr rendre
+  gólt ér a túloldalon, ott a kapus indítás: a rossz lövés ellenük
+  kontra — lövés-válogatás és bravúr utáni azonnali visszazárás kell;
+  akinél a bravúr elhal, ott a kapus megfog, de nem büntet — a merész
+  lövésnek nincs kontra-ára. Egy réteg, sok felület:
+  `big_save_momentum` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs mindkét irányra + csempe),
+  51. meccsterv-szabály (az ő elhaló bravúrjuk × a ti gyors
+  visszarendeződésetek), 72. edzés-szabály (bravúr utáni indítás).
 - **Sorozat-törés**: az elszenvedett 3+ gólos sorozat hol áll meg — a
   sorozatok réteg védekező-mentális párja. Aki a sorozatot rendre
   3-nál töri (időkérés, váltás, higgadt gól), az nem esik szét —

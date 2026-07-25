@@ -650,6 +650,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "túloldalon volt a labda a kapuban.")
     except Exception:
         pass
+    # Bravúr utáni lendület: a nagy védés gólt ért a túloldalon.
+    try:
+        from .xg import big_save_momentum
+        bsmc = big_save_momentum(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bs = bsmc[side]
+            if rec_bs["sparked"] >= 2:
+                body += (f" A(z) {name} bravúrjai lendületet adtak: "
+                         f"{rec_bs['saves']} nagy védésből "
+                         f"{rec_bs['sparked']} után fél percen belül gól "
+                         "lett elöl.")
+    except Exception:
+        pass
     # Kapuscsere-hatás: fordított-e a csere.
     try:
         from .goalkeeper import GK_CHANGE_DELTA_PP, gk_change_effect

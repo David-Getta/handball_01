@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 72) Bravúr utáni lendület: ha a kapusbravúrjaink elhalnak, a
+    # védés utáni azonnali indítás a téma.
+    try:
+        from .xg import BIG_SAVE_SPARK_MIN, big_save_momentum
+        bs72 = big_save_momentum(match, config)
+        for side in ("home", "away"):
+            rec72 = bs72[side]
+            if rec72["saves"] < BIG_SAVE_SPARK_MIN + 1 \
+                    or rec72["sparked"] > 0:
+                continue
+            add(side, "támadás", "Bravúr utáni indítás",
+                f"{rec72['saves']} nagy védésünkből egyet sem váltottunk "
+                "gyors gólra — a bravúr nálunk elhal",
+                "védés utáni indítás: a kapus első passza előre "
+                "(kidobás-gyakorlás célkapukra), a szélsők azonnali "
+                "indulása nagy védésnél, és 5 mp-es szabály — a bravúr "
+                "utáni első támadás fejben is támadás legyen, ne "
+                "leforgás")
+    except Exception:
+        pass
+
     # 71) Sorozat-törés: ha az elszenvedett sorozatok rendre elfutnak,
     # a sorozat-törés protokollja a téma.
     try:

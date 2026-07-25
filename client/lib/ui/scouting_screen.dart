@@ -1039,6 +1039,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Bravúr utáni lendület: a nagy védésből lett-e gyors gól elöl (4+
+  // bravúrnál; a backend-kulccsal azonos küszöbök).
+  String? _bigSaveMomentum(Map<String, dynamic> r) {
+    final saves = ((r["bsm_saves"] as num?) ?? 0).toInt();
+    if (saves < 4) return null;
+    final sparked = ((r["bsm_sparked"] as num?) ?? 0).toInt();
+    final rate = 100.0 * sparked / saves;
+    if (rate >= 40.0) {
+      return "$saves bravúrból $sparked gyors gól elöl · "
+          "a rossz lövés ellenük kontra";
+    }
+    if (sparked == 0) {
+      return "$saves bravúrból 0 gyors gól · "
+          "a kapusuk megfog, de nem büntet";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1707,6 +1725,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Holtpont-mérleg", _parityBreaks(r)!],
       if (_runContainment(r) != null)
         ["Sorozat-törés", _runContainment(r)!],
+      if (_bigSaveMomentum(r) != null)
+        ["Bravúr utáni lendület", _bigSaveMomentum(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
