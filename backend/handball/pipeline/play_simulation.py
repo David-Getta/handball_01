@@ -30,6 +30,13 @@ from .tactics import TacticsConfig, classify_phase, Phase
 from .decisions import shot_value
 
 
+# A 6 m-es kapuelőtér geometriája: a fal SOHA nem léphet a hatoson
+# belülre — alapból fél méterrel a hatos íve előtt áll (6-0 fal).
+GOAL_AREA_RADIUS_M = 6.0
+GOAL_AREA_MARGIN_M = 0.5
+_GOAL_HALF_W = 1.5  # kapufák: y = 8,5 és 11,5
+
+
 # ---- Tanult védekezési modell ---------------------------------------------
 
 @dataclass
@@ -73,13 +80,15 @@ class DefenseModel:
         )
 
     def respond(self, ball: Ball, goal_x: float) -> list[tuple[float, float]]:
-        """A védők pozíciói a labdára reagálva (a tanult mélységben, y-ban a labda felé).
+        """A védők pozíciói a labdára reagálva (y-ban a labda felé eltolva).
 
-        A védővonal a kaputól `line_depth_m`-re húzódik (a pálya belseje felé), a
-        védők y-ban egyenletesen elosztva, a labda y-helyzete felé eltolva.
+        A fal a 6 m-es kapuelőtér ívét követi KÍVÜLRŐL (6-0 fal): egy
+        védő sem léphet a hatoson belülre. A `line_depth_m` a fal
+        frontális mélysége — a hatoshoz képest tolja kijjebb az egész
+        falat (alapból fél méterrel a hatos előtt), a széleken a fal a
+        hatos ívére simul.
         """
         sign = -1.0 if goal_x == COURT_LENGTH_M else 1.0
-        line_x = goal_x + sign * self.line_depth_m
 
         n = max(1, self.num_defenders)
         # Egyenletes y-eloszlás a [3, 17] sávban.
@@ -90,7 +99,18 @@ class DefenseModel:
             base_ys = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
 
         shift = self.lateral_gain * (ball.y - COURT_WIDTH_M / 2.0)
-        return [(line_x, max(1.0, min(COURT_WIDTH_M - 1.0, by + shift))) for by in base_ys]
+        offset = max(GOAL_AREA_MARGIN_M,
+                     self.line_depth_m - GOAL_AREA_RADIUS_M
+                     + GOAL_AREA_MARGIN_M)
+        out = []
+        for by in base_ys:
+            y = max(1.0, min(COURT_WIDTH_M - 1.0, by + shift))
+            # A hatos határa ennél az y-nál: a közelebbi kapufától 6 m.
+            lateral = max(0.0, abs(y - COURT_WIDTH_M / 2.0) - _GOAL_HALF_W)
+            boundary = (math.sqrt(GOAL_AREA_RADIUS_M ** 2 - lateral ** 2)
+                        if lateral < GOAL_AREA_RADIUS_M else 0.0)
+            out.append((goal_x + sign * (boundary + offset), y))
+        return out
 
 
 # ---- A figura (set play) és a szimuláció ----------------------------------

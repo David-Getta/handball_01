@@ -59,10 +59,10 @@ class _DesignerScreenState extends State<DesignerScreen> {
   @override
   void initState() {
     super.initState();
-    // A védelmet a betöltött meccsből tanuljuk (létszám + mélység).
-    final learned = learnDefense(widget.match, Team.away);
-    _numDefenders = learned.numDefenders;
-    _lineDepth = learned.lineDepthM.clamp(4.0, 12.0).toDouble();
+    // Alapból 6-0-s fal a hatoson kívül (a fal-geometriát a
+    // DefenseModel.respond adja); a mélység-csúszkával tolható feljebb.
+    _numDefenders = 6;
+    _lineDepth = 6.0;
 
     // Alap figura: irányító, két átlövő, szélső, beálló — az edző átrendezi.
     _attackers = [
@@ -537,7 +537,8 @@ class _DesignerScreenState extends State<DesignerScreen> {
             ),
           ]),
           const SizedBox(height: AppSpacing.xl),
-          Text("TANULT VÉDELEM", style: AppText.sectionLabel),
+          Text("VÉDŐFAL (ALAP: 6-0, A HATOSON KÍVÜL)",
+              style: AppText.sectionLabel),
           const SizedBox(height: AppSpacing.sm),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text("Védők", style: AppText.label),
@@ -548,7 +549,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
             Text("${_lineDepth.toStringAsFixed(1)} m", style: AppText.value),
           ]),
           Slider(
-            value: _lineDepth, min: 4, max: 12,
+            value: _lineDepth, min: 6, max: 12,
             onChanged: _playing ? null : (v) => setState(() => _lineDepth = v),
           ),
           const Spacer(),

@@ -21,10 +21,13 @@ class DefenseModel {
 
   const DefenseModel({this.numDefenders = 6, this.lineDepthM = 6.0, this.lateralGain = 0.5});
 
-  /// A védők pozíciói a labdára reagálva (a tanult mélységben, y-ban a labda felé).
+  /// A fal a hatos ívét követi KÍVÜLRŐL (6-0 fal): egy védő sem léphet a
+  /// kapuelőtérbe — a lineDepthM a frontális mélység (alap: fél méterrel a
+  /// hatos előtt), a széleken a fal az ívre simul. A backend
+  /// play_simulation.py respond-jával azonos geometria.
   List<Offset> respond(double ballY, double goalX) {
+    const margin = 0.5; // ennyivel a hatos íve előtt áll a fal alapból
     final sign = goalX == courtLength ? -1.0 : 1.0;
-    final lineX = goalX + sign * lineDepthM;
     final n = math.max(1, numDefenders);
     final baseYs = <double>[];
     if (n == 1) {
@@ -37,7 +40,19 @@ class DefenseModel {
       }
     }
     final shift = lateralGain * (ballY - courtWidth / 2);
-    return [for (final by in baseYs) Offset(lineX, (by + shift).clamp(1.0, courtWidth - 1.0).toDouble())];
+    final offset = math.max(margin, lineDepthM - goalAreaRadius + margin);
+    final out = <Offset>[];
+    for (final by in baseYs) {
+      final y = (by + shift).clamp(1.0, courtWidth - 1.0).toDouble();
+      // A hatos határa ennél az y-nál: a közelebbi kapufától 6 m.
+      final lateral =
+          math.max(0.0, (y - courtWidth / 2).abs() - goalWidth / 2);
+      final boundary = lateral < goalAreaRadius
+          ? math.sqrt(goalAreaRadius * goalAreaRadius - lateral * lateral)
+          : 0.0;
+      out.add(Offset(goalX + sign * (boundary + offset), y));
+    }
+    return out;
   }
 }
 

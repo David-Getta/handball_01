@@ -40,12 +40,26 @@ def test_defense_model_learns_depth_and_count():
     assert abs(model.line_depth_m - 6.0) < 1e-6
 
 
-def test_defense_respond_line_and_shift():
-    """A védők a tanult mélységben állnak (x=34) és a labda y-felé tolódnak."""
+def test_defense_respond_wall_outside_area_and_shift():
+    """A 6-os fal a hatoson KÍVÜL áll (egy védő sincs a kapuelőtérben),
+    középen a hatos előtt fél méterrel, a széleken az ívre simulva — és a
+    labda y-felé tolódik."""
+    import math
+
     model = DefenseModel(num_defenders=6, line_depth_m=6.0, lateral_gain=0.5)
     pos = model.respond(Ball(x=30.0, y=16.0, confidence=1.0), goal_x=40.0)
-    assert all(abs(x - 34.0) < 1e-9 for x, _ in pos)   # vonal a kaputól 6 m-re
-    # a labda y=16 (a közép 10 felett) → a védők átlag y-ja feljebb tolódik
+    assert len(pos) == 6
+    # Egyik védő sem lehet a hatoson belül: a közelebbi kapufától 6 m+.
+    for x, y in pos:
+        post_y = min(11.5, max(8.5, y))
+        assert math.hypot(x - 40.0, y - post_y) >= 6.0 - 1e-9
+    # A fal íves: a szélső védő közelebb áll a kapu síkjához, mint a középső.
+    mid = min(pos, key=lambda p: abs(p[1] - 10.0))
+    wing = max(pos, key=lambda p: abs(p[1] - 10.0))
+    assert wing[0] > mid[0]
+    # Középen a hatos előtt fél méterrel (x = 40 - 6,5).
+    assert abs(mid[0] - 33.5) < 0.6
+    # A labda y=16 (a közép 10 felett) → a védők átlag y-ja feljebb tolódik.
     avg_y = sum(y for _, y in pos) / len(pos)
     assert avg_y > 10.0
 

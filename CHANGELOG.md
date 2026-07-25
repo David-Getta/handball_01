@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Figura-tervező — a védőfal alapból 6-0, a hatoson kívül**: a
+  tervező védői mostantól alapból hatan állnak, és a fal a 6 m-es
+  kapuelőtér ívét követi KÍVÜLRŐL (középen fél méterrel a hatos
+  előtt, a széleken az ívre simulva) — egy védő sem léphet a
+  kapuelőtérbe, a mélység-csúszka a teljes falat tolja feljebb
+  (6–12 m). A kliens-oldali szimuláció és a backend
+  (play_simulation.py respond) azonos geometriát használ, így a
+  meccsből tanult védelem elleni szimulációban sem kerülhet védő a
+  hatoson belülre.
 - **Eladás-büntetés**: az eladott labda fél percen belül gólba
   kerül-e — a kihagyott ziccer ára eladás-oldali párja: nem az a
   kérdés, mennyi labdát ad el a csapat, hanem hogy mennyibe kerül.
