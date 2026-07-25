@@ -615,3 +615,21 @@ def test_parity_breaks_counts_tie_breaking_goals():
     pb2 = parity_breaks(_match_from_goals("HAH"))
     assert pb2["home"]["ties"] == 2
     assert pb2["home"]["rate_pct"] is None
+
+
+def test_run_containment_measures_suffered_run_lengths():
+    """HHHAHHHH: a vendég két hazai sorozatot szenved el (3 és 4 gól,
+    átlag 3,5); egy sorozatnál nincs átlag-ítélet."""
+    from handball.pipeline.momentum import run_containment
+
+    rc = run_containment(_match_from_goals("HHHAHHHH"))
+    a = rc["away"]
+    assert a["suffered"] == 2 and a["suffered_goals"] == 7
+    assert a["avg_len"] == 3.5
+    assert rc["home"]["made"] == 2 and rc["home"]["made_goals"] == 7
+    assert rc["home"]["suffered"] == 0
+
+    # Egyetlen elszenvedett sorozat: kevés az átlaghoz.
+    rc2 = run_containment(_match_from_goals("HHHA"))
+    assert rc2["away"]["suffered"] == 1
+    assert rc2["away"]["avg_len"] is None

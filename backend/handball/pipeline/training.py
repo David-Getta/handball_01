@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 71) Sorozat-törés: ha az elszenvedett sorozatok rendre elfutnak,
+    # a sorozat-törés protokollja a téma.
+    try:
+        from .momentum import (RUN_CONTAIN_LONG, RUN_CONTAIN_MIN,
+                               run_containment)
+        rc71 = run_containment(match, config)
+        for side in ("home", "away"):
+            rec71 = rc71[side]
+            if rec71["avg_len"] is None \
+                    or rec71["suffered"] < RUN_CONTAIN_MIN \
+                    or rec71["avg_len"] < RUN_CONTAIN_LONG:
+                continue
+            add(side, "taktika", "Sorozat-törés protokoll",
+                f"az ellenfél sorozatai elfutottak ({rec71['suffered']} "
+                f"sorozat, átlag {rec71['avg_len']:.1f} gól) — a 3-0-nál "
+                "nem tudtunk megállni",
+                "sorozat-törés protokoll: 0-2-nél automatikus jelzés a "
+                "padról (ki kéri az időt és mikor), az időkérés utáni "
+                "első támadásra kész figura, tempó-kivétel (hosszabb "
+                "támadás), és védekezés-váltás begyakorlása sorozat "
+                "közben")
+    except Exception:
+        pass
+
     # 70) Holtpont-mérleg: ha az egál-pillanatokat rendre elengedjük,
     # a nyomás alatti befejezés a téma.
     try:

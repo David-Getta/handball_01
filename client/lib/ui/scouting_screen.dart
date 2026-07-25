@@ -1021,6 +1021,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Sorozat-törés: az elszenvedett 3+ gólos sorozatok átlag-hossza (3+
+  // sorozatnál; a backend-kulccsal azonos küszöbök).
+  String? _runContainment(Map<String, dynamic> r) {
+    final suffered = ((r["rn_suffered"] as num?) ?? 0).toInt();
+    if (suffered < 3) return null;
+    final goals = ((r["rn_suffered_goals"] as num?) ?? 0).toInt();
+    final avg = goals / suffered;
+    if (avg >= 4.5) {
+      return "$suffered sorozat fut el ellenük (átlag "
+          "${avg.toStringAsFixed(1)} gól) · a 2-0-t nyomd meg";
+    }
+    if (avg <= 3.4) {
+      return "a sorozatot 3-nál törik (átlag "
+          "${avg.toStringAsFixed(1)} gól) · sorozattal nem ölöd meg";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1687,6 +1705,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Félidei fordítás", _htComeback(r)!],
       if (_parityBreaks(r) != null)
         ["Holtpont-mérleg", _parityBreaks(r)!],
+      if (_runContainment(r) != null)
+        ["Sorozat-törés", _runContainment(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

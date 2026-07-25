@@ -407,6 +407,12 @@ class ScoutingReport:
     # holtpontok — darabszámok, összegződnek.
     pb_ties: int = 0
     pb_won: int = 0
+    # Sorozat-törés: futott/elszenvedett 3+ gólos sorozatok és
+    # összhosszuk — darabszámok, összegződnek.
+    rn_made: int = 0
+    rn_made_goals: int = 0
+    rn_suffered: int = 0
+    rn_suffered_goals: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1246,6 +1252,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"döntetlen-állásból csak {rep.pb_won}-szor léptek el) — "
                 "utolérni elég: hozd egálra, és a holtpontnál türelmes, "
                 "kidolgozott támadással tiétek a következő gól.")
+
+    # Sorozat-törés: hol áll meg ellenük a sorozat.
+    if rep.rn_suffered >= 3:
+        _rn_avg = rep.rn_suffered_goals / rep.rn_suffered
+        if _rn_avg >= 4.5:
+            keys.append(
+                f"A sorozat ellenük elfut ({rep.rn_suffered} elszenvedett "
+                f"sorozat, átlag {_rn_avg:.1f} gól) — ha megvan a 2-0, "
+                "nyomjátok meg: a 3-0-jukból rendre 5-6-0 lesz, és az "
+                "időkérésük sem mentőöv.")
+        elif _rn_avg <= 3.4:
+            keys.append(
+                f"A sorozatot ellenük 3-nál törik ({rep.rn_suffered} "
+                f"elszenvedett sorozat, átlag {_rn_avg:.1f} gól) — "
+                "sorozattal nem ölöd meg őket: a meccset végig kell "
+                "játszani, az előnyt apránként kell összerakni.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2383,6 +2405,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         pbrec = parity_breaks(match, config)[team.value]
         rep.pb_ties = pbrec["ties"]
         rep.pb_won = pbrec["won"]
+        from .momentum import run_containment
+        rnrec = run_containment(match, config)[team.value]
+        rep.rn_made = rnrec["made"]
+        rep.rn_made_goals = rnrec["made_goals"]
+        rep.rn_suffered = rnrec["suffered"]
+        rep.rn_suffered_goals = rnrec["suffered_goals"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3572,6 +3600,20 @@ def matchup_plan(own: "ScoutingReport",
             "állástól nem kell félni: egálnál a következő gól papíron a "
             "tiétek, türelmes befejezéssel zárjátok a holtpontokat.")
 
+    # 50) Az ő elfutó sorozataik × a ti sorozat-képességetek: a
+    # mini-sorozatot ellenük végig kell nyomni.
+    if (opp.rn_suffered >= 3
+            and opp.rn_suffered_goals / opp.rn_suffered >= 4.5
+            and own.rn_made >= 3):
+        _p50_avg = opp.rn_suffered_goals / opp.rn_suffered
+        plan.append(
+            f"A sorozat ellenük elfut ({opp.rn_suffered} elszenvedett "
+            f"sorozat, átlag {_p50_avg:.1f} gól), ti pedig tudtok "
+            f"sorozatot futni ({own.rn_made} sorozat a meccseiteken) — "
+            "ha megvan a 2-0, ne váltsatok le róla: letámadás, gyors "
+            "középkezdés, és az ő időkérésük után is a megkezdett "
+            "nyomás — a 3-0-jukból náluk 5-6-0 lesz.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -3927,6 +3969,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         htc_saved=sum(r.htc_saved for r in reports),
         pb_ties=sum(r.pb_ties for r in reports),
         pb_won=sum(r.pb_won for r in reports),
+        rn_made=sum(r.rn_made for r in reports),
+        rn_made_goals=sum(r.rn_made_goals for r in reports),
+        rn_suffered=sum(r.rn_suffered for r in reports),
+        rn_suffered_goals=sum(r.rn_suffered_goals for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

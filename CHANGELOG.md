@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Sorozat-törés**: az elszenvedett 3+ gólos sorozat hol áll meg — a
+  sorozatok réteg védekező-mentális párja. Aki a sorozatot rendre
+  3-nál töri (időkérés, váltás, higgadt gól), az nem esik szét —
+  sorozattal nem ölöd meg; akinél a 3-0-ból rendre 5-6-0 lesz, ott a
+  mini-sorozat megnyomása duplán kifizetődik, és az időkérése sem
+  mentőöv. Egy réteg, sok felület: `run_containment` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kulcs
+  mindkét irányra + csempe), 50. meccsterv-szabály (az ő elfutó
+  sorozataik × a ti sorozat-képességetek), 71. edzés-szabály
+  (sorozat-törés protokoll).
 - **Holtpont-mérleg**: döntetlen állásról ki lép el góllal — a
   vezetés-váltások irány-párja, a legtisztább nyomás-teszt (a 0-0-tól
   minden kiegyenlítés utáni első gól). Aki a holtpontokat rendre

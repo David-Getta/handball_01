@@ -731,6 +731,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_pb['won']}-szor ők léptek el).")
     except Exception:
         pass
+    # Sorozat-törés: akinél az ellenfél sorozatai elfutottak.
+    try:
+        from .momentum import (RUN_CONTAIN_LONG, RUN_CONTAIN_MIN,
+                               run_containment)
+        rcc = run_containment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rc = rcc[side]
+            if rec_rc["avg_len"] is None \
+                    or rec_rc["suffered"] < RUN_CONTAIN_MIN \
+                    or rec_rc["avg_len"] < RUN_CONTAIN_LONG:
+                continue
+            body += (f" A(z) {name} ellen a sorozatok elfutottak "
+                     f"({rec_rc['suffered']} sorozat, átlag "
+                     f"{rec_rc['avg_len']:.1f} gól) — a sorozat-törés "
+                     "nem működött.")
+    except Exception:
+        pass
     # Gól utáni elalvás: a saját gólra rendre azonnali válasz érkezik.
     try:
         from .momentum import post_goal_lapses

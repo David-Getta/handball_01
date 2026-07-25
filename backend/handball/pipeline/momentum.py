@@ -635,6 +635,44 @@ def close_game_record(match: Match, config=None) -> dict:
     return out
 
 
+# Sorozat-törés: ennyi elszenvedett sorozattól ítélünk átlagot, és
+# ekkora átlag-hossztól számít "elfutónak" a sorozat.
+RUN_CONTAIN_MIN = 2
+RUN_CONTAIN_LONG = 4.5
+
+
+def run_containment(match: Match, config=None) -> dict:
+    """Sorozat-törés: az ellenfél sorozatait ki meddig hagyja elfutni.
+
+    A sorozatok (scoring_runs) réteg védekező-mentális párja: nem az
+    érdekel, ki fut 3-0-kat, hanem hogy az ELSZENVEDETT 3+ gólos
+    sorozat hol áll meg. Aki a sorozatot rendre 3-nál töri (időkérés,
+    váltás, higgadt gól), az nem esik szét; akinél a 3-0-ból rendre
+    5-6-0 lesz, ott a mini-sorozat megnyomása duplán kifizetődik — és
+    az időkérése sem mentőöv.
+
+    Visszatérés csapatonként: {"made", "made_goals", "suffered",
+    "suffered_goals", "avg_len"} — made/suffered a futott/elszenvedett
+    3+ gólos sorozatok száma, a *_goals az összhosszuk; avg_len az
+    elszenvedett sorozatok átlagos hossza, None kevés
+    (RUN_CONTAIN_MIN alatti) elszenvedett sorozatnál.
+    """
+    runs = scoring_runs(match, config)
+    out = {}
+    for side in ("home", "away"):
+        own = [r for r in runs if r["team"] == side]
+        other = [r for r in runs if r["team"] != side]
+        sg = sum(r["length"] for r in other)
+        out[side] = {
+            "made": len(own),
+            "made_goals": sum(r["length"] for r in own),
+            "suffered": len(other),
+            "suffered_goals": sg,
+            "avg_len": (round(sg / len(other), 1)
+                        if len(other) >= RUN_CONTAIN_MIN else None)}
+    return out
+
+
 # Holtpont-mérleg: ennyi góllal lezárt döntetlen-állástól ítélünk.
 PARITY_MIN_TIES = 3
 
