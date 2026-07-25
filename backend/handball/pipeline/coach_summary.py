@@ -718,6 +718,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "az övék volt.")
     except Exception:
         pass
+    # Holtpont-mérleg: az egál-pillanatokat ki vitte el.
+    try:
+        from .momentum import parity_breaks
+        pbc = parity_breaks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pb = pbc[side]
+            if rec_pb["rate_pct"] is not None and rec_pb["won"] >= 3 \
+                    and rec_pb["rate_pct"] >= 75.0:
+                body += (f" A holtpontokat a(z) {name} nyerte "
+                         f"({rec_pb['ties']} döntetlen-állásból "
+                         f"{rec_pb['won']}-szor ők léptek el).")
+    except Exception:
+        pass
     # Gól utáni elalvás: a saját gólra rendre azonnali válasz érkezik.
     try:
         from .momentum import post_goal_lapses

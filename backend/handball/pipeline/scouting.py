@@ -403,6 +403,10 @@ class ScoutingReport:
     htc_behind: int = 0
     htc_turned: int = 0
     htc_saved: int = 0
+    # Holtpont-mérleg: góllal lezárt döntetlen-állások + az elvitt
+    # holtpontok — darabszámok, összegződnek.
+    pb_ties: int = 0
+    pb_won: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1225,6 +1229,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "előny ellenük nem ér semmit: a szünet után újra meg "
                 "kell nyerni a meccset, a második félidőre tarts friss "
                 "lábat és kész figurát.")
+
+    # Holtpont-mérleg: az egál a legtisztább nyomás-teszt.
+    if rep.pb_ties >= 4:
+        _pb_rate = 100.0 * rep.pb_won / rep.pb_ties
+        if _pb_rate >= 65.0:
+            keys.append(
+                f"A holtpontokat ők nyerik ({rep.pb_ties} "
+                f"döntetlen-állásból {rep.pb_won}-szor ők léptek el) — "
+                "ne csússz velük egálba: előnyből kontrolláld a meccset, "
+                "és ha beér az egál, időkéréssel törd meg a "
+                "holtpont-ritmusukat.")
+        elif _pb_rate <= 35.0:
+            keys.append(
+                f"Az egálnál ők remegnek ({rep.pb_ties} "
+                f"döntetlen-állásból csak {rep.pb_won}-szor léptek el) — "
+                "utolérni elég: hozd egálra, és a holtpontnál türelmes, "
+                "kidolgozott támadással tiétek a következő gól.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2358,6 +2379,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                 rep.htc_turned = 1
             elif htcrec["verdict"] == "mentette":
                 rep.htc_saved = 1
+        from .momentum import parity_breaks
+        pbrec = parity_breaks(match, config)[team.value]
+        rep.pb_ties = pbrec["ties"]
+        rep.pb_won = pbrec["won"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3535,6 +3560,18 @@ def matchup_plan(own: "ScoutingReport",
             "szerezz félidei előnyt, a szünet után ők maguktól "
             "elengedik.")
 
+    # 49) Az ő remegő holtpontjuk × a ti holtpont-erőtök: az egál nektek
+    # jó — a kiegyenlített állás az ő nyomásuk, a ti labdátok.
+    if (opp.pb_ties >= 4 and 100.0 * opp.pb_won / opp.pb_ties <= 35.0
+            and own.pb_ties >= 4
+            and 100.0 * own.pb_won / own.pb_ties >= 60.0):
+        plan.append(
+            f"Az egálnál ők remegnek ({opp.pb_ties} döntetlen-állásból "
+            f"csak {opp.pb_won}-szor léptek el), ti pedig hozzátok a "
+            f"holtpontokat ({own.pb_won}/{own.pb_ties}) — a szoros "
+            "állástól nem kell félni: egálnál a következő gól papíron a "
+            "tiétek, türelmes befejezéssel zárjátok a holtpontokat.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -3888,6 +3925,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         htc_behind=sum(r.htc_behind for r in reports),
         htc_turned=sum(r.htc_turned for r in reports),
         htc_saved=sum(r.htc_saved for r in reports),
+        pb_ties=sum(r.pb_ties for r in reports),
+        pb_won=sum(r.pb_won for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

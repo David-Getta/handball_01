@@ -635,6 +635,51 @@ def close_game_record(match: Match, config=None) -> dict:
     return out
 
 
+# Holtpont-mérleg: ennyi góllal lezárt döntetlen-állástól ítélünk.
+PARITY_MIN_TIES = 3
+
+
+def parity_breaks(match: Match, config=None) -> dict:
+    """Holtpont-mérleg: döntetlen állásról ki lép el góllal.
+
+    A vezetés-váltás réteg irány-párja: nem az érdekel, hányszor
+    fordult a meccs, hanem hogy az egál-pillanatok (a 0-0-tól minden
+    kiegyenlítés) után KI szerzi a következő gólt. A holtpont a
+    legtisztább nyomás-teszt: a következő gól a fejekben dől el. Aki a
+    holtpontokat rendre elviszi, azzal nem szabad egálba összecsúszni;
+    aki rendre elengedi, azt utolérni elég — onnan ő remeg.
+
+    Visszatérés csapatonként: {"ties", "won", "rate_pct"} — ties a
+    góllal lezárt döntetlen-állások száma (a két oldalon azonos), won
+    ebből az általa elvitt holtpontok; rate_pct None, ha kevés
+    (PARITY_MIN_TIES alatti) a holtpont.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    goals = sorted(
+        (e.t, e.team.value) for e in
+        detect_shots(match, config or TacticsConfig())
+        if e.type == EventType.GOAL)
+    score = {"home": 0, "away": 0}
+    won = {"home": 0, "away": 0}
+    tied = True  # a 0-0 is holtpont
+    ties = 0
+    for _, side in goals:
+        if tied:
+            ties += 1
+            won[side] += 1
+        score[side] += 1
+        tied = score["home"] == score["away"]
+    out = {}
+    for side in ("home", "away"):
+        out[side] = {
+            "ties": ties, "won": won[side],
+            "rate_pct": (round(100.0 * won[side] / ties, 1)
+                         if ties >= PARITY_MIN_TIES else None)}
+    return out
+
+
 # Félidei hátrányból fordítás: ennyi felismert gól kell az ítélethez
 # (részleges felvételen a hamis "0-0" nem ítélet).
 HT_COMEBACK_MIN_GOALS = 6

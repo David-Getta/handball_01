@@ -1005,6 +1005,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Holtpont-mérleg: az egál-pillanatok mérlege (4+ holtpontnál; a
+  // backend-kulccsal azonos küszöbök).
+  String? _parityBreaks(Map<String, dynamic> r) {
+    final ties = ((r["pb_ties"] as num?) ?? 0).toInt();
+    if (ties < 4) return null;
+    final won = ((r["pb_won"] as num?) ?? 0).toInt();
+    final rate = 100.0 * won / ties;
+    if (rate >= 65.0) {
+      return "$ties holtpontból $won az övék · ne csússz velük egálba";
+    }
+    if (rate <= 35.0) {
+      return "$ties holtpontból csak $won az övék · egálnál ők remegnek";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1669,6 +1685,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_paceFade(r) != null) ["Tempó-esés", _paceFade(r)!],
       if (_htComeback(r) != null)
         ["Félidei fordítás", _htComeback(r)!],
+      if (_parityBreaks(r) != null)
+        ["Holtpont-mérleg", _parityBreaks(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

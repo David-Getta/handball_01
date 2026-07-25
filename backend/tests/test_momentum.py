@@ -598,3 +598,20 @@ def test_halftime_comeback_turned_from_deficit():
     # Félidő-jel nélkül nincs ítélet.
     no_ht = halftime_comeback(_match_from_goals("HHAAHAH"))
     assert no_ht["home"]["verdict"] is None
+
+
+def test_parity_breaks_counts_tie_breaking_goals():
+    """HAHAHH: három holtpont (0-0, 1-1, 2-2), mindet a hazai viszi el;
+    kevés holtpontnál nincs ítélet."""
+    from handball.pipeline.momentum import parity_breaks
+
+    pb = parity_breaks(_match_from_goals("HAHAHH"))
+    h = pb["home"]
+    assert h["ties"] == 3 and h["won"] == 3
+    assert h["rate_pct"] == 100.0
+    assert pb["away"]["won"] == 0 and pb["away"]["rate_pct"] == 0.0
+
+    # Két holtpont: kevés az ítélethez.
+    pb2 = parity_breaks(_match_from_goals("HAH"))
+    assert pb2["home"]["ties"] == 2
+    assert pb2["home"]["rate_pct"] is None

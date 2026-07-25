@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 70) Holtpont-mérleg: ha az egál-pillanatokat rendre elengedjük,
+    # a nyomás alatti befejezés a téma.
+    try:
+        from .momentum import PARITY_MIN_TIES, parity_breaks
+        pb70 = parity_breaks(match, config)
+        for side in ("home", "away"):
+            rec70 = pb70[side]
+            if rec70["rate_pct"] is None \
+                    or rec70["ties"] < PARITY_MIN_TIES + 1 \
+                    or rec70["rate_pct"] > 35.0:
+                continue
+            add(side, "mentális", "Holtpont-játék",
+                f"{rec70['ties']} döntetlen-állásból csak "
+                f"{rec70['won']}-szor léptünk el — az egálnál mi "
+                "remegünk",
+                "holtpont-játék: edzésmeccs egál-állásról (a következő "
+                "gól dönt, sorozatban), büntetős-jellegű nyomás-"
+                "gyakorlatok fáradtan, és az egál utáni első támadásra "
+                "kijelölt, begyakorolt figura")
+    except Exception:
+        pass
+
     # 69) Félidei hátrányból fordítás: ha hátrányból nem tudtunk
     # visszajönni, a szünet utáni fordítás-protokoll a téma.
     try:

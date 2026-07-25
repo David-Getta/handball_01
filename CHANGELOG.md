@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Holtpont-mérleg**: döntetlen állásról ki lép el góllal — a
+  vezetés-váltások irány-párja, a legtisztább nyomás-teszt (a 0-0-tól
+  minden kiegyenlítés utáni első gól). Aki a holtpontokat rendre
+  elviszi, azzal nem szabad egálba összecsúszni — előnyből kell
+  kontrollálni; aki rendre elengedi, azt utolérni elég: egálnál ő
+  remeg. Egy réteg, sok felület: `parity_breaks` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kulcs
+  mindkét irányra + csempe), 49. meccsterv-szabály (az ő remegő
+  holtpontjuk × a ti holtpont-erőtök), 70. edzés-szabály
+  (holtpont-játék, nyomás alatti befejezés).
 - **Félidei hátrányból fordítás**: a félidei állás vs a végeredmény,
   meccsek közt összegezve — a mentális profil új tagja a szoros
   meccs-mérleg mellett. Aki félidei hátrányból rendre fordít, az ellen
