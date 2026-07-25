@@ -124,6 +124,48 @@ def suspensions_from_powerplay(match: Match) -> list[Suspension]:
             for w in detect_powerplay(match)]
 
 
+# Fegyelem-esés: ennyi kiállítástól ítélünk, és ekkora félidők közti
+# többlet számít mintázatnak (nem egyszeri balszerencsének).
+DISC_FADE_MIN_TOTAL = 3
+DISC_FADE_DIFF = 2
+
+
+def discipline_fade(match: Match, config=None) -> dict:
+    """Fegyelem-esés: a kiállítások félidőnkénti eloszlása — a fáradás-kép
+    fej-oldali tagja.
+
+    A felismert kiállításokat (emberhátrány-ablakokat) a felismert félidő
+    mentén számoljuk szét. Akinek a kiállításai a 2. félidőben sűrűsödnek,
+    az fáradtan, késve érkezve szabálytalankodik — a hajrában emberelőny
+    várható ellene; akinek az elején jönnek, az kemény kezdés után
+    szelídül.
+
+    Visszatérés csapatonként:
+      {"fh_susp", "sh_susp", "verdict"} — verdict None (nincs félidő-jel
+    vagy kevés kiállítás), "hajrában szabálytalankodnak" vagy
+    "az elején kemények".
+    """
+    from .halftime import detect_halftime
+
+    empty = {"fh_susp": 0, "sh_susp": 0, "verdict": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    for w in detect_powerplay(match):
+        rec = out[w["team_down"]]
+        rec["fh_susp" if w["start_frame"] <= ht else "sh_susp"] += 1
+    for s in ("home", "away"):
+        rec = out[s]
+        if rec["fh_susp"] + rec["sh_susp"] < DISC_FADE_MIN_TOTAL:
+            continue
+        if rec["sh_susp"] - rec["fh_susp"] >= DISC_FADE_DIFF:
+            rec["verdict"] = "hajrában szabálytalankodnak"
+        elif rec["fh_susp"] - rec["sh_susp"] >= DISC_FADE_DIFF:
+            rec["verdict"] = "az elején kemények"
+    return out
+
+
 def detect_seven_meters(match: Match,
                         config: Optional[TacticsConfig] = None) -> list[dict]:
     """Hétméteres (büntetődobás) felismerése.

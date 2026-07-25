@@ -364,6 +364,10 @@ class ScoutingReport:
     lp_led: int = 0
     lp_blown: int = 0
     lp_biggest: int = 0
+    # Fegyelem-esés: kiállítások félidőnként (csak félidő-jeles meccsről)
+    # — darabszámok, összegződnek.
+    disc_fh_susp: int = 0
+    disc_sh_susp: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1139,6 +1143,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
                 f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
                 "már csak a kidolgozott ziccer megy be neki.")
+
+    # Fegyelem-esés: akinek a kiállításai a hajrában jönnek, az ellen a
+    # meccs végén kell bevinni az egy-egy párharcokat.
+    if rep.disc_fh_susp + rep.disc_sh_susp >= 3:
+        if rep.disc_sh_susp - rep.disc_fh_susp >= 2:
+            keys.append(
+                f"A kiállításaik a 2. félidőben jönnek "
+                f"({rep.disc_fh_susp} → {rep.disc_sh_susp}) — fáradtan "
+                "szabálytalankodnak: a hajrában vigyétek be az egy-egy "
+                "párharcokat, jönni fog az emberelőny.")
+        elif rep.disc_fh_susp - rep.disc_sh_susp >= 2:
+            keys.append(
+                f"Az elején kemények ({rep.disc_fh_susp} → "
+                f"{rep.disc_sh_susp} kiállítás) — a meccs elején "
+                "provokáld ki a párharcokat, ott jön a korai emberelőny.")
 
     # Előny-őrzés: aki 3+ gólos vezetést is elenged, az ellen sosem
     # szabad feladni; aki mindig megtartja, azt nem szabad hagyni ellépni.
@@ -2133,6 +2152,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.gsf_fh_saves = gsfrec["fh_saves"]
             rep.gsf_sh_faced = gsfrec["sh_faced"]
             rep.gsf_sh_saves = gsfrec["sh_saves"]
+        from .rules import discipline_fade
+        dfrec = discipline_fade(match, config)[team.value]
+        rep.disc_fh_susp = dfrec["fh_susp"]
+        rep.disc_sh_susp = dfrec["sh_susp"]
         from .momentum import lead_protection
         lprec = lead_protection(match, config)[team.value]
         if lprec["led"]:
@@ -3255,6 +3278,20 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 40) Az ő hajrá-kiállításaik × a ti emberelőny-játékotok: a meccs
+    # végén emberelőny várható — előre gyakorolt figurával kell büntetni.
+    if (opp.disc_fh_susp + opp.disc_sh_susp >= 3
+            and opp.disc_sh_susp - opp.disc_fh_susp >= 2
+            and own.pp_shots >= 3 and own.pp_goals >= 1):
+        _g40_eff = 100.0 * own.pp_goals / own.pp_shots
+        plan.append(
+            f"A kiállításaik a 2. félidőben jönnek ({opp.disc_fh_susp} → "
+            f"{opp.disc_sh_susp}), ti pedig élni tudtok az emberelőnnyel "
+            f"({own.pp_goals}/{own.pp_shots} lövésből gól, "
+            f"{_g40_eff:.0f}%) — a hajrában vigyétek be az egy-egy "
+            "párharcokat, és legyen kész az emberelőny-figura: ott "
+            "dőlhet el a meccs.")
+
     # 39) Az ő elengedett vezetéseik × a ti hajrá-erőtök: hátrányban is
     # türelmesen kell játszani — ez a csapat a végén elereszti a meccset.
     if (opp.lp_blown >= 1 and own.clutch_matches >= 1
@@ -3502,6 +3539,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         lp_led=sum(r.lp_led for r in reports),
         lp_blown=sum(r.lp_blown for r in reports),
         lp_biggest=max((r.lp_biggest for r in reports), default=0),
+        disc_fh_susp=sum(r.disc_fh_susp for r in reports),
+        disc_sh_susp=sum(r.disc_sh_susp for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

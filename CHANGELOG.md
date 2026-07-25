@@ -3,6 +3,18 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.22 óta)
+
+- **Fegyelem-esés (fáradó fej)**: a kiállítások félidőnkénti
+  eloszlása — akinek a hajrában jönnek a kiállításai, az fáradtan
+  szabálytalankodik: ott emberelőny várható ellene. A fáradás-kép
+  ötödik tagja (lövőerő, fal, kéz, kapus után a fej). Egy réteg,
+  sok felület: `discipline_fade` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (kulcs + csempe),
+  40. meccsterv-szabály (az ő hajrá-kiállításaik × a ti
+  emberelőny-játékotok), 61. edzés-szabály (védekezés-technika
+  fáradtan).
+
 ## v0.1.22 — kiadva (2026-07-25, PR #562–#570)
 
 > Kiadás-jegyzet: a legfontosabb a két beragadás-javítás — a

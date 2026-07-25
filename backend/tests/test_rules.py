@@ -414,3 +414,43 @@ def test_key_moments_drought_end():
     ends = [lab for lab in labels if "Gólcsend vége" in lab]
     assert len(ends) == 1
     assert "6 perc" in ends[0] and "H" in ends[0]
+
+
+def test_discipline_fade_late_suspensions():
+    """1 kiállítás az 1. félidőben, 2 a másodikban → a hazai fegyelme a
+    hajrára esik; félidő-jel nélkül nincs ítélet."""
+    from handball.pipeline.rules import discipline_fade
+
+    fps = 25.0
+    frames = []
+    # 1. félidő: normál létszám + 1 hazai kiállítás.
+    frames += _roster_frames(0, 60, 6, 6)
+    frames += _roster_frames(frames[-1].t + 1, 60, 5, 6)
+    frames += _roster_frames(frames[-1].t + 1, 60, 6, 6)
+    # Szünet: 120 mp üres kocka.
+    t = frames[-1].t + 1
+    for i in range(int(120 * fps)):
+        frames.append(Frame(t=t + i, players=[], ball=None))
+    # 2. félidő: 2 hazai kiállítás külön szakaszban.
+    frames += _roster_frames(frames[-1].t + 1, 30, 6, 6)
+    frames += _roster_frames(frames[-1].t + 1, 60, 5, 6)
+    frames += _roster_frames(frames[-1].t + 1, 30, 6, 6)
+    frames += _roster_frames(frames[-1].t + 1, 60, 5, 6)
+    frames += _roster_frames(frames[-1].t + 1, 30, 6, 6)
+
+    df = discipline_fade(Match(_meta(), frames))
+    h = df["home"]
+    assert h["fh_susp"] == 1 and h["sh_susp"] == 2
+    assert h["verdict"] is None  # 3 kiállítás, de a többlet csak 1
+
+    # +1 hajrá-kiállítással már mintázat.
+    frames += _roster_frames(frames[-1].t + 1, 60, 5, 6)
+    frames += _roster_frames(frames[-1].t + 1, 30, 6, 6)
+    df2 = discipline_fade(Match(_meta(), frames))
+    h2 = df2["home"]
+    assert h2["sh_susp"] == 3
+    assert h2["verdict"] == "hajrában szabálytalankodnak"
+
+    # Félidő-jel nélkül (szünet kivágva) nincs ítélet.
+    no_break = [f for f in frames if f.players]
+    assert discipline_fade(Match(_meta(), no_break))["home"]["verdict"] is None
