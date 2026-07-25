@@ -1123,6 +1123,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Lövő-koncentráció: a fő lövő részaránya a lövésekből (12+
+  // azonosított lövésnél, 35%+ részaránynál; a backend-kulccsal
+  // azonos küszöbök).
+  String? _shotConcentration(Map<String, dynamic> r) {
+    final shots = ((r["sc_shots"] as num?) ?? 0).toInt();
+    final top = ((r["sc_top_shots"] as num?) ?? 0).toInt();
+    if (shots < 12) return null;
+    final share = top / shots;
+    if (share < 0.35) return null;
+    return "a fő lövő adja a lövések "
+        "${(100.0 * share).toStringAsFixed(0)}%-át ($top/$shots) · "
+        "emberfogás/kettőzés";
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1801,6 +1815,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Oldal-részrehajlás", _sideBias(r)!],
       if (_attackRhythm(r) != null)
         ["Ritmus-egyhangúság", _attackRhythm(r)!],
+      if (_shotConcentration(r) != null)
+        ["Lövő-koncentráció", _shotConcentration(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

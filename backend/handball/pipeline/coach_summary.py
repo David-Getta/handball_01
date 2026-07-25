@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Lövő-koncentráció: egy emberre épülő lövés-terhelés.
+    try:
+        from .xg import shot_concentration
+        scc = shot_concentration(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sc = scc[side]
+            if not rec_sc["concentrated"]:
+                continue
+            body += (f" A(z) {name} lövés-terhelése egy emberre épült: "
+                     f"a fő lövője adta a lövéseik "
+                     f"{100.0 * rec_sc['share']:.0f}%-át "
+                     f"({rec_sc['top_shots']}/{rec_sc['shots']}) — "
+                     "ellene a személyre szabott kettőzés rövidítés.")
+    except Exception:
+        pass
     # Oldal-részrehajlás: fél-oldalas támadás — eltolható fal.
     try:
         from .attack_types import attack_side_bias

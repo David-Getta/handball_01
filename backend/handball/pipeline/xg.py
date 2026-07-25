@@ -245,6 +245,52 @@ def shot_accuracy(match: Match,
     return out
 
 
+# Lövő-koncentráció: ennyi azonosított lövőjű lövéstől ítélünk, és e
+# részarány felett számít egy emberre épülőnek a lövés-terhelés.
+CONC_MIN_SHOTS = 12
+CONC_TOP_SHARE = 0.35
+
+
+def shot_concentration(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Lövő-koncentráció: mennyire egy emberre épül a lövés-terhelés.
+
+    A kiszámíthatóság személyi olvasata: ha a csapat lövéseinek nagy
+    hányadát ugyanaz a játékos adja le, a védekezés személyre szabható
+    — emberfogás vagy korai kettőzés a fő lövőn, és onnantól olyanoknak
+    kell befejezniük, akik ezt nem szokták. Elosztott terhelés ellen
+    ilyen rövidítés nincs: ott sáv- és fal-munka kell, nem személy.
+
+    Visszatérés csapatonként: {"shots", "top_shots", "top_player_id",
+    "share", "concentrated"} — share/concentrated None, ha kevés
+    (CONC_MIN_SHOTS alatti) az azonosított lövőjű lövés.
+    """
+    from .event_detection import EventType, detect_shots
+
+    counts = {"home": {}, "away": {}}
+    for e in detect_shots(match, config or TacticsConfig()):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        by = counts[e.team.value]
+        by[e.player_id] = by.get(e.player_id, 0) + 1
+    out = {}
+    for side in ("home", "away"):
+        by = counts[side]
+        total = sum(by.values())
+        top_pid = max(by, key=lambda p: by[p]) if by else None
+        top = by[top_pid] if top_pid is not None else 0
+        rec = {"shots": total, "top_shots": top,
+               "top_player_id": top_pid, "share": None,
+               "concentrated": None}
+        if total >= CONC_MIN_SHOTS:
+            rec["share"] = round(top / total, 2)
+            rec["concentrated"] = rec["share"] >= CONC_TOP_SHARE
+        out[side] = rec
+    return out
+
+
 # Befejezés-esés: félidőnként ennyi lövés-kísérlet kell az ítélethez,
 # és ekkora gólarány-esés (százalékpont) számít érdeminek.
 FINISH_FADE_MIN_SHOTS = 6

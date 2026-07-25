@@ -383,3 +383,38 @@ def test_shot_accuracy_counts_on_target_share():
     few = shot_accuracy(Match(_meta(), _attempt(0, "goal")))
     assert few["home"]["attempts"] == 1
     assert few["home"]["pct"] is None
+
+
+def test_shot_concentration_flags_one_man_offense():
+    """9 lövés a fő lövőtől + 3 a társtól → 75% részarány, egy emberre
+    épülő terhelés; kevés lövésnél nincs ítélet."""
+    from handball.pipeline.xg import shot_concentration
+
+    def _shot_by(t0, pid):
+        frames = []
+        for i in range(8):
+            frames.append(Frame(
+                t=t0 + i,
+                players=[_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0, confidence=1.0)))
+        frames.append(Frame(t=t0 + 9, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return frames
+
+    frames = []
+    t = 0
+    for pid in (1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 2, 1):
+        frames += _shot_by(t, pid)
+        t += 40
+    sc = shot_concentration(Match(_meta(), frames))
+    h = sc["home"]
+    assert h["shots"] == 12 and h["top_shots"] == 9
+    assert h["top_player_id"] == 1
+    assert h["share"] is not None and abs(h["share"] - 0.75) < 0.01
+    assert h["concentrated"] is True
+
+    # Kevés lövés: nincs ítélet.
+    few = shot_concentration(Match(_meta(), _shot_by(0, 1)))
+    assert few["home"]["shots"] == 1
+    assert few["home"]["share"] is None
+    assert few["home"]["concentrated"] is None

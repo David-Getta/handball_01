@@ -437,6 +437,11 @@ class ScoutingReport:
     ar_n: int = 0
     ar_sum_s: float = 0.0
     ar_sumsq_s: float = 0.0
+    # Lövő-koncentráció: azonosított lövőjű lövések + ebből a meccs fő
+    # lövőjének darabjai — darabszámok, meccsek közt összegződnek
+    # (részarány = top / összes).
+    sc_shots: int = 0
+    sc_top_shots: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1362,6 +1367,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Lövő-koncentráció: egy emberre épülő lövés-terhelés — a
+    # védekezés személyre szabható.
+    if rep.sc_shots >= 12:
+        _sc_share = rep.sc_top_shots / rep.sc_shots
+        if _sc_share >= 0.35:
+            keys.append(
+                f"A lövés-terhelésük egy emberre épül: a fő lövőjük "
+                f"adja a lövéseik {100.0 * _sc_share:.0f}%-át "
+                f"({rep.sc_top_shots}/{rep.sc_shots}) — emberfogás "
+                "vagy korai kettőzés rajta, és onnantól olyanoknak "
+                "kell befejezniük, akik ezt nem szokták.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2530,6 +2547,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.ar_n = arrec["n"]
         rep.ar_sum_s = arrec["sum_s"]
         rep.ar_sumsq_s = arrec["sumsq_s"]
+        from .xg import shot_concentration
+        screc = shot_concentration(match, config)[team.value]
+        rep.sc_shots = screc["shots"]
+        rep.sc_top_shots = screc["top_shots"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3807,6 +3828,18 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 56) Az ő fő lövőjük × a ti aktív falatok: a személyre szabott
+    # kettőzés + blokk a legrövidebb út a támadásuk lefejezéséhez.
+    if (opp.sc_shots >= 12 and own.blocks >= 3
+            and opp.sc_top_shots / opp.sc_shots >= 0.35):
+        _p56_share = 100.0 * opp.sc_top_shots / opp.sc_shots
+        plan.append(
+            f"A lövés-terhelésük egy emberre épül (a fő lövőjük adja a "
+            f"lövéseik {_p56_share:.0f}%-át), a ti falatok pedig aktív "
+            f"({own.blocks} blokk) — szabjátok rá: korai kettőzés a fő "
+            "lövőn, a blokk az ő megszokott sávjára készül, a többiek "
+            "lövését pedig vállaljátok be.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -4180,6 +4213,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ar_n=sum(r.ar_n for r in reports),
         ar_sum_s=round(sum(r.ar_sum_s for r in reports), 1),
         ar_sumsq_s=round(sum(r.ar_sumsq_s for r in reports), 1),
+        sc_shots=sum(r.sc_shots for r in reports),
+        sc_top_shots=sum(r.sc_top_shots for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

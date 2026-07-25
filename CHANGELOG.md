@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Lövő-koncentráció**: mennyire egy emberre épül a lövés-terhelés —
+  a kiszámíthatóság személyi olvasata. Ha a lövések 35%+ hányadát
+  ugyanaz a játékos adja le (12+ azonosított lövésből), a védekezés
+  személyre szabható: emberfogás/korai kettőzés a fő lövőn, és
+  olyanoknak kell befejezniük, akik ezt nem szokták; saját olvasatban
+  a lövés-elosztás (másod-lövők befejezései) a téma. Egy réteg, sok
+  felület: `shot_concentration` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 56.
+  meccsterv-szabály (az ő fő lövőjük × a ti aktív falatok), 77.
+  edzés-szabály (lövés-elosztás, kettőzés elleni átadó-döntések).
 - **Ritmus-egyhangúság**: mennyire egyforma hosszúak a támadások — a
   kiszámíthatóság idő-olvasata. Akinek belső órája van (a
   támadás-hossz relatív szórása kicsi), arra a védekezés ráállhat: az

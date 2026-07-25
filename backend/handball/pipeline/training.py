@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 77) Lövő-koncentráció: ha a lövés-terhelésünk egy emberre épül,
+    # az ellenfél kettőzéssel lefejezheti — a lövés-elosztás a téma.
+    try:
+        from .xg import shot_concentration
+        sc77 = shot_concentration(match, config)
+        for side in ("home", "away"):
+            rec77 = sc77[side]
+            if not rec77["concentrated"]:
+                continue
+            add(side, "támadás", "Lövés-elosztás",
+                f"a lövés-terhelésünk egy emberre épül (a fő lövő adja "
+                f"a lövések {100.0 * rec77['share']:.0f}%-át, "
+                f"{rec77['top_shots']}/{rec77['shots']}) — kettőzéssel "
+                "lefejezhető a támadásunk",
+                "lövés-elosztás: a másod- és harmad-lövő befejezései "
+                "edzésen (figura-variánsok, ahol a fő lövő csali és a "
+                "kettőzésből kimaradó társ zár), plusz a fő lövőnek "
+                "kettőzés elleni átadó-döntések")
+    except Exception:
+        pass
+
     # 76) Ritmus-egyhangúság: ha belső órán játszunk, az ellenfél
     # ráállhat — a tudatos ritmus-váltás a téma.
     try:
