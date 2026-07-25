@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Eladás-büntetés**: az eladott labda fél percen belül gólba
+  kerül-e — a kihagyott ziccer ára eladás-oldali párja: nem az a
+  kérdés, mennyi labdát ad el a csapat, hanem hogy mennyibe kerül.
+  Akinek az eladásai 35%+ arányban gyors kapott gólt érnek (6+
+  eladásból), annál a váltás-sprint hiányzik: az ellenfél olvasata,
+  hogy minden szerzés után azonnal indulni kell; saját olvasatban az
+  eladás utáni visszarendeződés a téma. Egy réteg, sok felület:
+  `turnover_punishment` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 64.
+  meccsterv-szabály (az ő drága eladásaik × a ti kontra-gólgépetek),
+  85. edzés-szabály (váltás-sprint eladás után).
 - **Kapus-indítás hossza**: hosszú indítós vagy rövid kihozós a
   kapus — az outlet_speed a gyorsaságot méri, ez a hosszt. Ha a
   kapus-passzok 50%+ hányada 15 m feletti (6+ passzból), a szélső

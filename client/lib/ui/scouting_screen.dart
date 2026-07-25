@@ -1137,6 +1137,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Eladás-büntetés: az eladások fél percen belül góllal büntetett
+  // hányada (6+ eladásnál, 35%+ aránynál; a backend-kulccsal azonos
+  // küszöbök).
+  String? _turnoverPunishment(Map<String, dynamic> r) {
+    final turnovers = ((r["tpu_turnovers"] as num?) ?? 0).toInt();
+    final punished = ((r["tpu_punished"] as num?) ?? 0).toInt();
+    if (turnovers < 6) return null;
+    final pct = 100.0 * punished / turnovers;
+    if (pct < 35.0) return null;
+    return "az eladásaik ${pct.toStringAsFixed(0)}%-a fél percen "
+        "belül gól ($punished/$turnovers) · szerzés után azonnal";
+  }
+
   // Kapus-indítás hossza: a 15 m feletti kapus-passzok aránya (6+
   // passznál; 50%+ = hosszú indítós, 15%- = rövid kihozós; a
   // backend-kulccsal azonos küszöbök).
@@ -1947,6 +1960,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Területi-fölény-esés", _tiltFade(r)!],
       if (_gkOutlet(r) != null)
         ["Kapus-indítás", _gkOutlet(r)!],
+      if (_turnoverPunishment(r) != null)
+        ["Eladás-büntetés", _turnoverPunishment(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

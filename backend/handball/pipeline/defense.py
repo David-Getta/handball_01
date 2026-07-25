@@ -1148,3 +1148,56 @@ def second_chance_allowed(match, config=None) -> dict:
                 100.0 * rec["allowed"] / rec["opp_misses"], 1)
         out[side] = rec
     return out
+
+
+# Eladás-büntetés: ennyi eladástól ítélünk; az eladás utáni ennyi
+# másodpercen belüli kapott gól számít büntetésnek, és e részarány
+# felett drágák az eladások.
+TO_PUNISH_MIN = 6
+TO_PUNISH_QUICK_S = 30.0
+TO_PUNISH_HIGH_PCT = 35.0
+
+
+def turnover_punishment(match, config=None,
+                        quick_s: float = TO_PUNISH_QUICK_S) -> dict:
+    """Eladás-büntetés: az eladott labda fél percen belül gólba kerül-e.
+
+    A kihagyott ziccer ára (miss_punishment) eladás-oldali párja: nem
+    az a kérdés, MENNYI labdát ad el a csapat (turnover_zones), hanem
+    hogy MENNYIBE kerül — akinek az eladásai rendre gyors kapott gólt
+    érnek, annál az eladás utáni visszarendeződés (a váltás-sprint)
+    hiányzik: az ellenfél olvasata, hogy minden szerzés után azonnal
+    indulni kell, mert ez a csapat ilyenkor büntethető a legjobban.
+
+    Visszatérés csapatonként: {"turnovers", "punished", "rate_pct"} —
+    rate_pct None, ha kevés (TO_PUNISH_MIN alatti) az eladás.
+    """
+    from .event_detection import EventType, detect_events, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(quick_s * fps)
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    counts = {"home": {"turnovers": 0, "punished": 0},
+              "away": {"turnovers": 0, "punished": 0}}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER:
+            continue
+        side = e.team.value
+        other = "away" if side == "home" else "home"
+        counts[side]["turnovers"] += 1
+        if any(gs == other and 0 <= gt - e.t <= win
+               for (gt, gs) in goals):
+            counts[side]["punished"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        out[side] = {
+            **rec,
+            "rate_pct": (round(100.0 * rec["punished"] / rec["turnovers"],
+                               1)
+                         if rec["turnovers"] >= TO_PUNISH_MIN else None),
+        }
+    return out

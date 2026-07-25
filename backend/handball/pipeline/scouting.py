@@ -478,6 +478,10 @@ class ScoutingReport:
     # — darabszámok, meccsek közt összegződnek (arány = long/outlets).
     gko_outlets: int = 0
     gko_long: int = 0
+    # Eladás-büntetés: eladások + ebből a fél percen belül góllal
+    # büntetettek — darabszámok, meccsek közt összegződnek.
+    tpu_turnovers: int = 0
+    tpu_punished: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1403,6 +1407,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Eladás-büntetés: az eladásaik gyors gólba kerülnek.
+    if rep.tpu_turnovers >= 6:
+        _tpu_pct = 100.0 * rep.tpu_punished / rep.tpu_turnovers
+        if _tpu_pct >= 35.0:
+            keys.append(
+                f"Az eladásaik drágák: {rep.tpu_turnovers} eladásukból "
+                f"{rep.tpu_punished} után fél percen belül gólt kaptak "
+                f"({_tpu_pct:.0f}%) — eladás után nem érnek vissza: "
+                "minden szerzésetek után azonnal, gondolkodás nélkül "
+                "induljon az első hullám.")
 
     # Kapus-indítás hossza: az egysíkú kihozatalra ráállhat a terv.
     if rep.gko_outlets >= 6:
@@ -2716,6 +2731,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         gorec = gk_outlet_length(match, config)[team.value]
         rep.gko_outlets = gorec["outlets"]
         rep.gko_long = gorec["long"]
+        from .defense import turnover_punishment
+        tpurec = turnover_punishment(match, config)[team.value]
+        rep.tpu_turnovers = tpurec["turnovers"]
+        rep.tpu_punished = tpurec["punished"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3993,6 +4012,19 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 64) Az ő drága eladásaik × a ti kontra-gólgépetek: a szerzés
+    # utáni azonnali indulás náluk a legtöbbet hozza.
+    if (opp.tpu_turnovers >= 6 and own.trans_steals >= 4
+            and own.trans_quick_goals >= 2
+            and opp.tpu_punished / opp.tpu_turnovers >= 0.35):
+        plan.append(
+            f"Az eladásaik drágák (a {opp.tpu_turnovers} eladásukból "
+            f"{opp.tpu_punished} után fél percen belül gólt kaptak), "
+            f"ti pedig jól váltjátok gólra a szerzést "
+            f"({own.trans_quick_goals}/{own.trans_steals} gyors gól) "
+            "— minden labdaszerzés után azonnali indulás: ellenük a "
+            "kontra nem lehetőség, hanem kötelező első opció.")
+
     # 63) Az ő hosszú-indításos kapusuk × a ti gyors
     # visszarendeződésetek: a hosszú labda nem talál üres területet.
     if (opp.gko_outlets >= 6 and own.rec_transitions >= 6
@@ -4508,6 +4540,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tf_sh_opp=sum(r.tf_sh_opp for r in reports),
         gko_outlets=sum(r.gko_outlets for r in reports),
         gko_long=sum(r.gko_long for r in reports),
+        tpu_turnovers=sum(r.tpu_turnovers for r in reports),
+        tpu_punished=sum(r.tpu_punished for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

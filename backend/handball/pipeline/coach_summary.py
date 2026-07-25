@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Eladás-büntetés: az eladott labda gyors gólba kerül.
+    try:
+        from .defense import TO_PUNISH_HIGH_PCT, turnover_punishment
+        tpc = turnover_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tp = tpc[side]
+            if rec_tp["rate_pct"] is None \
+                    or rec_tp["rate_pct"] < TO_PUNISH_HIGH_PCT:
+                continue
+            body += (f" A(z) {name} eladásai drágák voltak: "
+                     f"{rec_tp['turnovers']} eladásából "
+                     f"{rec_tp['punished']} után fél percen belül gól "
+                     "volt a kapujában.")
+    except Exception:
+        pass
     # Kapus-indítás hossza: egysíkú (kiszámítható) kihozatal.
     try:
         from .goalkeeper import gk_outlet_length

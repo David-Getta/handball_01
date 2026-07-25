@@ -705,3 +705,55 @@ def test_second_chance_allowed_mirrors_defense():
     # A hazai fal ellen nem volt lepattanó-lehetőség → nincs ítélet.
     assert sca["home"]["opp_misses"] == 0
     assert sca["home"]["allowed_pct"] is None
+
+
+def test_turnover_punishment_counts_quick_conceded_goals():
+    """7 hazai eladásból 3-at fél percen belüli vendég-gól büntet →
+    43%-os büntetés-arány; kevés eladásnál nincs ítélet."""
+    from handball.pipeline.defense import turnover_punishment
+
+    frames = []
+    t = 0
+
+    def _cycle(punished):
+        # Hazai birtoklás → a vendég elveszi (hazai eladás), majd ha
+        # punished, a vendég fél percen belül gólt lő a 0-s kapura.
+        nonlocal t, frames
+        both = [_pl(1, Team.HOME, 20.0, 10.0),
+                _pl(11, Team.AWAY, 20.6, 10.0)]
+        for _ in range(10):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=20.6, y=10.0, confidence=1.0)))
+            t += 1
+        if punished:
+            for _ in range(50):  # a lövés-elnyomó ablakon kívülre
+                frames.append(Frame(t=t, players=both,
+                                    ball=Ball(x=20.6, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+            shooter = [_pl(12, Team.AWAY, 7.0, 10.0)]
+            for i in range(9):
+                frames.append(Frame(t=t, players=shooter,
+                                    ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                                              confidence=1.0)))
+                t += 1
+        for _ in range(900):  # hosszú szünet: a következő kör önálló
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    for flag in (True, True, True, False, False, False, False):
+        _cycle(flag)
+    tp = turnover_punishment(Match(_meta(), frames))
+    h = tp["home"]
+    assert h["turnovers"] == 7 and h["punished"] == 3
+    assert h["rate_pct"] is not None
+    assert abs(h["rate_pct"] - 100.0 * 3 / 7) < 0.5
+
+    # Kevés eladás: nincs ítélet.
+    few = turnover_punishment(Match(_meta(), frames[:1000]))
+    assert few["home"]["rate_pct"] is None

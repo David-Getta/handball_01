@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 85) Eladás-büntetés: ha az eladásaink gyors gólba kerülnek, a
+    # váltás-sprint hiányzik — az eladás utáni visszarendeződés a téma.
+    try:
+        from .defense import (TO_PUNISH_HIGH_PCT, TO_PUNISH_MIN,
+                              turnover_punishment)
+        tp85 = turnover_punishment(match, config)
+        for side in ("home", "away"):
+            rec85 = tp85[side]
+            if rec85["rate_pct"] is None \
+                    or rec85["turnovers"] < TO_PUNISH_MIN \
+                    or rec85["rate_pct"] < TO_PUNISH_HIGH_PCT:
+                continue
+            add(side, "védekezés", "Váltás-sprint eladás után",
+                f"az eladásaink drágák: {rec85['turnovers']} eladásból "
+                f"{rec85['punished']} után fél percen belül gólt "
+                f"kaptunk ({rec85['rate_pct']:.0f}%) — eladás után nem "
+                "érünk vissza",
+                "váltás-sprint: eladás-jelre azonnali hátrasprint "
+                "kisjátékban (az eladó köteles a labdásig visszazárni), "
+                "a legközelebbi ember késleltet, a többiek a kapu felé "
+                "zárnak — a kontra-gól ellenük kezdődő edzésjáték")
+    except Exception:
+        pass
+
     # 84) Kapus-indítás hossza: ha a kapusunk egysíkúan indít, az
     # ellenfél ráállhat — az indítás-variancia a téma.
     try:
