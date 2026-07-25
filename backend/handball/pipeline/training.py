@@ -1343,6 +1343,41 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 87) Gólcsend-anatómia: a néma csend szervezés-gond (lövésig sem
+    # jutunk), a kihagyós csend befejezés-gond — más-más edzés-téma.
+    try:
+        from .momentum import (DROUGHT_ANATOMY_MIN_S,
+                               DROUGHT_SHOOTING_PER_MIN,
+                               DROUGHT_SILENT_PER_MIN, drought_anatomy)
+        da87 = drought_anatomy(match, config)
+        for side in ("home", "away"):
+            rec87 = da87[side]
+            if rec87["verdict"] is None \
+                    or rec87["drought_s"] < DROUGHT_ANATOMY_MIN_S:
+                continue
+            _da87_min = rec87["drought_s"] / 60.0
+            if rec87["verdict"] == "néma":
+                add(side, "támadás", "Gólcsend-törés (szervezés)",
+                    f"a leghosszabb gólcsendünk ({_da87_min:.0f} perc) "
+                    f"néma volt: {rec87['shots']} lövésig jutottunk — "
+                    "ilyenkor a támadás-szervezésünk áll le",
+                    "csend-törő minták: két begyakorolt 'vész-figura' "
+                    "(egyszerű, biztos lövést hozó lefutás), amit "
+                    "gólcsendben automatikusan elővesz a csapat, plusz "
+                    "időkérés-terv: mikor kérjen időt az edző a csend "
+                    "törésére")
+            else:
+                add(side, "támadás", "Gólcsend-törés (befejezés)",
+                    f"a leghosszabb gólcsendünk ({_da87_min:.0f} perc) "
+                    f"kihagyós volt: {rec87['shots']} lövés is volt "
+                    "benne, csak nem ment be — a befejezés a gond",
+                    "befejezés nyomás alatt: fáradt állapotban (sorozat "
+                    "után) lövés-döntés gyakorlás — sarok-váltás, ha a "
+                    "kapus belejött, és ziccer-rutin, hogy a csendben "
+                    "se kapkodjunk")
+    except Exception:
+        pass
+
     # 86) Engedett-oldal: ha a falunk egyik oldala átjárható, az
     # ellenfél oda szervez — az oldal-védő és a segítő-csúszás a téma.
     try:

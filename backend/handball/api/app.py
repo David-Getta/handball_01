@@ -2718,6 +2718,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import drought_anatomy
+            res["drought_anatomy"] = drought_anatomy(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3222,6 +3227,9 @@ def create_app():
                 from ..pipeline.defense import conceded_side_bias
                 _layer("conceded_side_bias",
                        lambda: conceded_side_bias(match))
+                from ..pipeline.momentum import drought_anatomy
+                _layer("drought_anatomy",
+                       lambda: drought_anatomy(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

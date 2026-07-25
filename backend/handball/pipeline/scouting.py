@@ -487,6 +487,11 @@ class ScoutingReport:
     csb_left: int = 0
     csb_center: int = 0
     csb_right: int = 0
+    # Gólcsend-anatómia: a leghosszabb gólcsendek össz-másodperce +
+    # a bennük leadott lövések — összegek, meccsek közt összeadódnak
+    # (ütem = shots / (s/60)).
+    da_drought_s: float = 0.0
+    da_shots: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1412,6 +1417,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Gólcsend-anatómia: néma vagy kihagyós a leghosszabb csendjük.
+    if rep.da_drought_s >= 300.0:
+        _da_pm = rep.da_shots / (rep.da_drought_s / 60.0)
+        if _da_pm <= 0.3:
+            keys.append(
+                f"A gólcsendjük néma: a leghosszabb csendjeikben "
+                f"({rep.da_drought_s / 60.0:.0f} perc) lövésig is alig "
+                f"jutottak ({rep.da_shots} lövés) — ha egyszer "
+                "megfogtátok őket, tartsátok a presszt: maguktól nem "
+                "találnak vissza a meccsbe.")
+        elif _da_pm >= 0.8:
+            keys.append(
+                f"A gólcsendjük kihagyós: a csendben is lőnek "
+                f"(percenként {_da_pm:.1f}) — a csendjüket a kapusod "
+                "tartja: tartsd melegen (bemelegítő lövések a "
+                "szünetben), és ne válts védekezést, ami működik.")
 
     # Engedett-oldal: a fal egyik oldala átjárható.
     _csb_wings = rep.csb_left + rep.csb_right
@@ -2758,6 +2780,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.csb_left = csbrec["left"]
         rep.csb_center = csbrec["center"]
         rep.csb_right = csbrec["right"]
+        from .momentum import drought_anatomy
+        darec = drought_anatomy(match, config)[team.value]
+        rep.da_drought_s = darec["drought_s"]
+        rep.da_shots = darec["shots"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4035,6 +4061,20 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 66) Az ő néma gólcsendjük × a ti elöl-szerző presszetek: ha
+    # egyszer megfogtátok őket, a pressz tartva tartja a csendet.
+    if (opp.da_drought_s >= 300.0 and own.steal_n >= 8
+            and opp.da_shots / (opp.da_drought_s / 60.0) <= 0.3
+            and own.steal_high / own.steal_n >= 0.35):
+        plan.append(
+            f"A gólcsendjük néma (a leghosszabb csendjeikben, "
+            f"{opp.da_drought_s / 60.0:.0f} perc alatt csak "
+            f"{opp.da_shots} lövésig jutottak), ti pedig elöl "
+            f"szerzitek a labdát ({own.steal_high}/{own.steal_n} magas "
+            "szerzés) — ha egyszer leállítottátok a támadásukat, NE "
+            "váltsatok: a presszetek tartja a csendet, ők maguktól "
+            "nem találnak vissza.")
+
     # 65) Az ő gyenge fal-oldaluk × a ti erős támadó-oldalatok: ha a
     # kettő egybeesik, a meccsterv magától megírja magát.
     _p65_wings = opp.csb_left + opp.csb_right
@@ -4590,6 +4630,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         csb_left=sum(r.csb_left for r in reports),
         csb_center=sum(r.csb_center for r in reports),
         csb_right=sum(r.csb_right for r in reports),
+        da_drought_s=sum(r.da_drought_s for r in reports),
+        da_shots=sum(r.da_shots for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

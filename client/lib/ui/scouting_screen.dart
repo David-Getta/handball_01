@@ -1137,6 +1137,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Gólcsend-anatómia: a leghosszabb gólcsendek lövés-üteme (5+ perc
+  // össz-csendnél; 0,3/perc alatt néma, 0,8/perc felett kihagyós; a
+  // backend-kulccsal azonos küszöbök).
+  String? _droughtAnatomy(Map<String, dynamic> r) {
+    final droughtS = ((r["da_drought_s"] as num?) ?? 0).toDouble();
+    final shots = ((r["da_shots"] as num?) ?? 0).toInt();
+    if (droughtS < 300.0) return null;
+    final perMin = shots / (droughtS / 60.0);
+    final mins = (droughtS / 60.0).toStringAsFixed(0);
+    if (perMin <= 0.3) {
+      return "néma gólcsend: $mins perc csendben csak $shots lövés · "
+          "ha megfogtad, tartsd a presszt";
+    }
+    if (perMin >= 0.8) {
+      return "kihagyós gólcsend: a csendben is "
+          "${perMin.toStringAsFixed(1)} lövés/perc · a kapusod tartja";
+    }
+    return null;
+  }
+
   // Engedett-oldal: a kapott szélső-sávos lövések oldal-többsége (8+
   // szélső-sávos lövésnél, 65%+ többségnél; a backend-kulccsal
   // azonos küszöbök). A "bal" a fal bal oldala.
@@ -1981,6 +2001,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Eladás-büntetés", _turnoverPunishment(r)!],
       if (_concededSide(r) != null)
         ["Engedett-oldal", _concededSide(r)!],
+      if (_droughtAnatomy(r) != null)
+        ["Gólcsend-anatómia", _droughtAnatomy(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

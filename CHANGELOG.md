@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Gólcsend-anatómia**: a leghosszabb gólcsend alatt lő-e a csapat
+  — a gólcsend (goal_droughts) csak azt mondja, meddig, ez azt, hogy
+  MIÉRT. A "kihagyós" csendben (0,8+ lövés/perc) a helyzet megvan,
+  a befejezés hiányzik — a téma a helyzetkihasználás és a túloldali
+  kapus melegen tartása; a "néma" csendben (0,3 lövés/perc alatt)
+  lövésig sem jutnak — a szervezés állt le, és az ellenfél pressze
+  tartva tartja a csendet. Egy réteg, sok felület: `drought_anatomy`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kétirányú kulcs + csempe), 66. meccsterv-szabály
+  (az ő néma csendjük × a ti elöl-szerző presszetek), 87.
+  edzés-szabály (csend-törő vész-figurák vs befejezés nyomás alatt).
 - **Engedett-oldal**: a fal melyik oldala felől jönnek a kapott
   lövések — az oldal-részrehajlás védő-oldali tükre. Ha a kapott
   szélső-sávos lövések 65%+ része ugyanarról az oldalról jön (8+

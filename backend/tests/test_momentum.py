@@ -633,3 +633,46 @@ def test_run_containment_measures_suffered_run_lengths():
     rc2 = run_containment(_match_from_goals("HHHA"))
     assert rc2["away"]["suffered"] == 1
     assert rc2["away"]["avg_len"] is None
+
+
+def test_drought_anatomy_separates_silent_and_wasteful():
+    """Mindkét csapat korán gólt lő, majd 10 percig egyik sem — de a
+    vendég közben 10 kapura törést kihagy (kihagyós csend), a hazai
+    lövésig sem jut (néma csend); rövid felvételnél nincs ítélet."""
+    from handball.pipeline.momentum import drought_anatomy
+
+    def _away_miss(t0):
+        fr = []
+        for i in range(7):
+            fr.append(Frame(
+                t=t0 + i,
+                players=[PlayerPosition(
+                    track_id=11, team=Team.AWAY, x=3.0, y=10.0,
+                    source=PositionSource.MEASURED, confidence=1.0)],
+                ball=Ball(x=max(2.6 - 0.6 * i, 0.0), y=10.0 - i * 1.0,
+                          confidence=1.0)))
+        fr.append(Frame(t=t0 + 8, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = _goal(0) + _goal(50, toward_home_goal=True)
+    events = {t: True for t in range(100, 15100, 1500)}  # 10 kihagyás
+    t = 100
+    while t < 15100:
+        if t in events:
+            frames += _away_miss(t)
+            t += 10
+        else:
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    da = drought_anatomy(Match(_meta(), frames))
+    assert da["home"]["verdict"] == "néma"
+    assert da["away"]["verdict"] == "kihagyós"
+    assert da["away"]["shots"] >= 10
+    assert da["home"]["shots"] <= 2
+
+    # Rövid felvétel: a leghosszabb csend is rövid → nincs ítélet.
+    short = drought_anatomy(Match(_meta(), frames[:2000]))
+    assert short["home"]["verdict"] is None

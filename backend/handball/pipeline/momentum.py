@@ -975,3 +975,55 @@ def key_moments(match: Match, config=None) -> list[dict]:
         pass
     moments.sort(key=lambda m: m["t"])
     return moments
+
+
+# Gólcsend-anatómia: legalább ennyi másodperces gólcsendet boncolunk;
+# percenként ennyi lövés felett "kihagyós" a csend (a helyzet megvan,
+# a befejezés hiányzik), ez alatt "néma" (a helyzetig sem jutnak el).
+DROUGHT_ANATOMY_MIN_S = 300.0
+DROUGHT_SHOOTING_PER_MIN = 0.8
+DROUGHT_SILENT_PER_MIN = 0.3
+
+
+def drought_anatomy(match: Match, config=None) -> dict:
+    """Gólcsend-anatómia: a leghosszabb gólcsend alatt lőtt-e a csapat.
+
+    A gólcsend (goal_droughts) csak azt mondja, MEDDIG nem esett gól —
+    itt az derül ki, MIÉRT: a "kihagyós" csendben a csapat továbbra is
+    lő, csak nem megy be — a befejezés (és a túloldali forró kezű
+    kapus) a téma, edzésben a helyzetkihasználás; a "néma" csendben
+    lövésig sem jut el — a támadás-szervezés állt le, és ilyenkor az
+    ellenfél pressze működött: ellene az olvasat, hogy ha egyszer
+    megfogtátok őket, a presszt tartani kell, mert maguktól nem
+    találnak vissza.
+
+    Visszatérés csapatonként: {"drought_s", "shots", "per_min",
+    "verdict"} — per_min/verdict None, ha a leghosszabb csend rövid
+    (DROUGHT_ANATOMY_MIN_S alatti); a verdict "kihagyós" / "néma" /
+    None (köztes ütem).
+    """
+    from .event_detection import detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dr = goal_droughts(match, config)
+    shots_by = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        shots_by[e.team.value].append(e.t / fps)
+    out = {}
+    for side in ("home", "away"):
+        rec = dr[side]
+        n = sum(1 for ts in shots_by[side]
+                if rec["start_s"] <= ts <= rec["end_s"])
+        r = {"drought_s": rec["longest_s"], "shots": n,
+             "per_min": None, "verdict": None}
+        if rec["longest_s"] >= DROUGHT_ANATOMY_MIN_S:
+            pm = n / (rec["longest_s"] / 60.0)
+            r["per_min"] = round(pm, 2)
+            if pm >= DROUGHT_SHOOTING_PER_MIN:
+                r["verdict"] = "kihagyós"
+            elif pm <= DROUGHT_SILENT_PER_MIN:
+                r["verdict"] = "néma"
+        out[side] = r
+    return out

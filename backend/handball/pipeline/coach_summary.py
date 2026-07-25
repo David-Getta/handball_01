@@ -663,6 +663,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Gólcsend-anatómia: kihagyós vagy néma volt a leghosszabb csend.
+    try:
+        from .momentum import drought_anatomy
+        dac = drought_anatomy(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_da = dac[side]
+            if rec_da["verdict"] is None:
+                continue
+            _da_min = rec_da["drought_s"] / 60.0
+            if rec_da["verdict"] == "kihagyós":
+                body += (f" A(z) {name} leghosszabb gólcsendje "
+                         f"({_da_min:.0f} perc) kihagyós volt: közben "
+                         f"{rec_da['shots']} lövésig eljutottak, csak "
+                         "nem ment be.")
+            else:
+                body += (f" A(z) {name} leghosszabb gólcsendje "
+                         f"({_da_min:.0f} perc) néma volt: közben "
+                         "lövésig is alig jutottak — a támadásuk "
+                         "szervezése állt le.")
+    except Exception:
+        pass
     # Engedett-oldal: a fal egyik oldala átjárható.
     try:
         from .defense import conceded_side_bias
