@@ -620,6 +620,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Fegyelem-esés: a kiállítások félidőnkénti sűrűsödése.
+    try:
+        from .rules import discipline_fade
+        dfc = discipline_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_df = dfc[side]
+            if rec_df["verdict"] == "hajrában szabálytalankodnak":
+                body += (f" A(z) {name} kiállításai a 2. félidőre "
+                         f"sűrűsödtek ({rec_df['fh_susp']} → "
+                         f"{rec_df['sh_susp']}) — fáradtan "
+                         "szabálytalankodnak.")
+            elif rec_df["verdict"] == "az elején kemények":
+                body += (f" A(z) {name} kiállításai az 1. félidőben "
+                         f"jöttek ({rec_df['fh_susp']} → "
+                         f"{rec_df['sh_susp']}) — kemény kezdés után "
+                         "megszelídültek.")
+    except Exception:
+        pass
     # Labdabiztonság-esés: az eladás-ütem változása a 2. félidőre.
     try:
         from .defense import TURNOVER_FADE_RISE_PER_MIN, turnover_fade

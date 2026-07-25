@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 61) Fegyelem-esés: ha a kiállításaink a 2. félidőre sűrűsödnek,
+    # a fáradt védekezés-technika a téma — a hajrában nem szabad
+    # emberhátrányba kerülni.
+    try:
+        from .rules import discipline_fade
+        df61 = discipline_fade(match, config)
+        for side in ("home", "away"):
+            rec61 = df61[side]
+            if rec61["verdict"] != "hajrában szabálytalankodnak":
+                continue
+            add(side, "védekezés", "Fegyelem fáradtan",
+                f"a kiállításaink a 2. félidőre sűrűsödtek "
+                f"({rec61['fh_susp']} → {rec61['sh_susp']}) — fáradtan "
+                "késve érkezünk és szabálytalanul zárunk",
+                "védekezés-technika fáradt állapotban: lábmunka-alapú "
+                "zárás kör-edzés UTÁN (kéz nélkül, tiszta test-pozícióból), "
+                "1-1 védekezés szabálytalanság nélkül pontozva, és a "
+                "hajrá-falba a leghiggadtabb védők kijelölése")
+    except Exception:
+        pass
+
     # 60) Előny-őrzés: ha ezen a meccsen 3+ gólos vezetés ment el, a
     # vezetés-menedzsment a következő edzés témája.
     try:

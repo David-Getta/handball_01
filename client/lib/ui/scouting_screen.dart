@@ -959,6 +959,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Fegyelem-esés: a kiállítások félidőnkénti eloszlása (3+ kiállításnál
+  // és 2+ többletnél; a backend-kulccsal azonos küszöb).
+  String? _disciplineFade(Map<String, dynamic> r) {
+    final fh = ((r["disc_fh_susp"] as num?) ?? 0).toInt();
+    final sh = ((r["disc_sh_susp"] as num?) ?? 0).toInt();
+    if (fh + sh < 3) return null;
+    if (sh - fh >= 2) {
+      return "$fh → $sh kiállítás · a hajrában szabálytalankodnak";
+    }
+    if (fh - sh >= 2) return "$fh → $sh kiállítás · az elején kemények";
+    return null;
+  }
+
   // Labdabiztonság-esés: az eladás-ütem változása a 2. félidőre
   // (félidőnként 2+ perc mért birtoklásnál; a backend-kulccsal azonos
   // küszöb) — csak a kirívó romlás érdekes.
@@ -1512,6 +1525,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Labdabiztonság-esés", _turnoverFade(r)!],
       if (_gkSaveFade(r) != null) ["Kapus-forma", _gkSaveFade(r)!],
       if (_leadProtection(r) != null) ["Előny-őrzés", _leadProtection(r)!],
+      if (_disciplineFade(r) != null)
+        ["Fegyelem-esés", _disciplineFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
