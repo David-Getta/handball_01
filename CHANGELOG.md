@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Félidő-zárás (a szünet előtti 5 perc)**: ki üt utoljára az
+  öltözőbe vonulás előtt — aki az 1. félidő hajráját rendre
+  elengedi, annál ott olcsó gólok vannak; aki erősen zár, annál a
+  félidő végén tilos kiengedni. A szünet utáni kezdés réteg párja
+  a szünet másik oldaláról. Egy réteg, sok felület:
+  `first_half_close` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 43. meccsterv-
+  szabály (az ő elengedett zárásuk × a ti erős zárásotok),
+  64. edzés-szabály (félidő-zárás begyakorlása).
 - **Szoros meccs-mérleg**: az 1-2 gólos meccsek kimenetele meccsek
   közt összegezve — aki a szorosat rendre elbukja, azt elég
   meccsben tartani (a hajrában ők roppannak meg); aki hozza, attól

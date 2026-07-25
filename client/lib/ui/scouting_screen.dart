@@ -959,6 +959,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Félidő-zárás: a szünet előtti 5 perc gól-mérlege (a backend-kulccsal
+  // azonos, 3 gólos különbség-küszöbbel).
+  String? _firstHalfClose(Map<String, dynamic> r) {
+    final m = ((r["fhc_matches"] as num?) ?? 0).toInt();
+    if (m < 1) return null;
+    final f = ((r["fhc_for"] as num?) ?? 0).toInt();
+    final a = ((r["fhc_against"] as num?) ?? 0).toInt();
+    if (a - f >= 3) return "$f–$a a szünet előtti 5 percben · elengedik";
+    if (f - a >= 3) return "$f–$a a szünet előtti 5 percben · erősen zárnak";
+    return null;
+  }
+
   // Szoros meccs-mérleg: az 1-2 gólos meccsek kimenetele (2+ szoros
   // meccsnél; a backend-kulccsal azonos küszöb).
   String? _closeGames(Map<String, dynamic> r) {
@@ -1565,6 +1577,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_postGoalLapses(r) != null)
         ["Gól utáni elalvás", _postGoalLapses(r)!],
       if (_closeGames(r) != null) ["Szoros meccsek", _closeGames(r)!],
+      if (_firstHalfClose(r) != null)
+        ["Félidő-zárás", _firstHalfClose(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

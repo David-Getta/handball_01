@@ -620,6 +620,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Félidő-zárás: ki nyerte a szünet előtti perceket.
+    try:
+        from .halftime import first_half_close
+        fhc = first_half_close(match)
+        if fhc is not None and abs(fhc["home"] - fhc["away"]) >= 2:
+            names = {"home": home, "away": away}
+            w_fhc = "home" if fhc["home"] > fhc["away"] else "away"
+            body += (f" A szünet előtti perceket a(z) {names[w_fhc]} "
+                     f"nyerte ({max(fhc['home'], fhc['away'])}–"
+                     f"{min(fhc['home'], fhc['away'])}) — lendülettel "
+                     "mentek az öltözőbe.")
+    except Exception:
+        pass
     # Szoros meccs: az 1-2 gólos vége a hajrá-részleteken múlt.
     try:
         from .momentum import close_game_record

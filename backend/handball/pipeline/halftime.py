@@ -171,3 +171,29 @@ def second_half_start(match: Match, config=None) -> Optional[dict]:
             goals[e.team.value] += 1
     return {"halftime_s": round(ht / fps, 1),
             "home": goals["home"], "away": goals["away"]}
+
+
+def first_half_close(match: Match, config=None) -> Optional[dict]:
+    """A félidő-zárás mérlege: ki üt utoljára a szünet előtt.
+
+    A szünet utáni kezdés (second_half_start) párja: a felismert félidő
+    ELŐTTI RESTART_WINDOW_S-ben (5 perc) dobott gólok csapatonként. Aki
+    az 1. félidő hajráját rendre elengedi, az fáradó fejjel megy az
+    öltözőbe — ott olcsó gólok vannak; aki lendülettel zár, annál a
+    szünet előtti percekben nem szabad kiengedni. None, ha nincs
+    felismert félidő-jel.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    ht = detect_halftime(match)
+    if ht is None:
+        return None
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    t_start = ht - round(RESTART_WINDOW_S * fps)
+    goals = {"home": 0, "away": 0}
+    for e in detect_shots(match, config or TacticsConfig()):
+        if e.type == EventType.GOAL and t_start <= e.t <= ht:
+            goals[e.team.value] += 1
+    return {"halftime_s": round(ht / fps, 1),
+            "home": goals["home"], "away": goals["away"]}
