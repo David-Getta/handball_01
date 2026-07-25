@@ -1343,6 +1343,24 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 63) Szoros vereség: ha ez a meccs 1-2 gólon úszott el, a
+    # hajrá-forgatókönyv a következő edzés témája.
+    try:
+        from .momentum import close_game_record
+        cg63 = close_game_record(match, config)
+        for side in ("home", "away"):
+            if cg63[side]["verdict"] != "szoros vereség":
+                continue
+            add(side, "taktika", "Hajrá-forgatókönyv",
+                f"a meccs {abs(cg63[side]['margin'])} gólon úszott el — "
+                "a szoros hajrát nem mi hoztuk",
+                "hajrá-szituációk gyakorlása: utolsó 5 perc -1-ről és "
+                "+1-ről (mindkét irány), utolsó-támadás figura időkéréssel "
+                "megbeszélve, 7 a 6 elleni játék le- és visszaváltása, és "
+                "a hajrá-ötös + a büntetőt dobók előre kijelölve")
+    except Exception:
+        pass
+
     # 62) Gól utáni elalvás: ha a góljaink után rendre azonnali választ
     # kapunk, a középkezdés elleni visszarendeződés a téma.
     try:

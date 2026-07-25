@@ -620,6 +620,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"formába ({_gf_fh:.0f}% → {_gf_sh:.0f}% védés).")
     except Exception:
         pass
+    # Szoros meccs: az 1-2 gólos vége a hajrá-részleteken múlt.
+    try:
+        from .momentum import close_game_record
+        cgc = close_game_record(match)
+        v_cg = cgc["home"]["verdict"]
+        if v_cg in ("szoros győzelem", "szoros vereség"):
+            body += (" A vége 1-2 gólos volt — az ilyen meccset a "
+                     "hajrá-részletek döntik el: az utolsó támadások, az "
+                     "időkérés és a higgadtság.")
+    except Exception:
+        pass
     # Gól utáni elalvás: a saját gólra rendre azonnali válasz érkezik.
     try:
         from .momentum import post_goal_lapses

@@ -2596,6 +2596,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import close_game_record
+            res["close_game_record"] = close_game_record(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3036,6 +3041,9 @@ def create_app():
                 _layer("discipline_fade", lambda: discipline_fade(match))
                 from ..pipeline.momentum import post_goal_lapses
                 _layer("post_goal_lapses", lambda: post_goal_lapses(match))
+                from ..pipeline.momentum import close_game_record
+                _layer("close_game_record",
+                       lambda: close_game_record(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

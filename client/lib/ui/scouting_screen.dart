@@ -959,6 +959,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szoros meccs-mérleg: az 1-2 gólos meccsek kimenetele (2+ szoros
+  // meccsnél; a backend-kulccsal azonos küszöb).
+  String? _closeGames(Map<String, dynamic> r) {
+    final w = ((r["cg_wins"] as num?) ?? 0).toInt();
+    final l = ((r["cg_losses"] as num?) ?? 0).toInt();
+    final d = ((r["cg_draws"] as num?) ?? 0).toInt();
+    if (w + l + d < 2) return null;
+    final merleg = d > 0 ? "$w–$l ($d döntetlen)" : "$w–$l";
+    if (l >= 2 && l >= 2 * w) {
+      return "$merleg a szoros meccseken · a hajrában megroppannak";
+    }
+    if (w >= 2 && w >= 2 * l) {
+      return "$merleg a szoros meccseken · a szorosat hozzák";
+    }
+    return null;
+  }
+
   // Gól utáni elalvás: a saját gólokra fél percen belül visszakapott
   // válasz-gólok aránya (5+ gólnál; a backend-kulccsal azonos küszöb).
   String? _postGoalLapses(Map<String, dynamic> r) {
@@ -1547,6 +1564,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fegyelem-esés", _disciplineFade(r)!],
       if (_postGoalLapses(r) != null)
         ["Gól utáni elalvás", _postGoalLapses(r)!],
+      if (_closeGames(r) != null) ["Szoros meccsek", _closeGames(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

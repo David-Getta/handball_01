@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Szoros meccs-mérleg**: az 1-2 gólos meccsek kimenetele meccsek
+  közt összegezve — aki a szorosat rendre elbukja, azt elég
+  meccsben tartani (a hajrában ők roppannak meg); aki hozza, attól
+  nem jön ajándék. A mentális profil negyedik tagja. Egy réteg,
+  sok felület: `close_game_record` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (kulcs + csempe),
+  42. meccsterv-szabály (az ő szoros-meccs gyengeségük × a ti
+  hajrá-erőtök), 63. edzés-szabály (hajrá-forgatókönyv szoros
+  vereség után).
 - **Gól utáni elalvás**: a saját gólokra fél percen belül
   visszakapott válasz-gólok aránya — a 40%+ a középkezdés utáni
   elalvás jele (a szerzett előny rendre azonnal elolvad), ellenük

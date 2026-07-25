@@ -533,3 +533,25 @@ def test_post_goal_lapses_no_goals():
     from handball.pipeline.momentum import post_goal_lapses
     pgl = post_goal_lapses(Match(_meta(), []))
     assert pgl["home"]["goals"] == 0 and pgl["home"]["rate_pct"] is None
+
+
+def test_close_game_record_verdicts():
+    """4-3 → szoros győzelem/vereség; 4-4 → döntetlen; kevés gólnál nincs
+    ítélet."""
+    from handball.pipeline.momentum import close_game_record
+
+    cg = close_game_record(_match_from_goals("HHAAHAH"))  # 4-3
+    assert cg["home"]["margin"] == 1
+    assert cg["home"]["verdict"] == "szoros győzelem"
+    assert cg["away"]["verdict"] == "szoros vereség"
+
+    cg2 = close_game_record(_match_from_goals("HHAAHAAH"))  # 4-4
+    assert cg2["home"]["verdict"] == "döntetlen"
+
+    cg3 = close_game_record(_match_from_goals("HHA"))  # 2-1, kevés gól
+    assert cg3["home"]["verdict"] is None
+
+    # Sima (3+ gólos) győzelem: nem szoros, nincs ítélet.
+    cg4 = close_game_record(_match_from_goals("HHHHHAA"))  # 5-2
+    assert cg4["home"]["verdict"] is None
+    assert cg4["home"]["margin"] == 3
