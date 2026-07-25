@@ -812,3 +812,65 @@ def gk_weak_side(match: Match, config=None) -> dict:
                 rec["share"] = round(share, 2)
         out[side] = rec
     return out
+
+
+# Kapus-indítás hossza: ennyi kapus-passztól ítélünk; e távolság
+# felett hosszú az indítás, e részarány felett hosszú-indításos, ez
+# alatt rövid-kihozós (egysíkú, tehát kiszámítható) a kapus.
+GK_OUTLET_MIN_PASSES = 6
+GK_OUTLET_LONG_M = 15.0
+GK_OUTLET_LONG_SHARE = 0.5
+GK_OUTLET_SHORT_SHARE = 0.15
+
+
+def gk_outlet_length(match: Match, config=None) -> dict:
+    """Kapus-indítás hossza: hosszú indítós vagy rövid kihozós a kapus.
+
+    A kapus-kidobás sebességét az outlet_speed méri — itt a HOSSZ a
+    kérdés: a hosszú indításokból élő kapus ellen a szélső
+    indítás-sávokat kell zárni (biztos hátsó ember, a fogadó szélsők
+    letámadása), a mindent rövidre kihozó ellen a magas pressz termel.
+    Amelyik kapus egysíkú (szinte csak hosszút vagy csak rövidet ad),
+    az kiszámítható — az ellenfél a teljes tervét ráállíthatja.
+
+    Minden olyan passznál, ahol a passzoló a megjelölt kapus, a
+    fogadó távolságát mérjük a passz megérkezésének kockáján.
+
+    Visszatérés csapatonként: {"outlets", "long", "long_pct",
+    "style"} — long_pct/style None, ha kevés (GK_OUTLET_MIN_PASSES
+    alatti) a kapus-passz; style "hosszú" / "rövid" / None (kevert).
+    """
+    import math as _math
+
+    from .decisions import detect_passes
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    detect_goalkeepers(match)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    out = {s: {"outlets": 0, "long": 0, "long_pct": None, "style": None}
+           for s in ("home", "away")}
+    for pe in detect_passes(match, config):
+        if getattr(pe.passer_pos, "role", None) != ROLE_GOALKEEPER:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None:
+            continue
+        recv = next((p for p in match.frames[i0].players
+                     if p.track_id == pe.receiver_id), None)
+        if recv is None:
+            continue
+        rec = out[pe.team.value]
+        rec["outlets"] += 1
+        if _math.hypot(recv.x - pe.passer_pos.x,
+                       recv.y - pe.passer_pos.y) >= GK_OUTLET_LONG_M:
+            rec["long"] += 1
+    for rec in out.values():
+        if rec["outlets"] >= GK_OUTLET_MIN_PASSES:
+            share = rec["long"] / rec["outlets"]
+            rec["long_pct"] = round(100.0 * share, 1)
+            if share >= GK_OUTLET_LONG_SHARE:
+                rec["style"] = "hosszú"
+            elif share <= GK_OUTLET_SHORT_SHARE:
+                rec["style"] = "rövid"
+    return out

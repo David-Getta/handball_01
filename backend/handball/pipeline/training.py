@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 84) Kapus-indítás hossza: ha a kapusunk egysíkúan indít, az
+    # ellenfél ráállhat — az indítás-variancia a téma.
+    try:
+        from .goalkeeper import gk_outlet_length
+        go84 = gk_outlet_length(match, config)
+        for side in ("home", "away"):
+            rec84 = go84[side]
+            if rec84["style"] is None:
+                continue
+            _go_desc = ("szinte csak hosszút indít"
+                        if rec84["style"] == "hosszú"
+                        else "mindent rövidre hoz ki")
+            add(side, "kapus", "Indítás-variancia",
+                f"a kapusunk {_go_desc} (a kapus-passzai "
+                f"{rec84['long_pct']:.0f}%-a 15 m feletti, "
+                f"{rec84['long']}/{rec84['outlets']}) — az ellenfél "
+                "ráállhat az egysíkú kihozatalunkra",
+                "indítás-variancia: a kapus mindkét opciót gyakorolja "
+                "(hosszú indítás a kiugró szélsőnek + rövid kihozatal "
+                "nyomás alatt), és a padról jelzett indítás-váltás, "
+                "hogy az ellenfél letámadása ne tudjon ráállni")
+    except Exception:
+        pass
+
     # 83) Területi-fölény-esés: ha a 2. félidőre hátracsúszik a
     # játékunk, fáradtan nem tartjuk elöl a labdát — a téma a
     # labdakihozatal és a magas birtoklás fáradtan.

@@ -474,6 +474,10 @@ class ScoutingReport:
     tf_fh_opp: int = 0
     tf_sh_frames: int = 0
     tf_sh_opp: int = 0
+    # Kapus-indítás hossza: kapus-passzok + ebből a hosszúak (15 m+)
+    # — darabszámok, meccsek közt összegződnek (arány = long/outlets).
+    gko_outlets: int = 0
+    gko_long: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1399,6 +1403,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Kapus-indítás hossza: az egysíkú kihozatalra ráállhat a terv.
+    if rep.gko_outlets >= 6:
+        _gko_share = rep.gko_long / rep.gko_outlets
+        if _gko_share >= 0.5:
+            keys.append(
+                f"Hosszú indítós a kapusuk (a kapus-passzai "
+                f"{100.0 * _gko_share:.0f}%-a 15 m feletti, "
+                f"{rep.gko_long}/{rep.gko_outlets}) — zárjátok a "
+                "szélső indítás-sávokat biztos hátsó emberrel: ha a "
+                "hosszút elveszitek, rövidre kényszerülnek, amit nem "
+                "szoktak.")
+        elif _gko_share <= 0.15:
+            keys.append(
+                f"Mindent rövidre hoz ki a kapusuk (csak "
+                f"{rep.gko_long}/{rep.gko_outlets} hosszú indítás) — "
+                "a magas letámadás rájuk fér: presszeljétek a "
+                "kihozatalt, a hosszú kényszer-indításuk gyakorlatlan.")
 
     # Területi-fölény-esés: a 2. félidőre hátracsúszó birtoklás.
     if rep.tf_fh_frames >= 100 and rep.tf_sh_frames >= 100:
@@ -2690,6 +2712,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.tf_fh_opp = tfrec["fh_opp"]
         rep.tf_sh_frames = tfrec["sh_frames"]
         rep.tf_sh_opp = tfrec["sh_opp"]
+        from .goalkeeper import gk_outlet_length
+        gorec = gk_outlet_length(match, config)[team.value]
+        rep.gko_outlets = gorec["outlets"]
+        rep.gko_long = gorec["long"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3967,6 +3993,20 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 63) Az ő hosszú-indításos kapusuk × a ti gyors
+    # visszarendeződésetek: a hosszú labda nem talál üres területet.
+    if (opp.gko_outlets >= 6 and own.rec_transitions >= 6
+            and opp.gko_long / opp.gko_outlets >= 0.5
+            and own.rec_slow / own.rec_transitions <= 0.2):
+        plan.append(
+            f"Hosszú indításokból élnek (a kapus-passzaik "
+            f"{100.0 * opp.gko_long / opp.gko_outlets:.0f}%-a 15 m "
+            f"feletti), ti pedig gyorsan visszarendeződtök (csak "
+            f"{own.rec_slow}/{own.rec_transitions} lassú "
+            "visszafutás) — a hosszú labdájuk nálatok nem talál üres "
+            "területet: zárjátok a rövid opciót is letámadó emberrel "
+            "a kapusra, és a kényszer-indítás a tiétek.")
+
     # 62) Az ő területi fölény-esésük × a ti kitartó tempótok: a
     # hajrában a pálya magától átfordul — akkor kell rákapcsolni.
     if (opp.tf_fh_frames >= 100 and opp.tf_sh_frames >= 100
@@ -4466,6 +4506,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tf_fh_opp=sum(r.tf_fh_opp for r in reports),
         tf_sh_frames=sum(r.tf_sh_frames for r in reports),
         tf_sh_opp=sum(r.tf_sh_opp for r in reports),
+        gko_outlets=sum(r.gko_outlets for r in reports),
+        gko_long=sum(r.gko_long for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

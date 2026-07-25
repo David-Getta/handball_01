@@ -694,3 +694,44 @@ def test_gk_weak_side_mirrors_conceded_goals():
     # A hazai kapu nem kapott gólt; kevés minta → nincs ítélet.
     assert gw["home"]["goals"] == 0
     assert gw["home"]["weak_side"] is None
+
+
+def test_gk_outlet_length_flags_long_ball_keeper():
+    """A hazai kapus 5 hosszú (24 m-es) + 2 rövid (8 m-es) indítást ad →
+    71% hosszú, "hosszú" stílus; kevés kapus-passznál nincs ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_outlet_length
+
+    def _p(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    # A kapus (1) a kapuelőtérben áll végig; két fogadó: távoli (2,
+    # 24 m) és közeli (3, 8 m).
+    players = [_p(1, 1.0, 10.0), _p(2, 25.0, 10.0), _p(3, 9.0, 10.0)]
+
+    def _hold(t0, x, y, n=5):
+        return [Frame(t=t0 + i, players=players,
+                      ball=Ball(x=x, y=y, confidence=1.0))
+                for i in range(n)]
+
+    frames = []
+    t = 0
+    for target_x in (25.0, 25.0, 25.0, 9.0, 25.0, 25.0, 9.0):
+        frames += _hold(t, 1.0, 10.0)      # a kapusnál a labda
+        t += 5
+        frames += _hold(t, target_x, 10.0)  # indítás a fogadóhoz
+        t += 5
+    # Ráhagyás, hogy a kapus-azonosításnak legyen elég mért ideje.
+    frames += _hold(t, 1.0, 10.0, n=250)
+    go = gk_outlet_length(_match(frames))
+    h = go["home"]
+    assert h["outlets"] == 7 and h["long"] == 5
+    assert h["long_pct"] is not None
+    assert abs(h["long_pct"] - 100.0 * 5 / 7) < 0.5
+    assert h["style"] == "hosszú"
+
+    # Kevés kapus-passz: nincs ítélet.
+    few = gk_outlet_length(_match(frames[:30] + frames[-250:]))
+    assert few["home"]["style"] is None and few["home"]["long_pct"] is None

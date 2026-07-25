@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kapus-indítás hossza**: hosszú indítós vagy rövid kihozós a
+  kapus — az outlet_speed a gyorsaságot méri, ez a hosszt. Ha a
+  kapus-passzok 50%+ hányada 15 m feletti (6+ passzból), a szélső
+  indítás-sávok zárása a terv; ha 15% alatti, a magas letámadás
+  termel; az egysíkú kihozatal mindkét irányban kiszámítható — saját
+  olvasatban az indítás-variancia a téma. Egy réteg, sok felület:
+  `gk_outlet_length` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 63.
+  meccsterv-szabály (az ő hosszú-indításos kapusuk × a ti gyors
+  visszarendeződésetek), 84. edzés-szabály (indítás-variancia).
 - **Területi-fölény-esés**: a field tilt 1. vs 2. félidei összevetése
   — a fáradás-kép terület-tagja. Akinek a 2. félidőre 12+
   százalékponttal esik a területi fölénye (félidőnként 100+ birtokos

@@ -1137,6 +1137,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Kapus-indítás hossza: a 15 m feletti kapus-passzok aránya (6+
+  // passznál; 50%+ = hosszú indítós, 15%- = rövid kihozós; a
+  // backend-kulccsal azonos küszöbök).
+  String? _gkOutlet(Map<String, dynamic> r) {
+    final outlets = ((r["gko_outlets"] as num?) ?? 0).toInt();
+    final long = ((r["gko_long"] as num?) ?? 0).toInt();
+    if (outlets < 6) return null;
+    final share = long / outlets;
+    if (share >= 0.5) {
+      return "hosszú indítós kapus: "
+          "${(100.0 * share).toStringAsFixed(0)}% 15 m+ "
+          "($long/$outlets) · zárd az indítás-sávokat";
+    }
+    if (share <= 0.15) {
+      return "rövid kihozós kapus: csak $long/$outlets hosszú · "
+          "magas letámadás";
+    }
+    return null;
+  }
+
   // Területi-fölény-esés: a tilt 1. vs 2. félidőben (félidőnként
   // 100+ birtokos kockánál, 12+ százalékpont esésnél; a
   // backend-kulccsal azonos küszöbök).
@@ -1925,6 +1945,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Asszist-függés", _assistReliance(r)!],
       if (_tiltFade(r) != null)
         ["Területi-fölény-esés", _tiltFade(r)!],
+      if (_gkOutlet(r) != null)
+        ["Kapus-indítás", _gkOutlet(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

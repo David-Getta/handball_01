@@ -663,6 +663,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Kapus-indítás hossza: egysíkú (kiszámítható) kihozatal.
+    try:
+        from .goalkeeper import gk_outlet_length
+        goc = gk_outlet_length(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_go = goc[side]
+            if rec_go["style"] is None:
+                continue
+            if rec_go["style"] == "hosszú":
+                body += (f" A(z) {name} kapusa szinte csak hosszút "
+                         f"indított (a kapus-passzai "
+                         f"{rec_go['long_pct']:.0f}%-a 15 m feletti).")
+            else:
+                body += (f" A(z) {name} kapusa mindent rövidre hozott "
+                         f"ki (a kapus-passzai csak "
+                         f"{rec_go['long_pct']:.0f}%-a volt 15 m "
+                         "feletti).")
+    except Exception:
+        pass
     # Területi-fölény-esés: a 2. félidőre hátracsúszó birtoklás.
     try:
         from .tactics import TILT_FADE_DROP_PP, tilt_fade
