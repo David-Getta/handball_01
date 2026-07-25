@@ -1137,6 +1137,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Eladás-időzítés: az eladások mekkora része korai, a birtoklás
+  // első 10 mp-ében (6+ eladásnál, 50%+ aránynál; a backend-kulccsal
+  // azonos küszöbök).
+  String? _turnoverTiming(Map<String, dynamic> r) {
+    final timed = ((r["tt_timed"] as num?) ?? 0).toInt();
+    final early = ((r["tt_early"] as num?) ?? 0).toInt();
+    if (timed < 6) return null;
+    final share = early / timed;
+    if (share < 0.5) return null;
+    return "az eladásaik ${(100.0 * share).toStringAsFixed(0)}%-a a "
+        "birtoklás első 10 mp-ében ($early/$timed) · magas letámadás";
+  }
+
   // Kapus-gyengeoldal: hova kapják a gólokat a kapus szemszögéből (6+
   // gólnál, 45%+ részaránynál; a backend-kulccsal azonos küszöbök).
   String? _gkWeakSide(Map<String, dynamic> r) {
@@ -1836,6 +1849,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lövő-koncentráció", _shotConcentration(r)!],
       if (_gkWeakSide(r) != null)
         ["Kapus-gyengeoldal", _gkWeakSide(r)!],
+      if (_turnoverTiming(r) != null)
+        ["Eladás-időzítés", _turnoverTiming(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

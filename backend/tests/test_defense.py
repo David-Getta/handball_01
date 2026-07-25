@@ -627,3 +627,33 @@ def test_turnover_fade_rate_rises_second_half():
     # Félidő nélkül nincs ítélet.
     short = turnover_fade(Match(_meta(), frames[:1000]))
     assert short["home"]["rise_per_min"] is None
+
+
+def test_turnover_timing_flags_early_losses():
+    """6 rövid (2 mp-es) + 1 hosszú (12 mp-es) hazai birtoklás végén jön
+    az eladás → az eladások ~86%-a korai; kevés eladásnál nincs ítélet."""
+    from handball.pipeline.defense import turnover_timing
+
+    def _hold(t0, pid, team, n):
+        return [Frame(t=t0 + i,
+                      players=[_pl(pid, team, 20.0, 10.0)],
+                      ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                for i in range(n)]
+
+    frames = []
+    t = 0
+    for k in range(7):
+        n_home = 300 if k == 6 else 50  # 12 mp a hetedik, 2 mp a többi
+        frames += _hold(t, 1, Team.HOME, n_home)
+        t += n_home
+        frames += _hold(t, 11, Team.AWAY, 25)
+        t += 25
+    tt = turnover_timing(Match(_meta(), frames))
+    h = tt["home"]
+    assert h["timed"] == 7 and h["early"] == 6
+    assert h["early_pct"] is not None
+    assert abs(h["early_pct"] - 100.0 * 6 / 7) < 0.5
+
+    # Kevés eladás: nincs ítélet.
+    few = turnover_timing(Match(_meta(), frames[:100]))
+    assert few["home"]["early_pct"] is None

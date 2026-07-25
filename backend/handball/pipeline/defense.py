@@ -1043,3 +1043,68 @@ def ball_winners(match, config=None) -> dict:
         out[side] = {"total": sum(tally[side].values()),
                      "players": players, "ts": ts[side]}
     return out
+
+
+# Eladás-időzítés: ennyi időzíthető eladástól ítélünk; a birtoklás
+# első ennyi másodpercében elvesztett labda számít korainak, és e
+# részarány felett "korai eladó" a csapat.
+TO_TIMING_MIN = 6
+TO_EARLY_S = 10.0
+TO_EARLY_SHARE = 0.5
+
+
+def turnover_timing(match, config=None) -> dict:
+    """Eladás-időzítés: a birtoklás hányadik másodpercében jön az eladás.
+
+    A labdaeladás helye (turnover_zones) mellett az IDEJE is beszédes:
+    aki a birtoklás első másodperceiben — a kihozatal és a felállás
+    közben — veszíti el a labdát, az a letámadásra érzékeny: ellene a
+    magas, korai pressz azonnal termel. Aki későn, a kidolgozás végén
+    ad el, annak a türelmes, felállt védekezés a méreg — ott a pressz
+    fölösleges kockázat.
+
+    Minden labdaeladásnál visszakeressük, mikor került a vesztes
+    csapathoz a labda (az ellenfél utolsó birtoklása utáni első saját
+    kocka), és a birtoklás-hossz alapján soroljuk koraira/későire.
+
+    Visszatérés csapatonként: {"timed", "early", "early_pct"} —
+    early_pct None, ha kevés (TO_TIMING_MIN alatti) az időzíthető
+    eladás.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig, possession_team
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+    poss = [possession_team(f, config) for f in frames]
+    out = {side: {"timed": 0, "early": 0, "early_pct": None}
+           for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER:
+            continue
+        i0 = idx_of.get(e.t)
+        if i0 is None or i0 == 0:
+            continue
+        team = e.team
+        other = Team.AWAY if team == Team.HOME else Team.HOME
+        start = None
+        # Az esemény kockáján már az ellenfélé a labda — visszafelé
+        # keressük a birtoklás elejét (a szabad-labdás kockákon átlépve).
+        for j in range(i0 - 1, -1, -1):
+            if poss[j] == other:
+                break
+            if poss[j] == team:
+                start = j
+        if start is None:
+            continue
+        rec = out[team.value]
+        rec["timed"] += 1
+        if (frames[i0].t - frames[start].t) / fps <= TO_EARLY_S:
+            rec["early"] += 1
+    for rec in out.values():
+        if rec["timed"] >= TO_TIMING_MIN:
+            rec["early_pct"] = round(100.0 * rec["early"] / rec["timed"], 1)
+    return out

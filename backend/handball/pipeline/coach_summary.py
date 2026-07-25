@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Eladás-időzítés: a korai eladás a letámadás-érzékenység jele.
+    try:
+        from .defense import TO_EARLY_S, TO_EARLY_SHARE, turnover_timing
+        ttc = turnover_timing(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tt = ttc[side]
+            if rec_tt["early_pct"] is None \
+                    or rec_tt["early_pct"] < 100.0 * TO_EARLY_SHARE:
+                continue
+            body += (f" A(z) {name} az eladásai {rec_tt['early_pct']:.0f}"
+                     f"%-át a birtoklás első {TO_EARLY_S:.0f} "
+                     "másodpercében követte el — a kihozatala érzékeny "
+                     "volt a letámadásra.")
+    except Exception:
+        pass
     # Kapus-gyengeoldal: egy oldalra kapott gólok — kész lövő-terv.
     try:
         from .goalkeeper import gk_weak_side

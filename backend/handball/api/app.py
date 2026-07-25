@@ -2678,6 +2678,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import turnover_timing
+            res["turnover_timing"] = turnover_timing(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3158,6 +3163,9 @@ def create_app():
                        lambda: shot_concentration(match))
                 from ..pipeline.goalkeeper import gk_weak_side
                 _layer("gk_weak_side", lambda: gk_weak_side(match))
+                from ..pipeline.defense import turnover_timing
+                _layer("turnover_timing",
+                       lambda: turnover_timing(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -447,6 +447,10 @@ class ScoutingReport:
     gw_bal: int = 0
     gw_kozep: int = 0
     gw_jobb: int = 0
+    # Eladás-időzítés: időzíthető eladások + ebből a koraiak (a
+    # birtoklás első másodperceiben) — darabszámok, összegződnek.
+    tt_timed: int = 0
+    tt_early: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1372,6 +1376,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Eladás-időzítés: a korai eladó a letámadásra érzékeny.
+    if rep.tt_timed >= 6 and rep.tt_early / rep.tt_timed >= 0.5:
+        keys.append(
+            f"Korai eladók: az eladásaik "
+            f"{100.0 * rep.tt_early / rep.tt_timed:.0f}%-a a birtoklás "
+            f"első 10 másodpercében jön ({rep.tt_early}/{rep.tt_timed}) "
+            "— a magas, korai letámadás ellenük azonnal termel: a "
+            "kihozataluknál presszeljetek, ne a felállt támadásuknál.")
 
     # Kapus-gyengeoldal: egy oldalra kapott gólok — kész lövő-terv.
     _gw_goals = rep.gw_bal + rep.gw_kozep + rep.gw_jobb
@@ -2575,6 +2588,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.gw_bal = gwrec["bal"]
         rep.gw_kozep = gwrec["közép"]
         rep.gw_jobb = gwrec["jobb"]
+        from .defense import turnover_timing
+        ttrec = turnover_timing(match, config)[team.value]
+        rep.tt_timed = ttrec["timed"]
+        rep.tt_early = ttrec["early"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3852,6 +3869,19 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 58) Az ő korai eladásaik × a ti elöl-szerzésetek: a magas pressz
+    # ott termel, ahol ők a leggyengébbek — a kihozatalnál.
+    if (opp.tt_timed >= 6 and opp.tt_early / opp.tt_timed >= 0.5
+            and own.steal_n >= 4 and own.steal_high >= 3):
+        plan.append(
+            f"Korai eladók (az eladásaik "
+            f"{100.0 * opp.tt_early / opp.tt_timed:.0f}%-a a birtoklás "
+            f"első 10 másodpercében), ti pedig elöl is szerzitek a "
+            f"labdát ({own.steal_high}/{own.steal_n} szerzés a felső "
+            "harmadban) — toljátok fel a presszt a kihozatalukra: az "
+            "első passzukra lépjetek rá, és a szerzésből azonnal "
+            "üres kapura fordultok.")
+
     # 57) Az ő kapus-gyengeoldaluk × a ti célzás-pontosságotok: aki
     # pontosan lő, annak a gyenge sarok kész gól-recept.
     _p57_goals = opp.gw_bal + opp.gw_kozep + opp.gw_jobb
@@ -4261,6 +4291,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gw_bal=sum(r.gw_bal for r in reports),
         gw_kozep=sum(r.gw_kozep for r in reports),
         gw_jobb=sum(r.gw_jobb for r in reports),
+        tt_timed=sum(r.tt_timed for r in reports),
+        tt_early=sum(r.tt_early for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

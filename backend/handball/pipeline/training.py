@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 79) Eladás-időzítés: ha a birtoklás elején adjuk el a labdát, a
+    # letámadás ellenünk termel — a kihozatal nyomás alatt a téma.
+    try:
+        from .defense import (TO_EARLY_S, TO_EARLY_SHARE, TO_TIMING_MIN,
+                              turnover_timing)
+        tt79 = turnover_timing(match, config)
+        for side in ("home", "away"):
+            rec79 = tt79[side]
+            if rec79["early_pct"] is None \
+                    or rec79["timed"] < TO_TIMING_MIN \
+                    or rec79["early_pct"] < 100.0 * TO_EARLY_SHARE:
+                continue
+            add(side, "támadás", "Kihozatal nyomás alatt",
+                f"az eladásaink {rec79['early_pct']:.0f}%-a a birtoklás "
+                f"első {TO_EARLY_S:.0f} másodpercében jön "
+                f"({rec79['early']}/{rec79['timed']}) — a letámadás "
+                "ellenünk azonnal termel",
+                "kihozatal nyomás alatt: 3-2 elleni kihozatal-gyakorlat "
+                "letámadó védőkkel, kötelező biztonsági passz-opció "
+                "(visszajátszás a kapusnak), és a szélső-nyitás mint "
+                "első kijátszási irány begyakorlása")
+    except Exception:
+        pass
+
     # 78) Kapus-gyengeoldal: ha egy oldalra kapjuk a gólokat, az
     # ellenfél lövő-terve kész — a kapus oldal-technikája a téma.
     try:

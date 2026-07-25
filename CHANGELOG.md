@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Eladás-időzítés**: a birtoklás hányadik másodpercében jön a
+  labdaeladás — a hely (turnover_zones) mellett az idő-olvasat. Aki
+  az eladásai felét+ a birtoklás első 10 másodpercében követi el (6+
+  eladásból), az a letámadásra érzékeny: ellene a magas, korai pressz
+  a kihozatalnál azonnal termel; saját olvasatban a kihozatal nyomás
+  alatt (biztonsági passz-opciók) a téma. Egy réteg, sok felület:
+  `turnover_timing` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 58.
+  meccsterv-szabály (az ő korai eladásaik × a ti elöl-szerzésetek),
+  79. edzés-szabály (kihozatal letámadó védőkkel).
 - **Kapus-gyengeoldal**: a kapu melyik oldalára kapja a csapat a
   gólokat (a kapus szemszögéből) — a kapu-sarok réteg védő-oldali
   tükörképe. Ha a bekapott gólok 45%+ hányada ugyanarra az oldalra
