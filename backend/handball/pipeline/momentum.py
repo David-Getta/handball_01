@@ -635,6 +635,54 @@ def close_game_record(match: Match, config=None) -> dict:
     return out
 
 
+# Félidei hátrányból fordítás: ennyi felismert gól kell az ítélethez
+# (részleges felvételen a hamis "0-0" nem ítélet).
+HT_COMEBACK_MIN_GOALS = 6
+
+
+def halftime_comeback(match: Match, config=None) -> dict:
+    """Félidei hátrányból fordítás: a félidei állás vs a végeredmény.
+
+    A mentális profil tagja a szoros meccs-mérleg mellett: aki félidei
+    hátrányból rendre fordít, azt a félidei előny nem töri meg — ellene
+    a vezetés birtokában is 60 perces meccsre kell készülni; aki
+    hátrányból sosem jön vissza, annál a félidei előny majdnem kész
+    győzelem. A felderítés meccsek közt összegzi.
+
+    Visszatérés csapatonként: {"ht_margin", "final_margin", "verdict"}
+    — verdict None (nincs félidő-jel, kevés gól, vagy a félidőnél nem
+    állt hátrányban), "fordította" (győzelem), "mentette" (döntetlen)
+    vagy "elbukta" (vereség).
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    empty = {"ht_margin": None, "final_margin": None, "verdict": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    if len(goals) < HT_COMEBACK_MIN_GOALS:
+        return out
+    ht_h = sum(1 for t, sd in goals if sd == "home" and t <= ht)
+    ht_a = sum(1 for t, sd in goals if sd == "away" and t <= ht)
+    fin_h = sum(1 for _, sd in goals if sd == "home")
+    fin_a = sum(1 for _, sd in goals if sd == "away")
+    for side, htm, finm in (("home", ht_h - ht_a, fin_h - fin_a),
+                            ("away", ht_a - ht_h, fin_a - fin_h)):
+        rec = out[side]
+        rec["ht_margin"] = htm
+        rec["final_margin"] = finm
+        if htm < 0:
+            rec["verdict"] = ("fordította" if finm > 0 else
+                              "mentette" if finm == 0 else "elbukta")
+    return out
+
+
 # Gól utáni elalvás: az ennyi másodpercen belül érkező ellenfél-gól
 # számít "azonnali válasznak" — a középkezdés utáni koncentráció-hiba.
 POST_GOAL_QUICK_S = 40.0

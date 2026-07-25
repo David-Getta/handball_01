@@ -1343,6 +1343,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 69) Félidei hátrányból fordítás: ha hátrányból nem tudtunk
+    # visszajönni, a szünet utáni fordítás-protokoll a téma.
+    try:
+        from .momentum import halftime_comeback
+        htc69 = halftime_comeback(match, config)
+        for side in ("home", "away"):
+            rec69 = htc69[side]
+            if rec69["verdict"] != "elbukta":
+                continue
+            add(side, "taktika", "Szünet utáni fordítás-protokoll",
+                f"félidei {-rec69['ht_margin']} gólos hátrányból nem "
+                "jöttünk vissza — a hátrányban játék a gyengénk",
+                "fordítás-protokoll: edzésmeccs indítása mínusz 2-ről "
+                "(15 perc a fordításra), a szünet utáni első három "
+                "támadásra kész figura, és letámadós/5-1-es váltás "
+                "begyakorlása hátrányban")
+    except Exception:
+        pass
+
     # 68) Tempó-esés: ha a 2. félidőre érdemben esik a támadás/perc,
     # elfogy a láb — a futó-állóképesség és a rotáció a téma.
     try:

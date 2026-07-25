@@ -555,3 +555,46 @@ def test_close_game_record_verdicts():
     cg4 = close_game_record(_match_from_goals("HHHHHAA"))  # 5-2
     assert cg4["home"]["verdict"] is None
     assert cg4["home"]["margin"] == 3
+
+
+def test_halftime_comeback_turned_from_deficit():
+    """A hazai félidei 1-2 hátrányból 4-3-ra fordít; félidő-jel nélkül
+    nincs ítélet."""
+    from handball.models.tracking import PlayerPosition, PositionSource
+    from handball.pipeline.momentum import halftime_comeback
+
+    def _active(t0, seconds):
+        players = [PlayerPosition(track_id=100 + k,
+                                  team=Team.HOME if k < 4 else Team.AWAY,
+                                  x=8.0 + 3.0 * k, y=4.0 + (k % 4),
+                                  source=PositionSource.MEASURED,
+                                  confidence=1.0) for k in range(8)]
+        return [Frame(t=t0 + i, players=players,
+                      ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                for i in range(int(seconds * 25))]
+
+    def _half(t0, sequence):
+        frames = _active(t0, 100)
+        t = frames[-1].t + 1
+        for ch in sequence:
+            frames += _goal(t, toward_home_goal=(ch == "A"))
+            t += 8
+            frames += _active(t, 100)
+            t = frames[-1].t + 1
+        return frames
+
+    frames = _half(0, "AAH")            # félidőben 1-2
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(120 * 25))]
+    frames += _half(frames[-1].t + 1, "HHHA")  # vége 4-3
+    htc = halftime_comeback(Match(_meta(), frames))
+    h = htc["home"]
+    assert h["ht_margin"] == -1 and h["final_margin"] == 1
+    assert h["verdict"] == "fordította"
+    # A vendég a félidőnél vezetett → róla nincs hátrány-ítélet.
+    assert htc["away"]["verdict"] is None
+
+    # Félidő-jel nélkül nincs ítélet.
+    no_ht = halftime_comeback(_match_from_goals("HHAAHAH"))
+    assert no_ht["home"]["verdict"] is None

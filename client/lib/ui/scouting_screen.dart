@@ -987,6 +987,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Félidei hátrányból fordítás: a hátrányos félidők mérlege (2+ ilyen
+  // meccsnél; a backend-kulccsal azonos küszöbök).
+  String? _htComeback(Map<String, dynamic> r) {
+    final behind = ((r["htc_behind"] as num?) ?? 0).toInt();
+    if (behind < 2) return null;
+    final turned = ((r["htc_turned"] as num?) ?? 0).toInt();
+    final saved = ((r["htc_saved"] as num?) ?? 0).toInt();
+    if (turned == 0 && saved == 0) {
+      return "$behind félidei hátrányból 0 mentve · "
+          "a félidei előny ellenük dönt";
+    }
+    if (2 * turned >= behind) {
+      return "$behind félidei hátrányból $turned fordítás · "
+          "60 perces meccs kell ellenük";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1649,6 +1667,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_missPunishment(r) != null)
         ["Kihagyott ziccer ára", _missPunishment(r)!],
       if (_paceFade(r) != null) ["Tempó-esés", _paceFade(r)!],
+      if (_htComeback(r) != null)
+        ["Félidei fordítás", _htComeback(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

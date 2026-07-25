@@ -398,6 +398,11 @@ class ScoutingReport:
     tpf_fh_min: float = 0.0
     tpf_sh_attacks: int = 0
     tpf_sh_min: float = 0.0
+    # Félidei hátrányból fordítás: hátrányos félidők + kimenetelük —
+    # darabszámok, összegződnek.
+    htc_behind: int = 0
+    htc_turned: int = 0
+    htc_saved: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1204,6 +1209,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "KELL emelni ellenük: gyors középkezdés, futó kézi, a "
                 "friss lábak a szünet utánra; a lassú leforgás az ő "
                 "meccsük.")
+
+    # Félidei hátrányból fordítás: kinek ér valamit a félidei előny.
+    if rep.htc_behind >= 2:
+        if rep.htc_turned == 0 and rep.htc_saved == 0:
+            keys.append(
+                f"Félidei hátrányból nem jönnek vissza ({rep.htc_behind} "
+                "ilyen meccsből egyet sem mentettek) — az első félidő a "
+                "meccs: ha a szünetre előnnyel mész, náluk fejben el van "
+                "döntve; a hangsúlyt az első 30 percre tedd.")
+        elif 2 * rep.htc_turned >= rep.htc_behind:
+            keys.append(
+                f"Félidei hátrányból rendre fordítanak ({rep.htc_behind} "
+                f"ilyen meccsből {rep.htc_turned} fordítás) — a félidei "
+                "előny ellenük nem ér semmit: a szünet után újra meg "
+                "kell nyerni a meccset, a második félidőre tarts friss "
+                "lábat és kész figurát.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2329,6 +2350,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.cg_losses = 1
         elif cgrec["verdict"] == "döntetlen":
             rep.cg_draws = 1
+        from .momentum import halftime_comeback
+        htcrec = halftime_comeback(match, config)[team.value]
+        if htcrec["verdict"] is not None:
+            rep.htc_behind = 1
+            if htcrec["verdict"] == "fordította":
+                rep.htc_turned = 1
+            elif htcrec["verdict"] == "mentette":
+                rep.htc_saved = 1
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3492,6 +3521,20 @@ def matchup_plan(own: "ScoutingReport",
             "minden gól után, futó kézi, és a friss lábakat a 2. "
             "félidőre időzítsd; a fáradó láb ellen a tempó a kés.")
 
+    # 48) Az ő feladott félidei hátrányuk × a ti erős kezdésetek: ha a
+    # szünetre előnyben vagytok, a meccs náluk fejben lefutott.
+    if (opp.htc_behind >= 2 and opp.htc_turned == 0
+            and opp.htc_saved == 0
+            and own.open_first_matches >= 1
+            and own.open_for > own.open_against):
+        plan.append(
+            f"Félidei hátrányból egyszer sem jöttek vissza "
+            f"({opp.htc_behind} ilyen meccsből 0), ti pedig erősen "
+            f"kezdtek ({own.open_for}–{own.open_against} a korai "
+            "gólokból) — a meccsterv az első 30 percre épüljön: "
+            "szerezz félidei előnyt, a szünet után ők maguktól "
+            "elengedik.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -3842,6 +3885,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tpf_fh_min=round(sum(r.tpf_fh_min for r in reports), 1),
         tpf_sh_attacks=sum(r.tpf_sh_attacks for r in reports),
         tpf_sh_min=round(sum(r.tpf_sh_min for r in reports), 1),
+        htc_behind=sum(r.htc_behind for r in reports),
+        htc_turned=sum(r.htc_turned for r in reports),
+        htc_saved=sum(r.htc_saved for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

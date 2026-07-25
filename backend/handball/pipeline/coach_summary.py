@@ -706,6 +706,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "időkérés és a higgadtság.")
     except Exception:
         pass
+    # Félidei hátrányból fordítás: aki hátrányból nyerte meg.
+    try:
+        from .momentum import halftime_comeback
+        htcc = halftime_comeback(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_htc = htcc[side]
+            if rec_htc["verdict"] == "fordította":
+                body += (f" A(z) {name} félidei {-rec_htc['ht_margin']} "
+                         "gólos hátrányból fordított — a második félidő "
+                         "az övék volt.")
+    except Exception:
+        pass
     # Gól utáni elalvás: a saját gólra rendre azonnali válasz érkezik.
     try:
         from .momentum import post_goal_lapses

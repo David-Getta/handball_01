@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Félidei hátrányból fordítás**: a félidei állás vs a végeredmény,
+  meccsek közt összegezve — a mentális profil új tagja a szoros
+  meccs-mérleg mellett. Aki félidei hátrányból rendre fordít, az ellen
+  a félidei előny nem ér semmit (60 perces meccsre kell készülni); aki
+  sosem jön vissza, annál a félidei előny majdnem kész győzelem — a
+  meccsterv az első 30 percre épülhet. Egy réteg, sok felület:
+  `halftime_comeback` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 48. meccsterv-
+  szabály (az ő feladott hátrányuk × a ti erős kezdésetek),
+  69. edzés-szabály (szünet utáni fordítás-protokoll).
 - **Tempó-esés (elfogyó láb)**: a csapat támadás/perc mutatója az
   1. vs 2. félidőben, a felismert félidő mentén. Akinél a 2. félidőre
   érdemben (0,2 támadás/perc+) esik az ütem, az már nem bírja futni a
