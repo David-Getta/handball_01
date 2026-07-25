@@ -650,6 +650,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "túloldalon volt a labda a kapuban.")
     except Exception:
         pass
+    # Befejezés-esés: a gólra váltás érdemi romlása a 2. félidőre.
+    try:
+        from .xg import FINISH_FADE_DROP_PP, finish_fade
+        ffc = finish_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ff = ffc[side]
+            if rec_ff["drop_pp"] is None \
+                    or rec_ff["drop_pp"] < FINISH_FADE_DROP_PP:
+                continue
+            _ff_fh = 100.0 * rec_ff["fh_goals"] / rec_ff["fh_shots"]
+            _ff_sh = 100.0 * rec_ff["sh_goals"] / rec_ff["sh_shots"]
+            body += (f" A(z) {name} befejezése a 2. félidőre esett "
+                     f"({_ff_fh:.0f}% → {_ff_sh:.0f}% gólra váltás) — "
+                     "fáradtan már nem ült a lövés.")
+    except Exception:
+        pass
     # Bravúr utáni lendület: a nagy védés gólt ért a túloldalon.
     try:
         from .xg import big_save_momentum

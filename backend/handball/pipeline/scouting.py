@@ -417,6 +417,12 @@ class ScoutingReport:
     # bravúrok — darabszámok, összegződnek.
     bsm_saves: int = 0
     bsm_sparked: int = 0
+    # Befejezés-esés: félidőnkénti lövés-kísérletek + gólok —
+    # darabszámok, összegződnek.
+    ff_fh_shots: int = 0
+    ff_fh_goals: int = 0
+    ff_sh_shots: int = 0
+    ff_sh_goals: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1288,6 +1294,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "egyet sem váltottak gyors gólra) — a kapusuk megfog, de "
                 "nem büntet: a merész lövésnek nincs kontra-ára, fel "
                 "lehet vállalni.")
+
+    # Befejezés-esés: mikor ül a lövésük, és mikor már nem.
+    if rep.ff_fh_shots >= 8 and rep.ff_sh_shots >= 8:
+        _ff_fh = 100.0 * rep.ff_fh_goals / rep.ff_fh_shots
+        _ff_sh = 100.0 * rep.ff_sh_goals / rep.ff_sh_shots
+        if _ff_fh - _ff_sh >= 15.0:
+            keys.append(
+                f"A befejezésük a 2. félidőre esik ({_ff_fh:.0f}% → "
+                f"{_ff_sh:.0f}% gólra váltás) — az első félidőt éld "
+                "túl: a hajrában a lövésük már nem ül, ott elég a "
+                "tömör fal és a lepattanó — a türelmes védekezés a "
+                "második félidőben kifizet.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2435,6 +2453,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         bsmrec = big_save_momentum(match, config)[team.value]
         rep.bsm_saves = bsmrec["saves"]
         rep.bsm_sparked = bsmrec["sparked"]
+        from .xg import finish_fade
+        ffrec = finish_fade(match, config)[team.value]
+        if ffrec["drop_pp"] is not None:
+            rep.ff_fh_shots = ffrec["fh_shots"]
+            rep.ff_fh_goals = ffrec["fh_goals"]
+            rep.ff_sh_shots = ffrec["sh_shots"]
+            rep.ff_sh_goals = ffrec["sh_goals"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3650,6 +3675,23 @@ def matchup_plan(own: "ScoutingReport",
             "lövést fel lehet vállalni: a kapusuk megfoghatja, de "
             "kontra nem jön belőle, ti addig visszaértek.")
 
+    # 52) Az ő eső befejezésük × a ti kitartó tempótok: a 2. félidőben
+    # ők már nem büntetnek, ti igen.
+    if (opp.ff_fh_shots >= 8 and opp.ff_sh_shots >= 8
+            and 100.0 * opp.ff_fh_goals / opp.ff_fh_shots
+            - 100.0 * opp.ff_sh_goals / opp.ff_sh_shots >= 15.0
+            and own.tpf_fh_min >= 8.0 and own.tpf_sh_min >= 8.0
+            and own.tpf_fh_attacks / own.tpf_fh_min
+            - own.tpf_sh_attacks / own.tpf_sh_min <= 0.0):
+        _p52_fh = 100.0 * opp.ff_fh_goals / opp.ff_fh_shots
+        _p52_sh = 100.0 * opp.ff_sh_goals / opp.ff_sh_shots
+        plan.append(
+            f"A befejezésük a 2. félidőre esik ({_p52_fh:.0f}% → "
+            f"{_p52_sh:.0f}% gólra váltás), a ti tempótok viszont "
+            "kitart — az első félidőben ne menj bele lövöldözésbe: "
+            "tartsd meccsben magad, a második félidőben az ő lövésük "
+            "már nem ül, a tiéd igen — ott dől el a meccs.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -4011,6 +4053,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rn_suffered_goals=sum(r.rn_suffered_goals for r in reports),
         bsm_saves=sum(r.bsm_saves for r in reports),
         bsm_sparked=sum(r.bsm_sparked for r in reports),
+        ff_fh_shots=sum(r.ff_fh_shots for r in reports),
+        ff_fh_goals=sum(r.ff_fh_goals for r in reports),
+        ff_sh_shots=sum(r.ff_sh_shots for r in reports),
+        ff_sh_goals=sum(r.ff_sh_goals for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

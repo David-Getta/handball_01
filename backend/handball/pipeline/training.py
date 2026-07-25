@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 73) Befejezés-esés: ha a gólra váltásunk a 2. félidőre esik, a
+    # fáradt befejezés a téma.
+    try:
+        from .xg import FINISH_FADE_DROP_PP, finish_fade
+        ff73 = finish_fade(match, config)
+        for side in ("home", "away"):
+            rec73 = ff73[side]
+            if rec73["drop_pp"] is None \
+                    or rec73["drop_pp"] < FINISH_FADE_DROP_PP:
+                continue
+            _f73_fh = 100.0 * rec73["fh_goals"] / rec73["fh_shots"]
+            _f73_sh = 100.0 * rec73["sh_goals"] / rec73["sh_shots"]
+            add(side, "támadás", "Fáradt befejezés",
+                f"a gólra váltásunk a 2. félidőre esik ({_f73_fh:.0f}% "
+                f"→ {_f73_sh:.0f}%) — fáradtan már nem ül a lövés",
+                "fáradt befejezés: lövés-sorozatok az edzés VÉGÉN "
+                "(kör-edzés után célra), ziccer-befejezés pulzus-plafon "
+                "felett, és a hajrá-szabály rögzítése: az utolsó 10 "
+                "percben csak kidolgozott helyzetre lövünk")
+    except Exception:
+        pass
+
     # 72) Bravúr utáni lendület: ha a kapusbravúrjaink elhalnak, a
     # védés utáni azonnali indítás a téma.
     try:

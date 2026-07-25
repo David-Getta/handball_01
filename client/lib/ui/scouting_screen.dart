@@ -1057,6 +1057,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Befejezés-esés: a gólra váltás esése a 2. félidőre (8+ kísérlet
+  // félidőnként; a backend-kulccsal azonos küszöbök).
+  String? _finishFade(Map<String, dynamic> r) {
+    final fhShots = ((r["ff_fh_shots"] as num?) ?? 0).toInt();
+    final shShots = ((r["ff_sh_shots"] as num?) ?? 0).toInt();
+    if (fhShots < 8 || shShots < 8) return null;
+    final fh = 100.0 * ((r["ff_fh_goals"] as num?) ?? 0).toInt() / fhShots;
+    final sh = 100.0 * ((r["ff_sh_goals"] as num?) ?? 0).toInt() / shShots;
+    if (fh - sh >= 15.0) {
+      return "${fh.toStringAsFixed(0)}% → ${sh.toStringAsFixed(0)}% "
+          "gólra váltás a 2. félidőre · fáradtan nem ül a lövésük";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1727,6 +1742,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Sorozat-törés", _runContainment(r)!],
       if (_bigSaveMomentum(r) != null)
         ["Bravúr utáni lendület", _bigSaveMomentum(r)!],
+      if (_finishFade(r) != null)
+        ["Befejezés-esés", _finishFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

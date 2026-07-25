@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Befejezés-esés (fáradó befejezés)**: a gólra váltás (gól az összes
+  lövés-kísérletből, a mellé menőt is számolva) az 1. vs 2. félidőben
+  — a fáradás-kép befejezés-tagja, a kapus-forma támadó-oldali párja.
+  Akinek a 2. félidőre érdemben (15 pp+) esik, annál fáradtan már nem
+  ül a lövés — ellene az első félidőt kell túlélni, a hajrában elég a
+  tömör fal; akinek nő, az a végére lő formába. Egy réteg, sok
+  felület: `finish_fade` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 52. meccsterv-
+  szabály (az ő eső befejezésük × a ti kitartó tempótok),
+  73. edzés-szabály (fáradt befejezés, hajrá-lövésszabály).
 - **Bravúr utáni lendület**: a nagy védés után jön-e gyors gól elöl —
   a kihagyott ziccer ára védés-oldali tükre. Akinél a bravúr rendre
   gólt ér a túloldalon, ott a kapus indítás: a rossz lövés ellenük

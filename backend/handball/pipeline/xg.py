@@ -200,6 +200,56 @@ def miss_punishment(match: Match,
     return out
 
 
+# Befejezés-esés: félidőnként ennyi lövés-kísérlet kell az ítélethez,
+# és ekkora gólarány-esés (százalékpont) számít érdeminek.
+FINISH_FADE_MIN_SHOTS = 6
+FINISH_FADE_DROP_PP = 15.0
+
+
+def finish_fade(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Befejezés-esés: a gólra váltás az 1. vs 2. félidőben.
+
+    A fáradás-kép befejezés-tagja: a kapus-forma (gk_save_fade)
+    támadó-oldali párja, de az ÖSSZES lövés-kísérletből (a mellé menőt
+    is beleértve) számolt gólarányon. Akinek a 2. félidőre érdemben
+    esik a gólra váltása, annál fáradtan már nem ül a befejezés — a
+    hajrában a kidolgozott ziccerig kell játszania; akinek nő, az a
+    meccs végére lő formába.
+
+    Visszatérés csapatonként: {"fh_shots", "fh_goals", "sh_shots",
+    "sh_goals", "drop_pp"} — drop_pp a gólarány esése százalékpontban
+    (pozitív = romlik), None, ha nincs félidő-jel vagy kevés
+    (félidőnként FINISH_FADE_MIN_SHOTS alatti) a kísérlet.
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+
+    empty = {"fh_shots": 0, "fh_goals": 0, "sh_shots": 0, "sh_goals": 0,
+             "drop_pp": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    evs = [e for e in detect_shots(match, config or TacticsConfig())
+           if e.type in (EventType.SHOT, EventType.GOAL)]
+    for side in ("home", "away"):
+        rec = out[side]
+        own = [e for e in evs if e.team.value == side]
+        rec["fh_shots"] = sum(1 for e in own if e.t <= ht)
+        rec["sh_shots"] = len(own) - rec["fh_shots"]
+        rec["fh_goals"] = sum(1 for e in own
+                              if e.t <= ht and e.type == EventType.GOAL)
+        rec["sh_goals"] = sum(1 for e in own
+                              if e.t > ht and e.type == EventType.GOAL)
+        if rec["fh_shots"] >= FINISH_FADE_MIN_SHOTS \
+                and rec["sh_shots"] >= FINISH_FADE_MIN_SHOTS:
+            fh_pct = 100.0 * rec["fh_goals"] / rec["fh_shots"]
+            sh_pct = 100.0 * rec["sh_goals"] / rec["sh_shots"]
+            rec["drop_pp"] = round(fh_pct - sh_pct, 1)
+    return out
+
+
 # Bravúr utáni lendület: az ennyi másodpercen belül szerzett gól számít
 # a nagy védés azonnali kamatoztatásának; és ennyi bravúrtól ítélünk.
 BIG_SAVE_SPARK_S = 40.0

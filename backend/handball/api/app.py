@@ -2648,6 +2648,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import finish_fade
+            res["finish_fade"] = finish_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3114,6 +3119,8 @@ def create_app():
                 from ..pipeline.xg import big_save_momentum
                 _layer("big_save_momentum",
                        lambda: big_save_momentum(match))
+                from ..pipeline.xg import finish_fade
+                _layer("finish_fade", lambda: finish_fade(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

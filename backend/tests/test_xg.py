@@ -289,3 +289,54 @@ def test_big_save_momentum_counts_quick_goals_after_save():
     assert a["saves"] == 3 and a["sparked"] == 1
     assert abs(a["rate_pct"] - 33.3) < 0.1
     assert bsm["home"]["saves"] == 0 and bsm["home"]["rate_pct"] is None
+
+
+def test_finish_fade_drop_needs_halftime():
+    """Az 1. félidőben 6 kísérletből 3 gól, a 2.-ban 6-ból 0 → 50 pp
+    esés; félidő-jel nélkül nincs ítélet."""
+    from handball.pipeline.xg import finish_fade
+
+    def _active(t0, seconds):
+        players = [_pl(100 + k, Team.HOME if k < 4 else Team.AWAY,
+                       8.0 + 3.0 * k, 4.0 + (k % 4)) for k in range(8)]
+        return [Frame(t=t0 + i, players=players,
+                      ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                for i in range(int(seconds * 25))]
+
+    def _try(t0, goal):
+        fr = []
+        for i in range(8):
+            x = min((33.6 if goal else 37.4) + (1.0 if goal else 0.8) * i,
+                    40.0)
+            y = 10.0 if goal else 10.0 - i * 1.0
+            fr.append(Frame(t=t0 + i,
+                            players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=x, y=y, confidence=1.0)))
+        fr.append(Frame(t=t0 + 9, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    def _half(t0, tries):
+        frames = _active(t0, 30)
+        t = frames[-1].t + 1
+        for goal in tries:
+            frames += _try(t, goal)
+            t += 10
+            frames += _active(t, 30)
+            t = frames[-1].t + 1
+        return frames
+
+    frames = _half(0, [True, False, True, False, True, False])
+    t = frames[-1].t + 1
+    frames += [Frame(t=t + i, players=[], ball=None)
+               for i in range(int(120 * 25))]
+    frames += _half(frames[-1].t + 1, [False] * 6)
+    ff = finish_fade(Match(_meta(), frames))
+    h = ff["home"]
+    assert h["fh_shots"] == 6 and h["fh_goals"] == 3
+    assert h["sh_shots"] == 6 and h["sh_goals"] == 0
+    assert h["drop_pp"] == 50.0
+
+    # Félidő-jel nélkül nincs ítélet.
+    no_ht = finish_fade(Match(_meta(), _half(0, [True, False])))
+    assert no_ht["home"]["drop_pp"] is None
