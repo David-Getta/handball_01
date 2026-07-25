@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Indítás-biztonság**: a kapus-indítás kihez jut el először — az
+  outlet_speed a kihozatal gyorsaságát, a gk_outlet_length a hosszát
+  méri, ez azt, hogy MEGÉRKEZIK-e. Akinek az indításai 25%+ arányban
+  az ellenfélnél kötnek ki (6+ indításból), annak a kihozatala
+  letámadással kényszeríthető: ellene a fogadók lefedése + letámadó
+  a kapusra; saját olvasatban az indítás-biztonság (biztos első
+  passz, kihozatal-minták) a téma. Egy réteg, sok felület:
+  `gk_outlet_security` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 69.
+  meccsterv-szabály (az ő elcsíphető indításuk × a ti elöl-szerző
+  presszetek), 90. edzés-szabály (indítás-biztonság nyomás alatt).
 - **Támadó-mozgás**: álló vagy mozgásos a szervezett támadás — a
   támadó mezőnyjátékosok átlagsebessége szervezett támadásban (kapus
   és becsült pozíciók nélkül, track-ugrás szűréssel, 120+ mért

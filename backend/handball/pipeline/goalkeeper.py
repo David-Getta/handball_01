@@ -874,3 +874,74 @@ def gk_outlet_length(match: Match, config=None) -> dict:
             elif share <= GK_OUTLET_SHORT_SHARE:
                 rec["style"] = "rövid"
     return out
+
+
+# Indítás-biztonság: ennyi kapus-indítástól ítélünk; e részarány
+# felett elcsíphető az indítás; a labdát ekkora sugáron belül
+# birtokolja egy játékos, és ennyi másodpercig követjük az indítást.
+GK_OUTLET_SEC_MIN = 6
+GK_OUTLET_LOST_PCT = 25.0
+GK_HOLD_RADIUS_M = 2.0
+GK_OUTLET_FOLLOW_S = 6.0
+
+
+def gk_outlet_security(match: Match, config=None) -> dict:
+    """Indítás-biztonság: a kapus-indítás kihez jut el először.
+
+    Az outlet_speed a kihozatal GYORSASÁGÁT, a gk_outlet_length a
+    HOSSZÁT méri — ez azt, hogy MEGÉRKEZIK-e: a kapus-birtoklás utáni
+    első labdát-szerző játékos a saját csapat vagy az ellenfél. Akinek
+    az indításai 25%+ arányban az ellenfélnél kötnek ki (6+
+    indításból), annak a kihozatala letámadással kényszeríthető — az
+    ellenfél olvasata, hogy a letámadás ellene termel; a saját
+    edzésé, hogy az indítás-biztonság (kigyorsítás, biztos első
+    passz) a téma.
+
+    Visszatérés csapatonként: {"outlets", "lost", "lost_pct"} —
+    lost_pct None, ha kevés (GK_OUTLET_SEC_MIN alatti) az indítás.
+    """
+    import math as _math
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    detect_goalkeepers(match)
+    follow = round(GK_OUTLET_FOLLOW_S * fps)
+
+    def _holder(frame):
+        if frame.ball is None:
+            return None
+        best, best_d = None, GK_HOLD_RADIUS_M
+        for p in frame.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            d = _math.hypot(p.x - frame.ball.x, p.y - frame.ball.y)
+            if d < best_d:
+                best, best_d = p, d
+        return best
+
+    counts = {"home": {"outlets": 0, "lost": 0},
+              "away": {"outlets": 0, "lost": 0}}
+    pending = None  # (kapus csapata, indítás frame-indexe)
+    for i, f in enumerate(match.frames):
+        h = _holder(f)
+        if h is not None and h.role == ROLE_GOALKEEPER:
+            pending = (h.team.value, i)
+            continue
+        if pending is None or h is None:
+            continue
+        side, i0 = pending
+        pending = None
+        if i - i0 > follow:
+            continue
+        counts[side]["outlets"] += 1
+        if h.team.value != side:
+            counts[side]["lost"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        out[side] = {
+            **rec,
+            "lost_pct": (round(100.0 * rec["lost"] / rec["outlets"], 1)
+                         if rec["outlets"] >= GK_OUTLET_SEC_MIN
+                         else None),
+        }
+    return out

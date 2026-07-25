@@ -1137,6 +1137,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Indítás-biztonság: az ellenfélnél kikötő kapus-indítások aránya
+  // (6+ indításnál, 25%+ aránynál; a backend-kulccsal azonos
+  // küszöbök).
+  String? _gkOutletSecurity(Map<String, dynamic> r) {
+    final outlets = ((r["gos_outlets"] as num?) ?? 0).toInt();
+    final lost = ((r["gos_lost"] as num?) ?? 0).toInt();
+    if (outlets < 6) return null;
+    final pct = 100.0 * lost / outlets;
+    if (pct < 25.0) return null;
+    return "elcsíphető indítás: $lost/$outlets kapus-indításuk az "
+        "ellenfélé (${pct.toStringAsFixed(0)}%) · támadd le a "
+        "kihozatalt";
+  }
+
   // Támadó-mozgás: átlagsebesség szervezett támadásban (120+ mért
   // játékos-másodpercnél; 0,9 m/s alatt álló, 1,6 felett mozgásos;
   // a backend-kulccsal azonos küszöbök).
@@ -2040,6 +2054,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fal-rés", _wallGaps(r)!],
       if (_attackMotion(r) != null)
         ["Támadó-mozgás", _attackMotion(r)!],
+      if (_gkOutletSecurity(r) != null)
+        ["Indítás-biztonság", _gkOutletSecurity(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

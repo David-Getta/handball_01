@@ -735,3 +735,45 @@ def test_gk_outlet_length_flags_long_ball_keeper():
     # Kevés kapus-passz: nincs ítélet.
     few = gk_outlet_length(_match(frames[:30] + frames[-250:]))
     assert few["home"]["style"] is None and few["home"]["long_pct"] is None
+
+
+def test_gk_outlet_security_counts_stolen_outlets():
+    """A hazai kapus 8 indításából 6 a társhoz, 2 az ellenfélhez jut →
+    25%-os elcsípés-arány; kevés indításnál nincs ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_outlet_security
+
+    def _p(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    players = [_p(1, Team.HOME, 1.0, 10.0),    # kapus a kapuelőtérben
+               _p(2, Team.HOME, 10.0, 10.0),   # saját fogadó
+               _p(11, Team.AWAY, 14.0, 5.0)]   # elcsípő ellenfél
+
+    def _hold(t0, x, y, n=5):
+        return [Frame(t=t0 + i, players=players,
+                      ball=Ball(x=x, y=y, confidence=1.0))
+                for i in range(n)]
+
+    frames = []
+    t = 0
+    targets = [(10.0, 10.0)] * 6 + [(14.0, 5.0)] * 2
+    for tx, ty in targets:
+        frames += _hold(t, 1.0, 10.0)   # a kapusnál a labda
+        t += 5
+        frames += _hold(t, tx, ty)      # az indítás megérkezik
+        t += 5
+    # Ráhagyás a kapus-azonosításhoz (elég mért kocka a kapuelőtérben).
+    frames += _hold(t, 1.0, 10.0, n=250)
+
+    gs = gk_outlet_security(_match(frames))
+    h = gs["home"]
+    assert h["outlets"] == 8 and h["lost"] == 2
+    assert h["lost_pct"] is not None
+    assert abs(h["lost_pct"] - 25.0) < 0.1
+
+    # Kevés indítás: nincs ítélet.
+    few = gk_outlet_security(_match(frames[:40] + frames[-250:]))
+    assert few["home"]["lost_pct"] is None

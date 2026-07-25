@@ -501,6 +501,10 @@ class ScoutingReport:
     # (átlagsebesség = dist / time).
     am_dist_m: float = 0.0
     am_time_s: float = 0.0
+    # Indítás-biztonság: kapus-indítások + ebből az ellenfélnél
+    # kikötők — darabszámok, meccsek közt összegződnek.
+    gos_outlets: int = 0
+    gos_lost: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1426,6 +1430,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Indítás-biztonság: az elcsíphető kihozatalra letámadás a válasz.
+    if rep.gos_outlets >= 6:
+        _gos_pct = 100.0 * rep.gos_lost / rep.gos_outlets
+        if _gos_pct >= 25.0:
+            keys.append(
+                f"A kapus-indításuk elcsíphető: {rep.gos_outlets} "
+                f"indításból {rep.gos_lost} az ellenfélnél köt ki "
+                f"({_gos_pct:.0f}%) — támadjátok le a kihozatalt: a "
+                "fogadók lefedése + egy letámadó a kapusra, és az "
+                "indításuk kapkodássá válik.")
 
     # Támadó-mozgás: az álló támadás ellen kockázat nélkül léphettek
     # ki; a mozgásos ellen a fegyelmezett átadás-átvétel a kulcs.
@@ -2829,6 +2844,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         amrec = attack_motion(match, config)[team.value]
         rep.am_dist_m = amrec["dist_m"]
         rep.am_time_s = amrec["time_s"]
+        from .goalkeeper import gk_outlet_security
+        gosrec = gk_outlet_security(match, config)[team.value]
+        rep.gos_outlets = gosrec["outlets"]
+        rep.gos_lost = gosrec["lost"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4106,6 +4125,19 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 69) Az ő elcsíphető indításuk × a ti elöl-szerző presszetek: a
+    # kihozataluk a ti vadászterületetek.
+    if (opp.gos_outlets >= 6 and own.steal_n >= 8
+            and 100.0 * opp.gos_lost / opp.gos_outlets >= 25.0
+            and own.steal_high / own.steal_n >= 0.35):
+        plan.append(
+            f"A kapus-indításuk elcsíphető ({opp.gos_lost}/"
+            f"{opp.gos_outlets} az ellenfélnél köt ki), ti pedig elöl "
+            f"szerzitek a labdát ({own.steal_high}/{own.steal_n} magas "
+            "szerzés) — a kihozataluk a ti vadászterületetek: teljes "
+            "letámadás minden kapus-labdánál, az elcsípett indítás "
+            "üres kapura menő kontra.")
+
     # 68) Az ő álló támadásuk × a ti kilépős védekezésetek: a
     # statikus támadó a kilépő védőnek nem tud válaszolni.
     if (opp.am_time_s >= 120.0 and own.defensive_pressure_m
@@ -4708,6 +4740,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         wg_wide=sum(r.wg_wide for r in reports),
         am_dist_m=sum(r.am_dist_m for r in reports),
         am_time_s=sum(r.am_time_s for r in reports),
+        gos_outlets=sum(r.gos_outlets for r in reports),
+        gos_lost=sum(r.gos_lost for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

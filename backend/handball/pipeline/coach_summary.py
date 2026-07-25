@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Indítás-biztonság: elcsíphető volt-e a kapus-indítás.
+    try:
+        from .goalkeeper import GK_OUTLET_LOST_PCT, gk_outlet_security
+        gsc = gk_outlet_security(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gs = gsc[side]
+            if rec_gs["lost_pct"] is None \
+                    or rec_gs["lost_pct"] < GK_OUTLET_LOST_PCT:
+                continue
+            body += (f" A(z) {name} kapus-indításai elcsíphetők "
+                     f"voltak: {rec_gs['outlets']} indításból "
+                     f"{rec_gs['lost']} az ellenfélnél kötött ki "
+                     f"({rec_gs['lost_pct']:.0f}%).")
+    except Exception:
+        pass
     # Támadó-mozgás: álló vagy mozgásos volt a szervezett támadás.
     try:
         from .tactics import attack_motion

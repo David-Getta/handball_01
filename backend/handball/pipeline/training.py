@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 90) Indítás-biztonság: ha a kapus-indításunk az ellenfélnél köt
+    # ki, a kihozatalunk letámadható — a biztos első passz a téma.
+    try:
+        from .goalkeeper import (GK_OUTLET_LOST_PCT, GK_OUTLET_SEC_MIN,
+                                 gk_outlet_security)
+        gs90 = gk_outlet_security(match, config)
+        for side in ("home", "away"):
+            rec90 = gs90[side]
+            if rec90["lost_pct"] is None \
+                    or rec90["outlets"] < GK_OUTLET_SEC_MIN \
+                    or rec90["lost_pct"] < GK_OUTLET_LOST_PCT:
+                continue
+            add(side, "kapus", "Indítás-biztonság",
+                f"a kapus-indításunk elcsíphető: {rec90['outlets']} "
+                f"indításból {rec90['lost']} az ellenfélnél kötött ki "
+                f"({rec90['lost_pct']:.0f}%) — a letámadás ellenünk "
+                "termel",
+                "indítás-biztonság: kihozatal-minták letámadás ellen "
+                "(két biztos rövid opció + egy hosszú szélső-kiugrás), "
+                "a kapus döntés-gyakorlata nyomás alatt (mikor rövid, "
+                "mikor hosszú, mikor időhúzó), és a fogadók "
+                "elmozgás-időzítése a kapus-labda pillanatában")
+    except Exception:
+        pass
+
     # 89) Támadó-mozgás: ha áll a támadásunk, a védő ingyen léphet ki
     # ránk — a labda nélküli mozgás (passzolj és fuss) a téma.
     try:
