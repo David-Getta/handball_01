@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Oldal-részrehajlás**: a lövések a támadás melyik oldaláról jönnek
+  (bal/közép/jobb, a támadó bal keze felőli oldal a "bal") — a
+  kiszámíthatóság térbeli olvasata. Akinek a szélső-sávos lövései
+  kétharmadban egy oldalról jönnek, annak a támadása fél-oldalas: a
+  fal eltolható, a segítő védő előre tudja, honnan jön a lövés; saját
+  olvasatban a gyenge oldal terhelése és az oldalváltó passz a téma.
+  Egy réteg, sok felület: `attack_side_bias` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kulcs +
+  csempe), 54. meccsterv-szabály (az ő fél-oldalas támadásuk × a ti
+  blokk-erőtök), 75. edzés-szabály (oldal-egyensúly, oldalváltó
+  passzok).
 - **Célzás-pontosság**: a lövés-kísérletekből mennyi tart kapura. A
   mellé lőtt labda a legolcsóbb támadás-halál: nincs lepattanó, csak
   ajándék-kidobás azonnali ellen-indítással — aki sokat lő mellé, az

@@ -650,6 +650,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "túloldalon volt a labda a kapuban.")
     except Exception:
         pass
+    # Oldal-részrehajlás: fél-oldalas támadás — eltolható fal.
+    try:
+        from .attack_types import attack_side_bias
+        sbc = attack_side_bias(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sb = sbc[side]
+            if rec_sb["bias_side"] is None:
+                continue
+            body += (f" A(z) {name} támadása fél-oldalas volt: a "
+                     f"szélső-sávos lövések {rec_sb['bias_pct']:.0f}%-a "
+                     f"a {rec_sb['bias_side']} oldalról jött.")
+    except Exception:
+        pass
     # Célzás-pontosság: a sok mellé lövés a legolcsóbb támadás-halál.
     try:
         from .xg import ACCURACY_LOW_PCT, shot_accuracy

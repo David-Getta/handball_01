@@ -427,6 +427,11 @@ class ScoutingReport:
     # darabszámok, összegződnek.
     ac_attempts: int = 0
     ac_on_target: int = 0
+    # Oldal-részrehajlás: lövések a támadás bal/közép/jobb sávjából —
+    # darabszámok, összegződnek.
+    sb_left: int = 0
+    sb_center: int = 0
+    sb_right: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1326,6 +1331,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A lövéseik {_ac_pct:.0f}%-a kaput ér — a kapusotok "
                 "egyedül nem marad meg ellenük: a blokk-munka kötelező, "
                 "a fal és a kapus sáv-felosztását előre tisztázzátok.")
+
+    # Oldal-részrehajlás: fél-oldalas támadás ellen a fal eltolható.
+    _sb_wings = rep.sb_left + rep.sb_right
+    if _sb_wings >= 10:
+        _sb_pct = 100.0 * max(rep.sb_left, rep.sb_right) / _sb_wings
+        if _sb_pct >= 65.0:
+            _sb_side = "bal" if rep.sb_left >= rep.sb_right else "jobb"
+            keys.append(
+                f"A támadásuk fél-oldalas: a szélső-sávos lövéseik "
+                f"{_sb_pct:.0f}%-a a {_sb_side} oldalukról jön — told "
+                "el a falat arra az oldalra, a segítő védő előre "
+                "csúszhat, a gyenge oldali szélsőjük felől pedig "
+                "kockázat nélkül lehet zárni.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2484,6 +2502,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sarec = shot_accuracy(match, config)[team.value]
         rep.ac_attempts = sarec["attempts"]
         rep.ac_on_target = sarec["on_target"]
+        from .attack_types import attack_side_bias
+        sbrec = attack_side_bias(match, config)[team.value]
+        rep.sb_left = sbrec["left"]
+        rep.sb_center = sbrec["center"]
+        rep.sb_right = sbrec["right"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3729,6 +3752,22 @@ def matchup_plan(own: "ScoutingReport",
             "szerzésből) — minden mellé lövésük indítás: a kapus "
             "kidobása az induló szélsőre, mielőtt a faluk visszaáll.")
 
+    # 54) Az ő fél-oldalas támadásuk × a ti blokk-erőtök: az eltolt fal
+    # elé lőnek majd.
+    if (opp.sb_left + opp.sb_right >= 10
+            and 100.0 * max(opp.sb_left, opp.sb_right)
+            / (opp.sb_left + opp.sb_right) >= 65.0
+            and own.blocks >= 5):
+        _p54_pct = (100.0 * max(opp.sb_left, opp.sb_right)
+                    / (opp.sb_left + opp.sb_right))
+        _p54_side = "bal" if opp.sb_left >= opp.sb_right else "jobb"
+        plan.append(
+            f"A támadásuk fél-oldalas ({_p54_pct:.0f}% a {_p54_side} "
+            f"oldalukról), ti pedig jól blokkoltok ({own.blocks} blokk "
+            "a meccseiteken) — toljátok el a falat az erős oldalukra: "
+            "a megszokott lövő-sávjukban dupla kéz vár, és a blokk "
+            "onnan már kontra-indítás.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -4096,6 +4135,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ff_sh_goals=sum(r.ff_sh_goals for r in reports),
         ac_attempts=sum(r.ac_attempts for r in reports),
         ac_on_target=sum(r.ac_on_target for r in reports),
+        sb_left=sum(r.sb_left for r in reports),
+        sb_center=sum(r.sb_center for r in reports),
+        sb_right=sum(r.sb_right for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

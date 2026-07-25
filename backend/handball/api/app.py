@@ -2658,6 +2658,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import attack_side_bias
+            res["attack_side_bias"] = attack_side_bias(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3128,6 +3133,9 @@ def create_app():
                 _layer("finish_fade", lambda: finish_fade(match))
                 from ..pipeline.xg import shot_accuracy
                 _layer("shot_accuracy", lambda: shot_accuracy(match))
+                from ..pipeline.attack_types import attack_side_bias
+                _layer("attack_side_bias",
+                       lambda: attack_side_bias(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 75) Oldal-részrehajlás: ha a támadásunk fél-oldalas, ellenünk
+    # eltolt fallal védekeznek — az oldal-egyensúly a téma.
+    try:
+        from .attack_types import attack_side_bias
+        sb75 = attack_side_bias(match, config)
+        for side in ("home", "away"):
+            rec75 = sb75[side]
+            if rec75["bias_side"] is None:
+                continue
+            add(side, "támadás", "Oldal-egyensúly",
+                f"a támadásunk fél-oldalas: a szélső-sávos lövéseink "
+                f"{rec75['bias_pct']:.0f}%-a a {rec75['bias_side']} "
+                "oldalról jön — az ellenfél eltolt fallal várhat",
+                "oldal-egyensúly: a gyenge oldal tudatos terhelése "
+                "(minden harmadik figura oda fusson ki), gyors "
+                "oldalváltó passzok begyakorlása a fal átmozgatására, "
+                "és a gyenge oldali átlövő/szélső önbizalom-helyzetei "
+                "edzésen")
+    except Exception:
+        pass
+
     # 74) Célzás-pontosság: ha a lövéseink fele mellé megy, a lövés
     # ára nálunk dupla — technikai célzás-edzés a téma.
     try:

@@ -1090,6 +1090,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Oldal-részrehajlás: a szélső-sávos lövések oldal-megoszlása (10+
+  // szélső-sávos lövésnél; a backend-kulccsal azonos küszöbök).
+  String? _sideBias(Map<String, dynamic> r) {
+    final left = ((r["sb_left"] as num?) ?? 0).toInt();
+    final right = ((r["sb_right"] as num?) ?? 0).toInt();
+    final wings = left + right;
+    if (wings < 10) return null;
+    final pct = 100.0 * (left > right ? left : right) / wings;
+    if (pct < 65.0) return null;
+    final side = left >= right ? "bal" : "jobb";
+    return "szélső-lövéseik ${pct.toStringAsFixed(0)}%-a a $side "
+        "oldalról · told el a falat";
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1764,6 +1778,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejezés-esés", _finishFade(r)!],
       if (_shotAccuracy(r) != null)
         ["Célzás-pontosság", _shotAccuracy(r)!],
+      if (_sideBias(r) != null)
+        ["Oldal-részrehajlás", _sideBias(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

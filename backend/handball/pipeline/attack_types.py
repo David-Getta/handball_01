@@ -362,6 +362,62 @@ def team_pace_fade(match: Match,
     return out
 
 
+# Oldal-részrehajlás: a szélső-sáv határa a pálya-középvonaltól (m),
+# ennyi szélső-sávos lövéstől ítélünk, és ekkora többség számít
+# részrehajlásnak.
+SIDE_BAND_M = 3.33
+SIDE_BIAS_MIN_SHOTS = 8
+SIDE_BIAS_PCT = 65.0
+
+
+def attack_side_bias(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Oldal-részrehajlás: a lövések a támadás melyik oldaláról jönnek.
+
+    A kiszámíthatóság térbeli olvasata: akinek a szélső-sávos lövései
+    kétharmadban egy oldalról jönnek, annak a támadása fél-oldalas — a
+    fal eltolható, a segítő védő előre tudja, honnan jön a lövés. A
+    "bal" a TÁMADÓ bal keze felőli oldal (a támadás iránya szerint),
+    így a két csapat összevethető.
+
+    Visszatérés csapatonként: {"left", "center", "right", "bias_side",
+    "bias_pct"} — bias_side/"bias_pct" None, ha kevés (a két szélső
+    sávban együtt SIDE_BIAS_MIN_SHOTS alatti) a lövés, vagy nincs
+    érdemi (SIDE_BIAS_PCT alatti) többség.
+    """
+    from ..models.tracking import Team
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    counts = {"home": {"left": 0, "center": 0, "right": 0},
+              "away": {"left": 0, "center": 0, "right": 0}}
+    for sh in match_xg(match, config).get("shots", []):
+        side = sh["team"]
+        d = sh["y"] - 10.0
+        team = Team.HOME if side == "home" else Team.AWAY
+        if config.attacks_toward_x(team) == 0.0:
+            d = -d  # a -x felé támadónál a bal kéz a -y oldal
+        if d > SIDE_BAND_M:
+            counts[side]["left"] += 1
+        elif d < -SIDE_BAND_M:
+            counts[side]["right"] += 1
+        else:
+            counts[side]["center"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = dict(counts[side])
+        rec["bias_side"] = rec["bias_pct"] = None
+        wings = rec["left"] + rec["right"]
+        if wings >= SIDE_BIAS_MIN_SHOTS:
+            pct = 100.0 * max(rec["left"], rec["right"]) / wings
+            if pct >= SIDE_BIAS_PCT:
+                rec["bias_side"] = ("bal" if rec["left"] >= rec["right"]
+                                    else "jobb")
+                rec["bias_pct"] = round(pct, 1)
+        out[side] = rec
+    return out
+
+
 # Támadás-eredet: az előzmény-esemény legfeljebb ennyi másodperccel a
 # támadás kezdete előtt számít bele az eredet-címkébe.
 ORIGIN_LOOKBACK_S = 8.0

@@ -762,3 +762,37 @@ def test_team_pace_fade_needs_halftime_and_minutes():
     # Félidő-jel nélkül nincs ítélet.
     no_ht = team_pace_fade(Match(_meta(), active(0, 300)))
     assert no_ht["home"]["drop_per_min"] is None
+
+
+def test_attack_side_bias_flags_one_sided_attack():
+    """A hazai szélső-sávos lövéseiből 6 a bal (+y), 2 a jobb (−y)
+    oldalról jön → 75% bal-részrehajlás; kevés lövésnél nincs ítélet."""
+    from handball.pipeline.attack_types import attack_side_bias
+
+    def _shot(t0, y0):
+        fr = []
+        for i in range(8):
+            fr.append(Frame(
+                t=t0 + i,
+                players=[_pl(1, Team.HOME, 36.6, y0)],
+                ball=Ball(x=min(37.0 + 0.8 * i, 40.0), y=y0,
+                          confidence=1.0)))
+        fr.append(Frame(t=t0 + 9, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = []
+    t = 0
+    for y0 in (16.0, 16.0, 16.0, 16.0, 16.0, 16.0, 4.0, 4.0):
+        frames += _shot(t, y0)
+        t += 40
+    sb = attack_side_bias(Match(_meta(), frames))
+    h = sb["home"]
+    assert h["left"] == 6 and h["right"] == 2
+    assert h["bias_side"] == "bal"
+    assert abs(h["bias_pct"] - 75.0) < 0.1
+    assert sb["away"]["bias_side"] is None
+
+    # Kevés szélső-sávos lövés: nincs ítélet.
+    few = attack_side_bias(Match(_meta(), _shot(0, 16.0)))
+    assert few["home"]["bias_side"] is None
