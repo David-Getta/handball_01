@@ -2608,6 +2608,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_meter_defense
+            res["seven_meter_defense"] = seven_meter_defense(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3054,6 +3059,9 @@ def create_app():
                 from ..pipeline.halftime import first_half_close
                 _layer("first_half_close",
                        lambda: first_half_close(match))
+                from ..pipeline.rules import seven_meter_defense
+                _layer("seven_meter_defense",
+                       lambda: seven_meter_defense(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -339,6 +339,33 @@ def seven_meter_summary(match: Match,
     return out
 
 
+def seven_meter_defense(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-védés: a kapus mérlege a RÁ dobott hetesekből.
+
+    A hetes-mérleg (seven_meter_summary) kapus-oldali olvasata: az
+    ellenfél hetesei közül mennyi ment be, mennyit fogott a kapus,
+    mennyi ment mellé. A hetest fogó kapus ellen a hetes nem "kész gól"
+    — a dobóknak készülniük kell; a hetest sosem fogó kapus ellen a
+    hetes-kiharcolás biztos üzlet.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ csapat kapusáé):
+      {"faced", "saved", "conceded", "missed"} — faced a kapura tartó
+    hetesek száma (gól + védés; a mellé menő nem a kapus érdeme).
+    """
+    summ = seven_meter_summary(match, config)
+    out = {}
+    for side, other in (("home", "away"), ("away", "home")):
+        rec = summ[other]
+        out[side] = {
+            "faced": rec["goals"] + rec["saved"],
+            "saved": rec["saved"],
+            "conceded": rec["goals"],
+            "missed": rec["missed"],
+        }
+    return out
+
+
 def rules_report(match: Match) -> dict:
     """A szabály-értő réteg összegzése egy hívásban (az API-nak)."""
     return {

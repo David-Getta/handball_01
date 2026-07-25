@@ -377,6 +377,10 @@ class ScoutingReport:
     cg_wins: int = 0
     cg_losses: int = 0
     cg_draws: int = 0
+    # Hetes-védés: a kapusukra dobott kapura tartó hetesek + fogások —
+    # darabszámok, összegződnek.
+    s7d_faced: int = 0
+    s7d_saved: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1157,6 +1161,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
                 f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
                 "már csak a kidolgozott ziccer megy be neki.")
+
+    # Hetes-védés: a hetest fogó kapus ellen a hetes nem kész gól; a
+    # sosem fogó ellen a hetes-kiharcolás biztos üzlet.
+    if rep.s7d_faced >= 3:
+        _s7_rate = 100.0 * rep.s7d_saved / rep.s7d_faced
+        if _s7_rate >= 40.0:
+            keys.append(
+                f"A kapusuk hetest fog ({rep.s7d_faced} kapura tartóból "
+                f"{rep.s7d_saved}) — a hetes ellenük nem kész gól: a "
+                "dobóitok sarok-váltással, késleltetéssel készüljenek, "
+                "és kihagyott hetes után ne törjön meg a lendület.")
+        elif rep.s7d_saved == 0 and rep.s7d_faced >= 4:
+            keys.append(
+                f"Hetest nem fognak ({rep.s7d_faced} kapura tartóból 0 "
+                "védés) — a hetes-kiharcolás ellenük biztos üzlet: "
+                "vigyétek be a beállóra a labdát, vállaljátok az "
+                "ütközést.")
 
     # Szoros meccs-mérleg: aki a szorosat rendre elbukja, azt elég
     # meccsben tartani; aki hozza, attól nem lehet ajándékot várni.
@@ -2216,6 +2237,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         dfrec = discipline_fade(match, config)[team.value]
         rep.disc_fh_susp = dfrec["fh_susp"]
         rep.disc_sh_susp = dfrec["sh_susp"]
+        from .rules import seven_meter_defense
+        s7drec = seven_meter_defense(match, config)[team.value]
+        rep.s7d_faced = s7drec["faced"]
+        rep.s7d_saved = s7drec["saved"]
         from .momentum import close_game_record
         cgrec = close_game_record(match, config)[team.value]
         if cgrec["verdict"] == "szoros győzelem":
@@ -3357,6 +3382,18 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 44) Az ő hetest nem fogó kapusuk × a ti hetes-kiharcolótok: a
+    # lerántott labda ellenük biztos gól — kiharcolni kell, nem lőni.
+    if (opp.s7d_faced >= 4 and opp.s7d_saved == 0
+            and own.seven_earners and own.seven_earners[0]["earned"] >= 2):
+        _g44_e = own.seven_earners[0]
+        plan.append(
+            f"A kapusuk hetest nem fog ({opp.s7d_faced} kapura tartóból "
+            f"0 védés), nálatok pedig a(z) {_g44_e['player_id']}. játékos "
+            f"rendre kiharcolja ({_g44_e['earned']} hetes) — járassátok "
+            "rá a labdát a betörésekhez: minden kiharcolt hetes ellenük "
+            "kész gól.")
+
     # 43) Az ő elengedett félidő-zárásuk × a ti erős zárásotok: a szünet
     # előtti 5 perc a ti terepetek — dupla lendület az öltözőbe.
     if (opp.fhc_matches >= 1 and own.fhc_matches >= 1
@@ -3665,6 +3702,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         cg_wins=sum(r.cg_wins for r in reports),
         cg_losses=sum(r.cg_losses for r in reports),
         cg_draws=sum(r.cg_draws for r in reports),
+        s7d_faced=sum(r.s7d_faced for r in reports),
+        s7d_saved=sum(r.s7d_saved for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

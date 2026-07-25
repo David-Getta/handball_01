@@ -454,3 +454,18 @@ def test_discipline_fade_late_suspensions():
     # Félidő-jel nélkül (szünet kivágva) nincs ítélet.
     no_break = [f for f in frames if f.players]
     assert discipline_fade(Match(_meta(), no_break))["home"]["verdict"] is None
+
+
+def test_seven_meter_defense_mirrors_summary():
+    """A hazai hetes-gól a VENDÉG kapus mérlegébe kerül; a mellé menő
+    nem 'faced'."""
+    from handball.pipeline.rules import seven_meter_defense
+
+    d = seven_meter_defense(_seven_then_shot(goal=True))
+    assert d["away"] == {"faced": 1, "saved": 0, "conceded": 1,
+                         "missed": 0}
+    assert d["home"]["faced"] == 0
+
+    d2 = seven_meter_defense(_seven_then_shot(goal=False))
+    assert d2["away"] == {"faced": 0, "saved": 0, "conceded": 0,
+                          "missed": 1}

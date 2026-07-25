@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Hetes-védés (a kapus a hetesek ellen)**: a kapusra dobott
+  kapura tartó hetesek mérlege — a hetest fogó (40%+) kapus ellen
+  a hetes nem kész gól, a sosem fogó ellen a hetes-kiharcolás
+  biztos üzlet. A hetes-dobó oldal (dobók + irány) régi rétegének
+  kapus-oldali párja. Egy réteg, sok felület: `seven_meter_defense`
+  motor, edzői összefoglaló (2+ fogott hetes), /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 44. meccsterv-
+  szabály (az ő hetest nem fogó kapusuk × a ti kiharcolótok),
+  65. edzés-szabály (kapus hetes-készülés).
 - **Félidő-zárás (a szünet előtti 5 perc)**: ki üt utoljára az
   öltözőbe vonulás előtt — aki az 1. félidő hajráját rendre
   elengedi, annál ott olcsó gólok vannak; aki erősen zár, annál a
