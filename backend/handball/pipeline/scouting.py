@@ -482,6 +482,11 @@ class ScoutingReport:
     # büntetettek — darabszámok, meccsek közt összegződnek.
     tpu_turnovers: int = 0
     tpu_punished: int = 0
+    # Engedett-oldal: kapott lövések a fal oldala szerint (bal a fal
+    # bal oldala) — darabszámok, meccsek közt összegződnek.
+    csb_left: int = 0
+    csb_center: int = 0
+    csb_right: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1407,6 +1412,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Engedett-oldal: a fal egyik oldala átjárható.
+    _csb_wings = rep.csb_left + rep.csb_right
+    if _csb_wings >= 8:
+        _csb_pct = 100.0 * max(rep.csb_left, rep.csb_right) / _csb_wings
+        if _csb_pct >= 65.0:
+            _csb_side = "bal" if rep.csb_left >= rep.csb_right else "jobb"
+            keys.append(
+                f"A faluk {_csb_side} oldala átjárható: a kapott "
+                f"szélső-sávos lövések {_csb_pct:.0f}%-a arról jön "
+                f"({max(rep.csb_left, rep.csb_right)}/{_csb_wings}) — "
+                "arra az oldalra szervezzétek a befejezést, és onnan "
+                "húzzátok szét a segítő-csúszásukat.")
 
     # Eladás-büntetés: az eladásaik gyors gólba kerülnek.
     if rep.tpu_turnovers >= 6:
@@ -2735,6 +2753,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         tpurec = turnover_punishment(match, config)[team.value]
         rep.tpu_turnovers = tpurec["turnovers"]
         rep.tpu_punished = tpurec["punished"]
+        from .defense import conceded_side_bias
+        csbrec = conceded_side_bias(match, config)[team.value]
+        rep.csb_left = csbrec["left"]
+        rep.csb_center = csbrec["center"]
+        rep.csb_right = csbrec["right"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4012,6 +4035,28 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 65) Az ő gyenge fal-oldaluk × a ti erős támadó-oldalatok: ha a
+    # kettő egybeesik, a meccsterv magától megírja magát.
+    _p65_wings = opp.csb_left + opp.csb_right
+    _p65_own_wings = own.sb_left + own.sb_right
+    if _p65_wings >= 8 and _p65_own_wings >= 8:
+        _p65_pct = 100.0 * max(opp.csb_left, opp.csb_right) / _p65_wings
+        _p65_weak = "bal" if opp.csb_left >= opp.csb_right else "jobb"
+        # A fal balja a támadó jobbja: az ő bal-gyengéjükhöz a ti
+        # jobb-erősségetek illik (és fordítva).
+        _p65_own_match = (own.sb_right if _p65_weak == "bal"
+                          else own.sb_left)
+        if (_p65_pct >= 65.0
+                and _p65_own_match / _p65_own_wings >= 0.55):
+            plan.append(
+                f"A faluk {_p65_weak} oldala átjárható (a kapott "
+                f"szélső-sávos lövések {_p65_pct:.0f}%-a arról jön), "
+                "és a ti támadásotok épp arról az oldalról a "
+                f"legerősebb ({_p65_own_match}/{_p65_own_wings} "
+                "szélső-sávos lövés) — a meccsterv kész: a figuráitok "
+                "arra az oldalra fussanak ki, a gyenge oldal-védőjük "
+                "mögé.")
+
     # 64) Az ő drága eladásaik × a ti kontra-gólgépetek: a szerzés
     # utáni azonnali indulás náluk a legtöbbet hozza.
     if (opp.tpu_turnovers >= 6 and own.trans_steals >= 4
@@ -4542,6 +4587,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gko_long=sum(r.gko_long for r in reports),
         tpu_turnovers=sum(r.tpu_turnovers for r in reports),
         tpu_punished=sum(r.tpu_punished for r in reports),
+        csb_left=sum(r.csb_left for r in reports),
+        csb_center=sum(r.csb_center for r in reports),
+        csb_right=sum(r.csb_right for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

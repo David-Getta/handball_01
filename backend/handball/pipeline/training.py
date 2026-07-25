@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 86) Engedett-oldal: ha a falunk egyik oldala átjárható, az
+    # ellenfél oda szervez — az oldal-védő és a segítő-csúszás a téma.
+    try:
+        from .defense import (CONCEDED_SIDE_MIN_SHOTS, CONCEDED_SIDE_PCT,
+                              conceded_side_bias)
+        cs86 = conceded_side_bias(match, config)
+        for side in ("home", "away"):
+            rec86 = cs86[side]
+            if rec86["weak_side"] is None \
+                    or rec86["left"] + rec86["right"] \
+                    < CONCEDED_SIDE_MIN_SHOTS \
+                    or rec86["weak_pct"] < CONCEDED_SIDE_PCT:
+                continue
+            add(side, "védekezés", "Fal-oldal erősítés",
+                f"a falunk {rec86['weak_side']} oldala átjárható: a "
+                f"kapott szélső-sávos lövések "
+                f"{rec86['weak_pct']:.0f}%-a arról jön — az ellenfél "
+                "oda szervezi a befejezést",
+                "fal-oldal erősítés: a gyenge oldali 2-es/3-as védő "
+                "zárás-technikája (kilépés-visszazárás párban), a "
+                "segítő-csúszás időzítése arról az oldalról, és "
+                "oldal-specifikus 2-2 elleni védekezés-sorozatok")
+    except Exception:
+        pass
+
     # 85) Eladás-büntetés: ha az eladásaink gyors gólba kerülnek, a
     # váltás-sprint hiányzik — az eladás utáni visszarendeződés a téma.
     try:

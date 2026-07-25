@@ -2713,6 +2713,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import conceded_side_bias
+            res["conceded_side_bias"] = conceded_side_bias(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3214,6 +3219,9 @@ def create_app():
                 from ..pipeline.defense import turnover_punishment
                 _layer("turnover_punishment",
                        lambda: turnover_punishment(match))
+                from ..pipeline.defense import conceded_side_bias
+                _layer("conceded_side_bias",
+                       lambda: conceded_side_bias(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

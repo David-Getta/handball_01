@@ -1137,6 +1137,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Engedett-oldal: a kapott szélső-sávos lövések oldal-többsége (8+
+  // szélső-sávos lövésnél, 65%+ többségnél; a backend-kulccsal
+  // azonos küszöbök). A "bal" a fal bal oldala.
+  String? _concededSide(Map<String, dynamic> r) {
+    final left = ((r["csb_left"] as num?) ?? 0).toInt();
+    final right = ((r["csb_right"] as num?) ?? 0).toInt();
+    final wings = left + right;
+    if (wings < 8) return null;
+    final top = left >= right ? left : right;
+    final pct = 100.0 * top / wings;
+    if (pct < 65.0) return null;
+    final side = left >= right ? "bal" : "jobb";
+    return "a faluk $side oldala átjárható: a kapott szélső-lövések "
+        "${pct.toStringAsFixed(0)}%-a arról jön ($top/$wings) · oda "
+        "szervezz";
+  }
+
   // Eladás-büntetés: az eladások fél percen belül góllal büntetett
   // hányada (6+ eladásnál, 35%+ aránynál; a backend-kulccsal azonos
   // küszöbök).
@@ -1962,6 +1979,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-indítás", _gkOutlet(r)!],
       if (_turnoverPunishment(r) != null)
         ["Eladás-büntetés", _turnoverPunishment(r)!],
+      if (_concededSide(r) != null)
+        ["Engedett-oldal", _concededSide(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

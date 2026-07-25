@@ -1201,3 +1201,45 @@ def turnover_punishment(match, config=None,
                          if rec["turnovers"] >= TO_PUNISH_MIN else None),
         }
     return out
+
+
+# Engedett-oldal: a két szélső sávban ennyi kapott lövéstől ítélünk,
+# és e többség felett átjárható az egyik fal-oldal.
+CONCEDED_SIDE_MIN_SHOTS = 8
+CONCEDED_SIDE_PCT = 65.0
+
+
+def conceded_side_bias(match, config=None) -> dict:
+    """Engedett-oldal: a fal melyik oldala felől jönnek a lövések.
+
+    Az oldal-részrehajlás (attack_side_bias) védő-oldali tükörképe:
+    ott az látszik, a támadó honnan lő szívesen — itt az, hogy a fal
+    melyik oldala engedi át a lövéseket. Ha a kapott szélső-sávos
+    lövések kétharmada ugyanarról az oldalról jön, az az oldal-védő
+    (és a mögötte lévő segítő-csúszás) gyengéje: az ellenfél oda
+    szervezheti a befejezést, a saját edzésnek pedig kész témája van.
+    A "bal" itt a VÉDEKEZŐ fal bal oldala (a támadó jobb keze felől).
+
+    Visszatérés csapatonként: {"left", "center", "right", "weak_side",
+    "weak_pct"} — weak_side/weak_pct None, ha kevés (a két szélső
+    sávban együtt CONCEDED_SIDE_MIN_SHOTS alatti) a kapott lövés,
+    vagy nincs érdemi (CONCEDED_SIDE_PCT alatti) többség.
+    """
+    from .attack_types import attack_side_bias
+
+    sb = attack_side_bias(match, config)
+    out: dict = {}
+    for side, opp in (("home", "away"), ("away", "home")):
+        p = sb[opp]
+        # A fal a támadóval szemben áll: a támadó balja a fal jobbja.
+        rec = {"left": p["right"], "center": p["center"],
+               "right": p["left"], "weak_side": None, "weak_pct": None}
+        wings = rec["left"] + rec["right"]
+        if wings >= CONCEDED_SIDE_MIN_SHOTS:
+            pct = 100.0 * max(rec["left"], rec["right"]) / wings
+            if pct >= CONCEDED_SIDE_PCT:
+                rec["weak_side"] = ("bal" if rec["left"] >= rec["right"]
+                                    else "jobb")
+                rec["weak_pct"] = round(pct, 1)
+        out[side] = rec
+    return out

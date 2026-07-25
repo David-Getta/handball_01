@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Engedett-oldal**: a fal melyik oldala felől jönnek a kapott
+  lövések — az oldal-részrehajlás védő-oldali tükre. Ha a kapott
+  szélső-sávos lövések 65%+ része ugyanarról az oldalról jön (8+
+  lövésből), az az oldal-védő és a segítő-csúszás gyengéje: az
+  ellenfél oda szervezheti a befejezést; a "bal" a VÉDŐ fal bal
+  oldala. Egy réteg, sok felület: `conceded_side_bias` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kulcs +
+  csempe), 65. meccsterv-szabály (az ő gyenge fal-oldaluk × a ti
+  erős támadó-oldalatok — a két oldal-mező egymásra illesztve), 86.
+  edzés-szabály (fal-oldal erősítés, zárás-technika párban).
 - **Figura-tervező — a védőfal alapból 6-0, a hatoson kívül**: a
   tervező védői mostantól alapból hatan állnak, és a fal a 6 m-es
   kapuelőtér ívét követi KÍVÜLRŐL (középen fél méterrel a hatos

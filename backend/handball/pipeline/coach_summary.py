@@ -663,6 +663,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Engedett-oldal: a fal egyik oldala átjárható.
+    try:
+        from .defense import conceded_side_bias
+        csc = conceded_side_bias(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cs = csc[side]
+            if rec_cs["weak_side"] is None:
+                continue
+            body += (f" A(z) {name} falának a(z) {rec_cs['weak_side']} "
+                     f"oldala volt átjárható: a kapott szélső-sávos "
+                     f"lövések {rec_cs['weak_pct']:.0f}%-a arról "
+                     "jött.")
+    except Exception:
+        pass
     # Eladás-büntetés: az eladott labda gyors gólba kerül.
     try:
         from .defense import TO_PUNISH_HIGH_PCT, turnover_punishment

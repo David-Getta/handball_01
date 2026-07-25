@@ -757,3 +757,38 @@ def test_turnover_punishment_counts_quick_conceded_goals():
     # Kevés eladás: nincs ítélet.
     few = turnover_punishment(Match(_meta(), frames[:1000]))
     assert few["home"]["rate_pct"] is None
+
+
+def test_conceded_side_bias_mirrors_attack_side():
+    """A hazai 6 bal (+y) + 2 jobb (−y) oldali lövése a vendég falának
+    JOBB oldalán jön át (a fal tükörben áll) → 75%-os gyenge oldal;
+    kevés kapott lövésnél nincs ítélet."""
+    from handball.pipeline.defense import conceded_side_bias
+
+    def _shot(t0, y0):
+        fr = []
+        for i in range(8):
+            fr.append(Frame(
+                t=t0 + i,
+                players=[_pl(1, Team.HOME, 36.6, y0)],
+                ball=Ball(x=min(37.0 + 0.8 * i, 40.0), y=y0,
+                          confidence=1.0)))
+        fr.append(Frame(t=t0 + 9, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = []
+    t = 0
+    for y0 in (16.0, 16.0, 16.0, 16.0, 16.0, 16.0, 4.0, 4.0):
+        frames += _shot(t, y0)
+        t += 40
+    cs = conceded_side_bias(Match(_meta(), frames))
+    a = cs["away"]
+    assert a["left"] == 2 and a["right"] == 6
+    assert a["weak_side"] == "jobb"
+    assert abs(a["weak_pct"] - 75.0) < 0.1
+    assert cs["home"]["weak_side"] is None
+
+    # Kevés kapott szélső-sávos lövés: nincs ítélet.
+    few = conceded_side_bias(Match(_meta(), _shot(0, 16.0)))
+    assert few["away"]["weak_side"] is None
