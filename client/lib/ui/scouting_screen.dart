@@ -1137,6 +1137,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Asszist-függés: a gólok gólpasszos aránya (6+ gólnál; 70%+ =
+  // kollektív, 35%- = egyéni; a backend-kulccsal azonos küszöbök).
+  String? _assistReliance(Map<String, dynamic> r) {
+    final goals = ((r["ad_goals"] as num?) ?? 0).toInt();
+    final assisted = ((r["ad_assisted"] as num?) ?? 0).toInt();
+    if (goals < 6) return null;
+    final pct = 100.0 * assisted / goals;
+    if (pct >= 70.0) {
+      return "kiadásból élnek: a gólok ${pct.toStringAsFixed(0)}%-a "
+          "gólpasszos ($assisted/$goals) · vágd a passzsávot";
+    }
+    if (pct <= 35.0) {
+      return "egyéni megoldások: csak ${pct.toStringAsFixed(0)}% "
+          "gólpasszos ($assisted/$goals) · kulcsember-párharc";
+    }
+    return null;
+  }
+
   // Lepattanó-fal: az ellenfél kimaradt lövései után visszaengedett
   // második rohamok aránya (6+ lehetőségnél, 35%+ aránynál; a
   // backend-kulccsal azonos küszöbök).
@@ -1886,6 +1904,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Pressz-tűrés", _passSecurity(r)!],
       if (_secondChanceAllowed(r) != null)
         ["Lepattanó-fal", _secondChanceAllowed(r)!],
+      if (_assistReliance(r) != null)
+        ["Asszist-függés", _assistReliance(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

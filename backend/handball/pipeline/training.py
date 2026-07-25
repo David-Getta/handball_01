@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 82) Asszist-függés: ha minden gólunk egyéni villanás, a
+    # kulcsember kettőzésével levehetők rólunk — a kiadás a téma.
+    try:
+        from .attack_types import (ASSIST_DEP_LOW_PCT,
+                                   ASSIST_DEP_MIN_GOALS,
+                                   assist_reliance)
+        ad82 = assist_reliance(match, config)
+        for side in ("home", "away"):
+            rec82 = ad82[side]
+            if rec82["assisted_pct"] is None \
+                    or rec82["goals"] < ASSIST_DEP_MIN_GOALS \
+                    or rec82["assisted_pct"] > ASSIST_DEP_LOW_PCT:
+                continue
+            add(side, "támadás", "Előkészített befejezés",
+                f"a góljaink zöme egyéni megoldás (csak "
+                f"{rec82['assisted']}/{rec82['goals']} gólpasszos) — "
+                "a kulcsemberünk kettőzésével levehetők vagyunk",
+                "előkészített befejezés: kiadás-figurák gyakorlása "
+                "(betörés-kiadás a beállónak, szélső-beadás), a "
+                "kettőzött labdás KÖTELEZŐ továbbadása, és a gólpassz "
+                "külön dicsérete a kisjátékokban (a gólpasszos gól "
+                "két pontot ér)")
+    except Exception:
+        pass
+
     # 81) Lepattanó-fal: ha a lövések után nem zárunk, az ellenfél
     # második hulláma jár — a box-out és a zárás a téma.
     try:

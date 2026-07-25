@@ -463,6 +463,10 @@ class ScoutingReport:
     sca_opp_misses: int = 0
     sca_allowed: int = 0
     sca_goals: int = 0
+    # Asszist-függés: gólok + ebből a gólpasszosak — darabszámok,
+    # meccsek közt összegződnek (arány = assisted / goals).
+    ad_goals: int = 0
+    ad_assisted: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1388,6 +1392,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Asszist-függés: kiadásból élő vs egyéni befejezés — más a terv.
+    if rep.ad_goals >= 6:
+        _ad_pct = 100.0 * rep.ad_assisted / rep.ad_goals
+        if _ad_pct >= 70.0:
+            keys.append(
+                f"Kiadásból élnek: a góljaik {_ad_pct:.0f}%-a "
+                f"gólpasszos ({rep.ad_assisted}/{rep.ad_goals}) — a "
+                "passzsávok elvágása (aktív kéz, a beálló elé lépés) "
+                "többet ér ellenük, mint az 1-1 elleni hősködés.")
+        elif _ad_pct <= 35.0:
+            keys.append(
+                f"Egyéni megoldásokból élnek: csak a góljaik "
+                f"{_ad_pct:.0f}%-a gólpasszos ({rep.ad_assisted}/"
+                f"{rep.ad_goals}) — a kulcsember-párharcokat kell "
+                "megnyerni: emberfogás, korai test, kettőzés a "
+                "labdás villanásaira.")
 
     # Lepattanó-fal: a lövés utáni zárás hiánya — a második hullám jár.
     if rep.sca_opp_misses >= 6:
@@ -2640,6 +2661,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sca_opp_misses = scarec["opp_misses"]
         rep.sca_allowed = scarec["allowed"]
         rep.sca_goals = scarec["allowed_goals"]
+        from .attack_types import assist_reliance
+        adrec = assist_reliance(match, config)[team.value]
+        rep.ad_goals = adrec["goals"]
+        rep.ad_assisted = adrec["assisted"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3917,6 +3942,18 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 61) Az ő kiadás-függő támadásuk × a ti labdaszerzésetek: az
+    # elvágott gólpassz nem csak védekezés — azonnali kontra.
+    if (opp.ad_goals >= 6 and own.trans_steals >= 5
+            and opp.ad_assisted / opp.ad_goals >= 0.70):
+        plan.append(
+            f"Kiadásból élnek (a góljaik "
+            f"{100.0 * opp.ad_assisted / opp.ad_goals:.0f}%-a "
+            f"gólpasszos), ti pedig jó labdaszerzők vagytok "
+            f"({own.trans_steals} szerzés) — vadásszátok a "
+            "gólpasszaikat: aktív kéz a kiadó-sávokban, a beálló elé "
+            "lépés — az elcsípett kiadás nálatok azonnali kontra.")
+
     # 60) Az ő áteresztő faluk × a ti lepattanó-harcotok: a második
     # hullám oda megy, ahol amúgy is erősek vagytok.
     if (opp.sca_opp_misses >= 6 and own.sc_misses >= 6
@@ -4381,6 +4418,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sca_opp_misses=sum(r.sca_opp_misses for r in reports),
         sca_allowed=sum(r.sca_allowed for r in reports),
         sca_goals=sum(r.sca_goals for r in reports),
+        ad_goals=sum(r.ad_goals for r in reports),
+        ad_assisted=sum(r.ad_assisted for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

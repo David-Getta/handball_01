@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Asszist-függés**: a gólok mekkora része előkészített (gólpasszos)
+  — a gólpassz-forrás a honnan kérdést nézi, ez a mennyire-t. A
+  kollektív (70%+ asszisztált, 6+ gólból) csapat ellen a passzsávok
+  elvágása a terv (aktív kéz, a beálló elé lépés), az egyéni
+  megoldásokból élő (35%- asszisztált) ellen a kulcsember-párharc
+  (emberfogás, kettőzés); saját olvasatban a kiadás-figurák és az
+  előkészített befejezés a téma. Egy réteg, sok felület:
+  `assist_reliance` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 61.
+  meccsterv-szabály (az ő kiadás-függő támadásuk × a ti
+  labdaszerzésetek), 82. edzés-szabály (előkészített befejezés, a
+  gólpasszos gól két pontot ér).
 - **Lepattanó-fal**: hány második rohamot enged a védekezés — a
   második roham réteg védő-oldali tükörképe: ott az látszik, ki
   harcolja vissza a saját lepattanóit, itt az, ki engedi vissza az

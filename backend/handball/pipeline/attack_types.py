@@ -1268,3 +1268,52 @@ def shot_timing(match: Match, config: Optional[TacticsConfig] = None) -> dict:
             "early_pct": round(100.0 * early / n, 1) if ok else None,
         }
     return out
+
+
+# Asszist-függés: ennyi góltól ítélünk; e gólpasszos arány felett
+# kollektív, ez alatt egyéni a befejezés-stílus.
+ASSIST_DEP_MIN_GOALS = 6
+ASSIST_DEP_HIGH_PCT = 70.0
+ASSIST_DEP_LOW_PCT = 35.0
+
+
+def assist_reliance(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Asszist-függés: a gólok mekkora része előkészített (gólpasszos).
+
+    A gólpassz-forrás (assist_sources) a HONNAN kérdést nézi — itt a
+    MENNYIRE a kérdés: a kollektív csapat góljai kiadásból születnek
+    (ellene a passzsávok elvágása — aktív kéz, a beálló elé lépés —
+    többet ér, mint az 1-1 elleni hősködés), az egyéni megoldásokból
+    élő csapatnál viszont a kulcsember-párharc dönt (emberfogás, korai
+    test). A védekezés-terv e stílus-tengely két végén másról szól.
+
+    Visszatérés csapatonként: {"goals", "assisted", "assisted_pct",
+    "style"} — assisted_pct/style None, ha kevés
+    (ASSIST_DEP_MIN_GOALS alatti) a gól; style "kollektív" /
+    "egyéni" / None (köztes).
+    """
+    from .event_detection import EventType, detect_events
+
+    counts = {"home": {"goals": 0, "assisted": 0},
+              "away": {"goals": 0, "assisted": 0}}
+    for e in detect_events(match, config or TacticsConfig()):
+        if e.type != EventType.GOAL:
+            continue
+        rec = counts[e.team.value]
+        rec["goals"] += 1
+        if (e.detail or {}).get("assist_id") is not None:
+            rec["assisted"] += 1
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        pct = None
+        style = None
+        if rec["goals"] >= ASSIST_DEP_MIN_GOALS:
+            pct = round(100.0 * rec["assisted"] / rec["goals"], 1)
+            if pct >= ASSIST_DEP_HIGH_PCT:
+                style = "kollektív"
+            elif pct <= ASSIST_DEP_LOW_PCT:
+                style = "egyéni"
+        out[side] = {**rec, "assisted_pct": pct, "style": style}
+    return out

@@ -827,3 +827,49 @@ def test_attack_rhythm_flags_metronome_offense():
     few = attack_rhythm(Match(_meta(), _attack_frames(0, 20.0, 24.0,
                                                       36.0)))
     assert few["home"]["n"] >= 1 and few["home"]["cv"] is None
+
+
+def test_assist_reliance_flags_collective_finishing():
+    """5 gólpasszos + 2 egyéni gól → 71% asszisztált, "kollektív"
+    stílus; kevés gólnál nincs ítélet."""
+    from handball.pipeline.attack_types import assist_reliance
+
+    def _goal(t0, assisted):
+        players = [_pl(1, Team.HOME, 33.0, 10.0)]
+        if assisted:
+            players = [_pl(2, Team.HOME, 30.0, 10.0)] + players
+        frames = []
+        t = t0
+        if assisted:  # p2 birtokol, majd passz p1-nek
+            for i in range(5):
+                frames.append(Frame(t=t + i, players=players,
+                                    ball=Ball(x=30.0, y=10.0,
+                                              confidence=1.0)))
+            t += 5
+        for i in range(5):  # p1 birtokol
+            frames.append(Frame(t=t + i, players=players,
+                                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 5
+        for i in range(8):  # lövés a kapuba
+            frames.append(Frame(t=t + i, players=players,
+                                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                          confidence=1.0)))
+        t += 8
+        for i in range(200):  # hosszú szünet a következő gólig
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return frames
+
+    frames = []
+    for assisted in (True, True, True, True, True, False, False):
+        frames += _goal(frames[-1].t + 1 if frames else 0, assisted)
+    ar = assist_reliance(Match(_meta(), frames))
+    h = ar["home"]
+    assert h["goals"] == 7 and h["assisted"] == 5
+    assert h["assisted_pct"] is not None
+    assert abs(h["assisted_pct"] - 100.0 * 5 / 7) < 0.5
+    assert h["style"] == "kollektív"
+
+    # Kevés gól: nincs ítélet.
+    few = assist_reliance(Match(_meta(), frames[:500]))
+    assert few["home"]["style"] is None and few["home"]["assisted_pct"] is None

@@ -663,6 +663,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Asszist-függés: kollektív (kiadásból élő) vs egyéni befejezés.
+    try:
+        from .attack_types import assist_reliance
+        adc = assist_reliance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ad = adc[side]
+            if rec_ad["style"] is None:
+                continue
+            if rec_ad["style"] == "kollektív":
+                body += (f" A(z) {name} góljai kiadásból születtek "
+                         f"({rec_ad['assisted']}/{rec_ad['goals']} "
+                         "gólpasszos) — kollektív befejezés-stílus.")
+            else:
+                body += (f" A(z) {name} góljai zöme egyéni megoldás "
+                         f"volt (csak {rec_ad['assisted']}/"
+                         f"{rec_ad['goals']} gólpasszos).")
+    except Exception:
+        pass
     # Lepattanó-fal: a második hullámot visszaengedő védekezés.
     try:
         from .defense import SC_ALLOW_HIGH_PCT, second_chance_allowed
