@@ -1072,6 +1072,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Célzás-pontosság: a kaput érő lövések aránya (10+ kísérletnél; a
+  // backend-kulccsal azonos küszöbök).
+  String? _shotAccuracy(Map<String, dynamic> r) {
+    final attempts = ((r["ac_attempts"] as num?) ?? 0).toInt();
+    if (attempts < 10) return null;
+    final onTarget = ((r["ac_on_target"] as num?) ?? 0).toInt();
+    final pct = 100.0 * onTarget / attempts;
+    if (pct <= 55.0) {
+      return "lövéseik ${pct.toStringAsFixed(0)}%-a ér kaput · "
+          "a mellé lövés = a ti indításotok";
+    }
+    if (pct >= 80.0) {
+      return "lövéseik ${pct.toStringAsFixed(0)}%-a kaput ér · "
+          "blokk-munka kötelező";
+    }
+    return null;
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1744,6 +1762,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Bravúr utáni lendület", _bigSaveMomentum(r)!],
       if (_finishFade(r) != null)
         ["Befejezés-esés", _finishFade(r)!],
+      if (_shotAccuracy(r) != null)
+        ["Célzás-pontosság", _shotAccuracy(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

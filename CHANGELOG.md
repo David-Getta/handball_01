@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Célzás-pontosság**: a lövés-kísérletekből mennyi tart kapura. A
+  mellé lőtt labda a legolcsóbb támadás-halál: nincs lepattanó, csak
+  ajándék-kidobás azonnali ellen-indítással — aki sokat lő mellé, az
+  ellen a mellé lövés a kidobás-indítás jele és a blokk-vállalás is
+  olcsó; aki szinte mindent kapura tesz, az ellen a blokk-munka
+  kötelező. Egy réteg, sok felület: `shot_accuracy` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kulcs
+  mindkét irányra + csempe), 53. meccsterv-szabály (az ő
+  mellé-lövésük × a ti gyors átmenetetek), 74. edzés-szabály
+  (célzás-edzés, lövés-válogatás).
 - **Befejezés-esés (fáradó befejezés)**: a gólra váltás (gól az összes
   lövés-kísérletből, a mellé menőt is számolva) az 1. vs 2. félidőben
   — a fáradás-kép befejezés-tagja, a kapus-forma támadó-oldali párja.

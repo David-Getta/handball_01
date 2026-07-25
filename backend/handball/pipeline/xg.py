@@ -200,6 +200,51 @@ def miss_punishment(match: Match,
     return out
 
 
+# Célzás-pontosság: ennyi lövés-kísérlettől ítélünk arányt; ez alatt
+# gyenge, e felett kiemelkedő a kapura tartó arány.
+ACCURACY_MIN_SHOTS = 8
+ACCURACY_LOW_PCT = 55.0
+ACCURACY_HIGH_PCT = 80.0
+
+
+def shot_accuracy(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Célzás-pontosság: a lövés-kísérletekből mennyi tart kapura.
+
+    A mellé lőtt labda a legolcsóbb támadás-halál: nincs lepattanó,
+    nincs szöglet — kapus-kidobás van, azonnali ellen-indítással. Aki
+    sokat lő mellé, annak a lövése fele ajándék: a mellé lövés utáni
+    kidobás a védekező csapat indítás-jele. Aki szinte mindent kapura
+    tesz, az ellen a blokk-munka kötelező — ott a kapus egyedül nem
+    marad meg.
+
+    Visszatérés csapatonként: {"attempts", "on_target", "pct"} — pct
+    None, ha kevés (ACCURACY_MIN_SHOTS alatti) a kísérlet.
+    """
+    from .event_detection import EventType, detect_shots
+
+    counts = {"home": {"attempts": 0, "on_target": 0},
+              "away": {"attempts": 0, "on_target": 0}}
+    for e in detect_shots(match, config or TacticsConfig()):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        rec = counts[e.team.value]
+        rec["attempts"] += 1
+        if e.type == EventType.GOAL \
+                or (e.detail or {}).get("outcome") == "save":
+            rec["on_target"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        out[side] = {
+            "attempts": rec["attempts"],
+            "on_target": rec["on_target"],
+            "pct": (round(100.0 * rec["on_target"] / rec["attempts"], 1)
+                    if rec["attempts"] >= ACCURACY_MIN_SHOTS else None),
+        }
+    return out
+
+
 # Befejezés-esés: félidőnként ennyi lövés-kísérlet kell az ítélethez,
 # és ekkora gólarány-esés (százalékpont) számít érdeminek.
 FINISH_FADE_MIN_SHOTS = 6

@@ -650,6 +650,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "túloldalon volt a labda a kapuban.")
     except Exception:
         pass
+    # Célzás-pontosság: a sok mellé lövés a legolcsóbb támadás-halál.
+    try:
+        from .xg import ACCURACY_LOW_PCT, shot_accuracy
+        sac = shot_accuracy(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sa = sac[side]
+            if rec_sa["pct"] is None or rec_sa["pct"] > ACCURACY_LOW_PCT:
+                continue
+            body += (f" A(z) {name} lövéseinek csak {rec_sa['pct']:.0f}%-a "
+                     f"tartott kapura ({rec_sa['attempts']} kísérletből "
+                     f"{rec_sa['on_target']}) — a mellé lőtt labda "
+                     "ajándék-kidobás volt az ellenfélnek.")
+    except Exception:
+        pass
     # Befejezés-esés: a gólra váltás érdemi romlása a 2. félidőre.
     try:
         from .xg import FINISH_FADE_DROP_PP, finish_fade

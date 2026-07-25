@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 74) Célzás-pontosság: ha a lövéseink fele mellé megy, a lövés
+    # ára nálunk dupla — technikai célzás-edzés a téma.
+    try:
+        from .xg import (ACCURACY_LOW_PCT, ACCURACY_MIN_SHOTS,
+                         shot_accuracy)
+        sa74 = shot_accuracy(match, config)
+        for side in ("home", "away"):
+            rec74 = sa74[side]
+            if rec74["pct"] is None \
+                    or rec74["attempts"] < ACCURACY_MIN_SHOTS \
+                    or rec74["pct"] > ACCURACY_LOW_PCT:
+                continue
+            add(side, "támadás", "Célzás",
+                f"a lövéseinknek csak {rec74['pct']:.0f}%-a tartott "
+                f"kapura ({rec74['attempts']} kísérletből "
+                f"{rec74['on_target']}) — a mellé lövés ajándék az "
+                "ellenfélnek",
+                "célzás-edzés: sarok-célzás sorozatban (alsó-felső "
+                "sarkok jelölve), lövés-válogatás — rossz szögből nem "
+                "lövünk, hanem visszajátszunk —, és fáradt célzás a "
+                "kondi-blokk végén, mert a mellé lövések ott sűrűsödnek")
+    except Exception:
+        pass
+
     # 73) Befejezés-esés: ha a gólra váltásunk a 2. félidőre esik, a
     # fáradt befejezés a téma.
     try:

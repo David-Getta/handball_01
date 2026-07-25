@@ -340,3 +340,46 @@ def test_finish_fade_drop_needs_halftime():
     # Félidő-jel nélkül nincs ítélet.
     no_ht = finish_fade(Match(_meta(), _half(0, [True, False])))
     assert no_ht["home"]["drop_pp"] is None
+
+
+def test_shot_accuracy_counts_on_target_share():
+    """8 hazai kísérletből 5 kaput ér (3 gól + 2 fogott) → 62,5%; kevés
+    kísérletnél nincs ítélet."""
+    from handball.pipeline.xg import shot_accuracy
+
+    def _attempt(t0, kind):
+        fr = []
+        gk = _pl(30, Team.AWAY, 39.0, 10.0)
+        gk.role = "kapus"
+        for i in range(8):
+            if kind == "goal":
+                ball = Ball(x=min(33.6 + i, 40.0), y=10.0, confidence=1.0)
+                players = [_pl(1, Team.HOME, 33.0, 10.0)]
+            elif kind == "save":
+                ball = Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                            confidence=1.0)
+                players = [_pl(1, Team.HOME, 37.0, 10.0), gk]
+            else:  # mellé
+                ball = Ball(x=min(37.4 + 0.8 * i, 40.0), y=10.0 - i * 1.0,
+                            confidence=1.0)
+                players = [_pl(1, Team.HOME, 37.0, 10.0)]
+            fr.append(Frame(t=t0 + i, players=players, ball=ball))
+        fr.append(Frame(t=t0 + 9, players=[],
+                        ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return fr
+
+    frames = []
+    t = 0
+    for kind in ("goal", "goal", "goal", "save", "save",
+                 "miss", "miss", "miss"):
+        frames += _attempt(t, kind)
+        t += 40
+    sa = shot_accuracy(Match(_meta(), frames))
+    h = sa["home"]
+    assert h["attempts"] == 8 and h["on_target"] == 5
+    assert abs(h["pct"] - 62.5) < 0.1
+
+    # Kevés kísérlet: nincs ítélet.
+    few = shot_accuracy(Match(_meta(), _attempt(0, "goal")))
+    assert few["home"]["attempts"] == 1
+    assert few["home"]["pct"] is None

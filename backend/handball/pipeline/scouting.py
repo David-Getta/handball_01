@@ -423,6 +423,10 @@ class ScoutingReport:
     ff_fh_goals: int = 0
     ff_sh_shots: int = 0
     ff_sh_goals: int = 0
+    # Célzás-pontosság: lövés-kísérletek + kaput érő lövések —
+    # darabszámok, összegződnek.
+    ac_attempts: int = 0
+    ac_on_target: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1306,6 +1310,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "túl: a hajrában a lövésük már nem ül, ott elég a "
                 "tömör fal és a lepattanó — a türelmes védekezés a "
                 "második félidőben kifizet.")
+
+    # Célzás-pontosság: mennyibe kerül nekik a lövés.
+    if rep.ac_attempts >= 10:
+        _ac_pct = 100.0 * rep.ac_on_target / rep.ac_attempts
+        if _ac_pct <= 55.0:
+            keys.append(
+                f"A lövéseiknek csak {_ac_pct:.0f}%-a tart kapura "
+                f"({rep.ac_attempts} kísérletből {rep.ac_on_target}) — "
+                "minden mellé lövésük ajándék-kidobás: a kapusotok első "
+                "passza előre, a szélsők induljanak a mellé lövés "
+                "pillanatában, és a blokkot bátran vállaljátok.")
+        elif _ac_pct >= 80.0:
+            keys.append(
+                f"A lövéseik {_ac_pct:.0f}%-a kaput ér — a kapusotok "
+                "egyedül nem marad meg ellenük: a blokk-munka kötelező, "
+                "a fal és a kapus sáv-felosztását előre tisztázzátok.")
 
     # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
     # kapusra is kell-e, vagy nincs mögötte mentőöv.
@@ -2460,6 +2480,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             rep.ff_fh_goals = ffrec["fh_goals"]
             rep.ff_sh_shots = ffrec["sh_shots"]
             rep.ff_sh_goals = ffrec["sh_goals"]
+        from .xg import shot_accuracy
+        sarec = shot_accuracy(match, config)[team.value]
+        rep.ac_attempts = sarec["attempts"]
+        rep.ac_on_target = sarec["on_target"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3692,6 +3716,19 @@ def matchup_plan(own: "ScoutingReport",
             "tartsd meccsben magad, a második félidőben az ő lövésük "
             "már nem ül, a tiéd igen — ott dől el a meccs.")
 
+    # 53) Az ő mellé-lövésük × a ti gyors átmenetetek: a mellé lőtt
+    # labda a ti indítás-jeletek.
+    if (opp.ac_attempts >= 10
+            and 100.0 * opp.ac_on_target / opp.ac_attempts <= 55.0
+            and own.trans_steals >= 3 and own.trans_quick_goals >= 2):
+        _p53_pct = 100.0 * opp.ac_on_target / opp.ac_attempts
+        plan.append(
+            f"A lövéseiknek csak {_p53_pct:.0f}%-a tart kapura, ti "
+            f"pedig jól váltjátok gólra a gyors átmenetet "
+            f"({own.trans_quick_goals} gyors gól {own.trans_steals} "
+            "szerzésből) — minden mellé lövésük indítás: a kapus "
+            "kidobása az induló szélsőre, mielőtt a faluk visszaáll.")
+
     # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
     # korai nyomás az egész meccsüket megroppanthatja.
     if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
@@ -4057,6 +4094,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ff_fh_goals=sum(r.ff_fh_goals for r in reports),
         ff_sh_shots=sum(r.ff_sh_shots for r in reports),
         ff_sh_goals=sum(r.ff_sh_goals for r in reports),
+        ac_attempts=sum(r.ac_attempts for r in reports),
+        ac_on_target=sum(r.ac_on_target for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
