@@ -3,27 +3,20 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## v0.1.18 — kiadva (2026-07-22, PR #57–#505)
+## v0.1.22 — kiadva (2026-07-25, PR #562–#570)
 
-> Kiadás-jegyzet: a telepítő-buildet a legfrissebb stabil Flutterre
-> (3.44.7) állás három ponton is elakasztotta; mind javítva —
-> védtelen fastapi-import a CI-tesztekben (#499), három kliens
-> fordítási hiba (törött string literál + két duplikált metódus,
-> #502), és az AppExitResponse API-elmozdulás (#504, verzió-független
-> onDetach-alapú kilépés-mentésre váltva). A kiadás Windows- és
-> macOS-telepítővel felkerült a Releases oldalra.
+> Kiadás-jegyzet: a legfontosabb a két beragadás-javítás — a
+> feldolgozás többé nem állhat meg csendben egy fix kockánál
+> (elakadás-őrszem + OpenCV szál-korlát), és ha a motor mégis
+> elakad, 3 perc után magától kilép és az addig kész részt teljes
+> utómunkával, folytatható meccsként menti. Mellé hat új
+> elemzés-réteg érkezett (mind a megszokott "egy réteg, sok
+> felület" bekötéssel) — köztük a fáradás-kép így négytagúra
+> bővült (lövőerő, fal, kéz, kapus), és az első mentális-profil
+> réteg (előny-őrzés). Windows- és macOS-telepítővel a Releases
+> oldalon.
 
-### A záró körök (a v0.1.17 → v0.1.18 lezárásig)
-- **Kapus-kimozdulás**: kint álló (átemelhető) vs vonalon maradó kapus
-  — réteg, edzői összefoglaló, /goalkeepers API, csomag, felderítés-
-  profil + kulcsok + csempe + 19. meccsterv-szabály (kint álló kapus ×
-  kontra), 33. edzés-szabály, meccsjelentés-sor, kapus- és játékos-lap.
-  (#497, #498, #501, #503, #505)
-- **README-frissítés**: a Hol tartunk szakasz a valós számokra (50+
-  réteg, 19 meccsterv- és 32 edzés-szabály, 8 riport, 670+ teszt).
-  (#500)
-
-## Kiadatlan (a v0.1.21 óta)
+### A v0.1.22 körei
 
 - **Előny-őrzés (elengedett vezetés)**: a meccs közbeni legnagyobb
   vezetés vs a végeredmény — aki 3+ gólos előnyt is elenged, az
@@ -813,6 +806,26 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 - **`docs/BROADCAST_AND_SENSORS.md`**: a teljes bemenet-jövőkép —
   telepített többkamerás + lidaros csarnok-rendszer ÉS a tévés-út
   lépcsői (auto-kalibráció, eredményjelző-OCR, élő stream). (#134)
+
+## v0.1.18 — kiadva (2026-07-22, PR #57–#505)
+
+> Kiadás-jegyzet: a telepítő-buildet a legfrissebb stabil Flutterre
+> (3.44.7) állás három ponton is elakasztotta; mind javítva —
+> védtelen fastapi-import a CI-tesztekben (#499), három kliens
+> fordítási hiba (törött string literál + két duplikált metódus,
+> #502), és az AppExitResponse API-elmozdulás (#504, verzió-független
+> onDetach-alapú kilépés-mentésre váltva). A kiadás Windows- és
+> macOS-telepítővel felkerült a Releases oldalra.
+
+### A záró körök (a v0.1.17 → v0.1.18 lezárásig)
+- **Kapus-kimozdulás**: kint álló (átemelhető) vs vonalon maradó kapus
+  — réteg, edzői összefoglaló, /goalkeepers API, csomag, felderítés-
+  profil + kulcsok + csempe + 19. meccsterv-szabály (kint álló kapus ×
+  kontra), 33. edzés-szabály, meccsjelentés-sor, kapus- és játékos-lap.
+  (#497, #498, #501, #503, #505)
+- **README-frissítés**: a Hol tartunk szakasz a valós számokra (50+
+  réteg, 19 meccsterv- és 32 edzés-szabály, 8 riport, 670+ teszt).
+  (#500)
 
 ## v0.1.17 és korábbi
 A korábbi kiadások tartalmát a Releases oldal és a PR-történet őrzi:
