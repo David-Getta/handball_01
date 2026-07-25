@@ -657,3 +657,51 @@ def test_turnover_timing_flags_early_losses():
     # Kevés eladás: nincs ítélet.
     few = turnover_timing(Match(_meta(), frames[:100]))
     assert few["home"]["early_pct"] is None
+
+
+def test_second_chance_allowed_mirrors_defense():
+    """4 hazai kimaradt lövést ablakon belüli újralövés (gól) követ, 2
+    magányos kimaradás → a VENDÉG fal a 6 lehetőségből 4 második rohamot
+    engedett (67%); a hazai oldalon nincs minta → nincs ítélet."""
+    from handball.pipeline.defense import second_chance_allowed
+
+    def _shot(t0, goal):
+        frames = []
+        for i in range(8):
+            bx = min(34.0 + i, 40.0)
+            by = 10.0 if goal else 5.0
+            frames.append(Frame(
+                t=t0 + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=bx, y=by, confidence=1.0)))
+        return frames
+
+    def _gap(t0, n):
+        return [Frame(t=t0 + i, players=[],
+                      ball=Ball(x=20.0, y=10.0, confidence=1.0))
+                for i in range(n)]
+
+    frames = []
+    t = 0
+    for _ in range(4):  # kimaradás → ablakon belül gól (második roham)
+        frames += _shot(t, goal=False)
+        t = frames[-1].t + 1
+        frames += _gap(t, 12)
+        t = frames[-1].t + 1
+        frames += _shot(t, goal=True)
+        t = frames[-1].t + 1
+        frames += _gap(t, 200)
+        t = frames[-1].t + 1
+    for _ in range(2):  # magányos kimaradások
+        frames += _shot(t, goal=False)
+        t = frames[-1].t + 1
+        frames += _gap(t, 200)
+        t = frames[-1].t + 1
+    sca = second_chance_allowed(Match(_meta(), frames))
+    a = sca["away"]  # a vendég védekezett a hazai lövéseknél
+    assert a["opp_misses"] == 6 and a["allowed"] == 4
+    assert a["allowed_goals"] == 4
+    assert a["allowed_pct"] is not None
+    assert abs(a["allowed_pct"] - 100.0 * 4 / 6) < 0.5
+    # A hazai fal ellen nem volt lepattanó-lehetőség → nincs ítélet.
+    assert sca["home"]["opp_misses"] == 0
+    assert sca["home"]["allowed_pct"] is None

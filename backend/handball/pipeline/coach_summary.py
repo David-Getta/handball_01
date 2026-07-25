@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Lepattanó-fal: a második hullámot visszaengedő védekezés.
+    try:
+        from .defense import SC_ALLOW_HIGH_PCT, second_chance_allowed
+        scac = second_chance_allowed(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sca = scac[side]
+            if rec_sca["allowed_pct"] is None \
+                    or rec_sca["allowed_pct"] < SC_ALLOW_HIGH_PCT:
+                continue
+            body += (f" A(z) {name} fala nem zárt a lövések után: az "
+                     f"ellenfél a kimaradt lövései "
+                     f"{rec_sca['allowed_pct']:.0f}%-ánál újra lőhetett "
+                     f"({rec_sca['allowed']}/{rec_sca['opp_misses']}).")
+    except Exception:
+        pass
     # Pressz-tűrés: rászorított védőnél megugró eladás-arány.
     try:
         from .decisions import (PRESS_TO_RISE_PP,

@@ -1137,6 +1137,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Lepattanó-fal: az ellenfél kimaradt lövései után visszaengedett
+  // második rohamok aránya (6+ lehetőségnél, 35%+ aránynál; a
+  // backend-kulccsal azonos küszöbök).
+  String? _secondChanceAllowed(Map<String, dynamic> r) {
+    final misses = ((r["sca_opp_misses"] as num?) ?? 0).toInt();
+    final allowed = ((r["sca_allowed"] as num?) ?? 0).toInt();
+    if (misses < 6) return null;
+    final pct = 100.0 * allowed / misses;
+    if (pct < 35.0) return null;
+    return "a kimaradt lövések ${pct.toStringAsFixed(0)}%-ánál "
+        "második hullámot engednek ($allowed/$misses) · lepattanóra rá";
+  }
+
   // Pressz-tűrés: eladás-arány testközeli védőnél vs szabadon (10+
   // esemény mindkét mintában, 15+ százalékpont ugrás; a
   // backend-kulccsal azonos küszöbök).
@@ -1871,6 +1884,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Eladás-időzítés", _turnoverTiming(r)!],
       if (_passSecurity(r) != null)
         ["Pressz-tűrés", _passSecurity(r)!],
+      if (_secondChanceAllowed(r) != null)
+        ["Lepattanó-fal", _secondChanceAllowed(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

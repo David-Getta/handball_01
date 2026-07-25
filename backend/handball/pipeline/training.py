@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 81) Lepattanó-fal: ha a lövések után nem zárunk, az ellenfél
+    # második hulláma jár — a box-out és a zárás a téma.
+    try:
+        from .defense import (SC_ALLOW_HIGH_PCT, SC_ALLOW_MIN,
+                              second_chance_allowed)
+        sca81 = second_chance_allowed(match, config)
+        for side in ("home", "away"):
+            rec81 = sca81[side]
+            if rec81["allowed_pct"] is None \
+                    or rec81["opp_misses"] < SC_ALLOW_MIN \
+                    or rec81["allowed_pct"] < SC_ALLOW_HIGH_PCT:
+                continue
+            add(side, "védekezés", "Lepattanó-zárás",
+                f"a lövések után nem zárunk: az ellenfél a kimaradt "
+                f"lövései {rec81['allowed_pct']:.0f}%-ánál újra lőtt "
+                f"({rec81['allowed']}/{rec81['opp_misses']}) — a jól "
+                "védett első hullám munkája vész kárba",
+                "lepattanó-zárás: box-out gyakorlat minden lövés-záró "
+                "sorban (a belső hármas kötelezően testet fordít), a "
+                "szélsők belépése a rövid lepattanóra, és a kapus "
+                "hangos irányítása, kié a kipattanó")
+    except Exception:
+        pass
+
     # 80) Pressz-tűrés: ha testközeli védőnél megugrik az eladásunk,
     # az agresszív fal ellenünk termel — a nyomás alatti passz a téma.
     try:

@@ -1108,3 +1108,43 @@ def turnover_timing(match, config=None) -> dict:
         if rec["timed"] >= TO_TIMING_MIN:
             rec["early_pct"] = round(100.0 * rec["early"] / rec["timed"], 1)
     return out
+
+
+# Lepattanó-fal: ennyi ellenfél-lehetőségtől (nem gólos lövéstől)
+# ítélünk, és e visszaadott arány felett áteresztő a fal a második
+# hullámmal szemben.
+SC_ALLOW_MIN = 6
+SC_ALLOW_HIGH_PCT = 35.0
+
+
+def second_chance_allowed(match, config=None) -> dict:
+    """Lepattanó-fal: hány második rohamot enged a védekezés.
+
+    A második roham réteg (second_chance) védő-oldali tükörképe: ott
+    az látszik, ki harcolja vissza a saját lepattanóit — itt az, ki
+    ENGEDI vissza az ellenfélét. A védett vagy mellé menő lövés után
+    a labda a levegőben senkié: ha a fal nem zár (nincs box-out, a
+    szélsők nem lépnek be), az ellenfél újra lő — a jól védett első
+    hullám munkája vész kárba. Az áteresztő fal ellen a lepattanóra
+    küldött plusz ember ingyen-lövéseket termel.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ csapat szemszögéből):
+    {"opp_misses", "allowed", "allowed_goals", "allowed_pct"} —
+    allowed_pct None, ha kevés (SC_ALLOW_MIN alatti) az ellenfél
+    lepattanó-lehetősége.
+    """
+    from .attack_types import second_chance
+
+    sc = second_chance(match, config)
+    out: dict = {}
+    for side, opp in (("home", "away"), ("away", "home")):
+        p = sc[opp]
+        rec = {"opp_misses": p["misses"],
+               "allowed": p["second_chances"],
+               "allowed_goals": p["second_goals"],
+               "allowed_pct": None}
+        if rec["opp_misses"] >= SC_ALLOW_MIN:
+            rec["allowed_pct"] = round(
+                100.0 * rec["allowed"] / rec["opp_misses"], 1)
+        out[side] = rec
+    return out

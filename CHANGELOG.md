@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Lepattanó-fal**: hány második rohamot enged a védekezés — a
+  második roham réteg védő-oldali tükörképe: ott az látszik, ki
+  harcolja vissza a saját lepattanóit, itt az, ki engedi vissza az
+  ellenfélét. Ha az ellenfél a kimaradt lövései 35%+ hányadánál újra
+  lőhet (6+ lehetőségből), a fal nem zár: az ellenfélnek a
+  lepattanó-ember terv, saját olvasatban a box-out és a lövés utáni
+  zárás a téma. Egy réteg, sok felület: `second_chance_allowed`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kulcs + csempe), 60. meccsterv-szabály (az ő
+  áteresztő faluk × a ti lepattanó-harcotok), 81. edzés-szabály
+  (lepattanó-zárás, box-out).
+
 ## v0.1.23 — kiadva (2026-07-25)
 
 > Kiadás-jegyzet: húsz új elemzés-réteg egyetlen körben — mind a

@@ -457,6 +457,12 @@ class ScoutingReport:
     ps_press_to: int = 0
     ps_free_passes: int = 0
     ps_free_to: int = 0
+    # Lepattanó-fal: az ellenfél lepattanó-lehetőségei ellenünk + a
+    # visszaengedett második rohamok és góljaik — darabszámok,
+    # meccsek közt összegződnek (arány = allowed / opp_misses).
+    sca_opp_misses: int = 0
+    sca_allowed: int = 0
+    sca_goals: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1382,6 +1388,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Lepattanó-fal: a lövés utáni zárás hiánya — a második hullám jár.
+    if rep.sca_opp_misses >= 6:
+        _sca_pct = 100.0 * rep.sca_allowed / rep.sca_opp_misses
+        if _sca_pct >= 35.0:
+            keys.append(
+                f"A faluk nem zár a lövések után: az ellenfelek a "
+                f"kimaradt lövéseik {_sca_pct:.0f}%-ánál újra lőhettek "
+                f"ellenük ({rep.sca_allowed}/{rep.sca_opp_misses}) — a "
+                "lövéseitek után menjetek rá a lepattanóra: a második "
+                "hullám ellenük ingyen-lövés.")
 
     # Pressz-tűrés: rászorított védőnél megugró eladás-arány.
     _ps_press_n = rep.ps_press_passes + rep.ps_press_to
@@ -2618,6 +2635,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.ps_press_to = psrec["press_to"]
         rep.ps_free_passes = psrec["free_passes"]
         rep.ps_free_to = psrec["free_to"]
+        from .defense import second_chance_allowed
+        scarec = second_chance_allowed(match, config)[team.value]
+        rep.sca_opp_misses = scarec["opp_misses"]
+        rep.sca_allowed = scarec["allowed"]
+        rep.sca_goals = scarec["allowed_goals"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3895,6 +3917,20 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 60) Az ő áteresztő faluk × a ti lepattanó-harcotok: a második
+    # hullám oda megy, ahol amúgy is erősek vagytok.
+    if (opp.sca_opp_misses >= 6 and own.sc_misses >= 6
+            and opp.sca_allowed / opp.sca_opp_misses >= 0.35
+            and own.sc_second / own.sc_misses >= 0.35):
+        plan.append(
+            f"A faluk nem zár a lövések után (az ellenfelek a kimaradt "
+            f"lövéseik "
+            f"{100.0 * opp.sca_allowed / opp.sca_opp_misses:.0f}%-ánál "
+            f"újra lőhettek), ti pedig amúgy is jól harcoljátok a "
+            f"lepattanót ({own.sc_second}/{own.sc_misses} visszaszerzés) "
+            "— minden lövésetekre menjen be a lepattanó-ember: a "
+            "második hullám ellenük terv, nem véletlen.")
+
     # 59) Az ő pressz-érzékenységük × a ti szoros falatok: aki
     # amúgy is testközelben védekezik, annak ez ingyen-termelés.
     _p59_press_n = opp.ps_press_passes + opp.ps_press_to
@@ -4342,6 +4378,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ps_press_to=sum(r.ps_press_to for r in reports),
         ps_free_passes=sum(r.ps_free_passes for r in reports),
         ps_free_to=sum(r.ps_free_to for r in reports),
+        sca_opp_misses=sum(r.sca_opp_misses for r in reports),
+        sca_allowed=sum(r.sca_allowed for r in reports),
+        sca_goals=sum(r.sca_goals for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
