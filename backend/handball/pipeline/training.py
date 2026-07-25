@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 80) Pressz-tűrés: ha testközeli védőnél megugrik az eladásunk,
+    # az agresszív fal ellenünk termel — a nyomás alatti passz a téma.
+    try:
+        from .decisions import (PRESS_TO_RISE_PP,
+                                pass_security_under_pressure)
+        ps80 = pass_security_under_pressure(match, config)
+        for side in ("home", "away"):
+            rec80 = ps80[side]
+            if rec80["rise_pp"] is None \
+                    or rec80["rise_pp"] < PRESS_TO_RISE_PP:
+                continue
+            add(side, "támadás", "Nyomás alatti passz",
+                f"testközeli védőnél az eladás-arányunk "
+                f"{rec80['press_to_pct']:.0f}%-ra ugrik (szabadon "
+                f"{rec80['free_to_pct']:.0f}%) — az agresszív fal "
+                "ellenünk termel",
+                "nyomás alatti passz: szűk területes labdatartás "
+                "(4-4 rácsban, testközeli védővel), passz előtti "
+                "váll-csel és lépés-előny begyakorlása, plusz a "
+                "labdás játékos melletti KÖTELEZŐ rövid passz-opció "
+                "(felkínálkozás szabályként)")
+    except Exception:
+        pass
+
     # 79) Eladás-időzítés: ha a birtoklás elején adjuk el a labdát, a
     # letámadás ellenünk termel — a kihozatal nyomás alatt a téma.
     try:

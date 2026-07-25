@@ -273,3 +273,95 @@ def analyze_player_decisions(match: Match, player_id: int,
         optimal_rate=(optimal / n) if n else 0.0,
         avg_value_gap=(sum(gaps) / len(gaps)) if gaps else 0.0,
     )
+
+
+# Pressz-tűrés: testközelinek ennyi méteren belüli védő számít; ennyi
+# esemény kell mindkét (nyomott/szabad) mintához, és ekkora
+# eladás-arány-többlet (százalékpont) számít érdeminek.
+PRESS_TIGHT_M = 2.0
+PRESS_MIN_EVENTS = 10
+PRESS_TO_RISE_PP = 15.0
+
+
+def pass_security_under_pressure(match: Match,
+                                 config: Optional[TacticsConfig] = None
+                                 ) -> dict:
+    """Pressz-tűrés: labdabiztonság testközeli védő mellett vs szabadon.
+
+    A nyomás alatti BEFEJEZÉST a pressure_finishing méri — itt a
+    passzjáték biztonsága a kérdés: rászorított (PRESS_TIGHT_M-en
+    belüli) védő mellett mennyivel nő a labdaeladás aránya a szabad
+    helyzethez képest. Akinél nagyot nő, az pressz-érzékeny: az
+    agresszív, kilépő fal és a kettőzés ellene nem kockázat, hanem
+    termelés. Akinél nem, azt szorongatni fölösleges — ellene a
+    kompakt, mély fal a jobb terv.
+
+    Minden csapaton belüli passznál (detect_passes) a döntés-kockán
+    mérjük a passzolóhoz legközelebbi (nem kapus) védő távolságát;
+    minden labdaeladásnál (TURNOVER) a vesztes utolsó ismert
+    pozícióján ugyanezt — így minden labdás döntés "nyomott" vagy
+    "szabad" mintába esik.
+
+    Visszatérés csapatonként: {"press_passes", "press_to",
+    "free_passes", "free_to", "press_to_pct", "free_to_pct",
+    "rise_pp"} — a százalékok és rise_pp None, ha bármelyik minta
+    kevés (PRESS_MIN_EVENTS alatti).
+    """
+    import math
+
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+
+    def _tight(frame: Frame, pos, team) -> bool:
+        dists = [math.hypot(p.x - pos.x, p.y - pos.y)
+                 for p in frame.players
+                 if p.team != team and p.role != "kapus"]
+        return bool(dists) and min(dists) <= PRESS_TIGHT_M
+
+    out = {side: {"press_passes": 0, "press_to": 0,
+                  "free_passes": 0, "free_to": 0,
+                  "press_to_pct": None, "free_to_pct": None,
+                  "rise_pp": None}
+           for side in ("home", "away")}
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        rec = out[pe.team.value]
+        if _tight(pe.decision_frame, pe.passer_pos, pe.team):
+            rec["press_passes"] += 1
+        else:
+            rec["free_passes"] += 1
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            continue
+        # A vesztes utolsó ismert pozíciója az esemény előtti kockákon.
+        placed = False
+        for j in range(i0 - 1, max(-1, i0 - 13), -1):
+            loser = next((p for p in frames[j].players
+                          if p.track_id == e.player_id), None)
+            if loser is None:
+                continue
+            rec = out[e.team.value]
+            if _tight(frames[j], loser, e.team):
+                rec["press_to"] += 1
+            else:
+                rec["free_to"] += 1
+            placed = True
+            break
+        if not placed:
+            continue
+    for rec in out.values():
+        press_n = rec["press_passes"] + rec["press_to"]
+        free_n = rec["free_passes"] + rec["free_to"]
+        if press_n >= PRESS_MIN_EVENTS and free_n >= PRESS_MIN_EVENTS:
+            rec["press_to_pct"] = round(100.0 * rec["press_to"] / press_n, 1)
+            rec["free_to_pct"] = round(100.0 * rec["free_to"] / free_n, 1)
+            rec["rise_pp"] = round(
+                rec["press_to_pct"] - rec["free_to_pct"], 1)
+    return out

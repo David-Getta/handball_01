@@ -663,6 +663,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Pressz-tűrés: rászorított védőnél megugró eladás-arány.
+    try:
+        from .decisions import (PRESS_TO_RISE_PP,
+                                pass_security_under_pressure)
+        psc = pass_security_under_pressure(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ps = psc[side]
+            if rec_ps["rise_pp"] is None \
+                    or rec_ps["rise_pp"] < PRESS_TO_RISE_PP:
+                continue
+            body += (f" A(z) {name} passzjátéka nyomás alatt megtört: "
+                     f"testközeli védőnél az eladás-aránya "
+                     f"{rec_ps['press_to_pct']:.0f}% volt, szabadon "
+                     f"csak {rec_ps['free_to_pct']:.0f}%.")
+    except Exception:
+        pass
     # Eladás-időzítés: a korai eladás a letámadás-érzékenység jele.
     try:
         from .defense import TO_EARLY_S, TO_EARLY_SHARE, turnover_timing

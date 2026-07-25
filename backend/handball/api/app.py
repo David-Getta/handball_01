@@ -2683,6 +2683,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import pass_security_under_pressure
+            res["pass_security"] = pass_security_under_pressure(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3166,6 +3171,10 @@ def create_app():
                 from ..pipeline.defense import turnover_timing
                 _layer("turnover_timing",
                        lambda: turnover_timing(match))
+                from ..pipeline.decisions import \
+                    pass_security_under_pressure
+                _layer("pass_security",
+                       lambda: pass_security_under_pressure(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

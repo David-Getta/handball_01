@@ -1137,6 +1137,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Pressz-tűrés: eladás-arány testközeli védőnél vs szabadon (10+
+  // esemény mindkét mintában, 15+ százalékpont ugrás; a
+  // backend-kulccsal azonos küszöbök).
+  String? _passSecurity(Map<String, dynamic> r) {
+    final pressPasses = ((r["ps_press_passes"] as num?) ?? 0).toInt();
+    final pressTo = ((r["ps_press_to"] as num?) ?? 0).toInt();
+    final freePasses = ((r["ps_free_passes"] as num?) ?? 0).toInt();
+    final freeTo = ((r["ps_free_to"] as num?) ?? 0).toInt();
+    final pressN = pressPasses + pressTo;
+    final freeN = freePasses + freeTo;
+    if (pressN < 10 || freeN < 10) return null;
+    final pressPct = 100.0 * pressTo / pressN;
+    final freePct = 100.0 * freeTo / freeN;
+    if (pressPct - freePct < 15.0) return null;
+    return "eladás testközeli védőnél ${pressPct.toStringAsFixed(0)}% "
+        "(szabadon ${freePct.toStringAsFixed(0)}%) · agresszív fal";
+  }
+
   // Eladás-időzítés: az eladások mekkora része korai, a birtoklás
   // első 10 mp-ében (6+ eladásnál, 50%+ aránynál; a backend-kulccsal
   // azonos küszöbök).
@@ -1851,6 +1869,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-gyengeoldal", _gkWeakSide(r)!],
       if (_turnoverTiming(r) != null)
         ["Eladás-időzítés", _turnoverTiming(r)!],
+      if (_passSecurity(r) != null)
+        ["Pressz-tűrés", _passSecurity(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

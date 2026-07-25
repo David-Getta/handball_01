@@ -176,3 +176,51 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {e}")
     print(f"\n{'OK' if failures == 0 else failures} hibás teszt")
     raise SystemExit(1 if failures else 0)
+
+
+def test_pass_security_flags_press_sensitive_team():
+    """A szabad passzok tiszták, a testközeli védő melletti játékban 3
+    eladás jön → a nyomott eladás-arány 30% vs szabadon 0%; kevés
+    mintánál nincs ítélet."""
+    from handball.pipeline.decisions import pass_security_under_pressure
+
+    # Álló felállás: p1-p2 szabadon passzolgat, p3-p4 mellett ott a
+    # d1 védő (1,5 m-re mindkettőtől), a labda mindig a birtokosnál.
+    spots = {
+        "p1": (1, Team.HOME, 5.0, 5.0),
+        "p2": (2, Team.HOME, 9.0, 5.0),
+        "p3": (3, Team.HOME, 30.0, 10.0),
+        "p4": (4, Team.HOME, 33.0, 10.0),
+        "d1": (11, Team.AWAY, 31.5, 10.0),
+    }
+
+    def _frames(t0, holder_key, n=5):
+        players = [_pl(tid, team, x, y)
+                   for (tid, team, x, y) in spots.values()]
+        hx, hy = spots[holder_key][2], spots[holder_key][3]
+        return [Frame(t=t0 + i, players=players,
+                      ball=Ball(x=hx, y=hy, confidence=1.0))
+                for i in range(n)]
+
+    holds = (["p1", "p2"] * 5 + ["p1"]        # 10 szabad passz
+             + ["p3"]                          # +1 szabad passz (p1→p3)
+             + ["p4", "p3"] * 3 + ["p4"]       # 7 nyomott passz
+             + ["d1", "p3", "d1", "p3", "d1"])  # 3 hazai nyomott eladás
+    frames = []
+    t = 0
+    for key in holds:
+        frames += _frames(t, key)
+        t += 5
+    meta = MatchMeta(match_id="ps", home_team="H", away_team="A", fps=25.0)
+    ps = pass_security_under_pressure(Match(meta, frames))
+    h = ps["home"]
+    assert h["free_passes"] == 11 and h["free_to"] == 0
+    assert h["press_passes"] == 7 and h["press_to"] == 3
+    assert h["press_to_pct"] is not None
+    assert abs(h["press_to_pct"] - 30.0) < 0.1
+    assert h["free_to_pct"] == 0.0
+    assert h["rise_pp"] is not None and h["rise_pp"] >= 15.0
+
+    # Kevés minta: nincs ítélet.
+    few = pass_security_under_pressure(Match(meta, frames[:60]))
+    assert few["home"]["press_to_pct"] is None

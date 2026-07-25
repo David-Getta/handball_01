@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Pressz-tűrés**: labdabiztonság testközeli védő mellett vs
+  szabadon — a nyomás alatti befejezés (pressure_finishing) passz-
+  oldali párja. Minden passznál és eladásnál megnézzük, volt-e 2 m-en
+  belüli védő a labdásnál; ha rászorított védőnél az eladás-arány
+  15+ százalékponttal magasabb (10+ esemény mindkét mintában), a
+  csapat pressz-érzékeny: az agresszív, kilépő fal és a kettőzés
+  ellene termelés; saját olvasatban a nyomás alatti passz (szűk
+  területes labdatartás) a téma. Egy réteg, sok felület:
+  `pass_security_under_pressure` motor, edzői összefoglaló, /analyze
+  + meccs-csomag, felderítés-profil (kulcs + csempe), 59.
+  meccsterv-szabály (az ő pressz-érzékenységük × a ti szoros
+  falatok), 80. edzés-szabály (nyomás alatti passz).
 - **Eladás-időzítés**: a birtoklás hányadik másodpercében jön a
   labdaeladás — a hely (turnover_zones) mellett az idő-olvasat. Aki
   az eladásai felét+ a birtoklás első 10 másodpercében követi el (6+

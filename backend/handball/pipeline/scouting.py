@@ -451,6 +451,12 @@ class ScoutingReport:
     # birtoklás első másodperceiben) — darabszámok, összegződnek.
     tt_timed: int = 0
     tt_early: int = 0
+    # Pressz-tűrés: nyomott/szabad passzok és eladások — darabszámok,
+    # meccsek közt összegződnek (eladás-arány = to / (passz + to)).
+    ps_press_passes: int = 0
+    ps_press_to: int = 0
+    ps_free_passes: int = 0
+    ps_free_to: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1376,6 +1382,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Pressz-tűrés: rászorított védőnél megugró eladás-arány.
+    _ps_press_n = rep.ps_press_passes + rep.ps_press_to
+    _ps_free_n = rep.ps_free_passes + rep.ps_free_to
+    if _ps_press_n >= 10 and _ps_free_n >= 10:
+        _ps_press_pct = 100.0 * rep.ps_press_to / _ps_press_n
+        _ps_free_pct = 100.0 * rep.ps_free_to / _ps_free_n
+        if _ps_press_pct - _ps_free_pct >= 15.0:
+            keys.append(
+                f"Pressz-érzékenyek: testközeli védőnél az eladásaik "
+                f"aránya {_ps_press_pct:.0f}% (szabadon csak "
+                f"{_ps_free_pct:.0f}%) — az agresszív, kilépő fal és a "
+                "kettőzés ellenük nem kockázat, hanem termelés: "
+                "szorítsátok rá a labdásra az első védőt.")
 
     # Eladás-időzítés: a korai eladó a letámadásra érzékeny.
     if rep.tt_timed >= 6 and rep.tt_early / rep.tt_timed >= 0.5:
@@ -2592,6 +2612,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         ttrec = turnover_timing(match, config)[team.value]
         rep.tt_timed = ttrec["timed"]
         rep.tt_early = ttrec["early"]
+        from .decisions import pass_security_under_pressure
+        psrec = pass_security_under_pressure(match, config)[team.value]
+        rep.ps_press_passes = psrec["press_passes"]
+        rep.ps_press_to = psrec["press_to"]
+        rep.ps_free_passes = psrec["free_passes"]
+        rep.ps_free_to = psrec["free_to"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3869,6 +3895,25 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 59) Az ő pressz-érzékenységük × a ti szoros falatok: aki
+    # amúgy is testközelben védekezik, annak ez ingyen-termelés.
+    _p59_press_n = opp.ps_press_passes + opp.ps_press_to
+    _p59_free_n = opp.ps_free_passes + opp.ps_free_to
+    if (_p59_press_n >= 10 and _p59_free_n >= 10
+            and own.defensive_pressure_m
+            and own.defensive_pressure_m <= 1.3):
+        _p59_press = 100.0 * opp.ps_press_to / _p59_press_n
+        _p59_free = 100.0 * opp.ps_free_to / _p59_free_n
+        if _p59_press - _p59_free >= 15.0:
+            plan.append(
+                f"Pressz-érzékenyek (testközeli védőnél az eladásaik "
+                f"{_p59_press:.0f}%-ra ugranak, szabadon "
+                f"{_p59_free:.0f}%), ti pedig eleve szorosan védekeztek "
+                f"(átlag {own.defensive_pressure_m:.1f} m-re a "
+                "labdástól) — ez ingyen-termelés: az első védő minden "
+                "labdaátvételnél lépjen testközelbe, a második pedig "
+                "készüljön a kipattanó labdára.")
+
     # 58) Az ő korai eladásaik × a ti elöl-szerzésetek: a magas pressz
     # ott termel, ahol ők a leggyengébbek — a kihozatalnál.
     if (opp.tt_timed >= 6 and opp.tt_early / opp.tt_timed >= 0.5
@@ -4293,6 +4338,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gw_jobb=sum(r.gw_jobb for r in reports),
         tt_timed=sum(r.tt_timed for r in reports),
         tt_early=sum(r.tt_early for r in reports),
+        ps_press_passes=sum(r.ps_press_passes for r in reports),
+        ps_press_to=sum(r.ps_press_to for r in reports),
+        ps_free_passes=sum(r.ps_free_passes for r in reports),
+        ps_free_to=sum(r.ps_free_to for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
