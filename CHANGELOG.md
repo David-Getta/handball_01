@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Területi-fölény-esés**: a field tilt 1. vs 2. félidei összevetése
+  — a fáradás-kép terület-tagja. Akinek a 2. félidőre 12+
+  százalékponttal esik a területi fölénye (félidőnként 100+ birtokos
+  kockából), az fáradtan már nem tudja az ellenfél térfelén tartani a
+  játékot: ellene a terv a türelem — az 1. félidei nyomást kiállni,
+  mert a hajrára magától átfordul a pálya; saját olvasatban a magas
+  birtoklás fáradtan (kihozatal-minták a 2. félidei presszre) a téma.
+  Egy réteg, sok felület: `tilt_fade` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (kulcs + csempe), 62.
+  meccsterv-szabály (az ő fölény-esésük × a ti kitartó tempótok), 83.
+  edzés-szabály (magas pulzusú területjáték).
 - **Asszist-függés**: a gólok mekkora része előkészített (gólpasszos)
   — a gólpassz-forrás a honnan kérdést nézi, ez a mennyire-t. A
   kollektív (70%+ asszisztált, 6+ gólból) csapat ellen a passzsávok

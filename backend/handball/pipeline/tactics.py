@@ -542,6 +542,59 @@ def field_tilt(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Területi-fölény-esés: félidőnként ennyi birtokos kocka kell az
+# ítélethez, és ekkora tilt-esés (százalékpont) számít érdeminek.
+TILT_FADE_MIN_FRAMES = 100
+TILT_FADE_DROP_PP = 12.0
+
+
+def tilt_fade(match: Match, config: Optional[TacticsConfig] = None) -> dict:
+    """Területi-fölény-esés: a field tilt az 1. vs a 2. félidőben.
+
+    A fáradás-kép terület-tagja: akinek a 2. félidőre érdemben esik a
+    területi fölénye, az fáradtan már nem tudja az ellenfél térfelén
+    tartani a játékot — a birtoklása hátracsúszik, a hajrában feljön
+    ellene az ellenfél. Ellene a terv a türelem: az 1. félidei nyomását
+    ki kell állni, mert a hajrára magától átfordul a pálya. Akinek nő,
+    az a meccs végére szorít be — ellene a hajrá-labdakihozatalt kell
+    külön megtervezni.
+
+    Visszatérés csapatonként: {"fh_frames", "fh_opp", "sh_frames",
+    "sh_opp", "drop_pp"} — drop_pp a tilt esése százalékpontban
+    (pozitív = a 2. félidőre hátraszorul), None, ha nincs félidő-jel
+    vagy kevés (félidőnként TILT_FADE_MIN_FRAMES alatti) a birtokos
+    kocka.
+    """
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    empty = {"fh_frames": 0, "fh_opp": 0, "sh_frames": 0, "sh_opp": 0,
+             "drop_pp": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    mid = COURT_LENGTH_M / 2.0
+    for f in match.frames:
+        team = possession_team(f, config)
+        if team is None or f.ball is None:
+            continue
+        rec = out[team.value]
+        half = "fh" if f.t <= ht else "sh"
+        rec[half + "_frames"] += 1
+        goal_x = config.attacks_toward_x(team)
+        in_opp = (f.ball.x > mid) if goal_x > mid else (f.ball.x < mid)
+        if in_opp:
+            rec[half + "_opp"] += 1
+    for rec in out.values():
+        if rec["fh_frames"] >= TILT_FADE_MIN_FRAMES \
+                and rec["sh_frames"] >= TILT_FADE_MIN_FRAMES:
+            fh_pct = 100.0 * rec["fh_opp"] / rec["fh_frames"]
+            sh_pct = 100.0 * rec["sh_opp"] / rec["sh_frames"]
+            rec["drop_pp"] = round(fh_pct - sh_pct, 1)
+    return out
+
+
 # Passz-tempó: legalább ennyi mért birtoklás-idő kell az ítélethez; a
 # percenkénti passzszám e fölött pörgetett, ez alatt lassú labdajáratás.
 PT_MIN_POSS_S = 120.0

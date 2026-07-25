@@ -467,6 +467,13 @@ class ScoutingReport:
     # meccsek közt összegződnek (arány = assisted / goals).
     ad_goals: int = 0
     ad_assisted: int = 0
+    # Területi-fölény-esés: félidőnkénti birtokos kockák + ebből az
+    # ellenfél térfelén lévők — darabszámok, meccsek közt pontosan
+    # összegződnek (tilt = opp / frames félidőnként).
+    tf_fh_frames: int = 0
+    tf_fh_opp: int = 0
+    tf_sh_frames: int = 0
+    tf_sh_opp: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1392,6 +1399,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Területi-fölény-esés: a 2. félidőre hátracsúszó birtoklás.
+    if rep.tf_fh_frames >= 100 and rep.tf_sh_frames >= 100:
+        _tf_fh = 100.0 * rep.tf_fh_opp / rep.tf_fh_frames
+        _tf_sh = 100.0 * rep.tf_sh_opp / rep.tf_sh_frames
+        if _tf_fh - _tf_sh >= 12.0:
+            keys.append(
+                f"A 2. félidőre elvész a területi fölényük "
+                f"({_tf_fh:.0f}% → {_tf_sh:.0f}% az ellenfél térfelén) "
+                "— az első félidei nyomásukat álljátok ki türelemmel: "
+                "a hajrára magától átfordul a pálya, akkor kell "
+                "feltolni a játékot.")
 
     # Asszist-függés: kiadásból élő vs egyéni befejezés — más a terv.
     if rep.ad_goals >= 6:
@@ -2665,6 +2684,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         adrec = assist_reliance(match, config)[team.value]
         rep.ad_goals = adrec["goals"]
         rep.ad_assisted = adrec["assisted"]
+        from .tactics import tilt_fade
+        tfrec = tilt_fade(match, config)[team.value]
+        rep.tf_fh_frames = tfrec["fh_frames"]
+        rep.tf_fh_opp = tfrec["fh_opp"]
+        rep.tf_sh_frames = tfrec["sh_frames"]
+        rep.tf_sh_opp = tfrec["sh_opp"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3942,6 +3967,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 62) Az ő területi fölény-esésük × a ti kitartó tempótok: a
+    # hajrában a pálya magától átfordul — akkor kell rákapcsolni.
+    if (opp.tf_fh_frames >= 100 and opp.tf_sh_frames >= 100
+            and own.tpf_fh_min >= 8.0 and own.tpf_sh_min >= 8.0):
+        _p62_fh = 100.0 * opp.tf_fh_opp / opp.tf_fh_frames
+        _p62_sh = 100.0 * opp.tf_sh_opp / opp.tf_sh_frames
+        _p62_own_fh = own.tpf_fh_attacks / own.tpf_fh_min
+        _p62_own_sh = own.tpf_sh_attacks / own.tpf_sh_min
+        if _p62_fh - _p62_sh >= 12.0 and _p62_own_sh >= _p62_own_fh:
+            plan.append(
+                f"A 2. félidőre hátracsúszik a játékuk (területi "
+                f"fölény {_p62_fh:.0f}% → {_p62_sh:.0f}%), ti pedig a "
+                "2. félidőben is tartjátok a tempót — az 1. félidei "
+                "nyomásukat álljátok ki kockázat nélkül, a hajrában "
+                "viszont tudatosan toljátok fel a játékot: ott már ti "
+                "diktáltok, ők csak kapaszkodnak.")
+
     # 61) Az ő kiadás-függő támadásuk × a ti labdaszerzésetek: az
     # elvágott gólpassz nem csak védekezés — azonnali kontra.
     if (opp.ad_goals >= 6 and own.trans_steals >= 5
@@ -4420,6 +4462,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sca_goals=sum(r.sca_goals for r in reports),
         ad_goals=sum(r.ad_goals for r in reports),
         ad_assisted=sum(r.ad_assisted for r in reports),
+        tf_fh_frames=sum(r.tf_fh_frames for r in reports),
+        tf_fh_opp=sum(r.tf_fh_opp for r in reports),
+        tf_sh_frames=sum(r.tf_sh_frames for r in reports),
+        tf_sh_opp=sum(r.tf_sh_opp for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

@@ -1137,6 +1137,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Területi-fölény-esés: a tilt 1. vs 2. félidőben (félidőnként
+  // 100+ birtokos kockánál, 12+ százalékpont esésnél; a
+  // backend-kulccsal azonos küszöbök).
+  String? _tiltFade(Map<String, dynamic> r) {
+    final fhFrames = ((r["tf_fh_frames"] as num?) ?? 0).toInt();
+    final fhOpp = ((r["tf_fh_opp"] as num?) ?? 0).toInt();
+    final shFrames = ((r["tf_sh_frames"] as num?) ?? 0).toInt();
+    final shOpp = ((r["tf_sh_opp"] as num?) ?? 0).toInt();
+    if (fhFrames < 100 || shFrames < 100) return null;
+    final fhPct = 100.0 * fhOpp / fhFrames;
+    final shPct = 100.0 * shOpp / shFrames;
+    if (fhPct - shPct < 12.0) return null;
+    return "a 2. félidőre hátracsúsznak "
+        "(${fhPct.toStringAsFixed(0)}% → ${shPct.toStringAsFixed(0)}% "
+        "elöl) · türelem, a hajrában told fel";
+  }
+
   // Asszist-függés: a gólok gólpasszos aránya (6+ gólnál; 70%+ =
   // kollektív, 35%- = egyéni; a backend-kulccsal azonos küszöbök).
   String? _assistReliance(Map<String, dynamic> r) {
@@ -1906,6 +1923,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lepattanó-fal", _secondChanceAllowed(r)!],
       if (_assistReliance(r) != null)
         ["Asszist-függés", _assistReliance(r)!],
+      if (_tiltFade(r) != null)
+        ["Területi-fölény-esés", _tiltFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -325,3 +325,43 @@ def test_pass_tempo_counts_passes_per_possession_minute():
 
     short = Match(_meta(), frames[:1000])  # 40 mp — kevés a méréshez
     assert pass_tempo(short)["home"]["per_min"] is None
+
+
+def test_tilt_fade_flags_second_half_retreat():
+    """Az 1. félidőben végig az ellenfél térfelén, a 2.-ban végig a
+    sajáton birtokol a hazai → a tilt 100% → 0%-ra esik; félidő-jel
+    nélkül nincs ítélet."""
+    from handball.pipeline.tactics import tilt_fade
+
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def _half(seconds, ball_x):
+        # 5 mért hazai játékos a labda körül (a félidő-érzékelő ne
+        # lássa alacsony aktivitásnak), a labda a birtokosnál.
+        nonlocal t, frames
+        players = [_pl(i, Team.HOME, ball_x + 0.5 * (i - 3), 10.0)
+                   for i in range(1, 6)]
+        players.append(_pl(20, Team.AWAY, 39.0, 3.0))
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=ball_x, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    _half(200, 30.0)                       # 1. félidő: elöl (x > 20)
+    for _ in range(int(90 * fps)):         # szünet
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    _half(200, 10.0)                       # 2. félidő: hátul (x < 20)
+
+    tf = tilt_fade(Match(_meta(), frames))
+    h = tf["home"]
+    assert h["fh_frames"] >= 100 and h["sh_frames"] >= 100
+    assert h["fh_opp"] == h["fh_frames"] and h["sh_opp"] == 0
+    assert h["drop_pp"] is not None and h["drop_pp"] >= 90.0
+
+    # Félidő-jel nélkül nincs ítélet.
+    short = tilt_fade(Match(_meta(), frames[:2000]))
+    assert short["home"]["drop_pp"] is None

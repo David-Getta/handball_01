@@ -663,6 +663,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Területi-fölény-esés: a 2. félidőre hátracsúszó birtoklás.
+    try:
+        from .tactics import TILT_FADE_DROP_PP, tilt_fade
+        tfc = tilt_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tf = tfc[side]
+            if rec_tf["drop_pp"] is None \
+                    or rec_tf["drop_pp"] < TILT_FADE_DROP_PP:
+                continue
+            _tf_fh = 100.0 * rec_tf["fh_opp"] / rec_tf["fh_frames"]
+            _tf_sh = 100.0 * rec_tf["sh_opp"] / rec_tf["sh_frames"]
+            body += (f" A(z) {name} területi fölénye a 2. félidőre "
+                     f"elveszett ({_tf_fh:.0f}% → {_tf_sh:.0f}% az "
+                     "ellenfél térfelén) — fáradtan hátracsúszott a "
+                     "játéka.")
+    except Exception:
+        pass
     # Asszist-függés: kollektív (kiadásból élő) vs egyéni befejezés.
     try:
         from .attack_types import assist_reliance

@@ -2698,6 +2698,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.tactics import tilt_fade
+            res["tilt_fade"] = tilt_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3191,6 +3196,8 @@ def create_app():
                 from ..pipeline.attack_types import assist_reliance
                 _layer("assist_reliance",
                        lambda: assist_reliance(match))
+                from ..pipeline.tactics import tilt_fade
+                _layer("tilt_fade", lambda: tilt_fade(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

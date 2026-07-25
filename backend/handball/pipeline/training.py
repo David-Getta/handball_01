@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 83) Területi-fölény-esés: ha a 2. félidőre hátracsúszik a
+    # játékunk, fáradtan nem tartjuk elöl a labdát — a téma a
+    # labdakihozatal és a magas birtoklás fáradtan.
+    try:
+        from .tactics import TILT_FADE_DROP_PP, tilt_fade
+        tf83 = tilt_fade(match, config)
+        for side in ("home", "away"):
+            rec83 = tf83[side]
+            if rec83["drop_pp"] is None \
+                    or rec83["drop_pp"] < TILT_FADE_DROP_PP:
+                continue
+            _fh83 = 100.0 * rec83["fh_opp"] / rec83["fh_frames"]
+            _sh83 = 100.0 * rec83["sh_opp"] / rec83["sh_frames"]
+            add(side, "támadás", "Területi fölény fáradtan",
+                f"a 2. félidőre hátracsúszik a játékunk (területi "
+                f"fölény {_fh83:.0f}% → {_sh83:.0f}%) — fáradtan nem "
+                "tartjuk az ellenfél térfelén a labdát",
+                "magas birtoklás fáradtan: kör-edzés utáni (magas "
+                "pulzusú) területjáték az ellenfél térfelén, "
+                "kihozatal-minták a 2. félidei presszre, és a hajrá "
+                "tudatos lassítása — a labda fusson, ne a játékos")
+    except Exception:
+        pass
+
     # 82) Asszist-függés: ha minden gólunk egyéni villanás, a
     # kulcsember kettőzésével levehetők rólunk — a kiadás a téma.
     try:
