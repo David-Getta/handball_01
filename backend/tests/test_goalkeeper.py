@@ -654,3 +654,43 @@ def test_gk_change_effect_improvement():
     # Csere nélkül (csak a 9-es szakasz) nincs ítélet.
     solo = [f for f in frames if all(p.track_id != 8 for p in f.players)]
     assert gk_change_effect(_match(solo))["away"]["delta_pp"] is None
+
+
+def test_gk_weak_side_mirrors_conceded_goals():
+    """7 hazai gól: 5 a lövő bal (felső y), 2 a jobb oldalára — a VENDÉG
+    kapu gyengéje a kapus szemszögéből a JOBB oldal; kevés gólnál nincs
+    ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_weak_side
+
+    def _goal(t0, cross_y):
+        frames = []
+        for i in range(9):
+            bx = min(33.0 + 1.6 * (i + 1), 40.0)
+            by = 10.0 + (cross_y - 10.0) * min(1.0, i / 6.0)
+            frames.append(Frame(
+                t=t0 + i,
+                players=[PlayerPosition(track_id=1, team=Team.HOME,
+                                        x=33.0, y=10.0,
+                                        source=PositionSource.MEASURED,
+                                        confidence=1.0)],
+                ball=Ball(x=bx, y=by, confidence=1.0)))
+        t = t0 + 9
+        for i in range(20):  # szünet a debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return frames
+
+    frames = []
+    for cy in (11.2, 11.2, 11.2, 11.2, 11.2, 9.0, 9.0):
+        frames += _goal(frames[-1].t + 1 if frames else 0, cy)
+    gw = gk_weak_side(_match(frames))
+    a = gw["away"]  # a vendég kapta a gólokat
+    assert a["goals"] == 7
+    # A lövő "bal"-ja a kapus jobbja.
+    assert a["jobb"] == 5 and a["bal"] == 2
+    assert a["weak_side"] == "jobb"
+    assert a["share"] is not None and abs(a["share"] - 5 / 7) < 0.01
+    # A hazai kapu nem kapott gólt; kevés minta → nincs ítélet.
+    assert gw["home"]["goals"] == 0
+    assert gw["home"]["weak_side"] is None

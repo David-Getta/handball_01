@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 78) Kapus-gyengeoldal: ha egy oldalra kapjuk a gólokat, az
+    # ellenfél lövő-terve kész — a kapus oldal-technikája a téma.
+    try:
+        from .goalkeeper import gk_weak_side
+        gw78 = gk_weak_side(match, config)
+        for side in ("home", "away"):
+            rec78 = gw78[side]
+            if rec78["weak_side"] is None:
+                continue
+            add(side, "kapus", "Kapus-oldaltechnika",
+                f"a kapunk a(z) {rec78['weak_side']} oldalán átjárható "
+                f"(oda ment a bekapott gólok "
+                f"{100.0 * rec78['share']:.0f}%-a, "
+                f"{rec78[rec78['weak_side']]}/{rec78['goals']}) — az "
+                "ellenfél lövő-terve kész recept ellenünk",
+                "kapus-oldaltechnika: célzott sorozatok a gyenge "
+                "oldalra (elhelyezett lövések jelzett sarokra), "
+                "beállás-korrekció videóról, és vetődés-technika a "
+                "gyenge oldali alsó/felső sarokra")
+    except Exception:
+        pass
+
     # 77) Lövő-koncentráció: ha a lövés-terhelésünk egy emberre épül,
     # az ellenfél kettőzéssel lefejezheti — a lövés-elosztás a téma.
     try:

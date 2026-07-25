@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Kapus-gyengeoldal**: a kapu melyik oldalára kapja a csapat a
+  gólokat (a kapus szemszögéből) — a kapu-sarok réteg védő-oldali
+  tükörképe. Ha a bekapott gólok 45%+ hányada ugyanarra az oldalra
+  megy (6+ gólból), az ellenfél lövő-terve egy mondat ("arra a
+  sarokra fejezz be"), saját olvasatban a kapus oldal-technikája és
+  beállás-korrekciója a téma. Egy réteg, sok felület: `gk_weak_side`
+  motor (a goal_placement tükrözésével), edzői összefoglaló, /analyze
+  + meccs-csomag, felderítés-profil (kulcs + csempe), 57.
+  meccsterv-szabály (az ő gyenge kapu-oldaluk × a ti
+  célzás-pontosságotok), 78. edzés-szabály (kapus-oldaltechnika).
 - **Lövő-koncentráció**: mennyire egy emberre épül a lövés-terhelés —
   a kiszámíthatóság személyi olvasata. Ha a lövések 35%+ hányadát
   ugyanaz a játékos adja le (12+ azonosított lövésből), a védekezés

@@ -771,3 +771,44 @@ def gk_change_effect(match: Match, config=None) -> dict:
             post_pct = 100.0 * rec["post_saves"] / rec["post_faced"]
             rec["delta_pp"] = round(post_pct - pre_pct, 1)
     return out
+
+
+# Kapus-gyengeoldal: ennyi bekapott góltól ítélünk, és e részarány
+# felett számít gyengének a kapu egy oldala (a kapus szemszögéből).
+GK_SIDE_MIN_GOALS = 6
+GK_SIDE_SHARE = 0.45
+
+
+def gk_weak_side(match: Match, config=None) -> dict:
+    """Kapus-gyengeoldal: a kapu melyik oldalára kap gólt a csapat.
+
+    A kapu-sarok réteg (goal_placement) védő-oldali tükörképe: ott az
+    látszik, hova lőnek ŐK — itt az, hova kapnak. Ha a bekapott gólok
+    nagy hányada ugyanarra az oldalra megy (a kapus szemszögéből), az
+    a kapus technikai gyengéje vagy beállás-hibája: az ellenfél
+    lövő-terve egy mondat ("a {oldal} sarokra fejezz be"), a saját
+    kapusedzésnek pedig kész témája van.
+
+    Visszatérés csapatonként (a BEKAPOTT gólokról, a kapus
+    szemszögéből): {"bal", "közép", "jobb", "goals", "weak_side",
+    "share"} — weak_side/share None, ha kevés (GK_SIDE_MIN_GOALS
+    alatti) a gól, vagy nincs GK_SIDE_SHARE feletti oldal.
+    """
+    from .attack_types import goal_placement
+    from .tactics import TacticsConfig
+
+    placement = goal_placement(match, config or TacticsConfig())
+    out: dict = {}
+    for side, opp in (("home", "away"), ("away", "home")):
+        p = placement[opp]
+        # A kapus a lövővel szemben áll: a lövő "bal"-ja a kapus jobbja.
+        rec = {"bal": p["jobb"], "közép": p["közép"], "jobb": p["bal"],
+               "goals": p["goals"], "weak_side": None, "share": None}
+        if rec["goals"] >= GK_SIDE_MIN_GOALS:
+            weak = max(("bal", "közép", "jobb"), key=lambda k: rec[k])
+            share = rec[weak] / rec["goals"]
+            if share >= GK_SIDE_SHARE:
+                rec["weak_side"] = weak
+                rec["share"] = round(share, 2)
+        out[side] = rec
+    return out

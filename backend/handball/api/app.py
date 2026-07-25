@@ -2673,6 +2673,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_weak_side
+            res["gk_weak_side"] = gk_weak_side(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3151,6 +3156,8 @@ def create_app():
                 from ..pipeline.xg import shot_concentration
                 _layer("shot_concentration",
                        lambda: shot_concentration(match))
+                from ..pipeline.goalkeeper import gk_weak_side
+                _layer("gk_weak_side", lambda: gk_weak_side(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Kapus-gyengeoldal: egy oldalra kapott gólok — kész lövő-terv.
+    try:
+        from .goalkeeper import gk_weak_side
+        gwc = gk_weak_side(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gw = gwc[side]
+            if rec_gw["weak_side"] is None:
+                continue
+            body += (f" A(z) {name} kapuja a(z) {rec_gw['weak_side']} "
+                     f"oldalán volt átjárható: oda ment a bekapott "
+                     f"gólok {100.0 * rec_gw['share']:.0f}%-a "
+                     f"({rec_gw[rec_gw['weak_side']]}/{rec_gw['goals']}, "
+                     "a kapus szemszögéből).")
+    except Exception:
+        pass
     # Lövő-koncentráció: egy emberre épülő lövés-terhelés.
     try:
         from .xg import shot_concentration

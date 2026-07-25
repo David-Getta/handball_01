@@ -442,6 +442,11 @@ class ScoutingReport:
     # (részarány = top / összes).
     sc_shots: int = 0
     sc_top_shots: int = 0
+    # Kapus-gyengeoldal: BEKAPOTT gólok kapu-oldal szerint (a kapus
+    # szemszögéből) — darabszámok, meccsek közt összegződnek.
+    gw_bal: int = 0
+    gw_kozep: int = 0
+    gw_jobb: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1367,6 +1372,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Kapus-gyengeoldal: egy oldalra kapott gólok — kész lövő-terv.
+    _gw_goals = rep.gw_bal + rep.gw_kozep + rep.gw_jobb
+    if _gw_goals >= 6:
+        _gw_tally = {"bal": rep.gw_bal, "közép": rep.gw_kozep,
+                     "jobb": rep.gw_jobb}
+        _gw_weak = max(_gw_tally, key=lambda k: _gw_tally[k])
+        if _gw_tally[_gw_weak] / _gw_goals >= 0.45:
+            keys.append(
+                f"A kapujuk a(z) {_gw_weak} oldalán átjárható (a kapus "
+                f"szemszögéből): oda kapták a gólok "
+                f"{100.0 * _gw_tally[_gw_weak] / _gw_goals:.0f}%-át "
+                f"({_gw_tally[_gw_weak]}/{_gw_goals}) — a befejezők "
+                "tudatosan arra az oldalra célozzanak.")
 
     # Lövő-koncentráció: egy emberre épülő lövés-terhelés — a
     # védekezés személyre szabható.
@@ -2551,6 +2570,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         screc = shot_concentration(match, config)[team.value]
         rep.sc_shots = screc["shots"]
         rep.sc_top_shots = screc["top_shots"]
+        from .goalkeeper import gk_weak_side
+        gwrec = gk_weak_side(match, config)[team.value]
+        rep.gw_bal = gwrec["bal"]
+        rep.gw_kozep = gwrec["közép"]
+        rep.gw_jobb = gwrec["jobb"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3828,6 +3852,25 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 57) Az ő kapus-gyengeoldaluk × a ti célzás-pontosságotok: aki
+    # pontosan lő, annak a gyenge sarok kész gól-recept.
+    _p57_goals = opp.gw_bal + opp.gw_kozep + opp.gw_jobb
+    if _p57_goals >= 6 and own.ac_attempts >= 8 \
+            and own.ac_on_target / own.ac_attempts >= 0.70:
+        _p57_tally = {"bal": opp.gw_bal, "közép": opp.gw_kozep,
+                      "jobb": opp.gw_jobb}
+        _p57_weak = max(_p57_tally, key=lambda k: _p57_tally[k])
+        if _p57_tally[_p57_weak] / _p57_goals >= 0.45:
+            plan.append(
+                f"A kapujuk a(z) {_p57_weak} oldalán átjárható (oda "
+                f"kapták a gólok "
+                f"{100.0 * _p57_tally[_p57_weak] / _p57_goals:.0f}%-át), "
+                f"ti pedig pontosan céloztok (a lövéseitek "
+                f"{100.0 * own.ac_on_target / own.ac_attempts:.0f}%-a "
+                "kapura tart) — a befejezés-terv egy mondat: a(z) "
+                f"{_p57_weak} oldalra fejezzetek be, a kapus "
+                "szemszögéből nézve.")
+
     # 56) Az ő fő lövőjük × a ti aktív falatok: a személyre szabott
     # kettőzés + blokk a legrövidebb út a támadásuk lefejezéséhez.
     if (opp.sc_shots >= 12 and own.blocks >= 3
@@ -4215,6 +4258,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ar_sumsq_s=round(sum(r.ar_sumsq_s for r in reports), 1),
         sc_shots=sum(r.sc_shots for r in reports),
         sc_top_shots=sum(r.sc_top_shots for r in reports),
+        gw_bal=sum(r.gw_bal for r in reports),
+        gw_kozep=sum(r.gw_kozep for r in reports),
+        gw_jobb=sum(r.gw_jobb for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

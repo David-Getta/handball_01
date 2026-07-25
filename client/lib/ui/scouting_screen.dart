@@ -1137,6 +1137,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Kapus-gyengeoldal: hova kapják a gólokat a kapus szemszögéből (6+
+  // gólnál, 45%+ részaránynál; a backend-kulccsal azonos küszöbök).
+  String? _gkWeakSide(Map<String, dynamic> r) {
+    final bal = ((r["gw_bal"] as num?) ?? 0).toInt();
+    final kozep = ((r["gw_kozep"] as num?) ?? 0).toInt();
+    final jobb = ((r["gw_jobb"] as num?) ?? 0).toInt();
+    final goals = bal + kozep + jobb;
+    if (goals < 6) return null;
+    final tally = {"bal": bal, "közép": kozep, "jobb": jobb};
+    final weak =
+        tally.entries.reduce((a, b) => a.value >= b.value ? a : b);
+    if (weak.value / goals < 0.45) return null;
+    return "a bekapott gólok "
+        "${(100.0 * weak.value / goals).toStringAsFixed(0)}%-a a "
+        "${weak.key} oldalukra (${weak.value}/$goals) · oda célozz";
+  }
+
   // Kapuscsere-hatás: a cserék előtti vs utáni védés% (2+ cserénél és
   // 4+ lövésnél mindkét oldalon; a backend-kulccsal azonos küszöbök).
   String? _gkChangeEffect(Map<String, dynamic> r) {
@@ -1817,6 +1834,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Ritmus-egyhangúság", _attackRhythm(r)!],
       if (_shotConcentration(r) != null)
         ["Lövő-koncentráció", _shotConcentration(r)!],
+      if (_gkWeakSide(r) != null)
+        ["Kapus-gyengeoldal", _gkWeakSide(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
