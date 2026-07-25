@@ -372,6 +372,11 @@ class ScoutingReport:
     # válasz-gólok — darabszámok, összegződnek.
     pgl_goals: int = 0
     pgl_quick: int = 0
+    # Szoros meccs-mérleg: 1-2 gólos meccsek kimenetele — darabszámok,
+    # összegződnek.
+    cg_wins: int = 0
+    cg_losses: int = 0
+    cg_draws: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1147,6 +1152,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
                 f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
                 "már csak a kidolgozott ziccer megy be neki.")
+
+    # Szoros meccs-mérleg: aki a szorosat rendre elbukja, azt elég
+    # meccsben tartani; aki hozza, attól nem lehet ajándékot várni.
+    _cg_dec = rep.cg_wins + rep.cg_losses
+    if _cg_dec + rep.cg_draws >= 2:
+        if rep.cg_losses >= 2 and rep.cg_losses >= 2 * rep.cg_wins:
+            keys.append(
+                f"A szoros meccseket elbukják ({rep.cg_wins} győzelem – "
+                f"{rep.cg_losses} vereség az 1-2 gólos meccseken) — "
+                "tartsd meccsben magad, a hajrában ŐK roppannak meg.")
+        elif rep.cg_wins >= 2 and rep.cg_wins >= 2 * rep.cg_losses:
+            keys.append(
+                f"A szoros meccseket hozzák ({rep.cg_wins}–"
+                f"{rep.cg_losses} az 1-2 gólos meccseken) — tőlük nem "
+                "jön ajándék a hajrában: még a szoros állás előtt kell "
+                "ellépni tőlük.")
 
     # Gól utáni elalvás: ha a góljaik után rendre bejön az azonnali
     # válasz, a középkezdésük utáni első támadás a ti nagy esélyetek.
@@ -2176,6 +2197,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         dfrec = discipline_fade(match, config)[team.value]
         rep.disc_fh_susp = dfrec["fh_susp"]
         rep.disc_sh_susp = dfrec["sh_susp"]
+        from .momentum import close_game_record
+        cgrec = close_game_record(match, config)[team.value]
+        if cgrec["verdict"] == "szoros győzelem":
+            rep.cg_wins = 1
+        elif cgrec["verdict"] == "szoros vereség":
+            rep.cg_losses = 1
+        elif cgrec["verdict"] == "döntetlen":
+            rep.cg_draws = 1
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -3302,6 +3331,18 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 42) Az ő szoros-meccs gyengeségük × a ti hajrá-erőtök: a meccset
+    # szoros hajrába kell vinni — ott ők megroppannak, ti nem.
+    if (opp.cg_losses >= 2 and opp.cg_losses >= 2 * opp.cg_wins
+            and own.clutch_matches >= 1
+            and own.clutch_goals_for > own.clutch_goals_against):
+        plan.append(
+            f"A szoros meccseket elbukják ({opp.cg_wins}–{opp.cg_losses} "
+            f"az 1-2 gólos meccseken), ti pedig erősek vagytok a hajrában "
+            f"({own.clutch_goals_for}–{own.clutch_goals_against}) — nem "
+            "kell szétlőni őket: elég meccsben maradni, mert a szoros "
+            "hajrában ők remegnek, ti nem.")
+
     # 41) Az ő gól utáni elalvásuk × a ti gyors válaszotok: minden kapott
     # gólra azonnali válasz jöhet — a középkezdésük után kell rohanni.
     if (opp.pgl_goals >= 5
@@ -3582,6 +3623,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         disc_sh_susp=sum(r.disc_sh_susp for r in reports),
         pgl_goals=sum(r.pgl_goals for r in reports),
         pgl_quick=sum(r.pgl_quick for r in reports),
+        cg_wins=sum(r.cg_wins for r in reports),
+        cg_losses=sum(r.cg_losses for r in reports),
+        cg_draws=sum(r.cg_draws for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

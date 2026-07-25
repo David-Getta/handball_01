@@ -599,6 +599,42 @@ def goal_responses(match: Match, config=None) -> dict:
     return out
 
 
+# Szoros meccs: legfeljebb ekkora záró különbség, és legalább ennyi
+# összesített gól (részleges felvételen a "0-0 döntetlen" nem ítélet).
+CLOSE_GAME_MARGIN = 2
+CLOSE_GAME_MIN_GOALS = 6
+
+
+def close_game_record(match: Match, config=None) -> dict:
+    """Szoros meccs-mérleg: hogyan végződött az 1-2 gólos meccs.
+
+    A szoros meccs a mentális erő mérlege: itt nem a tudás, hanem a
+    hajrá-higgadtság dönt. Csapatonként megmondjuk, hogy EZ a meccs
+    szoros volt-e, és mi lett a vége — a felderítés meccsek közt
+    összegzi (ki hozza, ki bukja a szorosat).
+
+    Visszatérés csapatonként: {"margin", "verdict"} — margin a záró
+    gólkülönbség (negatív = vereség); verdict None (nem szoros, vagy
+    kevés a felismert gól), "szoros győzelem", "szoros vereség" vagy
+    "döntetlen".
+    """
+    prog = score_progression(match, config)
+    fh, fa = prog["final"]
+    total = fh + fa
+
+    out: dict = {}
+    for side, margin in (("home", fh - fa), ("away", fa - fh)):
+        verdict = None
+        if total >= CLOSE_GAME_MIN_GOALS:
+            if margin == 0:
+                verdict = "döntetlen"
+            elif 0 < abs(margin) <= CLOSE_GAME_MARGIN:
+                verdict = ("szoros győzelem" if margin > 0
+                           else "szoros vereség")
+        out[side] = {"margin": margin, "verdict": verdict}
+    return out
+
+
 # Gól utáni elalvás: az ennyi másodpercen belül érkező ellenfél-gól
 # számít "azonnali válasznak" — a középkezdés utáni koncentráció-hiba.
 POST_GOAL_QUICK_S = 40.0
