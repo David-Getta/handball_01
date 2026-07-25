@@ -48,7 +48,7 @@ macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
   méter-térbe (a hatpontos összenézet a két bekalibrált térfelet egymás
   mellett mutatja), pásztázás-kompenzáció, csapat-szétválasztás, kapus- és
   mezszám-felismerés; megszakítás-biztos (checkpoint, folytatás).
-- **AI-elemzés**: ~95 magyarázható réteg — események (gól/lövés/passz/
+- **AI-elemzés**: ~105 magyarázható réteg — események (gól/lövés/passz/
   labdaeladás), xG és ziccerek, **befejezés-profil** (lövés-távolság,
   kapu-sarok, szélső-hatékonyság, kapus gyenge sávja), **építkezés**
   (passz-irány, gólpassz-forrás, passz-láncok, beálló-terhelés),
@@ -69,11 +69,14 @@ macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
   gól utáni elalvás, szoros meccs-mérleg, félidő-zárás, hetes-védés,
   kapuscsere-hatás, célzás-pontosság, oldal-részrehajlás,
   ritmus-egyhangúság, lövő-koncentráció, kapus-gyengeoldal,
-  eladás-időzítés, pressz-tűrés.
+  eladás-időzítés, pressz-tűrés, lepattanó-fal, asszist-függés,
+  területi-fölény-esés, kapus-indítás hossza, eladás-büntetés,
+  engedett-oldal, gólcsend-anatómia, fal-rés, támadó-mozgás,
+  indítás-biztonság.
   Minden réteg magyar edzői nyelven indokol.
 - **Felderítés és tervezés**: több-meccses ellenfél-profil pontos
-  (count-alapú) összegzéssel, edzői kulcsok, meccsterv-illesztés (59 páros
-  szabály), fejlődés-követés trenddel, edzés-fókusz (80 szabály,
+  (count-alapú) összegzéssel, edzői kulcsok, meccsterv-illesztés (69 páros
+  szabály), fejlődés-követés trenddel, edzés-fókusz (90 szabály,
   szezon-szintű visszatérő gyengeségekkel), élő jelzések a padnak (félidei
   emberfogás/beálló/rotáció-kép, hajrá-protokoll).
 - **Kimenetek**: edzői összefoglaló a meccs történetével, nyolc
@@ -86,7 +89,7 @@ macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
   (vágás/totálkép-szűrő, pályavonal-felismerés), több-nézetes fúzió
   (`POST /matches/fuse`) és lidar-finomítás — részletek a
   [`docs/BROADCAST_AND_SENSORS.md`](docs/BROADCAST_AND_SENSORS.md)-ben.
-- **Minőség**: 745+ automata teszt; pontosság-validáció kézi eseménylista
+- **Minőség**: 757 automata teszt; pontosság-validáció kézi eseménylista
   ellen (API + parancssori eszköz); réteg-megbízhatósági önjelentés
   (mihez van elég minta az adott meccsen).
 

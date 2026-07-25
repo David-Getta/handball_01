@@ -3,7 +3,25 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.23 óta)
+## Kiadatlan (a v0.1.24 óta)
+
+## v0.1.24 — kiadva (2026-07-25)
+
+> Kiadás-jegyzet: tíz új elemzés-réteg, ezúttal a MÁSIK OLDALRÓL. A
+> kör vezérfonala a tükrözés: több meglévő támadó-réteg mostantól
+> megkapta a védekező párját (a lepattanó-harc mellé a lepattanó-fal,
+> az oldal-részrehajlás mellé az engedett-oldal, a kihagyott ziccer
+> ára mellé az eladás-büntetés), és két réteg az OKOT méri ott, ahol
+> eddig csak a következmény látszott (fal-rés a betörés-folyosó mögé,
+> gólcsend-anatómia a gólcsend mögé). Kibővült a kapus-kép is: a
+> kihozatal gyorsasága mellé bejött a hossza (hosszú indítós vagy
+> rövid kihozós) és a biztonsága (megérkezik-e a labda), plusz a
+> fáradás-kép területi tagja (területi-fölény-esés) és két
+> stílus-olvasat (asszist-függés, támadó-mozgás). A figura-tervezőben
+> a védőfal alapból 6-0-ban, a hatoson kívül áll. A meccsterv 69, az
+> edzés-fókusz 90 szabálynál jár; a backend csomag 757 teszttel zöld.
+
+### A v0.1.24 körei
 
 - **Indítás-biztonság**: a kapus-indítás kihez jut el először — az
   outlet_speed a kihozatal gyorsaságát, a gk_outlet_length a hosszát
