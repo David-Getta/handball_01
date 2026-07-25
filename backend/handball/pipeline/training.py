@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 66) Kapuscsere-hatás: ha a csere sem segített (mindkét kapus
+    # nehéz napja), a kapus-alapok és a fal-kapus összhang a téma.
+    try:
+        from .goalkeeper import GK_CHANGE_DELTA_PP, gk_change_effect
+        gce66 = gk_change_effect(match, config)
+        for side in ("home", "away"):
+            rec66 = gce66[side]
+            if rec66["delta_pp"] is None \
+                    or rec66["delta_pp"] > -GK_CHANGE_DELTA_PP:
+                continue
+            _p66 = 100.0 * rec66["pre_saves"] / rec66["pre_faced"]
+            _q66 = 100.0 * rec66["post_saves"] / rec66["post_faced"]
+            add(side, "védekezés", "Kapus-poszt",
+                f"a kapuscsere sem segített ({_p66:.0f}% → {_q66:.0f}% "
+                "védés a csere után) — mindkét kapusnak nehéz napja volt",
+                "kapus-alapok + fal-kapus összhang: alaptechnika-sor "
+                "mindkét kapusnak (helyezkedés, sarok-zárás), a fal és a "
+                "kapus sáv-felosztásának tisztázása (ki mit vállal), és "
+                "a kapott gólok lövés-térképének közös visszanézése")
+    except Exception:
+        pass
+
     # 65) Hetes-védés: ha a kapusunk a rá dobott heteseket rendre kapja,
     # a hetes-készülés a kapus-edzés témája.
     try:

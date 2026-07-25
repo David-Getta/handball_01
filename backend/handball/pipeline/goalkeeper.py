@@ -719,3 +719,55 @@ def gk_save_fade(match: Match, config=None) -> dict:
             sh_pct = 100.0 * rec["sh_saves"] / rec["sh_faced"]
             rec["drop_pp"] = round(fh_pct - sh_pct, 1)
     return out
+
+
+# Kapuscsere-hatás: ennyi kapura tartó lövés kell a csere előtt ÉS után
+# az ítélethez, és ekkora védés%-változás számít érdeminek.
+GK_CHANGE_MIN_ON_TARGET = 3
+GK_CHANGE_DELTA_PP = 15.0
+
+
+def gk_change_effect(match: Match, config=None) -> dict:
+    """Kapuscsere-hatás: segített-e a kapuscsere.
+
+    Az első felismert kapuscsere (goalkeeper_timeline) előtti és utáni
+    védés-hatékonyságot vetjük össze. Akinél a csere rendre fordít, ott
+    az első kapus megingása után egy másik minőség jön — a lövő-tervet
+    a második kapusra is el kell készíteni; akinél a csere sem segít,
+    ott az első kapus megingása után nincs mentőöv — nyomni kell tovább.
+
+    Visszatérés csapatonként: {"changes", "pre_faced", "pre_saves",
+    "post_faced", "post_saves", "delta_pp"} — delta_pp a védés%
+    változása a csere után (pozitív = javult), None csere nélkül vagy
+    kevés (GK_CHANGE_MIN_ON_TARGET alatti) mintánál.
+    """
+    from ..models.tracking import Match as _M
+
+    empty = {"changes": 0, "pre_faced": 0, "pre_saves": 0,
+             "post_faced": 0, "post_saves": 0, "delta_pp": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    tl = goalkeeper_timeline(match, config)
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    for side in ("home", "away"):
+        rec = out[side]
+        chs = (tl.get(side) or {}).get("changes") or []
+        if not chs:
+            continue
+        rec["changes"] = len(chs)
+        t0 = round(chs[0] * fps)
+        pre = goalkeeper_stats(
+            _M(match.meta, [f for f in match.frames if f.t <= t0]),
+            config).get(side) or {}
+        post = goalkeeper_stats(
+            _M(match.meta, [f for f in match.frames if f.t > t0]),
+            config).get(side) or {}
+        rec["pre_faced"] = int(pre.get("on_target", 0))
+        rec["pre_saves"] = int(pre.get("saves", 0))
+        rec["post_faced"] = int(post.get("on_target", 0))
+        rec["post_saves"] = int(post.get("saves", 0))
+        if rec["pre_faced"] >= GK_CHANGE_MIN_ON_TARGET \
+                and rec["post_faced"] >= GK_CHANGE_MIN_ON_TARGET:
+            pre_pct = 100.0 * rec["pre_saves"] / rec["pre_faced"]
+            post_pct = 100.0 * rec["post_saves"] / rec["post_faced"]
+            rec["delta_pp"] = round(post_pct - pre_pct, 1)
+    return out

@@ -381,6 +381,13 @@ class ScoutingReport:
     # darabszámok, összegződnek.
     s7d_faced: int = 0
     s7d_saved: int = 0
+    # Kapuscsere-hatás: cserék + csere előtti/utáni kapura tartó lövések
+    # és védések — darabszámok, összegződnek.
+    gkc_changes: int = 0
+    gkc_pre_faced: int = 0
+    gkc_pre_saves: int = 0
+    gkc_post_faced: int = 0
+    gkc_post_saves: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1161,6 +1168,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A kapusuk a 2. félidőre lendül formába ({_gsf_fh:.0f}% → "
                 f"{_gsf_sh:.0f}% védés) — az elején büntesd, a hajrában "
                 "már csak a kidolgozott ziccer megy be neki.")
+
+    # Kapuscsere-hatás: bejön-e náluk a csere — a lövő-terv a második
+    # kapusra is kell-e, vagy nincs mögötte mentőöv.
+    if (rep.gkc_changes >= 2 and rep.gkc_pre_faced >= 4
+            and rep.gkc_post_faced >= 4):
+        _gkc_pre = 100.0 * rep.gkc_pre_saves / rep.gkc_pre_faced
+        _gkc_post = 100.0 * rep.gkc_post_saves / rep.gkc_post_faced
+        if _gkc_post - _gkc_pre >= 15.0:
+            keys.append(
+                f"A kapuscseréjük bejön ({_gkc_pre:.0f}% → "
+                f"{_gkc_post:.0f}% védés a cserék után) — az első kapus "
+                "megingása után másik minőség jön: a lövő-tervet a "
+                "második kapusra IS készítsétek el.")
+        elif _gkc_pre - _gkc_post >= 15.0:
+            keys.append(
+                f"A kapuscseréjük sem segít ({_gkc_pre:.0f}% → "
+                f"{_gkc_post:.0f}% védés a cserék után) — ha az első "
+                "kapusuk megingott, nyomjátok tovább: nincs mögötte "
+                "mentőöv.")
 
     # Hetes-védés: a hetest fogó kapus ellen a hetes nem kész gól; a
     # sosem fogó ellen a hetes-kiharcolás biztos üzlet.
@@ -2241,6 +2267,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         s7drec = seven_meter_defense(match, config)[team.value]
         rep.s7d_faced = s7drec["faced"]
         rep.s7d_saved = s7drec["saved"]
+        from .goalkeeper import gk_change_effect
+        gkcrec = gk_change_effect(match, config)[team.value]
+        if gkcrec["changes"]:
+            rep.gkc_changes = gkcrec["changes"]
+            rep.gkc_pre_faced = gkcrec["pre_faced"]
+            rep.gkc_pre_saves = gkcrec["pre_saves"]
+            rep.gkc_post_faced = gkcrec["post_faced"]
+            rep.gkc_post_saves = gkcrec["post_saves"]
         from .momentum import close_game_record
         cgrec = close_game_record(match, config)[team.value]
         if cgrec["verdict"] == "szoros győzelem":
@@ -3382,6 +3416,23 @@ def matchup_plan(own: "ScoutingReport",
             "zökkentsen ki: ugyanazzal a tempóval és ugyanazokkal a "
             "figurákkal gyertek vissza, a lendület a tiétek marad.")
 
+    # 45) Az ő mentőöv nélküli kapus-posztjuk × a ti erős kezdésetek: a
+    # korai nyomás az egész meccsüket megroppanthatja.
+    if (opp.gkc_changes >= 2 and opp.gkc_pre_faced >= 4
+            and opp.gkc_post_faced >= 4
+            and own.open_first_matches >= 1
+            and own.open_for > own.open_against):
+        _g45_pre = 100.0 * opp.gkc_pre_saves / opp.gkc_pre_faced
+        _g45_post = 100.0 * opp.gkc_post_saves / opp.gkc_post_faced
+        if _g45_pre - _g45_post >= 15.0:
+            plan.append(
+                f"A kapuscseréjük sem segít ({_g45_pre:.0f}% → "
+                f"{_g45_post:.0f}% a cserék után), ti pedig erősen "
+                f"kezdtek ({own.open_for}–{own.open_against} a korai "
+                "gólokból) — az első percekben menjetek rá az első "
+                "kapusukra: ha megtörik, a padon sincs mentőöv, és az "
+                "egész meccsük megroppan.")
+
     # 44) Az ő hetest nem fogó kapusuk × a ti hetes-kiharcolótok: a
     # lerántott labda ellenük biztos gól — kiharcolni kell, nem lőni.
     if (opp.s7d_faced >= 4 and opp.s7d_saved == 0
@@ -3704,6 +3755,11 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         cg_draws=sum(r.cg_draws for r in reports),
         s7d_faced=sum(r.s7d_faced for r in reports),
         s7d_saved=sum(r.s7d_saved for r in reports),
+        gkc_changes=sum(r.gkc_changes for r in reports),
+        gkc_pre_faced=sum(r.gkc_pre_faced for r in reports),
+        gkc_pre_saves=sum(r.gkc_pre_saves for r in reports),
+        gkc_post_faced=sum(r.gkc_post_faced for r in reports),
+        gkc_post_saves=sum(r.gkc_post_saves for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

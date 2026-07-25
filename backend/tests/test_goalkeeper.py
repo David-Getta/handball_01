@@ -607,3 +607,50 @@ def test_gk_save_fade_drop_second_half():
     # Félidő nélkül nincs ítélet.
     short = gk_save_fade(_match(frames[:2000]))
     assert short["away"]["drop_pp"] is None
+
+
+def test_gk_change_effect_improvement():
+    """A 9-es kapus 0/3 után jön a 8-as 3/3-mal → a csere +100
+    százalékpontot javított; csere nélkül nincs ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_change_effect
+
+    def gk(tid):
+        return PlayerPosition(track_id=tid, team=Team.AWAY, x=39.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")
+
+    frames = []
+    t = 0
+    # 1. szakasz: 9-es kapus, 3 kapott gól.
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):
+        frames += _shot_sequence(t, gk_track=9, save=False)
+        t = frames[-1].t + 1
+        frames.append(Frame(t=t, players=[gk(9)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # 2. szakasz: 8-as kapus, 3 védés.
+    for _ in range(600):
+        frames.append(Frame(t=t, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):
+        frames += _shot_sequence(t, gk_track=8, save=True)
+        t = frames[-1].t + 1
+        frames.append(Frame(t=t, players=[gk(8)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+
+    eff = gk_change_effect(_match(frames))["away"]
+    assert eff["changes"] == 1
+    assert eff["pre_faced"] == 3 and eff["pre_saves"] == 0
+    assert eff["post_faced"] == 3 and eff["post_saves"] == 3
+    assert eff["delta_pp"] == 100.0
+
+    # Csere nélkül (csak a 9-es szakasz) nincs ítélet.
+    solo = [f for f in frames if all(p.track_id != 8 for p in f.players)]
+    assert gk_change_effect(_match(solo))["away"]["delta_pp"] is None

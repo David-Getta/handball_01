@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.22 óta)
 
+- **Kapuscsere-hatás**: segít-e a kapuscsere — az első csere
+  előtti vs utáni védés% összevetése. Akinél a csere rendre
+  fordít, ott a lövő-terv a második kapusra is kell; akinél nem
+  segít, ott az első kapus megingása után nincs mentőöv. Egy
+  réteg, sok felület: `gk_change_effect` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kulcs + csempe), 45. meccsterv-szabály (az ő mentőöv nélküli
+  kapus-posztjuk × a ti erős kezdésetek), 66. edzés-szabály
+  (kapus-alapok + fal-kapus összhang).
 - **Hetes-védés (a kapus a hetesek ellen)**: a kapusra dobott
   kapura tartó hetesek mérlege — a hetest fogó (40%+) kapus ellen
   a hetes nem kész gól, a sosem fogó ellen a hetes-kiharcolás
