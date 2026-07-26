@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Elsütés-idő**: kapásból lőnek vagy sokáig fogják a labdát —
+  lövésenként visszafelé lépkedve mérjük, mennyi ideig volt a labda
+  folyamatosan a lövőnél az elengedés előtt. A kapásból lövő csapat
+  (60%+ elsütés 0,6 mp-en belül, 8+ lövésből) ellen a kapus a
+  passzra mozduljon, ne a lövésre; a labdafogó (25% alatti gyors
+  elsütés) időt ad — a kilépés és a blokk ellene szinte ingyen van,
+  és saját olvasatban a gyors elsütés a téma. Egy réteg, sok
+  felület: `shot_release` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 71.
+  meccsterv-szabály (az ő labdafogó lövőik × a ti blokk-falatok),
+  92. edzés-szabály (kapásból lövés sorozatban, lövő-kör
+  időnyomással).
 - **Beálló-védekezés**: mennyire bírja a fal az ellenfél beállóját —
   a beálló-terhelés (pivot_usage) védő-oldali tükre: ott az látszik,
   ki mennyit játszik a beállóval, itt az, ki mennyire bírja ellene.

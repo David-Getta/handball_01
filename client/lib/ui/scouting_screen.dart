@@ -1137,6 +1137,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Elsütés-idő: a gyors (0,6 mp-en belüli) elsütések aránya (8+
+  // mérhető lövésnél; 60%+ = kapásból, 25%- = labdafogó; a
+  // backend-kulccsal azonos küszöbök).
+  String? _shotRelease(Map<String, dynamic> r) {
+    final shots = ((r["sr_shots"] as num?) ?? 0).toInt();
+    final quick = ((r["sr_quick"] as num?) ?? 0).toInt();
+    if (shots < 8) return null;
+    final pct = 100.0 * quick / shots;
+    if (pct >= 60.0) {
+      return "kapásból lőnek: ${pct.toStringAsFixed(0)}% gyors "
+          "elsütés ($quick/$shots) · a kapus a passzra mozduljon";
+    }
+    if (pct <= 25.0) {
+      return "labdafogó lövők: csak ${pct.toStringAsFixed(0)}% gyors "
+          "elsütés · kilépés + blokk, van időd";
+    }
+    return null;
+  }
+
   // Beálló-védekezés: az ellenük vezetett beállós vs beálló nélküli
   // támadások gólaránya (6+ beállós támadásnál, 15+ százalékpont
   // eltérésnél; a backend-kulccsal azonos küszöbök).
@@ -2081,6 +2100,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Indítás-biztonság", _gkOutletSecurity(r)!],
       if (_pivotDefense(r) != null)
         ["Beálló-védekezés", _pivotDefense(r)!],
+      if (_shotRelease(r) != null)
+        ["Elsütés-idő", _shotRelease(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -512,6 +512,10 @@ class ScoutingReport:
     pd_pivot_goals: int = 0
     pd_other_attacks: int = 0
     pd_other_goals: int = 0
+    # Elsütés-idő: mérhető lövések + ebből a gyors (0,6 mp-en belüli)
+    # elsütések — darabszámok, meccsek közt összegződnek.
+    sr_shots: int = 0
+    sr_quick: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1437,6 +1441,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Elsütés-idő: a kapásból lövő az időzítést borítja, a labdafogó
+    # időt ad a kilépésre és a blokkra.
+    if rep.sr_shots >= 8:
+        _sr_pct = 100.0 * rep.sr_quick / rep.sr_shots
+        if _sr_pct >= 60.0:
+            keys.append(
+                f"Kapásból lőnek: a lövéseik {_sr_pct:.0f}%-a 0,6 "
+                f"mp-en belüli elsütés ({rep.sr_quick}/{rep.sr_shots}) "
+                "— a kapusod a PASSZRA mozduljon, ne a lövésre, a "
+                "sáncnak kész kéztartás kell, cselre nem szabad "
+                "ugrani.")
+        elif _sr_pct <= 25.0:
+            keys.append(
+                f"Sokáig fogják a labdát lövés előtt (csak "
+                f"{_sr_pct:.0f}% gyors elsütés) — van időtök: "
+                "agresszív kilépés a lövőre, a blokk ellenük szinte "
+                "ingyen van, és a kapus is be tud állni a sarokra.")
 
     # Beálló-védekezés: bírják-e a beállót, vagy oda kell etetni.
     if rep.pd_pivot_attacks >= 6 and rep.pd_other_attacks > 0:
@@ -2880,6 +2902,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.pd_pivot_goals = pdrec["pivot_goals"]
         rep.pd_other_attacks = pdrec["other_attacks"]
         rep.pd_other_goals = pdrec["other_goals"]
+        from .xg import shot_release
+        srrec = shot_release(match, config)[team.value]
+        rep.sr_shots = srrec["shots"]
+        rep.sr_quick = srrec["quick"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4157,6 +4183,18 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 71) Az ő labdafogó lövőik × a ti blokk-falatok: aki sokáig
+    # fogja a labdát, annak a blokk mindig odaér.
+    if (opp.sr_shots >= 8 and own.blocks >= 5
+            and 100.0 * opp.sr_quick / opp.sr_shots <= 25.0):
+        plan.append(
+            f"A lövőik sokáig fogják a labdát (csak "
+            f"{100.0 * opp.sr_quick / opp.sr_shots:.0f}% gyors "
+            f"elsütés), ti pedig eleve jól blokkoltok "
+            f"({own.blocks} blokk) — a blokk ellenük mindig odaér: "
+            "agresszív kilépés a lövőre, kész sánc, és a kapus a "
+            "maradék sarokra állhat.")
+
     # 70) Az ő gyenge beálló-őrzésük × a ti beállós játékotok: amit
     # nem bírnak, abból ti amúgy is sokat játszotok.
     if (opp.pd_pivot_attacks >= 6 and opp.pd_other_attacks > 0
@@ -4798,6 +4836,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pd_pivot_goals=sum(r.pd_pivot_goals for r in reports),
         pd_other_attacks=sum(r.pd_other_attacks for r in reports),
         pd_other_goals=sum(r.pd_other_goals for r in reports),
+        sr_shots=sum(r.sr_shots for r in reports),
+        sr_quick=sum(r.sr_quick for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

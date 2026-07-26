@@ -663,6 +663,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Elsütés-idő: kapásból lőttek vagy sokáig fogták a labdát.
+    try:
+        from .xg import shot_release
+        src = shot_release(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sr = src[side]
+            if rec_sr["style"] is None:
+                continue
+            if rec_sr["style"] == "kapásból":
+                body += (f" A(z) {name} kapásból lőtt: a lövéseik "
+                         f"{rec_sr['quick_pct']:.0f}%-a 0,6 mp-en "
+                         "belüli elsütés volt.")
+            else:
+                body += (f" A(z) {name} lövői sokáig fogták a labdát "
+                         f"(csak {rec_sr['quick_pct']:.0f}% gyors "
+                         f"elsütés, átlag {rec_sr['avg_hold_s']:.1f} "
+                         "mp birtoklás a lövés előtt).")
+    except Exception:
+        pass
     # Beálló-védekezés: bírta-e a fal az ellenfél beállóját.
     try:
         from .defense import pivot_defense

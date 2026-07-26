@@ -418,3 +418,63 @@ def test_shot_concentration_flags_one_man_offense():
     assert few["home"]["shots"] == 1
     assert few["home"]["share"] is None
     assert few["home"]["concentrated"] is None
+
+
+def test_shot_release_separates_catch_and_shoot_from_holders():
+    """A hazai lövők 0,2 mp után elengedik a labdát (kapásból), a
+    vendégek 2 mp-ig fogják (labdafogó); kevés lövésnél nincs ítélet."""
+    from handball.pipeline.xg import shot_release
+
+    frames = []
+    t = 0
+
+    def _shot_cycle(home_side, hold_frames):
+        # A lövő a zónán KÍVÜL (12+ m) kapja és fogja a labdát — a
+        # bejátszás hátrafelé ível (sosem lövés-irány), a lövés-zónába
+        # maga a lövés repülése lép be.
+        nonlocal t, frames
+        if home_side:
+            shooter = _pl(1, Team.HOME, 26.0, 10.0)
+            rest, hold_xy = (30.0, 3.0), (26.0, 10.0)
+        else:
+            shooter = _pl(11, Team.AWAY, 14.0, 10.0)
+            rest, hold_xy = (10.0, 17.0), (14.0, 10.0)
+        players = [shooter]
+        for i in range(6):  # érkező (hátrafelé tartó) bejátszás
+            fx = rest[0] + (hold_xy[0] - rest[0]) * i / 5.0
+            fy = rest[1] + (hold_xy[1] - rest[1]) * i / 5.0
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=fx, y=fy, confidence=1.0)))
+            t += 1
+        for _ in range(hold_frames):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hold_xy[0], y=hold_xy[1],
+                                          confidence=1.0)))
+            t += 1
+        for i in range(18):  # lövés: 0,8 m/kocka repülés a kapuig
+            bx = (min(26.8 + 0.8 * i, 40.0) if home_side
+                  else max(13.2 - 0.8 * i, 0.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(60):  # szünet: a labda hátul pihen, senkinél
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=rest[0], y=rest[1],
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(8):
+        _shot_cycle(True, 5)    # hazai: 0,2 mp fogás
+    for _ in range(8):
+        _shot_cycle(False, 50)  # vendég: 2 mp fogás
+
+    sr = shot_release(Match(_meta(), frames))
+    h, a = sr["home"], sr["away"]
+    assert h["shots"] >= 8 and h["style"] == "kapásból"
+    assert a["shots"] >= 8 and a["style"] == "labdafogó"
+    assert a["avg_hold_s"] > h["avg_hold_s"]
+
+    # Kevés lövés: nincs ítélet.
+    few = shot_release(Match(_meta(), frames[:150]))
+    assert few["home"]["style"] is None

@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 92) Elsütés-idő: ha a lövőink sokáig fogják a labdát, a blokk
+    # és a kilépés mindig odaér — a gyors elsütés a téma.
+    try:
+        from .xg import (RELEASE_MIN_SHOTS, RELEASE_SLOW_SHARE,
+                         shot_release)
+        sr92 = shot_release(match, config)
+        for side in ("home", "away"):
+            rec92 = sr92[side]
+            if rec92["style"] != "labdafogó" \
+                    or rec92["shots"] < RELEASE_MIN_SHOTS \
+                    or rec92["quick_pct"] > RELEASE_SLOW_SHARE:
+                continue
+            add(side, "támadás", "Gyors elsütés",
+                f"a lövőink sokáig fogják a labdát: csak "
+                f"{rec92['quick_pct']:.0f}% a gyors (0,6 mp-en "
+                f"belüli) elsütés, átlag {rec92['avg_hold_s']:.1f} mp "
+                "birtoklás a lövés előtt — a blokk és a kilépő védő "
+                "mindig odaér ránk",
+                "gyors elsütés: kapásból lövés sorozatban (passzból "
+                "egy ütem, lövés), lövő-kör időnyomással (aki 1 mp-nél "
+                "tovább fogja, ismétel), és döntés-gyakorlat: kapás "
+                "előtt eldöntve lövés vagy passz")
+    except Exception:
+        pass
+
     # 91) Beálló-védekezés: ha az ellenfél beállója ellen szakad be a
     # falunk, a beálló-őrzés (elöl-mögött, kettőzés) a téma.
     try:

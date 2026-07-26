@@ -444,3 +444,90 @@ def xg_prevented(match: Match, config: Optional[XGConfig] = None) -> dict:
         rec["faced_xg"] = round(rec["faced_xg"], 2)
         rec["prevented"] = round(rec["faced_xg"] - rec["conceded"], 2)
     return out
+
+
+# Elsütés-idő: a labda ekkora sugáron belül számít a lövőnél lévőnek;
+# ennyi másodpercen belüli elsütés "kapásból" lövés; ennyi lövéstől
+# ítélünk, és e részarányok döntik el a csapat-címkét.
+RELEASE_HOLD_R_M = 2.0
+RELEASE_QUICK_S = 0.6
+RELEASE_LOOKBACK_S = 4.0
+RELEASE_MIN_SHOTS = 8
+RELEASE_QUICK_SHARE = 60.0
+RELEASE_SLOW_SHARE = 25.0
+
+
+def shot_release(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Elsütés-idő: kapásból lőnek, vagy sokáig fogják a labdát.
+
+    Lövésenként visszafelé lépkedve megmérjük, mennyi ideig volt a
+    labda folyamatosan a lövőnél az elengedés előtt. A kapásból lövő
+    csapat ellen a blokk és a kapus időzítése borul: a kapus a
+    PASSZRA mozduljon, ne a lövésre, a sáncnak kész kéztartás kell.
+    A labdafogó lövő (kevés gyors elsütés) viszont időt ad: a kilépés
+    és a blokk ellene szinte ingyen van — és a saját edzésnek is
+    témája, mert a sokat fogott labda a védelemnek is idő.
+
+    Visszatérés csapatonként: {"shots", "quick", "avg_hold_s",
+    "quick_pct", "style"} — quick_pct/style None, ha kevés
+    (RELEASE_MIN_SHOTS alatti) a mérhető lövés; a style "kapásból" /
+    "labdafogó" / None (vegyes).
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    lookback = round(RELEASE_LOOKBACK_S * fps)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    def _hold_s(t_shot: int, pid: int) -> Optional[float]:
+        i0 = idx_of.get(t_shot)
+        if i0 is None:
+            return None
+        # Először a repülés-kockákat lépjük át (a labda már elhagyta a
+        # kezet), majd a folyamatos birtoklás hosszát számoljuk.
+        i = i0
+        held = 0
+        seen_hold = False
+        while i >= 0 and i0 - i <= lookback:
+            f = match.frames[i]
+            p = next((p for p in f.players if p.track_id == pid), None)
+            near = (p is not None and f.ball is not None
+                    and math.hypot(p.x - f.ball.x, p.y - f.ball.y)
+                    <= RELEASE_HOLD_R_M)
+            if near:
+                seen_hold = True
+                held += 1
+            elif seen_hold:
+                break
+            i -= 1
+        return held / fps if seen_hold else None
+
+    counts = {"home": {"shots": 0, "quick": 0, "sum_s": 0.0},
+              "away": {"shots": 0, "quick": 0, "sum_s": 0.0}}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("player_id") is None:
+            continue
+        hold = _hold_s(sh["t"], sh["player_id"])
+        if hold is None:
+            continue
+        rec = counts[sh["team"]]
+        rec["shots"] += 1
+        rec["sum_s"] += hold
+        if hold <= RELEASE_QUICK_S:
+            rec["quick"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {"shots": rec["shots"], "quick": rec["quick"],
+             "avg_hold_s": (round(rec["sum_s"] / rec["shots"], 2)
+                            if rec["shots"] else None),
+             "quick_pct": None, "style": None}
+        if rec["shots"] >= RELEASE_MIN_SHOTS:
+            pct = 100.0 * rec["quick"] / rec["shots"]
+            r["quick_pct"] = round(pct, 1)
+            if pct >= RELEASE_QUICK_SHARE:
+                r["style"] = "kapásból"
+            elif pct <= RELEASE_SLOW_SHARE:
+                r["style"] = "labdafogó"
+        out[side] = r
+    return out
