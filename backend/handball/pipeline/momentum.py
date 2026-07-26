@@ -1027,3 +1027,88 @@ def drought_anatomy(match: Match, config=None) -> dict:
                 r["verdict"] = "néma"
         out[side] = r
     return out
+
+
+# Középkezdés-tempó: kapott gól után ennyi másodpercen belüli
+# térfél-átlépés számít gyors újraindításnak (lerohanás); eddig
+# követjük az újraindítást; ennyi kapott góltól ítélünk, és e
+# részarányok döntik el a címkét.
+RESTART_FAST_S = 12.0
+RESTART_MAX_S = 45.0
+RESTART_MIN_GOALS = 4
+RESTART_FAST_SHARE = 50.0
+RESTART_SLOW_SHARE = 20.0
+
+
+def restart_speed(match: Match, config=None) -> dict:
+    """Középkezdés-tempó: kapott gól után mennyi idő alatt ér át a
+    labda az ellenfél térfelére.
+
+    Az outlet_speed a VÉDÉS utáni indítást méri — ez a KAPOTT GÓL
+    utánit: a lerohanós csapat a gólt kapva is azonnal középre viszi
+    és átjátssza a labdát, mielőtt a gólt szerző fal visszaérne.
+    Ellene a gól utáni ünneplés tilos — azonnali visszarendeződés,
+    kijelölt fékező ember középen; a lassan újraindító csapat ellen
+    viszont a középkezdés letámadható. Saját olvasatban a gyors
+    középkezdés begyakorolható fegyver.
+
+    Visszatérés csapatonként (a gólt KAPÓ oldal könyvelésében):
+    {"restarts", "fast", "sum_s", "avg_s", "fast_pct", "style"} —
+    avg_s/fast_pct/style None, ha kevés (RESTART_MIN_GOALS alatti) a
+    mérhető újraindítás; a style "lerohanós" / "lassú" / None.
+    """
+    from .calibration import COURT_LENGTH_M
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    goals = sorted((e.t, e.team.value) for e in
+                   detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    counts = {"home": {"restarts": 0, "fast": 0, "sum_s": 0.0},
+              "away": {"restarts": 0, "fast": 0, "sum_s": 0.0}}
+    mid = COURT_LENGTH_M / 2.0
+    for gi, (t0, scorer) in enumerate(goals):
+        side = "away" if scorer == "home" else "home"
+        team = Team.AWAY if side == "away" else Team.HOME
+        attacks_positive = config.attacks_toward_x(team) > mid
+        # A következő gólig, de legfeljebb RESTART_MAX_S-ig követünk.
+        t_max = t0 + round(RESTART_MAX_S * fps)
+        if gi + 1 < len(goals):
+            t_max = min(t_max, goals[gi + 1][0])
+        crossed = None
+        for f in match.frames:
+            if f.t <= t0 + round(1.0 * fps) or f.ball is None:
+                continue
+            if f.t > t_max:
+                break
+            in_att = (f.ball.x > mid) if attacks_positive \
+                else (f.ball.x < mid)
+            if in_att:
+                crossed = f.t
+                break
+        if crossed is None:
+            continue
+        dt = (crossed - t0) / fps
+        rec = counts[side]
+        rec["restarts"] += 1
+        rec["sum_s"] += dt
+        if dt <= RESTART_FAST_S:
+            rec["fast"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {"restarts": rec["restarts"], "fast": rec["fast"],
+             "sum_s": round(rec["sum_s"], 1), "avg_s": None,
+             "fast_pct": None, "style": None}
+        if rec["restarts"] >= RESTART_MIN_GOALS:
+            r["avg_s"] = round(rec["sum_s"] / rec["restarts"], 1)
+            pct = 100.0 * rec["fast"] / rec["restarts"]
+            r["fast_pct"] = round(pct, 1)
+            if pct >= RESTART_FAST_SHARE:
+                r["style"] = "lerohanós"
+            elif pct <= RESTART_SLOW_SHARE:
+                r["style"] = "lassú"
+        out[side] = r
+    return out

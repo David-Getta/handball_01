@@ -663,6 +663,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Középkezdés-tempó: kapott gól után lerohanós vagy lassú indítás.
+    try:
+        from .momentum import restart_speed
+        rsc = restart_speed(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rs = rsc[side]
+            if rec_rs["style"] is None:
+                continue
+            if rec_rs["style"] == "lerohanós":
+                body += (f" A(z) {name} a kapott gólok után is "
+                         f"lerohant: az újraindításaik "
+                         f"{rec_rs['fast_pct']:.0f}%-ánál 12 mp-en "
+                         "belül átért a labda.")
+            else:
+                body += (f" A(z) {name} lassan indított középről "
+                         f"(átlag {rec_rs['avg_s']:.0f} mp a kapott "
+                         "gól után a térfél-átlépésig).")
+    except Exception:
+        pass
     # Elsütés-idő: kapásból lőttek vagy sokáig fogták a labdát.
     try:
         from .xg import shot_release

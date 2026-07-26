@@ -676,3 +676,45 @@ def test_drought_anatomy_separates_silent_and_wasteful():
     # Rövid felvétel: a leghosszabb csend is rövid → nincs ítélet.
     short = drought_anatomy(Match(_meta(), frames[:2000]))
     assert short["home"]["verdict"] is None
+
+
+def test_restart_speed_separates_fast_break_and_slow_restart():
+    """A vendég a kapott gólok után 5 mp alatt átviszi a labdát
+    (lerohanós), a hazai 30 mp alatt (lassú); kevés újraindításnál
+    nincs ítélet."""
+    from handball.pipeline.momentum import restart_speed
+
+    frames = []
+    t = 0
+
+    def _idle(n, x):
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    for _ in range(4):
+        # Hazai gól (+x kapu) → a vendég 5 mp alatt átér (x < 20).
+        frames += _goal(t)
+        t = frames[-1].t + 1
+        _idle(120, 30.0)   # ~5 mp a vendég térfelén
+        _idle(30, 15.0)    # átlépve a hazai térfélre
+        _idle(100, 15.0)
+    for _ in range(4):
+        # Vendég gól (-x kapu) → a hazai 30 mp alatt ér csak át.
+        frames += _goal(t, toward_home_goal=True)
+        t = frames[-1].t + 1
+        _idle(750, 10.0)   # 30 mp a hazai térfélen
+        _idle(30, 25.0)    # átlépve a vendég térfélre
+        _idle(100, 25.0)
+
+    rs = restart_speed(Match(_meta(), frames))
+    h, a = rs["home"], rs["away"]
+    assert a["restarts"] >= 4 and a["style"] == "lerohanós"
+    assert h["restarts"] >= 4 and h["style"] == "lassú"
+    assert h["avg_s"] > a["avg_s"]
+
+    # Kevés újraindítás: nincs ítélet.
+    few = restart_speed(Match(_meta(), frames[:300]))
+    assert few["home"]["style"] is None and few["away"]["style"] is None

@@ -1137,6 +1137,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Középkezdés-tempó: a gyors (12 mp-en belüli térfél-átlépésű)
+  // újraindítások aránya kapott gól után (4+ újraindításnál; 50%+ =
+  // lerohanós, 20%- = lassú; a backend-kulccsal azonos küszöbök).
+  String? _restartSpeed(Map<String, dynamic> r) {
+    final restarts = ((r["rs_restarts"] as num?) ?? 0).toInt();
+    final fast = ((r["rs_fast"] as num?) ?? 0).toInt();
+    final sumS = ((r["rs_sum_s"] as num?) ?? 0).toDouble();
+    if (restarts < 4) return null;
+    final pct = 100.0 * fast / restarts;
+    if (pct >= 50.0) {
+      return "kapott gól után is lerohannak "
+          "(${pct.toStringAsFixed(0)}% gyors újraindítás) · gól után "
+          "tilos az ünneplés";
+    }
+    if (pct <= 20.0) {
+      return "lassú középkezdés: átlag "
+          "${(sumS / restarts).toStringAsFixed(0)} mp az átjutásig · "
+          "támadd le a középkezdést";
+    }
+    return null;
+  }
+
   // Elsütés-idő: a gyors (0,6 mp-en belüli) elsütések aránya (8+
   // mérhető lövésnél; 60%+ = kapásból, 25%- = labdafogó; a
   // backend-kulccsal azonos küszöbök).
@@ -2102,6 +2124,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Beálló-védekezés", _pivotDefense(r)!],
       if (_shotRelease(r) != null)
         ["Elsütés-idő", _shotRelease(r)!],
+      if (_restartSpeed(r) != null)
+        ["Középkezdés-tempó", _restartSpeed(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

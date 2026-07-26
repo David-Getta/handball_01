@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 93) Középkezdés-tempó: ha kapott gól után lassan indítunk, az
+    # ellenfél falja rendezetten vár — a gyors középkezdés a téma.
+    try:
+        from .momentum import (RESTART_MIN_GOALS, RESTART_SLOW_SHARE,
+                               restart_speed)
+        rs93 = restart_speed(match, config)
+        for side in ("home", "away"):
+            rec93 = rs93[side]
+            if rec93["style"] != "lassú" \
+                    or rec93["restarts"] < RESTART_MIN_GOALS \
+                    or rec93["fast_pct"] > RESTART_SLOW_SHARE:
+                continue
+            add(side, "támadás", "Gyors középkezdés",
+                f"kapott gól után lassan indítunk: átlag "
+                f"{rec93['avg_s']:.0f} mp, mire a labda átér az "
+                f"ellenfél térfelére (csak {rec93['fast']}/"
+                f"{rec93['restarts']} gyors újraindítás) — mire "
+                "odaérünk, a faluk rendezetten vár",
+                "gyors középkezdés: kijelölt labdaszedő (a kapott gól "
+                "után az övé a labda), begyakorolt első három passz "
+                "középkezdésből, és 5 mp-es szabály a kisjátékban — "
+                "aki gól után 5 mp-en belül nem indít, labdát veszt")
+    except Exception:
+        pass
+
     # 92) Elsütés-idő: ha a lövőink sokáig fogják a labdát, a blokk
     # és a kilépés mindig odaér — a gyors elsütés a téma.
     try:

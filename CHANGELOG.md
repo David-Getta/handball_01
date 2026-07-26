@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Középkezdés-tempó**: kapott gól után mennyi idő alatt ér át a
+  labda az ellenfél térfelére — az outlet_speed a védés utáni
+  indítást méri, ez a kapott gól utánit: a lerohanás-jelző. A
+  lerohanós csapat (az újraindítások 50%+ része 12 mp-en belüli
+  térfél-átlépés, 4+ kapott gólból) ellen gól után tilos az
+  ünneplés — azonnali visszarendeződés, fékező ember középen; a
+  lassan újraindító (20% alatt) középkezdése letámadható; saját
+  olvasatban a gyors középkezdés begyakorolható fegyver. Egy réteg,
+  sok felület: `restart_speed` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 72.
+  meccsterv-szabály (az ő lassú középkezdésük × a ti elöl-szerző
+  presszetek), 93. edzés-szabály (kijelölt labdaszedő, 5 mp-es
+  szabály).
 - **Elsütés-idő**: kapásból lőnek vagy sokáig fogják a labdát —
   lövésenként visszafelé lépkedve mérjük, mennyi ideig volt a labda
   folyamatosan a lövőnél az elengedés előtt. A kapásból lövő csapat

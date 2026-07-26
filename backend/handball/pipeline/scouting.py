@@ -516,6 +516,12 @@ class ScoutingReport:
     # elsütések — darabszámok, meccsek közt összegződnek.
     sr_shots: int = 0
     sr_quick: int = 0
+    # Középkezdés-tempó: mérhető újraindítások kapott gól után + a
+    # gyorsak (12 mp-en belüli térfél-átlépés) + össz-idő — összegek,
+    # meccsek közt összeadódnak.
+    rs_restarts: int = 0
+    rs_fast: int = 0
+    rs_sum_s: float = 0.0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1441,6 +1447,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Középkezdés-tempó: a lerohanós ellen tilos az ünneplés, a lassú
+    # újraindító középkezdése letámadható.
+    if rep.rs_restarts >= 4:
+        _rs_pct = 100.0 * rep.rs_fast / rep.rs_restarts
+        if _rs_pct >= 50.0:
+            keys.append(
+                f"Kapott gól után is lerohannak: az újraindításaik "
+                f"{_rs_pct:.0f}%-ánál 12 mp-en belül átér a labda "
+                f"({rep.rs_fast}/{rep.rs_restarts}) — gól után TILOS "
+                "az ünneplés: azonnali visszarendeződés, kijelölt "
+                "fékező ember középen.")
+        elif _rs_pct <= 20.0:
+            keys.append(
+                f"Lassan indítanak középről (átlag "
+                f"{rep.rs_sum_s / rep.rs_restarts:.0f} mp a kapott "
+                "gól után a térfél-átlépésig) — a középkezdésük "
+                "letámadható: gól után előre-pressz, a hátsó "
+                "passzsávok zárása.")
 
     # Elsütés-idő: a kapásból lövő az időzítést borítja, a labdafogó
     # időt ad a kilépésre és a blokkra.
@@ -2906,6 +2931,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         srrec = shot_release(match, config)[team.value]
         rep.sr_shots = srrec["shots"]
         rep.sr_quick = srrec["quick"]
+        from .momentum import restart_speed
+        rsrec = restart_speed(match, config)[team.value]
+        rep.rs_restarts = rsrec["restarts"]
+        rep.rs_fast = rsrec["fast"]
+        rep.rs_sum_s = rsrec["sum_s"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4183,6 +4213,20 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 72) Az ő lassú középkezdésük × a ti elöl-szerző presszetek: a
+    # gól utáni letámadás dupla gólt érhet.
+    if (opp.rs_restarts >= 4 and own.steal_n >= 8
+            and 100.0 * opp.rs_fast / opp.rs_restarts <= 20.0
+            and own.steal_high / own.steal_n >= 0.35):
+        plan.append(
+            f"Lassan indítanak középről (átlag "
+            f"{opp.rs_sum_s / opp.rs_restarts:.0f} mp a kapott gól "
+            f"után), ti pedig elöl szerzitek a labdát "
+            f"({own.steal_high}/{own.steal_n} magas szerzés) — gól "
+            "után NE hátra, hanem előre: letámadott középkezdésből a "
+            "második gól fél percen belül jöhet, ez a sorozat-gyilkos "
+            "fegyveretek.")
+
     # 71) Az ő labdafogó lövőik × a ti blokk-falatok: aki sokáig
     # fogja a labdát, annak a blokk mindig odaér.
     if (opp.sr_shots >= 8 and own.blocks >= 5
@@ -4838,6 +4882,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pd_other_goals=sum(r.pd_other_goals for r in reports),
         sr_shots=sum(r.sr_shots for r in reports),
         sr_quick=sum(r.sr_quick for r in reports),
+        rs_restarts=sum(r.rs_restarts for r in reports),
+        rs_fast=sum(r.rs_fast for r in reports),
+        rs_sum_s=round(sum(r.rs_sum_s for r in reports), 1),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
