@@ -3,7 +3,27 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.24 óta)
+## Kiadatlan (a v0.1.25 óta)
+
+## v0.1.25 — kiadva (2026-07-26)
+
+> Kiadás-jegyzet: huszonöt új elemzés-réteg — a kör vezérfonala az,
+> hogy a csapat-szintű képek NÉVRE szólóvá váltak. Eddig azt tudtuk,
+> honnan és mikor esnek a gólok; mostantól azt is, KI mögött: ki lő a
+> csapatátlag felett (lövő-erő), ki lő mindig ugyanabba a sarokba
+> (lövő-kapuoldal), kinek a pályán léte alatt megy a játék
+> (játékos-mérleg), kinek az eladásait büntetik (drága eladók), és
+> melyik védő előtt fejeznek be (célba vett védő). Mellé bejött az
+> IDŐZÍTÉS rétege (elsütés-idő, gól-előkészítés hossza,
+> középkezdés-tempó, hajrá-eladás, hajrá-lövésválasztás), az
+> elzárás mindkét oldala (elzárás-használat és -védekezés), az
+> emberelőny/-hátrány teljes képe (fölény-befejezés, hátrány-támadás,
+> emberelőny-védekezés), a kettőzés és az ellen-press mint mérhető
+> fegyver, valamint két új kapus-olvasat (indítás iránya, szabad
+> lövés elleni védés). A meccsterv 94, az edzés-fókusz 115 szabálynál
+> jár; a backend csomag 782 teszttel zöld.
+
+### A v0.1.25 körei
 
 - **Célba vett védő**: KIRE lőnek, és kinél lesz belőle gól. A szabad
   lövés és a fal lyukai (wall_gaps, breakthrough_lanes) a HELYET
