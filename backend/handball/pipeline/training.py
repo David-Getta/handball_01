@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 113) Lövő-erő: ha van a csapatátlag felett bombázónk, a távoli
+    # befejezés köré épített figura a téma.
+    try:
+        from .event_detection import (SHOOTER_POWER_MIN_SHOTS,
+                                      shooter_power)
+        spw113 = shooter_power(match, config)
+        for side in ("home", "away"):
+            cannon113 = spw113[side]["cannon"]
+            if cannon113 is None \
+                    or cannon113["shots"] < SHOOTER_POWER_MIN_SHOTS:
+                continue
+            add(side, "támadás", "Bombázó kihasználása",
+                f"a(z) {cannon113['player_id']} azonosítójú lövőnk "
+                f"bombáz ({cannon113['avg_kmh']:.0f} km/h átlag, "
+                f"csapatátlag {spw113[side]['avg_kmh']:.0f} km/h, "
+                f"csúcs {cannon113['max_kmh']:.0f} km/h) — ezt a "
+                "fegyvert tudatosan kell elsütni",
+                "bombázó kihasználása: elzárás-figura az ő "
+                "lövőtávjára (a fal kihúzása után szabad átlövés), "
+                "gyors labdajáratás az ő oldalára a fal átterhelésével, "
+                "és lövés-sorozat fáradtan — a végén is meglegyen a "
+                "sebesség")
+    except Exception:
+        pass
+
     # 112) Lövő-kapuoldal: ha egy befejezőnk mindig ugyanoda lő, a
     # kapuoldal-váltás a téma.
     try:

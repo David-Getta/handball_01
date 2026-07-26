@@ -684,6 +684,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
+    try:
+        from .event_detection import shooter_power
+        spw = shooter_power(match)
+        for side, name in (("home", home), ("away", away)):
+            cannon = spw[side]["cannon"]
+            if cannon is None:
+                continue
+            jn = _jersey_of_track(match).get(cannon["player_id"])
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{cannon['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} bombázott: "
+                     f"{cannon['avg_kmh']:.0f} km/h átlagsebesség "
+                     f"({cannon['shots']} mért lövés, csapatátlag "
+                     f"{spw[side]['avg_kmh']:.0f} km/h).")
+    except Exception:
+        pass
     # Lövő-kapuoldal: volt-e kiszámítható befejezőjük.
     try:
         from .attack_types import shooter_placement

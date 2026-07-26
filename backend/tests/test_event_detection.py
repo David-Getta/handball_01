@@ -422,3 +422,46 @@ def test_pass_network_pairs_and_hubs():
     # A vendégnek nincs passza.
     away = pass_network(Match(_meta(), frames))["away"]
     assert away["total_passes"] == 0 and away["pairs"] == []
+
+
+def test_shooter_power_names_the_cannon():
+    """Az 1-es hazai lövő négy lövése ~144 km/h, a 2-esé ~72 km/h → az
+    1-es a bombázó; kevés mért lövésnél nincs megnevezett játékos."""
+    from handball.pipeline.event_detection import shooter_power
+
+    frames = []
+    t = 0
+
+    def _shot(pid, step):
+        """A pid-es hazai lövő lövése: a labda `step` m/kocka tempóban
+        halad a +x kapu felé (25 fps → step * 90 km/h)."""
+        nonlocal t, frames
+        shooter = [_pl(pid, Team.HOME, 33.0, 10.0)]
+        for i in range(8):
+            frames.append(Frame(t=t, players=shooter,
+                                ball=Ball(x=min(34.0 + step * i, 40.0),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(4):
+        _shot(1, 1.6)     # ~144 km/h
+    for _ in range(4):
+        _shot(2, 0.8)     # ~72 km/h
+
+    spw = shooter_power(Match(_meta(), frames))
+    h = spw["home"]
+    cannon = h["cannon"]
+    assert cannon is not None and cannon["player_id"] == 1
+    assert cannon["shots"] == 4 and cannon["avg_kmh"] > h["avg_kmh"]
+    # A lassabb lövő is a listában van, de nem ő a bombázó.
+    slow = next(p for p in h["players"] if p["player_id"] == 2)
+    assert slow["avg_kmh"] < cannon["avg_kmh"]
+
+    # Egyetlen lövés: nincs elég minta → nincs megnevezett bombázó.
+    few = shooter_power(Match(_meta(), frames[:48]))
+    assert few["home"]["cannon"] is None

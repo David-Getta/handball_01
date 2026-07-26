@@ -535,3 +535,53 @@ def pass_network(match: Match, config: Optional[TacticsConfig] = None,
         result[side] = {"total_passes": rec["total"], "pairs": pairs,
                         "hubs": hubs}
     return result
+
+
+# Lövő-erő: ennyi mért lövéstől nevezünk meg egy játékost, és ennyi
+# km/h-val a csapatátlag felett számít bombázónak.
+SHOOTER_POWER_MIN_SHOTS = 4
+SHOOTER_POWER_GAP_KMH = 8.0
+
+
+def shooter_power(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Lövő-erő: kinek a legkeményebb a lövése.
+
+    A lövés-sebességek (shot_speeds) csapat-átlagot és egy
+    leggyorsabb lövést adnak — ez lövőnkénti profil: ki lő rendre a
+    csapatátlag felett. A bombázó ellen a fal ne "vakon" blokkoljon,
+    hanem zárja a szöget, a kapusnak pedig korábban kell indulnia;
+    saját olvasatban tudni kell, kire lehet a hajrában bízni a
+    távoli befejezést.
+
+    Visszatérés csapatonként: {"avg_kmh", "players": [{"player_id",
+    "shots", "avg_kmh", "max_kmh"}], "cannon"} — a lista átlagsebesség
+    szerint csökkenő; a cannon az első olyan játékos, akinek legalább
+    SHOOTER_POWER_MIN_SHOTS mért lövése van, és az átlaga legalább
+    SHOOTER_POWER_GAP_KMH-val a csapatátlag felett (egyébként None).
+    """
+    config = config or TacticsConfig()
+    speeds = shot_speeds(match, config)
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [s_ for s_ in speeds["shots"]
+                if s_["team"] == side and s_["player_id"] is not None]
+        team_vals = [s_["speed_kmh"] for s_ in speeds["shots"]
+                     if s_["team"] == side]
+        team_avg = (round(sum(team_vals) / len(team_vals), 1)
+                    if team_vals else 0.0)
+        tally: dict = {}
+        for s_ in rows:
+            tally.setdefault(s_["player_id"], []).append(s_["speed_kmh"])
+        players = [{"player_id": pid, "shots": len(vals),
+                    "avg_kmh": round(sum(vals) / len(vals), 1),
+                    "max_kmh": max(vals)}
+                   for pid, vals in tally.items()]
+        players.sort(key=lambda p: -p["avg_kmh"])
+        cannon = next(
+            (p for p in players
+             if p["shots"] >= SHOOTER_POWER_MIN_SHOTS
+             and p["avg_kmh"] - team_avg >= SHOOTER_POWER_GAP_KMH), None)
+        out[side] = {"avg_kmh": team_avg, "players": players,
+                     "cannon": cannon}
+    return out

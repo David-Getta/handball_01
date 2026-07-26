@@ -1137,6 +1137,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Lövő-erő: ki lő rendre a csapatátlag felett (4+ mért lövés, 8+
+  // km/h eltérés; a backend-kulccsal azonos küszöbök).
+  String? _shooterPower(Map<String, dynamic> r) {
+    final list = r["shooter_power"];
+    final teamShots = ((r["spw_team_shots"] as num?) ?? 0).toInt();
+    final teamSum = ((r["spw_team_sum_kmh"] as num?) ?? 0).toDouble();
+    if (list is! List || teamShots < 6) return null;
+    final teamAvg = teamSum / teamShots;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final shots = ((e["shots"] as num?) ?? 0).toInt();
+      final sum = ((e["sum_kmh"] as num?) ?? 0).toDouble();
+      if (shots < 4) continue;
+      final avg = sum / shots;
+      if (avg - teamAvg < 8.0) continue;
+      final max = ((e["max_kmh"] as num?) ?? 0).toDouble();
+      return "a(z) ${e["player_id"]} lövőjük bombáz: "
+          "${avg.toStringAsFixed(0)} km/h átlag (csapatátlag "
+          "${teamAvg.toStringAsFixed(0)}, csúcs "
+          "${max.toStringAsFixed(0)}) · zárd a szöget, ne vakon "
+          "blokkolj";
+    }
+    return null;
+  }
+
   // Lövő-kapuoldal: ki lövi a góljai többségét ugyanabba a sarokba
   // (4+ gól, 60% felett kiszámítható; a backend-kulccsal azonos
   // küszöbök).
@@ -2586,6 +2611,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szélső-védekezés", _wingDefense(r)!],
       if (_shooterPlacement(r) != null)
         ["Lövő-kapuoldal", _shooterPlacement(r)!],
+      if (_shooterPower(r) != null)
+        ["Lövő-erő", _shooterPower(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -566,6 +566,13 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Lövő-erejük: [{"player_id", "shots", "sum_kmh", "max_kmh"}] —
+    # a sebesség-összeg és a lövésszám tárolva, hogy az átlag meccsek
+    # közt pontosan visszaszámolható legyen; + a csapat sebesség-
+    # összege és lövésszáma a csapatátlaghoz.
+    shooter_power: list = field(default_factory=list)
+    spw_team_shots: int = 0
+    spw_team_sum_kmh: float = 0.0
     # Lövő-kapuoldaluk: [{"player_id", "goals", "bal", "közép",
     # "jobb"}] — ki melyik sarokba lő; darabszámok, meccsek közt
     # játékosonként és oldalanként összegződnek.
@@ -1563,6 +1570,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Lövő-erő: van-e a csapatátlag felett bombázó befejezőjük.
+    if rep.spw_team_shots >= 6:
+        _spw_avg = rep.spw_team_sum_kmh / rep.spw_team_shots
+        for _spw_p in (rep.shooter_power or []):
+            if _spw_p["shots"] < 4:
+                continue
+            _spw_pavg = _spw_p["sum_kmh"] / _spw_p["shots"]
+            if _spw_pavg - _spw_avg >= 8.0:
+                keys.append(
+                    f"A(z) {_spw_p['player_id']} azonosítójú lövőjük "
+                    f"bombáz ({_spw_pavg:.0f} km/h átlag, csapatátlag "
+                    f"{_spw_avg:.0f} km/h; csúcs "
+                    f"{_spw_p['max_kmh']:.0f} km/h) — ellene a fal ne "
+                    "vakon blokkoljon, hanem zárja a szöget, a kapus "
+                    "pedig korábban induljon.")
+                break
 
     # Lövő-kapuoldal: van-e kiszámítható befejezőjük.
     for _shp_p in (rep.shooter_placement or []):
@@ -3421,6 +3445,16 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .event_detection import shooter_power as _spw
+        spwrec = _spw(match, config)[team.value]
+        rep.shooter_power = [
+            {"player_id": p["player_id"], "shots": p["shots"],
+             "sum_kmh": round(p["avg_kmh"] * p["shots"], 1),
+             "max_kmh": p["max_kmh"]}
+            for p in spwrec["players"]]
+        rep.spw_team_shots = sum(p["shots"] for p in spwrec["players"])
+        rep.spw_team_sum_kmh = round(
+            sum(p["avg_kmh"] * p["shots"] for p in spwrec["players"]), 1)
         from .attack_types import shooter_placement as _shp
         rep.shooter_placement = [
             {"player_id": p["player_id"], "goals": p["goals"],
@@ -4085,6 +4119,27 @@ def _merge_turnover_players(reports) -> list:
                                      + int(w["losses"]))
     return [{"player_id": pid, "losses": n}
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
+def _merge_shooter_power(reports) -> list:
+    """Lövő-erő: játékosonként a lövésszám és a sebesség-összeg
+    összegzése (az átlag ebből pontosan visszaszámolható)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.shooter_power or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"shots": 0, "sum_kmh": 0.0,
+                                    "max_kmh": 0.0})
+            rec["shots"] += int(p["shots"])
+            rec["sum_kmh"] += float(p["sum_kmh"])
+            rec["max_kmh"] = max(rec["max_kmh"], float(p["max_kmh"]))
+    return [{"player_id": pid, "shots": rec["shots"],
+             "sum_kmh": round(rec["sum_kmh"], 1),
+             "max_kmh": rec["max_kmh"]}
+            for pid, rec in sorted(
+                tally.items(),
+                key=lambda kv: -(kv[1]["sum_kmh"]
+                                 / max(1, kv[1]["shots"])))]
 
 
 def _merge_shooter_placement(reports) -> list:
@@ -4797,6 +4852,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 92) Az ő bombázójuk × a ti aktív falatok: a szöget kell zárni,
+    # nem vakon blokkolni.
+    if opp.spw_team_shots >= 6 and own.blocks >= 3:
+        _spw_avg92 = opp.spw_team_sum_kmh / opp.spw_team_shots
+        for _p92 in (opp.shooter_power or []):
+            if _p92["shots"] < 4:
+                continue
+            _pavg92 = _p92["sum_kmh"] / _p92["shots"]
+            if _pavg92 - _spw_avg92 >= 8.0:
+                plan.append(
+                    f"A(z) {_p92['player_id']} azonosítójú lövőjük "
+                    f"bombáz ({_pavg92:.0f} km/h átlag, csapatátlag "
+                    f"{_spw_avg92:.0f} km/h), ti pedig aktívan "
+                    f"blokkoltok ({own.blocks} blokk) — ellene a fal "
+                    "ne vakon ugorjon: zárjátok a szöget és a lövő "
+                    "karját, a kapus a másik oldalt védje.")
+                break
 
     # 91) Az ő kiszámítható lövőjük × a ti kapusotok formája: névre
     # szóló kapus-felkészítés.
@@ -5795,6 +5868,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        shooter_power=_merge_shooter_power(reports),
+        spw_team_shots=sum(r.spw_team_shots for r in reports),
+        spw_team_sum_kmh=round(
+            sum(r.spw_team_sum_kmh for r in reports), 1),
         shooter_placement=_merge_shooter_placement(reports),
         wdf_wing_shots=sum(r.wdf_wing_shots for r in reports),
         wdf_wing_goals=sum(r.wdf_wing_goals for r in reports),

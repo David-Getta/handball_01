@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lövő-erő**: kinek a legkeményebb a lövése — a lövés-sebességek
+  csapat-átlagot és egy leggyorsabb lövést adnak, ez lövőnkénti
+  profil: ki lő rendre a csapatátlag felett (4+ mért lövésből, 8+
+  km/h eltérésnél). A bombázó ellen a fal ne vakon blokkoljon,
+  hanem zárja a szöget, a kapusnak pedig korábban kell indulnia;
+  saját olvasatban tudni kell, kire lehet a hajrában bízni a távoli
+  befejezést. Egy réteg, sok felület: `shooter_power` motor, edzői
+  összefoglaló (mezszámmal), /analyze + meccs-csomag,
+  felderítés-profil (edzői kulcs + csempe; a sebesség-összeg és a
+  lövésszám tárolva, hogy az átlag meccsek közt pontosan
+  visszaszámolható legyen), 92. meccsterv-szabály (az ő bombázójuk ×
+  a ti aktív falatok), 113. edzés-szabály (elzárás-figura a
+  lövőtávjára, fal-átterhelés, lövés-sorozat fáradtan).
 - **Lövő-kapuoldal**: ki melyik sarokba lő — a kapu-sarok
   (goal_placement) csapat-szinten mondja meg, merre mennek a gólok,
   ez lövőnként: a kapus akkor tud készülni, ha NÉVRE szól a jelzés.
