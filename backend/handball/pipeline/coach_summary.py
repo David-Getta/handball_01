@@ -684,6 +684,28 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Hátrány-támadás: emberhátrányban is támadtak-e.
+    try:
+        from .rules import shorthanded_attack
+        sha = shorthanded_attack(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sh = sha[side]
+            if rec_sh["verdict"] is None:
+                continue
+            if rec_sh["verdict"] == "megbénul":
+                body += (f" A(z) {name} emberhátrányban megbénult: "
+                         f"{rec_sh['sh_goals']} gól "
+                         f"{rec_sh['sh_seconds'] / 60:.1f} perc alatt "
+                         f"({rec_sh['sh_per_min']:.2f} gól/perc, "
+                         f"egyenlő létszámnál "
+                         f"{rec_sh['eq_per_min']:.2f}).")
+            else:
+                body += (f" A(z) {name} emberhátrányban is támadott "
+                         f"({rec_sh['sh_goals']} gól "
+                         f"{rec_sh['sh_seconds'] / 60:.1f} perc "
+                         "kiállítás alatt).")
+    except Exception:
+        pass
     # Fölény-befejezés: fölényben vagy felállt fal ellen szereztek-e gólt.
     try:
         from .attack_types import overload_finishing

@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hátrány-támadás**: mit támadnak a kiállítás alatt — az
+  emberelőny-hatékonyság a kiállítás nyertes oldalát nézi (a
+  hátrányban leadott lövéseket kifejezetten kihagyja), ez a hiányzó
+  fele: a kiállított csapat maga mennyit támad egy emberrel
+  kevesebben. A hátrányban töltött percre vetített gól-ütemet
+  hasonlítjuk az egyenlő létszámúhoz (90+ mp hátrányból, 0.15
+  gól/perc esésnél "megbénul"). Aki hátrányban is gólt szerez,
+  kihúzza a két percet: ellene az emberelőnyt türelmesen, kockázatos
+  lövés nélkül kell végigjátszani; aki megbénul, annál minden
+  kiállítás azonnali gólkülönbség. Saját olvasatban a hátrányos
+  labdatartás az edzés-téma. Egy réteg, sok felület:
+  `shorthanded_attack` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 83.
+  meccsterv-szabály (az ő megbénuló hátrány-támadásuk × a ti
+  emberelőny-hatékonyságotok), 104. edzés-szabály (5-6 elleni
+  labdatartás, ötös figura beállóval, hátrányban vállalt lerohanás).
 - **Fölény-befejezés**: létszámfölényben vagy felállt fal ellen
   szereznek-e gólt — minden lövésnél megszámoljuk, hány támadó és
   hány védő van a támadott térfélen, és ha több a támadó,

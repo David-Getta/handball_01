@@ -1137,6 +1137,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Hátrány-támadás: a kiállítás alatti gól/perc ütem az egyenlő
+  // létszámúhoz képest (90+ mp hátrányban, 0.15 gól/perc esésnél; a
+  // backend-kulccsal azonos küszöbök).
+  String? _shorthandedAttack(Map<String, dynamic> r) {
+    final shS = ((r["sha_seconds"] as num?) ?? 0).toDouble();
+    final shG = ((r["sha_goals"] as num?) ?? 0).toInt();
+    final eqS = ((r["sha_eq_seconds"] as num?) ?? 0).toDouble();
+    final eqG = ((r["sha_eq_goals"] as num?) ?? 0).toInt();
+    if (shS < 90.0 || eqS <= 0) return null;
+    final sh = 60.0 * shG / shS;
+    final eq = 60.0 * eqG / eqS;
+    if (eq - sh >= 0.15) {
+      return "hátrányban megbénulnak: ${sh.toStringAsFixed(2)} gól/perc "
+          "(egyenlő létszámnál ${eq.toStringAsFixed(2)}) · "
+          "a kiállítás gólkülönbség";
+    }
+    return "hátrányban is támadnak: ${sh.toStringAsFixed(2)} gól/perc · "
+        "az emberelőnyt labdatartással kell végigjátszani";
+  }
+
   // Fölény-befejezés: a létszámfölényből vs a felállt fal ellen
   // leadott lövések gólaránya (sávonként 5+ lövésnél, 15+
   // százalékpont eltérésnél; a backend-kulccsal azonos küszöbök).
@@ -2366,6 +2386,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Ellen-press", _counterPress(r)!],
       if (_overloadFinishing(r) != null)
         ["Fölény-befejezés", _overloadFinishing(r)!],
+      if (_shorthandedAttack(r) != null)
+        ["Hátrány-támadás", _shorthandedAttack(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

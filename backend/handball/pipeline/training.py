@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 104) Hátrány-támadás: ha a kiállítás alatt megbénul a
+    # támadójátékunk, a hátrányos labdatartás a téma.
+    try:
+        from .rules import SHATK_MIN_S, shorthanded_attack
+        sha104 = shorthanded_attack(match, config)
+        for side in ("home", "away"):
+            rec104 = sha104[side]
+            if rec104["verdict"] != "megbénul" \
+                    or rec104["sh_seconds"] < SHATK_MIN_S \
+                    or rec104["sh_per_min"] is None:
+                continue
+            add(side, "támadás", "Hátrány-támadás",
+                f"emberhátrányban megbénulunk: {rec104['sh_goals']} gól "
+                f"{rec104['sh_seconds'] / 60:.1f} perc kiállítás alatt "
+                f"({rec104['sh_per_min']:.2f} gól/perc, egyenlő "
+                f"létszámnál {rec104['eq_per_min']:.2f}) — minden "
+                "kiállítás azonnal gólkülönbség",
+                "hátrányos támadás: 5-6 elleni labdatartás-játék "
+                "(időre, eladás nélkül), betanult 5 fős figura "
+                "beállóval, és hátrányban is vállalt lerohanás — a "
+                "két percet ki kell húzni, nem átvészelni")
+    except Exception:
+        pass
+
     # 103) Fölény-befejezés: ha csak létszámfölényben vagyunk
     # eredményesek, a felállt támadás befejezése a téma.
     try:

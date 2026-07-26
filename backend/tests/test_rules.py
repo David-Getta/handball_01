@@ -469,3 +469,53 @@ def test_seven_meter_defense_mirrors_summary():
     d2 = seven_meter_defense(_seven_then_shot(goal=False))
     assert d2["away"] == {"faced": 0, "saved": 0, "conceded": 0,
                           "missed": 1}
+
+
+def test_shorthanded_attack_flags_paralysed_offense():
+    """A hazai egyenlő létszámnál négy gólt lő, a két perc
+    emberhátrányban egyet sem → "megbénul"; a kiállítás nélküli
+    vendégnél nincs ítélet."""
+    from handball.pipeline.rules import shorthanded_attack
+
+    frames = []
+    t = 0
+
+    def _roster(seconds, home_n, away_n):
+        nonlocal t, frames
+        frames += _roster_frames(t, seconds, home_n, away_n)
+        t += int(seconds * 25)
+
+    def _home_goal(home_n, away_n):
+        """Hazai gól: a labda a +x kapuvonalig, a létszám változatlan."""
+        nonlocal t, frames
+        for i in range(8):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(home_n)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(away_n)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(33.6 + i, 40.0), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    # Egyenlő létszám: négy gól, közte 50-50 mp játék.
+    for _ in range(4):
+        _roster(50, 6, 6)
+        _home_goal(6, 6)
+    # Két perc hazai emberhátrány, gól nélkül (előtte szünet, hogy az
+    # utolsó gól biztosan az egyenlő létszámú szakaszra essen).
+    _roster(50, 6, 6)
+    _roster(120, 5, 6)
+    _roster(30, 6, 6)
+
+    sha = shorthanded_attack(Match(_meta(), frames))
+    h = sha["home"]
+    assert h["sh_seconds"] >= 110.0 and h["sh_goals"] == 0
+    assert h["eq_goals"] == 4
+    assert h["sh_per_min"] == 0.0 and h["eq_per_min"] > 0.5
+    assert h["verdict"] == "megbénul"
+
+    # A vendég nem volt hátrányban → nincs ütem és nincs ítélet.
+    a = sha["away"]
+    assert a["sh_seconds"] == 0.0
+    assert a["sh_per_min"] is None and a["verdict"] is None

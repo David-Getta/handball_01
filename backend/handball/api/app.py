@@ -2803,6 +2803,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import shorthanded_attack
+            res["shorthanded_attack"] = shorthanded_attack(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3347,6 +3352,9 @@ def create_app():
                 from ..pipeline.attack_types import overload_finishing
                 _layer("overload_finishing",
                        lambda: overload_finishing(match))
+                from ..pipeline.rules import shorthanded_attack
+                _layer("shorthanded_attack",
+                       lambda: shorthanded_attack(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

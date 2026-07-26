@@ -566,6 +566,15 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Hátrány-támadás: emberhátrányban töltött idő és az alatta lőtt
+    # lövések/gólok + az egyenlő létszámnál szerzett gólok és a hozzá
+    # tartozó idő — darabszámok és összegek, meccsek közt pontosan
+    # összegződnek (ütem = gól / perc fázisonként).
+    sha_seconds: float = 0.0
+    sha_shots: int = 0
+    sha_goals: int = 0
+    sha_eq_seconds: float = 0.0
+    sha_eq_goals: int = 0
     # Fölény-befejezés: a létszámfölényből, illetve a felállt fal
     # ellen leadott lövések és gólok száma — darabszámok, meccsek közt
     # összegződnek (gólarány sávonként külön).
@@ -1507,6 +1516,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Hátrány-támadás: kihúzzák-e a két percet, vagy megbénulnak.
+    if rep.sha_seconds >= 90.0 and rep.sha_eq_seconds > 0:
+        _sha = 60.0 * rep.sha_goals / rep.sha_seconds
+        _sha_eq = 60.0 * rep.sha_eq_goals / rep.sha_eq_seconds
+        if _sha_eq - _sha >= 0.15:
+            keys.append(
+                f"Emberhátrányban megbénulnak ({_sha:.2f} gól/perc, "
+                f"egyenlő létszámnál {_sha_eq:.2f}) — minden "
+                "kiharcolt kiállítás gólkülönbség: az emberelőnyt "
+                "türelmesen, betanult figurából játsszátok végig.")
+        else:
+            keys.append(
+                f"Emberhátrányban is támadnak ({_sha:.2f} gól/perc, "
+                f"egyenlő létszámnál {_sha_eq:.2f}) — az emberelőny "
+                "önmagában nem elég ellenük: kockázatos lövés nélkül, "
+                "labdatartással kell végigjátszani a két percet, "
+                "különben lerohanásból visszakapjátok.")
 
     # Fölény-befejezés: a fal ellen is veszélyesek-e.
     if rep.ovl_shots >= 5 and rep.ovl_set_shots >= 5:
@@ -3216,6 +3243,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .rules import shorthanded_attack
+        sharec = shorthanded_attack(match, config)[team.value]
+        rep.sha_seconds = sharec["sh_seconds"]
+        rep.sha_shots = sharec["sh_shots"]
+        rep.sha_goals = sharec["sh_goals"]
+        rep.sha_eq_seconds = sharec["eq_seconds"]
+        rep.sha_eq_goals = sharec["eq_goals"]
         from .attack_types import overload_finishing
         ovlrec = overload_finishing(match, config)[team.value]
         rep.ovl_shots = ovlrec["overload_shots"]
@@ -4511,6 +4545,24 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 83) Az ő megbénuló hátrány-támadásuk × a ti emberelőny-
+    # hatékonyságotok: a két perc a ti aranybányátok.
+    if (opp.sha_seconds >= 90.0 and opp.sha_eq_seconds > 0
+            and (60.0 * opp.sha_eq_goals / opp.sha_eq_seconds)
+            - (60.0 * opp.sha_goals / opp.sha_seconds) >= 0.15
+            and own.pp_shots >= 3
+            and 100.0 * own.pp_goals / own.pp_shots >= 50.0):
+        plan.append(
+            f"Emberhátrányban megbénulnak "
+            f"({60.0 * opp.sha_goals / opp.sha_seconds:.2f} gól/perc, "
+            f"egyenlő létszámnál "
+            f"{60.0 * opp.sha_eq_goals / opp.sha_eq_seconds:.2f}), ti "
+            f"pedig kihasználjátok az emberelőnyt "
+            f"({100.0 * own.pp_goals / own.pp_shots:.0f}% "
+            "gólarány) — minden kiharcolt kiállítás gólkülönbség: "
+            "harcoljátok ki a hetest/kiállítást, és a két percet "
+            "türelmesen, betanult figurából játsszátok végig.")
+
     # 82) Az ő fölény-függésük × a ti gyors visszarendeződésetek: ha
     # hazaértek, elfogy a fegyverük.
     if (opp.ovl_shots >= 5 and opp.ovl_set_shots >= 5
@@ -5355,6 +5407,11 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        sha_seconds=round(sum(r.sha_seconds for r in reports), 1),
+        sha_shots=sum(r.sha_shots for r in reports),
+        sha_goals=sum(r.sha_goals for r in reports),
+        sha_eq_seconds=round(sum(r.sha_eq_seconds for r in reports), 1),
+        sha_eq_goals=sum(r.sha_eq_goals for r in reports),
         ovl_shots=sum(r.ovl_shots for r in reports),
         ovl_goals=sum(r.ovl_goals for r in reports),
         ovl_set_shots=sum(r.ovl_set_shots for r in reports),

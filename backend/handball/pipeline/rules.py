@@ -579,3 +579,91 @@ def suspended_players(match: Match,
                    for pid, n in sorted(rec.items(),
                                         key=lambda kv: -kv[1])]
             for side, rec in tally.items()}
+
+
+# Hátrány-támadás: ennyi emberhátrányban töltött másodperctől ítélünk,
+# és ennyi gól/perc eltérés választja el a "veszélyes" hátrányos
+# támadást a "megbénuló"-tól.
+SHATK_MIN_S = 90.0
+SHATK_DROP_PER_MIN = 0.15
+
+
+def shorthanded_attack(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Hátrány-támadás: mit támadnak a kiállítás alatt.
+
+    Az emberelőny-hatékonyság (powerplay_efficiency) a kiállítás
+    NYERTES oldalát nézi, a hátrányban leadott lövéseket kifejezetten
+    kihagyja — ez a hiányzó fele: a kiállított csapat MAGA mennyit
+    támad egy emberrel kevesebben. Aki hátrányban is gólt szerez
+    (labdát tart, lerohan), az kihúzza a két percet: ellene az
+    emberelőnyt türelmesen kell végigjátszani, kockázatos lövés
+    nélkül. Aki megbénul, annál a kiállítás azonnali gólkülönbség —
+    saját olvasatban a hátrányos labdatartás az edzés-téma.
+
+    Visszatérés csapatonként: {"sh_seconds", "sh_shots", "sh_goals",
+    "sh_per_min", "eq_seconds", "eq_goals", "eq_per_min",
+    "gap_per_min", "verdict"} — az ütemek és a verdict None, ha kevés
+    (SHATK_MIN_S alatti) a hátrányban töltött idő; a verdict
+    "veszélyes" / "megbénul" / None.
+    """
+    from .event_detection import detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    if not match.frames:
+        return {s: {"sh_seconds": 0.0, "sh_shots": 0, "sh_goals": 0,
+                    "sh_per_min": None, "eq_seconds": 0.0,
+                    "eq_goals": 0, "eq_per_min": None,
+                    "gap_per_min": None, "verdict": None}
+                for s in ("home", "away")}
+    windows = detect_powerplay(match)
+    total_s = (match.frames[-1].t - match.frames[0].t) / fps
+    # Egyenlő létszám: a teljes idő mínusz MINDEN kiállítás-szakasz
+    # (akármelyik csapaté) — ez a közös viszonyítási alap.
+    pp_total_s = sum(w["duration_s"] for w in windows)
+    eq_seconds = max(0.0, total_s - pp_total_s)
+
+    def _down_at(t: int) -> Optional[str]:
+        for w in windows:
+            if w["start_frame"] <= t <= w["end_frame"]:
+                return w["team_down"]
+        return None
+
+    counts = {s: {"sh_seconds": 0.0, "sh_shots": 0, "sh_goals": 0,
+                  "eq_goals": 0}
+              for s in ("home", "away")}
+    for w in windows:
+        counts[w["team_down"]]["sh_seconds"] += w["duration_s"]
+    for e in detect_shots(match, config):
+        outcome = (e.detail or {}).get("outcome")
+        if outcome not in ("goal", "save", "miss"):
+            continue
+        side = e.team.value
+        down = _down_at(e.t)
+        if down == side:
+            counts[side]["sh_shots"] += 1
+            if outcome == "goal":
+                counts[side]["sh_goals"] += 1
+        elif down is None and outcome == "goal":
+            counts[side]["eq_goals"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {"sh_seconds": round(rec["sh_seconds"], 1),
+             "sh_shots": rec["sh_shots"], "sh_goals": rec["sh_goals"],
+             "sh_per_min": None, "eq_seconds": round(eq_seconds, 1),
+             "eq_goals": rec["eq_goals"], "eq_per_min": None,
+             "gap_per_min": None, "verdict": None}
+        if rec["sh_seconds"] >= SHATK_MIN_S and eq_seconds > 0:
+            sh_pm = 60.0 * rec["sh_goals"] / rec["sh_seconds"]
+            eq_pm = 60.0 * rec["eq_goals"] / eq_seconds
+            r["sh_per_min"] = round(sh_pm, 2)
+            r["eq_per_min"] = round(eq_pm, 2)
+            r["gap_per_min"] = round(sh_pm - eq_pm, 2)
+            if eq_pm - sh_pm >= SHATK_DROP_PER_MIN:
+                r["verdict"] = "megbénul"
+            else:
+                r["verdict"] = "veszélyes"
+        out[side] = r
+    return out
