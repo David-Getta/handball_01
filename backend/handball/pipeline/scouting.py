@@ -566,6 +566,10 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Drága eladóik: [{"player_id", "turnovers", "punished"}] — kinek
+    # az eladásaiból lett fél percen belüli kapott gól; darabszámok,
+    # meccsek közt játékosonként összegződnek.
+    costly_turnover_players: list = field(default_factory=list)
     # Emberelőny-védekezés: emberelőnyben töltött idő és az alatta
     # kapott gólok + az egyenlő létszámú viszonyítás — darabszámok és
     # összegek, meccsek közt pontosan összegződnek (ütem = gól / perc).
@@ -1548,6 +1552,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Drága eladók: kinek a hibája kerül náluk gólba.
+    _ctp_worst = next((p for p in (rep.costly_turnover_players or [])
+                       if p["turnovers"] >= 3 and p["punished"] >= 2),
+                      None)
+    if _ctp_worst is not None:
+        keys.append(
+            f"A(z) {_ctp_worst['player_id']} azonosítójú játékosuk "
+            f"eladásai kerülnek gólba ({_ctp_worst['punished']} "
+            f"kapott gól {_ctp_worst['turnovers']} eladásból) — rá "
+            "kell menni: kettőzzétek a felhozatalnál, nála a "
+            "legnagyobb a nyereség.")
 
     # Emberelőny-védekezés: emberelőnyben is szivárognak-e.
     if rep.ppd_seconds >= 90.0 and rep.ppd_eq_seconds > 0:
@@ -3361,6 +3377,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .defense import costly_turnover_players as _ctp
+        rep.costly_turnover_players = _ctp(match, config)[team.value][
+            "players"]
         from .rules import powerplay_defense
         ppdrec = powerplay_defense(match, config)[team.value]
         rep.ppd_seconds = ppdrec["pp_seconds"]
@@ -4011,6 +4030,22 @@ def _merge_turnover_players(reports) -> list:
                                      + int(w["losses"]))
     return [{"player_id": pid, "losses": n}
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
+def _merge_costly_turnovers(reports) -> list:
+    """Drága eladók: játékosonként az eladások és a gólba kerültek
+    összege (a lista a gólba kerültek szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for w in (r.costly_turnover_players or []):
+            rec = tally.setdefault(w["player_id"],
+                                   {"turnovers": 0, "punished": 0})
+            rec["turnovers"] += int(w["turnovers"])
+            rec["punished"] += int(w["punished"])
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: (-kv[1]["punished"],
+                                                   -kv[1]["turnovers"]))]
 
 
 def _merge_clutch_scorers(reports) -> list:
@@ -4691,6 +4726,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 89) Az ő drága eladójuk × a ti magas szerzésetek: rá kell menni
+    # a felhozatalnál.
+    _ctp89 = next((p for p in (opp.costly_turnover_players or [])
+                   if p["turnovers"] >= 3 and p["punished"] >= 2), None)
+    if _ctp89 is not None and own.steal_high >= 3:
+        plan.append(
+            f"A(z) {_ctp89['player_id']} azonosítójú játékosuk "
+            f"eladásai kerülnek gólba ({_ctp89['punished']} kapott gól "
+            f"{_ctp89['turnovers']} eladásból), ti pedig magasan "
+            f"szereztek labdát ({own.steal_high} magas szerzés) — "
+            "menjetek rá a felhozatalnál: kettőzés rajta, a "
+            "passzsávjait zárva, és a szerzés után azonnal kontra.")
 
     # 88) Az ő szivárgó emberelőny-védekezésük × a ti lerohanásotok:
     # hátrányban is futni kell ellenük.
@@ -5636,6 +5684,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        costly_turnover_players=_merge_costly_turnovers(reports),
         ppd_seconds=round(sum(r.ppd_seconds for r in reports), 1),
         ppd_conceded=sum(r.ppd_conceded for r in reports),
         ppd_eq_seconds=round(sum(r.ppd_eq_seconds for r in reports), 1),

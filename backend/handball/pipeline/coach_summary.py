@@ -684,6 +684,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Drága eladók: kinek az eladásaiból lett kapott gól.
+    try:
+        from .defense import costly_turnover_players
+        ctp = costly_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            worst = ctp[side]["worst"]
+            if worst is None:
+                continue
+            jn = _jersey_of_track(match).get(worst["player_id"])
+            who = (f"{jn}-es mezszámú játékoshoz" if jn is not None
+                   else f"{worst['player_id']} azonosítójú játékoshoz")
+            body += (f" A(z) {name} legdrágább eladásai a {who} "
+                     f"kötődnek: "
+                     f"{worst['turnovers']} eladásából "
+                     f"{worst['punished']} lett fél percen belüli "
+                     "kapott gól.")
+    except Exception:
+        pass
     # Emberelőny-védekezés: emberelőnyben is kaptak-e gólt.
     try:
         from .rules import powerplay_defense

@@ -1012,3 +1012,65 @@ def test_double_teams_separates_doubling_and_passive_defense():
     few = double_teams(Match(_meta(), frames[:100]))
     assert few["away"]["doubled_pct"] is None
     assert few["away"]["verdict"] is None
+
+
+def test_costly_turnover_players_names_the_expensive_loser():
+    """A hazai 1-es játékos három eladásából kettőt fél percen belüli
+    vendég-gól büntet, a 2-esét egy sem → a "worst" az 1-es; kevés
+    eladásnál nincs megnevezett játékos."""
+    from handball.pipeline.defense import costly_turnover_players
+
+    frames = []
+    t = 0
+
+    def _cycle(pid, punished):
+        """A pid-es hazai játékos elveszti a labdát; ha punished, a
+        vendég fél percen belül gólt lő a 0-s kapura."""
+        nonlocal t, frames
+        both = [_pl(pid, Team.HOME, 20.0, 10.0),
+                _pl(11, Team.AWAY, 20.6, 10.0)]
+        for _ in range(10):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=20.6, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        if punished:
+            for _ in range(50):   # a lövés-elnyomó ablakon kívülre
+                frames.append(Frame(t=t, players=both,
+                                    ball=Ball(x=20.6, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+            shooter = [_pl(12, Team.AWAY, 7.0, 10.0)]
+            for i in range(7):
+                frames.append(Frame(t=t, players=shooter,
+                                    ball=Ball(x=max(0.0, 6.4 - i),
+                                              y=10.0, confidence=1.0)))
+                t += 1
+        for _ in range(60):       # szünet a következő kör előtt
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for punished in (True, True, False):
+        _cycle(1, punished)
+    for _ in range(3):
+        _cycle(2, False)
+
+    ctp = costly_turnover_players(Match(_meta(), frames))
+    h = ctp["home"]
+    worst = h["worst"]
+    assert worst is not None and worst["player_id"] == 1
+    assert worst["turnovers"] == 3 and worst["punished"] == 2
+    # A 2-es is szerepel a listában, de nem büntetett eladásokkal.
+    second = next(p for p in h["players"] if p["player_id"] == 2)
+    assert second["turnovers"] == 3 and second["punished"] == 0
+
+    # Egyetlen kör: nincs elég eladás → nincs megnevezett játékos.
+    few = costly_turnover_players(Match(_meta(), frames[:150]))
+    assert few["home"]["worst"] is None

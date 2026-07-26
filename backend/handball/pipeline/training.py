@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 110) Drága eladók: ha egy játékosunk eladásai rendre gólba
+    # kerülnek, vele a nyomás alatti labdakezelés a téma.
+    try:
+        from .defense import TO_COST_MIN, costly_turnover_players
+        ctp110 = costly_turnover_players(match, config)
+        for side in ("home", "away"):
+            worst110 = ctp110[side]["worst"]
+            if worst110 is None \
+                    or worst110["turnovers"] < TO_COST_MIN \
+                    or worst110["punished"] < 2:
+                continue
+            add(side, "támadás", "Nyomás alatti labdakezelés",
+                f"a(z) {worst110['player_id']} azonosítójú játékosunk "
+                f"eladásaiból {worst110['punished']} kapott gól lett "
+                f"({worst110['turnovers']} eladásból) — az ő hibái "
+                "kerülnek a legtöbbe",
+                "nyomás alatti labdakezelés vele: kettőzés elleni "
+                "kiszabadulás párokban, átvétel és passz zavarással "
+                "(kéz a labdán), és döntés-gyakorlat — ha zárt a sáv, "
+                "vissza a biztos társhoz, nem előre a présbe")
+    except Exception:
+        pass
+
     # 109) Emberelőny-védekezés: ha emberelőnyben is kapunk gólt, a
     # befejezés utáni visszarendeződés a téma.
     try:

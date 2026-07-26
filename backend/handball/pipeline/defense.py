@@ -1595,3 +1595,59 @@ def double_teams(match, config=None) -> dict:
                 r["verdict"] = "1v1-et hagy"
         out[side] = r
     return out
+
+
+# Drága eladók: ennyi eladástól nevezünk meg egy játékost, és ennyi
+# másodpercen belüli kapott gólt tekintünk az eladás árának.
+TO_COST_MIN = 3
+TO_COST_WINDOW_S = 30.0
+
+
+def costly_turnover_players(match, config=None) -> dict:
+    """Drága eladók: kinek az eladásai kerülnek gólba.
+
+    A labdaeladók (turnover_players) azt mutatják, KI veszti el a
+    labdát — az eladás-büntetés (turnover_punishment) azt, hogy a
+    csapat eladásai MENNYIBE kerülnek. Ez a kettő metszete: kinek az
+    eladásaiból lesz TO_COST_WINDOW_S mp-en belül kapott gól. Akinek
+    a hibái rendre gólt érnek, arra rá kell menni: őt kell
+    kettőzni-zavarni a felhozatalnál, mert nála a legnagyobb a
+    nyereség — saját olvasatban vele kell a nyomás alatti
+    labdakezelést gyakorolni.
+
+    Visszatérés csapatonként: {"players": [{"player_id",
+    "turnovers", "punished"}], "worst"} — a lista a gólba került
+    eladások szerint csökkenő; a worst az első olyan játékos, akinek
+    legalább TO_COST_MIN eladása volt (egyébként None).
+    """
+    from .event_detection import EventType, detect_events, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(TO_COST_WINDOW_S * fps)
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    tally = {"home": {}, "away": {}}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        other = "away" if side == "home" else "home"
+        rec = tally[side].setdefault(e.player_id,
+                                     {"turnovers": 0, "punished": 0})
+        rec["turnovers"] += 1
+        if any(gs == other and 0 <= gt - e.t <= win for (gt, gs) in goals):
+            rec["punished"] += 1
+    out = {}
+    for side in ("home", "away"):
+        players = [{"player_id": pid, **rec}
+                   for pid, rec in sorted(
+                       tally[side].items(),
+                       key=lambda kv: (-kv[1]["punished"],
+                                       -kv[1]["turnovers"]))]
+        worst = next((p for p in players
+                      if p["turnovers"] >= TO_COST_MIN
+                      and p["punished"] > 0), None)
+        out[side] = {"players": players, "worst": worst}
+    return out

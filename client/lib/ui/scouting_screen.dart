@@ -1137,6 +1137,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Drága eladók: kinek az eladásaiból lett fél percen belüli kapott
+  // gól (3+ eladás és 2+ gól kell; a backend-kulccsal azonos
+  // küszöbök).
+  String? _costlyTurnovers(Map<String, dynamic> r) {
+    final list = r["costly_turnover_players"];
+    if (list is! List) return null;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final to = ((e["turnovers"] as num?) ?? 0).toInt();
+      final pu = ((e["punished"] as num?) ?? 0).toInt();
+      if (to < 3 || pu < 2) continue;
+      return "a(z) ${e["player_id"]} játékosuk eladásai kerülnek "
+          "gólba ($pu kapott gól $to eladásból) · kettőzd a "
+          "felhozatalnál";
+    }
+    return null;
+  }
+
   // Emberelőny-védekezés: az emberelőnyben kapott gól/perc ütem az
   // egyenlő létszámúhoz képest (90+ mp előnyben, 0.2 gól/perc
   // eltérésnél; a backend-kulccsal azonos küszöbök).
@@ -2509,6 +2527,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus szabad lövés ellen", _gkFreeShotSaves(r)!],
       if (_powerplayDefense(r) != null)
         ["Emberelőny-védekezés", _powerplayDefense(r)!],
+      if (_costlyTurnovers(r) != null)
+        ["Drága eladók", _costlyTurnovers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

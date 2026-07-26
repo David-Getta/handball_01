@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Drága eladók**: kinek az eladásai kerülnek gólba — a labdaeladók
+  azt mutatják, KI veszti el a labdát, az eladás-büntetés azt, hogy
+  a csapat eladásai MENNYIBE kerülnek; ez a kettő metszete:
+  játékosonként hány eladásból lett fél percen belüli kapott gól
+  (3+ eladás és 1+ gól a megnevezéshez). Akinek a hibái rendre gólt
+  érnek, arra rá kell menni: őt kell kettőzni-zavarni a
+  felhozatalnál, mert nála a legnagyobb a nyereség. Saját
+  olvasatban vele kell a nyomás alatti labdakezelést gyakorolni.
+  Egy réteg, sok felület: `costly_turnover_players` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (edzői
+  kulcs + csempe, meccsek közti játékosonkénti összegzés), 89.
+  meccsterv-szabály (az ő drága eladójuk × a ti magas szerzésetek),
+  110. edzés-szabály (kettőzés elleni kiszabadulás, zavart átvétel,
+  döntés-gyakorlat zárt sávnál).
 - **Emberelőny-védekezés**: emberelőnyben is kapnak-e gólt — az
   emberelőny-hatékonyság azt méri, mit TÁMADNAK a kiállítás alatt,
   ez azt, mit VÉDEKEZNEK közben: egy emberrel többen is kaphatnak
