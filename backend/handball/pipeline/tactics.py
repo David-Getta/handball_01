@@ -721,3 +721,79 @@ def attack_motion(match: Match,
                 r["style"] = "mozgásos"
         out[side] = r
     return out
+
+
+# Védekezés-váltás: ennyi mért védekezett támadástól ítélünk, e feletti
+# váltás-aránynál váltogatós a csapat, és ennyi százalék feletti fő
+# forma-arány az "egy rendszer" jele. Egy támadás formája csak akkor
+# számít, ha legalább ennyi kockán olvasható a fal.
+FSW_MIN_ATTACKS = 6
+FSW_SWITCH_PCT = 30.0
+FSW_ONE_SYSTEM_PCT = 80.0
+FSW_MIN_FRAMES = 10
+
+
+def formation_switching(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
+
+    A leggyakoribb forma (most_common_formations) azt mondja meg, MIT
+    játszanak, a forma szerinti hatékonyság (efficiency_vs_formation)
+    azt, melyik fal fogja meg őket — ez a harmadik kérdés: MENNYIRE
+    állandó a rendszerük. Támadásonként (a védekező oldal szemszögéből)
+    megnézzük a fal uralkodó címkéjét, és számoljuk, hányszor tér el az
+    előző védekezett támadásétól.
+
+    Edzőileg: aki egy rendszert játszik, arra egy figurasort kell
+    felépíteni és végig azt húzni; aki váltogat, ott a felismerés a
+    feladat — a kihozatalnál hangosan bemondani a formát, és két kész
+    változattal érkezni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal):
+      {"attacks", "labels": {forma: támadás}, "main", "main_pct",
+       "switches", "switch_pct", "verdict"} — az arányok és a verdict
+    None FSW_MIN_ATTACKS alatt; a verdict "váltogatós" / "egy
+    rendszer" / None.
+    """
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    seqs: dict[str, list[str]] = {"home": [], "away": []}
+    for seq in segment_attacks(match, config):
+        defending = Team.AWAY if seq.team == Team.HOME else Team.HOME
+        tally: dict[str, int] = {}
+        for fr in seq.frames:
+            form = detect_formation(fr, defending, config)
+            if not form.label or form.label == "?" or form.defenders < 4:
+                continue  # kevés látott védő — a címke nem megbízható
+            tally[form.label] = tally.get(form.label, 0) + 1
+        if not tally or sum(tally.values()) < FSW_MIN_FRAMES:
+            continue
+        seqs[defending.value].append(
+            max(tally.items(), key=lambda kv: kv[1])[0])
+
+    out: dict = {}
+    for side in ("home", "away"):
+        labels_seq = seqs[side]
+        n = len(labels_seq)
+        labels: dict[str, int] = {}
+        for lab in labels_seq:
+            labels[lab] = labels.get(lab, 0) + 1
+        labels = dict(sorted(labels.items(), key=lambda kv: -kv[1]))
+        switches = sum(1 for a, b in zip(labels_seq, labels_seq[1:])
+                       if a != b)
+        rec = {"attacks": n, "labels": labels,
+               "main": (next(iter(labels)) if labels else None),
+               "main_pct": None, "switches": switches,
+               "switch_pct": None, "verdict": None}
+        if n >= FSW_MIN_ATTACKS:
+            main_pct = 100.0 * labels[rec["main"]] / n
+            sw_pct = 100.0 * switches / (n - 1)
+            rec["main_pct"] = round(main_pct, 1)
+            rec["switch_pct"] = round(sw_pct, 1)
+            if sw_pct >= FSW_SWITCH_PCT:
+                rec["verdict"] = "váltogatós"
+            elif main_pct >= FSW_ONE_SYSTEM_PCT:
+                rec["verdict"] = "egy rendszer"
+        out[side] = rec
+    return out

@@ -719,6 +719,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{tgt['goals']} gól.")
     except Exception:
         pass
+    # Védekezés-váltás: egy rendszert játszottak, vagy váltogattak.
+    try:
+        from .tactics import formation_switching
+        fsw = formation_switching(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fs = fsw[side]
+            if rec_fs["verdict"] is None:
+                continue
+            if rec_fs["verdict"] == "váltogatós":
+                body += (f" A(z) {name} védekezésben váltogatott "
+                         f"(a védekezett támadások "
+                         f"{rec_fs['switch_pct']:.0f}%-ánál más fal "
+                         f"volt, a fő forma a {rec_fs['main']}).")
+            else:
+                body += (f" A(z) {name} végig egy rendszert játszott "
+                         f"védekezésben ({rec_fs['main']}, a "
+                         f"védekezett támadások "
+                         f"{rec_fs['main_pct']:.0f}%-ában).")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power

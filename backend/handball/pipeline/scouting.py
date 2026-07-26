@@ -579,6 +579,14 @@ class ScoutingReport:
     targeted_defenders: list = field(default_factory=list)
     tdf_shots: int = 0
     tdf_goals: int = 0
+    # Védekezés-váltásuk: {forma: védekezett támadás} + a mért
+    # támadások, a szomszédos támadás-párok és a köztük történt
+    # váltások száma — darabszámok, meccsek közt pontosan
+    # összegződnek (váltás-arány = fsw_switches / fsw_pairs).
+    fsw_labels: dict = field(default_factory=dict)
+    fsw_attacks: int = 0
+    fsw_pairs: int = 0
+    fsw_switches: int = 0
     # Lövő-erejük: [{"player_id", "shots", "sum_kmh", "max_kmh"}] —
     # a sebesség-összeg és a lövésszám tárolva, hogy az átlag meccsek
     # közt pontosan visszaszámolható legyen; + a csapat sebesség-
@@ -3510,6 +3518,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
              "frames": round(p["minutes"] * 60.0 * _fps),
              "for": p["for"], "against": p["against"]}
             for p in _pm(match, config)[team.value]["players"]]
+        from .tactics import formation_switching as _fsw
+        fswrec = _fsw(match, config)[team.value]
+        rep.fsw_labels = dict(fswrec["labels"])
+        rep.fsw_attacks = fswrec["attacks"]
+        rep.fsw_pairs = max(0, fswrec["attacks"] - 1)
+        rep.fsw_switches = fswrec["switches"]
         from .defense import targeted_defenders as _tdf
         tdfrec = _tdf(match, config)[team.value]
         rep.tdf_shots = tdfrec["shots"]
