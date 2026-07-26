@@ -684,6 +684,29 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Hajrá-eladás: nyomás alatt megőrizték-e a labdát.
+    try:
+        from .momentum import clutch_turnovers
+        cto = clutch_turnovers(match)
+        if cto.get("available"):
+            for side, name in (("home", home), ("away", away)):
+                rec_ct = cto[side]
+                if rec_ct["verdict"] is None:
+                    continue
+                if rec_ct["verdict"] == "hajrá-hibázó":
+                    body += (f" A(z) {name} a hajrában szétesett a "
+                             f"labdakezelésben: az eladás-ütemük "
+                             f"{rec_ct['early_per_min']:.2f}-ről "
+                             f"{rec_ct['clutch_per_min']:.2f} "
+                             "eladás/percre ugrott.")
+                else:
+                    body += (f" A(z) {name} a hajrában hidegvérű "
+                             f"maradt (az eladás-ütemük "
+                             f"{rec_ct['early_per_min']:.2f}-ről "
+                             f"{rec_ct['clutch_per_min']:.2f}-re "
+                             "csökkent).")
+    except Exception:
+        pass
     # Hátrány-támadás: emberhátrányban is támadtak-e.
     try:
         from .rules import shorthanded_attack

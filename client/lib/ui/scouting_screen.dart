@@ -1137,6 +1137,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Hajrá-eladás: a hajrá előtti vs a hajrá eladás/perc üteme (5+
+  // korai eladásnál, 0.3 eladás/perc eltérésnél; a backend-kulccsal
+  // azonos küszöbök).
+  String? _clutchTurnovers(Map<String, dynamic> r) {
+    final eTo = ((r["cto_early_to"] as num?) ?? 0).toInt();
+    final eS = ((r["cto_early_s"] as num?) ?? 0).toDouble();
+    final cTo = ((r["cto_clutch_to"] as num?) ?? 0).toInt();
+    final cS = ((r["cto_clutch_s"] as num?) ?? 0).toDouble();
+    if (eTo < 5 || eS <= 0 || cS <= 0) return null;
+    final e = 60.0 * eTo / eS;
+    final c = 60.0 * cTo / cS;
+    if (c - e >= 0.3) {
+      return "a hajrában szétesnek: ${e.toStringAsFixed(2)} → "
+          "${c.toStringAsFixed(2)} eladás/perc · "
+          "a végén présbe kell tenni a labdavivőt";
+    }
+    if (e - c >= 0.3) {
+      return "a hajrában hidegvérűek: ${e.toStringAsFixed(2)} → "
+          "${c.toStringAsFixed(2)} eladás/perc · "
+          "a hibájukra várni hiba";
+    }
+    return null;
+  }
+
   // Hátrány-támadás: a kiállítás alatti gól/perc ütem az egyenlő
   // létszámúhoz képest (90+ mp hátrányban, 0.15 gól/perc esésnél; a
   // backend-kulccsal azonos küszöbök).
@@ -2388,6 +2412,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fölény-befejezés", _overloadFinishing(r)!],
       if (_shorthandedAttack(r) != null)
         ["Hátrány-támadás", _shorthandedAttack(r)!],
+      if (_clutchTurnovers(r) != null)
+        ["Hajrá-eladás", _clutchTurnovers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

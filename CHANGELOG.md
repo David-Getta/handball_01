@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hajrá-eladás**: nyomás alatt megőrzik-e a labdát — a
+  hajrá-lövésválasztás azt méri, milyen HELYZETEKBŐL lőnek a végén,
+  ez azt, hogy egyáltalán eljutnak-e a lövésig: az utolsó 5 perc és
+  az azt megelőző idő eladás/perc ütemét hasonlítjuk össze (5+ korai
+  eladásból, 0.3 eladás/perc emelkedésnél "hajrá-hibázó"). Akinél a
+  hajrában megugrik az eladás, az a döntéseiben esik szét: ellene a
+  végén présbe kell tenni a labdavivőt (magasabb védekezés, kettőzés
+  a felhozatalnál) és minden szerzés után futni; aki hidegvérű,
+  annál a hibára várni hiba. Saját olvasatban a fix hajrá-felállás
+  és a nyomás alatti döntés az edzés-téma. Egy réteg, sok felület:
+  `clutch_turnovers` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 84.
+  meccsterv-szabály (az ő hajrá-eladásaik × a ti átmenet-
+  támadásotok), 105. edzés-szabály (fix hajrá-felállás, döntés-játék
+  élő állással és fogyó idővel).
 - **Hátrány-támadás**: mit támadnak a kiállítás alatt — az
   emberelőny-hatékonyság a kiállítás nyertes oldalát nézi (a
   hátrányban leadott lövéseket kifejezetten kihagyja), ez a hiányzó

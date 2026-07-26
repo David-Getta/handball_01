@@ -1343,6 +1343,34 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 105) Hajrá-eladás: ha a végén megugrik az eladás-ütemünk, a
+    # nyomás alatti döntés és a hajrá-felállás a téma.
+    try:
+        from .momentum import (CLUTCH_TO_MIN_EARLY, CLUTCH_TO_RISE_PER_MIN,
+                               clutch_turnovers)
+        cto105 = clutch_turnovers(match, config)
+        if cto105.get("available"):
+            for side in ("home", "away"):
+                rec105 = cto105[side]
+                if rec105["verdict"] != "hajrá-hibázó" \
+                        or rec105["early_to"] < CLUTCH_TO_MIN_EARLY \
+                        or rec105["delta_per_min"] is None \
+                        or rec105["delta_per_min"] < CLUTCH_TO_RISE_PER_MIN:
+                    continue
+                add(side, "támadás", "Hajrá-labdakezelés",
+                    f"a hajrában megugrik az eladás-ütemünk "
+                    f"({rec105['early_per_min']:.2f} → "
+                    f"{rec105['clutch_per_min']:.2f} eladás/perc, "
+                    f"{rec105['clutch_to']} eladás a hajrában) — "
+                    "nyomás alatt rossz döntéseket hozunk",
+                    "hajrá-labdakezelés: fix hajrá-felállás (ki viszi "
+                    "a labdát, ki a beálló), döntés-játék zajjal és "
+                    "eredményjelzővel (élő állás, fogyó idő), és "
+                    "szabály a kisjátékban — a hajrában a rossz passz "
+                    "kétszer annyit ér az ellenfélnek")
+    except Exception:
+        pass
+
     # 104) Hátrány-támadás: ha a kiállítás alatt megbénul a
     # támadójátékunk, a hátrányos labdatartás a téma.
     try:

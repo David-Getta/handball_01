@@ -566,6 +566,13 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Hajrá-eladás: a hajrá előtti és a hajrá-eladások száma + a két
+    # fázis hossza másodpercben — darabszámok és összegek, meccsek közt
+    # pontosan összegződnek (ütem = eladás / perc fázisonként).
+    cto_early_to: int = 0
+    cto_early_s: float = 0.0
+    cto_clutch_to: int = 0
+    cto_clutch_s: float = 0.0
     # Hátrány-támadás: emberhátrányban töltött idő és az alatta lőtt
     # lövések/gólok + az egyenlő létszámnál szerzett gólok és a hozzá
     # tartozó idő — darabszámok és összegek, meccsek közt pontosan
@@ -1516,6 +1523,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Hajrá-eladás: nyomás alatt megőrzik-e a labdát.
+    if rep.cto_early_to >= 5 and rep.cto_early_s > 0 \
+            and rep.cto_clutch_s > 0:
+        _cto_e = 60.0 * rep.cto_early_to / rep.cto_early_s
+        _cto_c = 60.0 * rep.cto_clutch_to / rep.cto_clutch_s
+        if _cto_c - _cto_e >= 0.3:
+            keys.append(
+                f"A hajrában széteseik a labdakezelésük (az "
+                f"eladás-ütemük {_cto_e:.2f}-ről {_cto_c:.2f} "
+                "eladás/percre ugrik) — a végén présbe kell tenni a "
+                "labdavivőjüket: magasabb védekezés, kettőzés a "
+                "felhozatalnál, és minden szerzés után futni.")
+        elif _cto_e - _cto_c >= 0.3:
+            keys.append(
+                f"A hajrában hidegvérűek (az eladás-ütemük "
+                f"{_cto_e:.2f}-ről {_cto_c:.2f}-re csökken) — a "
+                "hibájukra várni hiba: a végén nektek kell gólt "
+                "lőnötök, a saját támadásaitokat kell végigjátszani.")
 
     # Hátrány-támadás: kihúzzák-e a két percet, vagy megbénulnak.
     if rep.sha_seconds >= 90.0 and rep.sha_eq_seconds > 0:
@@ -3243,6 +3269,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .momentum import clutch_turnovers
+        ctoall = clutch_turnovers(match, config)
+        if ctoall.get("available"):
+            ctorec = ctoall[team.value]
+            rep.cto_early_to = ctorec["early_to"]
+            rep.cto_early_s = ctorec["early_s"]
+            rep.cto_clutch_to = ctorec["clutch_to"]
+            rep.cto_clutch_s = ctorec["clutch_s"]
         from .rules import shorthanded_attack
         sharec = shorthanded_attack(match, config)[team.value]
         rep.sha_seconds = sharec["sh_seconds"]
@@ -4545,6 +4579,24 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 84) Az ő hajrá-eladásaik × a ti átmenet-támadásotok: a végén az
+    # ő hibájuk a ti kontrátok.
+    if (opp.cto_early_to >= 5 and opp.cto_early_s > 0
+            and opp.cto_clutch_s > 0
+            and (60.0 * opp.cto_clutch_to / opp.cto_clutch_s)
+            - (60.0 * opp.cto_early_to / opp.cto_early_s) >= 0.3
+            and own.trans_steals >= 5
+            and own.trans_quick_goals >= 2):
+        plan.append(
+            f"A hajrában megugrik az eladás-ütemük "
+            f"({60.0 * opp.cto_early_to / opp.cto_early_s:.2f} → "
+            f"{60.0 * opp.cto_clutch_to / opp.cto_clutch_s:.2f} "
+            f"eladás/perc), ti pedig gólra váltjátok a szerzéseket "
+            f"({own.trans_quick_goals} gyors gól "
+            f"{own.trans_steals} szerzésből) — a hajrában emeljétek a "
+            "védekezést: kettőzés a labdavivőn, és minden szerzés "
+            "után azonnal induljon a kontra.")
+
     # 83) Az ő megbénuló hátrány-támadásuk × a ti emberelőny-
     # hatékonyságotok: a két perc a ti aranybányátok.
     if (opp.sha_seconds >= 90.0 and opp.sha_eq_seconds > 0
@@ -5407,6 +5459,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        cto_early_to=sum(r.cto_early_to for r in reports),
+        cto_early_s=round(sum(r.cto_early_s for r in reports), 1),
+        cto_clutch_to=sum(r.cto_clutch_to for r in reports),
+        cto_clutch_s=round(sum(r.cto_clutch_s for r in reports), 1),
         sha_seconds=round(sum(r.sha_seconds for r in reports), 1),
         sha_shots=sum(r.sha_shots for r in reports),
         sha_goals=sum(r.sha_goals for r in reports),

@@ -1182,3 +1182,70 @@ def clutch_shot_quality(match: Match, config=None) -> dict:
                 r["verdict"] = "kidolgozza"
         out[side] = r
     return out
+
+
+# Hajrá-eladás: ennyi eladás/perc emelkedéstől beszélünk hajrá-hibáról,
+# és ennyi eladás kell a hajrá előtti szakaszon az ítélethez.
+CLUTCH_TO_RISE_PER_MIN = 0.3
+CLUTCH_TO_MIN_EARLY = 5
+
+
+def clutch_turnovers(match: Match, config=None) -> dict:
+    """Hajrá-eladás: nyomás alatt megőrzik-e a labdát.
+
+    A hajrá-lövésválasztás (clutch_shot_quality) azt méri, milyen
+    HELYZETEKBŐL lőnek a végén — ez azt, hogy egyáltalán ELJUTNAK-e a
+    lövésig: a hajrá (utolsó CLUTCH_WINDOW_S mp) és az azt megelőző
+    idő eladás/perc ütemét hasonlítja össze. Akinél a hajrában megugrik
+    az eladás, az a döntéseiben esik szét: ellene a végén présbe kell
+    tenni a labdavivőt, és minden szerzés után futni. Aki hidegvérű,
+    annál a hajrá-hiba nem jön magától — gólt kell lőni ellene.
+
+    Rövid felvételen (CLUTCH_MIN_DURATION_S alatt) nem értelmezzük:
+    {"available": False}. Egyébként csapatonként {"early_to",
+    "early_s", "clutch_to", "clutch_s", "early_per_min",
+    "clutch_per_min", "delta_per_min", "verdict"} — az ütemek és a
+    verdict None, ha kevés (CLUTCH_TO_MIN_EARLY alatti) a hajrá előtti
+    eladás; a verdict "hajrá-hibázó" / "hidegvérű" / None.
+    """
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    if not match.frames:
+        return {"available": False}
+    duration_s = (match.frames[-1].t - match.frames[0].t) / fps
+    if duration_s < CLUTCH_MIN_DURATION_S:
+        return {"available": False}
+    t_clutch = match.frames[-1].t - round(CLUTCH_WINDOW_S * fps)
+    clutch_s = (match.frames[-1].t - t_clutch) / fps
+    early_s = max(0.0, duration_s - clutch_s)
+
+    counts = {s: {"early_to": 0, "clutch_to": 0}
+              for s in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER:
+            continue
+        phase = "clutch" if e.t >= t_clutch else "early"
+        counts[e.team.value][phase + "_to"] += 1
+    out = {"available": True, "window_s": CLUTCH_WINDOW_S}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "early_s": round(early_s, 1),
+             "clutch_s": round(clutch_s, 1),
+             "early_per_min": None, "clutch_per_min": None,
+             "delta_per_min": None, "verdict": None}
+        if rec["early_to"] >= CLUTCH_TO_MIN_EARLY and early_s > 0 \
+                and clutch_s > 0:
+            early = 60.0 * rec["early_to"] / early_s
+            clutch = 60.0 * rec["clutch_to"] / clutch_s
+            r["early_per_min"] = round(early, 2)
+            r["clutch_per_min"] = round(clutch, 2)
+            r["delta_per_min"] = round(clutch - early, 2)
+            if clutch - early >= CLUTCH_TO_RISE_PER_MIN:
+                r["verdict"] = "hajrá-hibázó"
+            elif early - clutch >= CLUTCH_TO_RISE_PER_MIN:
+                r["verdict"] = "hidegvérű"
+        out[side] = r
+    return out

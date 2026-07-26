@@ -775,3 +775,46 @@ def test_clutch_shot_quality_flags_rushed_finishing():
     # Rövid felvétel (10 perc alatt): a réteg nem értelmezhető.
     short = clutch_shot_quality(Match(_meta(), frames[:5000]))
     assert short == {"available": False}
+
+
+def test_clutch_turnovers_flags_pressure_mistakes():
+    """A hazai a hajrában sűrűbben adja el a labdát, mint előtte →
+    "hajrá-hibázó"; rövid felvételen a réteg nem értelmezhető."""
+    from handball.pipeline.momentum import clutch_turnovers
+
+    both = [PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=11, team=Team.AWAY, x=20.6, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0)]
+    frames = []
+    t = 0
+
+    def _hold(x, n):
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    # 800 mp: a hajrá előtt (500 mp) ritka labdaváltás, a hajrában
+    # (utolsó 300 mp) sűrű — a hazai eladás-üteme megugrik.
+    while t < 12500:
+        _hold(20.0, 1000)    # 40 mp hazai birtoklás
+        _hold(20.6, 250)     # 10 mp vendég birtoklás
+    while t < 20000:
+        _hold(20.0, 125)     # 5 mp hazai birtoklás
+        _hold(20.6, 125)     # 5 mp vendég birtoklás
+
+    cto = clutch_turnovers(Match(_meta(), frames))
+    assert cto["available"] is True
+    h = cto["home"]
+    assert h["early_to"] >= 5 and h["clutch_to"] >= 5
+    assert h["clutch_per_min"] > h["early_per_min"]
+    assert h["delta_per_min"] > 0
+    assert h["verdict"] == "hajrá-hibázó"
+
+    # Rövid felvétel (10 perc alatt): nem értelmezhető.
+    short = clutch_turnovers(Match(_meta(), frames[:5000]))
+    assert short == {"available": False}
