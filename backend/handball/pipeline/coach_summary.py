@@ -663,6 +663,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Lerohanás-védés: hogy védett a kapus gyorsindítás ellen.
+    try:
+        from .goalkeeper import gk_break_response
+        gbr = gk_break_response(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gbr = gbr[side]
+            if rec_gbr["verdict"] is None:
+                continue
+            if rec_gbr["verdict"] == "érzékeny":
+                body += (f" A(z) {name} kapusa a lerohanásokra "
+                         f"érzékeny volt: gyorsindítás ellen "
+                         f"{rec_gbr['fast_pct']:.0f}%, rendezett "
+                         f"támadás ellen {rec_gbr['set_pct']:.0f}% "
+                         "védés.")
+            else:
+                body += (f" A(z) {name} kapusa lerohanás-fogó volt: "
+                         f"gyorsindítás ellen "
+                         f"{rec_gbr['fast_pct']:.0f}% védés (rendezett "
+                         f"ellen {rec_gbr['set_pct']:.0f}%).")
+    except Exception:
+        pass
     # Gól-előkészítés hossza: direkt vagy kombinatív gólok.
     try:
         from .attack_types import goal_buildup

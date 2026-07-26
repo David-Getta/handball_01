@@ -777,3 +777,53 @@ def test_gk_outlet_security_counts_stolen_outlets():
     # Kevés indítás: nincs ítélet.
     few = gk_outlet_security(_match(frames[:40] + frames[-250:]))
     assert few["home"]["lost_pct"] is None
+
+
+def test_gk_break_response_flags_fast_break_weakness():
+    """A vendég kapus a gyorsindításos lövéseket mind kapja (0%
+    védés), a rendezettekből hármat véd (75%) → lerohanásra érzékeny;
+    kevés lövésnél nincs ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_break_response
+
+    frames = []
+    t = 0
+
+    def _context(n, x):
+        # A lövés előtti kép: a labda a hazai játékosnál az adott
+        # ponton (x < 20: saját térfél → gyorsindítás; x >= 20:
+        # rendezett támadás).
+        nonlocal t, frames
+        holder = PlayerPosition(track_id=4, team=Team.HOME, x=x,
+                                y=10.0, source=PositionSource.MEASURED,
+                                confidence=1.0)
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[holder],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _shot(save):
+        nonlocal t, frames
+        frames += _shot_sequence(t, 30, save=save)
+        t = frames[-1].t + 1
+
+    # 4 rendezett lövés (10 mp a támadó térfélen): 3 védés, 1 gól.
+    for i in range(4):
+        _context(250, 28.0)
+        _shot(save=(i < 3))
+    # 4 gyorsindításos lövés (2 mp-vel előtte még saját térfél): mind gól.
+    for _ in range(4):
+        _context(50, 15.0)
+        _shot(save=False)
+
+    gbr = gk_break_response(_match(frames))
+    a = gbr["away"]
+    assert a["fast_faced"] >= 4 and a["set_faced"] >= 4
+    assert a["verdict"] == "érzékeny"
+    assert a["set_pct"] > a["fast_pct"]
+    # A hazai kapura nem ment lövés: nincs ítélet.
+    assert gbr["home"]["verdict"] is None
+
+    # Kevés lövés: nincs ítélet.
+    few = gk_break_response(_match(frames[:600]))
+    assert few["away"]["verdict"] is None

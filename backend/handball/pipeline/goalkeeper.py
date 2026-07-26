@@ -945,3 +945,91 @@ def gk_outlet_security(match: Match, config=None) -> dict:
                          else None),
         }
     return out
+
+
+# Lerohanás-védés: a lövés előtt ennyi másodpercen belül még a saját
+# térfélen járt labda jelez gyorsindítás-lövést; fázisonként ennyi
+# kaput eltaláló lövés kell az ítélethez, és ekkora védés-arány
+# különbség (százalékpont) számít érdeminek.
+GKBR_FAST_S = 8.0
+GKBR_LOOKBACK_S = 30.0
+GKBR_MIN_FACED = 4
+GKBR_GAP_PP = 15.0
+
+
+def gk_break_response(match: Match, config=None) -> dict:
+    """Lerohanás-védés: hogy véd a kapus gyorsindítás ellen.
+
+    A kaput eltaláló lövéseket két fázisra bontjuk: gyorsindításos (a
+    labda a lövés előtti GKBR_FAST_S másodpercben még a támadó saját
+    térfelén járt) és rendezett támadás végi lövésekre, és a VÉDŐ
+    oldal kapusának védés-arányát hasonlítjuk össze a kettőben. A
+    lerohanásra érzékeny kapus (a gyors fázisban érdemben rosszabb)
+    ellen futni kell — minden szerzés után indíts; a lerohanás-fogó
+    kapus ellen a gyors befejezést is ki kell játszani (csel,
+    visszatett labda), mert az első csapott lövést megeszi.
+
+    Visszatérés csapatonként (a VÉDŐ oldal könyvelésében):
+    {"fast_faced", "fast_saves", "set_faced", "set_saves",
+    "fast_pct", "set_pct", "gap_pp", "verdict"} — pct/verdict None,
+    ha bármelyik fázisban kevés (GKBR_MIN_FACED alatti) a lövés; a
+    verdict "érzékeny" / "lerohanás-fogó" / None (kiegyenlített).
+    """
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    mid = COURT_LENGTH_M / 2.0
+    lookback = round(GKBR_LOOKBACK_S * fps)
+    fast_win = GKBR_FAST_S
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    counts = {s: {"fast_faced": 0, "fast_saves": 0,
+                  "set_faced": 0, "set_saves": 0}
+              for s in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh["outcome"] not in ("goal", "save"):
+            continue
+        team = Team.HOME if sh["team"] == "home" else Team.AWAY
+        attacks_positive = config.attacks_toward_x(team) > mid
+        # A lövő saját (védekező) térfele.
+        def _own_half(x):
+            return x < mid if attacks_positive else x > mid
+        i0 = idx_of.get(sh["t"])
+        if i0 is None:
+            continue
+        dt_s = None
+        i = i0
+        while i >= 0 and i0 - i <= lookback:
+            f = match.frames[i]
+            if f.ball is not None and _own_half(f.ball.x):
+                dt_s = (sh["t"] - f.t) / fps
+                break
+            i -= 1
+        fast = dt_s is not None and dt_s <= fast_win
+        defender = "away" if sh["team"] == "home" else "home"
+        rec = counts[defender]
+        key = "fast" if fast else "set"
+        rec[key + "_faced"] += 1
+        if sh["outcome"] == "save":
+            rec[key + "_saves"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "fast_pct": None, "set_pct": None,
+             "gap_pp": None, "verdict": None}
+        if rec["fast_faced"] >= GKBR_MIN_FACED \
+                and rec["set_faced"] >= GKBR_MIN_FACED:
+            fast_pct = 100.0 * rec["fast_saves"] / rec["fast_faced"]
+            set_pct = 100.0 * rec["set_saves"] / rec["set_faced"]
+            r["fast_pct"] = round(fast_pct, 1)
+            r["set_pct"] = round(set_pct, 1)
+            r["gap_pp"] = round(fast_pct - set_pct, 1)
+            if set_pct - fast_pct >= GKBR_GAP_PP:
+                r["verdict"] = "érzékeny"
+            elif fast_pct - set_pct >= GKBR_GAP_PP:
+                r["verdict"] = "lerohanás-fogó"
+        out[side] = r
+    return out

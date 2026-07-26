@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lerohanás-védés**: hogy véd a kapus gyorsindítás ellen — a kaput
+  eltaláló lövéseket fázisra bontjuk (a labda a lövés előtti 8 mp-ben
+  még a támadó saját térfelén járt = gyorsindításos; különben
+  rendezett), és a védő oldal kapusának védés-arányát hasonlítjuk
+  össze (fázisonként 4+ lövésből, 15+ százalékpont a küszöb). Az
+  érzékeny kapus ellen futni kell — minden szerzés után indíts; a
+  lerohanás-fogó ellen a gyors befejezést is ki kell játszani (csel,
+  visszatett labda). Egy réteg, sok felület: `gk_break_response`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kétirányú kulcs + csempe), 75. meccsterv-szabály
+  (az ő lerohanás-érzékeny kapusuk × a ti lerohanás-gépezetetek), 96.
+  edzés-szabály (2v1/3v2 gyorsindítás elleni kapus-sorozat +
+  visszarendeződés).
 - **Gól-előkészítés hossza**: direkt vagy kombinatív gólokból élnek
   — gólonként megszámoljuk a gólt szerző csapat passzait az előző
   birtoklás-határig visszanézve. A direkt csapat (a gólok 50%+ része

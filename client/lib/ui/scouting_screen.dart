@@ -1137,6 +1137,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Lerohanás-védés: a kapus védés-aránya gyorsindítás vs rendezett
+  // támadás ellen (fázisonként 4+ kaput eltaláló lövésnél, 15+
+  // százalékpont eltérésnél; a backend-kulccsal azonos küszöbök).
+  String? _gkBreakResponse(Map<String, dynamic> r) {
+    final ff = ((r["gkb_fast_faced"] as num?) ?? 0).toInt();
+    final fs = ((r["gkb_fast_saves"] as num?) ?? 0).toInt();
+    final sf = ((r["gkb_set_faced"] as num?) ?? 0).toInt();
+    final ss = ((r["gkb_set_saves"] as num?) ?? 0).toInt();
+    if (ff < 4 || sf < 4) return null;
+    final fast = 100.0 * fs / ff;
+    final set = 100.0 * ss / sf;
+    if (set - fast >= 15.0) {
+      return "a kapusuk lerohanásra érzékeny: gyorsindítás ellen "
+          "${fast.toStringAsFixed(0)}%, rendezett ellen "
+          "${set.toStringAsFixed(0)}% védés · fuss minden szerzésből";
+    }
+    if (fast - set >= 15.0) {
+      return "lerohanás-fogó kapus (${fast.toStringAsFixed(0)}% vs "
+          "${set.toStringAsFixed(0)}%) · a gyors befejezést is "
+          "játszd ki";
+    }
+    return null;
+  }
+
   // Gól-előkészítés hossza: a direkt (0-2 passzos) és kombinatív
   // (5+ passzos) gólok aránya (4+ gólnál, 50%+ résznél; a
   // backend-kulccsal azonos küszöbök).
@@ -2169,6 +2193,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Előkészítő-függés", _assistConcentration(r)!],
       if (_goalBuildup(r) != null)
         ["Gól-előkészítés", _goalBuildup(r)!],
+      if (_gkBreakResponse(r) != null)
+        ["Lerohanás-védés", _gkBreakResponse(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

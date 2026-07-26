@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 96) Lerohanás-védés: ha a kapusunk gyorsindítás ellen szakad
+    # be, a kapus-edzés és a visszarendeződés együtt a téma.
+    try:
+        from .goalkeeper import (GKBR_GAP_PP, GKBR_MIN_FACED,
+                                 gk_break_response)
+        gkb96 = gk_break_response(match, config)
+        for side in ("home", "away"):
+            rec96 = gkb96[side]
+            if rec96["verdict"] != "érzékeny" \
+                    or rec96["fast_faced"] < GKBR_MIN_FACED \
+                    or rec96["set_faced"] < GKBR_MIN_FACED \
+                    or rec96["set_pct"] - rec96["fast_pct"] \
+                    < GKBR_GAP_PP:
+                continue
+            add(side, "kapus", "Lerohanás-védés",
+                f"a kapusunk gyorsindítás ellen "
+                f"{rec96['fast_pct']:.0f}%-ot véd, rendezett támadás "
+                f"ellen {rec96['set_pct']:.0f}%-ot ({rec96['fast_saves']}"
+                f"/{rec96['fast_faced']} vs {rec96['set_saves']}/"
+                f"{rec96['set_faced']}) — az átmenet a nyílt sebünk",
+                "lerohanás-védés a kapusnak: 2v1 és 3v2 gyorsindítás "
+                "elleni sorozat (gyors kijövetel, szög-zárás, lábmunka "
+                "hátrálásból), a mezőnynek pedig visszarendeződés — a "
+                "kapus ne maradjon egyedül az első hullám ellen")
+    except Exception:
+        pass
+
     # 95) Gól-előkészítés hossza: ha csak hosszú akcióból van gólunk,
     # az első hullámunk fogatlan — a direkt befejezés a téma.
     try:

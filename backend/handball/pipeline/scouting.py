@@ -533,6 +533,13 @@ class ScoutingReport:
     gb_goals: int = 0
     gb_short: int = 0
     gb_long: int = 0
+    # Lerohanás-védés: a kapusuk kaput eltaláló lövései fázisonként
+    # (gyorsindításos / rendezett) + védései — darabszámok, meccsek
+    # közt összegződnek.
+    gkb_fast_faced: int = 0
+    gkb_fast_saves: int = 0
+    gkb_set_faced: int = 0
+    gkb_set_saves: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1458,6 +1465,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Lerohanás-védés: az érzékeny kapus ellen futni kell, a
+    # lerohanás-fogó ellen a gyors befejezést is ki kell játszani.
+    if rep.gkb_fast_faced >= 4 and rep.gkb_set_faced >= 4:
+        _gkb_fast = 100.0 * rep.gkb_fast_saves / rep.gkb_fast_faced
+        _gkb_set = 100.0 * rep.gkb_set_saves / rep.gkb_set_faced
+        if _gkb_set - _gkb_fast >= 15.0:
+            keys.append(
+                f"A kapusuk a lerohanásokra érzékeny: gyorsindítás "
+                f"ellen {_gkb_fast:.0f}%, rendezett támadás ellen "
+                f"{_gkb_set:.0f}% a védése — FUSS: minden szerzés és "
+                "kapott gól után azonnali indítás, az első hullámot "
+                "fejezd is be.")
+        elif _gkb_fast - _gkb_set >= 15.0:
+            keys.append(
+                f"A kapusuk lerohanás-fogó: gyorsindítás ellen "
+                f"{_gkb_fast:.0f}% a védése (rendezett ellen "
+                f"{_gkb_set:.0f}%) — a lerohanást is JÁTSZD ki: csel "
+                "vagy visszatett labda a csapott lövés helyett, üres "
+                "lerohanásból ne lőj rá vaktában.")
 
     # Gól-előkészítés hossza: a direkt csapat ellen az első hullám
     # megfogása, a kombinatív ellen a fal türelme a meccs.
@@ -2988,6 +3015,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.gb_goals = gbrec["goals"]
         rep.gb_short = gbrec["short"]
         rep.gb_long = gbrec["long"]
+        from .goalkeeper import gk_break_response
+        gkbrec = gk_break_response(match, config)[team.value]
+        rep.gkb_fast_faced = gkbrec["fast_faced"]
+        rep.gkb_fast_saves = gkbrec["fast_saves"]
+        rep.gkb_set_faced = gkbrec["set_faced"]
+        rep.gkb_set_saves = gkbrec["set_saves"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4265,6 +4298,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 75) Az ő lerohanás-érzékeny kapusuk × a ti lerohanás-
+    # gépezetetek: minden szerzés után futni kell.
+    if (opp.gkb_fast_faced >= 4 and opp.gkb_set_faced >= 4
+            and own.trans_steals >= 4 and own.trans_quick_goals >= 2
+            and (100.0 * opp.gkb_set_saves / opp.gkb_set_faced)
+            - (100.0 * opp.gkb_fast_saves / opp.gkb_fast_faced)
+            >= 15.0):
+        plan.append(
+            f"A kapusuk a lerohanásokra érzékeny (gyorsindítás ellen "
+            f"{100.0 * opp.gkb_fast_saves / opp.gkb_fast_faced:.0f}% "
+            f"védés, rendezett ellen "
+            f"{100.0 * opp.gkb_set_saves / opp.gkb_set_faced:.0f}%), "
+            f"a ti lerohanás-gépezetetek pedig termel "
+            f"({own.trans_quick_goals} gyors gól {own.trans_steals} "
+            "szerzésből) — minden labdaszerzés után FUSS: az első "
+            "hullám végig kényszer legyen rajtuk.")
+
     # 74) Az ő kombinatív góltermelésük × a ti rés-mentes falatok: ha
     # a hosszú akcióikra nem szakad fel a fal, elfogy az ötletük.
     if (opp.gb_goals >= 4 and own.wg_frames >= 100
@@ -4968,6 +5018,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gb_goals=sum(r.gb_goals for r in reports),
         gb_short=sum(r.gb_short for r in reports),
         gb_long=sum(r.gb_long for r in reports),
+        gkb_fast_faced=sum(r.gkb_fast_faced for r in reports),
+        gkb_fast_saves=sum(r.gkb_fast_saves for r in reports),
+        gkb_set_faced=sum(r.gkb_set_faced for r in reports),
+        gkb_set_saves=sum(r.gkb_set_saves for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),
