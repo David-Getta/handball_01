@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 114) Játékos-mérleg: ha valakinek a pályán léte alatt érdemben
+    # rosszabb a gólkülönbségünk, a szerep-tisztázás a téma.
+    try:
+        from .stats import PM_MIN_MINUTES, player_plus_minus
+        pm114 = player_plus_minus(match, config)
+        for side in ("home", "away"):
+            worst114 = pm114[side]["worst"]
+            if worst114 is None \
+                    or worst114["minutes"] < PM_MIN_MINUTES:
+                continue
+            add(side, "taktika", "Szerep-tisztázás",
+                f"a(z) {worst114['player_id']} azonosítójú játékosunk "
+                f"pályán léte alatt {worst114['for']}-"
+                f"{worst114['against']} a mérlegünk "
+                f"({worst114['minutes']:.0f} perc, "
+                f"{worst114['diff_per_min']:.2f} gól/perc a csapatátlag "
+                "helyett) — nem ítélet, hanem kérdés: kivel és mikor "
+                "játszik",
+                "szerep-tisztázás: nézzétek végig a vele töltött "
+                "szakaszokat (kivel van egy egységben, milyen "
+                "állásnál), párosítsátok stabil társsal, és adjatok "
+                "neki egy világos feladatot támadásban és "
+                "védekezésben is")
+    except Exception:
+        pass
+
     # 113) Lövő-erő: ha van a csapatátlag felett bombázónk, a távoli
     # befejezés köré épített figura a téma.
     try:

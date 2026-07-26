@@ -502,3 +502,94 @@ def rotation_depth(match, config=None) -> dict:
                 sum(p_["minutes"] for p_ in rec["players"])
                 / rec["used"], 1)
     return out
+
+
+# Játékos-mérleg: ennyi pályán töltött perctől ítélünk, és ennyi
+# gól/perc eltérés a csapatátlagtól számít érdemi jelnek.
+PM_MIN_MINUTES = 5.0
+PM_GAP_PER_MIN = 0.15
+
+
+def player_plus_minus(match, config=None) -> dict:
+    """Játékos-mérleg (+/−): kinek a pályán léte alatt jobb a
+    gólkülönbség.
+
+    A rotáció-mélység (rotation_depth) azt mutatja, KI mennyit
+    játszik — ez azt, hogy MI TÖRTÉNIK, amíg játszik: a pályán
+    töltött ideje alatt szerzett és kapott gólok különbsége, percre
+    vetítve, a csapat saját átlagához mérve. A magas mérlegű
+    játékos ellen kell a legerősebb védekezés (és őt kell fárasztani);
+    a negatív mérleg nem ítélet, hanem kérdés: kivel és mikor játszik.
+
+    Visszatérés csapatonként: {"team_per_min", "players":
+    [{"player_id", "minutes", "for", "against", "diff",
+      "diff_per_min", "vs_team"}], "best", "worst"} — a lista a
+    percre vetített mérleg szerint csökkenő; a best/worst az első
+    olyan játékos, akinek legalább PM_MIN_MINUTES ideje van, és
+    PM_GAP_PER_MIN-nel a csapatátlag felett/alatt van (egyébként
+    None).
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    if not match.frames:
+        return {s: {"team_per_min": None, "players": [], "best": None,
+                    "worst": None} for s in ("home", "away")}
+
+    # Pályán töltött kockák és a rájuk eső gólok játékosonként.
+    on_frames: dict = {"home": {}, "away": {}}
+    goal_idx: dict = {}
+    for (gt, gs) in goals:
+        goal_idx.setdefault(gt, []).append(gs)
+    tally: dict = {"home": {}, "away": {}}
+    goals_by_t = {gt: gss for gt, gss in goal_idx.items()}
+    for f in match.frames:
+        gss = goals_by_t.get(f.t)
+        for p in f.players:
+            if p.team is None:
+                continue
+            side = p.team.value
+            on_frames[side][p.track_id] = (
+                on_frames[side].get(p.track_id, 0) + 1)
+            if gss:
+                rec = tally[side].setdefault(p.track_id,
+                                             {"for": 0, "against": 0})
+                for gs in gss:
+                    rec["for" if gs == side else "against"] += 1
+
+    total_s = (match.frames[-1].t - match.frames[0].t) / fps
+    out = {}
+    for side in ("home", "away"):
+        other = "away" if side == "home" else "home"
+        team_for = sum(1 for (_t, gs) in goals if gs == side)
+        team_against = sum(1 for (_t, gs) in goals if gs == other)
+        team_per_min = (round(60.0 * (team_for - team_against) / total_s, 2)
+                        if total_s > 0 else None)
+        players = []
+        for pid, frames_n in on_frames[side].items():
+            minutes = frames_n / fps / 60.0
+            rec = tally[side].get(pid, {"for": 0, "against": 0})
+            diff = rec["for"] - rec["against"]
+            per_min = (round(diff / minutes, 2) if minutes > 0 else None)
+            players.append({
+                "player_id": pid, "minutes": round(minutes, 1),
+                "for": rec["for"], "against": rec["against"],
+                "diff": diff, "diff_per_min": per_min,
+                "vs_team": (round(per_min - team_per_min, 2)
+                            if per_min is not None
+                            and team_per_min is not None else None)})
+        players.sort(key=lambda p: -(p["diff_per_min"] or 0.0))
+        best = next((p for p in players
+                     if p["minutes"] >= PM_MIN_MINUTES
+                     and (p["vs_team"] or 0.0) >= PM_GAP_PER_MIN), None)
+        worst = next((p for p in reversed(players)
+                      if p["minutes"] >= PM_MIN_MINUTES
+                      and (p["vs_team"] or 0.0) <= -PM_GAP_PER_MIN), None)
+        out[side] = {"team_per_min": team_per_min, "players": players,
+                     "best": best, "worst": worst}
+    return out

@@ -1137,6 +1137,37 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Játékos-mérleg: kinek a pályán léte alatt a legjobb a
+  // gólkülönbségük (5+ perc, 0.15 gól/perc felett; a backend-kulccsal
+  // azonos küszöbök).
+  String? _plusMinus(Map<String, dynamic> r) {
+    final list = r["player_plus_minus"];
+    final fps = ((r["pm_fps"] as num?) ?? 25.0).toDouble();
+    if (list is! List || fps <= 0) return null;
+    Map? best;
+    double bestRate = 0.0;
+    double bestMin = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final frames = ((e["frames"] as num?) ?? 0).toDouble();
+      final minutes = frames / fps / 60.0;
+      if (minutes < 5.0) continue;
+      final diff = ((e["for"] as num?) ?? 0).toInt() -
+          ((e["against"] as num?) ?? 0).toInt();
+      final rate = diff / minutes;
+      if (best == null || rate > bestRate) {
+        best = e;
+        bestRate = rate;
+        bestMin = minutes;
+      }
+    }
+    if (best == null || bestRate < 0.15) return null;
+    return "a(z) ${best["player_id"]} játékosukkal megy a legjobban: "
+        "${best["for"]}-${best["against"]} mérleg "
+        "${bestMin.toStringAsFixed(0)} perc alatt · "
+        "rá kell menni védekezésben is";
+  }
+
   // Lövő-erő: ki lő rendre a csapatátlag felett (4+ mért lövés, 8+
   // km/h eltérés; a backend-kulccsal azonos küszöbök).
   String? _shooterPower(Map<String, dynamic> r) {
@@ -2613,6 +2644,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lövő-kapuoldal", _shooterPlacement(r)!],
       if (_shooterPower(r) != null)
         ["Lövő-erő", _shooterPower(r)!],
+      if (_plusMinus(r) != null)
+        ["Játékos-mérleg", _plusMinus(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

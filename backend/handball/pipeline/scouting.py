@@ -566,6 +566,12 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Játékos-mérlegük: [{"player_id", "frames", "for", "against"}] —
+    # a pályán töltött kockák és a rájuk eső gólok; darabszámok,
+    # meccsek közt összegződnek (a percre vetített mérleg ebből
+    # pontosan visszaszámolható).
+    player_plus_minus: list = field(default_factory=list)
+    pm_fps: float = 25.0
     # Lövő-erejük: [{"player_id", "shots", "sum_kmh", "max_kmh"}] —
     # a sebesség-összeg és a lövésszám tárolva, hogy az átlag meccsek
     # közt pontosan visszaszámolható legyen; + a csapat sebesség-
@@ -1570,6 +1576,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Játékos-mérleg: kinek a pályán léte alatt megy a legjobban.
+    _pm_rows = [p for p in (rep.player_plus_minus or [])
+                if p["frames"] / (rep.pm_fps or 25.0) / 60.0 >= 5.0]
+    if _pm_rows:
+        _pm_best = max(
+            _pm_rows,
+            key=lambda p: ((p["for"] - p["against"])
+                           / max(0.1, p["frames"] / (rep.pm_fps or 25.0)
+                                 / 60.0)))
+        _pm_min = _pm_best["frames"] / (rep.pm_fps or 25.0) / 60.0
+        _pm_diff = _pm_best["for"] - _pm_best["against"]
+        if _pm_diff / _pm_min >= 0.15:
+            keys.append(
+                f"A(z) {_pm_best['player_id']} azonosítójú játékosuk "
+                f"a pályán megy a legjobban a játékuk "
+                f"({_pm_best['for']}-{_pm_best['against']} a mérleg "
+                f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
+                "legerősebb védekezés, és őt kell fárasztani: menjetek "
+                "rá védekezésben is.")
 
     # Lövő-erő: van-e a csapatátlag felett bombázó befejezőjük.
     if rep.spw_team_shots >= 6:
@@ -3445,6 +3471,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .stats import player_plus_minus as _pm
+        _fps = match.meta.fps if match.meta.fps > 0 else 25.0
+        rep.pm_fps = _fps
+        rep.player_plus_minus = [
+            {"player_id": p["player_id"],
+             "frames": round(p["minutes"] * 60.0 * _fps),
+             "for": p["for"], "against": p["against"]}
+            for p in _pm(match, config)[team.value]["players"]]
         from .event_detection import shooter_power as _spw
         spwrec = _spw(match, config)[team.value]
         rep.shooter_power = [
@@ -4119,6 +4153,22 @@ def _merge_turnover_players(reports) -> list:
                                      + int(w["losses"]))
     return [{"player_id": pid, "losses": n}
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
+def _merge_plus_minus(reports) -> list:
+    """Játékos-mérleg: pályán töltött kockák és a rájuk eső gólok
+    játékosonkénti összegzése (a mérleg szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.player_plus_minus or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"frames": 0, "for": 0, "against": 0})
+            for k in ("frames", "for", "against"):
+                rec[k] += int(p.get(k, 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(
+                tally.items(),
+                key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
 
 
 def _merge_shooter_power(reports) -> list:
@@ -4852,6 +4902,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 93) Az ő legjobb mérlegű játékosuk × a ti kettőzésetek: őt kell
+    # a leginkább zavarni.
+    _pm93 = [p for p in (opp.player_plus_minus or [])
+             if p["frames"] / (opp.pm_fps or 25.0) / 60.0 >= 5.0]
+    if _pm93 and own.dbl_holder_frames >= 250 \
+            and 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames \
+            >= 30.0:
+        _b93 = max(_pm93,
+                   key=lambda p: ((p["for"] - p["against"])
+                                  / max(0.1, p["frames"]
+                                        / (opp.pm_fps or 25.0) / 60.0)))
+        _m93 = _b93["frames"] / (opp.pm_fps or 25.0) / 60.0
+        if (_b93["for"] - _b93["against"]) / _m93 >= 0.15:
+            plan.append(
+                f"A(z) {_b93['player_id']} azonosítójú játékosuk "
+                f"pályán léte alatt megy a legjobban a játékuk "
+                f"({_b93['for']}-{_b93['against']} {_m93:.0f} perc "
+                f"alatt), ti pedig sokat kettőztök (a labdás-idő "
+                f"{100.0 * own.dbl_doubled_frames / own.dbl_holder_frames:.0f}"
+                "%-ában) — a kettőzést rá kell időzíteni: amikor nála "
+                "a labda, jöjjön a második védő.")
 
     # 92) Az ő bombázójuk × a ti aktív falatok: a szöget kell zárni,
     # nem vakon blokkolni.
@@ -5868,6 +5940,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        player_plus_minus=_merge_plus_minus(reports),
+        pm_fps=(reports[0].pm_fps if reports else 25.0),
         shooter_power=_merge_shooter_power(reports),
         spw_team_shots=sum(r.spw_team_shots for r in reports),
         spw_team_sum_kmh=round(

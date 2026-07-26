@@ -205,3 +205,69 @@ def test_rotation_depth_on_sliced_match_first_half_picture():
     assert fh["used"] == 1           # az első félidőben csak az 1-es
     full = rotation_depth(m)["home"]
     assert full["used"] == 2         # a teljes képben már ketten
+
+
+def test_player_plus_minus_ranks_on_court_goal_difference():
+    """Az 1-es hazai játékos két hazai gólnál van a pályán, a 2-es két
+    kapott gólnál → az 1-es a legjobb, a 2-es a legrosszabb mérlegű;
+    kevés játékidőnél nincs megnevezett játékos."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.stats import player_plus_minus
+
+    def _pl(track_id, team, x, y):
+        return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+
+    def _play(pid, seconds):
+        """`seconds` mp játék: a pid-es hazai játékos a pályán."""
+        nonlocal t, frames
+        for _ in range(int(seconds * 25)):
+            frames.append(Frame(t=t, players=[_pl(pid, Team.HOME,
+                                                  20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _goal(pid, home_goal):
+        """Gól a +x (hazai) vagy a -x (vendég) kapura, a pid-essel a
+        pályán."""
+        nonlocal t, frames
+        for i in range(8):
+            bx = (min(33.6 + i, 40.0) if home_goal
+                  else max(6.4 - i, 0.0))
+            frames.append(Frame(t=t, players=[_pl(pid, Team.HOME,
+                                                  20.0, 10.0)],
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    # Az 1-es 6 percet játszik két hazai góllal, a 2-es 6 percet két
+    # kapott góllal.
+    for _ in range(2):
+        _play(1, 180)
+        _goal(1, home_goal=True)
+    for _ in range(2):
+        _play(2, 180)
+        _goal(2, home_goal=False)
+
+    pm = player_plus_minus(Match(
+        meta=MatchMeta(match_id="pm", home_team="H", away_team="A",
+                       fps=25.0), frames=frames))
+    h = pm["home"]
+    one = next(p for p in h["players"] if p["player_id"] == 1)
+    two = next(p for p in h["players"] if p["player_id"] == 2)
+    assert one["for"] == 2 and one["against"] == 0
+    assert two["for"] == 0 and two["against"] == 2
+    assert one["diff_per_min"] > two["diff_per_min"]
+    assert h["best"]["player_id"] == 1
+    assert h["worst"]["player_id"] == 2
+
+    # Rövid részlet: nincs elég játékidő → nincs megnevezett játékos.
+    few = player_plus_minus(Match(
+        meta=MatchMeta(match_id="pm", home_team="H", away_team="A",
+                       fps=25.0), frames=frames[:500]))
+    assert few["home"]["best"] is None and few["home"]["worst"] is None

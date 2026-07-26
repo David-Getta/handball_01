@@ -684,6 +684,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Játékos-mérleg: kinek a pályán léte alatt ment jobban a játék.
+    try:
+        from .stats import player_plus_minus
+        pmm = player_plus_minus(match)
+        for side, name in (("home", home), ("away", away)):
+            best_pm = pmm[side]["best"]
+            if best_pm is None:
+                continue
+            jn = _jersey_of_track(match).get(best_pm["player_id"])
+            who = (f"{jn}-es mezszámú játékosával" if jn is not None
+                   else f"{best_pm['player_id']} azonosítójú "
+                        "játékosával")
+            body += (f" A(z) {name} {who} a pályán ment a legjobban: "
+                     f"{best_pm['for']}-{best_pm['against']} a mérleg "
+                     f"{best_pm['minutes']:.0f} perc alatt.")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power

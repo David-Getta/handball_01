@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Játékos-mérleg (+/−)**: kinek a pályán léte alatt jobb a
+  gólkülönbség — a rotáció-mélység azt mutatja, KI mennyit játszik,
+  ez azt, hogy MI TÖRTÉNIK, amíg játszik: a pályán töltött ideje
+  alatt szerzett és kapott gólok különbsége, percre vetítve, a
+  csapat saját átlagához mérve (5+ perc játékidőtől, 0.15 gól/perc
+  eltérésnél). A magas mérlegű játékos ellen kell a legerősebb
+  védekezés, és őt kell fárasztani; a negatív mérleg nem ítélet,
+  hanem kérdés: kivel és mikor játszik. Egy réteg, sok felület:
+  `player_plus_minus` motor, edzői összefoglaló (mezszámmal),
+  /analyze + meccs-csomag, felderítés-profil (edzői kulcs + csempe;
+  a pályán töltött kockák és a gólok tárolva, hogy a mérleg meccsek
+  közt pontosan visszaszámolható legyen), 93. meccsterv-szabály (az
+  ő legjobb mérlegű játékosuk × a ti kettőzésetek), 114.
+  edzés-szabály (szerep-tisztázás: kivel és milyen állásnál játszik).
 - **Lövő-erő**: kinek a legkeményebb a lövése — a lövés-sebességek
   csapat-átlagot és egy leggyorsabb lövést adnak, ez lövőnkénti
   profil: ki lő rendre a csapatátlag felett (4+ mért lövésből, 8+
