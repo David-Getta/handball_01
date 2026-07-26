@@ -1513,3 +1513,82 @@ def side_switching(match: Match,
                 r["style"] = "egy-oldalas"
         out[side] = r
     return out
+
+
+# Elzárás-használat: a lövő őrzője ennyire lehet a lövőtől, hogy
+# "őrzöttnek" számítson; a társ ennyire az őrzőtől, hogy elzárásnak;
+# ennyi őrzött lövés kell az ítélethez, és e részarányok döntik el a
+# címkét.
+SCREEN_MARKER_MAX_M = 3.0
+SCREEN_DIST_M = 2.0
+SCREEN_MIN_SHOTS = 8
+SCREEN_HIGH_PCT = 40.0
+SCREEN_LOW_PCT = 10.0
+
+
+def screen_usage(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárás-használat: elzárásból lőnek, vagy tisztán, 1v1-ből.
+
+    Lövésenként megnézzük, hogy a lövő őrzője (a hozzá legközelebbi
+    védő) mellett áll-e egy támadó társ elzárásban. Az elzárásos
+    csapat ellen a váltás-kommunikáció a meccs: hangos váltás vagy
+    átcsúszás az elzárás alatt, különben a lövő mindig tisztán marad;
+    az elzárás nélkül lövő csapat lövője viszont magára van hagyva —
+    a kilépés és a blokk ellene szinte ingyen van, és saját
+    olvasatban az elzárás-játék hiánya edzés-téma.
+
+    Visszatérés csapatonként: {"shots", "screened", "screen_pct",
+    "style"} — pct/style None, ha kevés (SCREEN_MIN_SHOTS alatti) az
+    őrzött lövés; a style "elzárásos" / "elzárás nélküli" / None.
+    """
+    import math
+
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    counts = {"home": {"shots": 0, "screened": 0},
+              "away": {"shots": 0, "screened": 0}}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        defenders = [p for p in f.players
+                     if p.team is not None and p.team != shooter.team]
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in defenders:
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue  # szabad lövés: nincs kit elzárni
+        rec = counts[sh["team"]]
+        rec["shots"] += 1
+        screened = any(
+            p.track_id != pid and p.team == shooter.team
+            and math.hypot(p.x - marker.x, p.y - marker.y)
+            <= SCREEN_DIST_M
+            for p in f.players)
+        if screened:
+            rec["screened"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "screen_pct": None, "style": None}
+        if rec["shots"] >= SCREEN_MIN_SHOTS:
+            pct = 100.0 * rec["screened"] / rec["shots"]
+            r["screen_pct"] = round(pct, 1)
+            if pct >= SCREEN_HIGH_PCT:
+                r["style"] = "elzárásos"
+            elif pct <= SCREEN_LOW_PCT:
+                r["style"] = "elzárás nélküli"
+        out[side] = r
+    return out

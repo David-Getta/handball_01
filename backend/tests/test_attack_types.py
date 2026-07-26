@@ -1044,3 +1044,61 @@ def test_side_switching_separates_cross_court_and_one_sided():
     # Kevés passz: nincs ítélet.
     few = side_switching(Match(_meta(), frames[:100]))
     assert few["home"]["style"] is None
+
+
+def test_screen_usage_separates_screened_and_isolated_shooters():
+    """A hazai lövéseinél társ zárja el a lövő őrzőjét (elzárásos), a
+    vendégnél a lövő egyedül van a védőjével (elzárás nélküli);
+    kevés őrzött lövésnél nincs ítélet."""
+    from handball.pipeline.attack_types import screen_usage
+
+    frames = []
+    t = 0
+
+    def _shot(home_side, screened):
+        # Őrzött lövés: a védő a lövő mellett (1,5 m); elzárásnál egy
+        # társ is a védő mellett áll (1 m-re).
+        nonlocal t, frames
+        if home_side:
+            team, opp = Team.HOME, Team.AWAY
+            sx, gx = 30.0, 40.0
+        else:
+            team, opp = Team.AWAY, Team.HOME
+            sx, gx = 10.0, 0.0
+        players = [_pl(1 if home_side else 11, team, sx, 10.0),
+                   _pl(20 if home_side else 21, opp, sx + 1.5, 10.0)]
+        if screened:
+            players.append(_pl(2 if home_side else 12, team,
+                               sx + 1.5, 11.0))
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=sx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            bx = (min(sx + 0.8 * (i + 1), gx) if home_side
+                  else max(sx - 0.8 * (i + 1), gx))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=gx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(8):
+        _shot(True, screened=True)
+    for _ in range(8):
+        _shot(False, screened=False)
+
+    scu = screen_usage(Match(_meta(), frames))
+    h, a = scu["home"], scu["away"]
+    assert h["shots"] >= 8 and h["style"] == "elzárásos"
+    assert a["shots"] >= 8 and a["style"] == "elzárás nélküli"
+    assert h["screen_pct"] > a["screen_pct"]
+
+    # Kevés őrzött lövés: nincs ítélet.
+    few = screen_usage(Match(_meta(), frames[:200]))
+    assert few["home"]["style"] is None

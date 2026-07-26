@@ -663,6 +663,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Elzárás-használat: elzárásból lőttek vagy tisztán, 1v1-ből.
+    try:
+        from .attack_types import screen_usage
+        scu = screen_usage(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_su = scu[side]
+            if rec_su["style"] is None:
+                continue
+            if rec_su["style"] == "elzárásos":
+                body += (f" A(z) {name} elzárásokból lőtt: az őrzött "
+                         f"lövéseik {rec_su['screen_pct']:.0f}%-ánál "
+                         "társ zárta el a lövő őrzőjét.")
+            else:
+                body += (f" A(z) {name} elzárás nélkül lőtt (az őrzött "
+                         f"lövéseik csak {rec_su['screen_pct']:.0f}"
+                         "%-ánál volt elzárás) — a lövőik magukra "
+                         "voltak hagyva.")
+    except Exception:
+        pass
     # Oldalváltás: széthúzó keresztpasszok vagy egy-oldalas játék.
     try:
         from .attack_types import side_switching

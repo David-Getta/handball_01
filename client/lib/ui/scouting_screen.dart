@@ -1137,6 +1137,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Elzárás-használat: az elzárásból leadott lövések aránya az
+  // őrzött lövésekben (8+ őrzött lövésnél; 40%+ = elzárásos, 10%- =
+  // elzárás nélküli; a backend-kulccsal azonos küszöbök).
+  String? _screenUsage(Map<String, dynamic> r) {
+    final shots = ((r["scu_shots"] as num?) ?? 0).toInt();
+    final screened = ((r["scu_screened"] as num?) ?? 0).toInt();
+    if (shots < 8) return null;
+    final pct = 100.0 * screened / shots;
+    if (pct >= 40.0) {
+      return "elzárásokból lőnek (${pct.toStringAsFixed(0)}% "
+          "$screened/$shots) · hangos váltás, átcsúszás a zár alatt";
+    }
+    if (pct <= 10.0) {
+      return "elzárás nélkül lőnek (csak "
+          "${pct.toStringAsFixed(0)}%) · a lövőjük magára marad: "
+          "kilépés + sánc";
+    }
+    return null;
+  }
+
   // Oldalváltás: a keresztpasszok (10 m+ oldalirány) aránya a támadó
   // passzokban (30+ passznál; 12%+ = oldalváltó, 3%- = egy-oldalas;
   // a backend-kulccsal azonos küszöbök).
@@ -2217,6 +2237,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lerohanás-védés", _gkBreakResponse(r)!],
       if (_sideSwitching(r) != null)
         ["Oldalváltás", _sideSwitching(r)!],
+      if (_screenUsage(r) != null)
+        ["Elzárás-használat", _screenUsage(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

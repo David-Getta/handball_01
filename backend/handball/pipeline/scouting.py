@@ -544,6 +544,11 @@ class ScoutingReport:
     # (10 m+ oldalirány) — darabszámok, meccsek közt összegződnek.
     ssw_passes: int = 0
     ssw_switches: int = 0
+    # Elzárás-használat: őrzött lövések + ebből az elzárásból leadott
+    # (társ az őrző 2 m-es körzetében) — darabszámok, meccsek közt
+    # összegződnek.
+    scu_shots: int = 0
+    scu_screened: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1469,6 +1474,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Elzárás-használat: az elzárásos ellen váltás-kommunikáció, az
+    # elzárás nélküli lövő magára van hagyva.
+    if rep.scu_shots >= 8:
+        _scu_pct = 100.0 * rep.scu_screened / rep.scu_shots
+        if _scu_pct >= 40.0:
+            keys.append(
+                f"Elzárásokból lőnek: az őrzött lövéseik "
+                f"{_scu_pct:.0f}%-ánál társ zárja el a lövő őrzőjét "
+                f"({rep.scu_screened}/{rep.scu_shots}) — a "
+                "váltás-kommunikáció a meccs: hangos váltás vagy "
+                "átcsúszás az elzárás alatt, különben a lövőjük "
+                "mindig tisztán marad.")
+        elif _scu_pct <= 10.0:
+            keys.append(
+                f"Elzárás nélkül lőnek (az őrzött lövéseik csak "
+                f"{_scu_pct:.0f}%-ánál van elzárás) — a lövőik "
+                "magukra vannak hagyva: agresszív kilépés és blokk, "
+                "a segítő védőnek nem kell váltásra készülnie.")
 
     # Oldalváltás: az oldalváltó ellen kompakt eltolás, az
     # egy-oldalas ellen bátran eltolható a fal.
@@ -3048,6 +3072,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sswrec = side_switching(match, config)[team.value]
         rep.ssw_passes = sswrec["passes"]
         rep.ssw_switches = sswrec["switches"]
+        from .attack_types import screen_usage
+        scurec = screen_usage(match, config)[team.value]
+        rep.scu_shots = scurec["shots"]
+        rep.scu_screened = scurec["screened"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4325,6 +4353,18 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 77) Az ő elzárás nélküli lövéseik × a ti blokk-falatok: a
+    # magára hagyott lövőt a sánc megeszi.
+    if (opp.scu_shots >= 8 and own.blocks >= 5
+            and 100.0 * opp.scu_screened / opp.scu_shots <= 10.0):
+        plan.append(
+            f"Elzárás nélkül lőnek (az őrzött lövéseik csak "
+            f"{100.0 * opp.scu_screened / opp.scu_shots:.0f}%-ánál "
+            f"van elzárás), ti pedig eleve jól blokkoltok "
+            f"({own.blocks} blokk) — a lövőjük magára marad: "
+            "agresszív kilépés kész sánccal, váltásra nem kell "
+            "készülni, a kapus a maradék sarokra állhat.")
+
     # 76) Az ő egy-oldalas támadásuk × a ti szerzés-gépezetetek: a
     # kedvenc oldaluk passzsávjai a ti vadászterületetek.
     if (opp.ssw_passes >= 30 and own.steal_n >= 8
@@ -5063,6 +5103,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gkb_set_saves=sum(r.gkb_set_saves for r in reports),
         ssw_passes=sum(r.ssw_passes for r in reports),
         ssw_switches=sum(r.ssw_switches for r in reports),
+        scu_shots=sum(r.scu_shots for r in reports),
+        scu_screened=sum(r.scu_screened for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

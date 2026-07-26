@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Elzárás-használat**: elzárásból lőnek, vagy tisztán, 1v1-ből —
+  lövésenként megnézzük, hogy a lövő őrzője mellett (2 m-en belül)
+  áll-e támadó társ elzárásban (8+ őrzött lövésből; 40%+ =
+  elzárásos, 10% alatt = elzárás nélküli). Az elzárásos csapat ellen
+  a váltás-kommunikáció a meccs — hangos váltás vagy átcsúszás a zár
+  alatt; az elzárás nélkül lövő csapat lövője magára van hagyva: a
+  kilépés és a blokk ellene szinte ingyen van. Saját olvasatban az
+  elzárás-játék hiánya edzés-téma. Egy réteg, sok felület:
+  `screen_usage` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kétirányú kulcs + csempe), 77.
+  meccsterv-szabály (az ő elzárás nélküli lövéseik × a ti
+  blokk-falatok), 98. edzés-szabály (beállós elzárás-sor,
+  átlövő-kereszt, leolvasás váltásnál).
 - **Oldalváltás**: széthúzzák-e a falat gyors keresztpasszokkal — a
   támadó térfélen adott passzok közül a 10 m+ oldalirányú
   elmozdulásúak aránya (30+ passzból; 12%+ = oldalváltó, 3% alatt =

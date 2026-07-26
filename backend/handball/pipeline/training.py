@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 98) Elzárás-használat: ha elzárás nélkül lövünk, a lövőnk
+    # magára marad — az elzárás-játék a téma.
+    try:
+        from .attack_types import (SCREEN_LOW_PCT, SCREEN_MIN_SHOTS,
+                                   screen_usage)
+        scu98 = screen_usage(match, config)
+        for side in ("home", "away"):
+            rec98 = scu98[side]
+            if rec98["style"] != "elzárás nélküli" \
+                    or rec98["shots"] < SCREEN_MIN_SHOTS \
+                    or rec98["screen_pct"] > SCREEN_LOW_PCT:
+                continue
+            add(side, "támadás", "Elzárás-játék",
+                f"elzárás nélkül lövünk: az őrzött lövéseink csak "
+                f"{rec98['screen_pct']:.0f}%-ánál zárja el társ a "
+                f"lövő őrzőjét ({rec98['screened']}/{rec98['shots']}) "
+                "— a lövőink magukra maradnak a kilépő védővel "
+                "szemben",
+                "elzárás-játék: beállós elzárás-sor (a beálló az "
+                "átlövő őrzőjére zár, az átlövő a zár mögé lép), "
+                "átlövő-átlövő kereszt elzárással, és leolvasás — "
+                "váltásnál a zárótól indul a leszakadás")
+    except Exception:
+        pass
+
     # 97) Oldalváltás: ha egy oldalon ragadunk, a fal ellenünk
     # nyugodtan eltolható — a keresztjáték a téma.
     try:
