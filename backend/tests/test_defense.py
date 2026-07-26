@@ -929,3 +929,43 @@ def test_screen_defense_flags_weak_switching():
     # Kevés elzárásos lövés: nincs ítélet.
     few = screen_defense(Match(_meta(), frames[:300]))
     assert few["away"]["verdict"] is None
+
+
+def test_counter_press_separates_pressing_and_resigned_team():
+    """A hazai az eladásai után 1 mp-en belül visszaszerzi a labdát a
+    tíz esetből hatszor ("visszatámad"), a vendég sosem, mert a hazai
+    10 mp-ig tartja ("beletörődik"); kevés eladásnál nincs ítélet."""
+    from handball.pipeline.defense import counter_press
+
+    both = [_pl(1, Team.HOME, 20.0, 10.0),
+            _pl(11, Team.AWAY, 20.6, 10.0)]
+    frames = []
+    t = 0
+
+    def _hold(x, n):
+        """n kockányi birtoklás: a labda a megadott játékosnál."""
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=both,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    # Tíz kör: a hazai mindig 10 mp-ig tartja (a vendég sosem szerzi
+    # vissza gyorsan), a vendég hatszor csak 1 mp-ig (a hazai
+    # visszaszerzi), négyszer 10 mp-ig.
+    for k in range(10):
+        _hold(20.0, 250)                      # hazai birtoklás (10 mp)
+        _hold(20.6, 25 if k < 6 else 250)     # vendég birtoklás
+    _hold(20.0, 250)   # a tizedik vendég-eladás is záruljon birtoklással
+
+    cp = counter_press(Match(_meta(), frames))
+    h, a = cp["home"], cp["away"]
+    assert h["turnovers"] == 10 and h["regained"] == 6
+    assert h["rate_pct"] == 60.0 and h["verdict"] == "visszatámad"
+    assert a["turnovers"] == 10 and a["regained"] == 0
+    assert a["rate_pct"] == 0.0 and a["verdict"] == "beletörődik"
+
+    # Kevés eladás: nincs arány és nincs ítélet.
+    few = counter_press(Match(_meta(), frames[:600]))
+    assert few["home"]["rate_pct"] is None
+    assert few["home"]["verdict"] is None

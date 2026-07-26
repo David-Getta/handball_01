@@ -1137,6 +1137,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Ellen-press: az eladások hány százaléka után szerzik vissza a
+  // labdát 6 mp-en belül (8+ eladásnál, 35% felett / 15% alatt; a
+  // backend-kulccsal azonos küszöbök).
+  String? _counterPress(Map<String, dynamic> r) {
+    final to = ((r["cpr_turnovers"] as num?) ?? 0).toInt();
+    final rg = ((r["cpr_regained"] as num?) ?? 0).toInt();
+    if (to < 8) return null;
+    final pct = 100.0 * rg / to;
+    if (pct >= 35.0) {
+      return "azonnal visszatámadnak: az eladásaik "
+          "${pct.toStringAsFixed(0)}%-át visszaszerzik · "
+          "a szerzés utáni első passz legyen tiszta";
+    }
+    if (pct <= 15.0) {
+      return "beletörődnek az eladásba (csak "
+          "${pct.toStringAsFixed(0)}% visszaszerzés) · "
+          "minden szerzés ingyen lerohanás";
+    }
+    return null;
+  }
+
   // Hajrá-lövésválasztás: a hajrá előtti vs a hajrá-lövések átlagos
   // helyzetértéke (fázisonként 5+ lövésnél, 0.05 xG eltérésnél; a
   // backend-kulccsal azonos küszöbök).
@@ -2317,6 +2338,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Passz-kockázat", _passRisk(r)!],
       if (_clutchShotQuality(r) != null)
         ["Hajrá-lövésválasztás", _clutchShotQuality(r)!],
+      if (_counterPress(r) != null)
+        ["Ellen-press", _counterPress(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

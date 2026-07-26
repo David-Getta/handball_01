@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 102) Ellen-press: ha az eladott labdára nem támadunk rá, a
+    # szerzés utáni első három másodperc a téma.
+    try:
+        from .defense import (COUNTERPRESS_MIN_TO, COUNTERPRESS_WINDOW_S,
+                              counter_press)
+        cpr102 = counter_press(match, config)
+        for side in ("home", "away"):
+            rec102 = cpr102[side]
+            if rec102["verdict"] != "beletörődik" \
+                    or rec102["turnovers"] < COUNTERPRESS_MIN_TO \
+                    or rec102["rate_pct"] is None:
+                continue
+            add(side, "védekezés", "Ellen-press",
+                f"az eladás után beletörődünk: az eladásaink "
+                f"{rec102['rate_pct']:.0f}%-a után szerezzük csak "
+                f"vissza a labdát {COUNTERPRESS_WINDOW_S:.0f} mp-en "
+                f"belül ({rec102['regained']}/{rec102['turnovers']}) — "
+                "az ellenfél minden szerzése ingyen kontra",
+                "ellen-press: átmenet-játék eladás-jelre (a labda "
+                "elvesztésekor a legközelebbi két játékos azonnal "
+                "rátámad, a többi zárja a mélységet), 3 mp-es "
+                "visszaszerzési szabály kisjátékban, és eladás utáni "
+                "sprint-vezényszó a felállásban")
+    except Exception:
+        pass
+
     # 101) Hajrá-lövésválasztás: ha a végén romlik a lövéseink
     # helyzetértéke, a hajrá-figurák és a türelem a téma.
     try:

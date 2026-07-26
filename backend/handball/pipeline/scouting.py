@@ -566,6 +566,11 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Ellen-press: az eladásaik száma + a 6 mp-en belül visszaszerzett
+    # labdák száma — darabszámok, meccsek közt összegződnek (arány =
+    # regained / turnovers).
+    cpr_turnovers: int = 0
+    cpr_regained: int = 0
     csq_early_shots: int = 0
     csq_early_xg: float = 0.0
     csq_clutch_shots: int = 0
@@ -1495,6 +1500,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Ellen-press: rátámadnak-e az eladott labdára.
+    if rep.cpr_turnovers >= 8:
+        _cpr = 100.0 * rep.cpr_regained / rep.cpr_turnovers
+        if _cpr >= 35.0:
+            keys.append(
+                f"Az eladás pillanatában azonnal visszatámadnak (az "
+                f"eladásaik {_cpr:.0f}%-át 6 mp-en belül visszaszerzik) "
+                "— a szerzés után az ELSŐ passz legyen tiszta: ne "
+                "cselezz a saját térfélen, azonnal játszd előre a "
+                "labdát a felszabaduló társnak.")
+        elif _cpr <= 15.0:
+            keys.append(
+                f"Az eladás után beletörődnek (az eladásaiknak csak "
+                f"{_cpr:.0f}%-át szerzik vissza gyorsan) — minden "
+                "labdaszerzés ingyen lerohanás ellenük: a szerzés után "
+                "azonnal indítsatok, a szélsők fussanak.")
 
     # Hajrá-lövésválasztás: elkapkodják-e a végén a befejezést.
     if rep.csq_early_shots >= 5 and rep.csq_clutch_shots >= 5:
@@ -3169,6 +3191,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .defense import counter_press
+        cprrec = counter_press(match, config)[team.value]
+        rep.cpr_turnovers = cprrec["turnovers"]
+        rep.cpr_regained = cprrec["regained"]
         from .momentum import clutch_shot_quality
         csqall = clutch_shot_quality(match, config)
         if csqall.get("available"):
@@ -4454,6 +4480,19 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 81) Az ő beletörődő ellen-pressük × a ti lerohanásotok: minden
+    # labdaszerzés ingyen kontra ellenük.
+    if (opp.cpr_turnovers >= 8
+            and 100.0 * opp.cpr_regained / opp.cpr_turnovers <= 15.0
+            and own.fast_break_pct >= 10.0):
+        plan.append(
+            f"Az eladás után beletörődnek (az eladásaiknak csak "
+            f"{100.0 * opp.cpr_regained / opp.cpr_turnovers:.0f}%-át "
+            f"szerzik vissza 6 mp-en belül), ti pedig sokat indultok "
+            f"({own.fast_break_pct:.0f}% gyors indítás) — minden "
+            "labdaszerzés után azonnal induljon a kontra: a szélsők "
+            "fussanak, a szerző ne várja meg a felállt védekezést.")
+
     # 80) Az ő hajrá-elkapkodásuk × a ti hajrá-erőtök: a meccs végén
     # nekik kell hibázniuk, nektek csak tartani kell.
     if (opp.csq_early_shots >= 5 and opp.csq_clutch_shots >= 5
@@ -5267,6 +5306,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        cpr_turnovers=sum(r.cpr_turnovers for r in reports),
+        cpr_regained=sum(r.cpr_regained for r in reports),
         csq_early_shots=sum(r.csq_early_shots for r in reports),
         csq_early_xg=round(sum(r.csq_early_xg for r in reports), 2),
         csq_clutch_shots=sum(r.csq_clutch_shots for r in reports),

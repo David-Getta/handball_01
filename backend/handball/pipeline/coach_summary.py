@@ -684,6 +684,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Ellen-press: az eladás után visszaszerezték-e azonnal a labdát.
+    try:
+        from .defense import counter_press
+        cpr = counter_press(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cp = cpr[side]
+            if rec_cp["verdict"] is None:
+                continue
+            if rec_cp["verdict"] == "visszatámad":
+                body += (f" A(z) {name} az eladás után azonnal "
+                         f"visszatámadt: az eladásaik "
+                         f"{rec_cp['rate_pct']:.0f}%-a után 6 mp-en "
+                         "belül visszaszerezték a labdát.")
+            else:
+                body += (f" A(z) {name} beletörődött az eladásokba: "
+                         f"csak {rec_cp['rate_pct']:.0f}%-uk után "
+                         "szerezték vissza gyorsan a labdát.")
+    except Exception:
+        pass
     # Passz-kockázat: a hosszú passzok vesztek-e el gyakrabban.
     try:
         from .attack_types import pass_risk

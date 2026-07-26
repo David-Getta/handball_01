@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Ellen-press**: rátámadnak-e az eladott labdára — az
+  eladás-büntetés azt méri, mennyibe KERÜL az eladás, a
+  visszarendeződés-idő azt, milyen gyorsan érnek haza; ez a kettő
+  közti pillanatot: az eladás utáni 6 másodpercben visszakerül-e
+  hozzájuk a labda (8+ eladásból, 35% felett "visszatámad", 15%
+  alatt "beletörődik"). Aki azonnal visszatámad, annál a szerzés
+  utáni ELSŐ passznak kell tisztának lennie — nem cselezni a saját
+  térfélen; aki beletörődik, annál minden labdaszerzés ingyen
+  lerohanás. Saját olvasatban az eladás-jelre induló átmenet-játék
+  az edzés-téma. Egy réteg, sok felület: `counter_press` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kétirányú kulcs + csempe), 81. meccsterv-szabály (az ő beletörődő
+  ellen-pressük × a ti lerohanásotok), 102. edzés-szabály
+  (eladás-jelre induló rátámadás, 3 mp-es visszaszerzési szabály).
 - **Hajrá-lövésválasztás**: milyen helyzetekből lőnek a meccs végén —
   a hajrá-teljesítmény a hajrá GÓLJAIT nézi, ez azt, hogy milyen
   HELYZETEKBŐL születnek: az utolsó 5 perc és az azt megelőző idő

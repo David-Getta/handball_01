@@ -1455,3 +1455,63 @@ def screen_defense(match, config=None) -> dict:
                 r["verdict"] = "jól vált"
         out[side] = r
     return out
+
+
+# Ellen-press: az eladás utáni ennyi másodpercen belüli visszaszerzést
+# számoljuk azonnali visszatámadásnak, ennyi eladástól ítélünk, és
+# e fölött/alatt beszélünk erős, illetve beletörődő ellen-pressről.
+COUNTERPRESS_WINDOW_S = 6.0
+COUNTERPRESS_MIN_TO = 8
+COUNTERPRESS_HIGH_PCT = 35.0
+COUNTERPRESS_LOW_PCT = 15.0
+
+
+def counter_press(match, config=None) -> dict:
+    """Ellen-press: az eladott labdát azonnal visszaszerzik-e.
+
+    Az eladás-büntetés (turnover_punishment) azt nézi, mennyibe KERÜL
+    az eladás; a visszarendeződés-idő (transition_recovery) azt, milyen
+    gyorsan érnek haza. Ez a kettő közti pillanatot méri: az eladás
+    utáni COUNTERPRESS_WINDOW_S másodpercben visszakerül-e hozzájuk a
+    labda. Aki sokszor szerzi vissza, az az eladás pillanatában
+    rátámad: ellene a szerzés utáni ELSŐ passznak kell tisztának
+    lennie — nem cselezni a saját térfélen, hanem azonnal előre
+    játszani. Aki ritkán, az beletörődik: ellene minden szerzés
+    ingyen lerohanás, futni kell vele.
+
+    Visszatérés csapatonként (a labdát ELADÓ oldal):
+      {"turnovers", "regained", "rate_pct", "verdict"} — rate_pct és
+    verdict None, ha kevés (COUNTERPRESS_MIN_TO alatti) az eladás; a
+    verdict "visszatámad" / "beletörődik" / None.
+    """
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(COUNTERPRESS_WINDOW_S * fps)
+    tos = [(e.t, e.team.value) for e in detect_events(match, config)
+           if e.type == EventType.TURNOVER]
+    counts = {"home": {"turnovers": 0, "regained": 0},
+              "away": {"turnovers": 0, "regained": 0}}
+    for i, (t, side) in enumerate(tos):
+        other = "away" if side == "home" else "home"
+        counts[side]["turnovers"] += 1
+        # Visszaszerzés: az ablakon belül az ELLENFÉL adja el a labdát
+        # (a következő birtoklás-váltás visszafelé).
+        if any(s2 == other and 0 < t2 - t <= win
+               for (t2, s2) in tos[i + 1:]):
+            counts[side]["regained"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "rate_pct": None, "verdict": None}
+        if rec["turnovers"] >= COUNTERPRESS_MIN_TO:
+            pct = 100.0 * rec["regained"] / rec["turnovers"]
+            r["rate_pct"] = round(pct, 1)
+            if pct >= COUNTERPRESS_HIGH_PCT:
+                r["verdict"] = "visszatámad"
+            elif pct <= COUNTERPRESS_LOW_PCT:
+                r["verdict"] = "beletörődik"
+        out[side] = r
+    return out
