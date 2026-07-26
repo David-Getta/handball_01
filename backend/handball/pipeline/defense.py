@@ -1651,3 +1651,67 @@ def costly_turnover_players(match, config=None) -> dict:
                       and p["punished"] > 0), None)
         out[side] = {"players": players, "worst": worst}
     return out
+
+
+# Szélső-védekezés: ennyi méterre a hosszanti középvonaltól kezdődik a
+# szélső sáv, sávonként ennyi kapott lövéstől ítélünk, és ennyi
+# százalékpont gólarány-eltérés a küszöb.
+WINGDEF_Y_M = 6.5
+WINGDEF_MIN_SHOTS = 5
+WINGDEF_GAP_PP = 15.0
+
+
+def wing_defense(match, config=None) -> dict:
+    """Szélső-védekezés: bírja-e a fal a szélső lövéseket.
+
+    A szélső-befejezés (wing_finishing) a TÁMADÓ oldalról nézi, ki
+    mennyire eredményes a szélről — ez a védő oldali tükre: a kapott
+    lövéseket a lövő helye alapján szélső és középső sávra bontja, és
+    a gólarányukat hasonlítja. Ha a szélről érkező lövések érdemben
+    többször gólok, a szélső-őrzés és a kapus szöge a hiba: ellenük
+    a szélső bevonása az első számú fegyver. Ha a szél zsákutca,
+    marad a középső áttörés és a beálló.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"wing_shots",
+    "wing_goals", "center_shots", "center_goals", "wing_pct",
+    "center_pct", "gap_pp", "verdict"} — az arányok és a verdict
+    None, ha valamelyik sávban kevés (WINGDEF_MIN_SHOTS alatti) a
+    lövés; a verdict "szélen nyitott" / "szélen zárt" / None.
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    mid_y = COURT_WIDTH_M / 2.0
+    counts = {s: {"wing_shots": 0, "wing_goals": 0,
+                  "center_shots": 0, "center_goals": 0}
+              for s in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        team = Team.HOME if sh["team"] == "home" else Team.AWAY
+        defender = "away" if team == Team.HOME else "home"
+        key = ("wing" if abs(sh["y"] - mid_y) >= WINGDEF_Y_M
+               else "center")
+        rec = counts[defender]
+        rec[key + "_shots"] += 1
+        if sh["outcome"] == "goal":
+            rec[key + "_goals"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "wing_pct": None, "center_pct": None,
+             "gap_pp": None, "verdict": None}
+        if rec["wing_shots"] >= WINGDEF_MIN_SHOTS \
+                and rec["center_shots"] >= WINGDEF_MIN_SHOTS:
+            wg = 100.0 * rec["wing_goals"] / rec["wing_shots"]
+            ct = 100.0 * rec["center_goals"] / rec["center_shots"]
+            r["wing_pct"] = round(wg, 1)
+            r["center_pct"] = round(ct, 1)
+            r["gap_pp"] = round(wg - ct, 1)
+            if wg - ct >= WINGDEF_GAP_PP:
+                r["verdict"] = "szélen nyitott"
+            elif ct - wg >= WINGDEF_GAP_PP:
+                r["verdict"] = "szélen zárt"
+        out[side] = r
+    return out

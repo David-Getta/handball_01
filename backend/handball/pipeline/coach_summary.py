@@ -684,6 +684,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Szélső-védekezés: bírta-e a fal a szélső lövéseket.
+    try:
+        from .defense import wing_defense
+        wdf = wing_defense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wd = wdf[side]
+            if rec_wd["verdict"] is None:
+                continue
+            if rec_wd["verdict"] == "szélen nyitott":
+                body += (f" A(z) {name} fala a szélen nyitott volt: a "
+                         f"szélső lövések {rec_wd['wing_pct']:.0f}%-a "
+                         f"gól, középről csak "
+                         f"{rec_wd['center_pct']:.0f}%.")
+            else:
+                body += (f" A(z) {name} a szélső lövéseket zárta "
+                         f"({rec_wd['wing_pct']:.0f}% gólarány, "
+                         f"középről {rec_wd['center_pct']:.0f}%).")
+    except Exception:
+        pass
     # Drága eladók: kinek az eladásaiból lett kapott gól.
     try:
         from .defense import costly_turnover_players

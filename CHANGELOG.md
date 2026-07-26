@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Szélső-védekezés**: bírja-e a fal a szélső lövéseket — a
+  szélső-befejezés a TÁMADÓ oldalról nézi, ki mennyire eredményes a
+  szélről; ez a védő oldali tükre: a kapott lövéseket a lövő helye
+  alapján szélső (a hosszanti középvonaltól 6,5 m-en túli) és
+  középső sávra bontjuk, és a gólarányukat hasonlítjuk (sávonként
+  5+ lövésből, 15+ százalékpont eltérésnél). Ha a szélről érkező
+  lövések érdemben többször gólok, a szélső-őrzés és a kapus szöge
+  a hiba: ellenük a szélső bevonása az első számú fegyver; ha a
+  szél zsákutca, marad a középső áttörés és a beálló. Saját
+  olvasatban a szélső védő kilépése és a kapus-védő egyeztetés az
+  edzés-téma. Egy réteg, sok felület: `wing_defense` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kétirányú kulcs + csempe), 90. meccsterv-szabály (az ő szélen
+  nyitott faluk × a ti szélső-játékotok), 111. edzés-szabály
+  (szélső védő kilépése szöget zárva, kapus-védő egyeztetés a rövid
+  sarokra).
 - **Drága eladók**: kinek az eladásai kerülnek gólba — a labdaeladók
   azt mutatják, KI veszti el a labdát, az eladás-büntetés azt, hogy
   a csapat eladásai MENNYIBE kerülnek; ez a kettő metszete:

@@ -1074,3 +1074,50 @@ def test_costly_turnover_players_names_the_expensive_loser():
     # Egyetlen kör: nincs elég eladás → nincs megnevezett játékos.
     few = costly_turnover_players(Match(_meta(), frames[:150]))
     assert few["home"]["worst"] is None
+
+
+def test_wing_defense_flags_open_wings():
+    """A vendég fal a szélről kapott hat lövésből ötöt gólként enged,
+    középről egyet hatból → "szélen nyitott"; kevés lövésnél nincs
+    ítélet."""
+    from handball.pipeline.defense import wing_defense
+
+    frames = []
+    t = 0
+
+    def _wing_shot(y, goal):
+        """Hazai lövés a +x kapura a megadott y-ról (szélső vagy
+        középső sáv); gólnál a kapu közepére, egyébként mellé."""
+        nonlocal t, frames
+        shooter = [_pl(1, Team.HOME, 31.0, y)]
+        y_end = 10.0 if goal else 2.0
+        for i in range(10):
+            bx = min(31.0 + 0.9 * (i + 1), 40.0)
+            by = y + (y_end - y) * (i + 1) / 10.0
+            frames.append(Frame(t=t, players=shooter,
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    # Hat szélső lövés (y = 3, azaz 7 m-re a középvonaltól): öt gól.
+    for k in range(6):
+        _wing_shot(3.0, goal=(k < 5))
+    # Hat középső lövés (y = 10): egy gól.
+    for k in range(6):
+        _wing_shot(10.0, goal=(k == 0))
+
+    wd = wing_defense(Match(_meta(), frames))
+    a = wd["away"]
+    assert a["wing_shots"] == 6 and a["wing_goals"] == 5
+    assert a["center_shots"] == 6 and a["center_goals"] == 1
+    assert a["wing_pct"] > a["center_pct"]
+    assert a["verdict"] == "szélen nyitott"
+
+    # A hazai fal nem kapott lövést → nincs arány és nincs ítélet.
+    h = wd["home"]
+    assert h["wing_shots"] == 0 and h["center_shots"] == 0
+    assert h["gap_pp"] is None and h["verdict"] is None

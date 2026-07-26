@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 111) Szélső-védekezés: ha a szélről kapjuk a gólokat, a
+    # szélső-őrzés és a kapus szöge a téma.
+    try:
+        from .defense import (WINGDEF_GAP_PP, WINGDEF_MIN_SHOTS,
+                              wing_defense)
+        wdf111 = wing_defense(match, config)
+        for side in ("home", "away"):
+            rec111 = wdf111[side]
+            if rec111["verdict"] != "szélen nyitott" \
+                    or rec111["wing_shots"] < WINGDEF_MIN_SHOTS \
+                    or rec111["gap_pp"] is None \
+                    or rec111["gap_pp"] < WINGDEF_GAP_PP:
+                continue
+            add(side, "védekezés", "Szélső-védekezés",
+                f"a szélről kapjuk a gólokat: a szélső lövések "
+                f"{rec111['wing_pct']:.0f}%-a gól ellenünk "
+                f"({rec111['wing_goals']}/{rec111['wing_shots']}), "
+                f"középről csak {rec111['center_pct']:.0f}% — a "
+                "szélső-őrzés és a kapus szöge a hiba",
+                "szélső-védekezés: a szélső védő kilépése a labda "
+                "érkezésekor (szöget zárva, nem szemben állva), "
+                "kapus-védő egyeztetés a rövid sarokra, és "
+                "szélső-lövés sorozat védése mindkét oldalon")
+    except Exception:
+        pass
+
     # 110) Drága eladók: ha egy játékosunk eladásai rendre gólba
     # kerülnek, vele a nyomás alatti labdakezelés a téma.
     try:

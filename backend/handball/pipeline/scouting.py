@@ -566,6 +566,13 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Szélső-védekezés: a szélső, illetve középső sávból kapott
+    # lövések és gólok száma — darabszámok, meccsek közt összegződnek
+    # (gólarány sávonként külön).
+    wdf_wing_shots: int = 0
+    wdf_wing_goals: int = 0
+    wdf_center_shots: int = 0
+    wdf_center_goals: int = 0
     # Drága eladóik: [{"player_id", "turnovers", "punished"}] — kinek
     # az eladásaiból lett fél percen belüli kapott gól; darabszámok,
     # meccsek közt játékosonként összegződnek.
@@ -1552,6 +1559,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Szélső-védekezés: nyitott-e a faluk a szélen.
+    if rep.wdf_wing_shots >= 5 and rep.wdf_center_shots >= 5:
+        _wdf_w = 100.0 * rep.wdf_wing_goals / rep.wdf_wing_shots
+        _wdf_c = 100.0 * rep.wdf_center_goals / rep.wdf_center_shots
+        if _wdf_w - _wdf_c >= 15.0:
+            keys.append(
+                f"A faluk a szélen nyitott: a szélső lövések "
+                f"{_wdf_w:.0f}%-a gól ellenük, középről csak "
+                f"{_wdf_c:.0f}% — vonjátok be a szélsőket: "
+                "szélességben játszott támadás, oldalváltás, és a "
+                "szélső kapja meg a labdát a tiszta szögben.")
+        elif _wdf_c - _wdf_w >= 15.0:
+            keys.append(
+                f"A szélső lövéseket zárják ({_wdf_w:.0f}% gólarány, "
+                f"középről {_wdf_c:.0f}%) — a szél zsákutca ellenük: "
+                "a középső áttörés és a beálló-bejátszás a járható út.")
 
     # Drága eladók: kinek a hibája kerül náluk gólba.
     _ctp_worst = next((p for p in (rep.costly_turnover_players or [])
@@ -3377,6 +3401,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .defense import wing_defense
+        wdfrec = wing_defense(match, config)[team.value]
+        rep.wdf_wing_shots = wdfrec["wing_shots"]
+        rep.wdf_wing_goals = wdfrec["wing_goals"]
+        rep.wdf_center_shots = wdfrec["center_shots"]
+        rep.wdf_center_goals = wdfrec["center_goals"]
         from .defense import costly_turnover_players as _ctp
         rep.costly_turnover_players = _ctp(match, config)[team.value][
             "players"]
@@ -4727,6 +4757,24 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 90) Az ő szélen nyitott faluk × a ti szélső-játékotok: a szélső
+    # bevonása az első számú fegyver.
+    if (opp.wdf_wing_shots >= 5 and opp.wdf_center_shots >= 5
+            and (100.0 * opp.wdf_wing_goals / opp.wdf_wing_shots)
+            - (100.0 * opp.wdf_center_goals / opp.wdf_center_shots)
+            >= 15.0
+            and own.wing_total_goals >= 5
+            and 100.0 * own.wing_goals / own.wing_total_goals >= 25.0):
+        plan.append(
+            f"A faluk a szélen nyitott (a szélső lövések "
+            f"{100.0 * opp.wdf_wing_goals / opp.wdf_wing_shots:.0f}%-a "
+            f"gól ellenük, középről "
+            f"{100.0 * opp.wdf_center_goals / opp.wdf_center_shots:.0f}"
+            f"%), ti pedig sokat szereztek a szélről (a góljaitok "
+            f"{100.0 * own.wing_goals / own.wing_total_goals:.0f}%-a) "
+            "— szélességben játsszatok: oldalváltás, majd a szélső "
+            "kapja meg a labdát tiszta szögben.")
+
     # 89) Az ő drága eladójuk × a ti magas szerzésetek: rá kell menni
     # a felhozatalnál.
     _ctp89 = next((p for p in (opp.costly_turnover_players or [])
@@ -5684,6 +5732,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        wdf_wing_shots=sum(r.wdf_wing_shots for r in reports),
+        wdf_wing_goals=sum(r.wdf_wing_goals for r in reports),
+        wdf_center_shots=sum(r.wdf_center_shots for r in reports),
+        wdf_center_goals=sum(r.wdf_center_goals for r in reports),
         costly_turnover_players=_merge_costly_turnovers(reports),
         ppd_seconds=round(sum(r.ppd_seconds for r in reports), 1),
         ppd_conceded=sum(r.ppd_conceded for r in reports),

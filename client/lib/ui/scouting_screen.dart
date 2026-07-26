@@ -1137,6 +1137,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Szélső-védekezés: a szélső vs középső sávból kapott lövések
+  // gólaránya (sávonként 5+ lövésnél, 15+ százalékpont eltérésnél; a
+  // backend-kulccsal azonos küszöbök).
+  String? _wingDefense(Map<String, dynamic> r) {
+    final ws = ((r["wdf_wing_shots"] as num?) ?? 0).toInt();
+    final wg = ((r["wdf_wing_goals"] as num?) ?? 0).toInt();
+    final cs = ((r["wdf_center_shots"] as num?) ?? 0).toInt();
+    final cg = ((r["wdf_center_goals"] as num?) ?? 0).toInt();
+    if (ws < 5 || cs < 5) return null;
+    final wing = 100.0 * wg / ws;
+    final center = 100.0 * cg / cs;
+    if (wing - center >= 15.0) {
+      return "a szélen nyitottak: ${wing.toStringAsFixed(0)}% "
+          "gólarány a szélről (középről "
+          "${center.toStringAsFixed(0)}%) · vond be a szélsőket";
+    }
+    if (center - wing >= 15.0) {
+      return "a szélső lövéseket zárják "
+          "(${wing.toStringAsFixed(0)}% vs "
+          "${center.toStringAsFixed(0)}%) · középen és beállóval kell "
+          "játszani";
+    }
+    return null;
+  }
+
   // Drága eladók: kinek az eladásaiból lett fél percen belüli kapott
   // gól (3+ eladás és 2+ gól kell; a backend-kulccsal azonos
   // küszöbök).
@@ -2529,6 +2554,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberelőny-védekezés", _powerplayDefense(r)!],
       if (_costlyTurnovers(r) != null)
         ["Drága eladók", _costlyTurnovers(r)!],
+      if (_wingDefense(r) != null)
+        ["Szélső-védekezés", _wingDefense(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
