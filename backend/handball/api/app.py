@@ -2788,6 +2788,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import clutch_shot_quality
+            res["clutch_shot_quality"] = clutch_shot_quality(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3324,6 +3329,9 @@ def create_app():
                 _layer("screen_defense", lambda: screen_defense(match))
                 from ..pipeline.attack_types import pass_risk
                 _layer("pass_risk", lambda: pass_risk(match))
+                from ..pipeline.momentum import clutch_shot_quality
+                _layer("clutch_shot_quality",
+                       lambda: clutch_shot_quality(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -1112,3 +1112,73 @@ def restart_speed(match: Match, config=None) -> dict:
                 r["style"] = "lassú"
         out[side] = r
     return out
+
+
+# Hajrá-lövésválasztás: fázisonként ennyi lövés kell az ítélethez, és
+# ekkora átlagos xG-esés (helyzetérték/lövés) számít érdeminek.
+CLUTCH_SQ_MIN_SHOTS = 5
+CLUTCH_SQ_DROP = 0.05
+
+
+def clutch_shot_quality(match: Match, config=None) -> dict:
+    """Hajrá-lövésválasztás: milyen helyzetekből lőnek a meccs végén.
+
+    A hajrá-teljesítmény (clutch_performance) a hajrá GÓLJAIT nézi —
+    ez azt, hogy milyen HELYZETEKBŐL lőnek ott: a hajrá (utolsó
+    CLUTCH_WINDOW_S mp) és az azt megelőző idő átlagos xG/lövés
+    értékét hasonlítja össze. Aki a hajrában érdemben rosszabb
+    helyzetekből lő, az nyomás alatt elkapkodja a befejezést: ellene
+    a hajrában elég tartani a falat, ők maguktól elrontják — saját
+    olvasatban a hajrá-figurák és a türelem a téma. Aki javul, az a
+    végén tudatosan a kidolgozott helyzetig játszik: ellene a hajrában
+    is kell a kidolgozott helyzetek elleni fegyelem.
+
+    Rövid felvételen (CLUTCH_MIN_DURATION_S alatt) nem értelmezzük:
+    {"available": False}. Egyébként csapatonként {"early_shots",
+    "early_xg", "clutch_shots", "clutch_xg", "early_avg",
+    "clutch_avg", "delta", "verdict"} — avg/delta/verdict None, ha
+    valamelyik fázisban kevés (CLUTCH_SQ_MIN_SHOTS alatti) a lövés; a
+    verdict "elkapkodja" / "kidolgozza" / None.
+    """
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    if not match.frames:
+        return {"available": False}
+    duration_s = (match.frames[-1].t - match.frames[0].t) / fps
+    if duration_s < CLUTCH_MIN_DURATION_S:
+        return {"available": False}
+    t_clutch = match.frames[-1].t - round(CLUTCH_WINDOW_S * fps)
+
+    counts = {s: {"early_shots": 0, "early_xg": 0.0,
+                  "clutch_shots": 0, "clutch_xg": 0.0}
+              for s in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        rec = counts[sh["team"]]
+        phase = "clutch" if sh["t"] >= t_clutch else "early"
+        rec[phase + "_shots"] += 1
+        rec[phase + "_xg"] += float(sh["xg"])
+    out = {"available": True, "window_s": CLUTCH_WINDOW_S}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {"early_shots": rec["early_shots"],
+             "early_xg": round(rec["early_xg"], 2),
+             "clutch_shots": rec["clutch_shots"],
+             "clutch_xg": round(rec["clutch_xg"], 2),
+             "early_avg": None, "clutch_avg": None,
+             "delta": None, "verdict": None}
+        if rec["early_shots"] >= CLUTCH_SQ_MIN_SHOTS \
+                and rec["clutch_shots"] >= CLUTCH_SQ_MIN_SHOTS:
+            early = rec["early_xg"] / rec["early_shots"]
+            clutch = rec["clutch_xg"] / rec["clutch_shots"]
+            r["early_avg"] = round(early, 3)
+            r["clutch_avg"] = round(clutch, 3)
+            r["delta"] = round(clutch - early, 3)
+            if early - clutch >= CLUTCH_SQ_DROP:
+                r["verdict"] = "elkapkodja"
+            elif clutch - early >= CLUTCH_SQ_DROP:
+                r["verdict"] = "kidolgozza"
+        out[side] = r
+    return out

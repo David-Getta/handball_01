@@ -663,6 +663,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Hajrá-lövésválasztás: elkapkodták-e a végén a befejezést.
+    try:
+        from .momentum import clutch_shot_quality
+        csq = clutch_shot_quality(match)
+        if csq.get("available"):
+            for side, name in (("home", home), ("away", away)):
+                rec_cs = csq[side]
+                if rec_cs["verdict"] is None:
+                    continue
+                if rec_cs["verdict"] == "elkapkodja":
+                    body += (f" A(z) {name} a hajrában elkapkodta a "
+                             f"befejezést: a lövéseik helyzetértéke "
+                             f"{rec_cs['early_avg']:.2f}-ről "
+                             f"{rec_cs['clutch_avg']:.2f}-re esett.")
+                else:
+                    body += (f" A(z) {name} a hajrában kidolgozta a "
+                             f"helyzeteket (a lövések helyzetértéke "
+                             f"{rec_cs['early_avg']:.2f}-ről "
+                             f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
+    except Exception:
+        pass
     # Passz-kockázat: a hosszú passzok vesztek-e el gyakrabban.
     try:
         from .attack_types import pass_risk

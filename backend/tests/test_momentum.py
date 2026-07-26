@@ -718,3 +718,60 @@ def test_restart_speed_separates_fast_break_and_slow_restart():
     # Kevés újraindítás: nincs ítélet.
     few = restart_speed(Match(_meta(), frames[:300]))
     assert few["home"]["style"] is None and few["away"]["style"] is None
+
+
+def test_clutch_shot_quality_flags_rushed_finishing():
+    """A hazai a hajrá előtt a hatosról fejezi be, a hajrában 15 m-ről
+    kapkod → "elkapkodja"; a vendégnek nincs lövése → nincs ítélet.
+    Rövid felvételen a réteg nem értelmezhető."""
+    from handball.pipeline.momentum import clutch_shot_quality
+
+    def _home_shot(t0, shooter_x):
+        """Egy hazai lövés a +x kapura, a megadott távolságból."""
+        fr = []
+        for i in range(8):
+            fr.append(Frame(
+                t=t0 + i,
+                players=[PlayerPosition(track_id=1, team=Team.HOME,
+                                        x=shooter_x, y=10.0,
+                                        source=PositionSource.MEASURED,
+                                        confidence=1.0)],
+                ball=Ball(x=min(shooter_x + (40.0 - shooter_x) / 7.0 * i,
+                                40.0),
+                          y=10.0, confidence=1.0)))
+        return fr
+
+    # 800 mp-es felvétel; a hajrá az utolsó 300 mp (t >= 12500 kocka).
+    shots = {}
+    for k in range(6):
+        shots[1000 + k * 500] = 34.0        # hajrá előtt: ~6 m
+    for k in range(6):
+        shots[13000 + k * 400] = 25.0       # hajrában: ~15 m
+
+    frames = []
+    t = 0
+    while t < 20000:
+        if t in shots:
+            frames += _home_shot(t, shots[t])
+            t += 10
+        else:
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    csq = clutch_shot_quality(Match(_meta(), frames))
+    assert csq["available"] is True
+    h = csq["home"]
+    assert h["early_shots"] >= 5 and h["clutch_shots"] >= 5
+    assert h["early_avg"] > h["clutch_avg"]
+    assert h["delta"] < 0
+    assert h["verdict"] == "elkapkodja"
+
+    # A vendégnek nincs lövése → nincs átlag és nincs ítélet.
+    a = csq["away"]
+    assert a["clutch_shots"] == 0
+    assert a["clutch_avg"] is None and a["verdict"] is None
+
+    # Rövid felvétel (10 perc alatt): a réteg nem értelmezhető.
+    short = clutch_shot_quality(Match(_meta(), frames[:5000]))
+    assert short == {"available": False}

@@ -1343,6 +1343,35 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 101) Hajrá-lövésválasztás: ha a végén romlik a lövéseink
+    # helyzetértéke, a hajrá-figurák és a türelem a téma.
+    try:
+        from .momentum import (CLUTCH_SQ_DROP, CLUTCH_SQ_MIN_SHOTS,
+                               clutch_shot_quality)
+        csq101 = clutch_shot_quality(match, config)
+        if csq101.get("available"):
+            for side in ("home", "away"):
+                rec101 = csq101[side]
+                if rec101["verdict"] != "elkapkodja" \
+                        or rec101["clutch_shots"] < CLUTCH_SQ_MIN_SHOTS \
+                        or rec101["delta"] is None \
+                        or -rec101["delta"] < CLUTCH_SQ_DROP:
+                    continue
+                add(side, "támadás", "Hajrá-türelem",
+                    f"a hajrában elkapkodjuk a befejezést: a lövéseink "
+                    f"helyzetértéke {rec101['early_avg']:.2f}-ről "
+                    f"{rec101['clutch_avg']:.2f}-re esik "
+                    f"({rec101['clutch_shots']} hajrá-lövés) — nyomás "
+                    "alatt rossz helyzetekből lövünk",
+                    "hajrá-türelem: betanult hajrá-figurák (2-3 fix "
+                    "befejezés, amit fáradtan is tudunk), "
+                    "fáradt-állapotú befejezés-gyakorlat (sprint utáni "
+                    "lövés kidolgozott helyzetből), és szabály a "
+                    "kisjátékban — a hajrában csak a második "
+                    "labdaérintés után, kidolgozott helyzetből lőhetsz")
+    except Exception:
+        pass
+
     # 100) Passz-kockázat: ha a hosszú passzaink elvesznek, a hosszú
     # passz technikája és a bejátszás-döntés a téma.
     try:

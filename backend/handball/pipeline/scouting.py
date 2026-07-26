@@ -563,6 +563,13 @@ class ScoutingReport:
     prk_long_to: int = 0
     prk_short_tries: int = 0
     prk_short_to: int = 0
+    # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
+    # xG-összege — darabszámok és összegek, meccsek közt pontosan
+    # összegződnek (átlag = xg / shots fázisonként).
+    csq_early_shots: int = 0
+    csq_early_xg: float = 0.0
+    csq_clutch_shots: int = 0
+    csq_clutch_xg: float = 0.0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1488,6 +1495,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Hajrá-lövésválasztás: elkapkodják-e a végén a befejezést.
+    if rep.csq_early_shots >= 5 and rep.csq_clutch_shots >= 5:
+        _csq_early = rep.csq_early_xg / rep.csq_early_shots
+        _csq_clutch = rep.csq_clutch_xg / rep.csq_clutch_shots
+        if _csq_early - _csq_clutch >= 0.05:
+            keys.append(
+                f"A hajrában elkapkodják a befejezést: a lövéseik "
+                f"helyzetértéke {_csq_early:.2f}-ről "
+                f"{_csq_clutch:.2f}-re esik a meccs végére — a "
+                "hajrában elég tartani a falat és nem hibázni: ők "
+                "maguktól bevállalják a rossz lövéseket.")
+        elif _csq_clutch - _csq_early >= 0.05:
+            keys.append(
+                f"A hajrában kidolgozzák a helyzeteket (a lövéseik "
+                f"helyzetértéke {_csq_early:.2f}-ről "
+                f"{_csq_clutch:.2f}-re nő) — a végén is kell a "
+                "fegyelem: a fal ne lazuljon, a beálló-őrzés és a "
+                "váltás a hajrában is éljen.")
 
     # Passz-kockázat: a hosszú passzsávjaik vadászterületek-e.
     if rep.prk_long_tries >= 8 and rep.prk_short_tries >= 8:
@@ -3143,6 +3169,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .momentum import clutch_shot_quality
+        csqall = clutch_shot_quality(match, config)
+        if csqall.get("available"):
+            csqrec = csqall[team.value]
+            rep.csq_early_shots = csqrec["early_shots"]
+            rep.csq_early_xg = csqrec["early_xg"]
+            rep.csq_clutch_shots = csqrec["clutch_shots"]
+            rep.csq_clutch_xg = csqrec["clutch_xg"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4420,6 +4454,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 80) Az ő hajrá-elkapkodásuk × a ti hajrá-erőtök: a meccs végén
+    # nekik kell hibázniuk, nektek csak tartani kell.
+    if (opp.csq_early_shots >= 5 and opp.csq_clutch_shots >= 5
+            and own.clutch_goals_for - own.clutch_goals_against >= 2
+            and (opp.csq_early_xg / opp.csq_early_shots)
+            - (opp.csq_clutch_xg / opp.csq_clutch_shots) >= 0.05):
+        plan.append(
+            f"A hajrában elkapkodják a befejezést (a lövéseik "
+            f"helyzetértéke "
+            f"{opp.csq_early_xg / opp.csq_early_shots:.2f}-ről "
+            f"{opp.csq_clutch_xg / opp.csq_clutch_shots:.2f}-re esik), "
+            f"ti pedig erősek vagytok a végén ({own.clutch_goals_for}"
+            f"-{own.clutch_goals_against} a hajrá-mérlegetek) — a "
+            "meccs végén ne kockáztassatok: tartsátok "
+            "a falat, minden támadást játsszatok végig, és hagyjátok "
+            "őket rossz lövésekbe futni.")
+
     # 79) Az ő kockázatos hosszú passzaik × a ti magas szerzésetek: a
     # hosszú átjátszás a ti csapdátokba fut.
     if (opp.prk_long_tries >= 8 and opp.prk_short_tries >= 8
@@ -5216,6 +5267,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        csq_early_shots=sum(r.csq_early_shots for r in reports),
+        csq_early_xg=round(sum(r.csq_early_xg for r in reports), 2),
+        csq_clutch_shots=sum(r.csq_clutch_shots for r in reports),
+        csq_clutch_xg=round(sum(r.csq_clutch_xg for r in reports), 2),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

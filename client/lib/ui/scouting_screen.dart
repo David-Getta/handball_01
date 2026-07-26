@@ -1137,6 +1137,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Hajrá-lövésválasztás: a hajrá előtti vs a hajrá-lövések átlagos
+  // helyzetértéke (fázisonként 5+ lövésnél, 0.05 xG eltérésnél; a
+  // backend-kulccsal azonos küszöbök).
+  String? _clutchShotQuality(Map<String, dynamic> r) {
+    final es = ((r["csq_early_shots"] as num?) ?? 0).toInt();
+    final exg = ((r["csq_early_xg"] as num?) ?? 0).toDouble();
+    final cs = ((r["csq_clutch_shots"] as num?) ?? 0).toInt();
+    final cxg = ((r["csq_clutch_xg"] as num?) ?? 0).toDouble();
+    if (es < 5 || cs < 5) return null;
+    final ea = exg / es;
+    final ca = cxg / cs;
+    if (ea - ca >= 0.05) {
+      return "a hajrában elkapkodják: helyzetérték "
+          "${ea.toStringAsFixed(2)} → ${ca.toStringAsFixed(2)} · "
+          "a végén elég tartani a falat";
+    }
+    if (ca - ea >= 0.05) {
+      return "a hajrában kidolgozzák: helyzetérték "
+          "${ea.toStringAsFixed(2)} → ${ca.toStringAsFixed(2)} · "
+          "a végén se lazuljon a fal";
+    }
+    return null;
+  }
+
   // Passz-kockázat: a hosszú (10 m+) vs rövid passzok eladás-aránya
   // (sávonként 8+ kísérletnél, 15+ százalékpont eltérésnél; a
   // backend-kulccsal azonos küszöbök).
@@ -2291,6 +2315,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elzárás-védekezés", _screenDefense(r)!],
       if (_passRisk(r) != null)
         ["Passz-kockázat", _passRisk(r)!],
+      if (_clutchShotQuality(r) != null)
+        ["Hajrá-lövésválasztás", _clutchShotQuality(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hajrá-lövésválasztás**: milyen helyzetekből lőnek a meccs végén —
+  a hajrá-teljesítmény a hajrá GÓLJAIT nézi, ez azt, hogy milyen
+  HELYZETEKBŐL születnek: az utolsó 5 perc és az azt megelőző idő
+  átlagos xG/lövés értékét hasonlítjuk össze (fázisonként 5+
+  lövésből, 0.05 xG a küszöb). Aki a hajrában érdemben rosszabb
+  helyzetekből lő, az nyomás alatt elkapkodja a befejezést: ellene a
+  végén elég tartani a falat és nem hibázni, ők maguktól bevállalják
+  a rossz lövéseket; aki javul, az a végén is kidolgozza a
+  helyzeteket — ellene a hajrában sem lazulhat a fal. Saját
+  olvasatban a hajrá-figurák és a fáradt-állapotú befejezés az
+  edzés-téma. Egy réteg, sok felület: `clutch_shot_quality` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kétirányú kulcs + csempe), 80. meccsterv-szabály (az ő
+  hajrá-elkapkodásuk × a ti erős hajrátok), 101. edzés-szabály
+  (hajrá-figurák, fáradtan is működő befejezés, türelem-szabály a
+  kisjátékban).
 - **Passz-kockázat**: a hosszú passzok eladás-aránya a rövidekhez
   képest — minden labda-továbbítási kísérletet (sikeres passz vagy
   eladás) a kiinduló és a megszerző játékos távolsága alapján hosszú
