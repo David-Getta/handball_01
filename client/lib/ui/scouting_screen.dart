@@ -1168,6 +1168,37 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "rá kell menni védekezésben is";
   }
 
+  // Célba vett védő: melyik védőjük előtt megy be a legtöbb lövés (4+
+  // rá eső lövés, a csapatátlaguknál 15 százalékponttal magasabb
+  // gólarány; a backend-kulccsal azonos küszöbök).
+  String? _targetedDefender(Map<String, dynamic> r) {
+    final list = r["targeted_defenders"];
+    final shots = ((r["tdf_shots"] as num?) ?? 0).toInt();
+    final goals = ((r["tdf_goals"] as num?) ?? 0).toInt();
+    if (list is! List || shots < 4) return null;
+    final avg = 100.0 * goals / shots;
+    Map? weak;
+    double weakGap = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final n = ((e["shots"] as num?) ?? 0).toInt();
+      if (n < 4) continue;
+      final gap = 100.0 * ((e["goals"] as num?) ?? 0).toInt() / n - avg;
+      if (gap >= 15.0 && (weak == null || gap > weakGap)) {
+        weak = e;
+        weakGap = gap;
+      }
+    }
+    if (weak == null) return null;
+    final who = weak["jersey"] != null
+        ? "${weak["jersey"]}-es"
+        : "${weak["player_id"]} azonosítójú";
+    return "a(z) $who védőjük előtt megy be a legtöbb lövés: "
+        "${weak["goals"]}/${weak["shots"]} · a csapatátlaguk felett "
+        "${weakGap.toStringAsFixed(0)} pp · oda vigyétek a "
+        "befejezéseket (elzárás rá, az ő oldalán a beálló)";
+  }
+
   // Lövő-erő: ki lő rendre a csapatátlag felett (4+ mért lövés, 8+
   // km/h eltérés; a backend-kulccsal azonos küszöbök).
   String? _shooterPower(Map<String, dynamic> r) {
@@ -2646,6 +2677,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lövő-erő", _shooterPower(r)!],
       if (_plusMinus(r) != null)
         ["Játékos-mérleg", _plusMinus(r)!],
+      if (_targetedDefender(r) != null)
+        ["Célba vett védő", _targetedDefender(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

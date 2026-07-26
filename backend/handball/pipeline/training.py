@@ -1343,6 +1343,34 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 115) Célba vett védő: ha egy védőnk előtt a csapatátlagnál
+    # érdemben többször megy be a lövés, a segítség-rendszer a téma.
+    try:
+        from .defense import (TDEF_GAP_PP, TDEF_MIN_SHOTS,
+                              targeted_defenders)
+        tdf115 = targeted_defenders(match, config)
+        for side in ("home", "away"):
+            weak115 = tdf115[side]["weak"]
+            if weak115 is None \
+                    or weak115["shots"] < TDEF_MIN_SHOTS:
+                continue
+            who115 = (f"{weak115['jersey']}-es mezszámú"
+                      if weak115["jersey"] is not None
+                      else f"{weak115['player_id']} azonosítójú")
+            add(side, "védekezés", "Védő-segítés",
+                f"a(z) {who115} védőnk előtt megy be a legtöbb lövés "
+                f"({weak115['goals']}/{weak115['shots']}, a "
+                f"csapatátlagnál {weak115['gap_pp']:.0f} "
+                f"százalékponttal magasabb gólarány, a küszöb "
+                f"{TDEF_GAP_PP:.0f}) — az ellenfél oda viszi a "
+                "befejezéseket",
+                "segítés-rendszer: a szomszéd védő zárja a lövőszöget "
+                "(kifelé tolás), a kapussal beszéljétek meg a szöget "
+                "ezen a poszton, és külön 1-1 blokk: kilépés–"
+                "visszalépés a lövő elé, elzárás alatti átcsúszással")
+    except Exception:
+        pass
+
     # 114) Játékos-mérleg: ha valakinek a pályán léte alatt érdemben
     # rosszabb a gólkülönbségünk, a szerep-tisztázás a téma.
     try:

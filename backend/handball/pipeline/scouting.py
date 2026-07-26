@@ -572,6 +572,13 @@ class ScoutingReport:
     # pontosan visszaszámolható).
     player_plus_minus: list = field(default_factory=list)
     pm_fps: float = 25.0
+    # Célba vett védőik: [{"player_id", "jersey", "shots", "goals"}] —
+    # védőnként a rá eső kapott lövések és gólok darabszáma, + a
+    # csapat-összegek; darabszámok, meccsek közt pontosan összegződnek
+    # (a gólarány ebből visszaszámolható).
+    targeted_defenders: list = field(default_factory=list)
+    tdf_shots: int = 0
+    tdf_goals: int = 0
     # Lövő-erejük: [{"player_id", "shots", "sum_kmh", "max_kmh"}] —
     # a sebesség-összeg és a lövésszám tárolva, hogy az átlag meccsek
     # közt pontosan visszaszámolható legyen; + a csapat sebesség-
@@ -1596,6 +1603,30 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Célba vett védő: melyik védőjük előtt megy be a legtöbb lövés
+    # (a csapatátlaguknál rosszabb gólarány = oda kell támadni).
+    if rep.tdf_shots >= 4:
+        _tdf_avg = 100.0 * rep.tdf_goals / rep.tdf_shots
+        _tdf_weak = None
+        for p in (rep.targeted_defenders or []):
+            if p["shots"] < 4:
+                continue
+            _gap = 100.0 * p["goals"] / p["shots"] - _tdf_avg
+            if _gap >= 15.0 and (_tdf_weak is None
+                                 or _gap > _tdf_weak[1]):
+                _tdf_weak = (p, _gap)
+        if _tdf_weak is not None:
+            _tdf_p = _tdf_weak[0]
+            _tdf_who = (f"{_tdf_p['jersey']}-es mezszámú"
+                        if _tdf_p.get("jersey") is not None
+                        else f"{_tdf_p['player_id']} azonosítójú")
+            keys.append(
+                f"A(z) {_tdf_who} védőjük előtt megy be a legtöbb "
+                f"lövés ({_tdf_p['goals']}/{_tdf_p['shots']}, a "
+                f"csapatátlaguk felett {_tdf_weak[1]:.0f} "
+                "százalékponttal) — oda kell vinni a befejezéseket: "
+                "elzárással rá, és az ő oldalán a beálló.")
 
     # Lövő-erő: van-e a csapatátlag felett bombázó befejezőjük.
     if rep.spw_team_shots >= 6:
@@ -3479,6 +3510,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
              "frames": round(p["minutes"] * 60.0 * _fps),
              "for": p["for"], "against": p["against"]}
             for p in _pm(match, config)[team.value]["players"]]
+        from .defense import targeted_defenders as _tdf
+        tdfrec = _tdf(match, config)[team.value]
+        rep.tdf_shots = tdfrec["shots"]
+        rep.tdf_goals = tdfrec["goals"]
+        rep.targeted_defenders = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "shots": p["shots"], "goals": p["goals"]}
+            for p in tdfrec["players"]]
         from .event_detection import shooter_power as _spw
         spwrec = _spw(match, config)[team.value]
         rep.shooter_power = [
@@ -4169,6 +4208,25 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_targeted_defenders(reports) -> list:
+    """Célba vett védők: védőnként a rá eső kapott lövések és gólok
+    összegzése (a lövésszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.targeted_defenders or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"jersey": None, "shots": 0,
+                                    "goals": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = p.get("jersey")
+            rec["shots"] += int(p.get("shots", 0))
+            rec["goals"] += int(p.get("goals", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(
+                tally.items(),
+                key=lambda kv: (-kv[1]["shots"], -kv[1]["goals"]))]
 
 
 def _merge_shooter_power(reports) -> list:
@@ -4902,6 +4960,32 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 94) Az ő gyenge védőjük × a ti elzárás-használatotok: oda kell
+    # vinni a befejezéseket.
+    if opp.tdf_shots >= 4 and own.scu_shots >= 8 \
+            and 100.0 * own.scu_screened / own.scu_shots >= 40.0:
+        _avg94 = 100.0 * opp.tdf_goals / opp.tdf_shots
+        _w94 = None
+        for p in (opp.targeted_defenders or []):
+            if p["shots"] < 4:
+                continue
+            _g94 = 100.0 * p["goals"] / p["shots"] - _avg94
+            if _g94 >= 15.0 and (_w94 is None or _g94 > _w94[1]):
+                _w94 = (p, _g94)
+        if _w94 is not None:
+            _p94 = _w94[0]
+            _who94 = (f"{_p94['jersey']}-es mezszámú"
+                      if _p94.get("jersey") is not None
+                      else f"{_p94['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who94} védőjük előtt megy be a legtöbb lövés "
+                f"({_p94['goals']}/{_p94['shots']}, a csapatátlaguk "
+                f"felett {_w94[1]:.0f} százalékponttal), ti pedig "
+                f"sokat zártok el (a lövéseitek "
+                f"{100.0 * own.scu_screened / own.scu_shots:.0f}"
+                "%-ánál) — az elzárásokat rá kell szervezni: az ő "
+                "oldalán jöjjön a beálló és a befejezés.")
 
     # 93) Az ő legjobb mérlegű játékosuk × a ti kettőzésetek: őt kell
     # a leginkább zavarni.
@@ -5942,6 +6026,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_short_to=sum(r.prk_short_to for r in reports),
         player_plus_minus=_merge_plus_minus(reports),
         pm_fps=(reports[0].pm_fps if reports else 25.0),
+        targeted_defenders=_merge_targeted_defenders(reports),
+        tdf_shots=sum(r.tdf_shots for r in reports),
+        tdf_goals=sum(r.tdf_goals for r in reports),
         shooter_power=_merge_shooter_power(reports),
         spw_team_shots=sum(r.spw_team_shots for r in reports),
         spw_team_sum_kmh=round(

@@ -1715,3 +1715,102 @@ def wing_defense(match, config=None) -> dict:
                 r["verdict"] = "szélen zárt"
         out[side] = r
     return out
+
+
+# Célba vett védő: ennyi rá eső lövéstől ítélünk egy védőt, ennyi
+# százalékpont gólarány-eltérés a csapatátlagtól a gyenge pont jele, és
+# ennyi méteren belül számít egy védő a lövés "gazdájának" (ennél
+# messzebbről már nem az ő hibája — az szabad lövés).
+TDEF_MIN_SHOTS = 4
+TDEF_GAP_PP = 15.0
+TDEF_RADIUS_M = 6.0
+
+
+def targeted_defenders(match, config=None) -> dict:
+    """Célba vett védő: KIRE lőnek, és kinél lesz belőle gól.
+
+    A szabad lövés (defense_analysis) és a fal lyukai (wall_gaps,
+    breakthrough_lanes) a HELYET mondják meg, a labdaszerzők
+    (ball_winners) a védekezés motorját — ez a hiányzó harmadik
+    kérdés: melyik védő ELŐTT fejeznek be. Minden kapott lövésnél a
+    lövőhöz legközelebbi mezőnyvédő kapja a lövést (TDEF_RADIUS_M-en
+    belül; ennél messzebb nincs gazdája, az szabad lövés), és mellé a
+    gólt, ha bement.
+
+    Edzőileg két olvasat: akire a legtöbbet lőnek, azt keresi az
+    ellenfél (őt kell segíteni, mögé a kapus szöge), akinél pedig a
+    csapatátlagnál érdemben magasabb a gólarány, ott a fal tényleg
+    puha — felderítéskor pont oda kell támadni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal):
+      {"shots", "goals", "players": [{"player_id", "jersey", "shots",
+       "goals", "goal_pct"}], "target": {...}|None,
+       "weak": {..., "gap_pp"}|None}
+    — players a rá eső lövések szerint csökkenően; goal_pct None
+    TDEF_MIN_SHOTS alatt; target a legtöbbet támadott védő (elég
+    lövéssel), weak a csapatátlagnál TDEF_GAP_PP-vel rosszabb
+    gólarányú védő — mindkettő None, ha nincs elég minta.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    jersey: dict[int, int] = {}
+    tally: dict[str, dict[int, dict]] = {"home": {}, "away": {}}
+    totals = {"home": [0, 0], "away": [0, 0]}  # lövés, gól
+
+    for sh in match_xg(match, config).get("shots", []):
+        f = by_t.get(sh["t"])
+        if f is None:
+            continue
+        attacker = Team.HOME if sh["team"] == "home" else Team.AWAY
+        side = "away" if attacker == Team.HOME else "home"
+        near = None
+        near_d = TDEF_RADIUS_M
+        for p in f.players:
+            if p.team != attacker and p.team is not None \
+                    and p.role != "kapus":
+                d = math.hypot(p.x - sh["x"], p.y - sh["y"])
+                if d <= near_d:
+                    near, near_d = p, d
+        if near is None:
+            continue
+        if near.jersey_number is not None:
+            jersey.setdefault(near.track_id, near.jersey_number)
+        rec = tally[side].setdefault(near.track_id,
+                                     {"shots": 0, "goals": 0})
+        rec["shots"] += 1
+        totals[side][0] += 1
+        if sh["outcome"] == "goal":
+            rec["goals"] += 1
+            totals[side][1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_sh, n_go = totals[side]
+        players = [
+            {"player_id": pid, "jersey": jersey.get(pid),
+             "shots": rec["shots"], "goals": rec["goals"],
+             "goal_pct": (round(100.0 * rec["goals"] / rec["shots"], 1)
+                          if rec["shots"] >= TDEF_MIN_SHOTS else None)}
+            for pid, rec in sorted(tally[side].items(),
+                                   key=lambda kv: (-kv[1]["shots"],
+                                                   -kv[1]["goals"]))]
+        target = next((p for p in players
+                       if p["shots"] >= TDEF_MIN_SHOTS), None)
+        weak = None
+        if n_sh >= TDEF_MIN_SHOTS:
+            avg = 100.0 * n_go / n_sh
+            cands = [{**p, "gap_pp": round(p["goal_pct"] - avg, 1)}
+                     for p in players
+                     if p["goal_pct"] is not None
+                     and p["goal_pct"] - avg >= TDEF_GAP_PP]
+            if cands:
+                weak = max(cands, key=lambda p: p["gap_pp"])
+        out[side] = {"shots": n_sh, "goals": n_go, "players": players,
+                     "target": target, "weak": weak}
+    return out

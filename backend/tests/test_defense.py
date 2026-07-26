@@ -1121,3 +1121,64 @@ def test_wing_defense_flags_open_wings():
     h = wd["home"]
     assert h["wing_shots"] == 0 and h["center_shots"] == 0
     assert h["gap_pp"] is None and h["verdict"] is None
+
+
+def test_targeted_defenders_finds_the_soft_spot():
+    """A vendég fal 8-as védője előtt hat lövésből öt gól, a 9-es előtt
+    hatból egy → a 8-as a célba vett és a gyenge pont; kevés lövésnél
+    nincs megnevezett védő."""
+    from handball.pipeline.defense import targeted_defenders
+
+    frames = []
+    t = 0
+
+    def _shot_at(defender_id, jersey, goal):
+        """Hazai lövés a +x kapura, a megadott vendég védővel a lövő
+        mellett (a másik védő messze, a kapus a kapuban)."""
+        nonlocal t, frames
+        players = [
+            _pl(1, Team.HOME, 33.0, 10.0),
+            PlayerPosition(track_id=defender_id, team=Team.AWAY,
+                           x=34.0, y=10.0, source=PositionSource.MEASURED,
+                           confidence=1.0, jersey_number=jersey),
+            _pl(20, Team.AWAY, 33.0, 1.0),          # távoli védő
+            _pl(30, Team.AWAY, 39.0, 10.0, role="kapus"),
+        ]
+        y_end = 10.0 if goal else 2.0
+        for i in range(10):
+            bx = min(33.0 + 0.7 * (i + 1), 40.0)
+            by = 10.0 + (y_end - 10.0) * (i + 1) / 10.0
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for k in range(6):
+        _shot_at(8, 8, goal=(k < 5))
+    for k in range(6):
+        _shot_at(9, 9, goal=(k == 0))
+
+    td = targeted_defenders(Match(_meta(), frames))
+    a = td["away"]
+    assert a["shots"] == 12 and a["goals"] == 6
+    eight = next(p for p in a["players"] if p["player_id"] == 8)
+    nine = next(p for p in a["players"] if p["player_id"] == 9)
+    assert eight["shots"] == 6 and eight["goals"] == 5
+    assert nine["shots"] == 6 and nine["goals"] == 1
+    assert eight["jersey"] == 8
+    assert a["weak"] is not None and a["weak"]["player_id"] == 8
+    assert a["weak"]["gap_pp"] > 0
+    # A kapus és a távoli védő nem kap lövést.
+    assert all(p["player_id"] not in (20, 30) for p in a["players"])
+
+    # A hazai fal nem kapott lövést → nincs célpont és nincs gyenge pont.
+    assert td["home"]["shots"] == 0
+    assert td["home"]["target"] is None and td["home"]["weak"] is None
+
+    # Két lövés: nincs elég minta → nincs megnevezett védő.
+    few = targeted_defenders(Match(_meta(), frames[:100]))
+    assert few["away"]["target"] is None and few["away"]["weak"] is None

@@ -701,6 +701,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{best_pm['minutes']:.0f} perc alatt.")
     except Exception:
         pass
+    # Célba vett védő: melyik védő előtt fejezte be az ellenfél a
+    # legtöbbször, és hol lett belőle gól is.
+    try:
+        from .defense import targeted_defenders
+        tdf = targeted_defenders(match)
+        for side, name in (("home", home), ("away", away)):
+            tgt = tdf[side]["weak"] or tdf[side]["target"]
+            if tgt is None:
+                continue
+            jn = tgt["jersey"] or _jersey_of_track(match).get(
+                tgt["player_id"])
+            who = (f"{jn}-es mezszámú védője" if jn is not None
+                   else f"{tgt['player_id']} azonosítójú védője")
+            body += (f" A(z) {name} védekezésében a(z) {who} előtt "
+                     f"fejeztek be a legtöbbször: {tgt['shots']} lövés, "
+                     f"{tgt['goals']} gól.")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power

@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Célba vett védő**: KIRE lőnek, és kinél lesz belőle gól. A szabad
+  lövés és a fal lyukai (wall_gaps, breakthrough_lanes) a HELYET
+  mondják meg, a labdaszerzők a védekezés motorját — ez a hiányzó
+  harmadik kérdés: melyik védő előtt fejeznek be. Minden kapott
+  lövésnél a lövőhöz legközelebbi mezőnyvédő (6 m-en belül; távolabb
+  nincs gazdája, az szabad lövés) kapja a lövést és a gólt is, ha
+  bement. Edzőileg két olvasat: akire a legtöbbet lőnek, azt keresi
+  az ellenfél (őt kell segíteni, mögé a kapus szöge), akinél pedig a
+  csapatátlagnál 15 százalékponttal magasabb a gólarány (4+ rá eső
+  lövéstől), ott a fal tényleg puha. Egy réteg, sok felület:
+  `targeted_defenders` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (edzői kulcs + csempe; védőnként a
+  lövés- és gólszám tárolva, hogy a gólarány meccsek közt pontosan
+  visszaszámolható legyen), 94. meccsterv-szabály (az ő gyenge védőjük
+  × a ti elzárás-használatotok), 115. edzés-szabály (védő-segítés:
+  szomszéd zárja a lövőszöget, a kapussal egyeztetett szög).
 - **Játékos-mérleg (+/−)**: kinek a pályán léte alatt jobb a
   gólkülönbség — a rotáció-mélység azt mutatja, KI mennyit játszik,
   ez azt, hogy MI TÖRTÉNIK, amíg játszik: a pályán töltött ideje
