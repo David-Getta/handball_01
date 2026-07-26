@@ -566,6 +566,12 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Kettőzés: a labdás-kockák és a kettőzött kockák száma + a
+    # kikényszerített eladások — darabszámok, meccsek közt
+    # összegződnek (arány = doubled / holder).
+    dbl_holder_frames: int = 0
+    dbl_doubled_frames: int = 0
+    dbl_forced_to: int = 0
     # Kapus-indítás iránya: a bal, illetve jobb oldalra adott
     # kapus-indítások száma — darabszámok, meccsek közt összegződnek
     # (arány = left / (left + right)).
@@ -1528,6 +1534,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Kettőzés: rálép-e a második védőjük a labdásra.
+    if rep.dbl_holder_frames >= 250:
+        _dbl = 100.0 * rep.dbl_doubled_frames / rep.dbl_holder_frames
+        if _dbl >= 30.0:
+            keys.append(
+                f"Sokat kettőznek a labdáson (a labdás-idő "
+                f"{_dbl:.0f}%-ában két védő is rálép, "
+                f"{rep.dbl_forced_to} kikényszerített eladás) — a "
+                "kettőzés ellen egy érintéssel kell játszani: gyors "
+                "labdaeladás az üres oldalra, és a kettőzött játékos "
+                "társa azonnal induljon a felszabadult helyre.")
+        elif _dbl <= 10.0:
+            keys.append(
+                f"Nem kettőznek (csak a labdás-idő {_dbl:.0f}%-ában "
+                "lép rá második védő) — 1v1-et hagynak: válasszátok "
+                "ki a legjobb áttörőtöket, és menjetek rá "
+                "ismételten ugyanarra a védőre.")
 
     # Kapus-indítás iránya: kiszámítható-e, merre nyit a kapusuk.
     if rep.gos_left + rep.gos_right >= 6:
@@ -3287,6 +3311,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .defense import double_teams
+        dblrec = double_teams(match, config)[team.value]
+        rep.dbl_holder_frames = dblrec["holder_frames"]
+        rep.dbl_doubled_frames = dblrec["doubled_frames"]
+        rep.dbl_forced_to = dblrec["forced_turnovers"]
         from .goalkeeper import gk_outlet_side
         gosrec = gk_outlet_side(match, config)[team.value]
         rep.gos_left = gosrec["left"]
@@ -4601,6 +4630,22 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 86) Az ő kettőzésük × a ti gyors passzjátékotok: a kettőzést egy
+    # érintéssel kell megbüntetni.
+    if (opp.dbl_holder_frames >= 250
+            and 100.0 * opp.dbl_doubled_frames / opp.dbl_holder_frames
+            >= 30.0
+            and own.pt_poss_s >= 60.0
+            and 60.0 * own.pt_passes / own.pt_poss_s >= 12.0):
+        plan.append(
+            f"Sokat kettőznek a labdáson (a labdás-idő "
+            f"{100.0 * opp.dbl_doubled_frames / opp.dbl_holder_frames:.0f}"
+            f"%-ában), ti pedig gyorsan járatjátok a labdát "
+            f"({60.0 * own.pt_passes / own.pt_poss_s:.0f} passz/perc "
+            "birtoklás) — ez ellenük a fegyver: egy érintéssel az üres "
+            "oldalra, és a kettőzött játékos társa azonnal induljon a "
+            "felszabadult helyre.")
+
     # 85) Az ő egyoldalú kapus-indításuk × a ti magas szerzésetek: az
     # indítás-sáv a ti csapdátok.
     if opp.gos_left + opp.gos_right >= 6 and own.steal_high >= 3:
@@ -5496,6 +5541,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        dbl_holder_frames=sum(r.dbl_holder_frames for r in reports),
+        dbl_doubled_frames=sum(r.dbl_doubled_frames for r in reports),
+        dbl_forced_to=sum(r.dbl_forced_to for r in reports),
         gos_left=sum(r.gos_left for r in reports),
         gos_right=sum(r.gos_right for r in reports),
         cto_early_to=sum(r.cto_early_to for r in reports),

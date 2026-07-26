@@ -684,6 +684,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Kettőzés: rálépett-e a második védő is a labdásra.
+    try:
+        from .defense import double_teams
+        dbl = double_teams(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_db = dbl[side]
+            if rec_db["verdict"] is None:
+                continue
+            if rec_db["verdict"] == "kettőz":
+                body += (f" A(z) {name} sokat kettőzött a labdáson "
+                         f"(a labdás kockák "
+                         f"{rec_db['doubled_pct']:.0f}%-ában két védő "
+                         f"is rálépett, {rec_db['forced_turnovers']} "
+                         "eladást kikényszerítve).")
+            else:
+                body += (f" A(z) {name} 1v1-et hagyott a labdáson "
+                         f"(csak {rec_db['doubled_pct']:.0f}%-ban "
+                         "lépett rá második védő).")
+    except Exception:
+        pass
     # Kapus-indítás iránya: egyoldalúan nyitott-e a kapus.
     try:
         from .goalkeeper import gk_outlet_side

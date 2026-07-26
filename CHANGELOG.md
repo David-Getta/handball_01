@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kettőzés**: rálép-e a második védő is a labdásra — a védekezési
+  nyomás a LEGKÖZELEBBI védő távolságát méri, ez azt, hogy jön-e
+  MÁSODIK: a labdás kockáin számoljuk, hányban van legalább két
+  ellenfél 2,5 m-en belül (250+ labdás-kockából, 30% felett
+  "kettőz", 10% alatt "1v1-et hagy"), és hány eladás lesz belőle 2
+  másodpercen belül. A kettőző védekezés ellen egy érintéssel kell
+  játszani (gyors labdaeladás az üres oldalra); aki nem kettőz,
+  1v1-et hagy — a legjobb áttörőt kell rá küldeni. Saját olvasatban
+  a kettőzés-mechanizmus és a mögötte lévő átvétel-csúszás az
+  edzés-téma. Egy réteg, sok felület: `double_teams` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kétirányú kulcs + csempe), 86. meccsterv-szabály (az ő
+  kettőzésük × a ti gyors passzjátékotok), 107. edzés-szabály
+  (kettőzés-jelre rálépés, átvétel-csúszás a beállóra).
 - **Kapus-indítás iránya**: melyik oldalra nyit a kapus — az indítás
   hossza azt mondja meg, milyen messzire indít, a biztonsága azt,
   hogy elcsíphető-e; ez azt, hogy MERRE: a fogadó a pálya bal vagy

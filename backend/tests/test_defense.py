@@ -969,3 +969,46 @@ def test_counter_press_separates_pressing_and_resigned_team():
     few = counter_press(Match(_meta(), frames[:600]))
     assert few["home"]["rate_pct"] is None
     assert few["home"]["verdict"] is None
+
+
+def test_double_teams_separates_doubling_and_passive_defense():
+    """A vendég két védője lép rá a hazai labdásra (kettőz), a hazai
+    csak egyet küld a vendég labdására (1v1-et hagy); kevés
+    labdás-kockánál nincs ítélet."""
+    from handball.pipeline.defense import double_teams
+
+    frames = []
+    t = 0
+
+    def _hold(home_has_ball, n):
+        """n kockányi birtoklás: a labdás mellett egy vagy két védő."""
+        nonlocal t, frames
+        for _ in range(n):
+            if home_has_ball:
+                players = [_pl(1, Team.HOME, 20.0, 10.0),
+                           _pl(11, Team.AWAY, 21.0, 10.0),
+                           _pl(12, Team.AWAY, 20.0, 11.5)]
+                ball = Ball(x=20.0, y=10.0, confidence=1.0)
+            else:
+                players = [_pl(11, Team.AWAY, 30.0, 10.0),
+                           _pl(1, Team.HOME, 31.0, 10.0),
+                           _pl(2, Team.HOME, 36.0, 10.0)]
+                ball = Ball(x=30.0, y=10.0, confidence=1.0)
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+
+    for _ in range(4):
+        _hold(True, 200)    # hazai labda: a vendég kettőz
+        _hold(False, 200)   # vendég labda: a hazai egy védőt küld
+
+    dt = double_teams(Match(_meta(), frames))
+    h, a = dt["home"], dt["away"]
+    assert a["holder_frames"] >= 250 and a["doubled_pct"] > 90.0
+    assert a["verdict"] == "kettőz"
+    assert h["holder_frames"] >= 250 and h["doubled_pct"] < 10.0
+    assert h["verdict"] == "1v1-et hagy"
+
+    # Kevés labdás-kocka: nincs arány és nincs ítélet.
+    few = double_teams(Match(_meta(), frames[:100]))
+    assert few["away"]["doubled_pct"] is None
+    assert few["away"]["verdict"] is None

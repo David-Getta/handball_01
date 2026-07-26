@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 107) Kettőzés: ha nem lép rá második védő a labdásra, a
+    # kettőzés-mechanizmus és a mögötte lévő zárás a téma.
+    try:
+        from .defense import (DOUBLE_MIN_FRAMES, double_teams)
+        dbl107 = double_teams(match, config)
+        for side in ("home", "away"):
+            rec107 = dbl107[side]
+            if rec107["verdict"] != "1v1-et hagy" \
+                    or rec107["holder_frames"] < DOUBLE_MIN_FRAMES \
+                    or rec107["doubled_pct"] is None:
+                continue
+            add(side, "védekezés", "Kettőzés",
+                f"nem lépünk rá másodikként a labdásra: a labdás-idő "
+                f"csak {rec107['doubled_pct']:.0f}%-ában van két "
+                "védőnk a labdán — minden befejezőjük 1v1-et kap "
+                "ellenünk",
+                "kettőzés: kettőzés-jelre (vezényszó) begyakorolt "
+                "rálépés a szomszéd védőtől, mögötte azonnali "
+                "átvétel-csúszás a beállóra, és 4-4 kisjáték "
+                "szabállyal — az átlövőt a lövés előtt két védőnek "
+                "kell elérnie")
+    except Exception:
+        pass
+
     # 106) Kapus-indítás iránya: ha a kapusunk mindig ugyanarra az
     # oldalra nyit, az indítás-irány variálása a téma.
     try:

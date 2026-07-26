@@ -1137,6 +1137,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Kettőzés: a labdás-kockák hány százalékában lép rá második védő
+  // (250+ labdás-kockánál, 30% felett kettőző, 10% alatt 1v1-et
+  // hagyó; a backend-kulccsal azonos küszöbök).
+  String? _doubleTeams(Map<String, dynamic> r) {
+    final hf = ((r["dbl_holder_frames"] as num?) ?? 0).toInt();
+    final df = ((r["dbl_doubled_frames"] as num?) ?? 0).toInt();
+    final ft = ((r["dbl_forced_to"] as num?) ?? 0).toInt();
+    if (hf < 250) return null;
+    final pct = 100.0 * df / hf;
+    if (pct >= 30.0) {
+      return "kettőznek a labdáson (${pct.toStringAsFixed(0)}%, "
+          "$ft kikényszerített eladás) · egy érintéssel az üres "
+          "oldalra";
+    }
+    if (pct <= 10.0) {
+      return "nem kettőznek (${pct.toStringAsFixed(0)}%) · "
+          "1v1-et hagynak: a legjobb áttörőt kell rájuk küldeni";
+    }
+    return null;
+  }
+
   // Kapus-indítás iránya: a bal/jobb oldalra adott indítások aránya
   // (6+ indításnál, 65% felett egyoldalú; a backend-kulccsal azonos
   // küszöbök).
@@ -2433,6 +2454,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hajrá-eladás", _clutchTurnovers(r)!],
       if (_gkOutletSide(r) != null)
         ["Kapus-indítás iránya", _gkOutletSide(r)!],
+      if (_doubleTeams(r) != null)
+        ["Kettőzés", _doubleTeams(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

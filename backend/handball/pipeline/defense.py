@@ -1515,3 +1515,83 @@ def counter_press(match, config=None) -> dict:
                 r["verdict"] = "beletörődik"
         out[side] = r
     return out
+
+
+# Kettőzés: ennyi méteren belül számít a második védő is a labdásra
+# lépőnek, ennyi labdás-kockától ítélünk, és e részarány felett
+# kettőző, alatta 1v1-et hagyó a védekezés.
+DOUBLE_TEAM_M = 2.5
+DOUBLE_MIN_FRAMES = 250
+DOUBLE_HIGH_PCT = 30.0
+DOUBLE_LOW_PCT = 10.0
+
+
+def double_teams(match, config=None) -> dict:
+    """Kettőzés: rálép-e a második védő is a labdásra.
+
+    A védekezési nyomás (defensive_pressure) a LEGKÖZELEBBI védő
+    távolságát méri — ez azt, hogy jön-e MÁSODIK: a labdás kockáin
+    megszámolja, hányban van legalább két ellenfél DOUBLE_TEAM_M-en
+    belül. Aki sokat kettőz, az felszabadítja a kettőzött játékos
+    társát: ellene a gyors labdaeladás (egy érintés, üres oldalra
+    járatás) a recept — ha lassan játszotok, elveszik a labdát. Aki
+    nem kettőz, az 1v1-et hagy: ellene a legjobb áttörőt kell
+    kiválasztani és rámenni.
+
+    Visszatérés csapatonként (a KETTŐZŐ, védekező oldal):
+      {"holder_frames", "doubled_frames", "doubled_pct",
+       "forced_turnovers", "verdict"} — doubled_pct és verdict None,
+    ha kevés (DOUBLE_MIN_FRAMES alatti) a labdás-kocka; a verdict
+    "kettőz" / "1v1-et hagy" / None.
+    """
+    import math
+
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(2.0 * fps)   # a kettőzés utáni 2 mp-en belüli eladás
+    tos = [(e.t, e.team.value) for e in detect_events(match, config)
+           if e.type == EventType.TURNOVER]
+    counts = {s: {"holder_frames": 0, "doubled_frames": 0,
+                  "forced_turnovers": 0}
+              for s in ("home", "away")}
+    doubled_since = {"home": None, "away": None}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        attacker = holder.team.value
+        defender = "away" if attacker == "home" else "home"
+        near = sum(1 for p in f.players
+                   if p.team is not None and p.team != holder.team
+                   and math.hypot(p.x - holder.x, p.y - holder.y)
+                   <= DOUBLE_TEAM_M)
+        rec = counts[defender]
+        rec["holder_frames"] += 1
+        if near >= 2:
+            rec["doubled_frames"] += 1
+            # A kettőzés akkor "hozott" eladást, ha a támadó az
+            # ablakon belül elveszti a labdát.
+            if any(s == attacker and 0 <= t - f.t <= win
+                   for (t, s) in tos) \
+                    and doubled_since[defender] != attacker:
+                rec["forced_turnovers"] += 1
+                doubled_since[defender] = attacker
+        else:
+            doubled_since[defender] = None
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "doubled_pct": None, "verdict": None}
+        if rec["holder_frames"] >= DOUBLE_MIN_FRAMES:
+            pct = 100.0 * rec["doubled_frames"] / rec["holder_frames"]
+            r["doubled_pct"] = round(pct, 1)
+            if pct >= DOUBLE_HIGH_PCT:
+                r["verdict"] = "kettőz"
+            elif pct <= DOUBLE_LOW_PCT:
+                r["verdict"] = "1v1-et hagy"
+        out[side] = r
+    return out
