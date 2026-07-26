@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Elzárás-védekezés**: bírja-e a fal az ellenfél elzárásait — az
+  elzárás-használat védő-oldali tükre: ott az látszik, ki mennyit
+  játszik elzárással, itt az, ki mennyire bírja ellene. Ha az
+  elzárásos lövésekből 15+ százalékponttal többször esik gól, mint
+  az elzárás nélküliekből (6+ elzárásos lövésből), a
+  váltás-kommunikáció a gyenge pont: minden figurát zárral kell
+  zárni ellenük; ha kevesebbszer, az elzárás zsákutca — tiszta
+  1v1-et kell keresni. Egy réteg, sok felület: `screen_defense`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kétirányú kulcs + csempe), 78.
+  meccsterv-szabály (az ő gyenge elzárás-váltásuk × a ti
+  elzárás-játékotok), 99. edzés-szabály (hangos váltás, átcsúszás a
+  zár elé, zár-leolvasás).
 - **Elzárás-használat**: elzárásból lőnek, vagy tisztán, 1v1-ből —
   lövésenként megnézzük, hogy a lövő őrzője mellett (2 m-en belül)
   áll-e támadó társ elzárásban (8+ őrzött lövésből; 40%+ =

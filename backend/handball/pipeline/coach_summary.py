@@ -663,6 +663,28 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Elzárás-védekezés: bírta-e a fal az ellenfél elzárásait.
+    try:
+        from .defense import screen_defense
+        scd = screen_defense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sd = scd[side]
+            if rec_sd["verdict"] is None:
+                continue
+            if rec_sd["verdict"] == "gyenge":
+                body += (f" A(z) {name} váltása gyenge volt az "
+                         f"elzárások ellen: elzárásos lövésekből "
+                         f"{rec_sd['screened_pct']:.0f}%, elzárás "
+                         f"nélküliekből {rec_sd['open_pct']:.0f}% gól "
+                         "esett ellenük.")
+            else:
+                body += (f" A(z) {name} jól váltott az elzárásokon "
+                         f"(elzárásos lövésekből csak "
+                         f"{rec_sd['screened_pct']:.0f}% gól ellenük, "
+                         f"elzárás nélküliekből "
+                         f"{rec_sd['open_pct']:.0f}%).")
+    except Exception:
+        pass
     # Elzárás-használat: elzárásból lőttek vagy tisztán, 1v1-ből.
     try:
         from .attack_types import screen_usage

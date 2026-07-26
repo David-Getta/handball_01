@@ -876,3 +876,56 @@ def test_pivot_defense_flags_weak_pivot_guarding():
     # Kevés beállós támadás: nincs ítélet.
     few = pivot_defense(Match(_meta(), frames[:600]))
     assert few["away"]["verdict"] is None
+
+
+def test_screen_defense_flags_weak_switching():
+    """A hazai elzárásos lövései mind gólt hoznak, az elzárás
+    nélküliek nem → a VENDÉG váltása gyenge; kevés elzárásos
+    lövésnél nincs ítélet."""
+    from handball.pipeline.defense import screen_defense
+
+    frames = []
+    t = 0
+
+    def _shot(screened, goal):
+        # Hazai őrzött lövés a +x kapura: a védő a lövő mellett;
+        # elzárásnál társ áll a védő mellett. Gólnál a labda a
+        # kapuvonalig repül, különben a kapusnál megáll.
+        nonlocal t, frames
+        players = [_pl(1, Team.HOME, 30.0, 10.0),
+                   _pl(20, Team.AWAY, 31.5, 10.0)]
+        if screened:
+            players.append(_pl(2, Team.HOME, 31.5, 11.0))
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            bx = min(30.0 + 0.8 * (i + 1), 40.0 if goal else 38.6)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(6):
+        _shot(screened=True, goal=True)
+    for _ in range(4):
+        _shot(screened=False, goal=False)
+
+    scd = screen_defense(Match(_meta(), frames))
+    a = scd["away"]
+    assert a["screened_shots"] >= 6 and a["open_shots"] >= 1
+    assert a["verdict"] == "gyenge"
+    assert a["gap_pp"] is not None and a["gap_pp"] >= 15.0
+    # A hazai ellen nem lőttek: nincs ítélet.
+    assert scd["home"]["verdict"] is None
+
+    # Kevés elzárásos lövés: nincs ítélet.
+    few = screen_defense(Match(_meta(), frames[:300]))
+    assert few["away"]["verdict"] is None

@@ -1343,6 +1343,35 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 99) Elzárás-védekezés: ha az elzárásokon szétesik a váltásunk,
+    # a váltás-kommunikáció a téma.
+    try:
+        from .defense import (SCRDEF_GAP_PP, SCRDEF_MIN_SCREENED,
+                              screen_defense)
+        scd99 = screen_defense(match, config)
+        for side in ("home", "away"):
+            rec99 = scd99[side]
+            if rec99["verdict"] != "gyenge" \
+                    or rec99["screened_shots"] < SCRDEF_MIN_SCREENED \
+                    or rec99["gap_pp"] is None \
+                    or rec99["gap_pp"] < SCRDEF_GAP_PP:
+                continue
+            add(side, "védekezés", "Váltás elzáráson",
+                f"az elzárásokon szétesik a váltásunk: elzárásos "
+                f"lövésekből {rec99['screened_pct']:.0f}% gól esik "
+                f"ellenünk, elzárás nélküliekből csak "
+                f"{rec99['open_pct']:.0f}% "
+                f"({rec99['screened_goals']}/"
+                f"{rec99['screened_shots']} vs {rec99['open_goals']}/"
+                f"{rec99['open_shots']}) — a zár mögül mindig tiszta "
+                "lövést kapunk",
+                "váltás elzáráson: hangos váltás-gyakorlat (a zárt "
+                "védő kiált, a szomszéd veszi át), átcsúszás a zár "
+                "elé félpályás 3-3-ban, és zár-leolvasás — a zárót a "
+                "közeli védő fogja, a lövőt a váltó")
+    except Exception:
+        pass
+
     # 98) Elzárás-használat: ha elzárás nélkül lövünk, a lövőnk
     # magára marad — az elzárás-játék a téma.
     try:

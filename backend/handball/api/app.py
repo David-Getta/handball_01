@@ -2778,6 +2778,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import screen_defense
+            res["screen_defense"] = screen_defense(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3310,6 +3315,8 @@ def create_app():
                 _layer("side_switching", lambda: side_switching(match))
                 from ..pipeline.attack_types import screen_usage
                 _layer("screen_usage", lambda: screen_usage(match))
+                from ..pipeline.defense import screen_defense
+                _layer("screen_defense", lambda: screen_defense(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

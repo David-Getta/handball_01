@@ -549,6 +549,13 @@ class ScoutingReport:
     # összegződnek.
     scu_shots: int = 0
     scu_screened: int = 0
+    # Elzárás-védekezés: az ellenük leadott elzárásos és elzárás
+    # nélküli őrzött lövések + a belőlük esett gólok — darabszámok,
+    # meccsek közt összegződnek (gólarány külön-külön).
+    scd_screened_shots: int = 0
+    scd_screened_goals: int = 0
+    scd_open_shots: int = 0
+    scd_open_goals: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1474,6 +1481,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Elzárás-védekezés: bírja-e a faluk az elzárást, vagy minden
+    # figurát zárással kell zárni ellenük.
+    if rep.scd_screened_shots >= 6 and rep.scd_open_shots > 0:
+        _scd_scr = (100.0 * rep.scd_screened_goals
+                    / rep.scd_screened_shots)
+        _scd_opn = 100.0 * rep.scd_open_goals / rep.scd_open_shots
+        if _scd_scr - _scd_opn >= 15.0:
+            keys.append(
+                f"Rosszul váltanak elzárás ellen: elzárásos "
+                f"lövésekből {_scd_scr:.0f}% gól esik ellenük, "
+                f"elzárás nélküliekből csak {_scd_opn:.0f}% — minden "
+                "figurát elzárással zárjatok: beállós zár az átlövő "
+                "őrzőjére, átlövő-kereszt, és a zár mögül lövés.")
+        elif _scd_opn - _scd_scr >= 15.0:
+            keys.append(
+                f"Jól váltanak az elzárásokon (elzárásos lövésekből "
+                f"csak {_scd_scr:.0f}% gól ellenük, elzárás "
+                f"nélküliekből {_scd_opn:.0f}%) — az elzárás ellenük "
+                "zsákutca: keressetek tiszta 1v1-et és üres "
+                "területet, ne a zárra játsszatok.")
 
     # Elzárás-használat: az elzárásos ellen váltás-kommunikáció, az
     # elzárás nélküli lövő magára van hagyva.
@@ -3076,6 +3104,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         scurec = screen_usage(match, config)[team.value]
         rep.scu_shots = scurec["shots"]
         rep.scu_screened = scurec["screened"]
+        from .defense import screen_defense
+        scdrec = screen_defense(match, config)[team.value]
+        rep.scd_screened_shots = scdrec["screened_shots"]
+        rep.scd_screened_goals = scdrec["screened_goals"]
+        rep.scd_open_shots = scdrec["open_shots"]
+        rep.scd_open_goals = scdrec["open_goals"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4353,6 +4387,25 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 78) Az ő gyenge elzárás-váltásuk × a ti elzárás-játékotok: amit
+    # nem bírnak, abból ti amúgy is sokat játszotok.
+    if (opp.scd_screened_shots >= 6 and opp.scd_open_shots > 0
+            and own.scu_shots >= 8
+            and (100.0 * opp.scd_screened_goals
+                 / opp.scd_screened_shots)
+            - (100.0 * opp.scd_open_goals / opp.scd_open_shots)
+            >= 15.0
+            and 100.0 * own.scu_screened / own.scu_shots >= 30.0):
+        plan.append(
+            f"Rosszul váltanak elzárás ellen (elzárásos lövésekből "
+            f"{100.0 * opp.scd_screened_goals / opp.scd_screened_shots:.0f}"
+            f"% gól esik ellenük, elzárás nélküliekből "
+            f"{100.0 * opp.scd_open_goals / opp.scd_open_shots:.0f}%), "
+            f"ti pedig eleve sokat játszotok elzárással (a lövéseitek "
+            f"{100.0 * own.scu_screened / own.scu_shots:.0f}%-a) — "
+            "minden figura zárral záruljon: beállós zár az átlövő "
+            "őrzőjére, és a zár mögül azonnal lövés.")
+
     # 77) Az ő elzárás nélküli lövéseik × a ti blokk-falatok: a
     # magára hagyott lövőt a sánc megeszi.
     if (opp.scu_shots >= 8 and own.blocks >= 5
@@ -5105,6 +5158,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ssw_switches=sum(r.ssw_switches for r in reports),
         scu_shots=sum(r.scu_shots for r in reports),
         scu_screened=sum(r.scu_screened for r in reports),
+        scd_screened_shots=sum(r.scd_screened_shots for r in reports),
+        scd_screened_goals=sum(r.scd_screened_goals for r in reports),
+        scd_open_shots=sum(r.scd_open_shots for r in reports),
+        scd_open_goals=sum(r.scd_open_goals for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

@@ -1367,3 +1367,91 @@ def pivot_defense(match, config=None) -> dict:
                 rec["verdict"] = "erős"
         out[side] = rec
     return out
+
+
+# Elzárás-védekezés: az elzárás-felismerés küszöbei (a screen_usage
+# motorral azonosak); ennyi ellenük vezetett elzárásos lövés kell az
+# ítélethez, és ekkora gólarány-különbség (százalékpont) számít
+# érdeminek.
+SCRDEF_MIN_SCREENED = 6
+SCRDEF_GAP_PP = 15.0
+
+
+def screen_defense(match, config=None) -> dict:
+    """Elzárás-védekezés: bírja-e a fal az ellenfél elzárásait.
+
+    Az elzárás-használat (screen_usage) védő-oldali tükre: ott az
+    látszik, ki mennyit játszik elzárással, itt az, ki mennyire bírja
+    ellene. Az ellenük leadott őrzött lövéseket elzárásos és elzárás
+    nélküli csoportra bontjuk, és a gólarányukat hasonlítjuk össze. Ha
+    az elzárásos lövésekből érdemben többször esik gól, a
+    váltás-kommunikáció a gyenge pont: az ellenfélnek minden figurát
+    elzárással kell zárnia; ha kevesebbszer, a fal jól vált — ott az
+    elzárás zsákutca, tiszta 1v1-et kell keresni.
+
+    Visszatérés csapatonként (a VÉDŐ oldal könyvelésében):
+    {"screened_shots", "screened_goals", "open_shots", "open_goals",
+    "screened_pct", "open_pct", "gap_pp", "verdict"} —
+    pct/gap/verdict None, ha kevés (SCRDEF_MIN_SCREENED alatti) az
+    elzárásos lövés; a verdict "gyenge" / "jól vált" / None.
+    """
+    import math
+
+    from .attack_types import SCREEN_DIST_M, SCREEN_MARKER_MAX_M
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    counts = {s: {"screened_shots": 0, "screened_goals": 0,
+                  "open_shots": 0, "open_goals": 0}
+              for s in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in f.players:
+            if d.team is None or d.team == shooter.team:
+                continue
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue  # szabad lövés: nem a váltásról szól
+        screened = any(
+            p.track_id != pid and p.team == shooter.team
+            and math.hypot(p.x - marker.x, p.y - marker.y)
+            <= SCREEN_DIST_M
+            for p in f.players)
+        defender = "away" if sh["team"] == "home" else "home"
+        rec = counts[defender]
+        key = "screened" if screened else "open"
+        rec[key + "_shots"] += 1
+        if sh["outcome"] == "goal":
+            rec[key + "_goals"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "screened_pct": None, "open_pct": None,
+             "gap_pp": None, "verdict": None}
+        if rec["screened_shots"] >= SCRDEF_MIN_SCREENED \
+                and rec["open_shots"] > 0:
+            scr = 100.0 * rec["screened_goals"] / rec["screened_shots"]
+            opn = 100.0 * rec["open_goals"] / rec["open_shots"]
+            r["screened_pct"] = round(scr, 1)
+            r["open_pct"] = round(opn, 1)
+            r["gap_pp"] = round(scr - opn, 1)
+            if scr - opn >= SCRDEF_GAP_PP:
+                r["verdict"] = "gyenge"
+            elif opn - scr >= SCRDEF_GAP_PP:
+                r["verdict"] = "jól vált"
+        out[side] = r
+    return out

@@ -1137,6 +1137,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Elzárás-védekezés: az ellenük vezetett elzárásos vs elzárás
+  // nélküli lövések gólaránya (6+ elzárásos lövésnél, 15+
+  // százalékpont eltérésnél; a backend-kulccsal azonos küszöbök).
+  String? _screenDefense(Map<String, dynamic> r) {
+    final scrS = ((r["scd_screened_shots"] as num?) ?? 0).toInt();
+    final scrG = ((r["scd_screened_goals"] as num?) ?? 0).toInt();
+    final opnS = ((r["scd_open_shots"] as num?) ?? 0).toInt();
+    final opnG = ((r["scd_open_goals"] as num?) ?? 0).toInt();
+    if (scrS < 6 || opnS < 1) return null;
+    final scr = 100.0 * scrG / scrS;
+    final opn = 100.0 * opnG / opnS;
+    if (scr - opn >= 15.0) {
+      return "rosszul váltanak elzárás ellen: "
+          "${scr.toStringAsFixed(0)}% gól elzárásból, "
+          "${opn.toStringAsFixed(0)}% nélküle · zárj minden figurát";
+    }
+    if (opn - scr >= 15.0) {
+      return "jól váltanak az elzárásokon "
+          "(${scr.toStringAsFixed(0)}% vs "
+          "${opn.toStringAsFixed(0)}%) · keress tiszta 1v1-et";
+    }
+    return null;
+  }
+
   // Elzárás-használat: az elzárásból leadott lövések aránya az
   // őrzött lövésekben (8+ őrzött lövésnél; 40%+ = elzárásos, 10%- =
   // elzárás nélküli; a backend-kulccsal azonos küszöbök).
@@ -2239,6 +2263,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Oldalváltás", _sideSwitching(r)!],
       if (_screenUsage(r) != null)
         ["Elzárás-használat", _screenUsage(r)!],
+      if (_screenDefense(r) != null)
+        ["Elzárás-védekezés", _screenDefense(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
