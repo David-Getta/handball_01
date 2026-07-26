@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Oldalváltás**: széthúzzák-e a falat gyors keresztpasszokkal — a
+  támadó térfélen adott passzok közül a 10 m+ oldalirányú
+  elmozdulásúak aránya (30+ passzból; 12%+ = oldalváltó, 3% alatt =
+  egy-oldalas). Az oldalváltó ellen kompakt eltolás kell — a váltás
+  alatt zárt sávok; az egy-oldalas ellen a fal bátran eltolható a
+  kedvenc oldalukra, a túloldali szélsőjük éhen marad; saját
+  olvasatban a keresztjáték hiánya edzés-téma. Egy réteg, sok
+  felület: `side_switching` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 76.
+  meccsterv-szabály (az ő egy-oldalas támadásuk × a ti
+  szerzés-gépezetetek), 97. edzés-szabály (kötelező oldalváltás a
+  kisjátékban, hosszú keresztpassz technika).
 - **Lerohanás-védés**: hogy véd a kapus gyorsindítás ellen — a kaput
   eltaláló lövéseket fázisra bontjuk (a labda a lövés előtti 8 mp-ben
   még a támadó saját térfelén járt = gyorsindításos; különben

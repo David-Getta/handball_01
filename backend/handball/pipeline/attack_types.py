@@ -1440,3 +1440,76 @@ def goal_buildup(match: Match,
                 r["style"] = "kombinatív"
         out[side] = r
     return out
+
+
+# Oldalváltás: ekkora keresztirányú (y) elmozdulás számít
+# oldalváltó passznak; ennyi támadó-térfeles passz kell az ítélethez,
+# és e részarányok döntik el a címkét.
+SWITCH_MIN_DY_M = 10.0
+SWITCH_MIN_PASSES = 30
+SWITCH_HIGH_PCT = 12.0
+SWITCH_LOW_PCT = 3.0
+
+
+def side_switching(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Oldalváltás: széthúzzák-e a falat gyors keresztpasszokkal.
+
+    A támadó térfélen adott passzok közül megszámoljuk azokat,
+    amelyeknél a passzoló és a fogadó közt legalább SWITCH_MIN_DY_M
+    méter a keresztirányú (oldal-oldal) távolság. Az oldalváltó
+    csapat szét akarja húzni a falat: ellene kompakt eltolás kell —
+    a váltás alatt zárt sávok, senki nem csúszhat el; az egy-oldalas
+    csapat beragad: a fal bátran eltolható a kedvenc oldalára, a
+    túloldali szélsőjük éhen marad.
+
+    Visszatérés csapatonként: {"passes", "switches", "switch_pct",
+    "style"} — pct/style None, ha kevés (SWITCH_MIN_PASSES alatti) a
+    támadó-térfeles passz; a style "oldalváltó" / "egy-oldalas" /
+    None (vegyes).
+    """
+    from .calibration import COURT_LENGTH_M
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    mid = COURT_LENGTH_M / 2.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    counts = {"home": {"passes": 0, "switches": 0},
+              "away": {"passes": 0, "switches": 0}}
+    for e in detect_events(match, config):
+        if e.type != EventType.PASS or e.player_id is None:
+            continue
+        rid = (e.detail or {}).get("receiver_id")
+        if rid is None:
+            continue
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            continue
+        f = match.frames[i0]
+        by_id = {p.track_id: p for p in f.players}
+        passer = by_id.get(e.player_id)
+        receiver = by_id.get(rid)
+        if passer is None or receiver is None:
+            continue
+        attacks_positive = config.attacks_toward_x(e.team) > mid
+        def _att_half(x):
+            return x > mid if attacks_positive else x < mid
+        if not (_att_half(passer.x) and _att_half(receiver.x)):
+            continue
+        rec = counts[e.team.value]
+        rec["passes"] += 1
+        if abs(receiver.y - passer.y) >= SWITCH_MIN_DY_M:
+            rec["switches"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "switch_pct": None, "style": None}
+        if rec["passes"] >= SWITCH_MIN_PASSES:
+            pct = 100.0 * rec["switches"] / rec["passes"]
+            r["switch_pct"] = round(pct, 1)
+            if pct >= SWITCH_HIGH_PCT:
+                r["style"] = "oldalváltó"
+            elif pct <= SWITCH_LOW_PCT:
+                r["style"] = "egy-oldalas"
+        out[side] = r
+    return out

@@ -540,6 +540,10 @@ class ScoutingReport:
     gkb_fast_saves: int = 0
     gkb_set_faced: int = 0
     gkb_set_saves: int = 0
+    # Oldalváltás: támadó-térfeles passzok + ebből a keresztpasszok
+    # (10 m+ oldalirány) — darabszámok, meccsek közt összegződnek.
+    ssw_passes: int = 0
+    ssw_switches: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1465,6 +1469,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Oldalváltás: az oldalváltó ellen kompakt eltolás, az
+    # egy-oldalas ellen bátran eltolható a fal.
+    if rep.ssw_passes >= 30:
+        _ssw_pct = 100.0 * rep.ssw_switches / rep.ssw_passes
+        if _ssw_pct >= 12.0:
+            keys.append(
+                f"Oldalváltásokkal húzzák szét a falat: a támadó "
+                f"passzaik {_ssw_pct:.0f}%-a keresztpassz "
+                f"({rep.ssw_switches}/{rep.ssw_passes}) — kompakt "
+                "eltolás kell: a váltás alatt zárt sávok, senki nem "
+                "csúszhat el, a szélső védő ne lépjen ki korán.")
+        elif _ssw_pct <= 3.0:
+            keys.append(
+                f"Egy oldalon ragadnak: a támadó passzaik csak "
+                f"{_ssw_pct:.0f}%-a oldalváltás ({rep.ssw_switches}/"
+                f"{rep.ssw_passes}) — a fal bátran eltolható a "
+                "kedvenc oldalukra: a túloldali szélsőjük éhen marad, "
+                "a segítő védő is a labda-oldalra csalható.")
 
     # Lerohanás-védés: az érzékeny kapus ellen futni kell, a
     # lerohanás-fogó ellen a gyors befejezést is ki kell játszani.
@@ -3021,6 +3044,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.gkb_fast_saves = gkbrec["fast_saves"]
         rep.gkb_set_faced = gkbrec["set_faced"]
         rep.gkb_set_saves = gkbrec["set_saves"]
+        from .attack_types import side_switching
+        sswrec = side_switching(match, config)[team.value]
+        rep.ssw_passes = sswrec["passes"]
+        rep.ssw_switches = sswrec["switches"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4298,6 +4325,18 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 76) Az ő egy-oldalas támadásuk × a ti szerzés-gépezetetek: a
+    # kedvenc oldaluk passzsávjai a ti vadászterületetek.
+    if (opp.ssw_passes >= 30 and own.steal_n >= 8
+            and 100.0 * opp.ssw_switches / opp.ssw_passes <= 3.0):
+        plan.append(
+            f"Egy oldalon ragadnak (a támadó passzaik csak "
+            f"{100.0 * opp.ssw_switches / opp.ssw_passes:.0f}%-a "
+            f"oldalváltás), ti pedig sokat szerzitek a labdát "
+            f"({own.steal_n} szerzés) — told el a falat a kedvenc "
+            "oldalukra és vadássz a bejátszásaikra: a szűk oldalon "
+            "kényszerített passzokból jön a szerzés és a lerohanás.")
+
     # 75) Az ő lerohanás-érzékeny kapusuk × a ti lerohanás-
     # gépezetetek: minden szerzés után futni kell.
     if (opp.gkb_fast_faced >= 4 and opp.gkb_set_faced >= 4
@@ -5022,6 +5061,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gkb_fast_saves=sum(r.gkb_fast_saves for r in reports),
         gkb_set_faced=sum(r.gkb_set_faced for r in reports),
         gkb_set_saves=sum(r.gkb_set_saves for r in reports),
+        ssw_passes=sum(r.ssw_passes for r in reports),
+        ssw_switches=sum(r.ssw_switches for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

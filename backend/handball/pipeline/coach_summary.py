@@ -663,6 +663,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Oldalváltás: széthúzó keresztpasszok vagy egy-oldalas játék.
+    try:
+        from .attack_types import side_switching
+        ssw = side_switching(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sw = ssw[side]
+            if rec_sw["style"] is None:
+                continue
+            if rec_sw["style"] == "oldalváltó":
+                body += (f" A(z) {name} oldalváltásokkal húzta szét a "
+                         f"falat: a támadó passzaik "
+                         f"{rec_sw['switch_pct']:.0f}%-a keresztpassz "
+                         "volt.")
+            else:
+                body += (f" A(z) {name} egy oldalon ragadt: a támadó "
+                         f"passzaik csak {rec_sw['switch_pct']:.0f}"
+                         "%-a volt oldalváltás.")
+    except Exception:
+        pass
     # Lerohanás-védés: hogy védett a kapus gyorsindítás ellen.
     try:
         from .goalkeeper import gk_break_response

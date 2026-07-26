@@ -1137,6 +1137,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Oldalváltás: a keresztpasszok (10 m+ oldalirány) aránya a támadó
+  // passzokban (30+ passznál; 12%+ = oldalváltó, 3%- = egy-oldalas;
+  // a backend-kulccsal azonos küszöbök).
+  String? _sideSwitching(Map<String, dynamic> r) {
+    final passes = ((r["ssw_passes"] as num?) ?? 0).toInt();
+    final switches = ((r["ssw_switches"] as num?) ?? 0).toInt();
+    if (passes < 30) return null;
+    final pct = 100.0 * switches / passes;
+    if (pct >= 12.0) {
+      return "oldalváltásokkal húzzák szét a falat "
+          "(${pct.toStringAsFixed(0)}% keresztpassz) · kompakt "
+          "eltolás, zárt sávok";
+    }
+    if (pct <= 3.0) {
+      return "egy oldalon ragadnak (csak ${pct.toStringAsFixed(0)}% "
+          "oldalváltás) · told el a falat a kedvenc oldalukra";
+    }
+    return null;
+  }
+
   // Lerohanás-védés: a kapus védés-aránya gyorsindítás vs rendezett
   // támadás ellen (fázisonként 4+ kaput eltaláló lövésnél, 15+
   // százalékpont eltérésnél; a backend-kulccsal azonos küszöbök).
@@ -2195,6 +2215,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-előkészítés", _goalBuildup(r)!],
       if (_gkBreakResponse(r) != null)
         ["Lerohanás-védés", _gkBreakResponse(r)!],
+      if (_sideSwitching(r) != null)
+        ["Oldalváltás", _sideSwitching(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 97) Oldalváltás: ha egy oldalon ragadunk, a fal ellenünk
+    # nyugodtan eltolható — a keresztjáték a téma.
+    try:
+        from .attack_types import (SWITCH_LOW_PCT, SWITCH_MIN_PASSES,
+                                   side_switching)
+        ssw97 = side_switching(match, config)
+        for side in ("home", "away"):
+            rec97 = ssw97[side]
+            if rec97["style"] != "egy-oldalas" \
+                    or rec97["passes"] < SWITCH_MIN_PASSES \
+                    or rec97["switch_pct"] > SWITCH_LOW_PCT:
+                continue
+            add(side, "támadás", "Oldalváltás",
+                f"egy oldalon ragadunk: a támadó passzaink csak "
+                f"{rec97['switch_pct']:.0f}%-a oldalváltás "
+                f"({rec97['switches']}/{rec97['passes']}) — a fal "
+                "nyugodtan ránk tolható, a túloldali szélsőnk éhen "
+                "marad",
+                "keresztjáték: kötelező két oldalváltás minden "
+                "akcióban (kisjáték-szabály), hosszú keresztpassz "
+                "technika-sor (feszes, egy ütemű váltás), és "
+                "szélső-szélső átjátszás a fal átmozgatására")
+    except Exception:
+        pass
+
     # 96) Lerohanás-védés: ha a kapusunk gyorsindítás ellen szakad
     # be, a kapus-edzés és a visszarendeződés együtt a téma.
     try:

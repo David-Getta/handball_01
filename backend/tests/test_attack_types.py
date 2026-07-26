@@ -1005,3 +1005,42 @@ def test_goal_buildup_separates_direct_and_combinative():
     # Kevés gól: nincs ítélet.
     few = goal_buildup(Match(_meta(), frames[:200]))
     assert few["home"]["style"] is None
+
+
+def test_side_switching_separates_cross_court_and_one_sided():
+    """A hazai minden passza oldalváltó keresztpassz, a vendégé mind
+    rövid, azonos oldali; kevés passznál nincs ítélet."""
+    from handball.pipeline.attack_types import side_switching
+
+    frames = []
+    t = 0
+
+    def _pass_block(team, spots):
+        # A labda a két pont közt jár (5-5 kocka birtoklás): minden
+        # elkapás egy passz a támadó térfélen.
+        nonlocal t, frames
+        ids = (1, 2) if team == Team.HOME else (11, 12)
+        pls = [_pl(ids[0], team, spots[0][0], spots[0][1]),
+               _pl(ids[1], team, spots[1][0], spots[1][1])]
+        for k in range(34):
+            hx, hy = spots[k % 2]
+            for _ in range(5):
+                frames.append(Frame(t=t, players=pls,
+                                    ball=Ball(x=hx, y=hy,
+                                              confidence=1.0)))
+                t += 1
+
+    # Hazai (+x térfél): keresztpasszok a két szél közt (Δy = 14 m).
+    _pass_block(Team.HOME, [(30.0, 3.0), (30.0, 17.0)])
+    # Vendég (-x térfél): rövid passzok azonos oldalon (Δy = 4 m).
+    _pass_block(Team.AWAY, [(10.0, 8.0), (10.0, 12.0)])
+
+    ssw = side_switching(Match(_meta(), frames))
+    h, a = ssw["home"], ssw["away"]
+    assert h["passes"] >= 30 and h["style"] == "oldalváltó"
+    assert a["passes"] >= 30 and a["style"] == "egy-oldalas"
+    assert h["switch_pct"] > a["switch_pct"]
+
+    # Kevés passz: nincs ítélet.
+    few = side_switching(Match(_meta(), frames[:100]))
+    assert few["home"]["style"] is None
