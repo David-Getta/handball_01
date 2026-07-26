@@ -663,6 +663,28 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Beálló-védekezés: bírta-e a fal az ellenfél beállóját.
+    try:
+        from .defense import pivot_defense
+        pdc = pivot_defense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pd = pdc[side]
+            if rec_pd["verdict"] is None:
+                continue
+            if rec_pd["verdict"] == "gyenge":
+                body += (f" A(z) {name} beálló-őrzése gyenge volt: az "
+                         f"ellene vezetett beállós támadások "
+                         f"{rec_pd['pivot_goal_pct']:.0f}%-a lett gól, "
+                         f"a beálló nélkülieknek csak "
+                         f"{rec_pd['other_goal_pct']:.0f}%-a.")
+            else:
+                body += (f" A(z) {name} bírta a beállót: az ellene "
+                         f"vezetett beállós támadásokból csak "
+                         f"{rec_pd['pivot_goal_pct']:.0f}% gól lett "
+                         f"(beálló nélkül "
+                         f"{rec_pd['other_goal_pct']:.0f}%).")
+    except Exception:
+        pass
     # Indítás-biztonság: elcsíphető volt-e a kapus-indítás.
     try:
         from .goalkeeper import GK_OUTLET_LOST_PCT, gk_outlet_security

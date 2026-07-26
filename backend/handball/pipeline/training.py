@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 91) Beálló-védekezés: ha az ellenfél beállója ellen szakad be a
+    # falunk, a beálló-őrzés (elöl-mögött, kettőzés) a téma.
+    try:
+        from .defense import PIVOT_DEF_MIN_ATTACKS, pivot_defense
+        pd91 = pivot_defense(match, config)
+        for side in ("home", "away"):
+            rec91 = pd91[side]
+            if rec91["verdict"] != "gyenge" \
+                    or rec91["pivot_attacks"] < PIVOT_DEF_MIN_ATTACKS:
+                continue
+            add(side, "védekezés", "Beálló-őrzés",
+                f"az ellenünk vezetett beállós támadások "
+                f"{rec91['pivot_goal_pct']:.0f}%-a lett gól, a beálló "
+                f"nélkülieknek csak "
+                f"{rec91['other_goal_pct']:.0f}%-a — a beálló ellenünk "
+                "külön fegyver",
+                "beálló-őrzés: elöl-mögött váltás gyakorlása jelre (ki "
+                "megy elé, ki mögé), kettőzés-időzítés a beúszásra, és "
+                "a beálló testes zárása labda nélkül — 3-3 elleni "
+                "játék középen, ahol a beálló az egyetlen befejező")
+    except Exception:
+        pass
+
     # 90) Indítás-biztonság: ha a kapus-indításunk az ellenfélnél köt
     # ki, a kihozatalunk letámadható — a biztos első passz a téma.
     try:

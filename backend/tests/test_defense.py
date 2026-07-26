@@ -821,3 +821,58 @@ def test_wall_gaps_flags_leaky_wall():
     # Kevés falkocka: nincs ítélet.
     few = wall_gaps(Match(_meta(), frames[:50]))
     assert few["away"]["share_pct"] is None
+
+
+def test_pivot_defense_flags_weak_pivot_guarding():
+    """A hazai beállós támadásai mind gólt hoznak, a beálló nélküliek
+    nem → a VENDÉG beálló-őrzése gyenge; kevés beállós támadásnál
+    nincs ítélet."""
+    from handball.pipeline.defense import pivot_defense
+
+    frames = []
+    t = 0
+
+    def _attack(through_pivot, goal):
+        # Hazai támadás: a labda a beállónál (5-ös, x=34) vagy az
+        # irányítónál (1-es, x=28) időzik, majd (ha goal) gól a +x
+        # kapuba; utána vendég-birtoklás választja el a szakaszokat.
+        nonlocal t, frames
+        hold_x = 34.0 if through_pivot else 28.0
+        for _ in range(200):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 27.0, 10.0),
+                _pl(5, Team.HOME, 34.0, 10.0),
+                _pl(20, Team.AWAY, 36.0, 8.0)],
+                ball=Ball(x=hold_x, y=10.0, confidence=1.0)))
+            t += 1
+        if goal:
+            for i in range(8):
+                frames.append(Frame(t=t, players=[
+                    _pl(5, Team.HOME, 34.0, 10.0)],
+                    ball=Ball(x=min(34.6 + 0.8 * i, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(50):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 20.0, 10.0),
+                _pl(5, Team.HOME, 20.0, 12.0),
+                _pl(20, Team.AWAY, 19.0, 10.0)],
+                ball=Ball(x=19.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    for _ in range(6):
+        _attack(through_pivot=True, goal=True)
+    for _ in range(3):
+        _attack(through_pivot=False, goal=False)
+
+    pdf = pivot_defense(Match(_meta(), frames))
+    a = pdf["away"]
+    assert a["pivot_attacks"] >= 6 and a["pivot_goals"] >= 6
+    assert a["verdict"] == "gyenge"
+    assert a["gap_pp"] is not None and a["gap_pp"] >= 15.0
+    # A hazai nem védekezett beállós támadás ellen → nincs ítélet.
+    assert pdf["home"]["verdict"] is None
+
+    # Kevés beállós támadás: nincs ítélet.
+    few = pivot_defense(Match(_meta(), frames[:600]))
+    assert few["away"]["verdict"] is None

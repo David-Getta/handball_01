@@ -1137,6 +1137,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Beálló-védekezés: az ellenük vezetett beállós vs beálló nélküli
+  // támadások gólaránya (6+ beállós támadásnál, 15+ százalékpont
+  // eltérésnél; a backend-kulccsal azonos küszöbök).
+  String? _pivotDefense(Map<String, dynamic> r) {
+    final pivA = ((r["pd_pivot_attacks"] as num?) ?? 0).toInt();
+    final pivG = ((r["pd_pivot_goals"] as num?) ?? 0).toInt();
+    final othA = ((r["pd_other_attacks"] as num?) ?? 0).toInt();
+    final othG = ((r["pd_other_goals"] as num?) ?? 0).toInt();
+    if (pivA < 6 || othA < 1) return null;
+    final piv = 100.0 * pivG / pivA;
+    final oth = 100.0 * othG / othA;
+    if (piv - oth >= 15.0) {
+      return "gyenge beálló-őrzés: beállóval ${piv.toStringAsFixed(0)}"
+          "% gól ellenük, nélküle ${oth.toStringAsFixed(0)}% · etesd "
+          "a beállót";
+    }
+    if (oth - piv >= 15.0) {
+      return "bírják a beállót (${piv.toStringAsFixed(0)}% vs "
+          "${oth.toStringAsFixed(0)}%) · játszd körbe, ne erőltesd";
+    }
+    return null;
+  }
+
   // Indítás-biztonság: az ellenfélnél kikötő kapus-indítások aránya
   // (6+ indításnál, 25%+ aránynál; a backend-kulccsal azonos
   // küszöbök).
@@ -2056,6 +2079,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Támadó-mozgás", _attackMotion(r)!],
       if (_gkOutletSecurity(r) != null)
         ["Indítás-biztonság", _gkOutletSecurity(r)!],
+      if (_pivotDefense(r) != null)
+        ["Beálló-védekezés", _pivotDefense(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

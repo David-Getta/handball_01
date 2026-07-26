@@ -1310,3 +1310,60 @@ def wall_gaps(match, config=None) -> dict:
                           if enough else None),
         }
     return out
+
+
+# Beálló-védekezés: ennyi ellenük vezetett beállós támadástól ítélünk;
+# ha a beállós támadásaik gólaránya ennyivel magasabb a beálló
+# nélkülinél, a beálló-őrzés a gyenge pont (és fordítva, ha alacsonyabb).
+PIVOT_DEF_MIN_ATTACKS = 6
+PIVOT_DEF_GAP_PP = 15.0
+
+
+def pivot_defense(match, config=None) -> dict:
+    """Beálló-védekezés: mennyire bírja a fal az ellenfél beállóját.
+
+    A beálló-terhelés (pivot_usage) védő-oldali tükre: ott az látszik,
+    ki mennyit játszik a beállóval, itt az, ki mennyire bírja ellene.
+    Ugyanazokat a támadásokat nézzük, csak a MÁSIK csapat könyvelésébe
+    írva: az ellenük vezetett beállós támadások gólaránya a beálló
+    nélküliekhez képest. Ha a beállós támadás érdemben többet terem
+    ellenük, a beálló-őrzésük (elöl-mögött váltás, kettőzés) a gyenge
+    pont — az ellenfél tervbe veheti a beálló-etetést; ha kevesebbet,
+    a beálló ellenük zsákutca: körbe kell játszani őket.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal könyvelésében):
+    {"pivot_attacks", "pivot_goals", "other_attacks", "other_goals",
+     "pivot_goal_pct", "other_goal_pct", "gap_pp", "verdict"} —
+    a pct-k/gap_pp/verdict None, ha kevés (PIVOT_DEF_MIN_ATTACKS
+    alatti) ellenük vezetett beállós támadás volt; a verdict
+    "gyenge" / "erős" / None (nincs érdemi eltérés).
+    """
+    from .attack_types import pivot_usage
+
+    pu = pivot_usage(match, config)
+    out = {}
+    for side, opp in (("home", "away"), ("away", "home")):
+        p = pu[opp]
+        other_attacks = p["attacks"] - p["pivot_attacks"]
+        rec = {
+            "pivot_attacks": p["pivot_attacks"],
+            "pivot_goals": p["pivot_goals"],
+            "other_attacks": other_attacks,
+            "other_goals": p["other_goals"],
+            "pivot_goal_pct": p["pivot_goal_pct"],
+            "other_goal_pct": p["other_goal_pct"],
+            "gap_pp": None,
+            "verdict": None,
+        }
+        if (p["pivot_attacks"] >= PIVOT_DEF_MIN_ATTACKS
+                and other_attacks > 0
+                and p["pivot_goal_pct"] is not None
+                and p["other_goal_pct"] is not None):
+            gap = p["pivot_goal_pct"] - p["other_goal_pct"]
+            rec["gap_pp"] = round(gap, 1)
+            if gap >= PIVOT_DEF_GAP_PP:
+                rec["verdict"] = "gyenge"
+            elif gap <= -PIVOT_DEF_GAP_PP:
+                rec["verdict"] = "erős"
+        out[side] = rec
+    return out

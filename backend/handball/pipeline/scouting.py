@@ -505,6 +505,13 @@ class ScoutingReport:
     # kikötők — darabszámok, meccsek közt összegződnek.
     gos_outlets: int = 0
     gos_lost: int = 0
+    # Beálló-védekezés: az ellenük vezetett beállós és beálló nélküli
+    # támadások + a belőlük esett gólok — darabszámok, meccsek közt
+    # összegződnek (gólarány = goals / attacks külön-külön).
+    pd_pivot_attacks: int = 0
+    pd_pivot_goals: int = 0
+    pd_other_attacks: int = 0
+    pd_other_goals: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1430,6 +1437,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Beálló-védekezés: bírják-e a beállót, vagy oda kell etetni.
+    if rep.pd_pivot_attacks >= 6 and rep.pd_other_attacks > 0:
+        _pd_piv = 100.0 * rep.pd_pivot_goals / rep.pd_pivot_attacks
+        _pd_oth = 100.0 * rep.pd_other_goals / rep.pd_other_attacks
+        if _pd_piv - _pd_oth >= 15.0:
+            keys.append(
+                f"A beálló-őrzésük gyenge: az ellenük vezetett beállós "
+                f"támadások {_pd_piv:.0f}%-a gól, a beálló nélkülieknek "
+                f"csak {_pd_oth:.0f}%-a — etessétek a beállót: "
+                "elöl-mögött váltás, beúszás a rés mögé, és a "
+                "kettőzésük késésre kényszerítése.")
+        elif _pd_oth - _pd_piv >= 15.0:
+            keys.append(
+                f"Bírják a beállót (az ellenük vezetett beállós "
+                f"támadásokból csak {_pd_piv:.0f}% gól, beálló nélkül "
+                f"{_pd_oth:.0f}%) — ne oda erőltessétek: játsszátok "
+                "körbe őket, a beálló inkább kötő-ember legyen, mint "
+                "befejező.")
 
     # Indítás-biztonság: az elcsíphető kihozatalra letámadás a válasz.
     if rep.gos_outlets >= 6:
@@ -2848,6 +2874,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         gosrec = gk_outlet_security(match, config)[team.value]
         rep.gos_outlets = gosrec["outlets"]
         rep.gos_lost = gosrec["lost"]
+        from .defense import pivot_defense
+        pdrec = pivot_defense(match, config)[team.value]
+        rep.pd_pivot_attacks = pdrec["pivot_attacks"]
+        rep.pd_pivot_goals = pdrec["pivot_goals"]
+        rep.pd_other_attacks = pdrec["other_attacks"]
+        rep.pd_other_goals = pdrec["other_goals"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4125,6 +4157,26 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 70) Az ő gyenge beálló-őrzésük × a ti beállós játékotok: amit
+    # nem bírnak, abból ti amúgy is sokat játszotok.
+    if (opp.pd_pivot_attacks >= 6 and opp.pd_other_attacks > 0
+            and own.pivot_attacks >= 6 and own.pivot_total_attacks > 0
+            and (100.0 * opp.pd_pivot_goals / opp.pd_pivot_attacks
+                 - 100.0 * opp.pd_other_goals / opp.pd_other_attacks)
+            >= 15.0
+            and own.pivot_attacks / own.pivot_total_attacks >= 0.3):
+        plan.append(
+            f"A beálló-őrzésük gyenge (az ellenük vezetett beállós "
+            f"támadások "
+            f"{100.0 * opp.pd_pivot_goals / opp.pd_pivot_attacks:.0f}"
+            f"%-a gól, beálló nélkül csak "
+            f"{100.0 * opp.pd_other_goals / opp.pd_other_attacks:.0f}"
+            f"%), ti pedig eleve sokat játszotok a beállóval "
+            f"({own.pivot_attacks}/{own.pivot_total_attacks} támadás) — "
+            "vigyétek a meccset a beállóra: elöl-mögött váltás, "
+            "beúszás a kettőzésük mögé, és minden figura a beállón "
+            "keresztül záruljon.")
+
     # 69) Az ő elcsíphető indításuk × a ti elöl-szerző presszetek: a
     # kihozataluk a ti vadászterületetek.
     if (opp.gos_outlets >= 6 and own.steal_n >= 8
@@ -4742,6 +4794,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         am_time_s=sum(r.am_time_s for r in reports),
         gos_outlets=sum(r.gos_outlets for r in reports),
         gos_lost=sum(r.gos_lost for r in reports),
+        pd_pivot_attacks=sum(r.pd_pivot_attacks for r in reports),
+        pd_pivot_goals=sum(r.pd_pivot_goals for r in reports),
+        pd_other_attacks=sum(r.pd_other_attacks for r in reports),
+        pd_other_goals=sum(r.pd_other_goals for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

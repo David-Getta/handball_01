@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Beálló-védekezés**: mennyire bírja a fal az ellenfél beállóját —
+  a beálló-terhelés (pivot_usage) védő-oldali tükre: ott az látszik,
+  ki mennyit játszik a beállóval, itt az, ki mennyire bírja ellene.
+  Ha az ellenük vezetett beállós támadások gólaránya 15+
+  százalékponttal magasabb a beálló nélkülieknél (6+ beállós
+  támadásból), a beálló-őrzés a gyenge pont: az ellenfélnek a
+  beálló-etetés a terv; ha ugyanennyivel alacsonyabb, a beálló
+  ellenük zsákutca — körbe kell játszani. Egy réteg, sok felület:
+  `pivot_defense` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 70.
+  meccsterv-szabály (az ő gyenge beálló-őrzésük × a ti beállós
+  játékotok), 91. edzés-szabály (beálló-őrzés: elöl-mögött váltás,
+  kettőzés-időzítés).
+
 ## v0.1.24 — kiadva (2026-07-25)
 
 > Kiadás-jegyzet: tíz új elemzés-réteg, ezúttal a MÁSIK OLDALRÓL. A
