@@ -1137,6 +1137,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Kapus-indítás iránya: a bal/jobb oldalra adott indítások aránya
+  // (6+ indításnál, 65% felett egyoldalú; a backend-kulccsal azonos
+  // küszöbök).
+  String? _gkOutletSide(Map<String, dynamic> r) {
+    final l = ((r["gos_left"] as num?) ?? 0).toInt();
+    final rt = ((r["gos_right"] as num?) ?? 0).toInt();
+    final all = l + rt;
+    if (all < 6) return null;
+    final share = l / all;
+    if (share < 0.65 && 1.0 - share < 0.65) return null;
+    final side = share >= 0.65 ? "bal" : "jobb";
+    final pct = 100.0 * (share >= 0.65 ? share : 1.0 - share);
+    return "a kapusuk a $side oldalra indít "
+        "(${pct.toStringAsFixed(0)}%, $all indításból) · "
+        "arra az oldalra indulj előre, támadd le a fogadó szélsőt";
+  }
+
   // Hajrá-eladás: a hajrá előtti vs a hajrá eladás/perc üteme (5+
   // korai eladásnál, 0.3 eladás/perc eltérésnél; a backend-kulccsal
   // azonos küszöbök).
@@ -2414,6 +2431,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hátrány-támadás", _shorthandedAttack(r)!],
       if (_clutchTurnovers(r) != null)
         ["Hajrá-eladás", _clutchTurnovers(r)!],
+      if (_gkOutletSide(r) != null)
+        ["Kapus-indítás iránya", _gkOutletSide(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

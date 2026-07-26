@@ -684,6 +684,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Kapus-indítás iránya: egyoldalúan nyitott-e a kapus.
+    try:
+        from .goalkeeper import gk_outlet_side
+        gos = gk_outlet_side(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_go = gos[side]
+            if rec_go["side"] is None:
+                continue
+            pct = (rec_go["left_pct"] if rec_go["side"] == "bal"
+                   else 100.0 - rec_go["left_pct"])
+            body += (f" A(z) {name} kapusa szinte mindig a "
+                     f"{rec_go['side']} oldalra indított "
+                     f"({pct:.0f}%, {rec_go['outlets']} indításból).")
+    except Exception:
+        pass
     # Hajrá-eladás: nyomás alatt megőrizték-e a labdát.
     try:
         from .momentum import clutch_turnovers

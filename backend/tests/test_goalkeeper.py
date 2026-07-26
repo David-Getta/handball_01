@@ -827,3 +827,45 @@ def test_gk_break_response_flags_fast_break_weakness():
     # Kevés lövés: nincs ítélet.
     few = gk_break_response(_match(frames[:600]))
     assert few["away"]["verdict"] is None
+
+
+def test_gk_outlet_side_flags_one_sided_keeper():
+    """A hazai kapus 6 indítást a bal (y < 10) oldalra ad, egyet a
+    jobbra → "bal" irány; kevés indításnál nincs ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_outlet_side
+
+    def _p(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    # A kapus (1) a kapuelőtérben; a bal oldali (2, y=4) és a jobb
+    # oldali (3, y=16) fogadó ugyanolyan távol van tőle.
+    players = [_p(1, 1.0, 10.0), _p(2, 20.0, 4.0), _p(3, 20.0, 16.0)]
+
+    def _hold(t0, x, y, n=5):
+        return [Frame(t=t0 + i, players=players,
+                      ball=Ball(x=x, y=y, confidence=1.0))
+                for i in range(n)]
+
+    frames = []
+    t = 0
+    for target_y in (4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 16.0):
+        frames += _hold(t, 1.0, 10.0)        # a kapusnál a labda
+        t += 5
+        frames += _hold(t, 20.0, target_y)   # indítás a fogadóhoz
+        t += 5
+    # Ráhagyás, hogy a kapus-azonosításnak legyen elég mért ideje.
+    frames += _hold(t, 1.0, 10.0, n=250)
+
+    gos = gk_outlet_side(_match(frames))
+    h = gos["home"]
+    assert h["outlets"] == 7 and h["left"] == 6 and h["right"] == 1
+    assert h["left_pct"] is not None
+    assert abs(h["left_pct"] - 100.0 * 6 / 7) < 0.5
+    assert h["side"] == "bal"
+
+    # Kevés indítás: nincs arány és nincs ítélet.
+    few = gk_outlet_side(_match(frames[:30] + frames[-250:]))
+    assert few["home"]["side"] is None and few["home"]["left_pct"] is None

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kapus-indítás iránya**: melyik oldalra nyit a kapus — az indítás
+  hossza azt mondja meg, milyen messzire indít, a biztonsága azt,
+  hogy elcsíphető-e; ez azt, hogy MERRE: a fogadó a pálya bal vagy
+  jobb oldalán van-e (6+ indításból, 65% felett egyoldalú). Az
+  egyoldalú kapus kiszámítható: arra az oldalra kell előre
+  elindulni, a fogadó szélsőt letámadva a lerohanásuk már a
+  kidobásnál megfogható. Saját olvasatban az indítás-irány
+  variálása az edzés-téma. Egy réteg, sok felület: `gk_outlet_side`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (edzői kulcs + csempe), 85. meccsterv-szabály
+  (az ő egyoldalú kapus-indításuk × a ti magas szerzésetek), 106.
+  edzés-szabály (kidobás vezényszóra váltott irányba, letámadás
+  elleni kihozatal).
 - **Hajrá-eladás**: nyomás alatt megőrzik-e a labdát — a
   hajrá-lövésválasztás azt méri, milyen HELYZETEKBŐL lőnek a végén,
   ez azt, hogy egyáltalán eljutnak-e a lövésig: az utolsó 5 perc és

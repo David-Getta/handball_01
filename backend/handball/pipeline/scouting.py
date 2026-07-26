@@ -566,6 +566,11 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Kapus-indítás iránya: a bal, illetve jobb oldalra adott
+    # kapus-indítások száma — darabszámok, meccsek közt összegződnek
+    # (arány = left / (left + right)).
+    gos_left: int = 0
+    gos_right: int = 0
     # Hajrá-eladás: a hajrá előtti és a hajrá-eladások száma + a két
     # fázis hossza másodpercben — darabszámok és összegek, meccsek közt
     # pontosan összegződnek (ütem = eladás / perc fázisonként).
@@ -1523,6 +1528,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Kapus-indítás iránya: kiszámítható-e, merre nyit a kapusuk.
+    if rep.gos_left + rep.gos_right >= 6:
+        _gos_all = rep.gos_left + rep.gos_right
+        _gos_share = rep.gos_left / _gos_all
+        if _gos_share >= 0.65 or 1.0 - _gos_share >= 0.65:
+            _gos_side = "bal" if _gos_share >= 0.65 else "jobb"
+            _gos_pct = 100.0 * max(_gos_share, 1.0 - _gos_share)
+            keys.append(
+                f"A kapusuk szinte mindig a {_gos_side} oldalra indít "
+                f"({_gos_pct:.0f}%, {_gos_all} indításból) — arra az "
+                "oldalra kell előre elindulni: a fogadó szélsőjüket "
+                "letámadva már a kidobásnál megfogható a lerohanásuk.")
 
     # Hajrá-eladás: nyomás alatt megőrzik-e a labdát.
     if rep.cto_early_to >= 5 and rep.cto_early_s > 0 \
@@ -3269,6 +3287,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .goalkeeper import gk_outlet_side
+        gosrec = gk_outlet_side(match, config)[team.value]
+        rep.gos_left = gosrec["left"]
+        rep.gos_right = gosrec["right"]
         from .momentum import clutch_turnovers
         ctoall = clutch_turnovers(match, config)
         if ctoall.get("available"):
@@ -4579,6 +4601,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 85) Az ő egyoldalú kapus-indításuk × a ti magas szerzésetek: az
+    # indítás-sáv a ti csapdátok.
+    if opp.gos_left + opp.gos_right >= 6 and own.steal_high >= 3:
+        _g_all = opp.gos_left + opp.gos_right
+        _g_share = opp.gos_left / _g_all
+        if _g_share >= 0.65 or 1.0 - _g_share >= 0.65:
+            plan.append(
+                f"A kapusuk szinte mindig a "
+                f"{'bal' if _g_share >= 0.65 else 'jobb'} oldalra "
+                f"indít ({100.0 * max(_g_share, 1.0 - _g_share):.0f}%, "
+                f"{_g_all} indításból), ti pedig magasan szereztek "
+                f"labdát ({own.steal_high} magas szerzés) — állítsatok "
+                "csapdát az indítás-sávjukba: a fogadó szélsőt "
+                "letámadva a kidobásból lesz a ti kontrátok.")
+
     # 84) Az ő hajrá-eladásaik × a ti átmenet-támadásotok: a végén az
     # ő hibájuk a ti kontrátok.
     if (opp.cto_early_to >= 5 and opp.cto_early_s > 0
@@ -5459,6 +5496,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        gos_left=sum(r.gos_left for r in reports),
+        gos_right=sum(r.gos_right for r in reports),
         cto_early_to=sum(r.cto_early_to for r in reports),
         cto_early_s=round(sum(r.cto_early_s for r in reports), 1),
         cto_clutch_to=sum(r.cto_clutch_to for r in reports),

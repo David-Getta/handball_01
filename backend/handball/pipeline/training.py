@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 106) Kapus-indítás iránya: ha a kapusunk mindig ugyanarra az
+    # oldalra nyit, az indítás-irány variálása a téma.
+    try:
+        from .goalkeeper import GK_SIDE_MIN_PASSES, gk_outlet_side
+        gos106 = gk_outlet_side(match, config)
+        for side in ("home", "away"):
+            rec106 = gos106[side]
+            if rec106["side"] is None \
+                    or rec106["outlets"] < GK_SIDE_MIN_PASSES:
+                continue
+            pct106 = (rec106["left_pct"] if rec106["side"] == "bal"
+                      else 100.0 - rec106["left_pct"])
+            add(side, "kapus", "Indítás-irány",
+                f"a kapusunk szinte mindig a {rec106['side']} oldalra "
+                f"indít ({pct106:.0f}%, {rec106['outlets']} "
+                "indításból) — az ellenfél előre elindulhat arra az "
+                "oldalra, és a kidobásból lesz a kontrája",
+                "indítás-irány: kidobás-gyakorlat mindkét oldalra "
+                "(vezényszóra váltott irány), a két szélső egyszerre "
+                "nyit ellentétes irányba, és letámadás elleni "
+                "kihozatal — ha a fogadó oldal zárt, a kapus a "
+                "másikra vagy rövidre indít")
+    except Exception:
+        pass
+
     # 105) Hajrá-eladás: ha a végén megugrik az eladás-ütemünk, a
     # nyomás alatti döntés és a hajrá-felállás a téma.
     try:

@@ -1033,3 +1033,61 @@ def gk_break_response(match: Match, config=None) -> dict:
                 r["verdict"] = "lerohanás-fogó"
         out[side] = r
     return out
+
+
+# Indítás-irány: ennyi kapus-indítástól ítélünk, és e részarány felett
+# nevezzük egyoldalúnak az indítás-irányt (a pálya közepétől mért
+# oldal-sávok: a kapus melyik oldalra nyit).
+GK_SIDE_MIN_PASSES = 6
+GK_SIDE_SHARE = 0.65
+
+
+def gk_outlet_side(match: Match, config=None) -> dict:
+    """Kapus-indítás iránya: melyik oldalra nyit a kapus.
+
+    Az indítás hossza (gk_outlet_length) azt mondja meg, MILYEN
+    messzire indít, a biztonsága (gk_outlet_security) azt, hogy
+    elcsíphető-e — ez azt, hogy MERRE: a fogadó a pálya bal vagy jobb
+    oldalán van-e (a hosszanti középvonalhoz képest). Az egyoldalú
+    kapus kiszámítható: arra az oldalra kell előre elindulni, ott
+    lehet elkapni az indítást — a saját szélsőt letámadva a
+    lerohanásuk már a kidobásnál megfogható.
+
+    Visszatérés csapatonként: {"outlets", "left", "right",
+    "left_pct", "side"} — left_pct/side None, ha kevés
+    (GK_SIDE_MIN_PASSES alatti) a kapus-indítás; a side "bal" /
+    "jobb" / None (kiegyensúlyozott).
+    """
+    from .calibration import COURT_WIDTH_M
+    from .decisions import detect_passes
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    detect_goalkeepers(match)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    mid_y = COURT_WIDTH_M / 2.0
+    out = {s: {"outlets": 0, "left": 0, "right": 0,
+               "left_pct": None, "side": None}
+           for s in ("home", "away")}
+    for pe in detect_passes(match, config):
+        if getattr(pe.passer_pos, "role", None) != ROLE_GOALKEEPER:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None:
+            continue
+        recv = next((p for p in match.frames[i0].players
+                     if p.track_id == pe.receiver_id), None)
+        if recv is None or abs(recv.y - mid_y) < 1.0:
+            continue  # a középre adott indítás egyik oldalt sem jelöli
+        rec = out[pe.team.value]
+        rec["outlets"] += 1
+        rec["left" if recv.y < mid_y else "right"] += 1
+    for rec in out.values():
+        if rec["outlets"] >= GK_SIDE_MIN_PASSES:
+            share = rec["left"] / rec["outlets"]
+            rec["left_pct"] = round(100.0 * share, 1)
+            if share >= GK_SIDE_SHARE:
+                rec["side"] = "bal"
+            elif 1.0 - share >= GK_SIDE_SHARE:
+                rec["side"] = "jobb"
+    return out
