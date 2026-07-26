@@ -663,6 +663,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Előkészítő-függés: egy emberre épül-e a gólpassz-termelés.
+    try:
+        from .attack_types import assist_concentration
+        acc = assist_concentration(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ac = acc[side]
+            if not rec_ac["concentrated"]:
+                continue
+            body += (f" A(z) {name} előkészítése egy emberen múlt: a "
+                     f"gólpasszaik {100.0 * rec_ac['share']:.0f}%-a "
+                     f"({rec_ac['top_assists']}/{rec_ac['assists']}) "
+                     f"a(z) {rec_ac['top_player_id']}. játékostól "
+                     "jött.")
+    except Exception:
+        pass
     # Középkezdés-tempó: kapott gól után lerohanós vagy lassú indítás.
     try:
         from .momentum import restart_speed

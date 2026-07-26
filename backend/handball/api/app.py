@@ -2753,6 +2753,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import assist_concentration
+            res["assist_concentration"] = assist_concentration(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3273,6 +3278,9 @@ def create_app():
                 _layer("shot_release", lambda: shot_release(match))
                 from ..pipeline.momentum import restart_speed
                 _layer("restart_speed", lambda: restart_speed(match))
+                from ..pipeline.attack_types import assist_concentration
+                _layer("assist_concentration",
+                       lambda: assist_concentration(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

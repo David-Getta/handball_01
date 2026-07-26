@@ -1317,3 +1317,52 @@ def assist_reliance(match: Match,
                 style = "egyéni"
         out[side] = {**rec, "assisted_pct": pct, "style": style}
     return out
+
+
+# Előkészítő-függés: ennyi gólpasszos góltól ítélünk; e részarány
+# felett egy emberre épül az előkészítés.
+ASSIST_CONC_MIN = 5
+ASSIST_CONC_TOP_SHARE = 0.5
+
+
+def assist_concentration(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Előkészítő-függés: mennyire egy emberre épül a gólpassz-termelés.
+
+    A lövő-koncentráció (shot_concentration) előkészítő-oldali párja,
+    és az asszist-függés (assist_reliance) folytatása: az mondja meg,
+    MENNYIRE előkészítettek a gólok — ez azt, hogy KI készíti elő
+    őket. Ha a gólpasszok fele ugyanattól a játékostól jön, a
+    kulcs-előkészítő elvágása (előfogás, a passzsávjának zárása,
+    korai kettőzés) az egész befejezést megbénítja; elosztott
+    előkészítés ellen ilyen rövidítés nincs.
+
+    Visszatérés csapatonként: {"assists", "top_assists",
+    "top_player_id", "share", "concentrated"} — share/concentrated
+    None, ha kevés (ASSIST_CONC_MIN alatti) a gólpasszos gól.
+    """
+    from .event_detection import EventType, detect_events
+
+    counts: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config or TacticsConfig()):
+        if e.type != EventType.GOAL:
+            continue
+        aid = (e.detail or {}).get("assist_id")
+        if aid is None:
+            continue
+        by = counts[e.team.value]
+        by[aid] = by.get(aid, 0) + 1
+    out: dict = {}
+    for side in ("home", "away"):
+        by = counts[side]
+        total = sum(by.values())
+        top_pid = max(by, key=lambda p: by[p]) if by else None
+        top = by[top_pid] if top_pid is not None else 0
+        rec = {"assists": total, "top_assists": top,
+               "top_player_id": top_pid, "share": None,
+               "concentrated": None}
+        if total >= ASSIST_CONC_MIN:
+            rec["share"] = round(top / total, 2)
+            rec["concentrated"] = rec["share"] >= ASSIST_CONC_TOP_SHARE
+        out[side] = rec
+    return out

@@ -1137,6 +1137,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Előkészítő-függés: a gólpasszok fő előkészítőre jutó hányada
+  // (6+ gólpasszos gólnál, 50%+ résznél; a backend-kulccsal azonos
+  // küszöbök).
+  String? _assistConcentration(Map<String, dynamic> r) {
+    final assists = ((r["ac_assists"] as num?) ?? 0).toInt();
+    final top = ((r["ac_top_assists"] as num?) ?? 0).toInt();
+    if (assists < 6) return null;
+    final share = 100.0 * top / assists;
+    if (share >= 50.0) {
+      return "egy emberen múlik az előkészítés: a gólpasszok "
+          "${share.toStringAsFixed(0)}%-a ($top/$assists) egy "
+          "játékostól · vágd el: előfogás + kettőzés";
+    }
+    return null;
+  }
+
   // Középkezdés-tempó: a gyors (12 mp-en belüli térfél-átlépésű)
   // újraindítások aránya kapott gól után (4+ újraindításnál; 50%+ =
   // lerohanós, 20%- = lassú; a backend-kulccsal azonos küszöbök).
@@ -2126,6 +2142,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elsütés-idő", _shotRelease(r)!],
       if (_restartSpeed(r) != null)
         ["Középkezdés-tempó", _restartSpeed(r)!],
+      if (_assistConcentration(r) != null)
+        ["Előkészítő-függés", _assistConcentration(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

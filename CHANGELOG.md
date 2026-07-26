@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Előkészítő-függés**: mennyire egy emberre épül a
+  gólpassz-termelés — a lövő-koncentráció előkészítő-oldali párja:
+  az asszist-függés azt mondja meg, MENNYIRE előkészítettek a gólok,
+  ez azt, hogy KI készíti elő őket. Ha a gólpasszos gólok 50%+ része
+  ugyanattól a játékostól jön (5+ gólpasszos gólból), a
+  kulcs-előkészítő elvágása (előfogás, passzsáv-zárás, korai
+  kettőzés) az egész befejezést megbénítja; saját olvasatban második
+  játékszervezőt kell kinevelni. Egy réteg, sok felület:
+  `assist_concentration` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kulcs + csempe), 73.
+  meccsterv-szabály (az ő egy-emberes előkészítésük × a ti
+  labdaszerzésetek), 94. edzés-szabály (irányító-szerep forgatása,
+  befejezés előkészítő nélkül).
 - **Középkezdés-tempó**: kapott gól után mennyi idő alatt ér át a
   labda az ellenfél térfelére — az outlet_speed a védés utáni
   indítást méri, ez a kapott gól utánit: a lerohanás-jelző. A

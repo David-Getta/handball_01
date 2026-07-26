@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 94) Előkészítő-függés: ha a gólpasszaink egy emberen múlnak, az
+    # ellenfél őt vágja el — második játékszervező kell.
+    try:
+        from .attack_types import (ASSIST_CONC_MIN,
+                                   ASSIST_CONC_TOP_SHARE,
+                                   assist_concentration)
+        ac94 = assist_concentration(match, config)
+        for side in ("home", "away"):
+            rec94 = ac94[side]
+            if not rec94["concentrated"] \
+                    or rec94["assists"] < ASSIST_CONC_MIN \
+                    or rec94["share"] < ASSIST_CONC_TOP_SHARE:
+                continue
+            add(side, "támadás", "Második játékszervező",
+                f"az előkészítésünk egy emberen múlik: a gólpasszaink "
+                f"{100.0 * rec94['share']:.0f}%-a a(z) "
+                f"{rec94['top_player_id']}. játékostól jön "
+                f"({rec94['top_assists']}/{rec94['assists']}) — ha őt "
+                "elveszik vagy elfárad, megáll a befejezésünk",
+                "második játékszervező kinevelése: irányító-szerep "
+                "forgatása a kisjátékban, betanult figurák a másik "
+                "átlövő indításával, és befejezés előkészítő nélkül "
+                "(cselből átlövés) — a fő előkészítő pihenőjében is "
+                "legyen gólunk")
+    except Exception:
+        pass
+
     # 93) Középkezdés-tempó: ha kapott gól után lassan indítunk, az
     # ellenfél falja rendezetten vár — a gyors középkezdés a téma.
     try:

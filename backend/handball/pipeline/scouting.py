@@ -522,6 +522,11 @@ class ScoutingReport:
     rs_restarts: int = 0
     rs_fast: int = 0
     rs_sum_s: float = 0.0
+    # Előkészítő-függés: gólpasszos gólok + ebből a fő előkészítőé —
+    # darabszámok, meccsek közt összegződnek (a top meccsenkénti fő
+    # előkészítő összege — közelítés, mint a lövő-koncentrációnál).
+    ac_assists: int = 0
+    ac_top_assists: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1447,6 +1452,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Előkészítő-függés: a kulcs-előkészítő elvágása az egész
+    # befejezést megbénítja.
+    if rep.ac_assists >= 6:
+        _ac_share = rep.ac_top_assists / rep.ac_assists
+        if _ac_share >= 0.5:
+            keys.append(
+                f"Az előkészítésük egy emberen múlik: a gólpasszaik "
+                f"{100.0 * _ac_share:.0f}%-a ugyanattól a játékostól "
+                f"jön ({rep.ac_top_assists}/{rep.ac_assists}) — "
+                "előfogás és a passzsávjának zárása, korai kettőzés "
+                "rajta: ha őt elvágjátok, a befejezőik éhen maradnak.")
 
     # Középkezdés-tempó: a lerohanós ellen tilos az ünneplés, a lassú
     # újraindító középkezdése letámadható.
@@ -2936,6 +2953,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.rs_restarts = rsrec["restarts"]
         rep.rs_fast = rsrec["fast"]
         rep.rs_sum_s = rsrec["sum_s"]
+        from .attack_types import assist_concentration
+        acrec = assist_concentration(match, config)[team.value]
+        rep.ac_assists = acrec["assists"]
+        rep.ac_top_assists = acrec["top_assists"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4213,6 +4234,18 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 73) Az ő egy-emberes előkészítésük × a ti labdaszerzésetek: a
+    # kulcs-előkészítő passzsávja a ti vadászterületetek.
+    if (opp.ac_assists >= 6 and own.steal_n >= 8
+            and opp.ac_top_assists / opp.ac_assists >= 0.5):
+        plan.append(
+            f"Az előkészítésük egy emberen múlik (a gólpasszaik "
+            f"{100.0 * opp.ac_top_assists / opp.ac_assists:.0f}%-a "
+            f"egy játékostól jön), ti pedig sokat szerzitek a labdát "
+            f"({own.steal_n} szerzés) — a kulcs-előkészítő passzsávja "
+            "a vadászterületetek: előfogás az ő sávjában, és a "
+            "szerzésből azonnal indul a lerohanás.")
+
     # 72) Az ő lassú középkezdésük × a ti elöl-szerző presszetek: a
     # gól utáni letámadás dupla gólt érhet.
     if (opp.rs_restarts >= 4 and own.steal_n >= 8
@@ -4885,6 +4918,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rs_restarts=sum(r.rs_restarts for r in reports),
         rs_fast=sum(r.rs_fast for r in reports),
         rs_sum_s=round(sum(r.rs_sum_s for r in reports), 1),
+        ac_assists=sum(r.ac_assists for r in reports),
+        ac_top_assists=sum(r.ac_top_assists for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

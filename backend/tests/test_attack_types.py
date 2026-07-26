@@ -873,3 +873,56 @@ def test_assist_reliance_flags_collective_finishing():
     # Kevés gól: nincs ítélet.
     few = assist_reliance(Match(_meta(), frames[:500]))
     assert few["home"]["style"] is None and few["home"]["assisted_pct"] is None
+
+
+def test_assist_concentration_flags_single_playmaker():
+    """Hat gólpasszos gólból ötöt ugyanaz a játékos készít elő →
+    koncentrált előkészítés; kevés gólpasszos gólnál nincs ítélet."""
+    from handball.pipeline.attack_types import assist_concentration
+
+    frames = []
+    t = 0
+
+    def _assisted_goal(passer_id):
+        # Passz (passer → 2-es), a 2-es gólja a +x kapura, majd
+        # üres-labdás szünet választja el a köröket.
+        nonlocal t, frames
+        frames.append(Frame(t=t, players=[
+            _pl(passer_id, Team.HOME, 25.0, 10.0),
+            _pl(2, Team.HOME, 30.0, 10.0)],
+            ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+        t += 1
+        for _ in range(3):
+            frames.append(Frame(t=t, players=[
+                _pl(passer_id, Team.HOME, 25.0, 10.0),
+                _pl(2, Team.HOME, 30.0, 10.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[
+                _pl(2, Team.HOME, 30.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(50):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(5):
+        _assisted_goal(1)   # a fő előkészítő
+    _assisted_goal(3)       # egy másik előkészítő
+
+    ac = assist_concentration(Match(_meta(), frames))
+    h = ac["home"]
+    assert h["assists"] >= 6
+    assert h["top_player_id"] == 1
+    assert h["share"] is not None and h["share"] >= 0.5
+    assert h["concentrated"] is True
+    # A vendégnek nincs gólpasszos gólja: nincs ítélet.
+    assert ac["away"]["concentrated"] is None
+
+    # Kevés gólpasszos gól: nincs ítélet.
+    few = assist_concentration(Match(_meta(), frames[:130]))
+    assert few["home"]["concentrated"] is None
