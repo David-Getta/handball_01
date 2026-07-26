@@ -1212,3 +1212,47 @@ def test_overload_finishing_separates_overload_and_set_defense():
     a = ovl["away"]
     assert a["overload_shots"] == 0 and a["set_shots"] == 0
     assert a["gap_pp"] is None and a["verdict"] is None
+
+
+def test_shooter_placement_flags_predictable_finisher():
+    """Az 1-es hazai lövő öt góljából négy a bal (felső y) sarokba megy
+    → kiszámítható; a négy gól alatti lövőnél nincs ítélet."""
+    from handball.pipeline.attack_types import shooter_placement
+
+    frames = []
+    t = 0
+
+    def _goal(pid, y_end):
+        """A pid-es hazai lövő gólja a +x kapu megadott magasságába."""
+        nonlocal t, frames
+        shooter = [_pl(pid, Team.HOME, 31.0, 10.0)]
+        for i in range(12):
+            bx = min(31.0 + 0.9 * (i + 1), 40.0)
+            by = 10.0 + (y_end - 10.0) * (i + 1) / 12.0
+            frames.append(Frame(t=t, players=shooter,
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    # A +x kapunál a "bal" a felső y (11,3), a "jobb" az alsó (8,7).
+    for _ in range(4):
+        _goal(1, 11.3)
+    _goal(1, 8.7)
+    for _ in range(2):
+        _goal(2, 8.7)
+
+    shp = shooter_placement(Match(_meta(), frames))
+    h = shp["home"]
+    one = next(p for p in h["players"] if p["player_id"] == 1)
+    assert one["goals"] == 5 and one["bal"] == 4 and one["jobb"] == 1
+    assert one["dominant"] == "bal" and one["share_pct"] == 80.0
+    assert h["predictable"]["player_id"] == 1
+
+    # A két góllal szereplő 2-es lövőnél nincs ítélet.
+    two = next(p for p in h["players"] if p["player_id"] == 2)
+    assert two["goals"] == 2
+    assert two["dominant"] is None and two["share_pct"] is None

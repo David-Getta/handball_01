@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lövő-kapuoldal**: ki melyik sarokba lő — a kapu-sarok
+  (goal_placement) csapat-szinten mondja meg, merre mennek a gólok,
+  ez lövőnként: a kapus akkor tud készülni, ha NÉVRE szól a jelzés.
+  Aki a góljainak 60%-át ugyanarra az oldalra lövi (4+ gólból),
+  kiszámítható: a kapus arra a sarokra állhat rá, a fal a másikat
+  zárja. Saját olvasatban neki a kapuoldal-váltás a gyakorlandó.
+  Egy réteg, sok felület: `shooter_placement` motor, edzői
+  összefoglaló (mezszámmal), /analyze + meccs-csomag,
+  felderítés-profil (edzői kulcs + csempe, meccsek közti
+  játékosonkénti és oldalankénti összegzés), 91. meccsterv-szabály
+  (az ő kiszámítható lövőjük × a ti kapusotok formája), 112.
+  edzés-szabály (célzott lövés-sorozat a gyengébb oldalra,
+  vezényszóra váltott sarok, lövőcsel a kapus mozdulatára).
 - **Szélső-védekezés**: bírja-e a fal a szélső lövéseket — a
   szélső-befejezés a TÁMADÓ oldalról nézi, ki mennyire eredményes a
   szélről; ez a védő oldali tükre: a kapott lövéseket a lövő helye

@@ -2843,6 +2843,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import shooter_placement
+            res["shooter_placement"] = shooter_placement(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3408,6 +3413,9 @@ def create_app():
                        lambda: costly_turnover_players(match))
                 from ..pipeline.defense import wing_defense
                 _layer("wing_defense", lambda: wing_defense(match))
+                from ..pipeline.attack_types import shooter_placement
+                _layer("shooter_placement",
+                       lambda: shooter_placement(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

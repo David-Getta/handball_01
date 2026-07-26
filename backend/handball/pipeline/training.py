@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 112) Lövő-kapuoldal: ha egy befejezőnk mindig ugyanoda lő, a
+    # kapuoldal-váltás a téma.
+    try:
+        from .attack_types import (SHOOTER_SIDE_MIN_GOALS,
+                                   shooter_placement)
+        shp112 = shooter_placement(match, config)
+        for side in ("home", "away"):
+            pred112 = shp112[side]["predictable"]
+            if pred112 is None \
+                    or pred112["goals"] < SHOOTER_SIDE_MIN_GOALS:
+                continue
+            add(side, "támadás", "Kapuoldal-váltás",
+                f"a(z) {pred112['player_id']} azonosítójú lövőnk "
+                f"kiszámítható: a {pred112['goals']} góljából "
+                f"{pred112['share_pct']:.0f}% a "
+                f"{pred112['dominant']} oldalra ment — a kapus "
+                "felkészülhet rá",
+                "kapuoldal-váltás vele: célzott lövés-sorozat a "
+                "gyengébb oldalra (kapus nélkül, majd kapussal), "
+                "vezényszóra váltott sarok lövés közben, és "
+                "lövőcsel-gyakorlat — a kapus mozdulatára kell "
+                "reagálni, nem előre eldönteni az oldalt")
+    except Exception:
+        pass
+
     # 111) Szélső-védekezés: ha a szélről kapjuk a gólokat, a
     # szélső-őrzés és a kapus szöge a téma.
     try:

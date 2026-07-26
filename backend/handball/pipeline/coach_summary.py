@@ -684,6 +684,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Lövő-kapuoldal: volt-e kiszámítható befejezőjük.
+    try:
+        from .attack_types import shooter_placement
+        shp = shooter_placement(match)
+        for side, name in (("home", home), ("away", away)):
+            pred = shp[side]["predictable"]
+            if pred is None:
+                continue
+            jn = _jersey_of_track(match).get(pred["player_id"])
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{pred['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} kiszámítható a "
+                     f"befejezésben: a {pred['goals']} góljából "
+                     f"{pred['share_pct']:.0f}% a "
+                     f"{pred['dominant']} oldalra ment.")
+    except Exception:
+        pass
     # Szélső-védekezés: bírta-e a fal a szélső lövéseket.
     try:
         from .defense import wing_defense

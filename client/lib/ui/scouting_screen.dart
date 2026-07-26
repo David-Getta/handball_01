@@ -1137,6 +1137,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Lövő-kapuoldal: ki lövi a góljai többségét ugyanabba a sarokba
+  // (4+ gól, 60% felett kiszámítható; a backend-kulccsal azonos
+  // küszöbök).
+  String? _shooterPlacement(Map<String, dynamic> r) {
+    final list = r["shooter_placement"];
+    if (list is! List) return null;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final goals = ((e["goals"] as num?) ?? 0).toInt();
+      if (goals < 4) continue;
+      var dom = "bal";
+      var best = ((e["bal"] as num?) ?? 0).toInt();
+      for (final k in ["közép", "jobb"]) {
+        final v = ((e[k] as num?) ?? 0).toInt();
+        if (v > best) {
+          best = v;
+          dom = k;
+        }
+      }
+      final share = 100.0 * best / goals;
+      if (share < 60.0) continue;
+      return "a(z) ${e["player_id"]} lövőjük kiszámítható: "
+          "${share.toStringAsFixed(0)}% a $dom oldalra ($goals gólból) "
+          "· a kapus álljon rá, a fal a másik oldalt zárja";
+    }
+    return null;
+  }
+
   // Szélső-védekezés: a szélső vs középső sávból kapott lövések
   // gólaránya (sávonként 5+ lövésnél, 15+ százalékpont eltérésnél; a
   // backend-kulccsal azonos küszöbök).
@@ -2556,6 +2584,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Drága eladók", _costlyTurnovers(r)!],
       if (_wingDefense(r) != null)
         ["Szélső-védekezés", _wingDefense(r)!],
+      if (_shooterPlacement(r) != null)
+        ["Lövő-kapuoldal", _shooterPlacement(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

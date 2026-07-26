@@ -566,6 +566,10 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Lövő-kapuoldaluk: [{"player_id", "goals", "bal", "közép",
+    # "jobb"}] — ki melyik sarokba lő; darabszámok, meccsek közt
+    # játékosonként és oldalanként összegződnek.
+    shooter_placement: list = field(default_factory=list)
     # Szélső-védekezés: a szélső, illetve középső sávból kapott
     # lövések és gólok száma — darabszámok, meccsek közt összegződnek
     # (gólarány sávonként külön).
@@ -1559,6 +1563,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Lövő-kapuoldal: van-e kiszámítható befejezőjük.
+    for _shp_p in (rep.shooter_placement or []):
+        if _shp_p["goals"] < 4:
+            continue
+        _shp_dom = max(("bal", "közép", "jobb"),
+                       key=lambda k: _shp_p[k])
+        _shp_share = 100.0 * _shp_p[_shp_dom] / _shp_p["goals"]
+        if _shp_share >= 60.0:
+            keys.append(
+                f"A(z) {_shp_p['player_id']} azonosítójú lövőjük "
+                f"kiszámítható: a {_shp_p['goals']} góljából "
+                f"{_shp_share:.0f}% a {_shp_dom} oldalra ment — a "
+                f"kapus álljon rá a {_shp_dom} sarokra, a fal a "
+                "másik oldalt zárja.")
+            break
 
     # Szélső-védekezés: nyitott-e a faluk a szélen.
     if rep.wdf_wing_shots >= 5 and rep.wdf_center_shots >= 5:
@@ -3401,6 +3421,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .attack_types import shooter_placement as _shp
+        rep.shooter_placement = [
+            {"player_id": p["player_id"], "goals": p["goals"],
+             "bal": p["bal"], "közép": p["közép"], "jobb": p["jobb"]}
+            for p in _shp(match, config)[team.value]["players"]]
         from .defense import wing_defense
         wdfrec = wing_defense(match, config)[team.value]
         rep.wdf_wing_shots = wdfrec["wing_shots"]
@@ -4060,6 +4085,22 @@ def _merge_turnover_players(reports) -> list:
                                      + int(w["losses"]))
     return [{"player_id": pid, "losses": n}
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
+def _merge_shooter_placement(reports) -> list:
+    """Lövő-kapuoldal: játékosonként és oldalanként összegzett gólok
+    (a lista gólszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.shooter_placement or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"goals": 0, "bal": 0, "közép": 0,
+                                    "jobb": 0})
+            for k in ("goals", "bal", "közép", "jobb"):
+                rec[k] += int(p.get(k, 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["goals"])]
 
 
 def _merge_costly_turnovers(reports) -> list:
@@ -4756,6 +4797,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 91) Az ő kiszámítható lövőjük × a ti kapusotok formája: névre
+    # szóló kapus-felkészítés.
+    _shp91 = None
+    for _p91 in (opp.shooter_placement or []):
+        if _p91["goals"] < 4:
+            continue
+        _dom91 = max(("bal", "közép", "jobb"), key=lambda k: _p91[k])
+        if 100.0 * _p91[_dom91] / _p91["goals"] >= 60.0:
+            _shp91 = (_p91, _dom91,
+                      100.0 * _p91[_dom91] / _p91["goals"])
+            break
+    if _shp91 is not None and own.gk_on_target >= 10 \
+            and 100.0 * own.gk_saves / own.gk_on_target >= 30.0:
+        _p91, _dom91, _sh91 = _shp91
+        plan.append(
+            f"A(z) {_p91['player_id']} azonosítójú lövőjük "
+            f"kiszámítható (a {_p91['goals']} góljából {_sh91:.0f}% a "
+            f"{_dom91} oldalra ment), a ti kapusotok pedig jó formában "
+            f"van ({100.0 * own.gk_saves / own.gk_on_target:.0f}% "
+            f"védés) — névre szóló felkészítés: a kapus álljon rá a "
+            f"{_dom91} sarokra, a fal a másik oldalt zárja.")
 
     # 90) Az ő szélen nyitott faluk × a ti szélső-játékotok: a szélső
     # bevonása az első számú fegyver.
@@ -5732,6 +5795,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        shooter_placement=_merge_shooter_placement(reports),
         wdf_wing_shots=sum(r.wdf_wing_shots for r in reports),
         wdf_wing_goals=sum(r.wdf_wing_goals for r in reports),
         wdf_center_shots=sum(r.wdf_center_shots for r in reports),

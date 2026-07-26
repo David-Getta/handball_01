@@ -1759,3 +1759,91 @@ def overload_finishing(match: Match,
                 r["verdict"] = "fal-törő"
         out[side] = r
     return out
+
+
+# Lövő-kapuoldal: ennyi bekönyvelt góltól nevezünk meg egy játékost, és
+# e részarány felett nevezzük kiszámíthatónak a kapuoldal-szokását.
+SHOOTER_SIDE_MIN_GOALS = 4
+SHOOTER_SIDE_SHARE = 0.6
+
+
+def shooter_placement(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Lövő-kapuoldal: ki melyik sarokba lő.
+
+    A kapu-sarok (goal_placement) csapat-szinten mondja meg, merre
+    mennek a gólok — ez lövőnként: a kapus akkor tud készülni, ha
+    NÉVRE szól a jelzés. Aki a góljainak SHOOTER_SIDE_SHARE részét
+    ugyanarra az oldalra lövi, az kiszámítható: a kapus arra az
+    oldalra állhat rá, a fal a másikat zárja — saját olvasatban neki
+    a kapuoldal-váltás a gyakorlandó.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "goals",
+    "bal", "közép", "jobb", "dominant", "share_pct"}], "predictable"}
+    — a lista gólszám szerint csökkenő, dominant/share_pct None, ha
+    kevés (SHOOTER_SIDE_MIN_GOALS alatti) a gól; a predictable az
+    első olyan játékos, aki a küszöb felett egyoldalú (egyébként
+    None).
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_LENGTH_M
+    from .event_detection import (GOAL_LOOKAHEAD, GOAL_TOL_M, EventType,
+                                  _GOAL_Y_HIGH, _GOAL_Y_LOW, detect_shots)
+
+    config = config or TacticsConfig()
+    lo, hi = _GOAL_Y_LOW, _GOAL_Y_HIGH
+    span = (hi - lo) or 1.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    def _side_of_goal(e) -> Optional[str]:
+        goal_x = config.attacks_toward_x(e.team)
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            return None
+        end = min(len(match.frames), i0 + GOAL_LOOKAHEAD)
+        for j in range(i0, end):
+            b = match.frames[j].ball
+            if b is None:
+                continue
+            if abs(b.x - goal_x) <= GOAL_TOL_M and lo <= b.y <= hi:
+                rel = (b.y - lo) / span
+                # A lövő szemszögéhez igazítva (a két kaput tükrözzük).
+                leftness = (rel if goal_x >= COURT_LENGTH_M / 2
+                            else 1.0 - rel)
+                if leftness >= 2.0 / 3.0:
+                    return "bal"
+                if leftness <= 1.0 / 3.0:
+                    return "jobb"
+                return "közép"
+        return None
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        side = _side_of_goal(e)
+        if side is None:
+            continue
+        rec = tally[e.team.value].setdefault(
+            e.player_id, {"bal": 0, "közép": 0, "jobb": 0})
+        rec[side] += 1
+
+    out: dict = {}
+    for s in ("home", "away"):
+        players = []
+        for pid, rec in tally[s].items():
+            goals = rec["bal"] + rec["közép"] + rec["jobb"]
+            p = {"player_id": pid, "goals": goals, **rec,
+                 "dominant": None, "share_pct": None}
+            if goals >= SHOOTER_SIDE_MIN_GOALS:
+                dom = max(("bal", "közép", "jobb"), key=lambda k: rec[k])
+                p["dominant"] = dom
+                p["share_pct"] = round(100.0 * rec[dom] / goals, 1)
+            players.append(p)
+        players.sort(key=lambda p: -p["goals"])
+        predictable = next(
+            (p for p in players
+             if p["share_pct"] is not None
+             and p["share_pct"] >= 100.0 * SHOOTER_SIDE_SHARE), None)
+        out[s] = {"players": players, "predictable": predictable}
+    return out
