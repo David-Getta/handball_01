@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 95) Gól-előkészítés hossza: ha csak hosszú akcióból van gólunk,
+    # az első hullámunk fogatlan — a direkt befejezés a téma.
+    try:
+        from .attack_types import (BUILDUP_LONG_SHARE,
+                                   BUILDUP_MIN_GOALS, goal_buildup)
+        gb95 = goal_buildup(match, config)
+        for side in ("home", "away"):
+            rec95 = gb95[side]
+            if rec95["style"] != "kombinatív" \
+                    or rec95["goals"] < BUILDUP_MIN_GOALS \
+                    or rec95["long_pct"] < BUILDUP_LONG_SHARE:
+                continue
+            add(side, "támadás", "Direkt befejezés",
+                f"csak hosszú akcióból van gólunk: a góljaink "
+                f"{rec95['long_pct']:.0f}%-a 5+ passzos akció vége "
+                f"({rec95['long']}/{rec95['goals']}) — az első "
+                "hullámunk és az átmenetünk nem termel, minden gólért "
+                "sokat kell dolgoznunk",
+                "direkt befejezés: 2 passzos gyorsindítás-sorozat "
+                "(szerzés után legfeljebb két passz a kapuig), első "
+                "hullámos befejezés 3-2 ellen, és lerohanás-verseny — "
+                "a gyors gól is legyen a repertoárban")
+    except Exception:
+        pass
+
     # 94) Előkészítő-függés: ha a gólpasszaink egy emberen múlnak, az
     # ellenfél őt vágja el — második játékszervező kell.
     try:

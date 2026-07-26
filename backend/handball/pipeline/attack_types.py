@@ -1366,3 +1366,77 @@ def assist_concentration(match: Match,
             rec["concentrated"] = rec["share"] >= ASSIST_CONC_TOP_SHARE
         out[side] = rec
     return out
+
+
+# Gól-előkészítés hossza: a gól előtti ennyi másodperc saját passzait
+# számoljuk (az előző birtoklásig visszanézve); legfeljebb ennyi passz
+# a direkt, legalább ennyi a kombinatív gól; ennyi góltól ítélünk, és
+# e részarányok döntik el a címkét.
+BUILDUP_WINDOW_S = 20.0
+BUILDUP_SHORT_PASSES = 2
+BUILDUP_LONG_PASSES = 5
+BUILDUP_MIN_GOALS = 4
+BUILDUP_SHORT_SHARE = 50.0
+BUILDUP_LONG_SHARE = 50.0
+
+
+def goal_buildup(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Gól-előkészítés hossza: direkt vagy kombinatív gólokból élnek.
+
+    Gólonként megszámoljuk a gólt szerző csapat passzait a gól előtti
+    ablakban — az előző gólig vagy az ellenfél utolsó eseményéig
+    (birtoklás-határ) visszanézve. A direkt csapat (a gólok fele 0–2
+    passzból) az első hullámból és az átmenetből él: ellene a
+    visszarendeződés és az első hullám megfogása a meccs; a
+    kombinatív csapat (a gólok fele 5+ passzból) kijátssza a falat:
+    ellene türelmes, fegyelmezett fal kell — aki az ötödik passznál
+    kilép, azon átmennek.
+
+    Visszatérés csapatonként: {"goals", "short", "long", "short_pct",
+    "long_pct", "style"} — pct/style None, ha kevés
+    (BUILDUP_MIN_GOALS alatti) a gól; a style "direkt" /
+    "kombinatív" / None (vegyes).
+    """
+    from .event_detection import EventType, detect_events
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(BUILDUP_WINDOW_S * fps)
+    events = sorted(detect_events(match, config or TacticsConfig()),
+                    key=lambda e: e.t)
+    counts = {"home": {"goals": 0, "short": 0, "long": 0},
+              "away": {"goals": 0, "short": 0, "long": 0}}
+    for gi, g in enumerate(events):
+        if g.type != EventType.GOAL:
+            continue
+        side = g.team.value
+        n_pass = 0
+        for e in reversed(events[:gi]):
+            if g.t - e.t > win:
+                break
+            # Birtoklás-határ: korábbi gól vagy az ellenfél eseménye.
+            if e.type == EventType.GOAL or e.team != g.team:
+                break
+            if e.type == EventType.PASS:
+                n_pass += 1
+        rec = counts[side]
+        rec["goals"] += 1
+        if n_pass <= BUILDUP_SHORT_PASSES:
+            rec["short"] += 1
+        if n_pass >= BUILDUP_LONG_PASSES:
+            rec["long"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "short_pct": None, "long_pct": None, "style": None}
+        if rec["goals"] >= BUILDUP_MIN_GOALS:
+            short_pct = 100.0 * rec["short"] / rec["goals"]
+            long_pct = 100.0 * rec["long"] / rec["goals"]
+            r["short_pct"] = round(short_pct, 1)
+            r["long_pct"] = round(long_pct, 1)
+            if short_pct >= BUILDUP_SHORT_SHARE:
+                r["style"] = "direkt"
+            elif long_pct >= BUILDUP_LONG_SHARE:
+                r["style"] = "kombinatív"
+        out[side] = r
+    return out

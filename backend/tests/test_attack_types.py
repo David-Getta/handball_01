@@ -926,3 +926,82 @@ def test_assist_concentration_flags_single_playmaker():
     # Kevés gólpasszos gól: nincs ítélet.
     few = assist_concentration(Match(_meta(), frames[:130]))
     assert few["home"]["concentrated"] is None
+
+
+def test_goal_buildup_separates_direct_and_combinative():
+    """A hazai góljai 1 passzból esnek (direkt), a vendégé 6 passzos
+    akciókból (kombinatív); kevés gólnál nincs ítélet."""
+    from handball.pipeline.attack_types import goal_buildup
+
+    frames = []
+    t = 0
+
+    def _sep():
+        nonlocal t, frames
+        for _ in range(60):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _direct_goal():
+        # 1 passz (1-es → 2-es), a 2-es viszi és lövi: direkt gól.
+        nonlocal t, frames
+        pls = [_pl(1, Team.HOME, 25.0, 10.0),
+               _pl(2, Team.HOME, 30.0, 10.0)]
+        for _ in range(4):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=25.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(3):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[
+                _pl(2, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        _sep()
+
+    def _combinative_goal():
+        # 6 passz a 11-12-13 háromszögben (csak y-irányú ugrások),
+        # majd a 11-es lövése: kombinatív gól a -x kapura.
+        nonlocal t, frames
+        spots = {11: (15.0, 10.0), 12: (15.0, 4.0), 13: (15.0, 16.0)}
+        pls = [_pl(pid, Team.AWAY, x, y)
+               for pid, (x, y) in spots.items()]
+        order = [11, 12, 13, 11, 12, 13, 11]
+        for holder in order:
+            hx, hy = spots[holder]
+            for _ in range(4):
+                frames.append(Frame(t=t, players=pls,
+                                    ball=Ball(x=hx, y=hy,
+                                              confidence=1.0)))
+                t += 1
+        for i in range(19):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=max(14.2 - 0.8 * i, 0.0),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _sep()
+
+    for _ in range(4):
+        _direct_goal()
+    for _ in range(4):
+        _combinative_goal()
+
+    gb = goal_buildup(Match(_meta(), frames))
+    h, a = gb["home"], gb["away"]
+    assert h["goals"] >= 4 and h["style"] == "direkt"
+    assert a["goals"] >= 4 and a["style"] == "kombinatív"
+
+    # Kevés gól: nincs ítélet.
+    few = goal_buildup(Match(_meta(), frames[:200]))
+    assert few["home"]["style"] is None

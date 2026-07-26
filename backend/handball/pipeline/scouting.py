@@ -527,6 +527,12 @@ class ScoutingReport:
     # előkészítő összege — közelítés, mint a lövő-koncentrációnál).
     ac_assists: int = 0
     ac_top_assists: int = 0
+    # Gól-előkészítés hossza: gólok + ebből a direkt (0-2 passzos) és
+    # a kombinatív (5+ passzos) — darabszámok, meccsek közt
+    # összegződnek.
+    gb_goals: int = 0
+    gb_short: int = 0
+    gb_long: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1452,6 +1458,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Gól-előkészítés hossza: a direkt csapat ellen az első hullám
+    # megfogása, a kombinatív ellen a fal türelme a meccs.
+    if rep.gb_goals >= 4:
+        _gb_short = 100.0 * rep.gb_short / rep.gb_goals
+        _gb_long = 100.0 * rep.gb_long / rep.gb_goals
+        if _gb_short >= 50.0:
+            keys.append(
+                f"Direkt gólokból élnek: a góljaik {_gb_short:.0f}%-a "
+                f"legfeljebb két passzból esik ({rep.gb_short}/"
+                f"{rep.gb_goals}) — a visszarendeződés és az első "
+                "hullám megfogása a meccs: eladott labda után azonnal "
+                "hátra, a hosszú indítást a középső ember fékezi.")
+        elif _gb_long >= 50.0:
+            keys.append(
+                f"Kombinatív gólokból élnek: a góljaik "
+                f"{_gb_long:.0f}%-a 5+ passzos akció vége "
+                f"({rep.gb_long}/{rep.gb_goals}) — türelmes, "
+                "fegyelmezett fal kell: aki az ötödik passznál kilép "
+                "vagy cselre ugrik, azon átmennek.")
 
     # Előkészítő-függés: a kulcs-előkészítő elvágása az egész
     # befejezést megbénítja.
@@ -2957,6 +2983,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         acrec = assist_concentration(match, config)[team.value]
         rep.ac_assists = acrec["assists"]
         rep.ac_top_assists = acrec["top_assists"]
+        from .attack_types import goal_buildup
+        gbrec = goal_buildup(match, config)[team.value]
+        rep.gb_goals = gbrec["goals"]
+        rep.gb_short = gbrec["short"]
+        rep.gb_long = gbrec["long"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4234,6 +4265,20 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 74) Az ő kombinatív góltermelésük × a ti rés-mentes falatok: ha
+    # a hosszú akcióikra nem szakad fel a fal, elfogy az ötletük.
+    if (opp.gb_goals >= 4 and own.wg_frames >= 100
+            and 100.0 * opp.gb_long / opp.gb_goals >= 50.0
+            and 100.0 * own.wg_wide / own.wg_frames <= 20.0):
+        plan.append(
+            f"A góljaik {100.0 * opp.gb_long / opp.gb_goals:.0f}%-a "
+            f"hosszú, 5+ passzos akció vége, a ti falatok viszont "
+            f"rés-mentes (a kockák csak "
+            f"{100.0 * own.wg_wide / own.wg_frames:.0f}%-ában van "
+            "3,5 m+ rés) — ez a ti meccsetek: türelem a falban, semmi "
+            "korai kilépés, és a nyolcadik passznál is fegyelem — "
+            "előbb fogy el az ötletük, mint a ti türelmetek.")
+
     # 73) Az ő egy-emberes előkészítésük × a ti labdaszerzésetek: a
     # kulcs-előkészítő passzsávja a ti vadászterületetek.
     if (opp.ac_assists >= 6 and own.steal_n >= 8
@@ -4920,6 +4965,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rs_sum_s=round(sum(r.rs_sum_s for r in reports), 1),
         ac_assists=sum(r.ac_assists for r in reports),
         ac_top_assists=sum(r.ac_top_assists for r in reports),
+        gb_goals=sum(r.gb_goals for r in reports),
+        gb_short=sum(r.gb_short for r in reports),
+        gb_long=sum(r.gb_long for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

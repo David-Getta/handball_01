@@ -663,6 +663,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Gól-előkészítés hossza: direkt vagy kombinatív gólok.
+    try:
+        from .attack_types import goal_buildup
+        gbc = goal_buildup(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gb = gbc[side]
+            if rec_gb["style"] is None:
+                continue
+            if rec_gb["style"] == "direkt":
+                body += (f" A(z) {name} góljai direktek voltak: "
+                         f"{rec_gb['short_pct']:.0f}%-uk legfeljebb "
+                         "két passzból született.")
+            else:
+                body += (f" A(z) {name} góljai kombinatívak voltak: "
+                         f"{rec_gb['long_pct']:.0f}%-uk 5+ passzos "
+                         "akció végén esett.")
+    except Exception:
+        pass
     # Előkészítő-függés: egy emberre épül-e a gólpassz-termelés.
     try:
         from .attack_types import assist_concentration

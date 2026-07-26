@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Gól-előkészítés hossza**: direkt vagy kombinatív gólokból élnek
+  — gólonként megszámoljuk a gólt szerző csapat passzait az előző
+  birtoklás-határig visszanézve. A direkt csapat (a gólok 50%+ része
+  0–2 passzból, 4+ gólból) az első hullámból él: ellene a
+  visszarendeződés a meccs; a kombinatív (50%+ rész 5+ passzból)
+  kijátssza a falat: ellene türelmes, fegyelmezett fal kell — aki az
+  ötödik passznál kilép, azon átmennek. Saját olvasatban a csak
+  kombinatív góltermelés fogatlan első hullámot jelez. Egy réteg,
+  sok felület: `goal_buildup` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 74.
+  meccsterv-szabály (az ő kombinatív góltermelésük × a ti rés-mentes
+  falatok), 95. edzés-szabály (2 passzos gyorsindítás, első hullámos
+  befejezés).
 - **Előkészítő-függés**: mennyire egy emberre épül a
   gólpassz-termelés — a lövő-koncentráció előkészítő-oldali párja:
   az asszist-függés azt mondja meg, MENNYIRE előkészítettek a gólok,

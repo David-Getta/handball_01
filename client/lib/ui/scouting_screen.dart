@@ -1137,6 +1137,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Gól-előkészítés hossza: a direkt (0-2 passzos) és kombinatív
+  // (5+ passzos) gólok aránya (4+ gólnál, 50%+ résznél; a
+  // backend-kulccsal azonos küszöbök).
+  String? _goalBuildup(Map<String, dynamic> r) {
+    final goals = ((r["gb_goals"] as num?) ?? 0).toInt();
+    final short = ((r["gb_short"] as num?) ?? 0).toInt();
+    final long = ((r["gb_long"] as num?) ?? 0).toInt();
+    if (goals < 4) return null;
+    final shortPct = 100.0 * short / goals;
+    final longPct = 100.0 * long / goals;
+    if (shortPct >= 50.0) {
+      return "direkt gólok: ${shortPct.toStringAsFixed(0)}% "
+          "legfeljebb 2 passzból ($short/$goals) · fogd meg az első "
+          "hullámot";
+    }
+    if (longPct >= 50.0) {
+      return "kombinatív gólok: ${longPct.toStringAsFixed(0)}% 5+ "
+          "passzos akcióból ($long/$goals) · türelmes fal, ne lépj "
+          "ki korán";
+    }
+    return null;
+  }
+
   // Előkészítő-függés: a gólpasszok fő előkészítőre jutó hányada
   // (6+ gólpasszos gólnál, 50%+ résznél; a backend-kulccsal azonos
   // küszöbök).
@@ -2144,6 +2167,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Középkezdés-tempó", _restartSpeed(r)!],
       if (_assistConcentration(r) != null)
         ["Előkészítő-függés", _assistConcentration(r)!],
+      if (_goalBuildup(r) != null)
+        ["Gól-előkészítés", _goalBuildup(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
