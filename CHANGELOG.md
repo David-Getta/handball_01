@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Passz-kockázat**: a hosszú passzok eladás-aránya a rövidekhez
+  képest — minden labda-továbbítási kísérletet (sikeres passz vagy
+  eladás) a kiinduló és a megszerző játékos távolsága alapján hosszú
+  (10 m+) és rövid sávra bontunk (sávonként 8+ kísérletből, 15+
+  százalékpont a küszöb). Akinek a hosszú passzai érdemben többször
+  vesznek el, annál a hosszú passzsávok lezárása a terv: letámadás
+  és sávba állás; aki biztos kezű, ellene a passzsáv-vadászat nem
+  fizet. Saját olvasatban a hosszú passz technikája az edzés-téma.
+  Egy réteg, sok felület: `pass_risk` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (kétirányú kulcs +
+  csempe), 79. meccsterv-szabály (az ő kockázatos hosszú passzaik ×
+  a ti magas szerzésetek), 100. edzés-szabály (feszes hosszú passz
+  technika, döntés-játék zárt sávnál).
 - **Elzárás-védekezés**: bírja-e a fal az ellenfél elzárásait — az
   elzárás-használat védő-oldali tükre: ott az látszik, ki mennyit
   játszik elzárással, itt az, ki mennyire bírja ellene. Ha az

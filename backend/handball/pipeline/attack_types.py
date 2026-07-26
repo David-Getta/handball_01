@@ -1592,3 +1592,95 @@ def screen_usage(match: Match,
                 r["style"] = "elzárás nélküli"
         out[side] = r
     return out
+
+
+# Passz-kockázat: ettől a távolságtól számít hosszúnak a passz;
+# sávonként ennyi kísérlet kell az ítélethez, és ekkora eladás-arány
+# különbség (százalékpont) számít érdeminek.
+PASSRISK_LONG_M = 10.0
+PASSRISK_MIN_TRIES = 8
+PASSRISK_GAP_PP = 15.0
+
+
+def pass_risk(match: Match,
+              config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-kockázat: a hosszú passzok eladás-aránya a rövidekhez
+    képest.
+
+    Minden labda-továbbítási kísérletet (sikeres passz vagy eladás) a
+    kiinduló és a megszerző játékos távolsága alapján hosszú és rövid
+    sávra bontunk, és sávonként számoljuk az eladás-arányt. Akinek a
+    hosszú passzai érdemben többször vesznek el, annál a hosszú
+    passzsávok lezárása a terv: a letámadás és a sávba állás azonnal
+    labdát hoz — és saját olvasatban a hosszú passz technikája
+    (feszes, előre vezetett labda) az edzés-téma.
+
+    Visszatérés csapatonként: {"long_tries", "long_to",
+    "short_tries", "short_to", "long_to_pct", "short_to_pct",
+    "gap_pp", "verdict"} — pct/gap/verdict None, ha bármelyik sávban
+    kevés (PASSRISK_MIN_TRIES alatti) a kísérlet; a verdict
+    "kockázatos" (a hosszú passz vész el) / "biztos kezű" / None.
+    """
+    import math
+
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    counts = {s: {"long_tries": 0, "long_to": 0,
+                  "short_tries": 0, "short_to": 0}
+              for s in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type not in (EventType.PASS, EventType.TURNOVER):
+            continue
+        if e.player_id is None:
+            continue
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            continue
+        f = match.frames[i0]
+        by_id = {p.track_id: p for p in f.players}
+        passer = by_id.get(e.player_id)
+        if passer is None:
+            continue
+        if e.type == EventType.PASS:
+            rid = (e.detail or {}).get("receiver_id")
+            taker = by_id.get(rid) if rid is not None else None
+        else:
+            # Eladásnál a megszerző az ellenfél labdához legközelebbi
+            # játékosa a kockán.
+            taker = None
+            if f.ball is not None:
+                best = None
+                for p in f.players:
+                    if p.team is None or p.team == e.team:
+                        continue
+                    d = math.hypot(p.x - f.ball.x, p.y - f.ball.y)
+                    if best is None or d < best:
+                        taker, best = p, d
+        if taker is None:
+            continue
+        dist = math.hypot(taker.x - passer.x, taker.y - passer.y)
+        rec = counts[e.team.value]
+        band = "long" if dist >= PASSRISK_LONG_M else "short"
+        rec[band + "_tries"] += 1
+        if e.type == EventType.TURNOVER:
+            rec[band + "_to"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "long_to_pct": None, "short_to_pct": None,
+             "gap_pp": None, "verdict": None}
+        if rec["long_tries"] >= PASSRISK_MIN_TRIES \
+                and rec["short_tries"] >= PASSRISK_MIN_TRIES:
+            lon = 100.0 * rec["long_to"] / rec["long_tries"]
+            sho = 100.0 * rec["short_to"] / rec["short_tries"]
+            r["long_to_pct"] = round(lon, 1)
+            r["short_to_pct"] = round(sho, 1)
+            r["gap_pp"] = round(lon - sho, 1)
+            if lon - sho >= PASSRISK_GAP_PP:
+                r["verdict"] = "kockázatos"
+            elif sho - lon >= PASSRISK_GAP_PP:
+                r["verdict"] = "biztos kezű"
+        out[side] = r
+    return out

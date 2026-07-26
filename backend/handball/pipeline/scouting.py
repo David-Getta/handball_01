@@ -556,6 +556,13 @@ class ScoutingReport:
     scd_screened_goals: int = 0
     scd_open_shots: int = 0
     scd_open_goals: int = 0
+    # Passz-kockázat: hosszú (10 m+) és rövid passz-kísérletek + a
+    # belőlük lett eladások — darabszámok, meccsek közt összegződnek
+    # (eladás-arány sávonként külön).
+    prk_long_tries: int = 0
+    prk_long_to: int = 0
+    prk_short_tries: int = 0
+    prk_short_to: int = 0
     # Kapus-kimozdulás: táv-összeg + kockák (átlag = összeg / kockák,
     # meccsek közt pontosan összegződik).
     gk_depth_sum_m: float = 0.0
@@ -1481,6 +1488,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Passz-kockázat: a hosszú passzsávjaik vadászterületek-e.
+    if rep.prk_long_tries >= 8 and rep.prk_short_tries >= 8:
+        _prk_long = 100.0 * rep.prk_long_to / rep.prk_long_tries
+        _prk_short = 100.0 * rep.prk_short_to / rep.prk_short_tries
+        if _prk_long - _prk_short >= 15.0:
+            keys.append(
+                f"A hosszú passzaik kockázatosak: "
+                f"{_prk_long:.0f}%-uk elveszik, a rövideknek csak "
+                f"{_prk_short:.0f}%-a ({rep.prk_long_to}/"
+                f"{rep.prk_long_tries}) — zárjátok a hosszú "
+                "passzsávokat: letámadás és sávba állás, a hosszú "
+                "átjátszásaikra vadásszatok.")
+        elif _prk_short - _prk_long >= 15.0:
+            keys.append(
+                f"A hosszú passzokat is biztosan kezelik "
+                f"({_prk_long:.0f}% eladás, a rövideknél "
+                f"{_prk_short:.0f}%) — a passzsáv-vadászat ellenük "
+                "nem fizet: inkább a lövő-fedezésre és a "
+                "visszarendeződésre tegyétek a hangsúlyt.")
 
     # Elzárás-védekezés: bírja-e a faluk az elzárást, vagy minden
     # figurát zárással kell zárni ellenük.
@@ -3110,6 +3137,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.scd_screened_goals = scdrec["screened_goals"]
         rep.scd_open_shots = scdrec["open_shots"]
         rep.scd_open_goals = scdrec["open_goals"]
+        from .attack_types import pass_risk
+        prkrec = pass_risk(match, config)[team.value]
+        rep.prk_long_tries = prkrec["long_tries"]
+        rep.prk_long_to = prkrec["long_to"]
+        rep.prk_short_tries = prkrec["short_tries"]
+        rep.prk_short_to = prkrec["short_to"]
         from .momentum import post_goal_lapses
         pglrec = post_goal_lapses(match, config)[team.value]
         rep.pgl_goals = pglrec["goals"]
@@ -4387,6 +4420,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 79) Az ő kockázatos hosszú passzaik × a ti magas szerzésetek: a
+    # hosszú átjátszás a ti csapdátokba fut.
+    if (opp.prk_long_tries >= 8 and opp.prk_short_tries >= 8
+            and own.steal_n >= 8 and own.steal_high / own.steal_n >= 0.35
+            and (100.0 * opp.prk_long_to / opp.prk_long_tries)
+            - (100.0 * opp.prk_short_to / opp.prk_short_tries)
+            >= 15.0):
+        plan.append(
+            f"A hosszú passzaik kockázatosak "
+            f"({100.0 * opp.prk_long_to / opp.prk_long_tries:.0f}% "
+            f"elveszik, a rövideknél csak "
+            f"{100.0 * opp.prk_short_to / opp.prk_short_tries:.0f}%), "
+            f"ti pedig elöl szereztek ({own.steal_high}/"
+            f"{own.steal_n} magas szerzés) — állj a hosszú "
+            "passzsávjaikba: a letámadás hosszú átjátszásra "
+            "kényszeríti őket, és onnan indul a lerohanásotok.")
+
     # 78) Az ő gyenge elzárás-váltásuk × a ti elzárás-játékotok: amit
     # nem bírnak, abból ti amúgy is sokat játszotok.
     if (opp.scd_screened_shots >= 6 and opp.scd_open_shots > 0
@@ -5162,6 +5212,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         scd_screened_goals=sum(r.scd_screened_goals for r in reports),
         scd_open_shots=sum(r.scd_open_shots for r in reports),
         scd_open_goals=sum(r.scd_open_goals for r in reports),
+        prk_long_tries=sum(r.prk_long_tries for r in reports),
+        prk_long_to=sum(r.prk_long_to for r in reports),
+        prk_short_tries=sum(r.prk_short_tries for r in reports),
+        prk_short_to=sum(r.prk_short_to for r in reports),
         gk_depth_sum_m=round(sum(r.gk_depth_sum_m for r in reports), 1),
         gk_depth_frames=sum(r.gk_depth_frames for r in reports),
         trans_steals=sum(r.trans_steals for r in reports),

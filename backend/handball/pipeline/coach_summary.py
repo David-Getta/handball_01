@@ -663,6 +663,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "— a ritmusa kiszámítható volt.")
     except Exception:
         pass
+    # Passz-kockázat: a hosszú passzok vesztek-e el gyakrabban.
+    try:
+        from .attack_types import pass_risk
+        prk = pass_risk(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pr = prk[side]
+            if rec_pr["verdict"] is None:
+                continue
+            if rec_pr["verdict"] == "kockázatos":
+                body += (f" A(z) {name} hosszú passzai kockázatosak "
+                         f"voltak: {rec_pr['long_to_pct']:.0f}%-uk "
+                         f"veszett el, a rövideknek csak "
+                         f"{rec_pr['short_to_pct']:.0f}%-a.")
+            else:
+                body += (f" A(z) {name} a hosszú passzokat is "
+                         f"biztosan kezelte "
+                         f"({rec_pr['long_to_pct']:.0f}% eladás, a "
+                         f"rövideknél {rec_pr['short_to_pct']:.0f}%).")
+    except Exception:
+        pass
     # Elzárás-védekezés: bírta-e a fal az ellenfél elzárásait.
     try:
         from .defense import screen_defense

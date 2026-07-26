@@ -1102,3 +1102,53 @@ def test_screen_usage_separates_screened_and_isolated_shooters():
     # Kevés őrzött lövés: nincs ítélet.
     few = screen_usage(Match(_meta(), frames[:200]))
     assert few["home"]["style"] is None
+
+
+def test_pass_risk_flags_lost_long_balls():
+    """A hazai hosszú passzai zömmel az ellenfélnél kötnek ki, a
+    rövidek nem → kockázatos hosszú passz; kevés kísérletnél nincs
+    ítélet."""
+    from handball.pipeline.attack_types import pass_risk
+
+    frames = []
+    t = 0
+
+    def _transfer(dist_y, lost):
+        # A labda a 1-esről a társ (2-es) vagy — eladásnál — az
+        # ellenfél (20-as) kezébe kerül; a fogadó dist_y méterre áll.
+        nonlocal t, frames
+        taker = (_pl(20, Team.AWAY, 30.0, 10.0 + dist_y) if lost
+                 else _pl(2, Team.HOME, 30.0, 10.0 + dist_y))
+        pls = [_pl(1, Team.HOME, 30.0, 10.0), taker]
+        for _ in range(5):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(5):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=10.0 + dist_y,
+                                          confidence=1.0)))
+            t += 1
+        # A labda visszakerül az 1-eshez: a következő kísérlet innen
+        # indul (eladás után "visszaszerzés").
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 30.0, 10.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    for i in range(10):
+        _transfer(12.0, lost=(i < 6))   # hosszú: 60% elveszik
+    for i in range(10):
+        _transfer(3.0, lost=False)      # rövid: nincs eladás
+
+    prk = pass_risk(Match(_meta(), frames))
+    h = prk["home"]
+    assert h["long_tries"] >= 8 and h["short_tries"] >= 8
+    assert h["verdict"] == "kockázatos"
+    assert h["long_to_pct"] > h["short_to_pct"]
+
+    # Kevés kísérlet: nincs ítélet.
+    few = pass_risk(Match(_meta(), frames[:100]))
+    assert few["home"]["verdict"] is None

@@ -1137,6 +1137,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Passz-kockázat: a hosszú (10 m+) vs rövid passzok eladás-aránya
+  // (sávonként 8+ kísérletnél, 15+ százalékpont eltérésnél; a
+  // backend-kulccsal azonos küszöbök).
+  String? _passRisk(Map<String, dynamic> r) {
+    final lt = ((r["prk_long_tries"] as num?) ?? 0).toInt();
+    final lto = ((r["prk_long_to"] as num?) ?? 0).toInt();
+    final st = ((r["prk_short_tries"] as num?) ?? 0).toInt();
+    final sto = ((r["prk_short_to"] as num?) ?? 0).toInt();
+    if (lt < 8 || st < 8) return null;
+    final lon = 100.0 * lto / lt;
+    final sho = 100.0 * sto / st;
+    if (lon - sho >= 15.0) {
+      return "kockázatos hosszú passzok: "
+          "${lon.toStringAsFixed(0)}% elveszik (rövidnél "
+          "${sho.toStringAsFixed(0)}%) · állj a hosszú sávokba";
+    }
+    if (sho - lon >= 15.0) {
+      return "a hosszú passzt is biztosan kezelik "
+          "(${lon.toStringAsFixed(0)}% vs "
+          "${sho.toStringAsFixed(0)}%) · a sáv-vadászat nem fizet";
+    }
+    return null;
+  }
+
   // Elzárás-védekezés: az ellenük vezetett elzárásos vs elzárás
   // nélküli lövések gólaránya (6+ elzárásos lövésnél, 15+
   // százalékpont eltérésnél; a backend-kulccsal azonos küszöbök).
@@ -2265,6 +2289,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elzárás-használat", _screenUsage(r)!],
       if (_screenDefense(r) != null)
         ["Elzárás-védekezés", _screenDefense(r)!],
+      if (_passRisk(r) != null)
+        ["Passz-kockázat", _passRisk(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

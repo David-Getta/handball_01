@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 100) Passz-kockázat: ha a hosszú passzaink elvesznek, a hosszú
+    # passz technikája és a bejátszás-döntés a téma.
+    try:
+        from .attack_types import (PASSRISK_GAP_PP,
+                                   PASSRISK_MIN_TRIES, pass_risk)
+        prk100 = pass_risk(match, config)
+        for side in ("home", "away"):
+            rec100 = prk100[side]
+            if rec100["verdict"] != "kockázatos" \
+                    or rec100["long_tries"] < PASSRISK_MIN_TRIES \
+                    or rec100["gap_pp"] is None \
+                    or rec100["gap_pp"] < PASSRISK_GAP_PP:
+                continue
+            add(side, "támadás", "Hosszú passz",
+                f"a hosszú passzaink elvesznek: "
+                f"{rec100['long_to_pct']:.0f}%-uk eladás "
+                f"({rec100['long_to']}/{rec100['long_tries']}), a "
+                f"rövideknek csak {rec100['short_to_pct']:.0f}%-a — "
+                "az ellenfél a hosszú sávjainkban vadászik",
+                "hosszú passz: feszes, előre vezetett labda "
+                "technika-sor (mellmagasság, futó társ elé), "
+                "átjátszás védő-sávon át párokban, és döntés-játék — "
+                "ha a sáv zárt, a hosszú passz helyett indíts")
+    except Exception:
+        pass
+
     # 99) Elzárás-védekezés: ha az elzárásokon szétesik a váltásunk,
     # a váltás-kommunikáció a téma.
     try:
