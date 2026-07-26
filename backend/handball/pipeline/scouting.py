@@ -1612,6 +1612,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
 
+    # Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
+    if rep.fsw_attacks >= 6 and rep.fsw_pairs > 0 and rep.fsw_labels:
+        _fsw_main = max(rep.fsw_labels.items(), key=lambda kv: kv[1])[0]
+        _fsw_sw = 100.0 * rep.fsw_switches / rep.fsw_pairs
+        _fsw_mainpct = (100.0 * rep.fsw_labels[_fsw_main]
+                        / rep.fsw_attacks)
+        if _fsw_sw >= 30.0:
+            keys.append(
+                f"Váltogatják a védekezést (a védekezett támadások "
+                f"{_fsw_sw:.0f}%-ánál más fal, a fő formájuk a "
+                f"{_fsw_main}) — a felismerés a feladat: a "
+                "kihozatalnál hangosan be kell mondani a formát, és "
+                "két kész változattal érkezni (elzárásos az egyik, "
+                "beállós a másik).")
+        elif _fsw_mainpct >= 80.0:
+            keys.append(
+                f"Végig egy rendszert játszanak védekezésben "
+                f"({_fsw_main}, a védekezett támadások "
+                f"{_fsw_mainpct:.0f}%-ában) — egy figurasort kell rá "
+                "felépíteni és végig azt húzni: ha bejön a megoldás, "
+                "nem fognak váltani rá.")
+
     # Célba vett védő: melyik védőjük előtt megy be a legtöbb lövés
     # (a csapatátlaguknál rosszabb gólarány = oda kell támadni).
     if rep.tdf_shots >= 4:
@@ -4224,6 +4246,16 @@ def _merge_plus_minus(reports) -> list:
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
 
 
+def _merge_fsw_labels(reports) -> dict:
+    """Védekezés-váltás: formánként a védekezett támadások összegzése
+    (a támadás-szám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for lab, n in (r.fsw_labels or {}).items():
+            tally[lab] = tally.get(lab, 0) + int(n)
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]))
+
+
 def _merge_targeted_defenders(reports) -> list:
     """Célba vett védők: védőnként a rá eső kapott lövések és gólok
     összegzése (a lövésszám szerint csökkenő)."""
@@ -4974,6 +5006,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 95) Az ő védekezés-váltásuk × a ti lerohanásaitok: a váltás csak
+    # felállt védekezésben él.
+    if opp.fsw_attacks >= 6 and opp.fsw_pairs > 0 \
+            and own.fast_break_pct >= 8.0:
+        _sw95 = 100.0 * opp.fsw_switches / opp.fsw_pairs
+        if _sw95 >= 30.0:
+            _main95 = (max(opp.fsw_labels.items(),
+                           key=lambda kv: kv[1])[0]
+                       if opp.fsw_labels else "?")
+            plan.append(
+                f"Váltogatják a védekezést (a védekezett támadások "
+                f"{_sw95:.0f}%-ánál más fal, alapból {_main95}), ti "
+                f"pedig sokat rohantok le "
+                f"({own.fast_break_pct:.0f}% lerohanás-arány) — a "
+                "váltás csak felállt védekezésben él: minden "
+                "labdaszerzés és kapott gól után azonnal indulni "
+                "kell, mielőtt eldöntik, milyen falat állítanak.")
 
     # 94) Az ő gyenge védőjük × a ti elzárás-használatotok: oda kell
     # vinni a befejezéseket.
@@ -6043,6 +6093,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        fsw_labels=_merge_fsw_labels(reports),
+        fsw_attacks=sum(r.fsw_attacks for r in reports),
+        fsw_pairs=sum(r.fsw_pairs for r in reports),
+        fsw_switches=sum(r.fsw_switches for r in reports),
         shooter_power=_merge_shooter_power(reports),
         spw_team_shots=sum(r.spw_team_shots for r in reports),
         spw_team_sum_kmh=round(

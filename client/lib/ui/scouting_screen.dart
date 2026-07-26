@@ -1199,6 +1199,41 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "befejezéseket (elzárás rá, az ő oldalán a beálló)";
   }
 
+  // Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak (6+
+  // védekezett támadás, 30% váltás-arány / 80% fő forma; a
+  // backend-kulccsal azonos küszöbök).
+  String? _formationSwitching(Map<String, dynamic> r) {
+    final labels = r["fsw_labels"];
+    final attacks = ((r["fsw_attacks"] as num?) ?? 0).toInt();
+    final pairs = ((r["fsw_pairs"] as num?) ?? 0).toInt();
+    final switches = ((r["fsw_switches"] as num?) ?? 0).toInt();
+    if (labels is! Map || labels.isEmpty || attacks < 6 || pairs <= 0) {
+      return null;
+    }
+    String main = "";
+    int mainN = -1;
+    labels.forEach((k, v) {
+      final n = ((v as num?) ?? 0).toInt();
+      if (n > mainN) {
+        main = "$k";
+        mainN = n;
+      }
+    });
+    final swPct = 100.0 * switches / pairs;
+    final mainPct = 100.0 * mainN / attacks;
+    if (swPct >= 30.0) {
+      return "váltogatják a védekezést: a védekezett támadások "
+          "${swPct.toStringAsFixed(0)}%-ánál más fal (alapból $main) · "
+          "a kihozatalnál mondjátok be a formát, két kész változattal";
+    }
+    if (mainPct >= 80.0) {
+      return "végig egy rendszert játszanak: $main a védekezett "
+          "támadások ${mainPct.toStringAsFixed(0)}%-ában · egy "
+          "figurasort építsetek rá és húzzátok végig";
+    }
+    return null;
+  }
+
   // Lövő-erő: ki lő rendre a csapatátlag felett (4+ mért lövés, 8+
   // km/h eltérés; a backend-kulccsal azonos küszöbök).
   String? _shooterPower(Map<String, dynamic> r) {
@@ -2679,6 +2714,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Játékos-mérleg", _plusMinus(r)!],
       if (_targetedDefender(r) != null)
         ["Célba vett védő", _targetedDefender(r)!],
+      if (_formationSwitching(r) != null)
+        ["Védekezés-váltás", _formationSwitching(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

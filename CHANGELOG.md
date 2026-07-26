@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Védekezés-váltás**: egy rendszert játszanak, vagy váltogatnak. A
+  leggyakoribb forma azt mondja meg, MIT játszanak, a forma szerinti
+  hatékonyság azt, melyik fal fogja meg őket — ez a harmadik kérdés:
+  MENNYIRE állandó a rendszerük. Támadásonként (a védekező oldal
+  szemszögéből) a fal uralkodó címkéjét vesszük, és számoljuk, hányszor
+  tér el az előző védekezett támadásétól (6+ mért támadástól; 30%
+  váltás-arány felett "váltogatós", 80% fő forma felett "egy
+  rendszer"). Edzőileg: aki egy rendszert játszik, arra egy figurasort
+  kell építeni és végig azt húzni; aki váltogat, ott a felismerés a
+  feladat — a kihozatalnál hangosan bemondani a formát, és két kész
+  változattal érkezni. Egy réteg, sok felület: `formation_switching`
+  motor, edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (edzői kulcs + csempe; formánként a védekezett támadások, a
+  támadás-párok és a váltások száma tárolva, hogy a váltás-arány
+  meccsek közt pontosan visszaszámolható legyen), 95.
+  meccsterv-szabály (az ő váltogatásuk × a ti lerohanásaitok: a váltás
+  csak felállt védekezésben él), 116. edzés-szabály (második
+  védekezési változat betanítása, ha végig egy rendszert játszunk).
+
 ## v0.1.25 — kiadva (2026-07-26)
 
 > Kiadás-jegyzet: huszonöt új elemzés-réteg — a kör vezérfonala az,

@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 116) Védekezés-váltás: ha végig egy rendszert játszunk, a
+    # második változat betanítása a téma.
+    try:
+        from .tactics import FSW_ONE_SYSTEM_PCT, formation_switching
+        fsw116 = formation_switching(match, config)
+        for side in ("home", "away"):
+            rec116 = fsw116[side]
+            if rec116["verdict"] != "egy rendszer":
+                continue
+            add(side, "védekezés", "Második védekezési változat",
+                f"végig egy rendszert játszottunk ({rec116['main']}, a "
+                f"védekezett támadások {rec116['main_pct']:.0f}%-ában, "
+                f"a küszöb {FSW_ONE_SYSTEM_PCT:.0f}%) — ha az "
+                "ellenfél megfejti, nincs mire váltani",
+                "második változat: 15 perc alapforma-váltás jelre "
+                "(6-0 ↔ 5-1) élő támadás közben, hangos bemondással; "
+                "a váltás pillanatában az előretolt védő és a "
+                "szomszédja átadja egymásnak az embert")
+    except Exception:
+        pass
+
     # 115) Célba vett védő: ha egy védőnk előtt a csapatátlagnál
     # érdemben többször megy be a lövés, a segítség-rendszer a téma.
     try:

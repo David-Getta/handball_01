@@ -405,3 +405,54 @@ def test_attack_motion_separates_static_and_fluid():
     # Kevés minta: nincs ítélet.
     few = attack_motion(Match(_meta(), frames[:200]))
     assert few["home"]["style"] is None
+
+
+def _fsw_match(walls):
+    """Hazai támadás-sorozat: minden elemhez a vendég fal x-koordinátái
+    (a vendég kapuja x=40), a támadások közt szünettel."""
+    frames = []
+    t = 0
+    for wall in walls:
+        for _ in range(20):
+            players = [_pl(1, Team.HOME, 28.0, 10.0)] + [
+                _pl(20 + j, Team.AWAY, x, float(y))
+                for j, (x, y) in enumerate(zip(wall,
+                                               [2, 6, 8, 12, 14, 18]))]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=28.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):     # szünet: itt zárul a támadás
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_formation_switching_separates_switchers_from_one_system():
+    """Nyolc védekezett támadás felváltva 6-0 és 5-1 → "váltogatós";
+    végig 6-0 → "egy rendszer"; kevés támadásnál nincs ítélet."""
+    from handball.pipeline.tactics import formation_switching
+
+    flat = [35.0] * 6                     # 6-0: mind a hátsó sávban
+    one_up = [35.0] * 5 + [31.0]          # 5-1: egy előretolt védő
+
+    sw = formation_switching(_fsw_match(
+        [flat, one_up] * 4))["away"]
+    assert sw["attacks"] == 8
+    assert sw["main"] in ("6-0", "5-1")
+    assert sw["switches"] == 7
+    assert sw["switch_pct"] == 100.0
+    assert sw["verdict"] == "váltogatós"
+    assert sw["labels"]["6-0"] == 4 and sw["labels"]["5-1"] == 4
+
+    one = formation_switching(_fsw_match([flat] * 8))["away"]
+    assert one["attacks"] == 8 and one["switches"] == 0
+    assert one["main"] == "6-0" and one["main_pct"] == 100.0
+    assert one["verdict"] == "egy rendszer"
+
+    # Két támadás: nincs elég minta → nincs arány és nincs ítélet.
+    few = formation_switching(_fsw_match([flat, one_up]))
+    assert few["away"]["switch_pct"] is None
+    assert few["away"]["verdict"] is None
+    # A hazai fal nem védekezett → üres.
+    assert few["home"]["attacks"] == 0 and few["home"]["verdict"] is None
