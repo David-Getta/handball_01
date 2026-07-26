@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 108) Kapus szabad lövés ellen: ha a kapusunk csak a fal mögött
+    # véd, a szabad lövés elleni kapusmunka a téma.
+    try:
+        from .goalkeeper import GKFREE_MIN_SHOTS, gk_free_shot_saves
+        gkf108 = gk_free_shot_saves(match, config)
+        for side in ("home", "away"):
+            rec108 = gkf108[side]
+            if rec108["verdict"] != "falfüggő" \
+                    or rec108["free_shots"] < GKFREE_MIN_SHOTS \
+                    or rec108["gap_pp"] is None:
+                continue
+            add(side, "kapus", "Szabad lövés elleni védés",
+                f"a kapusunk falfüggő: fedezett lövésnél "
+                f"{rec108['covered_save_pct']:.0f}%-ot véd, szabadon "
+                f"leadottnál csak {rec108['free_save_pct']:.0f}%-ot "
+                f"({rec108['free_saves']}/{rec108['free_shots']}) — "
+                "tiszta lövéshelyzetben magára marad",
+                "szabad lövés elleni kapusmunka: zavartalan átlövések "
+                "sorozata változó ritmusban (a kapus indulási idejére), "
+                "helyezkedés-korrekció a lövő karjához igazítva, és "
+                "fal-kapus egyeztetés — a fal mindig egy oldalt zárjon, "
+                "a kapus a másikat védje")
+    except Exception:
+        pass
+
     # 107) Kettőzés: ha nem lép rá második védő a labdásra, a
     # kettőzés-mechanizmus és a mögötte lévő zárás a téma.
     try:

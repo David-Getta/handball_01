@@ -1091,3 +1091,83 @@ def gk_outlet_side(match: Match, config=None) -> dict:
             elif 1.0 - share >= GK_SIDE_SHARE:
                 rec["side"] = "jobb"
     return out
+
+
+# Kapus szabad lövés ellen: sávonként ennyi kapura tartó lövéstől
+# ítélünk, és ennyi százalékpont védés-arány eltérés a "falfüggő" /
+# "önállóan is véd" küszöb.
+GKFREE_MIN_SHOTS = 5
+GKFREE_GAP_PP = 15.0
+
+
+def gk_free_shot_saves(match: Match, config=None) -> dict:
+    """Kapus szabad lövés ellen: a fal segítsége nélkül is véd-e.
+
+    A védés-sávok (gk_save_ranges) a TÁVOLSÁG szerint bontanak — ez a
+    FEDEZETTSÉG szerint: a kapura tartó lövéseket aszerint válogatja
+    szét, hogy a lövőn volt-e védő (a védekezés-elemzés "szabad
+    lövés" fogalmával azonos sugárral). Akinek a kapusa csak a fal
+    mögött véd, azt tiszta, zavartalan lövésekkel kell terhelni:
+    elzárás után szabad átlövés a recept. Aki szabadon is fog,
+    annál a távoli lövés ajándék — kidolgozott, közeli helyzet kell.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"free_shots",
+    "free_saves", "free_save_pct", "covered_shots", "covered_saves",
+    "covered_save_pct", "gap_pp", "verdict"} — az arányok és a
+    verdict None, ha valamelyik sávban kevés (GKFREE_MIN_SHOTS
+    alatti) a lövés; a verdict "falfüggő" / "önállóan is véd" / None.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .defense import FREE_DEF_RADIUS_M
+    from .event_detection import detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    detect_goalkeepers(match)
+    by_t = {f.t: f for f in match.frames}
+    counts = {s: {"free_shots": 0, "free_saves": 0,
+                  "covered_shots": 0, "covered_saves": 0}
+              for s in ("home", "away")}
+    for e in detect_shots(match, config):
+        outcome = (e.detail or {}).get("outcome")
+        if outcome not in ("goal", "save"):
+            continue  # a mellé menő lövésből nem mérünk kapus-formát
+        f = by_t.get(e.t)
+        if f is None or e.player_id is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is None:
+            continue
+        defender_team = Team.AWAY if e.team == Team.HOME else Team.HOME
+        dists = [math.hypot(p.x - shooter.x, p.y - shooter.y)
+                 for p in f.players
+                 if p.team == defender_team
+                 and getattr(p, "role", None) != ROLE_GOALKEEPER]
+        if not dists:
+            continue  # nincs mért védő: a fedezettség nem eldönthető
+        key = "free" if min(dists) > FREE_DEF_RADIUS_M else "covered"
+        rec = counts[defender_team.value]
+        rec[key + "_shots"] += 1
+        if outcome == "save":
+            rec[key + "_saves"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "free_save_pct": None, "covered_save_pct": None,
+             "gap_pp": None, "verdict": None}
+        if rec["free_shots"] >= GKFREE_MIN_SHOTS \
+                and rec["covered_shots"] >= GKFREE_MIN_SHOTS:
+            fr = 100.0 * rec["free_saves"] / rec["free_shots"]
+            cv = 100.0 * rec["covered_saves"] / rec["covered_shots"]
+            r["free_save_pct"] = round(fr, 1)
+            r["covered_save_pct"] = round(cv, 1)
+            r["gap_pp"] = round(cv - fr, 1)
+            if cv - fr >= GKFREE_GAP_PP:
+                r["verdict"] = "falfüggő"
+            elif fr - cv >= GKFREE_GAP_PP:
+                r["verdict"] = "önállóan is véd"
+        out[side] = r
+    return out

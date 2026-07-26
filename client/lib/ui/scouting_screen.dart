@@ -1137,6 +1137,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Kapus szabad lövés ellen: a szabad vs fedezett lövések elleni
+  // védés-arány (sávonként 5+ lövésnél, 15+ százalékpont eltérésnél;
+  // a backend-kulccsal azonos küszöbök).
+  String? _gkFreeShotSaves(Map<String, dynamic> r) {
+    final fs = ((r["gkf_free_shots"] as num?) ?? 0).toInt();
+    final fv = ((r["gkf_free_saves"] as num?) ?? 0).toInt();
+    final cs = ((r["gkf_cov_shots"] as num?) ?? 0).toInt();
+    final cv = ((r["gkf_cov_saves"] as num?) ?? 0).toInt();
+    if (fs < 5 || cs < 5) return null;
+    final free = 100.0 * fv / fs;
+    final cover = 100.0 * cv / cs;
+    if (cover - free >= 15.0) {
+      return "falfüggő kapus: fedezve ${cover.toStringAsFixed(0)}%, "
+          "szabad lövésnél ${free.toStringAsFixed(0)}% védés · "
+          "elzárás után tiszta átlövés";
+    }
+    if (free - cover >= 15.0) {
+      return "a szabad lövéseket is fogja "
+          "(${free.toStringAsFixed(0)}% vs "
+          "${cover.toStringAsFixed(0)}%) · kidolgozott, közeli "
+          "helyzetig kell játszani";
+    }
+    return null;
+  }
+
   // Kettőzés: a labdás-kockák hány százalékában lép rá második védő
   // (250+ labdás-kockánál, 30% felett kettőző, 10% alatt 1v1-et
   // hagyó; a backend-kulccsal azonos küszöbök).
@@ -2456,6 +2481,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-indítás iránya", _gkOutletSide(r)!],
       if (_doubleTeams(r) != null)
         ["Kettőzés", _doubleTeams(r)!],
+      if (_gkFreeShotSaves(r) != null)
+        ["Kapus szabad lövés ellen", _gkFreeShotSaves(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

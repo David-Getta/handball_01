@@ -684,6 +684,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Kapus szabad lövés ellen: a fal nélkül is védett-e.
+    try:
+        from .goalkeeper import gk_free_shot_saves
+        gkf = gk_free_shot_saves(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gf = gkf[side]
+            if rec_gf["verdict"] is None:
+                continue
+            if rec_gf["verdict"] == "falfüggő":
+                body += (f" A(z) {name} kapusa a fal mögött védett: "
+                         f"fedezett lövésnél "
+                         f"{rec_gf['covered_save_pct']:.0f}%, szabad "
+                         f"lövésnél csak "
+                         f"{rec_gf['free_save_pct']:.0f}% védés.")
+            else:
+                body += (f" A(z) {name} kapusa a szabad lövéseket is "
+                         f"fogta ({rec_gf['free_save_pct']:.0f}% "
+                         f"védés, fedezett lövésnél "
+                         f"{rec_gf['covered_save_pct']:.0f}%).")
+    except Exception:
+        pass
     # Kettőzés: rálépett-e a második védő is a labdásra.
     try:
         from .defense import double_teams

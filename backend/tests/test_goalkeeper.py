@@ -869,3 +869,49 @@ def test_gk_outlet_side_flags_one_sided_keeper():
     # Kevés indítás: nincs arány és nincs ítélet.
     few = gk_outlet_side(_match(frames[:30] + frames[-250:]))
     assert few["home"]["side"] is None and few["home"]["left_pct"] is None
+
+
+def test_gk_free_shot_saves_flags_wall_dependent_keeper():
+    """A vendég kapus a fedezett lövéseket mind fogja, a szabadon
+    leadottaknak csak a felét → "falfüggő"; kevés lövésnél nincs
+    ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.goalkeeper import gk_free_shot_saves
+
+    def _cov_shot(t0, save, covered):
+        """Hazai lövés a +x kapura; a védő a lövő mellett (fedezett)
+        vagy messze tőle (szabad lövés) áll."""
+        sx = 29.0
+        frames = _range_shot(t0, sx, save=save)
+        # A mezőnyvédőt minden kockára hozzátesszük: fedezésnél a lövő
+        # MÖGÖTT (nem a labda útjában), szabad lövésnél az oldalvonalnál.
+        dx, dy = (sx - 0.5, 10.6) if covered else (sx, 18.0)
+        for f in frames:
+            f.players.append(PlayerPosition(
+                track_id=20, team=Team.AWAY, x=dx, y=dy,
+                source=PositionSource.MEASURED, confidence=1.0))
+        return frames
+
+    frames = []
+    t = 0
+    # 6 fedezett lövés (mind védés) és 6 szabad lövés (3 védés).
+    plan = [(True, True)] * 6 + [(True, False)] * 3 + [(False, False)] * 3
+    for save, covered in plan:
+        frames += _cov_shot(t, save, covered)
+        t = frames[-1].t + 1
+        for i in range(25):   # szünet a debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 25
+
+    gkf = gk_free_shot_saves(_match(frames))
+    a = gkf["away"]
+    assert a["covered_shots"] == 6 and a["covered_saves"] == 6
+    assert a["free_shots"] == 6 and a["free_saves"] == 3
+    assert a["covered_save_pct"] == 100.0 and a["free_save_pct"] == 50.0
+    assert a["verdict"] == "falfüggő"
+
+    # A hazai kapusát nem érte lövés → nincs arány és nincs ítélet.
+    h = gkf["home"]
+    assert h["free_shots"] == 0 and h["covered_shots"] == 0
+    assert h["gap_pp"] is None and h["verdict"] is None

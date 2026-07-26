@@ -566,6 +566,13 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Kapus szabad lövés ellen: a szabad, illetve fedezett lövésre
+    # kapott kapura tartó lövések és a védések száma — darabszámok,
+    # meccsek közt összegződnek (védés-arány sávonként külön).
+    gkf_free_shots: int = 0
+    gkf_free_saves: int = 0
+    gkf_cov_shots: int = 0
+    gkf_cov_saves: int = 0
     # Kettőzés: a labdás-kockák és a kettőzött kockák száma + a
     # kikényszerített eladások — darabszámok, meccsek közt
     # összegződnek (arány = doubled / holder).
@@ -1534,6 +1541,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Kapus szabad lövés ellen: a fal nélkül is véd-e a kapusuk.
+    if rep.gkf_free_shots >= 5 and rep.gkf_cov_shots >= 5:
+        _gkf_fr = 100.0 * rep.gkf_free_saves / rep.gkf_free_shots
+        _gkf_cv = 100.0 * rep.gkf_cov_saves / rep.gkf_cov_shots
+        if _gkf_cv - _gkf_fr >= 15.0:
+            keys.append(
+                f"A kapusuk falfüggő: fedezett lövésnél "
+                f"{_gkf_cv:.0f}%-ot véd, szabadon leadottnál csak "
+                f"{_gkf_fr:.0f}%-ot — tiszta lövéshelyzetet kell "
+                "gyártani: elzárás után zavartalan átlövés, ne a "
+                "falon keresztül lőjetek.")
+        elif _gkf_fr - _gkf_cv >= 15.0:
+            keys.append(
+                f"A kapusuk a szabad lövéseket is fogja "
+                f"({_gkf_fr:.0f}% védés, fedezett lövésnél "
+                f"{_gkf_cv:.0f}%) — a távoli lövés ajándék neki: "
+                "kidolgozott, közeli helyzetig kell játszani.")
 
     # Kettőzés: rálép-e a második védőjük a labdásra.
     if rep.dbl_holder_frames >= 250:
@@ -3311,6 +3336,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .goalkeeper import gk_free_shot_saves
+        gkfrec = gk_free_shot_saves(match, config)[team.value]
+        rep.gkf_free_shots = gkfrec["free_shots"]
+        rep.gkf_free_saves = gkfrec["free_saves"]
+        rep.gkf_cov_shots = gkfrec["covered_shots"]
+        rep.gkf_cov_saves = gkfrec["covered_saves"]
         from .defense import double_teams
         dblrec = double_teams(match, config)[team.value]
         rep.dbl_holder_frames = dblrec["holder_frames"]
@@ -4630,6 +4661,24 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 87) Az ő falfüggő kapusuk × a ti elzárásos játékotok: az
+    # elzárásból jövő tiszta átlövés az ellenszer.
+    if (opp.gkf_free_shots >= 5 and opp.gkf_cov_shots >= 5
+            and (100.0 * opp.gkf_cov_saves / opp.gkf_cov_shots)
+            - (100.0 * opp.gkf_free_saves / opp.gkf_free_shots) >= 15.0
+            and own.scu_shots >= 8
+            and 100.0 * own.scu_screened / own.scu_shots >= 30.0):
+        plan.append(
+            f"A kapusuk falfüggő (fedezett lövésnél "
+            f"{100.0 * opp.gkf_cov_saves / opp.gkf_cov_shots:.0f}%, "
+            f"szabadon leadottnál "
+            f"{100.0 * opp.gkf_free_saves / opp.gkf_free_shots:.0f}% "
+            f"védés), ti pedig sokat játszotok elzárással (a "
+            f"lövéseitek "
+            f"{100.0 * own.scu_screened / own.scu_shots:.0f}%-a "
+            "elzárásból) — ez a párosítás: elzárás után zavartalan "
+            "átlövés, ne a falon keresztül lőjetek.")
+
     # 86) Az ő kettőzésük × a ti gyors passzjátékotok: a kettőzést egy
     # érintéssel kell megbüntetni.
     if (opp.dbl_holder_frames >= 250
@@ -5541,6 +5590,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        gkf_free_shots=sum(r.gkf_free_shots for r in reports),
+        gkf_free_saves=sum(r.gkf_free_saves for r in reports),
+        gkf_cov_shots=sum(r.gkf_cov_shots for r in reports),
+        gkf_cov_saves=sum(r.gkf_cov_saves for r in reports),
         dbl_holder_frames=sum(r.dbl_holder_frames for r in reports),
         dbl_doubled_frames=sum(r.dbl_doubled_frames for r in reports),
         dbl_forced_to=sum(r.dbl_forced_to for r in reports),

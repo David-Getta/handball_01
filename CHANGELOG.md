@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kapus szabad lövés ellen**: a fal segítsége nélkül is véd-e a
+  kapus — a védés-sávok a TÁVOLSÁG szerint bontanak, ez a
+  FEDEZETTSÉG szerint: a kapura tartó lövéseket aszerint válogatjuk
+  szét, hogy volt-e védő a lövőn (a védekezés-elemzés "szabad lövés"
+  sugarával; sávonként 5+ lövésből, 15+ százalékpont eltérésnél).
+  Akinek a kapusa csak a fal mögött véd, azt tiszta lövésekkel kell
+  terhelni: elzárás után zavartalan átlövés; aki szabadon is fog,
+  annál a távoli lövés ajándék — kidolgozott, közeli helyzet kell.
+  Saját olvasatban a szabad lövés elleni kapusmunka és a fal-kapus
+  egyeztetés az edzés-téma. Egy réteg, sok felület:
+  `gk_free_shot_saves` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 87.
+  meccsterv-szabály (az ő falfüggő kapusuk × a ti elzárásos
+  játékotok), 108. edzés-szabály (zavartalan átlövés-sorozatok,
+  helyezkedés-korrekció, fal-kapus oldalmegosztás).
 - **Kettőzés**: rálép-e a második védő is a labdásra — a védekezési
   nyomás a LEGKÖZELEBBI védő távolságát méri, ez azt, hogy jön-e
   MÁSODIK: a labdás kockáin számoljuk, hányban van legalább két
