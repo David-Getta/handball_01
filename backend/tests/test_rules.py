@@ -519,3 +519,53 @@ def test_shorthanded_attack_flags_paralysed_offense():
     a = sha["away"]
     assert a["sh_seconds"] == 0.0
     assert a["sh_per_min"] is None and a["verdict"] is None
+
+
+def test_powerplay_defense_flags_leaking_advantage():
+    """A vendég két perc emberelőnyben két gólt kap a hátrányban lévő
+    hazaitól, egyenlő létszámnál semmit → "szivárog"; kiállítás
+    nélkül nincs ítélet."""
+    from handball.pipeline.rules import powerplay_defense
+
+    frames = []
+    t = 0
+
+    def _roster(seconds, home_n, away_n):
+        nonlocal t, frames
+        frames += _roster_frames(t, seconds, home_n, away_n)
+        t += int(seconds * 25)
+
+    def _home_goal(home_n, away_n):
+        """Hazai gól: a labda a +x kapuvonalig, a létszám változatlan."""
+        nonlocal t, frames
+        for i in range(8):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(home_n)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(away_n)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(33.6 + i, 40.0), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    # Egyenlő létszám gól nélkül, majd hazai emberhátrány, amelyben a
+    # HAZAI (hátrányban lévő) csapat két gólt lő — ezt a vendég
+    # emberelőnyös védekezése kapja.
+    _roster(200, 6, 6)
+    _roster(40, 5, 6)
+    _home_goal(5, 6)
+    _roster(40, 5, 6)
+    _home_goal(5, 6)
+    _roster(45, 5, 6)
+    _roster(60, 6, 6)
+
+    ppd = powerplay_defense(Match(_meta(), frames))
+    a = ppd["away"]
+    assert a["pp_seconds"] >= 90.0 and a["pp_conceded"] == 2
+    assert a["eq_conceded"] == 0 and a["eq_per_min"] == 0.0
+    assert a["pp_per_min"] > 0.2 and a["verdict"] == "szivárog"
+
+    # A hazai nem volt emberelőnyben → nincs ütem és nincs ítélet.
+    h = ppd["home"]
+    assert h["pp_seconds"] == 0.0
+    assert h["pp_per_min"] is None and h["verdict"] is None

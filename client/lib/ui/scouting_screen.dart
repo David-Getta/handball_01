@@ -1137,6 +1137,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Emberelőny-védekezés: az emberelőnyben kapott gól/perc ütem az
+  // egyenlő létszámúhoz képest (90+ mp előnyben, 0.2 gól/perc
+  // eltérésnél; a backend-kulccsal azonos küszöbök).
+  String? _powerplayDefense(Map<String, dynamic> r) {
+    final ppS = ((r["ppd_seconds"] as num?) ?? 0).toDouble();
+    final ppC = ((r["ppd_conceded"] as num?) ?? 0).toInt();
+    final eqS = ((r["ppd_eq_seconds"] as num?) ?? 0).toDouble();
+    final eqC = ((r["ppd_eq_conceded"] as num?) ?? 0).toInt();
+    if (ppS < 90.0 || eqS <= 0) return null;
+    final pp = 60.0 * ppC / ppS;
+    final eq = 60.0 * eqC / eqS;
+    if (pp - eq >= 0.2) {
+      return "emberelőnyben is szivárognak: ${pp.toStringAsFixed(2)} "
+          "kapott gól/perc (egyenlő létszámnál "
+          "${eq.toStringAsFixed(2)}) · hátrányban is vállald a kontrát";
+    }
+    if (eq - pp >= 0.2) {
+      return "emberelőnyben fegyelmezettek "
+          "(${pp.toStringAsFixed(2)} kapott gól/perc) · "
+          "hátrányban a labdatartás a reális cél";
+    }
+    return null;
+  }
+
   // Kapus szabad lövés ellen: a szabad vs fedezett lövések elleni
   // védés-arány (sávonként 5+ lövésnél, 15+ százalékpont eltérésnél;
   // a backend-kulccsal azonos küszöbök).
@@ -2483,6 +2507,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kettőzés", _doubleTeams(r)!],
       if (_gkFreeShotSaves(r) != null)
         ["Kapus szabad lövés ellen", _gkFreeShotSaves(r)!],
+      if (_powerplayDefense(r) != null)
+        ["Emberelőny-védekezés", _powerplayDefense(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

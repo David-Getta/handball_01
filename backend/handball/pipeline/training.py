@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 109) Emberelőny-védekezés: ha emberelőnyben is kapunk gólt, a
+    # befejezés utáni visszarendeződés a téma.
+    try:
+        from .rules import PPDEF_MIN_S, powerplay_defense
+        ppd109 = powerplay_defense(match, config)
+        for side in ("home", "away"):
+            rec109 = ppd109[side]
+            if rec109["verdict"] != "szivárog" \
+                    or rec109["pp_seconds"] < PPDEF_MIN_S \
+                    or rec109["pp_per_min"] is None:
+                continue
+            add(side, "védekezés", "Emberelőny-védekezés",
+                f"emberelőnyben is szivárgunk: {rec109['pp_conceded']} "
+                f"kapott gól {rec109['pp_seconds'] / 60:.1f} perc "
+                f"emberelőny alatt ({rec109['pp_per_min']:.2f} "
+                f"gól/perc, egyenlő létszámnál "
+                f"{rec109['eq_per_min']:.2f}) — a kiállítás nálunk "
+                "nem büntetés, hanem kockázat",
+                "emberelőny-védekezés: 6-5 elleni támadás úgy, hogy a "
+                "befejezés után azonnal két ember hazasprintel, "
+                "kijelölt biztosító a lövés pillanatában, és "
+                "emberelőny-figura lövés-tiltással a szélső helyéről "
+                "— előnyben nem kockázatos lövés kell, hanem gól")
+    except Exception:
+        pass
+
     # 108) Kapus szabad lövés ellen: ha a kapusunk csak a fal mögött
     # véd, a szabad lövés elleni kapusmunka a téma.
     try:

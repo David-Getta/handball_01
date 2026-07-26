@@ -566,6 +566,13 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Emberelőny-védekezés: emberelőnyben töltött idő és az alatta
+    # kapott gólok + az egyenlő létszámú viszonyítás — darabszámok és
+    # összegek, meccsek közt pontosan összegződnek (ütem = gól / perc).
+    ppd_seconds: float = 0.0
+    ppd_conceded: int = 0
+    ppd_eq_seconds: float = 0.0
+    ppd_eq_conceded: int = 0
     # Kapus szabad lövés ellen: a szabad, illetve fedezett lövésre
     # kapott kapura tartó lövések és a védések száma — darabszámok,
     # meccsek közt összegződnek (védés-arány sávonként külön).
@@ -1541,6 +1548,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Emberelőny-védekezés: emberelőnyben is szivárognak-e.
+    if rep.ppd_seconds >= 90.0 and rep.ppd_eq_seconds > 0:
+        _ppd = 60.0 * rep.ppd_conceded / rep.ppd_seconds
+        _ppd_eq = 60.0 * rep.ppd_eq_conceded / rep.ppd_eq_seconds
+        if _ppd - _ppd_eq >= 0.2:
+            keys.append(
+                f"Emberelőnyben is szivárognak ({_ppd:.2f} kapott "
+                f"gól/perc, egyenlő létszámnál {_ppd_eq:.2f}) — ha "
+                "kiállítást kaptok, ne csak túléljetek: hátrányban is "
+                "vállaljátok a lerohanást, a befejezésük után azonnal "
+                "induljon a kontra.")
+        elif _ppd_eq - _ppd >= 0.2:
+            keys.append(
+                f"Emberelőnyben fegyelmezetten védekeznek ({_ppd:.2f} "
+                f"kapott gól/perc, egyenlő létszámnál {_ppd_eq:.2f}) — "
+                "hátrányban ellenük a labdatartás a reális cél: "
+                "húzzátok ki a két percet eladás nélkül.")
 
     # Kapus szabad lövés ellen: a fal nélkül is véd-e a kapusuk.
     if rep.gkf_free_shots >= 5 and rep.gkf_cov_shots >= 5:
@@ -3336,6 +3361,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .rules import powerplay_defense
+        ppdrec = powerplay_defense(match, config)[team.value]
+        rep.ppd_seconds = ppdrec["pp_seconds"]
+        rep.ppd_conceded = ppdrec["pp_conceded"]
+        rep.ppd_eq_seconds = ppdrec["eq_seconds"]
+        rep.ppd_eq_conceded = ppdrec["eq_conceded"]
         from .goalkeeper import gk_free_shot_saves
         gkfrec = gk_free_shot_saves(match, config)[team.value]
         rep.gkf_free_shots = gkfrec["free_shots"]
@@ -4661,6 +4692,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 88) Az ő szivárgó emberelőny-védekezésük × a ti lerohanásotok:
+    # hátrányban is futni kell ellenük.
+    if (opp.ppd_seconds >= 90.0 and opp.ppd_eq_seconds > 0
+            and (60.0 * opp.ppd_conceded / opp.ppd_seconds)
+            - (60.0 * opp.ppd_eq_conceded / opp.ppd_eq_seconds) >= 0.2
+            and own.fast_break_pct >= 10.0):
+        plan.append(
+            f"Emberelőnyben is szivárognak "
+            f"({60.0 * opp.ppd_conceded / opp.ppd_seconds:.2f} kapott "
+            f"gól/perc, egyenlő létszámnál "
+            f"{60.0 * opp.ppd_eq_conceded / opp.ppd_eq_seconds:.2f}), "
+            f"ti pedig sokat indultok ({own.fast_break_pct:.0f}% gyors "
+            "indítás) — ha kiállítást kaptok, ne csak túléljetek: a "
+            "befejezésük után azonnal induljon a kontra, hátrányban is.")
+
     # 87) Az ő falfüggő kapusuk × a ti elzárásos játékotok: az
     # elzárásból jövő tiszta átlövés az ellenszer.
     if (opp.gkf_free_shots >= 5 and opp.gkf_cov_shots >= 5
@@ -5590,6 +5636,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        ppd_seconds=round(sum(r.ppd_seconds for r in reports), 1),
+        ppd_conceded=sum(r.ppd_conceded for r in reports),
+        ppd_eq_seconds=round(sum(r.ppd_eq_seconds for r in reports), 1),
+        ppd_eq_conceded=sum(r.ppd_eq_conceded for r in reports),
         gkf_free_shots=sum(r.gkf_free_shots for r in reports),
         gkf_free_saves=sum(r.gkf_free_saves for r in reports),
         gkf_cov_shots=sum(r.gkf_cov_shots for r in reports),

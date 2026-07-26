@@ -684,6 +684,28 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Emberelőny-védekezés: emberelőnyben is kaptak-e gólt.
+    try:
+        from .rules import powerplay_defense
+        ppd = powerplay_defense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pd = ppd[side]
+            if rec_pd["verdict"] is None:
+                continue
+            if rec_pd["verdict"] == "szivárog":
+                body += (f" A(z) {name} emberelőnyben is szivárgott: "
+                         f"{rec_pd['pp_conceded']} kapott gól "
+                         f"{rec_pd['pp_seconds'] / 60:.1f} perc alatt "
+                         f"({rec_pd['pp_per_min']:.2f} gól/perc, "
+                         f"egyenlő létszámnál "
+                         f"{rec_pd['eq_per_min']:.2f}).")
+            else:
+                body += (f" A(z) {name} emberelőnyben fegyelmezetten "
+                         f"védekezett ({rec_pd['pp_per_min']:.2f} "
+                         f"kapott gól/perc, egyenlő létszámnál "
+                         f"{rec_pd['eq_per_min']:.2f}).")
+    except Exception:
+        pass
     # Kapus szabad lövés ellen: a fal nélkül is védett-e.
     try:
         from .goalkeeper import gk_free_shot_saves

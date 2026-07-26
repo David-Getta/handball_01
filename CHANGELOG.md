@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Emberelőny-védekezés**: emberelőnyben is kapnak-e gólt — az
+  emberelőny-hatékonyság azt méri, mit TÁMADNAK a kiállítás alatt,
+  ez azt, mit VÉDEKEZNEK közben: egy emberrel többen is kaphatnak
+  lerohanás-gólt, ha a befejezéseik után nem rendeződnek vissza. A
+  perces kapott gól-ütemet hasonlítjuk az egyenlő létszámúhoz (90+
+  mp előnyből, 0.2 gól/perc eltérésnél). Aki előnyben is szivárog,
+  annál a kiállítás nem büntetés: hátrányban is vállalni kell a
+  lerohanást ellene; aki fegyelmezett, azzal szemben hátrányban a
+  labdatartás a reális cél. Saját olvasatban a befejezés utáni
+  visszarendeződés az edzés-téma. Egy réteg, sok felület:
+  `powerplay_defense` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kétirányú kulcs + csempe), 88.
+  meccsterv-szabály (az ő szivárgó emberelőny-védekezésük × a ti
+  lerohanásotok), 109. edzés-szabály (6-5 elleni támadás hazasprint-
+  szabállyal, kijelölt biztosító a lövés pillanatában).
 - **Kapus szabad lövés ellen**: a fal segítsége nélkül is véd-e a
   kapus — a védés-sávok a TÁVOLSÁG szerint bontanak, ez a
   FEDEZETTSÉG szerint: a kapura tartó lövéseket aszerint válogatjuk

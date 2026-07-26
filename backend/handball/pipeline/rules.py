@@ -667,3 +667,88 @@ def shorthanded_attack(match: Match,
                 r["verdict"] = "veszélyes"
         out[side] = r
     return out
+
+
+# Emberelőny-védekezés: ennyi emberelőnyben töltött másodperctől
+# ítélünk, és ennyi kapott gól/perc eltérés a "szivárog" /
+# "fegyelmezett" küszöb.
+PPDEF_MIN_S = 90.0
+PPDEF_RISE_PER_MIN = 0.2
+
+
+def powerplay_defense(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Emberelőny-védekezés: emberelőnyben is kapnak-e gólt.
+
+    Az emberelőny-hatékonyság (powerplay_efficiency) azt méri, mit
+    TÁMADNAK a kiállítás alatt — ez azt, mit VÉDEKEZNEK közben:
+    egy emberrel többen is kaphatnak lerohanás-gólt, ha a
+    befejezéseik után nem rendeződnek vissza. A perces kapott
+    gól-ütemet hasonlítja az egyenlő létszámúhoz. Aki előnyben is
+    szivárog, annál a kiállítás nem büntetés: hátrányban is vállalni
+    kell a lerohanást ellene — aki fegyelmezett, azzal szemben
+    hátrányban a labdatartás a reális cél.
+
+    Visszatérés csapatonként (az ELŐNYBEN lévő oldal): {"pp_seconds",
+    "pp_conceded", "pp_per_min", "eq_seconds", "eq_conceded",
+    "eq_per_min", "gap_per_min", "verdict"} — az ütemek és a verdict
+    None, ha kevés (PPDEF_MIN_S alatti) az emberelőnyben töltött idő;
+    a verdict "szivárog" / "fegyelmezett" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    if not match.frames:
+        return {s: {"pp_seconds": 0.0, "pp_conceded": 0,
+                    "pp_per_min": None, "eq_seconds": 0.0,
+                    "eq_conceded": 0, "eq_per_min": None,
+                    "gap_per_min": None, "verdict": None}
+                for s in ("home", "away")}
+    windows = detect_powerplay(match)
+    total_s = (match.frames[-1].t - match.frames[0].t) / fps
+    eq_seconds = max(0.0, total_s - sum(w["duration_s"] for w in windows))
+
+    def _down_at(t: int) -> Optional[str]:
+        for w in windows:
+            if w["start_frame"] <= t <= w["end_frame"]:
+                return w["team_down"]
+        return None
+
+    counts = {s: {"pp_seconds": 0.0, "pp_conceded": 0, "eq_conceded": 0}
+              for s in ("home", "away")}
+    for w in windows:
+        up = "away" if w["team_down"] == "home" else "home"
+        counts[up]["pp_seconds"] += w["duration_s"]
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        scorer = e.team.value
+        conceder = "away" if scorer == "home" else "home"
+        down = _down_at(e.t)
+        if down == scorer:
+            # A hátrányban lévő csapat szerzett gólt: ezt az
+            # EMBERELŐNYBEN lévő védekezés kapta.
+            counts[conceder]["pp_conceded"] += 1
+        elif down is None:
+            counts[conceder]["eq_conceded"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {"pp_seconds": round(rec["pp_seconds"], 1),
+             "pp_conceded": rec["pp_conceded"], "pp_per_min": None,
+             "eq_seconds": round(eq_seconds, 1),
+             "eq_conceded": rec["eq_conceded"], "eq_per_min": None,
+             "gap_per_min": None, "verdict": None}
+        if rec["pp_seconds"] >= PPDEF_MIN_S and eq_seconds > 0:
+            pp_pm = 60.0 * rec["pp_conceded"] / rec["pp_seconds"]
+            eq_pm = 60.0 * rec["eq_conceded"] / eq_seconds
+            r["pp_per_min"] = round(pp_pm, 2)
+            r["eq_per_min"] = round(eq_pm, 2)
+            r["gap_per_min"] = round(pp_pm - eq_pm, 2)
+            if pp_pm - eq_pm >= PPDEF_RISE_PER_MIN:
+                r["verdict"] = "szivárog"
+            elif eq_pm - pp_pm >= PPDEF_RISE_PER_MIN:
+                r["verdict"] = "fegyelmezett"
+        out[side] = r
+    return out
