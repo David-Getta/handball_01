@@ -566,6 +566,13 @@ class ScoutingReport:
     # Hajrá-lövésválasztás: a hajrá előtti és a hajrá-lövések száma +
     # xG-összege — darabszámok és összegek, meccsek közt pontosan
     # összegződnek (átlag = xg / shots fázisonként).
+    # Fölény-befejezés: a létszámfölényből, illetve a felállt fal
+    # ellen leadott lövések és gólok száma — darabszámok, meccsek közt
+    # összegződnek (gólarány sávonként külön).
+    ovl_shots: int = 0
+    ovl_goals: int = 0
+    ovl_set_shots: int = 0
+    ovl_set_goals: int = 0
     # Ellen-press: az eladásaik száma + a 6 mp-en belül visszaszerzett
     # labdák száma — darabszámok, meccsek közt összegződnek (arány =
     # regained / turnovers).
@@ -1500,6 +1507,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"a {max(0.0, _ar_avg - 5.0):.0f}. másodperc körül "
                 "időzített kettőzés/letámadás rendre a "
                 "lövés-előkészítésüket töri meg.")
+
+    # Fölény-befejezés: a fal ellen is veszélyesek-e.
+    if rep.ovl_shots >= 5 and rep.ovl_set_shots >= 5:
+        _ovl = 100.0 * rep.ovl_goals / rep.ovl_shots
+        _set = 100.0 * rep.ovl_set_goals / rep.ovl_set_shots
+        if _ovl - _set >= 15.0:
+            keys.append(
+                f"Létszámfölényben veszélyesek ({_ovl:.0f}% gólarány), "
+                f"felállt fal ellen viszont csak {_set:.0f}% — "
+                "kényszerítsétek őket felállt támadásba: minden "
+                "befejezés után azonnali visszarendeződés-sprint, a "
+                "szélsők is fussanak haza.")
+        elif _set - _ovl >= 15.0:
+            keys.append(
+                f"A felállt falat is törik ({_set:.0f}% gólarány "
+                f"ellene, fölényben {_ovl:.0f}%) — ellenük a puszta "
+                "hazaérés kevés: kell a nyomás a lövő-távolságon "
+                "kívül és a szoros emberfogás a fő befejezőn.")
 
     # Ellen-press: rátámadnak-e az eladott labdára.
     if rep.cpr_turnovers >= 8:
@@ -3191,6 +3216,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.prk_long_to = prkrec["long_to"]
         rep.prk_short_tries = prkrec["short_tries"]
         rep.prk_short_to = prkrec["short_to"]
+        from .attack_types import overload_finishing
+        ovlrec = overload_finishing(match, config)[team.value]
+        rep.ovl_shots = ovlrec["overload_shots"]
+        rep.ovl_goals = ovlrec["overload_goals"]
+        rep.ovl_set_shots = ovlrec["set_shots"]
+        rep.ovl_set_goals = ovlrec["set_goals"]
         from .defense import counter_press
         cprrec = counter_press(match, config)[team.value]
         rep.cpr_turnovers = cprrec["turnovers"]
@@ -4480,6 +4511,24 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 82) Az ő fölény-függésük × a ti gyors visszarendeződésetek: ha
+    # hazaértek, elfogy a fegyverük.
+    if (opp.ovl_shots >= 5 and opp.ovl_set_shots >= 5
+            and (100.0 * opp.ovl_goals / opp.ovl_shots)
+            - (100.0 * opp.ovl_set_goals / opp.ovl_set_shots) >= 15.0
+            and own.rec_transitions >= 4
+            and own.rec_sum_s / own.rec_transitions <= 4.0):
+        plan.append(
+            f"Létszámfölényben veszélyesek "
+            f"({100.0 * opp.ovl_goals / opp.ovl_shots:.0f}% gólarány), "
+            f"felállt fal ellen csak "
+            f"{100.0 * opp.ovl_set_goals / opp.ovl_set_shots:.0f}%, ti "
+            f"pedig gyorsan hazaértek "
+            f"({own.rec_sum_s / own.rec_transitions:.1f} mp átlagos "
+            "visszarendeződés) — ez a meccs kulcsa: minden befejezés "
+            "után azonnal induljon a visszarendeződés-sprint, és "
+            "elfogy a fegyverük.")
+
     # 81) Az ő beletörődő ellen-pressük × a ti lerohanásotok: minden
     # labdaszerzés ingyen kontra ellenük.
     if (opp.cpr_turnovers >= 8
@@ -5306,6 +5355,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prk_long_to=sum(r.prk_long_to for r in reports),
         prk_short_tries=sum(r.prk_short_tries for r in reports),
         prk_short_to=sum(r.prk_short_to for r in reports),
+        ovl_shots=sum(r.ovl_shots for r in reports),
+        ovl_goals=sum(r.ovl_goals for r in reports),
+        ovl_set_shots=sum(r.ovl_set_shots for r in reports),
+        ovl_set_goals=sum(r.ovl_set_goals for r in reports),
         cpr_turnovers=sum(r.cpr_turnovers for r in reports),
         cpr_regained=sum(r.cpr_regained for r in reports),
         csq_early_shots=sum(r.csq_early_shots for r in reports),

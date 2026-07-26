@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Fölény-befejezés**: létszámfölényben vagy felállt fal ellen
+  szereznek-e gólt — minden lövésnél megszámoljuk, hány támadó és
+  hány védő van a támadott térfélen, és ha több a támadó,
+  "fölényben" leadott lövésnek vesszük (sávonként 5+ lövésből, 15+
+  százalékpont gólarány-eltérésnél ítélünk). Aki csak fölényben
+  eredményes, azt vissza kell kényszeríteni a felállt támadásba: a
+  visszarendeződés-sprint ér ellene a legtöbbet; aki a falat is töri,
+  ellene a puszta hazaérés kevés — nyomás és szoros emberfogás kell.
+  Saját olvasatban a felállt támadás figura-készlete az edzés-téma.
+  Egy réteg, sok felület: `overload_finishing` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kétirányú
+  kulcs + csempe), 82. meccsterv-szabály (az ő fölény-függésük × a ti
+  gyors visszarendeződésetek), 103. edzés-szabály (6-0 elleni
+  figura-sor, 1v1-áttörés, lerohanás-tiltásos felállt támadás).
 - **Ellen-press**: rátámadnak-e az eladott labdára — az
   eladás-büntetés azt méri, mennyibe KERÜL az eladás, a
   visszarendeződés-idő azt, milyen gyorsan érnek haza; ez a kettő

@@ -1152,3 +1152,63 @@ def test_pass_risk_flags_lost_long_balls():
     # Kevés kísérlet: nincs ítélet.
     few = pass_risk(Match(_meta(), frames[:100]))
     assert few["home"]["verdict"] is None
+
+
+def test_overload_finishing_separates_overload_and_set_defense():
+    """A hazai létszámfölényben mind gólt lő, felállt fal ellen alig —
+    "fölény-függő"; a lövés nélküli vendégnél nincs ítélet."""
+    from handball.pipeline.attack_types import overload_finishing
+
+    frames = []
+    t = 0
+
+    def _shot(overload, goal):
+        """Hazai lövés a +x kapura; fölényben 3 támadó áll 1 védővel
+        szemben a támadott térfélen, felállt fal ellen 2 a 4-gyel."""
+        nonlocal t, frames
+        players = [_pl(1, Team.HOME, 30.0, 10.0)]
+        if overload:
+            players += [_pl(2, Team.HOME, 32.0, 6.0),
+                        _pl(3, Team.HOME, 34.0, 14.0),
+                        _pl(21, Team.AWAY, 36.0, 10.0)]
+        else:
+            players += [_pl(2, Team.HOME, 32.0, 6.0),
+                        _pl(21, Team.AWAY, 34.0, 8.0),
+                        _pl(22, Team.AWAY, 35.0, 10.0),
+                        _pl(23, Team.AWAY, 36.0, 12.0),
+                        _pl(24, Team.AWAY, 37.0, 14.0)]
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # Gólnál a kapu közepére, kihagyásnál a kapufa mellé megy.
+        y_end = 10.0 if goal else 3.0
+        for i in range(14):
+            bx = min(30.0 + 0.8 * (i + 1), 40.0)
+            by = 10.0 + (y_end - 10.0) * (i + 1) / 14.0
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(6):
+        _shot(overload=True, goal=True)
+    for k in range(6):
+        _shot(overload=False, goal=(k == 0))
+
+    ovl = overload_finishing(Match(_meta(), frames))
+    h = ovl["home"]
+    assert h["overload_shots"] == 6 and h["overload_goals"] == 6
+    assert h["set_shots"] == 6 and h["set_goals"] == 1
+    assert h["overload_pct"] > h["set_pct"]
+    assert h["verdict"] == "fölény-függő"
+
+    # A vendégnek nincs lövése → nincs arány és nincs ítélet.
+    a = ovl["away"]
+    assert a["overload_shots"] == 0 and a["set_shots"] == 0
+    assert a["gap_pp"] is None and a["verdict"] is None

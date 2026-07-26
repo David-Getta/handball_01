@@ -684,6 +684,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                              f"{rec_cs['clutch_avg']:.2f}-re nőtt).")
     except Exception:
         pass
+    # Fölény-befejezés: fölényben vagy felállt fal ellen szereztek-e gólt.
+    try:
+        from .attack_types import overload_finishing
+        ovl = overload_finishing(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ov = ovl[side]
+            if rec_ov["verdict"] is None:
+                continue
+            if rec_ov["verdict"] == "fölény-függő":
+                body += (f" A(z) {name} létszámfölényben volt igazán "
+                         f"eredményes ({rec_ov['overload_pct']:.0f}% "
+                         f"gólarány, felállt fal ellen csak "
+                         f"{rec_ov['set_pct']:.0f}%).")
+            else:
+                body += (f" A(z) {name} a felállt falat is törte "
+                         f"({rec_ov['set_pct']:.0f}% gólarány, "
+                         f"fölényben {rec_ov['overload_pct']:.0f}%).")
+    except Exception:
+        pass
     # Ellen-press: az eladás után visszaszerezték-e azonnal a labdát.
     try:
         from .defense import counter_press

@@ -1684,3 +1684,78 @@ def pass_risk(match: Match,
                 r["verdict"] = "biztos kezű"
         out[side] = r
     return out
+
+
+# Fölény-befejezés: ennyi lövés kell sávonként az ítélethez, és ennyi
+# százalékpont gólarány-eltérés a "fölény-függő" / "fal-törő" küszöb.
+OVERLOAD_MIN_SHOTS = 5
+OVERLOAD_GAP_PP = 15.0
+
+
+def overload_finishing(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Fölény-befejezés: fölényben vagy felállt fal ellen szereznek gólt.
+
+    Az átmenet-támadás (transition_offense) azt méri, MENNYI gyors gól
+    születik a szerzésekből — ez azt, hogy a gólok LÉTSZÁMFÖLÉNYBŐL
+    jönnek-e: minden lövésnél megszámolja, hány támadó és hány védő van
+    a támadott térfélen. Ha több a támadó, a lövés "fölényben"
+    született, egyébként felállt fal ellen. Aki csak fölényben
+    eredményes, azt vissza kell kényszeríteni a felállt támadásba: a
+    visszarendeződés-sprint ér ellene a legtöbbet. Aki a falat is
+    töri, ellen a puszta hazaérés kevés — nyomás és szoros emberfogás
+    kell.
+
+    Visszatérés csapatonként: {"overload_shots", "overload_goals",
+    "set_shots", "set_goals", "overload_pct", "set_pct", "gap_pp",
+    "verdict"} — az arányok és a verdict None, ha valamelyik sávban
+    kevés (OVERLOAD_MIN_SHOTS alatti) a lövés; a verdict
+    "fölény-függő" / "fal-törő" / None.
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_LENGTH_M
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    frames = {f.t: f for f in match.frames}
+    counts = {s: {"overload_shots": 0, "overload_goals": 0,
+                  "set_shots": 0, "set_goals": 0}
+              for s in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        f = frames.get(sh["t"])
+        if f is None:
+            continue
+        side = sh["team"]
+        team = Team.HOME if side == "home" else Team.AWAY
+        goal_x = config.attacks_toward_x(team)
+        # A támadott térfél: a támadott kapuhoz közelebbi fél pálya.
+        attackers = sum(1 for p in f.players
+                        if p.team == team and abs(p.x - goal_x) < half)
+        defenders = sum(1 for p in f.players
+                        if p.team is not None and p.team != team
+                        and abs(p.x - goal_x) < half)
+        if attackers == 0 or defenders == 0:
+            continue  # hiányos követés: nem ítélünk létszámot
+        key = "overload" if attackers > defenders else "set"
+        counts[side][key + "_shots"] += 1
+        if sh["outcome"] == "goal":
+            counts[side][key + "_goals"] += 1
+    out = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "overload_pct": None, "set_pct": None,
+             "gap_pp": None, "verdict": None}
+        if rec["overload_shots"] >= OVERLOAD_MIN_SHOTS \
+                and rec["set_shots"] >= OVERLOAD_MIN_SHOTS:
+            ovl = 100.0 * rec["overload_goals"] / rec["overload_shots"]
+            st = 100.0 * rec["set_goals"] / rec["set_shots"]
+            r["overload_pct"] = round(ovl, 1)
+            r["set_pct"] = round(st, 1)
+            r["gap_pp"] = round(ovl - st, 1)
+            if ovl - st >= OVERLOAD_GAP_PP:
+                r["verdict"] = "fölény-függő"
+            elif st - ovl >= OVERLOAD_GAP_PP:
+                r["verdict"] = "fal-törő"
+        out[side] = r
+    return out

@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 103) Fölény-befejezés: ha csak létszámfölényben vagyunk
+    # eredményesek, a felállt támadás befejezése a téma.
+    try:
+        from .attack_types import (OVERLOAD_GAP_PP, OVERLOAD_MIN_SHOTS,
+                                   overload_finishing)
+        ovl103 = overload_finishing(match, config)
+        for side in ("home", "away"):
+            rec103 = ovl103[side]
+            if rec103["verdict"] != "fölény-függő" \
+                    or rec103["set_shots"] < OVERLOAD_MIN_SHOTS \
+                    or rec103["gap_pp"] is None \
+                    or rec103["gap_pp"] < OVERLOAD_GAP_PP:
+                continue
+            add(side, "támadás", "Felállt támadás",
+                f"csak létszámfölényben vagyunk eredményesek: "
+                f"fölényben {rec103['overload_pct']:.0f}%, felállt fal "
+                f"ellen {rec103['set_pct']:.0f}% a gólarányunk "
+                f"({rec103['set_goals']}/{rec103['set_shots']}) — ha "
+                "az ellenfél hazaér, elfogy a fegyverünk",
+                "felállt támadás: 6-0 elleni figura-sor betanítása "
+                "(keresztezés, beállós bejátszás, elzárás utáni "
+                "lövés), 1v1-áttörés gyakorlása lövő-távolságról, és "
+                "6-6 felállt támadás lerohanás-tiltással (csak "
+                "kidolgozott helyzetből lehet befejezni)")
+    except Exception:
+        pass
+
     # 102) Ellen-press: ha az eladott labdára nem támadunk rá, a
     # szerzés utáni első három másodperc a téma.
     try:

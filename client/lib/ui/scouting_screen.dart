@@ -1137,6 +1137,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "emberfogás/kettőzés";
   }
 
+  // Fölény-befejezés: a létszámfölényből vs a felállt fal ellen
+  // leadott lövések gólaránya (sávonként 5+ lövésnél, 15+
+  // százalékpont eltérésnél; a backend-kulccsal azonos küszöbök).
+  String? _overloadFinishing(Map<String, dynamic> r) {
+    final os = ((r["ovl_shots"] as num?) ?? 0).toInt();
+    final og = ((r["ovl_goals"] as num?) ?? 0).toInt();
+    final ss = ((r["ovl_set_shots"] as num?) ?? 0).toInt();
+    final sg = ((r["ovl_set_goals"] as num?) ?? 0).toInt();
+    if (os < 5 || ss < 5) return null;
+    final ovl = 100.0 * og / os;
+    final set = 100.0 * sg / ss;
+    if (ovl - set >= 15.0) {
+      return "fölény-függők: ${ovl.toStringAsFixed(0)}% fölényben, "
+          "${set.toStringAsFixed(0)}% felállt fal ellen · "
+          "kényszerítsd őket felállt támadásba";
+    }
+    if (set - ovl >= 15.0) {
+      return "a falat is törik: ${set.toStringAsFixed(0)}% felállt fal "
+          "ellen (fölényben ${ovl.toStringAsFixed(0)}%) · "
+          "a hazaérés önmagában kevés";
+    }
+    return null;
+  }
+
   // Ellen-press: az eladások hány százaléka után szerzik vissza a
   // labdát 6 mp-en belül (8+ eladásnál, 35% felett / 15% alatt; a
   // backend-kulccsal azonos küszöbök).
@@ -2340,6 +2364,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hajrá-lövésválasztás", _clutchShotQuality(r)!],
       if (_counterPress(r) != null)
         ["Ellen-press", _counterPress(r)!],
+      if (_overloadFinishing(r) != null)
+        ["Fölény-befejezés", _overloadFinishing(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
