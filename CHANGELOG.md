@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Lövőerő-esés**: marad-e erő a karban a második félidőre. A
+  befejezés-esés azt mutatja, mennyi megy be, a lövő-erő azt, ki lő
+  keményen — ez a kettő metszete időben: a mért lövés-sebességek
+  félidőnkénti átlaga (félidőnként 4+ mért lövéstől, 6 km/h eltérés a
+  küszöb). Ha az átlagsebesség érdemben esik, a hajrában a távoli lövés
+  már nem fegyver (kidolgozott helyzet kell, a fal kintebb jöhet); ha
+  tartja vagy nő, a bombázójuk a hajrában is élő veszély — a kapusnak
+  korábban kell indulnia. Egy réteg, sok felület: `shot_power_fade`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (edzői kulcs + csempe; félidőnként a lövésszám és a
+  sebesség-összeg tárolva, hogy a félidő-átlag meccsek közt pontosan
+  visszaszámolható legyen), 97. meccsterv-szabály (az ő
+  lövőerő-esésük × a ti mély falatok), 118. edzés-szabály (fáradt
+  befejezés: lövőgyakorlat magas pulzuson, törzs- és vállerő).
 - **Labdatartás-idő**: KI meddig tartja magánál a labdát. A passz-tempó
   és a támadás-ritmus csapatszinten mondja meg, pörög-e a játék — ez a
   névre szóló olvasata: minden labdás szakasz hosszát a birtokoshoz

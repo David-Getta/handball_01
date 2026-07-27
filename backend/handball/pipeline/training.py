@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 118) Lövőerő-esés: ha a 2. félidőre esik a lövéserőnk, a fáradt
+    # állapotban gyakorolt befejezés a téma.
+    try:
+        from .event_detection import (POWER_FADE_DROP_KMH,
+                                      shot_power_fade)
+        spf118 = shot_power_fade(match, config)
+        for side in ("home", "away"):
+            rec118 = spf118[side]
+            if rec118["drop_kmh"] is None \
+                    or rec118["drop_kmh"] < POWER_FADE_DROP_KMH:
+                continue
+            add(side, "erőnlét", "Lövőerő a hajrában",
+                f"a 2. félidőre {rec118['drop_kmh']:.0f} km/h-t "
+                f"vesztett a lövésünk ({rec118['fh_avg_kmh']:.0f} → "
+                f"{rec118['sh_avg_kmh']:.0f} km/h, a küszöb "
+                f"{POWER_FADE_DROP_KMH:.0f}) — a hajrában az átlövés "
+                "már nem fegyver",
+                "fáradt befejezés: minden edzés végén 10 perc "
+                "lövőgyakorlat magas pulzuson (sprint után azonnal "
+                "lövés), a törzs- és vállerő heti két külön körrel; a "
+                "hajrá-figurákban pedig a kidolgozott ziccer legyen a "
+                "cél, ne a távoli bomba")
+    except Exception:
+        pass
+
     # 117) Labdatartás-idő: ha valakinél érdemben megáll a labda, a
     # gyorsabb továbbítás a téma.
     try:

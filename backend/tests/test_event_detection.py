@@ -465,3 +465,60 @@ def test_shooter_power_names_the_cannon():
     # Egyetlen lövés: nincs elég minta → nincs megnevezett bombázó.
     few = shooter_power(Match(_meta(), frames[:48]))
     assert few["home"]["cannon"] is None
+
+
+def test_shot_power_fade_measures_second_half_drop():
+    """Az 1. félidőben ~144 km/h-s lövések, a 2.-ban ~72 km/h-sak →
+    érdemi lövőerő-esés; félidő-jel nélkül nincs ítélet."""
+    from handball.pipeline.event_detection import shot_power_fade
+
+    frames = []
+    t = 0
+
+    def _wall():
+        """Öt mért hazai játékos — hogy a félidő-felismerő aktívnak
+        lássa a játékot (a szünetben nincs mért játékos)."""
+        return [_pl(10 + j, Team.HOME, 20.0, 4.0 + 3.0 * j)
+                for j in range(5)]
+
+    def _shot(step):
+        """Hazai lövés a +x kapura: a labda `step` m/kocka tempóban
+        halad (25 fps → step * 90 km/h)."""
+        nonlocal t, frames
+        for i in range(8):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)] + _wall(),
+                ball=Ball(x=min(34.0 + step * i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(42):
+            frames.append(Frame(t=t, players=_wall(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _break():
+        """100 mp szünet: nincs mért játékos a pályán."""
+        nonlocal t, frames
+        for _ in range(2500):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    for _ in range(6):
+        _shot(1.6)        # 1. félidő: ~144 km/h
+    _break()
+    for _ in range(6):
+        _shot(0.8)        # 2. félidő: ~72 km/h
+
+    spf = shot_power_fade(Match(_meta(), frames))
+    h = spf["home"]
+    assert h["fh_shots"] >= 4 and h["sh_shots"] >= 4
+    assert h["fh_avg_kmh"] > h["sh_avg_kmh"]
+    assert h["drop_kmh"] >= 6.0
+    # A vendég nem lőtt → nincs félidő-átlag és nincs ítélet.
+    assert spf["away"]["drop_kmh"] is None
+
+    # Szünet nélküli felvétel: nincs félidő-jel → nincs ítélet.
+    no_break = [f for f in frames if f.players]
+    flat = shot_power_fade(Match(_meta(), no_break))
+    assert flat["home"]["drop_kmh"] is None

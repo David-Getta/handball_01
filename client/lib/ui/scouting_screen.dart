@@ -1199,6 +1199,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "befejezéseket (elzárás rá, az ő oldalán a beálló)";
   }
 
+  // Lövőerő-esés: marad-e erő a karjukban a 2. félidőre (félidőnként
+  // 4+ mért lövés, 6 km/h eltérés; a backend-kulccsal azonos
+  // küszöbök).
+  String? _shotPowerFade(Map<String, dynamic> r) {
+    final fhN = ((r["spf_fh_shots"] as num?) ?? 0).toInt();
+    final shN = ((r["spf_sh_shots"] as num?) ?? 0).toInt();
+    if (fhN < 4 || shN < 4) return null;
+    final fh = ((r["spf_fh_sum_kmh"] as num?) ?? 0).toDouble() / fhN;
+    final sh = ((r["spf_sh_sum_kmh"] as num?) ?? 0).toDouble() / shN;
+    if (fh - sh >= 6.0) {
+      return "a 2. félidőre esik a lövéserejük: "
+          "${fh.toStringAsFixed(0)} → ${sh.toStringAsFixed(0)} km/h · "
+          "a hajrában kintebb jöhet a fal";
+    }
+    if (sh - fh >= 6.0) {
+      return "a 2. félidőre erősödik a lövésük: "
+          "${fh.toStringAsFixed(0)} → ${sh.toStringAsFixed(0)} km/h · "
+          "a kapusnak korábban kell indulnia, a fal a szöget zárja";
+    }
+    return null;
+  }
+
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
   String? _holdTime(Map<String, dynamic> r) {
@@ -2753,6 +2775,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_formationSwitching(r) != null)
         ["Védekezés-váltás", _formationSwitching(r)!],
       if (_holdTime(r) != null) ["Labdatartás", _holdTime(r)!],
+      if (_shotPowerFade(r) != null)
+        ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

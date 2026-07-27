@@ -757,6 +757,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{htp[side]['avg_s']:.1f} mp).")
     except Exception:
         pass
+    # Lövőerő-esés: maradt-e erő a karban a második félidőre.
+    try:
+        from .event_detection import (POWER_FADE_DROP_KMH,
+                                      shot_power_fade)
+        spf = shot_power_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pf = spf[side]
+            if rec_pf["drop_kmh"] is None:
+                continue
+            if rec_pf["drop_kmh"] >= POWER_FADE_DROP_KMH:
+                body += (f" A(z) {name} lövéserejéből a 2. félidőre "
+                         f"{rec_pf['drop_kmh']:.0f} km/h-t vesztett "
+                         f"({rec_pf['fh_avg_kmh']:.0f} → "
+                         f"{rec_pf['sh_avg_kmh']:.0f} km/h).")
+            elif rec_pf["drop_kmh"] <= -POWER_FADE_DROP_KMH:
+                body += (f" A(z) {name} a 2. félidőre erősödött a "
+                         f"lövéseiben ({rec_pf['fh_avg_kmh']:.0f} → "
+                         f"{rec_pf['sh_avg_kmh']:.0f} km/h).")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power

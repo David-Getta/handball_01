@@ -589,6 +589,13 @@ class ScoutingReport:
     # átlagos tartás = frames / holds / fps).
     hold_players: list = field(default_factory=list)
     hold_fps: float = 25.0
+    # Lövőerő-esésük: félidőnként a mért lövések száma + a
+    # sebesség-összeg (km/h) — darabszámok és összegek, meccsek közt
+    # pontosan összegződnek (félidő-átlag = összeg / darab).
+    spf_fh_shots: int = 0
+    spf_fh_sum_kmh: float = 0.0
+    spf_sh_shots: int = 0
+    spf_sh_sum_kmh: float = 0.0
     fsw_labels: dict = field(default_factory=dict)
     fsw_attacks: int = 0
     fsw_pairs: int = 0
@@ -1617,6 +1624,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Lövőerő-esés: marad-e erő a karjukban a második félidőre.
+    if rep.spf_fh_shots >= 4 and rep.spf_sh_shots >= 4:
+        _spf_fh = rep.spf_fh_sum_kmh / rep.spf_fh_shots
+        _spf_sh = rep.spf_sh_sum_kmh / rep.spf_sh_shots
+        if _spf_fh - _spf_sh >= 6.0:
+            keys.append(
+                f"A 2. félidőre esik a lövéserejük "
+                f"({_spf_fh:.0f} → {_spf_sh:.0f} km/h) — a hajrában "
+                "nyugodtan kintebb védekezhettek: az átlövésük már "
+                "nem üt át, a ziccerig kell kényszeríteni őket.")
+        elif _spf_sh - _spf_fh >= 6.0:
+            keys.append(
+                f"A 2. félidőre erősödik a lövésük "
+                f"({_spf_fh:.0f} → {_spf_sh:.0f} km/h) — a hajrában "
+                "a kapusnak korábban kell indulnia, a falnak pedig "
+                "a szöget kell zárnia, nem vakon blokkolnia.")
 
     # Labdatartás-idő: kinél áll meg náluk a labda.
     _htp_rows = [p for p in (rep.hold_players or []) if p["holds"] >= 5]
@@ -3569,6 +3593,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .event_detection import shot_power_fade as _spf
+        spfrec = _spf(match, config)[team.value]
+        rep.spf_fh_shots = spfrec["fh_shots"]
+        rep.spf_sh_shots = spfrec["sh_shots"]
+        rep.spf_fh_sum_kmh = round(
+            (spfrec["fh_avg_kmh"] or 0.0) * spfrec["fh_shots"], 1)
+        rep.spf_sh_sum_kmh = round(
+            (spfrec["sh_avg_kmh"] or 0.0) * spfrec["sh_shots"], 1)
         from .decisions import hold_time_players as _htp
         _hfps = match.meta.fps if match.meta.fps > 0 else 25.0
         rep.hold_fps = _hfps
@@ -5062,6 +5094,22 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 97) Az ő lövőerő-esésük × a ti mély falatok: a hajrában kintebb
+    # lehet jönni.
+    if opp.spf_fh_shots >= 4 and opp.spf_sh_shots >= 4 \
+            and own.defline_frames >= 100:
+        _fh97 = opp.spf_fh_sum_kmh / opp.spf_fh_shots
+        _sh97 = opp.spf_sh_sum_kmh / opp.spf_sh_shots
+        _line97 = own.defline_sum_m / own.defline_frames
+        if _fh97 - _sh97 >= 6.0 and _line97 <= 6.5:
+            plan.append(
+                f"A 2. félidőre esik a lövéserejük ({_fh97:.0f} → "
+                f"{_sh97:.0f} km/h), ti pedig mélyen védekeztek (a "
+                f"falatok átlagosan {_line97:.1f} m-re áll a saját "
+                "kaputoktól) — a hajrában kintebb lehet jönni: a "
+                "fáradt átlövésük már nem üt át, a magasabb fal "
+                "viszont a ziccerig kényszeríti őket.")
+
     # 96) Az ő labdatartójuk × a ti elöl-szerzéseitek: nála van idő
     # odaérni.
     _htp96 = [p for p in (opp.hold_players or []) if p["holds"] >= 5]
@@ -6173,6 +6221,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        spf_fh_shots=sum(r.spf_fh_shots for r in reports),
+        spf_fh_sum_kmh=round(sum(r.spf_fh_sum_kmh for r in reports), 1),
+        spf_sh_shots=sum(r.spf_sh_shots for r in reports),
+        spf_sh_sum_kmh=round(sum(r.spf_sh_sum_kmh for r in reports), 1),
         hold_players=_merge_hold_players(reports),
         hold_fps=(reports[0].hold_fps if reports else 25.0),
         fsw_labels=_merge_fsw_labels(reports),

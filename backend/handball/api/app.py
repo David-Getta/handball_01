@@ -2873,6 +2873,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.event_detection import shot_power_fade
+            res["shot_power_fade"] = shot_power_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3455,6 +3460,9 @@ def create_app():
                 from ..pipeline.decisions import hold_time_players
                 _layer("hold_time_players",
                        lambda: hold_time_players(match))
+                from ..pipeline.event_detection import shot_power_fade
+                _layer("shot_power_fade",
+                       lambda: shot_power_fade(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
