@@ -600,6 +600,13 @@ class ScoutingReport:
     # "against"}] — az együtt töltött kockák és a rájuk eső gólok;
     # darabszámok, meccsek közt pontosan összegződnek (a percre
     # vetített mérleg ebből visszaszámolható).
+    # Időkérés-időzítésük: a felismert időkéréseik, az előttük álló
+    # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
+    # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
+    # sum_before / timeouts).
+    tot_timeouts: int = 0
+    tot_sum_before: int = 0
+    tot_late: int = 0
     pair_plus_minus: list = field(default_factory=list)
     pair_fps: float = 25.0
     sbl_waves: int = 0
@@ -1637,6 +1644,32 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Időkérés-időzítés: hol a küszöbük, és tartogatják-e a hajrára.
+    if rep.tot_timeouts >= 2:
+        _tot_avg = rep.tot_sum_before / rep.tot_timeouts
+        _tot_late = 100.0 * rep.tot_late / rep.tot_timeouts
+        if _tot_avg <= 1.5:
+            keys.append(
+                f"Korán fékeznek: átlag {_tot_avg:.1f} kapott gól "
+                f"után kérnek időt ({rep.tot_timeouts} időkérés) — a "
+                "sorozatot nem hagyják kifutni, ezért a gyors "
+                "gólváltásra kell játszani, nem egy nagy hullámra: "
+                "az időkérés utáni első támadásukra legyen kész terv.")
+        elif _tot_avg >= 2.5:
+            keys.append(
+                f"Hagyják elszaladni a sorozatot: átlag "
+                f"{_tot_avg:.1f} kapott gól után kérnek időt "
+                f"({rep.tot_timeouts} időkérés) — ha megindul a "
+                "hullám, van két-három támadásnyi ablak: azt kell "
+                "maximálisan kihasználni.")
+        if _tot_late >= 50.0:
+            keys.append(
+                f"A hajrára tartogatják az időkérést (az "
+                f"időkéréseik {_tot_late:.0f}%-a az utolsó 10 "
+                "percben) — a döntő szakaszban mindig rendezetten "
+                "állnak fel: a záró támadásaitokat előre le kell "
+                "beszélni, meglepetéssel nem lesz meg.")
 
     # Páros-mérleg: melyik kettősük megy a legjobban együtt.
     _prm_rows = [p for p in (rep.pair_plus_minus or [])
@@ -3644,6 +3677,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .stoppages import timeout_timing as _tot
+        totrec = _tot(match, config)[team.value]
+        rep.tot_timeouts = totrec["timeouts"]
+        rep.tot_sum_before = totrec["sum_before"]
+        rep.tot_late = totrec["late_timeouts"]
         from .stats import pair_plus_minus as _prm
         _pfps = match.meta.fps if match.meta.fps > 0 else 25.0
         rep.pair_fps = _pfps
@@ -5176,6 +5214,19 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 100) Az ő késői fékük × a ti gólsorozataitok: van két-három
+    # támadásnyi ablak, ha megindul a hullám.
+    if opp.tot_timeouts >= 2 and own.rn_made >= 2:
+        _avg100 = opp.tot_sum_before / opp.tot_timeouts
+        if _avg100 >= 2.5:
+            plan.append(
+                f"Későn fékeznek (átlag {_avg100:.1f} kapott gól után "
+                f"kérnek időt), ti pedig tudtok sorozatot vinni "
+                f"({own.rn_made} gólsorozatotok volt) — ha megindul a "
+                "hullám, van két-három támadásnyi ablakotok az "
+                "időkérésükig: ott kell a legnagyobbat ütni, gyors "
+                "középkezdéssel és azonnali befejezéssel.")
+
     # 99) Az ő legjobb párosuk × a ti időkéréseitek: a jól menő
     # kettőst meg kell törni.
     _prm99 = [p for p in (opp.pair_plus_minus or [])
@@ -6339,6 +6390,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        tot_timeouts=sum(r.tot_timeouts for r in reports),
+        tot_sum_before=sum(r.tot_sum_before for r in reports),
+        tot_late=sum(r.tot_late for r in reports),
         pair_plus_minus=_merge_pair_plus_minus(reports),
         pair_fps=(reports[0].pair_fps if reports else 25.0),
         sbl_waves=sum(r.sbl_waves for r in reports),

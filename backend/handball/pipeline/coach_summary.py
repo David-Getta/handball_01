@@ -814,6 +814,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{best_pr['minutes']:.0f} közös perc alatt.")
     except Exception:
         pass
+    # Időkérés-időzítés: hány kapott gól után nyúltak a korongért.
+    try:
+        from .stoppages import timeout_timing
+        tot = timeout_timing(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tt = tot[side]
+            if rec_tt["verdict"] is None:
+                continue
+            if rec_tt["verdict"] == "gyors fék":
+                body += (f" A(z) {name} korán fékezett: átlag "
+                         f"{rec_tt['avg_before']:.1f} kapott gól után "
+                         f"kért időt ({rec_tt['timeouts']} időkérés).")
+            else:
+                body += (f" A(z) {name} hagyta elszaladni a "
+                         f"sorozatokat: átlag "
+                         f"{rec_tt['avg_before']:.1f} kapott gól után "
+                         f"kért időt ({rec_tt['timeouts']} időkérés).")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power

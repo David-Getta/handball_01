@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 121) Időkérés-időzítés: ha későn fékezünk, a sorozat-kezelés
+    # (mikor kérünk időt) a téma.
+    try:
+        from .stoppages import TOT_LATE_MIN, timeout_timing
+        tot121 = timeout_timing(match, config)
+        for side in ("home", "away"):
+            rec121 = tot121[side]
+            if rec121["verdict"] != "hagyják elszaladni":
+                continue
+            add(side, "taktika", "Sorozat-kezelés",
+                f"átlag {rec121['avg_before']:.1f} kapott gól után "
+                f"kértünk időt ({rec121['timeouts']} időkérés, a "
+                f"küszöb {TOT_LATE_MIN:.1f}) — mire megszakítottuk a "
+                "játékot, a sorozat már elvitte a meccset",
+                "sorozat-kezelés: fix szabály a kispadon — a MÁSODIK "
+                "kapott gól után jön az időkérés, és legyen rá egy "
+                "bejátszott, 20 másodperces forgatókönyv (kijelölt "
+                "befejező, egy figura, egy védekezési utasítás); "
+                "edzésen játsszátok le hátrányból indulva")
+    except Exception:
+        pass
+
     # 120) Páros-mérleg: ha egy kettősünk együtt érdemben rosszabb, az
     # egység-építés (kivel kivel) a téma.
     try:

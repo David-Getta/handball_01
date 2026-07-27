@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Időkérés-időzítés**: MIKOR kérnek időt. Az időkérés-mérleg azt
+  mondja meg, MŰKÖDÖTT-E a megszakítás — ez azt, hol a küszöbük: hány
+  kapott gól után nyúlnak a jelzőkorongért (2+ időkéréstől; 1,5 alatt
+  "gyors fék", 2,5 felett "hagyják elszaladni"), és mennyit
+  tartogatnak a hajrára (az utolsó 10 perc). Aki már az első-második
+  kapott gólnál fékez, nem hagyja kifutni a sorozatot — ellene a gyors
+  gólváltás a cél; aki hármat is elenged, ott a sorozat két-három
+  támadásnyi ablakot ér. A hajrára tartogatott időkérés azt jelenti, a
+  zárásuk mindig rendezett: a döntő támadásokat előre le kell
+  beszélni. Egy réteg, sok felület: `timeout_timing` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (két edzői
+  kulcs + csempe; az időkérések, az előttük álló kapott gólok és a
+  hajrában kértek száma tárolva, hogy az átlag meccsek közt pontosan
+  visszaszámolható legyen), 100. meccsterv-szabály (az ő késői fékük ×
+  a ti gólsorozataitok), 121. edzés-szabály (sorozat-kezelés: a
+  második kapott gól után időkérés, 20 másodperces forgatókönyvvel).
 - **Páros-mérleg**: MELYIK KETTŐ megy jól EGYÜTT a pályán. A
   játékos-mérleg egy emberre nézi a gólkülönbséget — ez a párokra:
   minden együtt töltött kockát a két játékos párosához írunk, a rájuk

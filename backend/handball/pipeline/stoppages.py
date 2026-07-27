@@ -174,3 +174,67 @@ def timeout_record(match: Match,
         elif st.get("verdict") == "nem hozott fordulatot":
             rec["failed"] += 1
     return out
+
+
+# Időkérés-időzítés: ennyi felismert időkéréstől ítélünk; ennyi kapott
+# gól alatti átlag a gyors fék, e felett hagyják elszaladni; és a
+# meccs utolsó ennyi másodperce a hajrá.
+TOT_MIN_TIMEOUTS = 2
+TOT_EARLY_MAX = 1.5
+TOT_LATE_MIN = 2.5
+TOT_LATE_S = 600.0
+
+
+def timeout_timing(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés-időzítés: MIKOR kérnek időt.
+
+    Az időkérés-mérleg (timeout_record) azt mondja meg, MŰKÖDÖTT-E a
+    megszakítás — ez azt, HOL a küszöbük: hány kapott gól után nyúlnak
+    a jelzőkorongért, és mennyit tartogatnak a hajrára. Aki már az
+    első-második kapott gólnál fékez, az nem hagyja kifutni a
+    sorozatot; aki hármat is elenged, annál a sorozat vége a
+    lendület-ablak. A hajrára tartogatott időkérés viszont azt
+    jelenti, hogy a zárás náluk mindig rendezett — a döntő
+    támadásokat nem lehet meglepetéssel elvinni.
+
+    Visszatérés csapatonként (a KÉRŐ oldal): {"timeouts",
+    "sum_before", "avg_before", "late_timeouts", "late_pct",
+    "verdict"} — sum_before a megszakítás előtti kapott gólok
+    összege (darabszám, meccsek közt összegződik); az arányok és a
+    verdict None TOT_MIN_TIMEOUTS alatt, a verdict "gyors fék" /
+    "hagyják elszaladni" / None.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    end_t = match.frames[-1].t if match.frames else 0
+    late_from = end_t - TOT_LATE_S * fps
+
+    acc = {s: {"timeouts": 0, "sum_before": 0, "late_timeouts": 0}
+           for s in ("home", "away")}
+    for st in timeout_effects(match, config):
+        team = st.get("likely_team")
+        if st.get("kind") != "időkérés" or team not in acc:
+            continue
+        rec = acc[team]
+        rec["timeouts"] += 1
+        rec["sum_before"] += int(st.get("conceded_before") or 0)
+        if st["start_frame"] >= late_from:
+            rec["late_timeouts"] += 1
+
+    out = {}
+    for side in ("home", "away"):
+        rec = acc[side]
+        r = {**rec, "avg_before": None, "late_pct": None,
+             "verdict": None}
+        if rec["timeouts"] >= TOT_MIN_TIMEOUTS:
+            avg = rec["sum_before"] / rec["timeouts"]
+            r["avg_before"] = round(avg, 2)
+            r["late_pct"] = round(
+                100.0 * rec["late_timeouts"] / rec["timeouts"], 1)
+            if avg <= TOT_EARLY_MAX:
+                r["verdict"] = "gyors fék"
+            elif avg >= TOT_LATE_MIN:
+                r["verdict"] = "hagyják elszaladni"
+        out[side] = r
+    return out

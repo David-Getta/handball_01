@@ -213,3 +213,64 @@ def test_timeout_record_aggregates_verdicts():
     assert rec["home"]["timeouts"] == 1
     assert rec["home"]["broke"] == 1 and rec["home"]["failed"] == 0
     assert rec["away"]["timeouts"] == 0
+
+
+# ---- Időkérés-időzítés (hány kapott gól után fékeznek) -----------------------
+
+def _timeout_match(counts, fps=25.0):
+    """Hazai időkérés-sorozat: a `counts` elemenként megadja, hány
+    vendég-gól (a hazai kapujába) előzi meg az adott időkérést."""
+    frames = []
+    t = 0
+
+    def _play(seconds):
+        """Hazai birtoklás — a leállás előtt ő "kéri" majd az időt."""
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = _players(t, moving=True)
+            hp = players[0]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y,
+                                          confidence=1.0)))
+            t += 1
+
+    for n_goals in counts:
+        _play(10)
+        for _ in range(n_goals):
+            for g in _goal_frames(t, toward_home_goal=True):
+                frames.append(g)
+            t = frames[-1].t + 1
+            _play(3)          # debounce a gólok közt
+        _play(4)
+        for _ in range(int(20 * fps)):   # időkérés (20 mp állás)
+            frames.append(Frame(t=t, players=_players(0, moving=False),
+                                ball=None))
+            t += 1
+        # Hosszú játék a következő kör előtt: a 120 mp-es hatás-ablak
+        # ne lásson át az előző kör góljaira.
+        _play(130)
+    return Match(_meta(fps), frames)
+
+
+def test_timeout_timing_separates_early_and_late_brakes():
+    """Két időkérés egy-egy kapott gól után → "gyors fék"; három, majd
+    két kapott gól után → "hagyják elszaladni"; egyetlen időkérésnél
+    nincs ítélet."""
+    from handball.pipeline.stoppages import timeout_timing
+
+    early = timeout_timing(_timeout_match([1, 1]))["home"]
+    assert early["timeouts"] == 2
+    assert early["sum_before"] == 2
+    assert early["avg_before"] == 1.0
+    assert early["verdict"] == "gyors fék"
+
+    late = timeout_timing(_timeout_match([3, 2]))["home"]
+    assert late["timeouts"] == 2 and late["sum_before"] == 5
+    assert late["avg_before"] == 2.5
+    assert late["verdict"] == "hagyják elszaladni"
+
+    # Egyetlen időkérés: kevés minta → nincs arány és nincs ítélet.
+    one = timeout_timing(_timeout_match([3]))["home"]
+    assert one["avg_before"] is None and one["verdict"] is None
+    # A vendég nem kért időt.
+    assert timeout_timing(_timeout_match([1, 1]))["away"]["timeouts"] == 0

@@ -1199,6 +1199,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "befejezéseket (elzárás rá, az ő oldalán a beálló)";
   }
 
+  // Időkérés-időzítés: hány kapott gól után kérnek időt (2+ időkérés,
+  // 1,5 alatt gyors fék, 2,5 felett későn; a backend-kulccsal azonos
+  // küszöbök).
+  String? _timeoutTiming(Map<String, dynamic> r) {
+    final n = ((r["tot_timeouts"] as num?) ?? 0).toInt();
+    final before = ((r["tot_sum_before"] as num?) ?? 0).toInt();
+    final late = ((r["tot_late"] as num?) ?? 0).toInt();
+    if (n < 2) return null;
+    final avg = before / n;
+    final latePct = 100.0 * late / n;
+    if (avg <= 1.5) {
+      return "korán fékeznek: átlag ${avg.toStringAsFixed(1)} kapott "
+          "gól után kérnek időt ($n időkérés) · gyors gólváltásra "
+          "kell játszani, nem egy nagy hullámra";
+    }
+    if (avg >= 2.5) {
+      return "hagyják elszaladni a sorozatot: átlag "
+          "${avg.toStringAsFixed(1)} kapott gól után kérnek időt "
+          "($n időkérés)${latePct >= 50.0 ? ", és a hajrára "
+              "tartogatják" : ""} · ha megindul a hullám, van "
+          "két-három támadásnyi ablak";
+    }
+    return null;
+  }
+
   // Páros-mérleg: melyik kettősük megy együtt a legjobban (4+ közös
   // perc, 0,2 gól/perc felett; a backend-kulccsal azonos küszöbök).
   String? _pairPlusMinus(Map<String, dynamic> r) {
@@ -2829,6 +2854,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],
       if (_pairPlusMinus(r) != null)
         ["Páros-mérleg", _pairPlusMinus(r)!],
+      if (_timeoutTiming(r) != null)
+        ["Időkérés-időzítés", _timeoutTiming(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
