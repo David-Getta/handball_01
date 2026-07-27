@@ -1199,6 +1199,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "befejezéseket (elzárás rá, az ő oldalán a beálló)";
   }
 
+  // Csere-blokkok: egységekben cserélnek-e (4+ cserehullám, 40%
+  // blokkos arány; a backend-kulccsal azonos küszöbök).
+  String? _subBlocks(Map<String, dynamic> r) {
+    final waves = ((r["sbl_waves"] as num?) ?? 0).toInt();
+    final players = ((r["sbl_players"] as num?) ?? 0).toInt();
+    final block = ((r["sbl_block_waves"] as num?) ?? 0).toInt();
+    if (waves < 4) return null;
+    final pct = 100.0 * block / waves;
+    final avg = players / waves;
+    if (pct >= 40.0) {
+      return "egységekben cserélnek: $waves hullámból $block volt 2+ "
+          "fős (átlag ${avg.toStringAsFixed(1)} ember) · gyors "
+          "újraindítással kell büntetni a csere ütemét";
+    }
+    return "egyesével cserélnek: $waves hullám, átlag "
+        "${avg.toStringAsFixed(1)} ember · nincs külön támadó és "
+        "védekező egységük, a célzott fárasztás működik";
+  }
+
   // Lövőerő-esés: marad-e erő a karjukban a 2. félidőre (félidőnként
   // 4+ mért lövés, 6 km/h eltérés; a backend-kulccsal azonos
   // küszöbök).
@@ -2777,6 +2796,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_holdTime(r) != null) ["Labdatartás", _holdTime(r)!],
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
+      if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

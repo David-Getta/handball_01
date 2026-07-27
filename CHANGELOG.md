@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Csere-blokkok**: egyesével cserélnek, vagy egységekben. A
+  csere-hatás azt méri, MI TÖRTÉNIK a csere után, a késő csere azt,
+  kit felejtenek bent — ez a harmadik kérdés: HOGYAN cserélnek. Ha egy
+  hullámban rendre két-három ember jön-megy, a csapat specialistákat
+  mozgat (támadó és védekező egység); ha egyesével, akkor pihentet
+  (4+ cserehullámtól, 40% blokkos arány a küszöb). Edzőileg: a blokkos
+  csere ellen a gyors újraindítás a fegyver — csere közben egy ütemre
+  rossz emberek vannak a pályán; egyesével cserélő csapatnál a célzott
+  fárasztás működik. Egy réteg, sok felület: `substitution_blocks`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (edzői kulcs + csempe; a hullámok, a mozgatott
+  játékosok és a 2+ fős hullámok száma tárolva, hogy a blokk-arány
+  meccsek közt pontosan visszaszámolható legyen), 98.
+  meccsterv-szabály (az ő blokkos cseréjük × a ti gyors
+  újraindításotok), 119. edzés-szabály (csere-fegyelem: holt
+  játékhelyzetben cserélni, 3 mp alatti hullám).
 - **Lövőerő-esés**: marad-e erő a karban a második félidőre. A
   befejezés-esés azt mutatja, mennyi megy be, a lövő-erő azt, ki lő
   keményen — ez a kettő metszete időben: a mért lövés-sebességek

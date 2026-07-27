@@ -113,3 +113,66 @@ def test_late_sub_flags_fading_player_left_on_court():
     assert 3 not in ids
     top = next(f for f in flags if f["track_id"] == 1)
     assert top["drop_pct"] >= 20.0
+
+
+def _waves_match(sizes):
+    """Cserehullámok egymás után: a `sizes` elemenként megadja, hány
+    ember megy ki és jön be az adott hullámban. A kimenő track-ek a
+    cserezónában érnek véget, a bejövők ott kezdődnek."""
+    frames = []
+    plan = []       # (t, méret, kimenő id-k, bejövő id-k)
+    tid = 100
+    for k, size in enumerate(sizes):
+        t_wave = 200 + k * 400
+        outs = list(range(tid, tid + size))
+        tid += size
+        ins = list(range(tid, tid + size))
+        tid += size
+        plan.append((t_wave, outs, ins))
+    total = 200 + len(sizes) * 400 + 300
+    for t in range(total):
+        players = [_pl(1, Team.HOME, 25.0, 10.0)]   # állandó játékos
+        for (t_wave, outs, ins) in plan:
+            if t_wave - 150 <= t <= t_wave:
+                # A kimenők a cserezóna felé tartanak (ott tűnnek el).
+                frac = (t - (t_wave - 150)) / 150.0
+                for j, oid in enumerate(outs):
+                    players.append(_pl(oid, Team.HOME,
+                                       28.0 + (20.0 - 28.0) * frac,
+                                       8.0 + (1.0 - 8.0) * frac
+                                       + 0.2 * j))
+            if t_wave + 10 <= t <= t_wave + 150:
+                # A bejövők a cserezónából állnak be.
+                frac = (t - (t_wave + 10)) / 140.0
+                for j, iid in enumerate(ins):
+                    players.append(_pl(iid, Team.HOME,
+                                       20.0 + 10.0 * frac,
+                                       1.0 + 11.0 * frac + 0.2 * j))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=22.0, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_substitution_blocks_separates_units_from_single_swaps():
+    """Négy hullámból kettő 2 fős → "blokkos csere"; csupa egyfős
+    hullámnál "egyesével"; kevés hullámnál nincs ítélet."""
+    from handball.pipeline.substitutions import substitution_blocks
+
+    blocks = substitution_blocks(_waves_match([2, 2, 1, 1]))["home"]
+    assert blocks["waves"] == 4
+    assert blocks["block_waves"] == 2
+    assert blocks["players"] == 6
+    assert blocks["block_pct"] == 50.0
+    assert blocks["avg_size"] == 1.5
+    assert blocks["verdict"] == "blokkos csere"
+
+    singles = substitution_blocks(_waves_match([1, 1, 1, 1]))["home"]
+    assert singles["waves"] == 4 and singles["block_waves"] == 0
+    assert singles["verdict"] == "egyesével"
+
+    # Két hullám: nincs elég minta → nincs arány és nincs ítélet.
+    few = substitution_blocks(_waves_match([2, 1]))["home"]
+    assert few["block_pct"] is None and few["verdict"] is None
+    # A vendég nem cserélt.
+    assert substitution_blocks(
+        _waves_match([2, 2, 1, 1]))["away"]["waves"] == 0

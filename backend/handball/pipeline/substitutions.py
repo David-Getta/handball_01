@@ -154,3 +154,56 @@ def late_sub_flags(match: Match,
             for r in player_fatigue(match)
             if r["drop_pct"] >= LATE_SUB_DROP_PCT
             and r["track_id"] not in subbed_out]
+
+
+# Csere-blokkok: ennyi cserehullámtól ítélünk, és e feletti blokkos
+# arány jelenti, hogy a csapat egységeket (specialistákat) cserél.
+SUBBLK_MIN_WAVES = 4
+SUBBLK_BLOCK_PCT = 40.0
+
+
+def substitution_blocks(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-blokkok: egyesével cserélnek, vagy egységekben.
+
+    A csere-hatás (substitution_impact) azt méri, MI TÖRTÉNIK a csere
+    után, a késő csere (late_sub_flags) azt, kit felejtenek bent — ez
+    a harmadik kérdés: HOGYAN cserélnek. Ha egy hullámban rendre két-
+    három ember jön-megy, a csapat specialistákat mozgat (támadó és
+    védekező egység); ha egyesével, akkor pihentetnek.
+
+    Edzőileg: a blokkos csere ellen a gyors újraindítás a fegyver —
+    csere közben egy ütemre rossz emberek vannak a pályán, és a
+    védekező egységük támadásban (vagy fordítva) kiszolgáltatott;
+    egyesével cserélő csapatnál viszont a célzott fárasztás működik.
+
+    Visszatérés csapatonként: {"waves", "players", "block_waves",
+    "block_pct", "avg_size", "verdict"} — a hullámok száma, a bennük
+    mozgatott játékosok összege, a 2+ fős hullámok száma és aránya, a
+    hullámok átlagos mérete; az arányok és a verdict None
+    SUBBLK_MIN_WAVES alatt, a verdict "blokkos csere" / "egyesével".
+    """
+    config = config or TacticsConfig()
+    acc = {s: {"waves": 0, "players": 0, "block_waves": 0}
+           for s in ("home", "away")}
+    for ev in detect_substitutions(match, config):
+        size = max(len(ev["out_ids"]), len(ev["in_ids"]))
+        rec = acc[ev["team"]]
+        rec["waves"] += 1
+        rec["players"] += size
+        if size >= 2:
+            rec["block_waves"] += 1
+
+    out = {}
+    for side in ("home", "away"):
+        rec = acc[side]
+        r = {**rec, "block_pct": None, "avg_size": None,
+             "verdict": None}
+        if rec["waves"] >= SUBBLK_MIN_WAVES:
+            pct = 100.0 * rec["block_waves"] / rec["waves"]
+            r["block_pct"] = round(pct, 1)
+            r["avg_size"] = round(rec["players"] / rec["waves"], 2)
+            r["verdict"] = ("blokkos csere" if pct >= SUBBLK_BLOCK_PCT
+                            else "egyesével")
+        out[side] = r
+    return out

@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 119) Csere-blokkok: ha egységekben cserélünk, a csere-fegyelem
+    # (a váltás ütemének védelme) a téma.
+    try:
+        from .substitutions import (SUBBLK_BLOCK_PCT,
+                                    substitution_blocks)
+        sbl119 = substitution_blocks(match, config)
+        for side in ("home", "away"):
+            rec119 = sbl119[side]
+            if rec119["verdict"] != "blokkos csere":
+                continue
+            add(side, "taktika", "Csere-fegyelem",
+                f"egységekben cserélünk (a {rec119['waves']} "
+                f"hullámból {rec119['block_waves']} volt 2+ fős, a "
+                f"küszöb {SUBBLK_BLOCK_PCT:.0f}%) — a váltás ütemében "
+                "egy pillanatra rossz emberek vannak a pályán, ezt "
+                "egy gyors ellenfél megbünteti",
+                "csere-fegyelem: a blokkos cserét csak holt "
+                "játékhelyzetben (kapusnál lévő labda, saját "
+                "bedobás) indítsátok, kijelölt fékező emberrel "
+                "középen; edzésen 20 gyakorlás élő játékban, "
+                "stopperrel — a hullám maradjon 3 mp alatt")
+    except Exception:
+        pass
+
     # 118) Lövőerő-esés: ha a 2. félidőre esik a lövéserőnk, a fáradt
     # állapotban gyakorolt befejezés a téma.
     try:

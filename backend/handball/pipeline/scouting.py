@@ -592,6 +592,13 @@ class ScoutingReport:
     # Lövőerő-esésük: félidőnként a mért lövések száma + a
     # sebesség-összeg (km/h) — darabszámok és összegek, meccsek közt
     # pontosan összegződnek (félidő-átlag = összeg / darab).
+    # Csere-blokkjaik: a cserehullámok száma, a bennük mozgatott
+    # játékosok összege és a 2+ fős hullámok száma — darabszámok,
+    # meccsek közt pontosan összegződnek (blokk-arány = block / waves,
+    # átlagos hullám-méret = players / waves).
+    sbl_waves: int = 0
+    sbl_players: int = 0
+    sbl_block_waves: int = 0
     spf_fh_shots: int = 0
     spf_fh_sum_kmh: float = 0.0
     spf_sh_shots: int = 0
@@ -1624,6 +1631,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Csere-blokkok: egységekben cserélnek, vagy egyesével.
+    if rep.sbl_waves >= 4:
+        _sbl_pct = 100.0 * rep.sbl_block_waves / rep.sbl_waves
+        _sbl_avg = rep.sbl_players / rep.sbl_waves
+        if _sbl_pct >= 40.0:
+            keys.append(
+                f"Egységekben cserélnek (a {rep.sbl_waves} hullámból "
+                f"{rep.sbl_block_waves} volt 2+ fős, átlag "
+                f"{_sbl_avg:.1f} ember) — specialistákat mozgatnak: a "
+                "gyors újraindítás a fegyver ellenük, mert csere "
+                "közben egy ütemre rossz emberek vannak a pályán.")
+        else:
+            keys.append(
+                f"Egyesével cserélnek ({rep.sbl_waves} hullám, átlag "
+                f"{_sbl_avg:.1f} ember) — nincs külön támadó és "
+                "védekező egységük: a célzott fárasztás működik, "
+                "vigyétek rá a játékot a kulcsembereikre.")
 
     # Lövőerő-esés: marad-e erő a karjukban a második félidőre.
     if rep.spf_fh_shots >= 4 and rep.spf_sh_shots >= 4:
@@ -3593,6 +3618,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .substitutions import substitution_blocks as _sbl
+        sblrec = _sbl(match, config)[team.value]
+        rep.sbl_waves = sblrec["waves"]
+        rep.sbl_players = sblrec["players"]
+        rep.sbl_block_waves = sblrec["block_waves"]
         from .event_detection import shot_power_fade as _spf
         spfrec = _spf(match, config)[team.value]
         rep.spf_fh_shots = spfrec["fh_shots"]
@@ -5094,6 +5124,22 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 98) Az ő blokkos cseréjük × a ti gyors újraindításotok: csere
+    # közben egy ütemre rossz emberek vannak a pályán.
+    if opp.sbl_waves >= 4 and own.rs_restarts >= 4:
+        _blk98 = 100.0 * opp.sbl_block_waves / opp.sbl_waves
+        _fast98 = 100.0 * own.rs_fast / own.rs_restarts
+        if _blk98 >= 40.0 and _fast98 >= 50.0:
+            plan.append(
+                f"Egységekben cserélnek (a {opp.sbl_waves} "
+                f"hullámukból {opp.sbl_block_waves} volt 2+ fős), ti "
+                f"pedig gyorsan indítotok újra (az "
+                f"újraindításaitok {_fast98:.0f}%-ánál 12 mp-en belül "
+                "átér a labda) — gól után azonnal indulni kell: a "
+                "cseréjük közben egy ütemre rossz emberek vannak a "
+                "pályán, és a védekező egységük támadásban "
+                "kiszolgáltatott.")
+
     # 97) Az ő lövőerő-esésük × a ti mély falatok: a hajrában kintebb
     # lehet jönni.
     if opp.spf_fh_shots >= 4 and opp.spf_sh_shots >= 4 \
@@ -6221,6 +6267,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        sbl_waves=sum(r.sbl_waves for r in reports),
+        sbl_players=sum(r.sbl_players for r in reports),
+        sbl_block_waves=sum(r.sbl_block_waves for r in reports),
         spf_fh_shots=sum(r.spf_fh_shots for r in reports),
         spf_fh_sum_kmh=round(sum(r.spf_fh_sum_kmh for r in reports), 1),
         spf_sh_shots=sum(r.spf_sh_shots for r in reports),

@@ -777,6 +777,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_pf['sh_avg_kmh']:.0f} km/h).")
     except Exception:
         pass
+    # Csere-blokkok: egyesével cseréltek, vagy egységekben.
+    try:
+        from .substitutions import substitution_blocks
+        sbl = substitution_blocks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sb = sbl[side]
+            if rec_sb["verdict"] is None:
+                continue
+            if rec_sb["verdict"] == "blokkos csere":
+                body += (f" A(z) {name} egységekben cserélt "
+                         f"({rec_sb['waves']} hullámból "
+                         f"{rec_sb['block_waves']} volt 2+ fős, "
+                         f"átlag {rec_sb['avg_size']:.1f} ember).")
+            else:
+                body += (f" A(z) {name} egyesével cserélt "
+                         f"({rec_sb['waves']} hullám, átlag "
+                         f"{rec_sb['avg_size']:.1f} ember).")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power
