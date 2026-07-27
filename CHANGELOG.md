@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Poszt szerinti gólmegoszlás**: MELYIK POSZTRÓL jönnek a góljaik.
+  A poszt-becslés megmondja, ki milyen poszton játszik — ez a réteg a
+  gólokat köti a lövő posztjához, vagyis nem a gólfelelősüket, hanem
+  azt mutatja, melyik posztra épül a befejezésük (5+ poszthoz kötött
+  gól, 45%-os vezető poszt, holtverseny nélkül). Ez rendezi a
+  védekezési feladatokat: szélső-gólok ellen kifutás és szög-zárás,
+  beállós gólok ellen elé állás, átlövő-gólok ellen előrelépés a
+  lövő-vonalba, irányító-gólok ellen kettőzés a 9 m-en kívül. Egy
+  réteg, sok felület: `goals_by_role` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (posztonkénti darabszámok
+  + edzői kulcs a poszthoz illő utasítással + csempe), 103.
+  meccsterv-szabály (az ő beállóra épülő befejezésük × a ti beállós
+  védekezésetek), 124. edzés-szabály (befejezés több posztról: a
+  vezető posztról csak minden harmadik befejezés jöhet).
 - **Gólpassz-zónák**: HONNAN érkezik a gólpassz. A gólpassz-hálózat
   azt mondja meg, KI készíti elő a gólokat — ez azt, melyik vonalról:
   a gólpassz pillanatában a passzoló helye alapján szélről, beállótól

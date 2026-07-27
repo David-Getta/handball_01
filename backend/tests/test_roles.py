@@ -51,3 +51,93 @@ def test_too_few_samples_skipped():
     m = Match(MatchMeta(match_id="rl2", home_team="H", away_team="A",
                         fps=25.0), frames)
     assert estimate_positions(m)["home"] == {}
+
+
+# ---- Poszt szerinti gólmegoszlás ---------------------------------------------
+
+# A poszt-becsléshez használt hazai felállás (a +x kapura támadva).
+_SPOTS = {1: (34.0, 10.0),    # beálló: 6 m, közép
+          2: (36.0, 2.0),     # szélső: a bal sávban
+          3: (28.0, 10.0),    # irányító: 12 m, közép
+          4: (31.5, 7.0)}     # átlövő: 8,5 m, belső sáv
+
+
+def _lineup(holder_id=None):
+    """A négy hazai játékos; ha van holder, a labda nála van."""
+    players = [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _SPOTS.items()]
+    if holder_id is None:
+        return players, Ball(x=28.5, y=10.0, confidence=1.0)
+    hx, hy = _SPOTS[holder_id]
+    return players, Ball(x=hx, y=hy, confidence=1.0)
+
+
+def _role_goal_match(scorers, warmup=150):
+    """Poszt-mintát adó birtoklás, majd a `scorers` listája szerint
+    egy-egy gól (a lövő birtokol, aztán a labda a +x kapuba száguld)."""
+    frames = []
+    t = 0
+    for _ in range(warmup):
+        players, ball = _lineup()
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+    for tid in scorers:
+        # A labda lassan (lövés-küszöb alatt) a lövőhöz vándorol, hogy a
+        # helyváltás ne látsszon lövésnek.
+        sx, sy = _SPOTS[tid]
+        for i in range(1, 61):
+            f_ = i / 60.0
+            frames.append(Frame(
+                t=t, players=_lineup()[0],
+                ball=Ball(x=28.5 + (sx - 28.5) * f_,
+                          y=10.0 + (sy - 10.0) * f_, confidence=1.0)))
+            t += 1
+        for _ in range(3):           # a lövő birtokolja a labdát
+            players, ball = _lineup(tid)
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+        # A lövés a lövő helyéről indul a kapuba (kb. 1 m/kocka), így a
+        # labdához legközelebbi ember a lövés kezdetén ő maga.
+        sx, sy = _SPOTS[tid]
+        steps = max(3, int(round(40.5 - sx)))
+        for i in range(1, steps + 1):
+            f_ = i / steps
+            players, _ = _lineup()
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=sx + (40.5 - sx) * f_,
+                                          y=sy + (10.0 - sy) * f_,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(25):          # szünet a gólok közt
+            players, ball = _lineup()
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+    return Match(MatchMeta(match_id="rg", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_goals_by_role_finds_the_wing_heavy_attack():
+    """Hat gólból négy a szélsőé → a szélső-védekezés az első feladat."""
+    from handball.pipeline.roles import goals_by_role
+
+    rec = goals_by_role(_role_goal_match([2, 2, 2, 2, 1, 1]))["home"]
+    assert rec["goals"] == 6
+    assert rec["roles"]["szélső"] == 4
+    assert rec["top"] is not None
+    assert rec["top"]["poszt"] == "szélső" and rec["top"]["goals"] == 4
+
+
+def test_goals_by_role_balanced_attack_has_no_top():
+    """Ha két poszt holtversenyben áll, nincs kiemelt poszt."""
+    from handball.pipeline.roles import goals_by_role
+
+    rec = goals_by_role(_role_goal_match([1, 1, 1, 2, 2, 2]))["home"]
+    assert rec["goals"] == 6
+    assert rec["top"] is None
+
+
+def test_goals_by_role_needs_enough_goals():
+    """Kevés (5-nél kevesebb) poszthoz kötött gólnál nincs ítélet."""
+    from handball.pipeline.roles import goals_by_role
+
+    rec = goals_by_role(_role_goal_match([2, 2, 2]))["home"]
+    assert rec["goals"] == 3 and rec["top"] is None

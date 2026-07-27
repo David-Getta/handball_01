@@ -73,3 +73,61 @@ def estimate_positions(match: Match,
         out[side][tid] = {"poszt": poszt, "samples": n,
                           "avg_dist_m": round(avg_dist, 1)}
     return out
+
+
+# Poszt szerinti gólmegoszlás: ennyi poszthoz kötött góltól ítélünk, és
+# e feletti részarány jelenti, hogy egy posztra épül a támadásuk.
+ROLE_GOALS_MIN = 5
+ROLE_GOALS_SHARE = 45.0
+
+
+def goals_by_role(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt szerinti gólmegoszlás: MELYIK POSZTRÓL jönnek a góljaik.
+
+    A poszt-becslés (estimate_positions) megmondja, ki milyen poszton
+    játszik; ez a réteg a gólokat köti a lövő posztjához — vagyis nem
+    azt, ki a gólfelelősük, hanem hogy melyik posztra épül a
+    befejezésük (szélső, beálló, átlövő, irányító).
+
+    Edzőileg ez rendezi a védekezési feladatokat: szélső-gólok ellen a
+    kifutás és a szög zárása, beállós gólok ellen az elé állás,
+    átlövő-gólok ellen az előrelépés a lövő-vonalba.
+
+    Visszatérés csapatonként: {"goals" (poszthoz kötött gólok),
+    "roles": {poszt: gólok}, "top": {"poszt", "goals", "share_pct"} |
+    None} — a "top" akkor van kitöltve, ha legalább ROLE_GOALS_MIN
+    poszthoz kötött gól van, a vezető poszt részaránya eléri a
+    ROLE_GOALS_SHARE-t, és nincs vele holtversenyben másik poszt.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    out: dict = {side: {"goals": 0, "roles": {}, "top": None}
+                 for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        rec = out[side]
+        rec["goals"] += 1
+        poszt = rec_role["poszt"]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["roles"].items())
+        if rec["goals"] >= ROLE_GOALS_MIN and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["goals"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= ROLE_GOALS_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "goals": n,
+                              "share_pct": round(share, 1)}
+    return out

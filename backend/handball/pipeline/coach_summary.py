@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Poszt szerinti gólmegoszlás: melyik posztra épült a befejezésük.
+    try:
+        from .roles import goals_by_role
+        gbr = goals_by_role(match)
+        for side, name in (("home", home), ("away", away)):
+            top_gbr = gbr[side]["top"]
+            if top_gbr is None:
+                continue
+            body += (f" A(z) {name} befejezése egy posztra épült: a "
+                     f"góljaik {top_gbr['share_pct']:.0f}%-a a "
+                     f"{top_gbr['poszt']} posztról jött "
+                     f"({top_gbr['goals']}/{gbr[side]['goals']}).")
+    except Exception:
+        pass
     # Gólpassz-zónák: melyik vonalról jöttek az előkészítések.
     try:
         from .event_detection import assist_zones

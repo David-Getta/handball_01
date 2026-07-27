@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 124) Poszt szerinti gólmegoszlás: ha egy posztra épül a
+    # befejezésünk, a poszt-váltogatás a téma.
+    try:
+        from .roles import goals_by_role
+        gbr124 = goals_by_role(match, config)
+        for side in ("home", "away"):
+            top124 = gbr124[side]["top"]
+            if top124 is None:
+                continue
+            add(side, "támadás", "Befejezés több posztról",
+                f"a góljaink {top124['share_pct']:.0f}%-a a "
+                f"{top124['poszt']} posztról jött "
+                f"({top124['goals']}/{gbr124[side]['goals']}) — egy "
+                "felkészült ellenfél erre az egy posztra rendezi a "
+                "védekezését, és elfogy a támadásunk",
+                "befejezés több posztról: felállt támadás azzal a "
+                f"szabállyal, hogy a {top124['poszt']} posztról csak "
+                "minden harmadik befejezés jöhet — a többit a "
+                "szomszédos posztoknak kell megoldaniuk (üres "
+                "kapura, majd kapussal), hogy meccsen is bátran "
+                "lőjenek onnan")
+    except Exception:
+        pass
+
     # 123) Gólpassz-zónák: ha minden előkészítés egy vonalról jön, a
     # támadásunk kiszámítható — a második vonal nyitása a téma.
     try:
