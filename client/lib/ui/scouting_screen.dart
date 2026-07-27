@@ -1297,6 +1297,40 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Támadás-indítók: egy ember hozza-e fel a labdát (6+ mért
+  // indítás; 40% felett egyszemélyes, 25% alatt megosztott — a
+  // backend-kulccsal azonos küszöbök).
+  String? _attackStarters(Map<String, dynamic> r) {
+    final list = r["starters"];
+    if (list is! List || list.isEmpty) return null;
+    int total = 0;
+    Map? top;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final n = ((e["starts"] as num?) ?? 0).toInt();
+      total += n;
+      if (top == null || n > ((top["starts"] as num?) ?? 0).toInt()) {
+        top = e;
+      }
+    }
+    if (total < 6 || top == null) return null;
+    final pct = 100.0 * ((top["starts"] as num?) ?? 0).toInt() / total;
+    if (pct >= 40.0) {
+      final who = top["jersey"] != null
+          ? "${top["jersey"]}-es"
+          : "${top["player_id"]} azonosítójú";
+      return "egy ember hozza fel a labdát: a(z) $who játékosuk "
+          "indítja a támadások ${pct.toStringAsFixed(0)}%-át "
+          "(${top["starts"]}/$total) · letámadás a felhozatalára";
+    }
+    if (pct <= 25.0) {
+      return "megosztott kihozatal: a legtöbbet indító emberük is csak "
+          "a támadások ${pct.toStringAsFixed(0)}%-át hozza fel "
+          "($total mért indítás) · a letámadás itt nem fizet ki";
+    }
+    return null;
+  }
+
   String? _holdTime(Map<String, dynamic> r) {
     final list = r["hold_players"];
     final fps = ((r["hold_fps"] as num?) ?? 25.0).toDouble();
@@ -2856,6 +2890,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Páros-mérleg", _pairPlusMinus(r)!],
       if (_timeoutTiming(r) != null)
         ["Időkérés-időzítés", _timeoutTiming(r)!],
+      if (_attackStarters(r) != null)
+        ["Támadás-indítók", _attackStarters(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

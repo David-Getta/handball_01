@@ -1847,3 +1847,67 @@ def shooter_placement(match: Match,
              and p["share_pct"] >= 100.0 * SHOOTER_SIDE_SHARE), None)
         out[s] = {"players": players, "predictable": predictable}
     return out
+
+
+# Támadás-indítók: ennyi mért támadástól ítélünk, és e feletti
+# részarány jelenti, hogy egy ember hozza fel a labdát.
+STARTER_MIN_ATTACKS = 6
+STARTER_TOP_SHARE = 40.0
+
+
+def attack_starters(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-indítók: KI hozza fel a labdát.
+
+    A támadás-eredet (attack_origins) azt mondja meg, MIBŐL indul a
+    támadás (középkezdés, kidobás, labdaszerzés) — ez azt, KI INDÍTJA:
+    minden támadás-szakasz első azonosított labdabirtokosát (a kapust
+    kihagyva) az indítójának vesszük. A szakasz a támadó térfélen
+    kezdődik, tehát az indító az az ember, akinél a labda átjön a
+    felezővonalon és megindul a támadás.
+
+    Edzőileg: ha egy ember hozza fel a labdák nagy részét, ő a
+    kihozatali kulcs — rá kell menni a felhozatalnál (letámadás, az
+    átadás-vonal zárása), mert nélküle megakad a felállásuk. Ha
+    megoszlik, a letámadás kevésbé kifizetődő: ott a felállt védekezés
+    a válasz.
+
+    Visszatérés csapatonként: {"attacks", "players": [{"player_id",
+    "jersey", "starts", "share_pct"}], "top"} — a lista indítás szerint
+    csökkenő; a "top" az első játékos, ha legalább STARTER_MIN_ATTACKS
+    mért támadás van, és a részaránya eléri a STARTER_TOP_SHARE-t
+    (egyébként None).
+    """
+    from .decisions import ball_holder
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        for fr in seq.frames:
+            h = ball_holder(fr, config)
+            if h is None or h.team != seq.team:
+                continue
+            if getattr(h, "role", None) == "kapus":
+                continue
+            if getattr(h, "jersey_number", None) is not None:
+                jersey.setdefault(h.track_id, h.jersey_number)
+            tally[side][h.track_id] = tally[side].get(h.track_id, 0) + 1
+            break
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "starts": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if n >= STARTER_MIN_ATTACKS and players \
+                and (players[0]["share_pct"] or 0.0) >= STARTER_TOP_SHARE:
+            top = players[0]
+        out[side] = {"attacks": n, "players": players, "top": top}
+    return out

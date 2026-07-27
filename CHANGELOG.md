@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Támadás-indítók**: KI hozza fel a labdát. A támadás-eredet azt
+  mondja meg, MIBŐL indul a támadás (középkezdés, kidobás,
+  labdaszerzés) — ez azt, ki indítja: minden támadás-szakasz első
+  labdabirtokosa (a kapus nélkül), vagyis akinél a labda átjön a
+  felezővonalon. Ha egy ember hozza fel a támadások 40%-át, ő a
+  kihozatali kulcs: rá kell menni a felhozatalnál (letámadás, az első
+  átadás-vonal zárása), mert nélküle megakad a felállásuk; ha
+  megoszlik (25% alatti csúcs), a letámadás nem fizet ki, ott a
+  felállt védekezés a válasz. Egy réteg, sok felület:
+  `attack_starters` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (két edzői kulcs + csempe;
+  játékosonként az indítások száma tárolva, hogy a részarány meccsek
+  közt pontosan visszaszámolható legyen), 101. meccsterv-szabály (az ő
+  egyszemélyes kihozataluk × a ti elöl szerzett labdáitok), 122.
+  edzés-szabály (kihozatal több kézbe: 4-2 elleni kihozatal három
+  felváltva indító emberrel).
 - **Időkérés-időzítés**: MIKOR kérnek időt. Az időkérés-mérleg azt
   mondja meg, MŰKÖDÖTT-E a megszakítás — ez azt, hol a küszöbük: hány
   kapott gól után nyúlnak a jelzőkorongért (2+ időkéréstől; 1,5 alatt

@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Támadás-indítók: egy ember hozta-e fel a labdák nagy részét.
+    try:
+        from .attack_types import attack_starters
+        st = attack_starters(match)
+        for side, name in (("home", home), ("away", away)):
+            top = st[side]["top"]
+            if top is None:
+                continue
+            jn = _jersey_of_track(match).get(top["player_id"])
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} támadásait jórészt egy ember "
+                     f"indította: a {who} hozta fel a labdát a "
+                     f"támadások {top['share_pct']:.0f}%-ában "
+                     f"({top['starts']}/{st[side]['attacks']}).")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power

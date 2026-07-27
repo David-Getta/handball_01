@@ -1256,3 +1256,86 @@ def test_shooter_placement_flags_predictable_finisher():
     two = next(p for p in h["players"] if p["player_id"] == 2)
     assert two["goals"] == 2
     assert two["dominant"] is None and two["share_pct"] is None
+
+
+# ---- Támadás-indítók (ki hozza fel a labdát) ---------------------------------
+
+def _starter_match(starters, fps=25.0):
+    """HAZAI támadás-sorozat: a `starters` elemenként megadja, melyik
+    hazai játékos (track_id) birtokolja a labdát a támadás első
+    kockáin; utána az 1-es viszi tovább. A támadásokat egy-egy rövid
+    vendég-birtoklás választja el."""
+    from handball.pipeline.attack_types import attack_starters  # noqa: F401
+
+    frames = []
+    t = 0
+
+    def _home(holder_id, seconds):
+        """Hazai támadás-kockák: a labda a `holder_id` játékosnál."""
+        nonlocal t, frames
+        for i in range(int(seconds * fps)):
+            x = 24.0 + 0.05 * i
+            spots = {1: (x, 10.0), 2: (x - 1.5, 5.0), 3: (x - 1.5, 15.0)}
+            players = [_pl(pid, Team.HOME, px, py)
+                       for pid, (px, py) in spots.items()]
+            players.append(_pl(9, Team.HOME, 1.5, 10.0, role="kapus"))
+            players += [_pl(21, Team.AWAY, 37.0, 8.0),
+                        _pl(22, Team.AWAY, 37.0, 12.0)]
+            hx, hy = spots[holder_id]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+
+    def _away(seconds):
+        """Vendég-birtoklás: elválasztja a két hazai támadást."""
+        nonlocal t, frames
+        for i in range(int(seconds * fps)):
+            x = 18.0 - 0.05 * i
+            players = [_pl(1, Team.HOME, 3.0, 8.0),
+                       _pl(2, Team.HOME, 3.0, 12.0),
+                       _pl(3, Team.HOME, 5.0, 10.0),
+                       _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                       _pl(21, Team.AWAY, x, 10.0),
+                       _pl(22, Team.AWAY, x - 3.0, 14.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    for pid in starters:
+        _home(pid, 1.0)      # az indító kockái
+        _home(1, 2.0)        # utána az 1-es viszi
+        _away(1.5)
+    return Match(_meta(fps), frames)
+
+
+def test_attack_starters_finds_the_single_outlet():
+    """Hat támadásból ötöt a 2-es indít → ő a kihozatali kulcs."""
+    from handball.pipeline.attack_types import attack_starters
+
+    rec = attack_starters(_starter_match([2, 2, 2, 2, 2, 3]))["home"]
+    assert rec["attacks"] == 6
+    top = rec["top"]
+    assert top is not None
+    assert top["player_id"] == 2 and top["starts"] == 5
+    assert top["share_pct"] > 80.0
+    # A vendég oldalon az elválasztó birtoklásokat a 21-es indítja.
+    away = attack_starters(_starter_match([2] * 6))["away"]
+    assert away["top"] is not None and away["top"]["player_id"] == 21
+
+
+def test_attack_starters_shared_outlet_has_no_top():
+    """Ha három ember osztozik a felhozatalon, nincs kiemelt indító."""
+    from handball.pipeline.attack_types import attack_starters
+
+    rec = attack_starters(_starter_match([1, 2, 3, 1, 2, 3]))["home"]
+    assert rec["attacks"] == 6
+    assert rec["top"] is None
+    assert {p["player_id"] for p in rec["players"]} == {1, 2, 3}
+
+
+def test_attack_starters_needs_enough_attacks():
+    """Kevés (6-nál kevesebb) mért támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import attack_starters
+
+    rec = attack_starters(_starter_match([2, 2, 2]))["home"]
+    assert rec["attacks"] == 3 and rec["top"] is None

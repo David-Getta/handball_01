@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Támadás-indítóik: [{"player_id", "jersey", "starts"}] —
+    # játékosonként hányszor ő hozta fel a labdát; darabszámok, meccsek
+    # közt pontosan összegződnek (részarány = starts / összes indítás).
+    starters: list = field(default_factory=list)
     tot_timeouts: int = 0
     tot_sum_before: int = 0
     tot_late: int = 0
@@ -1644,6 +1648,30 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Támadás-indítók: egy ember hozza-e fel a labdát.
+    _st_rows = rep.starters or []
+    _st_n = sum(p["starts"] for p in _st_rows)
+    if _st_n >= 6 and _st_rows:
+        _st_top = max(_st_rows, key=lambda p: p["starts"])
+        _st_pct = 100.0 * _st_top["starts"] / _st_n
+        _st_who = (f"{_st_top['jersey']}-es mezszámú"
+                   if _st_top.get("jersey") is not None
+                   else f"{_st_top['player_id']} azonosítójú")
+        if _st_pct >= 40.0:
+            keys.append(
+                f"Egy ember hozza fel a labdát: a(z) {_st_who} "
+                f"játékosuk indítja a támadások {_st_pct:.0f}%-át "
+                f"({_st_top['starts']}/{_st_n}) — rá kell menni a "
+                "felhozatalnál: letámadás és az átadás-vonal zárása, "
+                "mert nélküle megakad a felállásuk.")
+        elif _st_pct <= 25.0:
+            keys.append(
+                f"Megosztott kihozatal: a legtöbbet indító emberük is "
+                f"csak a támadások {_st_pct:.0f}%-át hozza fel "
+                f"({_st_n} mért indítás) — a letámadás itt nem fizet "
+                "ki, mert bárki felhozza: inkább rendezetten álljatok "
+                "fel a felállt védekezésben.")
 
     # Időkérés-időzítés: hol a küszöbük, és tartogatják-e a hajrára.
     if rep.tot_timeouts >= 2:
@@ -3677,6 +3705,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import attack_starters as _ast
+        rep.starters = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "starts": p["starts"]}
+            for p in _ast(match, config)[team.value]["players"]]
         from .stoppages import timeout_timing as _tot
         totrec = _tot(match, config)[team.value]
         rep.tot_timeouts = totrec["timeouts"]
@@ -4414,6 +4447,22 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_starters(reports) -> list:
+    """Támadás-indítók: játékosonként az indítások összegzése (az
+    indítás-szám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.starters or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"jersey": None, "starts": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = p.get("jersey")
+            rec["starts"] += int(p.get("starts", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["starts"])]
 
 
 def _merge_pair_plus_minus(reports) -> list:
@@ -5213,6 +5262,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 101) Az ő egyszemélyes kihozataluk × a ti elöl szerzett
+    # labdáitok: a letámadás pont rá fizet ki.
+    _st101 = opp.starters or []
+    _stn101 = sum(x["starts"] for x in _st101)
+    if _st101 and _stn101 >= 6 and own.steal_n >= 4:
+        _top101 = max(_st101, key=lambda x: x["starts"])
+        _pct101 = 100.0 * _top101["starts"] / _stn101
+        _high101 = 100.0 * own.steal_high / max(1, own.steal_n)
+        if _pct101 >= 40.0 and _high101 >= 30.0:
+            _who101 = (f"{_top101['jersey']}-es mezszámú"
+                       if _top101.get("jersey") is not None
+                       else f"{_top101['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who101} játékosuk hozza fel a labdát a "
+                f"támadások {_pct101:.0f}%-ában, ti pedig elöl is "
+                f"tudtok szerezni (a labdaszerzéseitek "
+                f"{_high101:.0f}%-a a támadó térfélen) — a "
+                "letámadás pont rá fizet ki: kapott gól után ketten "
+                "menjenek a kihozatalára, és zárjátok az első "
+                "átadás-vonalát.")
 
     # 100) Az ő késői fékük × a ti gólsorozataitok: van két-három
     # támadásnyi ablak, ha megindul a hullám.
@@ -6390,6 +6460,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        starters=_merge_starters(reports),
         tot_timeouts=sum(r.tot_timeouts for r in reports),
         tot_sum_before=sum(r.tot_sum_before for r in reports),
         tot_late=sum(r.tot_late for r in reports),

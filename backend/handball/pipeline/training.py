@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 122) Támadás-indítók: ha egy ember hozza fel a labdát, a
+    # kihozatal letámadás-állóvá tétele a téma.
+    try:
+        from .attack_types import attack_starters
+        st122 = attack_starters(match, config)
+        for side in ("home", "away"):
+            top122 = st122[side]["top"]
+            if top122 is None:
+                continue
+            who122 = (f"a {top122['jersey']}-es mezszámú játékos"
+                      if top122.get("jersey") is not None
+                      else f"a {top122['player_id']} azonosítójú játékos")
+            add(side, "támadás", "Kihozatal több kézbe",
+                f"{who122} hozta fel a labdát a támadások "
+                f"{top122['share_pct']:.0f}%-ában "
+                f"({top122['starts']}/{st122[side]['attacks']}) — egy "
+                "letámadó ellenfél ezt kiszámolja, és őt fogja "
+                "elzárni",
+                "kihozatal letámadás ellen: 4-2 elleni kihozatal a "
+                "saját térfélen, azzal a szabállyal, hogy a "
+                "felhozatalt három különböző ember indítja "
+                "felváltva (a kapus indítása is számít); ha az "
+                "elsőt zárják, a második opció automatikusan "
+                "beindul — a kapussal együtt gyakorolva")
+    except Exception:
+        pass
+
     # 121) Időkérés-időzítés: ha későn fékezünk, a sorozat-kezelés
     # (mikor kérünk időt) a téma.
     try:
