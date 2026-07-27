@@ -522,3 +522,67 @@ def test_shot_power_fade_measures_second_half_drop():
     no_break = [f for f in frames if f.players]
     flat = shot_power_fade(Match(_meta(), no_break))
     assert flat["home"]["drop_kmh"] is None
+
+
+# ---- Gólpassz-zónák (honnan jön az előkészítés) ------------------------------
+
+def _assist_from(px, py, t0):
+    """Egy gól kockái: a passzoló (1-es) a (px, py) helyről adja a
+    labdát a 2-esnek, aki a +x kapura lő."""
+    frames = [
+        Frame(t=t0, players=[_pl(1, Team.HOME, px, py),
+                             _pl(2, Team.HOME, 33.0, 10.0)],
+              ball=Ball(x=px, y=py, confidence=1.0)),
+        Frame(t=t0 + 1, players=[_pl(1, Team.HOME, px, py),
+                                 _pl(2, Team.HOME, 33.0, 10.0)],
+              ball=Ball(x=33.0, y=10.0, confidence=1.0)),   # passz 1→2
+    ]
+    for i in range(7):   # lövés: 34..40, y=10 → gól
+        frames.append(Frame(t=t0 + 2 + i,
+                            players=[_pl(1, Team.HOME, px, py),
+                                     _pl(2, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
+    return frames
+
+
+def _assist_match(spots):
+    """A `spots` (x, y) párokból egy-egy gólpasszos gól, egymás után."""
+    frames = []
+    t = 0
+    for (px, py) in spots:
+        frames += _assist_from(px, py, t)
+        t = frames[-1].t + 30      # szünet a gólok közt
+    return Match(_meta(), frames)
+
+
+def test_assist_zones_reads_the_wing_line():
+    """Négy gólpasszból három a szélről (y=2, illetve y=18) → a szélső
+    átadás-vonal a zárandó."""
+    from handball.pipeline.event_detection import assist_zones
+
+    rec = assist_zones(_assist_match([(30.0, 2.0), (30.0, 18.0),
+                                      (30.0, 2.0), (28.0, 10.0)]))["home"]
+    assert rec["assists"] == 4
+    assert rec["zones"]["szélről"] == 3
+    assert rec["top"] is not None
+    assert rec["top"]["zone"] == "szélről" and rec["top"]["goals"] == 3
+
+
+def test_assist_zones_separates_pivot_and_backcourt():
+    """A kapuhoz közeli (9 m-en belüli) középső passz beállós
+    kiszolgálás, a távolabbi átlövő-vonalból jön."""
+    from handball.pipeline.event_detection import assist_zones
+
+    rec = assist_zones(_assist_match([(34.0, 10.0), (34.0, 11.0),
+                                      (24.0, 10.0), (24.0, 9.0)]))["home"]
+    assert rec["zones"]["beállótól"] == 2
+    assert rec["zones"]["átlövésből"] == 2
+    assert rec["top"] is None          # nincs 50%-ot elérő vezető zóna
+
+
+def test_assist_zones_needs_enough_assists():
+    """Kevés (4-nél kevesebb) gólpassznál nincs ítélet."""
+    from handball.pipeline.event_detection import assist_zones
+
+    rec = assist_zones(_assist_match([(30.0, 2.0), (30.0, 2.0)]))["home"]
+    assert rec["assists"] == 2 and rec["top"] is None

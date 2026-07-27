@@ -1297,6 +1297,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Gólpassz-zónák: melyik vonalról készítik elő a gólokat (4+
+  // gólpassz, 50% feletti vezető zóna, holtverseny nélkül — a
+  // backend-kulccsal azonos küszöbök).
+  String? _assistZones(Map<String, dynamic> r) {
+    final zones = r["assist_zones"];
+    if (zones is! Map || zones.isEmpty) return null;
+    final rows = zones.entries
+        .map((e) => [e.key.toString(), ((e.value as num?) ?? 0).toInt()])
+        .toList()
+      ..sort((a, b) => (b[1] as int).compareTo(a[1] as int));
+    final total = rows.fold<int>(0, (s, e) => s + (e[1] as int));
+    if (total < 4) return null;
+    final top = rows.first[1] as int;
+    if (rows.length > 1 && (rows[1][1] as int) == top) return null;
+    final pct = 100.0 * top / total;
+    if (pct < 50.0) return null;
+    const what = {
+      "szélről": "a szélső–beálló tengelyt kell elvágni",
+      "beállótól": "a beálló kiszolgálását kell elvágni",
+      "átlövésből": "az átlövők passz-sávját kell zárni",
+    };
+    final zone = rows.first[0] as String;
+    return "a gólpasszaik ${pct.toStringAsFixed(0)}%-a $zone érkezik "
+        "($top/$total) · ${what[zone] ?? "ezt a vonalat kell zárni"}";
+  }
+
   // Támadás-indítók: egy ember hozza-e fel a labdát (6+ mért
   // indítás; 40% felett egyszemélyes, 25% alatt megosztott — a
   // backend-kulccsal azonos küszöbök).
@@ -2892,6 +2918,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés-időzítés", _timeoutTiming(r)!],
       if (_attackStarters(r) != null)
         ["Támadás-indítók", _attackStarters(r)!],
+      if (_assistZones(r) != null)
+        ["Gólpassz-zónák", _assistZones(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

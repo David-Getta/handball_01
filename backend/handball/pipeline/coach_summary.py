@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Gólpassz-zónák: melyik vonalról jöttek az előkészítések.
+    try:
+        from .event_detection import assist_zones
+        az = assist_zones(match)
+        for side, name in (("home", home), ("away", away)):
+            top_az = az[side]["top"]
+            if top_az is None:
+                continue
+            body += (f" A(z) {name} gólpasszai jórészt egy vonalról "
+                     f"jöttek: {top_az['zone']} érkezett az "
+                     f"előkészítések {top_az['share_pct']:.0f}%-a "
+                     f"({top_az['goals']}/{az[side]['assists']}).")
+    except Exception:
+        pass
     # Támadás-indítók: egy ember hozta-e fel a labdák nagy részét.
     try:
         from .attack_types import attack_starters

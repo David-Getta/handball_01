@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Gólpassz-zónáik: {zóna: gólpasszok} — honnan érkezik az
+    # előkészítés (szélről / beállótól / átlövésből); darabszámok,
+    # meccsek közt pontosan összegződnek (részarány = zóna / összes).
+    assist_zones: dict = field(default_factory=dict)
     # Támadás-indítóik: [{"player_id", "jersey", "starts"}] —
     # játékosonként hányszor ő hozta fel a labdát; darabszámok, meccsek
     # közt pontosan összegződnek (részarány = starts / összes indítás).
@@ -1648,6 +1652,32 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Gólpassz-zónák: melyik átadás-vonalról készítik elő a gólokat.
+    _az_rows = list((rep.assist_zones or {}).items())
+    _az_n = sum(n for _, n in _az_rows)
+    if _az_n >= 4 and _az_rows:
+        _az_rows.sort(key=lambda kv: -kv[1])
+        _az_zone, _az_top = _az_rows[0]
+        _az_pct = 100.0 * _az_top / _az_n
+        _az_tie = len(_az_rows) > 1 and _az_rows[1][1] == _az_top
+        if _az_pct >= 50.0 and not _az_tie:
+            _az_what = {
+                "szélről": ("a szélső–beálló tengelyt kell elvágni: a "
+                            "szélső átadás-vonalába kell belépni, és a "
+                            "beállót elölről kell megfogni"),
+                "beállótól": ("a beálló kiszolgálását kell elvágni: "
+                              "előtte kell állni és a befelé fordulást "
+                              "kell megakadályozni, ne mögüle jöjjön a "
+                              "labda"),
+                "átlövésből": ("az átlövők passz-sávját kell zárni: "
+                               "előrelépés a lövő-vonalba, felemelt "
+                               "kézzel, hogy a beadás ne menjen át"),
+            }.get(_az_zone, "ezt az átadás-vonalat kell zárni")
+            keys.append(
+                f"Egy vonalról készítik elő a gólokat: a gólpasszaik "
+                f"{_az_pct:.0f}%-a {_az_zone} érkezik "
+                f"({_az_top}/{_az_n}) — {_az_what}.")
 
     # Támadás-indítók: egy ember hozza-e fel a labdát.
     _st_rows = rep.starters or []
@@ -3705,6 +3735,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .event_detection import assist_zones as _azn
+        rep.assist_zones = dict(_azn(match, config)[team.value]["zones"])
         from .attack_types import attack_starters as _ast
         rep.starters = [
             {"player_id": p["player_id"], "jersey": p["jersey"],
@@ -4447,6 +4479,16 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_assist_zones(reports) -> dict:
+    """Gólpassz-zónák: zónánként az előkészítések összegzése (a
+    gólpassz-szám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for zone, n in (r.assist_zones or {}).items():
+            tally[zone] = tally.get(zone, 0) + int(n)
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]))
 
 
 def _merge_starters(reports) -> list:
@@ -5262,6 +5304,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 102) Az ő gólpassz-vonaluk × a ti blokkjaitok: az átlövésből
+    # előkészített gólok ellen az előrelépés fizet ki.
+    _az102 = list((opp.assist_zones or {}).items())
+    _azn102 = sum(n for _, n in _az102)
+    if _az102 and _azn102 >= 4 and own.blk_attempts >= 4:
+        _az102.sort(key=lambda kv: -kv[1])
+        _zone102, _top102 = _az102[0]
+        _pct102 = 100.0 * _top102 / _azn102
+        _blk102 = 100.0 * own.blk_for / max(1, own.blk_attempts)
+        if _zone102 == "átlövésből" and _pct102 >= 50.0 \
+                and _blk102 >= 25.0:
+            plan.append(
+                f"A gólpasszaik {_pct102:.0f}%-a átlövésből érkezik "
+                f"({_top102}/{_azn102}), ti pedig blokkoltok is (a "
+                f"lövéseik {_blk102:.0f}%-ába belenyúltatok) — az "
+                "előrelépés duplán fizet: a második vonal lépjen ki a "
+                "lövő-vonalba felemelt kézzel, mert onnan nemcsak a "
+                "lövés, az előkészítő beadás is elakad.")
 
     # 101) Az ő egyszemélyes kihozataluk × a ti elöl szerzett
     # labdáitok: a letámadás pont rá fizet ki.
@@ -6460,6 +6521,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        assist_zones=_merge_assist_zones(reports),
         starters=_merge_starters(reports),
         tot_timeouts=sum(r.tot_timeouts for r in reports),
         tot_sum_before=sum(r.tot_sum_before for r in reports),

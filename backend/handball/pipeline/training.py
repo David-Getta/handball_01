@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 123) Gólpassz-zónák: ha minden előkészítés egy vonalról jön, a
+    # támadásunk kiszámítható — a második vonal nyitása a téma.
+    try:
+        from .event_detection import assist_zones
+        az123 = assist_zones(match, config)
+        for side in ("home", "away"):
+            top123 = az123[side]["top"]
+            if top123 is None:
+                continue
+            add(side, "támadás", "Előkészítés két vonalról",
+                f"a gólpasszaink {top123['share_pct']:.0f}%-a "
+                f"{top123['zone']} érkezett "
+                f"({top123['goals']}/{az123[side]['assists']}) — egy "
+                "felkészült védelem ezt az egy átadás-vonalat zárja, "
+                "és elfogy a támadásunk",
+                "előkészítés két vonalról: 6-0 elleni támadó-játék "
+                "azzal a szabállyal, hogy a gólpassz nem jöhet "
+                f"kétszer egymás után {top123['zone']} — a "
+                "befejezésnek legalább két különböző vonalról kell "
+                "előkészítve lennie (szélső, beálló, átlövő), "
+                "különben a gól nem számít")
+    except Exception:
+        pass
+
     # 122) Támadás-indítók: ha egy ember hozza fel a labdát, a
     # kihozatal letámadás-állóvá tétele a téma.
     try:

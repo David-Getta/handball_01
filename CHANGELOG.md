@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Gólpassz-zónák**: HONNAN érkezik a gólpassz. A gólpassz-hálózat
+  azt mondja meg, KI készíti elő a gólokat — ez azt, melyik vonalról:
+  a gólpassz pillanatában a passzoló helye alapján szélről, beállótól
+  vagy átlövésből (4+ gólpassztól, 50%-os vezető zónánál, holtverseny
+  nélkül). Ez adja meg az elvágandó átadás-vonalat: a szélső–beálló
+  tengelyt, a beálló kiszolgálását vagy az átlövők passz-sávját.
+  Egy réteg, sok felület: `assist_zones` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (edzői kulcs a zónához
+  illő védekezési utasítással + csempe; zónánkénti darabszámok, hogy
+  meccsek közt pontosan összegződjön), 102. meccsterv-szabály (az ő
+  átlövésből előkészített gólpasszaik × a ti blokkjaitok), 123.
+  edzés-szabály (előkészítés két vonalról: a gólpassz nem jöhet
+  kétszer egymás után ugyanarról a vonalról).
 - **Támadás-indítók**: KI hozza fel a labdát. A támadás-eredet azt
   mondja meg, MIBŐL indul a támadás (középkezdés, kidobás,
   labdaszerzés) — ez azt, ki indítja: minden támadás-szakasz első
