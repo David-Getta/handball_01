@@ -365,3 +365,91 @@ def pass_security_under_pressure(match: Match,
             rec["rise_pp"] = round(
                 rec["press_to_pct"] - rec["free_to_pct"], 1)
     return out
+
+
+# Labdatartás-idő: ennél rövidebb birtoklás csak érintés (zaj), ennyi
+# labdás szakasztól ítélünk egy játékost, és ennyi másodperccel a
+# csapatátlag felett labdatartó a játékos.
+HOLD_MIN_FRAMES = 5
+HOLD_MIN_HOLDS = 5
+HOLD_GAP_S = 0.8
+
+
+def hold_time_players(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Labdatartás-idő: KI meddig tartja magánál a labdát.
+
+    A passz-tempó (pass_tempo) és a támadás-ritmus csapatszinten mondja
+    meg, pörög-e a játék — ez a névre szóló olvasata: minden labdás
+    szakasz hosszát a birtokoshoz írjuk, és nézzük, kinél áll meg a
+    labda. Az érintésnyi (HOLD_MIN_FRAMES alatti) birtoklás zaj, azt
+    nem számoljuk.
+
+    Edzőileg két irányba szól: ellenfélnél a hosszan tartó labdás a
+    kettőzés célpontja (nála van idő odaérni, és nála lassul a
+    támadásuk), saját oldalon pedig a gyorsabb továbbítás témája —
+    egy-két tizeddel korábbi passz egy egész átrendeződést ér.
+
+    Visszatérés csapatonként:
+      {"holds", "seconds", "avg_s", "players": [{"player_id", "jersey",
+       "holds", "seconds", "avg_s"}], "slowest": {..., "gap_s"}|None}
+    — players az átlagos tartás szerint csökkenően; avg_s és slowest
+    None, ha kevés a minta (HOLD_MIN_HOLDS).
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    jersey: dict[int, int] = {}
+    tally: dict[str, dict[int, list]] = {"home": {}, "away": {}}
+    run_id = run_team = None
+    run_len = 0
+
+    def _close():
+        """A lezáruló labdás szakasz jóváírása a birtokosnál."""
+        if run_id is None or run_team is None:
+            return
+        if run_len < HOLD_MIN_FRAMES:
+            return
+        rec = tally[run_team].setdefault(run_id, [0, 0])
+        rec[0] += 1
+        rec[1] += run_len
+
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        pid = holder.track_id if holder is not None else None
+        side = (holder.team.value
+                if holder is not None and holder.team is not None
+                else None)
+        if holder is not None and holder.jersey_number is not None:
+            jersey.setdefault(holder.track_id, holder.jersey_number)
+        if pid != run_id or side != run_team:
+            _close()
+            run_id, run_team, run_len = pid, side, 0
+        if pid is not None and side is not None:
+            run_len += 1
+    _close()
+
+    out: dict = {}
+    for s in ("home", "away"):
+        players = []
+        for pid, (holds, frames) in tally[s].items():
+            players.append({"player_id": pid, "jersey": jersey.get(pid),
+                            "holds": holds,
+                            "seconds": round(frames / fps, 1),
+                            "avg_s": round(frames / fps / holds, 2)})
+        players.sort(key=lambda p: -p["avg_s"])
+        n_holds = sum(p["holds"] for p in players)
+        n_sec = round(sum(p["seconds"] for p in players), 1)
+        team_avg = (round(n_sec / n_holds, 2) if n_holds else None)
+        slowest = None
+        if n_holds >= HOLD_MIN_HOLDS and team_avg:
+            cands = [{**p, "gap_s": round(p["avg_s"] - team_avg, 2)}
+                     for p in players
+                     if p["holds"] >= HOLD_MIN_HOLDS
+                     and p["avg_s"] - team_avg >= HOLD_GAP_S]
+            if cands:
+                slowest = max(cands, key=lambda p: p["gap_s"])
+        out[s] = {"holds": n_holds, "seconds": n_sec,
+                  "avg_s": (team_avg if n_holds >= HOLD_MIN_HOLDS
+                            else None),
+                  "players": players, "slowest": slowest}
+    return out

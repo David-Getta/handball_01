@@ -224,3 +224,51 @@ def test_pass_security_flags_press_sensitive_team():
     # Kevés minta: nincs ítélet.
     few = pass_security_under_pressure(Match(meta, frames[:60]))
     assert few["home"]["press_to_pct"] is None
+
+
+def test_hold_time_players_finds_where_the_ball_stops():
+    """Az 1-es öt labdás szakaszban átlag 2 mp-et tart, a 2-es 0,4-et
+    → az 1-es a labdatartó; kevés szakasznál nincs megnevezett
+    játékos."""
+    from handball.pipeline.decisions import hold_time_players
+
+    frames = []
+    t = 0
+
+    def _hold(pid, seconds):
+        """`seconds` mp-ig a pid-es hazai játékosnál a labda (x=25)."""
+        nonlocal t, frames
+        for _ in range(int(seconds * 25)):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=pid, team=Team.HOME, x=25.0,
+                               y=10.0, source=PositionSource.MEASURED,
+                               confidence=1.0),
+            ], ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(3):      # labda nélküli szünet: zárul a szakasz
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    for _ in range(5):
+        _hold(1, 2.0)
+    for _ in range(5):
+        _hold(2, 0.4)
+
+    meta = MatchMeta(match_id="h", home_team="H", away_team="A", fps=25.0)
+    htp = hold_time_players(Match(meta, frames))
+    h = htp["home"]
+    one = next(p for p in h["players"] if p["player_id"] == 1)
+    two = next(p for p in h["players"] if p["player_id"] == 2)
+    assert one["holds"] == 5 and two["holds"] == 5
+    assert one["avg_s"] == 2.0 and two["avg_s"] == 0.4
+    assert h["avg_s"] == 1.2
+    assert h["slowest"] is not None and h["slowest"]["player_id"] == 1
+    assert h["slowest"]["gap_s"] > 0
+    # A vendégnek nincs labdás szakasza → nincs átlag és nincs ítélet.
+    assert htp["away"]["holds"] == 0
+    assert htp["away"]["avg_s"] is None
+    assert htp["away"]["slowest"] is None
+
+    # Egyetlen szakasz: kevés minta → nincs megnevezett játékos.
+    few = hold_time_players(Match(meta, frames[:53]))
+    assert few["home"]["slowest"] is None

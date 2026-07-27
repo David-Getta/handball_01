@@ -1199,6 +1199,42 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "befejezéseket (elzárás rá, az ő oldalán a beálló)";
   }
 
+  // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
+  // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  String? _holdTime(Map<String, dynamic> r) {
+    final list = r["hold_players"];
+    final fps = ((r["hold_fps"] as num?) ?? 25.0).toDouble();
+    if (list is! List || fps <= 0) return null;
+    int holds = 0;
+    int frames = 0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      holds += ((e["holds"] as num?) ?? 0).toInt();
+      frames += ((e["frames"] as num?) ?? 0).toInt();
+    }
+    if (holds < 5) return null;
+    final avg = frames / holds / fps;
+    Map? slow;
+    double slowS = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final n = ((e["holds"] as num?) ?? 0).toInt();
+      if (n < 5) continue;
+      final s = ((e["frames"] as num?) ?? 0).toInt() / n / fps;
+      if (slow == null || s > slowS) {
+        slow = e;
+        slowS = s;
+      }
+    }
+    if (slow == null || slowS - avg < 0.8) return null;
+    final who = slow["jersey"] != null
+        ? "${slow["jersey"]}-es"
+        : "${slow["player_id"]} azonosítójú";
+    return "a(z) $who játékosuknál áll meg a labda: átlag "
+        "${slowS.toStringAsFixed(1)} mp tartás (csapatátlag "
+        "${avg.toStringAsFixed(1)} mp) · rá a kettőzés és a letámadás";
+  }
+
   // Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak (6+
   // védekezett támadás, 30% váltás-arány / 80% fő forma; a
   // backend-kulccsal azonos küszöbök).
@@ -2716,6 +2752,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Célba vett védő", _targetedDefender(r)!],
       if (_formationSwitching(r) != null)
         ["Védekezés-váltás", _formationSwitching(r)!],
+      if (_holdTime(r) != null) ["Labdatartás", _holdTime(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

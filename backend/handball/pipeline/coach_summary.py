@@ -739,6 +739,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_fs['main_pct']:.0f}%-ában).")
     except Exception:
         pass
+    # Labdatartás-idő: kinél állt meg a labda a csapatátlaghoz képest.
+    try:
+        from .decisions import hold_time_players
+        htp = hold_time_players(match)
+        for side, name in (("home", home), ("away", away)):
+            slow = htp[side]["slowest"]
+            if slow is None:
+                continue
+            jn = slow["jersey"] or _jersey_of_track(match).get(
+                slow["player_id"])
+            who = (f"{jn}-es mezszámú játékosánál" if jn is not None
+                   else f"{slow['player_id']} azonosítójú játékosánál")
+            body += (f" A(z) {name} {who} állt meg a leginkább a "
+                     f"labda: átlag {slow['avg_s']:.1f} mp-et tartotta "
+                     f"({slow['holds']} labdás szakasz, a csapatátlag "
+                     f"{htp[side]['avg_s']:.1f} mp).")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power

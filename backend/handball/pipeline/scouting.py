@@ -583,6 +583,12 @@ class ScoutingReport:
     # támadások, a szomszédos támadás-párok és a köztük történt
     # váltások száma — darabszámok, meccsek közt pontosan
     # összegződnek (váltás-arány = fsw_switches / fsw_pairs).
+    # Labdatartásuk: [{"player_id", "jersey", "holds", "frames"}] —
+    # játékosonként a labdás szakaszok száma és a bennük töltött
+    # kockák; darabszámok, meccsek közt pontosan összegződnek (az
+    # átlagos tartás = frames / holds / fps).
+    hold_players: list = field(default_factory=list)
+    hold_fps: float = 25.0
     fsw_labels: dict = field(default_factory=dict)
     fsw_attacks: int = 0
     fsw_pairs: int = 0
@@ -1611,6 +1617,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Labdatartás-idő: kinél áll meg náluk a labda.
+    _htp_rows = [p for p in (rep.hold_players or []) if p["holds"] >= 5]
+    _htp_holds = sum(p["holds"] for p in (rep.hold_players or []))
+    _htp_frames = sum(p["frames"] for p in (rep.hold_players or []))
+    if _htp_rows and _htp_holds >= 5:
+        _htp_avg = _htp_frames / _htp_holds / (rep.hold_fps or 25.0)
+        _htp_slow = max(_htp_rows,
+                        key=lambda p: p["frames"] / p["holds"])
+        _htp_s = (_htp_slow["frames"] / _htp_slow["holds"]
+                  / (rep.hold_fps or 25.0))
+        if _htp_s - _htp_avg >= 0.8:
+            _htp_who = (f"{_htp_slow['jersey']}-es mezszámú"
+                        if _htp_slow.get("jersey") is not None
+                        else f"{_htp_slow['player_id']} azonosítójú")
+            keys.append(
+                f"A(z) {_htp_who} játékosuknál áll meg a labda "
+                f"(átlag {_htp_s:.1f} mp tartás a csapatátlag "
+                f"{_htp_avg:.1f} mp helyett) — nála van idő odaérni: "
+                "rá jöjjön a kettőzés és a letámadás, mert nála "
+                "lassul a támadásuk.")
 
     # Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.
     if rep.fsw_attacks >= 6 and rep.fsw_pairs > 0 and rep.fsw_labels:
@@ -3542,6 +3569,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .decisions import hold_time_players as _htp
+        _hfps = match.meta.fps if match.meta.fps > 0 else 25.0
+        rep.hold_fps = _hfps
+        rep.hold_players = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "holds": p["holds"],
+             "frames": round(p["seconds"] * _hfps)}
+            for p in _htp(match, config)[team.value]["players"]]
         rep.fsw_labels = dict(fswrec["labels"])
         rep.fsw_attacks = fswrec["attacks"]
         rep.fsw_pairs = max(0, fswrec["attacks"] - 1)
@@ -4244,6 +4279,26 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_hold_players(reports) -> list:
+    """Labdatartás: játékosonként a labdás szakaszok és a bennük
+    töltött kockák összegzése (az átlagos tartás szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.hold_players or []):
+            rec = tally.setdefault(p["player_id"],
+                                   {"jersey": None, "holds": 0,
+                                    "frames": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = p.get("jersey")
+            rec["holds"] += int(p.get("holds", 0))
+            rec["frames"] += int(p.get("frames", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(
+                tally.items(),
+                key=lambda kv: -(kv[1]["frames"]
+                                 / max(1, kv[1]["holds"])))]
 
 
 def _merge_fsw_labels(reports) -> dict:
@@ -5006,6 +5061,31 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 96) Az ő labdatartójuk × a ti elöl-szerzéseitek: nála van idő
+    # odaérni.
+    _htp96 = [p for p in (opp.hold_players or []) if p["holds"] >= 5]
+    _hold96 = sum(p["holds"] for p in (opp.hold_players or []))
+    if _htp96 and _hold96 >= 5 and own.steal_n >= 6 \
+            and 100.0 * own.steal_high / own.steal_n >= 35.0:
+        _avg96 = (sum(p["frames"] for p in (opp.hold_players or []))
+                  / _hold96 / (opp.hold_fps or 25.0))
+        _slow96 = max(_htp96, key=lambda p: p["frames"] / p["holds"])
+        _s96 = (_slow96["frames"] / _slow96["holds"]
+                / (opp.hold_fps or 25.0))
+        if _s96 - _avg96 >= 0.8:
+            _who96 = (f"{_slow96['jersey']}-es mezszámú"
+                      if _slow96.get("jersey") is not None
+                      else f"{_slow96['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who96} játékosuknál áll meg a labda (átlag "
+                f"{_s96:.1f} mp a csapatátlag {_avg96:.1f} mp "
+                f"helyett), ti pedig sokat szereztek elöl (a "
+                f"szerzéseitek "
+                f"{100.0 * own.steal_high / own.steal_n:.0f}%-a) — a "
+                "letámadást rá kell időzíteni: amikor nála van a "
+                "labda, jöjjön a második védő, mert nála van idő "
+                "odaérni.")
 
     # 95) Az ő védekezés-váltásuk × a ti lerohanásaitok: a váltás csak
     # felállt védekezésben él.
@@ -6093,6 +6173,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        hold_players=_merge_hold_players(reports),
+        hold_fps=(reports[0].hold_fps if reports else 25.0),
         fsw_labels=_merge_fsw_labels(reports),
         fsw_attacks=sum(r.fsw_attacks for r in reports),
         fsw_pairs=sum(r.fsw_pairs for r in reports),

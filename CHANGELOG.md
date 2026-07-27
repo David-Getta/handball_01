@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Labdatartás-idő**: KI meddig tartja magánál a labdát. A passz-tempó
+  és a támadás-ritmus csapatszinten mondja meg, pörög-e a játék — ez a
+  névre szóló olvasata: minden labdás szakasz hosszát a birtokoshoz
+  írjuk (az érintésnyi, 5 kockánál rövidebb birtoklás zaj), és nézzük,
+  kinél áll meg a labda (5+ labdás szakasztól, 0,8 mp-cel a
+  csapatátlag felett). Edzőileg két irányba szól: ellenfélnél a hosszan
+  tartó labdás a kettőzés célpontja (nála van idő odaérni, és nála
+  lassul a támadásuk), saját oldalon a gyorsabb továbbítás témája. Egy
+  réteg, sok felület: `hold_time_players` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (edzői kulcs + csempe;
+  játékosonként a labdás szakaszok és a bennük töltött kockák tárolva,
+  hogy az átlagos tartás meccsek közt pontosan visszaszámolható
+  legyen), 96. meccsterv-szabály (az ő labdatartójuk × a ti
+  elöl-szerzéseitek), 117. edzés-szabály (két-érintéses játék,
+  kényszerítő döntés a labdatartónak).
 - **Védekezés-váltás**: egy rendszert játszanak, vagy váltogatnak. A
   leggyakoribb forma azt mondja meg, MIT játszanak, a forma szerinti
   hatékonyság azt, melyik fal fogja meg őket — ez a harmadik kérdés:

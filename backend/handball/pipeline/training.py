@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 117) Labdatartás-idő: ha valakinél érdemben megáll a labda, a
+    # gyorsabb továbbítás a téma.
+    try:
+        from .decisions import HOLD_GAP_S, hold_time_players
+        htp117 = hold_time_players(match, config)
+        for side in ("home", "away"):
+            slow117 = htp117[side]["slowest"]
+            if slow117 is None:
+                continue
+            who117 = (f"{slow117['jersey']}-es mezszámú"
+                      if slow117["jersey"] is not None
+                      else f"{slow117['player_id']} azonosítójú")
+            add(side, "támadás", "Gyorsabb továbbítás",
+                f"a(z) {who117} játékosunknál áll meg a labda: átlag "
+                f"{slow117['avg_s']:.1f} mp tartás a csapatátlag "
+                f"{htp117[side]['avg_s']:.1f} mp helyett "
+                f"({slow117['holds']} labdás szakasz, a küszöb "
+                f"{HOLD_GAP_S:.1f} mp eltérés) — nála van ideje "
+                "odaérni a kettőzésnek",
+                "két-érintéses játék: felállt támadásban a labda "
+                "legfeljebb két ütemig maradhat egy kézben "
+                "(passz–passz–befejezés), külön kör érkezés közbeni "
+                "átvétellel; nála pedig kényszerítő döntés: elzárásra "
+                "indulás vagy azonnali továbbadás")
+    except Exception:
+        pass
+
     # 116) Védekezés-váltás: ha végig egy rendszert játszunk, a
     # második változat betanítása a téma.
     try:
