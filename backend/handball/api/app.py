@@ -2883,6 +2883,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stats import pair_plus_minus
+            res["pair_plus_minus"] = pair_plus_minus(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3471,6 +3476,8 @@ def create_app():
                 from ..pipeline.substitutions import substitution_blocks
                 _layer("substitution_blocks",
                        lambda: substitution_blocks(match))
+                from ..pipeline.stats import pair_plus_minus
+                _layer("pair_plus_minus", lambda: pair_plus_minus(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

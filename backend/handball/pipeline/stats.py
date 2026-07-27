@@ -593,3 +593,101 @@ def player_plus_minus(match, config=None) -> dict:
         out[side] = {"team_per_min": team_per_min, "players": players,
                      "best": best, "worst": worst}
     return out
+
+
+# Páros-mérleg: ennyi együtt töltött perctől ítélünk egy párost, és
+# ennyi gól/perc eltérés a csapatátlagtól számít érdemi jelnek.
+PAIR_MIN_MINUTES = 4.0
+PAIR_GAP_PER_MIN = 0.2
+
+
+def pair_plus_minus(match, config=None) -> dict:
+    """Páros-mérleg: MELYIK KETTŐ megy jól EGYÜTT a pályán.
+
+    A játékos-mérleg (player_plus_minus) egy emberre nézi a
+    gólkülönbséget — ez a párokra: minden együtt töltött kockát a
+    két játékos párosához írunk, és a rájuk eső gólokat is. Így
+    látszik, mely kettős emeli a csapatot, és melyik páros együtt
+    nem működik (attól még külön-külön jók lehetnek).
+
+    Edzőileg ez az egység-építés adata: a jó párost egy blokkban
+    kell tartani (együtt cserélni), a rosszat szét kell húzni; az
+    ellenfél legjobb párosát pedig a cseréikkel lehet szétszedni —
+    kettőzéssel arra, aki hamarabb fárad.
+
+    Visszatérés csapatonként: {"team_per_min", "pairs":
+    [{"players": [id, id], "minutes", "for", "against", "diff",
+      "diff_per_min", "vs_team"}], "best", "worst"} — a lista a
+    percre vetített mérleg szerint csökkenő; a best/worst az első
+    olyan páros, amelynek legalább PAIR_MIN_MINUTES közös ideje van,
+    és PAIR_GAP_PER_MIN-nel a csapatátlag felett/alatt van
+    (egyébként None).
+    """
+    from itertools import combinations
+
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    empty = {s: {"team_per_min": None, "pairs": [], "best": None,
+                 "worst": None} for s in ("home", "away")}
+    if not match.frames:
+        return empty
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    goals_by_t: dict = {}
+    for (gt, gs) in goals:
+        goals_by_t.setdefault(gt, []).append(gs)
+
+    # Együtt töltött kockák és a rájuk eső gólok páronként.
+    on: dict = {"home": {}, "away": {}}
+    tally: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        gss = goals_by_t.get(f.t)
+        by_side: dict = {"home": [], "away": []}
+        for p in f.players:
+            if p.team is not None:
+                by_side[p.team.value].append(p.track_id)
+        for side, ids in by_side.items():
+            for pair in combinations(sorted(set(ids)), 2):
+                on[side][pair] = on[side].get(pair, 0) + 1
+                if gss:
+                    rec = tally[side].setdefault(pair,
+                                                 {"for": 0,
+                                                  "against": 0})
+                    for gs in gss:
+                        rec["for" if gs == side else "against"] += 1
+
+    total_s = (match.frames[-1].t - match.frames[0].t) / fps
+    out = {}
+    for side in ("home", "away"):
+        other = "away" if side == "home" else "home"
+        team_for = sum(1 for (_t, gs) in goals if gs == side)
+        team_against = sum(1 for (_t, gs) in goals if gs == other)
+        team_per_min = (round(60.0 * (team_for - team_against) / total_s, 2)
+                        if total_s > 0 else None)
+        pairs = []
+        for pair, frames_n in on[side].items():
+            minutes = frames_n / fps / 60.0
+            rec = tally[side].get(pair, {"for": 0, "against": 0})
+            diff = rec["for"] - rec["against"]
+            per_min = (round(diff / minutes, 2) if minutes > 0 else None)
+            pairs.append({
+                "players": list(pair), "minutes": round(minutes, 1),
+                "for": rec["for"], "against": rec["against"],
+                "diff": diff, "diff_per_min": per_min,
+                "vs_team": (round(per_min - team_per_min, 2)
+                            if per_min is not None
+                            and team_per_min is not None else None)})
+        pairs.sort(key=lambda p: -(p["diff_per_min"] or 0.0))
+        best = next((p for p in pairs
+                     if p["minutes"] >= PAIR_MIN_MINUTES
+                     and (p["vs_team"] or 0.0) >= PAIR_GAP_PER_MIN), None)
+        worst = next((p for p in reversed(pairs)
+                      if p["minutes"] >= PAIR_MIN_MINUTES
+                      and (p["vs_team"] or 0.0) <= -PAIR_GAP_PER_MIN),
+                     None)
+        out[side] = {"team_per_min": team_per_min, "pairs": pairs,
+                     "best": best, "worst": worst}
+    return out

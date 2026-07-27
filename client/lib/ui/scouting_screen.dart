@@ -1199,6 +1199,36 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "befejezéseket (elzárás rá, az ő oldalán a beálló)";
   }
 
+  // Páros-mérleg: melyik kettősük megy együtt a legjobban (4+ közös
+  // perc, 0,2 gól/perc felett; a backend-kulccsal azonos küszöbök).
+  String? _pairPlusMinus(Map<String, dynamic> r) {
+    final list = r["pair_plus_minus"];
+    final fps = ((r["pair_fps"] as num?) ?? 25.0).toDouble();
+    if (list is! List || fps <= 0) return null;
+    Map? best;
+    double bestRate = 0.0;
+    double bestMin = 0.0;
+    for (final e in list) {
+      if (e is! Map) continue;
+      final minutes = ((e["frames"] as num?) ?? 0).toDouble() / fps / 60.0;
+      if (minutes < 4.0) continue;
+      final diff = ((e["for"] as num?) ?? 0).toInt() -
+          ((e["against"] as num?) ?? 0).toInt();
+      final rate = diff / minutes;
+      if (best == null || rate > bestRate) {
+        best = e;
+        bestRate = rate;
+        bestMin = minutes;
+      }
+    }
+    if (best == null || bestRate < 0.2) return null;
+    final players = (best["players"] as List?) ?? const [];
+    return "a(z) ${players.join(" és ")} kettősük megy együtt a "
+        "legjobban: ${best["for"]}-${best["against"]} mérleg "
+        "${bestMin.toStringAsFixed(0)} közös perc alatt · a párost "
+        "szét kell szedni (kettőzés a fáradóbbra, időkérés)";
+  }
+
   // Csere-blokkok: egységekben cserélnek-e (4+ cserehullám, 40%
   // blokkos arány; a backend-kulccsal azonos küszöbök).
   String? _subBlocks(Map<String, dynamic> r) {
@@ -2797,6 +2827,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_shotPowerFade(r) != null)
         ["Lövőerő-esés", _shotPowerFade(r)!],
       if (_subBlocks(r) != null) ["Csere-blokkok", _subBlocks(r)!],
+      if (_pairPlusMinus(r) != null)
+        ["Páros-mérleg", _pairPlusMinus(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

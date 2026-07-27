@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 120) Páros-mérleg: ha egy kettősünk együtt érdemben rosszabb, az
+    # egység-építés (kivel kivel) a téma.
+    try:
+        from .stats import PAIR_MIN_MINUTES, pair_plus_minus
+        prm120 = pair_plus_minus(match, config)
+        for side in ("home", "away"):
+            worst120 = prm120[side]["worst"]
+            if worst120 is None \
+                    or worst120["minutes"] < PAIR_MIN_MINUTES:
+                continue
+            add(side, "taktika", "Egység-építés",
+                f"a(z) {' és '.join(str(i) for i in worst120['players'])} "
+                f"azonosítójú kettősünk együtt {worst120['for']}-"
+                f"{worst120['against']} mérleget hozott "
+                f"({worst120['minutes']:.0f} közös perc, "
+                f"{worst120['diff_per_min']:.2f} gól/perc a csapatátlag "
+                "helyett) — külön-külön lehetnek jók, együtt nem "
+                "működnek",
+                "egység-építés: nézzétek meg a közös szakaszaikat "
+                "(ki hova mozdul, ki kit fed), és próbáljátok ki őket "
+                "külön blokkban egy-egy edzőmeccsen; ha a párosítás "
+                "marad, adjatok nekik egy fix feladat-megosztást "
+                "(egyikük indít, a másik zár)")
+    except Exception:
+        pass
+
     # 119) Csere-blokkok: ha egységekben cserélünk, a csere-fegyelem
     # (a váltás ütemének védelme) a téma.
     try:

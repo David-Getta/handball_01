@@ -596,6 +596,12 @@ class ScoutingReport:
     # játékosok összege és a 2+ fős hullámok száma — darabszámok,
     # meccsek közt pontosan összegződnek (blokk-arány = block / waves,
     # átlagos hullám-méret = players / waves).
+    # Páros-mérlegük: [{"players": [id, id], "frames", "for",
+    # "against"}] — az együtt töltött kockák és a rájuk eső gólok;
+    # darabszámok, meccsek közt pontosan összegződnek (a percre
+    # vetített mérleg ebből visszaszámolható).
+    pair_plus_minus: list = field(default_factory=list)
+    pair_fps: float = 25.0
     sbl_waves: int = 0
     sbl_players: int = 0
     sbl_block_waves: int = 0
@@ -1631,6 +1637,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Páros-mérleg: melyik kettősük megy a legjobban együtt.
+    _prm_rows = [p for p in (rep.pair_plus_minus or [])
+                 if p["frames"] / (rep.pair_fps or 25.0) / 60.0 >= 4.0]
+    if _prm_rows:
+        _prm_best = max(
+            _prm_rows,
+            key=lambda p: ((p["for"] - p["against"])
+                           / max(0.1, p["frames"] / (rep.pair_fps or 25.0)
+                                 / 60.0)))
+        _prm_min = _prm_best["frames"] / (rep.pair_fps or 25.0) / 60.0
+        if (_prm_best["for"] - _prm_best["against"]) / _prm_min >= 0.2:
+            _prm_who = " és ".join(str(pid)
+                                   for pid in _prm_best["players"])
+            keys.append(
+                f"A(z) {_prm_who} azonosítójú kettősük együtt megy a "
+                f"legjobban ({_prm_best['for']}-{_prm_best['against']} "
+                f"a mérleg {_prm_min:.0f} közös perc alatt) — a "
+                "párost szét kell szedni: kettőzés arra, aki hamarabb "
+                "fárad, és időkérés, ha együtt lendülnek meg.")
 
     # Csere-blokkok: egységekben cserélnek, vagy egyesével.
     if rep.sbl_waves >= 4:
@@ -3618,6 +3644,15 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .stats import pair_plus_minus as _prm
+        _pfps = match.meta.fps if match.meta.fps > 0 else 25.0
+        rep.pair_fps = _pfps
+        rep.pair_plus_minus = [
+            {"players": p["players"],
+             "frames": round(p["minutes"] * 60.0 * _pfps),
+             "for": p["for"], "against": p["against"]}
+            for p in _prm(match, config)[team.value]["pairs"]
+            if p["minutes"] * 60.0 >= 60.0]
         from .substitutions import substitution_blocks as _sbl
         sblrec = _sbl(match, config)[team.value]
         rep.sbl_waves = sblrec["waves"]
@@ -4339,6 +4374,23 @@ def _merge_plus_minus(reports) -> list:
                 rec[k] += int(p.get(k, 0))
     return [{"player_id": pid, **rec}
             for pid, rec in sorted(
+                tally.items(),
+                key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_pair_plus_minus(reports) -> list:
+    """Páros-mérleg: párosonként az együtt töltött kockák és a rájuk
+    eső gólok összegzése (a mérleg szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for p in (r.pair_plus_minus or []):
+            key = tuple(sorted(p["players"]))
+            rec = tally.setdefault(key, {"frames": 0, "for": 0,
+                                         "against": 0})
+            for k in ("frames", "for", "against"):
+                rec[k] += int(p.get(k, 0))
+    return [{"players": list(key), **rec}
+            for key, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
 
@@ -5123,6 +5175,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 99) Az ő legjobb párosuk × a ti időkéréseitek: a jól menő
+    # kettőst meg kell törni.
+    _prm99 = [p for p in (opp.pair_plus_minus or [])
+              if p["frames"] / (opp.pair_fps or 25.0) / 60.0 >= 4.0]
+    if _prm99 and own.to_n >= 1:
+        _b99 = max(_prm99,
+                   key=lambda p: ((p["for"] - p["against"])
+                                  / max(0.1, p["frames"]
+                                        / (opp.pair_fps or 25.0) / 60.0)))
+        _m99 = _b99["frames"] / (opp.pair_fps or 25.0) / 60.0
+        if (_b99["for"] - _b99["against"]) / _m99 >= 0.2:
+            plan.append(
+                f"A(z) {' és '.join(str(i) for i in _b99['players'])} "
+                f"azonosítójú kettősük együtt megy a legjobban "
+                f"({_b99['for']}-{_b99['against']} {_m99:.0f} közös "
+                "perc alatt) — tartsatok fenn egy időkérést arra a "
+                "szakaszra, amikor együtt vannak a pályán, és "
+                "kettőzzétek azt, aki hamarabb fárad: a párost szét "
+                "kell szedni, nem egyenként legyőzni.")
 
     # 98) Az ő blokkos cseréjük × a ti gyors újraindításotok: csere
     # közben egy ütemre rossz emberek vannak a pályán.
@@ -6267,6 +6339,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pair_plus_minus=_merge_pair_plus_minus(reports),
+        pair_fps=(reports[0].pair_fps if reports else 25.0),
         sbl_waves=sum(r.sbl_waves for r in reports),
         sbl_players=sum(r.sbl_players for r in reports),
         sbl_block_waves=sum(r.sbl_block_waves for r in reports),

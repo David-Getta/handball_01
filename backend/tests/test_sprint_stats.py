@@ -271,3 +271,68 @@ def test_player_plus_minus_ranks_on_court_goal_difference():
         meta=MatchMeta(match_id="pm", home_team="H", away_team="A",
                        fps=25.0), frames=frames[:500]))
     assert few["home"]["best"] is None and few["home"]["worst"] is None
+
+
+def test_pair_plus_minus_ranks_partnerships():
+    """Az 1-2 páros két hazai gólnál van együtt a pályán, az 1-3 páros
+    két kapott gólnál → az 1-2 a legjobb, az 1-3 a legrosszabb
+    mérlegű; rövid részletnél nincs megnevezett páros."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.stats import pair_plus_minus
+
+    def _pl(track_id, x):
+        return PlayerPosition(track_id=track_id, team=Team.HOME, x=x,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+
+    def _play(partner, seconds):
+        """`seconds` mp játék: az 1-es és a partnere a pályán."""
+        nonlocal t, frames
+        for _ in range(int(seconds * 25)):
+            frames.append(Frame(t=t,
+                                players=[_pl(1, 20.0), _pl(partner, 22.0)],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _goal(partner, home_goal):
+        """Gól a +x (hazai) vagy a -x (vendég) kapura, a párossal a
+        pályán."""
+        nonlocal t, frames
+        for i in range(8):
+            bx = (min(33.6 + i, 40.0) if home_goal
+                  else max(6.4 - i, 0.0))
+            frames.append(Frame(t=t,
+                                players=[_pl(1, 20.0), _pl(partner, 22.0)],
+                                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+
+    for _ in range(2):
+        _play(2, 150)
+        _goal(2, home_goal=True)
+    for _ in range(2):
+        _play(3, 150)
+        _goal(3, home_goal=False)
+
+    prm = pair_plus_minus(Match(
+        meta=MatchMeta(match_id="pr", home_team="H", away_team="A",
+                       fps=25.0), frames=frames))
+    h = prm["home"]
+    good = next(p for p in h["pairs"] if p["players"] == [1, 2])
+    bad = next(p for p in h["pairs"] if p["players"] == [1, 3])
+    assert good["for"] == 2 and good["against"] == 0
+    assert bad["for"] == 0 and bad["against"] == 2
+    assert good["diff_per_min"] > bad["diff_per_min"]
+    assert h["best"]["players"] == [1, 2]
+    assert h["worst"]["players"] == [1, 3]
+    # A vendégnek nincs játékosa → nincs páros.
+    assert prm["away"]["pairs"] == []
+
+    # Rövid részlet: nincs elég közös idő → nincs megnevezett páros.
+    few = pair_plus_minus(Match(
+        meta=MatchMeta(match_id="pr", home_team="H", away_team="A",
+                       fps=25.0), frames=frames[:400]))
+    assert few["home"]["best"] is None and few["home"]["worst"] is None

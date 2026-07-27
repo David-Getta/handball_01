@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Páros-mérleg**: MELYIK KETTŐ megy jól EGYÜTT a pályán. A
+  játékos-mérleg egy emberre nézi a gólkülönbséget — ez a párokra:
+  minden együtt töltött kockát a két játékos párosához írunk, a rájuk
+  eső gólokkal együtt (4+ közös perctől, 0,2 gól/perc eltérés a
+  csapatátlagtól). Így látszik, mely kettős emeli a csapatot, és
+  melyik páros együtt nem működik — attól még külön-külön jók
+  lehetnek. Edzőileg ez az egység-építés adata: a jó párost egy
+  blokkban kell tartani (együtt cserélni), a rosszat szét kell húzni;
+  az ellenfél legjobb párosát pedig a cseréikkel és időkéréssel lehet
+  szétszedni. Egy réteg, sok felület: `pair_plus_minus` motor, edzői
+  összefoglaló (mezszámmal), /analyze + meccs-csomag,
+  felderítés-profil (edzői kulcs + csempe; párosonként az együtt
+  töltött kockák és a gólok tárolva, hogy a mérleg meccsek közt
+  pontosan visszaszámolható legyen), 99. meccsterv-szabály (az ő
+  legjobb párosuk × a ti időkéréseitek), 120. edzés-szabály
+  (egység-építés: fix feladat-megosztás vagy külön blokk).
 - **Csere-blokkok**: egyesével cserélnek, vagy egységekben. A
   csere-hatás azt méri, MI TÖRTÉNIK a csere után, a késő csere azt,
   kit felejtenek bent — ez a harmadik kérdés: HOGYAN cserélnek. Ha egy

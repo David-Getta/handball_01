@@ -796,6 +796,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"{rec_sb['avg_size']:.1f} ember).")
     except Exception:
         pass
+    # Páros-mérleg: melyik kettősük ment a legjobban együtt.
+    try:
+        from .stats import pair_plus_minus
+        prm = pair_plus_minus(match)
+        for side, name in (("home", home), ("away", away)):
+            best_pr = prm[side]["best"]
+            if best_pr is None:
+                continue
+            jm = _jersey_of_track(match)
+            who = " és ".join(
+                (f"{jm[pid]}-es" if jm.get(pid) is not None
+                 else f"{pid} azonosítójú")
+                for pid in best_pr["players"])
+            body += (f" A(z) {name} legjobb párosa {who} volt: "
+                     f"{best_pr['for']}-{best_pr['against']} a mérleg "
+                     f"{best_pr['minutes']:.0f} közös perc alatt.")
+    except Exception:
+        pass
     # Lövő-erő: volt-e a csapatátlag felett bombázó befejezőjük.
     try:
         from .event_detection import shooter_power
