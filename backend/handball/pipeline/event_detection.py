@@ -640,28 +640,25 @@ def shot_power_fade(match: Match,
 # részarány jelenti, hogy egy vonalról jönnek az előkészítések.
 ASSIST_ZONE_MIN = 4
 ASSIST_ZONE_SHARE = 50.0
-# A beálló-sáv: a kaputól ilyen közelről adott gólpassz beállós
-# kiszolgálás; a középső sávban ennél távolabbról átlövő-vonalból jön.
-ASSIST_PIVOT_M = 9.0
-# Szélső-sáv: a pálya közepétől ennyivel oldalra már szélről adnak.
-ASSIST_WING_M = 5.0
+# A gólpassz-forrás (attack_types.assist_sources) zóna-nevei edzői
+# nyelven — a zónázás maga ott történik, hogy egy helyen legyen.
+ASSIST_ZONE_NAMES = {"szél": "szélről", "közép": "beállótól",
+                     "hátsó": "átlövésből"}
 
 
 def assist_zones(match: Match,
                  config: Optional[TacticsConfig] = None) -> dict:
-    """Gólpassz-zónák: HONNAN érkezik a gólpassz.
+    """Gólpassz-zónák: HONNAN érkezik a gólpassz — edzői ítélettel.
 
-    A gólpassz-hálózat (assist_network) azt mondja meg, KI készíti elő
-    a gólokat — ez azt, MELYIK VONALRÓL: a gólhoz rendelt gólpassz
-    pillanatában a passzoló helye alapján "szélről" (a pálya közepétől
-    ASSIST_WING_M-nél oldalabbról), "beállótól" (a kaputól
-    ASSIST_PIVOT_M-en belülről, középen) vagy "átlövésből" (középen,
-    távolabbról).
+    A gólpassz-forrás (assist_sources) számolja meg, melyik zónából
+    (szél / közép / hátsó) érkeznek az előkészítések; ez a réteg abból
+    von le ítéletet: van-e EGY vonal, amiről a gólpasszaik fele jön.
+    A gólpassz-hálózat (assist_network) a ki-kinek kérdést nézi.
 
-    Edzőileg ez az átadás-vonal, amit zárni kell: ha a gólpasszaik fele
-    a szélről jön, a szélső–beálló tengelyt kell elvágni; ha a
-    beállótól, a beálló körüli kiszolgálást; ha átlövésből, az átlövők
-    passz-sávját (előrelépés a lövő-vonalba).
+    Edzőileg ez az átadás-vonal, amit zárni kell: ha a gólpasszaik
+    fele a szélről jön, a szélső–beálló tengelyt kell elvágni; ha a
+    beállótól, a beálló körüli kiszolgálást; ha átlövésből, az
+    átlövők passz-sávját (előrelépés a lövő-vonalba).
 
     Visszatérés csapatonként: {"assists", "zones": {zóna: gólpasszok},
     "top": {"zone", "goals", "share_pct"} | None} — a "top" akkor van
@@ -669,65 +666,20 @@ def assist_zones(match: Match,
     vezető zóna részaránya eléri az ASSIST_ZONE_SHARE-t, és nincs vele
     holtversenyben másik zóna.
     """
-    config = config or TacticsConfig()
-    events = detect_events(match, config)
-    passes = [e for e in events if e.type == EventType.PASS]
-    by_t = {f.t: f for f in match.frames}
-    times = [f.t for f in match.frames]
-    fps = match.meta.fps if match.meta.fps > 0 else 25.0
-    win = ASSIST_WINDOW_S * fps
-    mid_y = COURT_WIDTH_M / 2.0
+    from .attack_types import assist_sources
 
-    out: dict = {side: {"assists": 0, "zones": {}, "top": None}
-                 for side in ("home", "away")}
-    for g in events:
-        if g.type != EventType.GOAL:
-            continue
-        aid = (g.detail or {}).get("assist_id")
-        if aid is None:
-            continue
-        # A gólhoz tartozó gólpassz: a gól előtti ablakban az utolsó
-        # passz a gólpasszolótól.
-        best = None
-        for p in passes:
-            if p.team != g.team or p.player_id != aid:
-                continue
-            if not (0 <= g.t - p.t <= win):
-                continue
-            if best is None or p.t > best.t:
-                best = p
-        if best is None:
-            continue
-        # A passzoló helye a passz ELŐTTI kockán (ott még ő birtokolt).
-        idx = None
-        for i, t in enumerate(times):
-            if t == best.t:
-                idx = i
-                break
-        fr = by_t.get(times[idx - 1]) if idx else None
-        pos = None
-        if fr is not None:
-            pos = next((pl for pl in fr.players if pl.track_id == aid), None)
-        if pos is None:
-            continue
-        goal_x = config.attacks_toward_x(g.team)
-        dist = math.hypot(goal_x - pos.x, mid_y - pos.y)
-        if abs(pos.y - mid_y) >= ASSIST_WING_M:
-            zone = "szélről"
-        elif dist <= ASSIST_PIVOT_M:
-            zone = "beállótól"
-        else:
-            zone = "átlövésből"
-        rec = out[g.team.value]
-        rec["assists"] += 1
-        rec["zones"][zone] = rec["zones"].get(zone, 0) + 1
-
+    src = assist_sources(match, config)
+    out: dict = {}
     for side in ("home", "away"):
-        rec = out[side]
-        rec["zones"] = dict(sorted(rec["zones"].items(),
-                                   key=lambda kv: -kv[1]))
-        if rec["assists"] >= ASSIST_ZONE_MIN and rec["zones"]:
-            items = list(rec["zones"].items())
+        rec_src = src[side]
+        zones = {name: rec_src[key]
+                 for key, name in ASSIST_ZONE_NAMES.items()
+                 if rec_src.get(key)}
+        zones = dict(sorted(zones.items(), key=lambda kv: -kv[1]))
+        rec = {"assists": rec_src["assists"], "zones": zones,
+               "top": None}
+        items = list(zones.items())
+        if rec["assists"] >= ASSIST_ZONE_MIN and items:
             zone, n = items[0]
             share = 100.0 * n / rec["assists"]
             # Holtverseny esetén nincs "vezető" vonal: ilyenkor nem
@@ -736,4 +688,5 @@ def assist_zones(match: Match,
             if share >= ASSIST_ZONE_SHARE and not tie:
                 rec["top"] = {"zone": zone, "goals": n,
                               "share_pct": round(share, 1)}
+        out[side] = rec
     return out

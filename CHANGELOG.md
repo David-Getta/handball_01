@@ -47,10 +47,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   meccsterv-szabály (az ő beállóra épülő befejezésük × a ti beállós
   védekezésetek), 124. edzés-szabály (befejezés több posztról: a
   vezető posztról csak minden harmadik befejezés jöhet).
-- **Gólpassz-zónák**: HONNAN érkezik a gólpassz. A gólpassz-hálózat
-  azt mondja meg, KI készíti elő a gólokat — ez azt, melyik vonalról:
-  a gólpassz pillanatában a passzoló helye alapján szélről, beállótól
-  vagy átlövésből (4+ gólpassztól, 50%-os vezető zónánál, holtverseny
+- **Gólpassz-zónák**: HONNAN érkezik a gólpassz — edzői ítélettel. A
+  zónázást a meglévő gólpassz-forrás (`assist_sources`) végzi, ez a
+  réteg abból von le ítéletet: van-e EGY vonal, amiről a gólpasszaik
+  fele jön (4+ gólpassztól, 50%-os vezető zónánál, holtverseny
   nélkül). Ez adja meg az elvágandó átadás-vonalat: a szélső–beálló
   tengelyt, a beálló kiszolgálását vagy az átlövők passz-sávját.
   Egy réteg, sok felület: `assist_zones` motor, edzői összefoglaló,
