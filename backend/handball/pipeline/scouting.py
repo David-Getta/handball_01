@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Támadás-kimeneteleik: {kimenetel: darab} — mivel zárulnak a
+    # támadásaik (lövés / eladás / hetes / egyéb); darabszámok, meccsek
+    # közt pontosan összegződnek (arány = kimenetel / összes támadás).
+    attack_outcomes: dict = field(default_factory=dict)
     # Kapusuk védései posztonként: {poszt: {"faced", "saves"}} — melyik
     # szögből sebezhető; darabszámok, meccsek közt pontosan
     # összegződnek (védés-arány = saves / faced).
@@ -1671,6 +1675,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Támadás-kimenetel: eljutnak-e egyáltalán a befejezésig.
+    _ao_rows = rep.attack_outcomes or {}
+    _ao_n = sum(_ao_rows.values())
+    if _ao_n >= 8:
+        _ao_shot = 100.0 * _ao_rows.get("lövés", 0) / _ao_n
+        _ao_to = 100.0 * _ao_rows.get("eladás", 0) / _ao_n
+        if _ao_to >= 25.0:
+            keys.append(
+                f"Lövés nélkül halnak el a támadásaik: a "
+                f"{_ao_n} támadásuk {_ao_to:.0f}%-a eladással "
+                f"zárult ({_ao_rows.get('eladás', 0)} db) — a "
+                "kettőzés és a magas nyomás azonnal termel ellenük: "
+                "a labdásra kell menni, mert a befejezésig sem "
+                "jutnak el.")
+        elif _ao_shot >= 85.0:
+            keys.append(
+                f"Mindent befejeznek: a {_ao_n} támadásuk "
+                f"{_ao_shot:.0f}%-a lövéssel zárult — a rájuk "
+                "erőltetett pressz kockázat, mert nem ajándékoznak: "
+                "a blokk és a kapus mögé rendezett fal a válasz, és "
+                "a lövés minőségét kell rontani.")
 
     # Kapus-védés posztonként: melyik szögből sebezhető a kapusuk.
     _gs_rows = list((rep.gk_role_saves or {}).items())
@@ -3849,6 +3875,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import attack_outcomes as _aou
+        rep.attack_outcomes = dict(
+            _aou(match, config)[team.value]["outcomes"])
         from .goalkeeper import gk_saves_by_role as _gsr
         rep.gk_role_saves = {
             poszt: {"faced": r["faced"], "saves": r["saves"]}
@@ -4606,6 +4635,16 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_attack_outcomes(reports) -> dict:
+    """Támadás-kimenetel: kimenetelenként a támadások összegzése (a
+    darabszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for kind, n in (r.attack_outcomes or {}).items():
+            tally[kind] = tally.get(kind, 0) + int(n)
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]))
 
 
 def _merge_gk_role_saves(reports) -> dict:
@@ -5463,6 +5502,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 107) Az ő lövés nélkül elhaló támadásaik × a ti kettőzésetek: a
+    # nyomás pont ott fizet ki, ahol ők amúgy is elakadnak.
+    _ao107 = opp.attack_outcomes or {}
+    _aon107 = sum(_ao107.values())
+    if _aon107 >= 8 and own.dbl_holder_frames >= 250:
+        _to107 = 100.0 * _ao107.get("eladás", 0) / _aon107
+        _dbl107 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        if _to107 >= 25.0 and _dbl107 >= 30.0:
+            plan.append(
+                f"A támadásaik {_to107:.0f}%-a lövés nélkül, "
+                f"eladással hal el ({_aon107} támadásból), ti pedig "
+                f"sokat kettőztök (a labdás-idő {_dbl107:.0f}%-ában "
+                f"két védő is rálép, {own.dbl_forced_to} "
+                "kikényszerített eladás) — a kettőzést végig kell "
+                "vinni: a labdásra menjetek rá a kidolgozás elején, "
+                "mert ők a befejezésig sem jutnak el, és minden "
+                "elvett labda azonnali kontra.")
 
     # 106) Az ő kapusuk gyenge szöge × a ti onnan szerzett góljaitok:
     # oda kell szervezni a befejezést.
@@ -6769,6 +6826,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        attack_outcomes=_merge_attack_outcomes(reports),
         gk_role_saves=_merge_gk_role_saves(reports),
         tc_turnovers=sum(r.tc_turnovers for r in reports),
         tc_clustered=sum(r.tc_clustered for r in reports),

@@ -833,6 +833,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Támadás-kimenetel: eljutottak-e egyáltalán a befejezésig.
+    try:
+        from .attack_types import attack_outcomes
+        ao_ = attack_outcomes(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ao = ao_[side]
+            if rec_ao["verdict"] is None:
+                continue
+            if rec_ao["verdict"] == "lövés nélkül halnak el":
+                body += (f" A(z) {name} támadásainak "
+                         f"{rec_ao['turnover_pct']:.0f}%-a lövés "
+                         f"nélkül, eladással halt el "
+                         f"({rec_ao['attacks']} támadás).")
+            else:
+                body += (f" A(z) {name} szinte mindent befejezett: a "
+                         f"támadásaik {rec_ao['shot_pct']:.0f}%-a "
+                         f"lövéssel zárult ({rec_ao['attacks']} "
+                         "támadás).")
+    except Exception:
+        pass
     # Kapus-védés posztonként: melyik szögből volt sebezhető a kapus.
     try:
         from .goalkeeper import gk_saves_by_role

@@ -1911,3 +1911,81 @@ def attack_starters(match: Match,
             top = players[0]
         out[side] = {"attacks": n, "players": players, "top": top}
     return out
+
+
+# Támadás-kimenetel: ennyi mért támadástól ítélünk; e feletti
+# eladás-arány jelenti, hogy a támadásaik lövés nélkül halnak el, és e
+# feletti lövés-arány azt, hogy szinte minden támadásukat befejezik.
+OUTCOME_MIN_ATTACKS = 8
+OUTCOME_TURNOVER_HIGH = 25.0
+OUTCOME_SHOT_HIGH = 85.0
+
+
+def attack_outcomes(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Támadás-kimenetel: MIVEL zárulnak a támadásaik.
+
+    A támadás-hatékonyság (attack_efficiency) azt mondja meg, a
+    támadásaikból mennyi lesz gól — ez azt, hogy egyáltalán ELJUTNAK-E
+    a befejezésig: minden támadás-szakaszt lövéssel, hetessel,
+    eladással vagy "egyéb"-bel (lefújás, félidő, követés-vesztés)
+    zárunk le. A kettő közti rés a lényeg: egy 30%-os gólarány mást
+    jelent 90%-os és 60%-os lövés-aránnyal.
+
+    Edzőileg: ha a támadásaik negyede eladással hal el, a kettőzés és a
+    magas nyomás azonnal termel; ha szinte mindent befejeznek, a
+    nyomás kockázat — ott a blokk és a kapus mögé rendezett fal a
+    válasz.
+
+    Visszatérés csapatonként: {"attacks", "outcomes": {kimenetel:
+    darab}, "shot_pct", "turnover_pct", "verdict"} — az arányok és a
+    verdict None OUTCOME_MIN_ATTACKS alatt; a verdict "lövés nélkül
+    halnak el" / "mindent befejeznek" / None.
+    """
+    from .event_detection import EventType, detect_events, detect_shots
+    from .rules import detect_seven_meters
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    shots = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+    turnovers = [(e.t, e.team.value) for e in detect_events(match, config)
+                 if e.type == EventType.TURNOVER]
+    sevens = [(sm["t"], sm["team"])
+              for sm in detect_seven_meters(match, config)]
+
+    out: dict = {side: {"attacks": 0, "outcomes": {}, "shot_pct": None,
+                        "turnover_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        lo, hi = a["start_frame"], a["end_frame"] + tail
+        in_win = [t for (t, tm) in sevens if tm == side and lo <= t <= hi]
+        if in_win:
+            kind = "hetes"
+        elif any(tm == side and lo <= t <= hi for (t, tm) in shots):
+            kind = "lövés"
+        elif any(tm == side and lo <= t <= hi for (t, tm) in turnovers):
+            kind = "eladás"
+        else:
+            kind = "egyéb"
+        rec = out[side]
+        rec["attacks"] += 1
+        rec["outcomes"][kind] = rec["outcomes"].get(kind, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["outcomes"] = dict(sorted(rec["outcomes"].items(),
+                                      key=lambda kv: -kv[1]))
+        n = rec["attacks"]
+        if n >= OUTCOME_MIN_ATTACKS:
+            shot_pct = 100.0 * rec["outcomes"].get("lövés", 0) / n
+            to_pct = 100.0 * rec["outcomes"].get("eladás", 0) / n
+            rec["shot_pct"] = round(shot_pct, 1)
+            rec["turnover_pct"] = round(to_pct, 1)
+            if to_pct >= OUTCOME_TURNOVER_HIGH:
+                rec["verdict"] = "lövés nélkül halnak el"
+            elif shot_pct >= OUTCOME_SHOT_HIGH:
+                rec["verdict"] = "mindent befejeznek"
+    return out

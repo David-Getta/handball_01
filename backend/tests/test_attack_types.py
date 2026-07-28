@@ -1339,3 +1339,86 @@ def test_attack_starters_needs_enough_attacks():
 
     rec = attack_starters(_starter_match([2, 2, 2]))["home"]
     assert rec["attacks"] == 3 and rec["top"] is None
+
+
+# ---- Támadás-kimenetel (mivel zárulnak a támadásaik) -------------------------
+
+def _outcome_match(kinds, fps=25.0):
+    """HAZAI támadás-sorozat: a `kinds` elemenként "lövés" vagy
+    "eladás" — a támadásokat egy-egy vendég-birtoklás választja el."""
+    frames = []
+    t = 0
+
+    def _home(seconds):
+        nonlocal t, frames
+        for i in range(int(seconds * fps)):
+            x = 24.0 + 0.05 * i
+            players = [_pl(1, Team.HOME, x, 10.0),
+                       _pl(2, Team.HOME, x - 2.0, 6.0),
+                       _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                       _pl(21, Team.AWAY, 37.0, 8.0),
+                       _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _shot():
+        """A hazai befejezi a támadást: a labda a +x kapuba száguld."""
+        nonlocal t, frames
+        for i in range(1, 8):
+            players = [_pl(1, Team.HOME, 33.0, 10.0),
+                       _pl(21, Team.AWAY, 37.0, 8.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=33.0 + i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _away(seconds):
+        nonlocal t, frames
+        for i in range(int(seconds * fps)):
+            x = 18.0 - 0.05 * i
+            players = [_pl(1, Team.HOME, 5.0, 10.0),
+                       _pl(21, Team.AWAY, x, 10.0),
+                       _pl(22, Team.AWAY, x - 3.0, 14.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    for kind in kinds:
+        _home(3.0)
+        if kind == "lövés":
+            _shot()
+        _away(1.5)
+    return Match(_meta(fps), frames)
+
+
+def test_attack_outcomes_flags_shotless_attacks():
+    """Nyolc támadásból három eladással hal el → a támadásaik több mint
+    negyede lövés nélkül zárul."""
+    from handball.pipeline.attack_types import attack_outcomes
+
+    rec = attack_outcomes(_outcome_match(
+        ["lövés"] * 5 + ["eladás"] * 3))["home"]
+    assert rec["attacks"] == 8
+    assert rec["outcomes"]["lövés"] == 5
+    assert rec["outcomes"]["eladás"] == 3
+    assert rec["shot_pct"] == 62.5 and rec["turnover_pct"] == 37.5
+    assert rec["verdict"] == "lövés nélkül halnak el"
+
+
+def test_attack_outcomes_flags_finishing_teams():
+    """Ha minden támadásuk lövéssel zárul, mindent befejeznek."""
+    from handball.pipeline.attack_types import attack_outcomes
+
+    rec = attack_outcomes(_outcome_match(["lövés"] * 8))["home"]
+    assert rec["attacks"] == 8 and rec["shot_pct"] == 100.0
+    assert rec["verdict"] == "mindent befejeznek"
+
+
+def test_attack_outcomes_needs_enough_attacks():
+    """Kevés (8-nál kevesebb) mért támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import attack_outcomes
+
+    rec = attack_outcomes(_outcome_match(["lövés", "eladás"]))["home"]
+    assert rec["attacks"] == 2
+    assert rec["shot_pct"] is None and rec["verdict"] is None

@@ -1297,6 +1297,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Támadás-kimenetel: eljutnak-e a befejezésig (8+ támadás; 25%
+  // feletti eladás-arány, illetve 85% feletti lövés-arány — a
+  // backend-kulccsal azonos küszöbök).
+  String? _attackOutcomes(Map<String, dynamic> r) {
+    final outcomes = r["attack_outcomes"];
+    if (outcomes is! Map || outcomes.isEmpty) return null;
+    int total = 0;
+    outcomes.forEach((_, v) => total += ((v as num?) ?? 0).toInt());
+    if (total < 8) return null;
+    final shots = ((outcomes["lövés"] as num?) ?? 0).toInt();
+    final lost = ((outcomes["eladás"] as num?) ?? 0).toInt();
+    final toPct = 100.0 * lost / total;
+    final shotPct = 100.0 * shots / total;
+    if (toPct >= 25.0) {
+      return "lövés nélkül halnak el a támadásaik: a $total "
+          "támadásuk ${toPct.toStringAsFixed(0)}%-a eladással zárult "
+          "($lost db) · a kettőzés és a magas nyomás azonnal termel";
+    }
+    if (shotPct >= 85.0) {
+      return "mindent befejeznek: a $total támadásuk "
+          "${shotPct.toStringAsFixed(0)}%-a lövéssel zárult · a "
+          "pressz kockázat, a lövés minőségét kell rontani";
+    }
+    return null;
+  }
+
   // Kapus-védés posztonként: melyik szögből sebezhető a kapusuk (8+
   // kapura tartó lövés, posztonként 4+, 15 százalékpont elmaradás a
   // csapat-átlagtól — a backend-kulccsal azonos küszöbök).
@@ -3041,6 +3067,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hiba-sorozatok", _turnoverClusters(r)!],
       if (_gkRoleSaves(r) != null)
         ["Kapus-védés posztonként", _gkRoleSaves(r)!],
+      if (_attackOutcomes(r) != null)
+        ["Támadás-kimenetel", _attackOutcomes(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

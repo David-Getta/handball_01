@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 128) Támadás-kimenetel: ha a támadásaink lövés nélkül halnak el,
+    # a befejezésig vitel a téma.
+    try:
+        from .attack_types import attack_outcomes
+        ao128 = attack_outcomes(match, config)
+        for side in ("home", "away"):
+            rec128 = ao128[side]
+            if rec128["verdict"] != "lövés nélkül halnak el":
+                continue
+            add(side, "támadás", "Befejezésig vitt támadás",
+                f"a támadásaink {rec128['turnover_pct']:.0f}%-a lövés "
+                f"nélkül, eladással halt el ({rec128['attacks']} "
+                "támadásból) — a kidolgozás közben veszítjük el a "
+                "labdát, tehát a helyzet minősége előtt a "
+                "befejezésig jutás a feladat",
+                "befejezésig vitt támadás: felállt támadás azzal a "
+                "szabállyal, hogy MINDEN támadást lövéssel kell "
+                "zárni — ha 30 másodpercen belül nincs lövés, a "
+                "kijelölt átlövő vállalja; a gyakorlat pontot csak "
+                "leadott lövésért ad, gólért kettőt, eladásért "
+                "mínuszt")
+    except Exception:
+        pass
+
     # 127) Kapus-védés posztonként: ha egy szögből sebezhető a
     # kapusunk, az adott szög védése a téma.
     try:

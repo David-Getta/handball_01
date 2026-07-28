@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Támadás-kimenetel**: MIVEL zárulnak a támadásaik. A
+  támadás-hatékonyság azt mondja meg, mennyi lesz gól — ez azt, hogy
+  eljutnak-e egyáltalán a befejezésig: minden támadás-szakaszt
+  lövéssel, hetessel, eladással vagy egyébbel zárunk le (8+
+  támadástól). A kettő közti rés a lényeg: egy 30%-os gólarány mást
+  jelent 90%-os és 60%-os lövés-aránnyal. Ha a támadásaik negyede
+  eladással hal el, a kettőzés és a magas nyomás azonnal termel; ha
+  szinte mindent befejeznek (85% felett), a pressz kockázat — ott a
+  blokk és a lövés minőségének rontása a válasz. Egy réteg, sok
+  felület: `attack_outcomes` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kimenetelenkénti darabszámok + két
+  edzői kulcs + csempe), 107. meccsterv-szabály (az ő lövés nélkül
+  elhaló támadásaik × a ti kettőzésetek), 128. edzés-szabály
+  (befejezésig vitt támadás: minden támadást lövéssel kell zárni).
 - **Kapus-védés posztonként**: MELYIK SZÖGBŐL sebezhető a kapusuk. A
   távolság-sávos réteg (`gk_save_ranges`) azt mondja meg, milyen
   messziről — ez azt, milyen szögből: a kapura tartó lövéseket a lövő
