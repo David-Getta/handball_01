@@ -1297,6 +1297,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Hetes-okozó védők: kinél szakad meg a védekezésük hetessel (2+
+  // okozott hetes — a backend-kulccsal azonos küszöb).
+  String? _sevenConceders(Map<String, dynamic> r) {
+    final rows = r["seven_conceders"];
+    if (rows is! List || rows.isEmpty) return null;
+    final top = rows.first;
+    if (top is! Map) return null;
+    final n = ((top["conceded"] as num?) ?? 0).toInt();
+    if (n < 2) return null;
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a(z) $who védőjük $n hetest okozott · nála kézzel áll meg "
+        "a betörés: ellene betörés és beugrás";
+  }
+
   // Támadás-mélység: milyen messze állnak a kaputól (100+ mért kocka;
   // 9,5 m alatt vonalra tapadó, 12 m felett mély — a backend-kulccsal
   // azonos küszöbök).
@@ -3143,6 +3159,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_wingInvolvement(r) != null)
         ["Szélső-bevonás", _wingInvolvement(r)!],
       if (_attackDepth(r) != null) ["Támadás-mélység", _attackDepth(r)!],
+      if (_sevenConceders(r) != null)
+        ["Hetes-okozó védők", _sevenConceders(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

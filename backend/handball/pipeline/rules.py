@@ -752,3 +752,78 @@ def powerplay_defense(match: Match,
                 r["verdict"] = "fegyelmezett"
         out[side] = r
     return out
+
+
+# Hetes-okozó: ennyi hetes kell egy védő megbélyegzéséhez (a
+# heurisztika zaja miatt egy eset még nem minta).
+SEVEN_CONCEDER_MIN = 2
+
+
+def seven_meter_conceders(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-okozó védők: KINÉL szakad meg a védekezés hetessel.
+
+    A hetes-kiharcolók (seven_meter_earners) a támadó oldalról nézik,
+    kit rántanak le — ez a védő oldali párja: a hetes-jel előtt a
+    kiharcolóhoz legközelebb álló (nem kapus) VÉDŐ kapja a
+    jóváírást. Heurisztika, de magyarázható: a befejezésbe érkező
+    embert az a védő állítja meg szabálytalanul, aki mellette van.
+
+    Edzőileg: aki két-három hetest is okoz, annak a lábmunkájával van
+    baj (kézzel áll meg a betörést) — vele szemben a betörés
+    kifizetődő, a saját edzésnek pedig kész témája van.
+
+    Visszatérés a VÉDEKEZŐ csapat oldalán: {"home"/"away":
+    {"players": [{"player_id", "jersey", "conceded"}], "top":
+    {"player_id", "jersey", "conceded"} | None}} — a "top" akkor van kitöltve, ha a vezető védő
+    legalább SEVEN_CONCEDER_MIN hetest okozott.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+    tally: dict = {"home": {}, "away": {}}
+    jersey: dict = {}
+    for sm in detect_seven_meters(match, config):
+        t_prev = sm["t"] - round(SEVEN_EARNER_LOOKBACK_S * fps)
+        fr = None
+        for dt in range(0, round(fps)):
+            fr = frames_by_t.get(t_prev - dt) or frames_by_t.get(t_prev + dt)
+            if fr is not None and fr.players:
+                break
+        if fr is None or not fr.players:
+            continue
+        for p in fr.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+        # A kiharcoló: a támadott kapuhoz legközelebbi támadó.
+        earner = None
+        for p in fr.players:
+            if p.team.value != sm["team"] or p.role == "kapus":
+                continue
+            d = abs(p.x - sm["goal_x"])
+            if earner is None or d < earner[1]:
+                earner = (p, d)
+        if earner is None:
+            continue
+        # Az okozó: a kiharcolóhoz legközelebbi mezőnyvédő.
+        defending = "away" if sm["team"] == "home" else "home"
+        best = None
+        for p in fr.players:
+            if p.team.value != defending or p.role == "kapus":
+                continue
+            d = ((p.x - earner[0].x) ** 2 + (p.y - earner[0].y) ** 2) ** 0.5
+            if best is None or d < best[1]:
+                best = (p.track_id, d)
+        if best is not None:
+            tally[defending][best[0]] = tally[defending].get(best[0], 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "conceded": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0] if rows and rows[0]["conceded"] >= SEVEN_CONCEDER_MIN
+               else None)
+        out[side] = {"players": rows, "top": top}
+    return out

@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 132) Hetes-okozó védők: ha egy védőnk sorozatban okoz hetest, a
+    # lábbal védekezés a téma.
+    try:
+        from .rules import seven_meter_conceders
+        smc132 = seven_meter_conceders(match, config)
+        for side in ("home", "away"):
+            top132 = smc132[side]["top"]
+            if top132 is None:
+                continue
+            jn132 = top132.get("jersey")
+            who132 = (f"a {jn132}-es mezszámú védőnk" if jn132 is not None
+                      else f"a {top132['player_id']} azonosítójú védőnk")
+            add(side, "védekezés", "Lábbal védekezés",
+                f"{who132} {top132['conceded']} hetest okozott — a "
+                "betörést kézzel állítja meg, ami hetest és "
+                "kiállítást ér",
+                "lábbal védekezés: 1-1 gyakorlat a 9 m-en, ahol a "
+                "védő KEZE hátul van összekulcsolva — csak "
+                "lábmunkával, testtel szabad terelni; utána "
+                "ugyanez felszabadított kézzel, de a szabály az, "
+                "hogy a kéz csak a labdára mehet, a testre soha")
+    except Exception:
+        pass
+
     # 131) Támadás-mélység: ha mélyen, hátrahúzódva támadunk, a
     # vonalra lépés a téma.
     try:

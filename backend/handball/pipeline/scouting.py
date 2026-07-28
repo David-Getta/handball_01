@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Hetes-okozó védőik: [{"player_id", "conceded"}] — kinél szakad
+    # meg a védekezés hetessel; darabszámok, meccsek közt pontosan
+    # összegződnek.
+    seven_conceders: list = field(default_factory=list)
     # Támadás-mélységük: a mért kockák és a kapu-távolság összege (m) —
     # összegek, meccsek közt pontosan összegződnek (átlag = összeg /
     # kocka).
@@ -1692,6 +1696,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Hetes-okozó védők: kinél szakad meg a védekezésük hetessel.
+    _smc_rows = rep.seven_conceders or []
+    if _smc_rows and _smc_rows[0]["conceded"] >= 2:
+        _smc_top = _smc_rows[0]
+        _smc_who = (f"{_smc_top['jersey']}-es mezszámú"
+                    if _smc_top.get("jersey") is not None
+                    else f"{_smc_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_smc_who} védőjük {_smc_top['conceded']} hetest "
+            "okozott — nála kézzel áll meg a betörés: ellene "
+            "indítsatok betörést és beugrást, mert vagy áthaladtok, "
+            "vagy hetest ér.")
 
     # Támadás-mélység: milyen messze állnak a kaputól felállt támadásban.
     if rep.adp_frames >= 100 and rep.adp_sum_m > 0:
@@ -3951,6 +3968,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .rules import seven_meter_conceders as _smc
+        rep.seven_conceders = [
+            dict(row) for row in _smc(match, config)[team.value]["players"]]
         from .attack_types import attack_depth as _adp
         adprec = _adp(match, config)[team.value]
         if adprec["avg_depth_m"] is not None:
@@ -4731,6 +4751,22 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_seven_conceders(reports) -> list:
+    """Hetes-okozó védők: védőnként az okozott hetesek összegzése (a
+    darabszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.seven_conceders or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "conceded": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["conceded"] += int(row.get("conceded", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["conceded"])]
 
 
 def _merge_attack_outcomes(reports) -> dict:
@@ -5598,6 +5634,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 111) Az ő hetes-okozó védőjük × a ti hetes-kiharcolóitok: a
+    # betörést oda kell irányítani, ahol a kéz megjelenik.
+    _smc111 = opp.seven_conceders or []
+    _sme111 = own.seven_earners or []
+    if _smc111 and _smc111[0]["conceded"] >= 2 \
+            and _sme111 and _sme111[0]["earned"] >= 2:
+        _def111 = _smc111[0]
+        _att111 = _sme111[0]
+        _dwho111 = (f"{_def111['jersey']}-es mezszámú"
+                    if _def111.get("jersey") is not None
+                    else f"{_def111['player_id']} azonosítójú")
+        _awho111 = (f"{_att111['jersey']}-es mezszámú"
+                    if _att111.get("jersey") is not None
+                    else f"{_att111['player_id']} azonosítójú")
+        plan.append(
+            f"A(z) {_dwho111} védőjük {_def111['conceded']} hetest "
+            f"okozott, a ti {_awho111} játékosotok pedig "
+            f"{_att111['earned']} hetest harcolt ki — őket kell "
+            "egymásra irányítani: a betörés az ő oldalára menjen, "
+            "mert ott vagy áthaladtok, vagy hetest és kiállítást ér.")
 
     # 110) Az ő mély támadásuk × a ti felfutó falatok: a kilépés pont
     # az ő lövés-előkészítésüket töri meg.
@@ -6972,6 +7029,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        seven_conceders=_merge_seven_conceders(reports),
         adp_frames=sum(r.adp_frames for r in reports),
         adp_sum_m=round(sum(r.adp_sum_m for r in reports), 1),
         wi_attacks=sum(r.wi_attacks for r in reports),

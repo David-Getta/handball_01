@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hetes-okozó védők**: KINÉL szakad meg a védekezés hetessel. A
+  hetes-kiharcolók a támadó oldalról nézik, kit rántanak le — ez a
+  védő oldali párja: a hetes-jel előtt a kiharcolóhoz legközelebb álló
+  mezőnyvédő kapja a jóváírást (2+ esettől, mert egy eset még nem
+  minta). Aki két-három hetest is okoz, annál kézzel áll meg a
+  betörés: ellene betörést és beugrást kell indítani, mert vagy
+  áthaladtok, vagy hetest ér. Egy réteg, sok felület:
+  `seven_meter_conceders` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (védőnkénti darabszámok mezszámmal +
+  edzői kulcs + csempe), 111. meccsterv-szabály (az ő hetes-okozó
+  védőjük × a ti hetes-kiharcolóitok), 132. edzés-szabály (lábbal
+  védekezés: 1-1 hátrakulcsolt kézzel).
 - **Támadás-mélység**: MILYEN MESSZE állnak a kaputól felállt
   támadásban. A támadás-szélesség az oldalirányú terjedelmet méri — ez
   a mélységet: birtoklású kockánként a támadók átlagos kapu-távolsága

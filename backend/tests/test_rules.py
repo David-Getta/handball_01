@@ -569,3 +569,61 @@ def test_powerplay_defense_flags_leaking_advantage():
     h = ppd["home"]
     assert h["pp_seconds"] == 0.0
     assert h["pp_per_min"] is None and h["verdict"] is None
+
+
+# ---- Hetes-okozó védők -------------------------------------------------------
+
+def _seven_conceder_frames(t0, defender_id, defender_y=10.0):
+    """Egy hetes: a hazai 9-es tör be a kapu elé, mellette a megadott
+    vendég védő áll — utána a labda megáll a 7 m-es ponton."""
+    frames = []
+    t = t0
+    for _ in range(50):
+        frames.append(Frame(
+            t=t,
+            players=[_pl(9, Team.HOME, 37.5, 10.0),
+                     _pl(1, Team.HOME, 28.0, 10.0),
+                     _pl(defender_id, Team.AWAY, 37.0, defender_y),
+                     _pl(23, Team.AWAY, 33.0, 16.0)],
+            ball=Ball(x=36.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(50):
+        frames.append(Frame(
+            t=t,
+            players=[_pl(9, Team.HOME, 34.0, 10.0),
+                     _pl(1, Team.HOME, 30.0, 10.0),
+                     _pl(defender_id, Team.AWAY, 37.0, defender_y),
+                     _pl(23, Team.AWAY, 33.0, 16.0)],
+            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames
+
+
+def test_seven_meter_conceder_identified():
+    """Két hetesnél is a kiharcoló mellett álló 21-es védő az okozó."""
+    from handball.pipeline.rules import seven_meter_conceders
+
+    frames = _seven_conceder_frames(0, 21)
+    t = frames[-1].t + 1
+    # Játék a két hetes közt (10 mp debounce a felismerésben).
+    for i in range(300):
+        frames.append(Frame(t=t + i, players=[_pl(9, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0 + 0.01 * i, y=10.0,
+                                      confidence=1.0)))
+    frames += _seven_conceder_frames(frames[-1].t + 1, 21)
+    rec = seven_meter_conceders(Match(_meta(), frames))["away"]
+    assert rec["players"] and rec["players"][0]["player_id"] == 21
+    assert rec["players"][0]["conceded"] == 2
+    assert rec["top"] is not None and rec["top"]["conceded"] == 2
+    # A hazai nem védekezett hetes ellen.
+    assert seven_meter_conceders(Match(_meta(), frames))["home"]["top"] is None
+
+
+def test_seven_meter_conceder_needs_two_cases():
+    """Egyetlen hetesnél a heurisztika zajos: nincs megbélyegzett védő."""
+    from handball.pipeline.rules import seven_meter_conceders
+
+    rec = seven_meter_conceders(
+        Match(_meta(), _seven_conceder_frames(0, 21)))["away"]
+    assert rec["players"] and rec["players"][0]["conceded"] == 1
+    assert rec["top"] is None

@@ -833,6 +833,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Hetes-okozó védők: kinél szakadt meg a védekezés hetessel.
+    try:
+        from .rules import seven_meter_conceders
+        smc = seven_meter_conceders(match)
+        for side, name in (("home", home), ("away", away)):
+            top_smc = smc[side]["top"]
+            if top_smc is None:
+                continue
+            jn = _jersey_of_track(match).get(top_smc["player_id"])
+            who = (f"{jn}-es mezszámú védője" if jn is not None
+                   else f"{top_smc['player_id']} azonosítójú védője")
+            body += (f" A(z) {name} {who} {top_smc['conceded']} hetest "
+                     "okozott.")
+    except Exception:
+        pass
     # Támadás-mélység: milyen messze álltak a kaputól.
     try:
         from .attack_types import attack_depth

@@ -2943,6 +2943,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_meter_conceders
+            res["seven_meter_conceders"] = seven_meter_conceders(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3559,6 +3564,9 @@ def create_app():
                        lambda: wing_involvement(match))
                 from ..pipeline.attack_types import attack_depth
                 _layer("attack_depth", lambda: attack_depth(match))
+                from ..pipeline.rules import seven_meter_conceders
+                _layer("seven_meter_conceders",
+                       lambda: seven_meter_conceders(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
