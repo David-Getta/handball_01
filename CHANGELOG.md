@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Szélső-bevonás**: ELJUT-E a labda a szélre a támadásaikban. A
+  szélső-befejezés azt méri, mennyire eredményes a szélső, ha lő — ez
+  azt, hogy egyáltalán megkapja-e a labdát: támadásonként nézzük,
+  járt-e a labda a szél-sávban (8+ támadástól; 60% felett széthúzzák,
+  30% alatt közép-központúak). Aki széthúzza a támadást, ott a
+  szélső-védekezés és az időben kifutás a feladat; aki
+  közép-központú, ott a szélső-védők beljebb segíthetnek — tömör
+  fallal a beállót és az átlövést kell elzárni. Egy réteg, sok
+  felület: `wing_involvement` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (támadás- és szélre-jutás
+  darabszámok + két edzői kulcs + csempe), 109. meccsterv-szabály (az
+  ő közép-központú támadásuk × a ti tömör falatok), 130.
+  edzés-szabály (szélesség-tartás: a befejezés előtt mindkét szélsőt
+  meg kell járnia a labdának).
 - **Védekezési mélység állás szerint**: ELŐNYBEN vagy HÁTRÁNYBAN
   jönnek-e előre. A vonal-magasság a meccs egészére adja meg a fal
   helyét, a támadás-hossz állás szerint pedig a támadó oldal

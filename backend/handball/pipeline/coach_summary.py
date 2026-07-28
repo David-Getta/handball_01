@@ -833,6 +833,27 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Szélső-bevonás: eljutott-e a labda a szélre.
+    try:
+        from .attack_types import wing_involvement
+        wi = wing_involvement(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wi = wi[side]
+            if rec_wi["verdict"] is None:
+                continue
+            if rec_wi["verdict"] == "széthúzzák a támadást":
+                body += (f" A(z) {name} széthúzta a támadást: a "
+                         f"támadásaik {rec_wi['share_pct']:.0f}%-ában "
+                         f"kiment a labda a szélre "
+                         f"({rec_wi['with_wing']}/{rec_wi['attacks']}).")
+            else:
+                body += (f" A(z) {name} közép-központú volt: a "
+                         f"támadásaiknak csak "
+                         f"{rec_wi['share_pct']:.0f}%-ában jutott ki a "
+                         f"labda a szélre ({rec_wi['attacks']} "
+                         "támadás).")
+    except Exception:
+        pass
     # Védekezési mélység állás szerint: mikor jött a nyomásuk.
     try:
         from .defense import line_height_by_score

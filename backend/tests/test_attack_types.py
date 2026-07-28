@@ -1422,3 +1422,71 @@ def test_attack_outcomes_needs_enough_attacks():
     rec = attack_outcomes(_outcome_match(["lövés", "eladás"]))["home"]
     assert rec["attacks"] == 2
     assert rec["shot_pct"] is None and rec["verdict"] is None
+
+
+# ---- Szélső-bevonás (eljut-e a labda a szélre) -------------------------------
+
+def _wing_match(wings, fps=25.0):
+    """HAZAI támadás-sorozat: a `wings` elemenként megadja, kimegy-e a
+    labda a szél-sávba az adott támadásban."""
+    frames = []
+    t = 0
+
+    def _home(to_wing):
+        nonlocal t, frames
+        for i in range(int(3.0 * fps)):
+            # A labda a támadó térfélen; szélezésnél kikerül y=2-re.
+            y = 2.0 if (to_wing and i >= 25) else 10.0
+            players = [_pl(1, Team.HOME, 26.0, y),
+                       _pl(2, Team.HOME, 24.0, 12.0),
+                       _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                       _pl(21, Team.AWAY, 37.0, 8.0),
+                       _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=26.0, y=y, confidence=1.0)))
+            t += 1
+
+    def _away():
+        nonlocal t, frames
+        for i in range(int(1.5 * fps)):
+            players = [_pl(1, Team.HOME, 5.0, 10.0),
+                       _pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0),
+                       _pl(22, Team.AWAY, 15.0, 14.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=18.0 - 0.05 * i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for to_wing in wings:
+        _home(to_wing)
+        _away()
+    return Match(_meta(fps), frames)
+
+
+def test_wing_involvement_spots_the_wide_attack():
+    """Nyolc támadásból hatban kimegy a labda a szélre → széthúzzák a
+    támadást."""
+    from handball.pipeline.attack_types import wing_involvement
+
+    rec = wing_involvement(_wing_match([True] * 6 + [False] * 2))["home"]
+    assert rec["attacks"] == 8 and rec["with_wing"] == 6
+    assert rec["share_pct"] == 75.0
+    assert rec["verdict"] == "széthúzzák a támadást"
+
+
+def test_wing_involvement_spots_the_narrow_attack():
+    """Ha a labda alig megy ki a szélre, közép-központúak."""
+    from handball.pipeline.attack_types import wing_involvement
+
+    rec = wing_involvement(_wing_match([True] * 2 + [False] * 6))["home"]
+    assert rec["share_pct"] == 25.0
+    assert rec["verdict"] == "közép-központú"
+
+
+def test_wing_involvement_needs_enough_attacks():
+    """Kevés (8-nál kevesebb) mért támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import wing_involvement
+
+    rec = wing_involvement(_wing_match([True, False]))["home"]
+    assert rec["attacks"] == 2
+    assert rec["share_pct"] is None and rec["verdict"] is None

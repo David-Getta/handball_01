@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Szélső-bevonás: eljut-e a labda a szélre (8+ támadás; 60% felett
+  // széthúzzák, 30% alatt közép-központú — a backend-kulccsal azonos
+  // küszöbök).
+  String? _wingInvolvement(Map<String, dynamic> r) {
+    final n = ((r["wi_attacks"] as num?) ?? 0).toInt();
+    final wide = ((r["wi_with_wing"] as num?) ?? 0).toInt();
+    if (n < 8) return null;
+    final pct = 100.0 * wide / n;
+    if (pct >= 60.0) {
+      return "széthúzzák a támadást: a támadásaik "
+          "${pct.toStringAsFixed(0)}%-ában kimegy a labda a szélre "
+          "($wide/$n) · időben kell kifutni a szélsőre";
+    }
+    if (pct <= 30.0) {
+      return "közép-központúak: a támadásaiknak csak "
+          "${pct.toStringAsFixed(0)}%-ában jut ki a labda a szélre "
+          "($n támadás) · a szélső-védőitek beljebb segíthetnek";
+    }
+    return null;
+  }
+
   // Védekezési mélység állás szerint: mikor jön a nyomásuk (100+ mért
   // kocka mindkét állásban, 0,8 m-es rés — a backend-kulccsal azonos
   // küszöbök).
@@ -3098,6 +3119,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Támadás-kimenetel", _attackOutcomes(r)!],
       if (_lineHeightByScore(r) != null)
         ["Védekezési mélység állás szerint", _lineHeightByScore(r)!],
+      if (_wingInvolvement(r) != null)
+        ["Szélső-bevonás", _wingInvolvement(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Szélső-bevonásuk: a mért támadások és azok száma, amelyekben
+    # kiment a labda a szélre — darabszámok, meccsek közt pontosan
+    # összegződnek (arány = wi_with_wing / wi_attacks).
+    wi_attacks: int = 0
+    wi_with_wing: int = 0
     # Védekezési mélységük állás szerint: állásonként a mért kockák és
     # a magasság-összeg (m) — összegek, meccsek közt pontosan
     # összegződnek (átlag = összeg / kocka).
@@ -1682,6 +1687,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Szélső-bevonás: eljut-e a labda a szélre a támadásaikban.
+    if rep.wi_attacks >= 8:
+        _wi_pct = 100.0 * rep.wi_with_wing / rep.wi_attacks
+        if _wi_pct >= 60.0:
+            keys.append(
+                f"Széthúzzák a támadást: a támadásaik "
+                f"{_wi_pct:.0f}%-ában kimegy a labda a szélre "
+                f"({rep.wi_with_wing}/{rep.wi_attacks}) — a "
+                "szélső-védekezés a feladat: időben kell kifutni, és "
+                "a szélső mögötti területet a segítő védőnek kell "
+                "zárnia, mert a szélre-húzás nyitja meg a beállót.")
+        elif _wi_pct <= 30.0:
+            keys.append(
+                f"Közép-központúak: a támadásaiknak csak "
+                f"{_wi_pct:.0f}%-ában jut ki a labda a szélre "
+                f"({rep.wi_attacks} támadás) — a szélső-védőitek "
+                "beljebb segíthetnek: tömör fallal a beállót és az "
+                "átlövést kell elzárni, a szélt úgysem játsszák meg.")
 
     # Védekezési mélység állás szerint: mikor jön a nyomásuk.
     if rep.lhs_lead_frames >= 100 and rep.lhs_trail_frames >= 100:
@@ -3904,6 +3928,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import wing_involvement as _win
+        winrec = _win(match, config)[team.value]
+        rep.wi_attacks = winrec["attacks"]
+        rep.wi_with_wing = winrec["with_wing"]
         from .defense import line_height_by_score as _lhs
         lhsrec = _lhs(match, config)[team.value]
         rep.lhs_lead_frames = lhsrec["leading"]["frames"]
@@ -5542,6 +5570,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 109) Az ő közép-központú támadásuk × a ti tömör falatok: a
+    # szélső-védőitek nyugodtan segíthetnek befelé.
+    if opp.wi_attacks >= 8 and own.defw_frames >= 100:
+        _wi109 = 100.0 * opp.wi_with_wing / opp.wi_attacks
+        _dw109 = own.defw_sum_m / own.defw_frames
+        if _wi109 <= 30.0 and _dw109 <= 12.0:
+            plan.append(
+                f"Közép-központúak (a támadásaiknak csak "
+                f"{_wi109:.0f}%-ában jut ki a labda a szélre), a ti "
+                f"falatok pedig amúgy is tömör ({_dw109:.1f} m átlagos "
+                "szélesség) — ez a párosítás nektek kedvez: a "
+                "szélső-védőitek bátran segíthetnek befelé, kettőzzék "
+                "a beállót és az átlövőt, mert a szélre-játékkal nem "
+                "fognak megbüntetni.")
+
     # 108) Az ő hátrányban feljebb lépő faluk × a ti gyors
     # középkezdésetek: a letámadásuk pont akkor jön, amikor ti amúgy is
     # gyorsan indítanátok.
@@ -6884,6 +6927,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        wi_attacks=sum(r.wi_attacks for r in reports),
+        wi_with_wing=sum(r.wi_with_wing for r in reports),
         lhs_lead_frames=sum(r.lhs_lead_frames for r in reports),
         lhs_lead_sum_m=round(sum(r.lhs_lead_sum_m for r in reports), 1),
         lhs_trail_frames=sum(r.lhs_trail_frames for r in reports),

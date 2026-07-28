@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 130) Szélső-bevonás: ha a labda ki sem megy a szélre, a
+    # szélesség-tartás a téma.
+    try:
+        from .attack_types import wing_involvement
+        wi130 = wing_involvement(match, config)
+        for side in ("home", "away"):
+            rec130 = wi130[side]
+            if rec130["verdict"] != "közép-központú":
+                continue
+            add(side, "támadás", "Szélesség-tartás",
+                f"a támadásaink csak {rec130['share_pct']:.0f}%-ában "
+                f"jutott ki a labda a szélre "
+                f"({rec130['with_wing']}/{rec130['attacks']}) — a "
+                "védelem befelé tömörülhet, mert a szélső nem "
+                "jelent fenyegetést",
+                "szélesség-tartás: felállt támadás azzal a "
+                "szabállyal, hogy a befejezés előtt a labdának "
+                "MINDKÉT szélsőt meg kell járnia — a szélsők a "
+                "9 m-es vonal magasságában, a felezővonal felé "
+                "nyitva kérjék a labdát, és minden átvétel után "
+                "azonnal induljanak befelé (beadás vagy betörés)")
+    except Exception:
+        pass
+
     # 129) Védekezési mélység állás szerint: ha vezetve visszaülünk, a
     # vezetés-védés a téma (a fal helye ne az eredménytől függjön).
     try:

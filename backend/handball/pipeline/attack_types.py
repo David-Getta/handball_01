@@ -1989,3 +1989,67 @@ def attack_outcomes(match: Match,
             elif shot_pct >= OUTCOME_SHOT_HIGH:
                 rec["verdict"] = "mindent befejeznek"
     return out
+
+
+# Szélső-bevonás: ennyi mért támadástól ítélünk; e feletti arányban
+# széleznek, e alattiban közép-központúak.
+WING_INV_MIN_ATTACKS = 8
+WING_INV_HIGH = 60.0
+WING_INV_LOW = 30.0
+
+
+def wing_involvement(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Szélső-bevonás: ELJUT-E a labda a szélre a támadásaikban.
+
+    A szélső-befejezés (wing_finishing) azt méri, mennyire eredményes a
+    szélső, ha LŐ — ez azt, hogy egyáltalán megkapja-e a labdát:
+    támadás-szakaszonként megnézzük, járt-e a labda a szél-sávban (a
+    pálya közepétől WING_LATERAL_M-nél oldalabb, a támadó térfélen).
+
+    Edzőileg: aki széthúzza a támadást, annál a szélső-védekezés és a
+    kifutás a feladat; aki közép-központú (a labda ki sem megy a
+    szélre), annál a szélső-védők beljebb segíthetnek — tömör fallal a
+    beállót és az átlövést kell elzárni, mert a szélt úgysem játsszák
+    meg.
+
+    Visszatérés csapatonként: {"attacks", "with_wing", "share_pct",
+    "verdict"} — a share_pct/verdict None WING_INV_MIN_ATTACKS alatt; a
+    verdict "széthúzzák a támadást" / "közép-központú" / None.
+    """
+    from .calibration import COURT_WIDTH_M
+    from .setplays import segment_attacks
+    from .tactics import COURT_LENGTH_M
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    half = COURT_LENGTH_M / 2.0
+
+    out: dict = {side: {"attacks": 0, "with_wing": 0, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        goal_x = config.attacks_toward_x(seq.team)
+        rec = out[side]
+        rec["attacks"] += 1
+        for fr in seq.frames:
+            b = fr.ball
+            if b is None:
+                continue
+            # Csak a támadó térfélen számít a szélre kerülés.
+            if abs(b.x - goal_x) > half:
+                continue
+            if abs(b.y - cy) >= WING_LATERAL_M:
+                rec["with_wing"] += 1
+                break
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attacks"] >= WING_INV_MIN_ATTACKS:
+            share = 100.0 * rec["with_wing"] / rec["attacks"]
+            rec["share_pct"] = round(share, 1)
+            if share >= WING_INV_HIGH:
+                rec["verdict"] = "széthúzzák a támadást"
+            elif share <= WING_INV_LOW:
+                rec["verdict"] = "közép-központú"
+    return out
