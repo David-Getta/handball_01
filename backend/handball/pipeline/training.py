@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 126) Hiba-sorozatok: ha egy eladás után jön a következő, a
+    # hiba utáni rendezés a téma.
+    try:
+        from .defense import turnover_clusters
+        tc126 = turnover_clusters(match, config)
+        for side in ("home", "away"):
+            rec126 = tc126[side]
+            if rec126["verdict"] != "sorozatban hibáznak":
+                continue
+            add(side, "taktika", "Hiba utáni rendezés",
+                f"az eladásaink {rec126['share_pct']:.0f}%-a egy "
+                f"percen belül követte az előzőt "
+                f"({rec126['clustered']}/{rec126['turnovers']}, "
+                f"{rec126['clusters']} sorozat) — egy hiba után "
+                "kapkodunk, és rögtön jön a második",
+                "hiba utáni rendezés: támadójáték azzal a szabállyal, "
+                "hogy eladott labda után a következő támadás KÖTÖTT — "
+                "kijelölt indító, legalább négy passz, és csak "
+                "biztos helyzetből lehet befejezni; edzésen "
+                "eladás-büntetéssel (a hibázó ötös visszafut) "
+                "gyakoroljátok, hogy meccsen is legyen mihez nyúlni")
+    except Exception:
+        pass
+
     # 125) Kapott gólok posztonként: ha egy poszt ellen szivárgunk, az
     # adott poszt védekezése a téma.
     try:

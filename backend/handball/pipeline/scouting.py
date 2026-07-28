@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Hiba-sorozataik: az eladásaik száma, a sorozatban (egy percen
+    # belül egymást követve) érkezők száma és a sorozatok darabszáma —
+    # darabszámok, meccsek közt pontosan összegződnek (sorozat-arány =
+    # tc_clustered / tc_turnovers).
+    tc_turnovers: int = 0
+    tc_clustered: int = 0
+    tc_clusters: int = 0
     # Kapott góljaik posztonként: {poszt: gólok} — melyik poszt ellen
     # szivárog a faluk; darabszámok, meccsek közt pontosan
     # összegződnek (részarány = poszt / összes kapott gól).
@@ -1660,6 +1667,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Hiba-sorozatok: egymás után jönnek-e az eladásaik.
+    if rep.tc_turnovers >= 5:
+        _tc_pct = 100.0 * rep.tc_clustered / rep.tc_turnovers
+        if _tc_pct >= 50.0:
+            keys.append(
+                f"Sorozatban hibáznak: az eladásaik {_tc_pct:.0f}%-a "
+                f"egy percen belül követte az előzőt "
+                f"({rep.tc_clustered}/{rep.tc_turnovers}, "
+                f"{rep.tc_clusters} sorozat) — egy eladás után "
+                "kapkodni kezdenek: az első labdaszerzés után "
+                "azonnal újra rá kell menni, mert ott jön a második "
+                "ajándék.")
+        elif _tc_pct <= 20.0:
+            keys.append(
+                f"Szórt hibák: az eladásaiknak csak {_tc_pct:.0f}%-a "
+                f"jön sorozatban ({rep.tc_turnovers} eladás) — egy "
+                "hibájuk után nem borulnak be, a rájuk erőltetett "
+                "pressz fölösleges kockázat: a felállt védekezés a "
+                "válasz.")
 
     # Kapott gólok posztonként: melyik poszt ellen szivárog a faluk.
     _cr_rows = list((rep.conceded_roles or {}).items())
@@ -3797,6 +3824,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import turnover_clusters as _tcl
+        tclrec = _tcl(match, config)[team.value]
+        rep.tc_turnovers = tclrec["turnovers"]
+        rep.tc_clustered = tclrec["clustered"]
+        rep.tc_clusters = tclrec["clusters"]
         from .defense import conceded_by_role as _cbr
         rep.conceded_roles = dict(_cbr(match, config)[team.value]["roles"])
         from .roles import goals_by_role as _gbr
@@ -5391,6 +5423,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 105) Az ő hiba-sorozataik × a ti gyors kontráitok: a második
+    # ajándékot azonnal büntetni kell.
+    if opp.tc_turnovers >= 5 and own.trans_steals >= 4:
+        _tc105 = 100.0 * opp.tc_clustered / opp.tc_turnovers
+        _cv105 = (100.0 * own.trans_quick_goals
+                  / max(1, own.trans_steals))
+        if _tc105 >= 50.0 and _cv105 >= 30.0:
+            plan.append(
+                f"Sorozatban hibáznak (az eladásaik {_tc105:.0f}%-a "
+                f"egy percen belül követi az előzőt), ti pedig "
+                f"gyorsan büntettek (a labdaszerzéseitek "
+                f"{_cv105:.0f}%-ából lett azonnali gól) — az első "
+                "megszerzett labda után maradjon fent a nyomás: "
+                "azonnali letámadás a kihozatalukra, mert a második "
+                "hiba percen belül jön, és az dönthet egy ötös "
+                "sorozatot.")
+
     # 104) Az ő gyenge posztjuk × a ti ugyanonnan szerzett góljaitok:
     # oda kell szervezni a befejezést, ahol ők engednek.
     _cr104 = list((opp.conceded_roles or {}).items())
@@ -6652,6 +6701,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        tc_turnovers=sum(r.tc_turnovers for r in reports),
+        tc_clustered=sum(r.tc_clustered for r in reports),
+        tc_clusters=sum(r.tc_clusters for r in reports),
         conceded_roles=_merge_conceded_roles(reports),
         role_goals=_merge_role_goals(reports),
         assist_zones=_merge_assist_zones(reports),

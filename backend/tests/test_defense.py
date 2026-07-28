@@ -1212,3 +1212,60 @@ def test_conceded_by_role_needs_enough_goals():
 
     rec = conceded_by_role(_role_goal_match([2, 2, 2]))["away"]
     assert rec["goals"] == 3 and rec["top"] is None
+
+
+# ---- Hiba-sorozatok (egymás után jönnek-e az eladások) -----------------------
+
+def _turnover_match(gaps_s, fps=25.0):
+    """Hazai eladás-sorozat: a `gaps_s` az egymást követő eladások közti
+    szünetek másodpercben (az első eladás a meccs elején van)."""
+    frames = []
+    t = 0
+
+    def _hold(pid, team, n):
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[_pl(pid, team, 20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for k, gap in enumerate([0.0] + list(gaps_s)):
+        # A szünetet a hazai birtoklás hossza adja; a végén a vendéghez
+        # kerül a labda = eladás.
+        _hold(1, Team.HOME, max(2, int(gap * fps)))
+        _hold(11, Team.AWAY, 2)
+    return Match(_meta(fps), frames)
+
+
+def test_turnover_clusters_flags_the_streaky_side():
+    """Öt eladásból négy egy percen belül követi egymást → sorozatban
+    hibáznak."""
+    from handball.pipeline.defense import turnover_clusters
+
+    rec = turnover_clusters(_turnover_match([20.0, 20.0, 20.0,
+                                             300.0]))["home"]
+    assert rec["turnovers"] == 5
+    assert rec["clusters"] == 1 and rec["clustered"] == 4
+    assert rec["share_pct"] == 80.0
+    assert rec["verdict"] == "sorozatban hibáznak"
+
+
+def test_turnover_clusters_scattered_losses():
+    """Ha minden eladás közt több perc telik el, a hibák szórtak."""
+    from handball.pipeline.defense import turnover_clusters
+
+    rec = turnover_clusters(_turnover_match([200.0] * 4))["home"]
+    assert rec["turnovers"] == 5
+    assert rec["clusters"] == 0 and rec["clustered"] == 0
+    assert rec["share_pct"] == 0.0
+    assert rec["verdict"] == "szórt hibák"
+
+
+def test_turnover_clusters_needs_enough_turnovers():
+    """Kevés (5-nél kevesebb) eladásnál nincs ítélet."""
+    from handball.pipeline.defense import turnover_clusters
+
+    rec = turnover_clusters(_turnover_match([20.0, 20.0]))["home"]
+    assert rec["turnovers"] == 3
+    assert rec["share_pct"] is None and rec["verdict"] is None

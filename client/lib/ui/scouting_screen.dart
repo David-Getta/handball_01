@@ -1297,6 +1297,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Hiba-sorozatok: egymás után jönnek-e az eladásaik (5+ eladás;
+  // 50% felett sorozatos, 20% alatt szórt — a backend-kulccsal azonos
+  // küszöbök).
+  String? _turnoverClusters(Map<String, dynamic> r) {
+    final n = ((r["tc_turnovers"] as num?) ?? 0).toInt();
+    final clustered = ((r["tc_clustered"] as num?) ?? 0).toInt();
+    final clusters = ((r["tc_clusters"] as num?) ?? 0).toInt();
+    if (n < 5) return null;
+    final pct = 100.0 * clustered / n;
+    if (pct >= 50.0) {
+      return "sorozatban hibáznak: az eladásaik "
+          "${pct.toStringAsFixed(0)}%-a egy percen belül követi az "
+          "előzőt ($clustered/$n, $clusters sorozat) · az első "
+          "labdaszerzés után azonnal újra rá kell menni";
+    }
+    if (pct <= 20.0) {
+      return "szórt hibák: az eladásaiknak csak "
+          "${pct.toStringAsFixed(0)}%-a jön sorozatban ($n eladás) · "
+          "egy hiba után nem borulnak be, a pressz fölösleges "
+          "kockázat";
+    }
+    return null;
+  }
+
   // Kapott gólok posztonként: melyik poszt ellen szivárog a faluk
   // (5+ kapott gól, 45% feletti vezető poszt, holtverseny nélkül — a
   // backend-kulccsal azonos küszöbök).
@@ -2979,6 +3003,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_roleGoals(r) != null) ["Gólmegoszlás posztonként", _roleGoals(r)!],
       if (_concededRoles(r) != null)
         ["Kapott gólok posztonként", _concededRoles(r)!],
+      if (_turnoverClusters(r) != null)
+        ["Hiba-sorozatok", _turnoverClusters(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

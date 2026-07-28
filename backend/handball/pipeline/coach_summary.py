@@ -833,6 +833,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Hiba-sorozatok: egymás után jöttek-e az eladások.
+    try:
+        from .defense import turnover_clusters
+        tc = turnover_clusters(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tc = tc[side]
+            if rec_tc["verdict"] != "sorozatban hibáznak":
+                continue
+            body += (f" A(z) {name} sorozatban hibázott: az "
+                     f"eladásaik {rec_tc['share_pct']:.0f}%-a egy "
+                     f"percen belül követte az előzőt "
+                     f"({rec_tc['clustered']}/{rec_tc['turnovers']}, "
+                     f"{rec_tc['clusters']} sorozat).")
+    except Exception:
+        pass
     # Kapott gólok posztonként: melyik poszt ellen szivárgott a faluk.
     try:
         from .defense import conceded_by_role

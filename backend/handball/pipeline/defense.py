@@ -1859,3 +1859,71 @@ def conceded_by_role(match, config=None) -> dict:
                               "share_pct": round(share, 1)}
         out[side] = rec
     return out
+
+
+# Hiba-sorozatok: ennyi eladástól ítélünk, ekkora ablakon belül
+# számít egy hiba a előzőhöz tartozónak, és e feletti részarány
+# jelenti, hogy sorozatban hibáznak.
+TC_MIN_TURNOVERS = 5
+TC_WINDOW_S = 60.0
+TC_SHARE = 50.0
+
+
+def turnover_clusters(match, config=None) -> dict:
+    """Hiba-sorozatok: EGYMÁS UTÁN jönnek-e az eladott labdák.
+
+    Az eladás-időzítés (turnover_timing) azt mondja meg, a birtokláson
+    BELÜL mikor adják el a labdát — ez azt, hogy a hibák a meccsen
+    belül egyenletesen szóródnak-e, vagy sorozatban érkeznek: két
+    eladás egy klaszterbe kerül, ha TC_WINDOW_S-en belül követik
+    egymást.
+
+    Edzőileg: ha a hibáik fele sorozatban jön, egy eladás után
+    kapkodni kezdenek — az első labdaszerzés után azonnal újra rá kell
+    menni, mert ott jön a második ajándék. Ha szórtak a hibák, ez a
+    nyomás nem fizet ki: ott a felállt védekezés a válasz.
+
+    Visszatérés csapatonként: {"turnovers", "clusters" (a 2+ tagú
+    sorozatok száma), "clustered" (a sorozatban lévő eladások),
+    "share_pct", "verdict"} — a share_pct/verdict None, ha kevés
+    (TC_MIN_TURNOVERS alatti) az eladás; a verdict "sorozatban
+    hibáznak", ha a részarány eléri a TC_SHARE-t, egyébként "szórt
+    hibák".
+    """
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TC_WINDOW_S * fps
+
+    times: dict = {"home": [], "away": []}
+    for e in detect_events(match, config):
+        if e.type == EventType.TURNOVER:
+            times[e.team.value].append(e.t)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        ts = sorted(times[side])
+        rec = {"turnovers": len(ts), "clusters": 0, "clustered": 0,
+               "share_pct": None, "verdict": None}
+        # Sorozat: az egymást TC_WINDOW_S-en belül követő eladások.
+        run = 1
+        for prev, cur in zip(ts, ts[1:]):
+            if cur - prev <= win:
+                run += 1
+                continue
+            if run >= 2:
+                rec["clusters"] += 1
+                rec["clustered"] += run
+            run = 1
+        if run >= 2:
+            rec["clusters"] += 1
+            rec["clustered"] += run
+        if len(ts) >= TC_MIN_TURNOVERS:
+            share = 100.0 * rec["clustered"] / len(ts)
+            rec["share_pct"] = round(share, 1)
+            rec["verdict"] = ("sorozatban hibáznak" if share >= TC_SHARE
+                              else "szórt hibák")
+        out[side] = rec
+    return out

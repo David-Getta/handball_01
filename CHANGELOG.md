@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hiba-sorozatok**: EGYMÁS UTÁN jönnek-e az eladások. Az
+  eladás-időzítés azt mondja meg, a birtokláson belül mikor adják el a
+  labdát — ez azt, hogy a hibák a meccsen belül szóródnak-e, vagy
+  sorozatban érkeznek (két eladás egy sorozat, ha egy percen belül
+  követi egymást; 5+ eladástól, 50%-os küszöbbel). Ha sorozatban
+  hibáznak, egy eladás után kapkodnak: az első labdaszerzés után
+  azonnal újra rá kell menni, mert ott jön a második ajándék. Ha
+  szórtak a hibák (20% alatt), a pressz fölösleges kockázat. Egy
+  réteg, sok felület: `turnover_clusters` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (két edzői kulcs +
+  csempe; az eladások, a sorozatban lévők és a sorozatok darabszáma
+  tárolva), 105. meccsterv-szabály (az ő hiba-sorozataik × a ti gyors
+  kontráitok), 126. edzés-szabály (hiba utáni rendezés: eladás után
+  kötött következő támadás).
 - **Kapott gólok posztonként**: MELYIK POSZT ELLEN szivárognak. A
   poszt szerinti gólmegoszlás védő-oldali tükre: a gólt a lövő
   posztjához kötjük, de a védekező csapat oldalán tartjuk nyilván (5+
