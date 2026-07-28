@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Passz-sebesség: éles vagy lágy volt a labdajáratásuk.
+    try:
+        from .decisions import pass_speed
+        psp = pass_speed(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_psp = psp[side]
+            if rec_psp["label"] in (None, "vegyes"):
+                continue
+            body += (f" A(z) {name} labdajáratása {rec_psp['label']} "
+                     f"volt: átlag {rec_psp['avg_ms']:.1f} m/s "
+                     f"passz-sebesség ({rec_psp['passes']} mért "
+                     "passz).")
+    except Exception:
+        pass
     # Beálló-kiszolgálók: kin keresztül él a beállójuk.
     try:
         from .attack_types import pivot_feeders

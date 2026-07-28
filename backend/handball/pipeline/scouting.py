@@ -604,6 +604,12 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Passz-sebességük: a mért passzok, a sebesség-összeg (m/s) és az
+    # éles (12 m/s feletti) passzok száma — összegek, meccsek közt
+    # pontosan összegződnek (átlag = összeg / darab).
+    psp_passes: int = 0
+    psp_sum_ms: float = 0.0
+    psp_fast: int = 0
     # Beálló-kiszolgálóik: [{"player_id", "jersey", "feeds"}] —
     # játékosonként a beállónak adott beadások; darabszámok, meccsek
     # közt pontosan összegződnek (részarány = feeds / összes beadás).
@@ -1700,6 +1706,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Passz-sebesség: éles vagy lágy a labdajáratásuk.
+    if rep.psp_passes >= 10:
+        _psp_avg = rep.psp_sum_ms / rep.psp_passes
+        _psp_fast = 100.0 * rep.psp_fast / rep.psp_passes
+        if _psp_fast >= 50.0:
+            keys.append(
+                f"Éles a labdajáratásuk: a passzaik "
+                f"{_psp_fast:.0f}%-a feszes (átlag {_psp_avg:.1f} "
+                f"m/s, {rep.psp_passes} mért passz) — a passz-vonalba "
+                "nyúlás ellenük kockázatos: testtel kell zárni és a "
+                "FOGADÓT megfogni, mert a labdát nem éritek utol.")
+        elif _psp_fast <= 20.0:
+            keys.append(
+                f"Lágy a labdajáratásuk: a passzaiknak csak "
+                f"{_psp_fast:.0f}%-a feszes (átlag {_psp_avg:.1f} "
+                f"m/s, {rep.psp_passes} mért passz) — bele lehet érni: "
+                "kilépéssel és beleérő védekezéssel az elfogott "
+                "második passz azonnali kontrát ér.")
 
     # Beálló-kiszolgálók: kin keresztül él a beállójuk.
     _pf_rows = rep.pivot_feeders or []
@@ -3992,6 +4017,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .decisions import pass_speed as _psp
+        psprec = _psp(match, config)[team.value]
+        rep.psp_passes = psprec["passes"]
+        rep.psp_sum_ms = round(
+            (psprec["avg_ms"] or 0.0) * psprec["passes"], 1)
+        rep.psp_fast = psprec["fast"]
         from .attack_types import pivot_feeders as _pfd
         rep.pivot_feeders = [
             {"player_id": p["player_id"], "jersey": p["jersey"],
@@ -5680,6 +5711,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 113) Az ő lágy labdajáratásuk × a ti labdaszerzéseitek: a
+    # beleérő védekezés pont ellenük fizet ki.
+    if opp.psp_passes >= 10 and own.steal_n >= 4:
+        _psp113 = 100.0 * opp.psp_fast / opp.psp_passes
+        _avg113 = opp.psp_sum_ms / opp.psp_passes
+        if _psp113 <= 20.0:
+            plan.append(
+                f"Lágy a labdajáratásuk (a passzaiknak csak "
+                f"{_psp113:.0f}%-a feszes, átlag {_avg113:.1f} m/s), "
+                f"ti pedig tudtok labdát szerezni "
+                f"({own.steal_n} szerzés) — a beleérő védekezés pont "
+                "ellenük fizet ki: a passzsávokba kell lépni, "
+                "elsősorban a beadásoknál és az oldalváltásoknál, "
+                "mert az elfogott labda azonnali kontra.")
+
     # 112) Az ő egyszemélyes beálló-kiszolgálásuk × a ti
     # beálló-védekezésetek: a kiszolgálót zárva a beállójuk kiesik.
     _pf112 = opp.pivot_feeders or []
@@ -7099,6 +7145,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        psp_passes=sum(r.psp_passes for r in reports),
+        psp_sum_ms=round(sum(r.psp_sum_ms for r in reports), 1),
+        psp_fast=sum(r.psp_fast for r in reports),
         pivot_feeders=_merge_pivot_feeders(reports),
         seven_conceders=_merge_seven_conceders(reports),
         adp_frames=sum(r.adp_frames for r in reports),

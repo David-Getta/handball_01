@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Passz-sebesség**: ÉLES vagy LÁGY a labdajáratásuk. A passz-hossz
+  azt mondja meg, mekkora távra passzolnak, a passz-tempó azt, milyen
+  sűrűn — ez azt, milyen keményen: a passzoló döntés-pillanata és a
+  fogadó átvétele közti repülési időből és távolságból számolt
+  sebesség (10+ mért passztól; 50% felett éles, 20% alatt lágy). Az
+  éles passz ellen a passz-vonalba nyúlás kockázatos — testtel kell
+  zárni és a fogadót megfogni; a lágy labdajáratásba bele lehet érni,
+  és az elfogott passz azonnali kontrát ér. Egy réteg, sok felület:
+  `pass_speed` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (passz-darab, sebesség-összeg és éles passzok +
+  két edzői kulcs + csempe), 113. meccsterv-szabály (az ő lágy
+  labdajáratásuk × a ti labdaszerzéseitek), 134. edzés-szabály (feszes
+  passz: mellkasra menő, egy érintéses passzgyakorlat védővel).
 - **Beálló-kiszolgálók**: KI adja be a labdát a beállónak. A
   beálló-terhelés azt mondja meg, a támadásaik mekkora része megy át a
   beállón — ez azt, kin keresztül: minden passzt számolunk, amelynek a

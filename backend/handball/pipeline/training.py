@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 134) Passz-sebesség: ha lágy a labdajáratásunk, a feszes passz a
+    # téma.
+    try:
+        from .decisions import pass_speed
+        psp134 = pass_speed(match, config)
+        for side in ("home", "away"):
+            rec134 = psp134[side]
+            if rec134["label"] != "lágy labdajáratás":
+                continue
+            add(side, "támadás", "Feszes passz",
+                f"a passzainknak csak {rec134['fast_pct']:.0f}%-a volt "
+                f"feszes (átlag {rec134['avg_ms']:.1f} m/s, "
+                f"{rec134['passes']} mért passz) — a lassú labdába "
+                "bele lehet érni, és minden elfogott passz kontrát ér "
+                "ellenünk",
+                "feszes passz: páros passzgyakorlat 8-10 m-ről, "
+                "mellmagasságban, egy érintéssel — a fogadó a labdával "
+                "szemben lép, a passz a MELLKASRA megy, nem ívelten; "
+                "utána ugyanez védővel a passzsávban, hogy a feszes "
+                "passz kényszer legyen, ne választás")
+    except Exception:
+        pass
+
     # 133) Beálló-kiszolgálók: ha egy ember adja a beadások felét, a
     # kiszolgálás szélesítése a téma.
     try:

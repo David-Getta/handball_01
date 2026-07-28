@@ -453,3 +453,78 @@ def hold_time_players(match: Match,
                             else None),
                   "players": players, "slowest": slowest}
     return out
+
+
+# Passz-sebesség: ennyi mért passz kell az ítélethez, e felett számít
+# élesnek egy passz, és e felett már mérési hiba (követés-ugrás).
+PASS_SPEED_MIN_PASSES = 10
+PASS_SPEED_FAST_MS = 12.0
+PASS_SPEED_MAX_MS = 25.0
+
+
+def pass_speed(match: Match,
+               config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-sebesség: ÉLES vagy LÁGY a labdajáratásuk.
+
+    A passz-hossz (pass_length) azt mondja meg, MEKKORA távra
+    passzolnak, a passz-tempó (pass_tempo) azt, MILYEN SŰRŰN — ez azt,
+    milyen KEMÉNYEN: a passzoló döntés-pillanata és a fogadó
+    átvételének ideje közti repülési időből és a köztük mért távolságból
+    számolunk sebességet. Az egy kockán belüli birtokosváltást (ott a
+    repülési idő nem mérhető) és a PASS_SPEED_MAX_MS feletti értékeket
+    (követés-ugrás) kihagyjuk.
+
+    Edzőileg: az éles, feszes passz ellen a passz-vonalba nyúlás
+    kockázatos — testtel kell zárni és a fogadót kell megfogni; a lágy,
+    ívelt labdajáratásba viszont bele lehet érni: kilépés, beleérő
+    védekezés és a második passz elfogása azonnal termel.
+
+    Visszatérés csapatonként: {"passes", "avg_ms", "fast", "fast_pct",
+    "label"} — az avg_ms/fast_pct/label None PASS_SPEED_MIN_PASSES
+    alatt; a label "éles passzjáték" / "lágy labdajáratás" / None.
+    """
+    import math
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    by_t = {f.t: f for f in match.frames}
+
+    acc = {"home": [0, 0.0, 0], "away": [0, 0.0, 0]}  # n, összeg, éles
+    for p in detect_passes(match, config):
+        if p.decision_frame is None:
+            continue
+        dt = p.t - p.decision_frame.t
+        if dt < 2:
+            continue  # egy kockán belüli váltás: a repülési idő nem mérhető
+        fr = by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        dist = math.hypot(receiver.x - p.passer_pos.x,
+                          receiver.y - p.passer_pos.y)
+        speed = dist / (dt / fps)
+        if speed > PASS_SPEED_MAX_MS:
+            continue
+        rec = acc[p.team.value]
+        rec[0] += 1
+        rec[1] += speed
+        if speed >= PASS_SPEED_FAST_MS:
+            rec[2] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n, total, fast = acc[side]
+        ok = n >= PASS_SPEED_MIN_PASSES
+        fast_pct = round(100.0 * fast / n, 1) if ok else None
+        label = None
+        if fast_pct is not None:
+            label = ("éles passzjáték" if fast_pct >= 50.0
+                     else "lágy labdajáratás" if fast_pct <= 20.0
+                     else "vegyes")
+        out[side] = {"passes": n,
+                     "avg_ms": round(total / n, 1) if ok else None,
+                     "fast": fast, "fast_pct": fast_pct, "label": label}
+    return out

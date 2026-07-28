@@ -272,3 +272,62 @@ def test_hold_time_players_finds_where_the_ball_stops():
     # Egyetlen szakasz: kevés minta → nincs megnevezett játékos.
     few = hold_time_players(Match(meta, frames[:53]))
     assert few["home"]["slowest"] is None
+
+
+# ---- Passz-sebesség (éles vagy lágy labdajáratás) ----------------------------
+
+def _speed_match(flight_frames, n_passes=12, dist_m=8.0, fps=25.0):
+    """HAZAI passz-sorozat az 1-es és a 2-es között: a labda
+    `flight_frames` kockán át repül `dist_m` métert (a repülés alatt
+    senki sincs a labdánál, így a birtokosváltás ideje mérhető)."""
+    frames = []
+    t = 0
+    a_x, b_x = 20.0, 20.0 + dist_m
+    for k in range(n_passes + 1):
+        src_x, dst_x = (a_x, b_x) if k % 2 == 0 else (b_x, a_x)
+        for _ in range(6):    # a passzoló birtokol
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, a_x, 10.0),
+                              _pl(2, Team.HOME, b_x, 10.0)],
+                ball=Ball(x=src_x, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(1, flight_frames + 1):
+            f_ = i / (flight_frames + 1)
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, a_x, 10.0),
+                              _pl(2, Team.HOME, b_x, 10.0)],
+                ball=Ball(x=src_x + (dst_x - src_x) * f_, y=16.0,
+                          confidence=1.0)))   # repülés közben senkinél
+            t += 1
+    return Match(MatchMeta(match_id="ps", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_pass_speed_flags_the_crisp_passing():
+    """8 m-es passzok ~0,44 mp repüléssel (≈18 m/s) → éles
+    passzjáték."""
+    from handball.pipeline.decisions import pass_speed
+
+    rec = pass_speed(_speed_match(flight_frames=10))["home"]
+    assert rec["passes"] >= 10
+    assert rec["avg_ms"] is not None and rec["avg_ms"] >= 12.0
+    assert rec["fast_pct"] == 100.0
+    assert rec["label"] == "éles passzjáték"
+
+
+def test_pass_speed_flags_the_soft_passing():
+    """Ugyanaz a 8 m bő 1 mp alatt (≈8 m/s) → lágy labdajáratás."""
+    from handball.pipeline.decisions import pass_speed
+
+    rec = pass_speed(_speed_match(flight_frames=25))["home"]
+    assert rec["avg_ms"] is not None and rec["avg_ms"] <= 12.0
+    assert rec["fast_pct"] == 0.0
+    assert rec["label"] == "lágy labdajáratás"
+
+
+def test_pass_speed_needs_enough_passes():
+    """Kevés (10-nél kevesebb) mért passznál nincs ítélet."""
+    from handball.pipeline.decisions import pass_speed
+
+    rec = pass_speed(_speed_match(flight_frames=10, n_passes=4))["home"]
+    assert rec["avg_ms"] is None and rec["label"] is None

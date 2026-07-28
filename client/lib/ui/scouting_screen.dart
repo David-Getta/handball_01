@@ -1297,6 +1297,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Passz-sebesség: éles vagy lágy a labdajáratásuk (10+ mért passz;
+  // 50% felett éles, 20% alatt lágy — a backend-kulccsal azonos
+  // küszöbök).
+  String? _passSpeed(Map<String, dynamic> r) {
+    final n = ((r["psp_passes"] as num?) ?? 0).toInt();
+    final sum = ((r["psp_sum_ms"] as num?) ?? 0).toDouble();
+    final fast = ((r["psp_fast"] as num?) ?? 0).toInt();
+    if (n < 10) return null;
+    final avg = sum / n;
+    final pct = 100.0 * fast / n;
+    if (pct >= 50.0) {
+      return "éles a labdajáratásuk: a passzaik "
+          "${pct.toStringAsFixed(0)}%-a feszes (átlag "
+          "${avg.toStringAsFixed(1)} m/s) · testtel zárni, a fogadót "
+          "megfogni";
+    }
+    if (pct <= 20.0) {
+      return "lágy a labdajáratásuk: a passzaiknak csak "
+          "${pct.toStringAsFixed(0)}%-a feszes (átlag "
+          "${avg.toStringAsFixed(1)} m/s) · bele lehet érni, beleérő "
+          "védekezés";
+    }
+    return null;
+  }
+
   // Beálló-kiszolgálók: ki adja be a labdát a beállónak (4+ beadás,
   // 50% feletti vezető kiszolgáló, holtverseny nélkül — a
   // backend-kulccsal azonos küszöbök).
@@ -3191,6 +3216,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes-okozó védők", _sevenConceders(r)!],
       if (_pivotFeeders(r) != null)
         ["Beálló-kiszolgálók", _pivotFeeders(r)!],
+      if (_passSpeed(r) != null) ["Passz-sebesség", _passSpeed(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
