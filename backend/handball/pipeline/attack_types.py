@@ -2053,3 +2053,65 @@ def wing_involvement(match: Match,
             elif share <= WING_INV_LOW:
                 rec["verdict"] = "közép-központú"
     return out
+
+
+# Támadás-mélység: ennyi mérhető kocka kell az átlaghoz; e alatt
+# rátapadnak a 9 m-es vonalra, e fölött mélyen, hátrahúzódva játszanak.
+ATTACK_DEPTH_MIN_FRAMES = 100
+ATTACK_DEPTH_CLOSE_M = 9.5
+ATTACK_DEPTH_DEEP_M = 12.0
+
+
+def attack_depth(match, config=None) -> dict:
+    """Támadás-mélység: MILYEN MESSZE állnak a kaputól felállt
+    támadásban.
+
+    A támadás-szélesség (attack_width) az oldalirányú terjedelmet méri
+    — ez a mélységet: saját labdabirtoklású kockánként a támadott
+    térfélen lévő (nem kapus) támadók átlagos kapu-távolsága, legalább
+    3 látott támadóval.
+
+    Edzőileg: aki a 9 m-es vonalra tapad, az betörésre és beugrásra
+    játszik — ellene a fal nem léphet ki, a segítő-csúszás és a
+    testes fogadás a válasz. Aki mélyen, hátrahúzódva áll, annak idő
+    kell a lövés-előkészítéshez — ellene ki kell lépni a
+    lövő-vonalba, mert a távoli lövés az egyetlen fegyvere.
+
+    Visszatérés csapatonként: {"frames", "avg_depth_m", "style"} — az
+    átlag és a style None, ha nincs ATTACK_DEPTH_MIN_FRAMES mérhető
+    kocka; a style "vonalra tapadó" / "mély (hátrahúzódó)" /
+    "kiegyensúlyozott".
+    """
+    import math
+
+    from .calibration import COURT_WIDTH_M
+    from .tactics import TacticsConfig, possession_team
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    acc = {"home": [0, 0.0], "away": [0, 0.0]}  # (kocka, összeg)
+    for fr in match.frames:
+        poss = possession_team(fr, config)
+        if poss is None:
+            continue
+        goal_x = config.attacks_toward_x(poss)
+        dists = [math.hypot(p.x - goal_x, p.y - cy) for p in fr.players
+                 if p.team == poss and p.role != "kapus"
+                 and abs(p.x - goal_x) <= 15.0]
+        if len(dists) < 3:
+            continue
+        rec = acc[poss.value]
+        rec[0] += 1
+        rec[1] += sum(dists) / len(dists)
+
+    out = {}
+    for side in ("home", "away"):
+        n, total = acc[side]
+        avg = round(total / n, 1) if n >= ATTACK_DEPTH_MIN_FRAMES else None
+        style = None
+        if avg is not None:
+            style = ("vonalra tapadó" if avg <= ATTACK_DEPTH_CLOSE_M
+                     else "mély (hátrahúzódó)" if avg >= ATTACK_DEPTH_DEEP_M
+                     else "kiegyensúlyozott")
+        out[side] = {"frames": n, "avg_depth_m": avg, "style": style}
+    return out

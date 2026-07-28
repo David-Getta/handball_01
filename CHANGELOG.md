@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Támadás-mélység**: MILYEN MESSZE állnak a kaputól felállt
+  támadásban. A támadás-szélesség az oldalirányú terjedelmet méri — ez
+  a mélységet: birtoklású kockánként a támadók átlagos kapu-távolsága
+  (100+ mért kocka; 9,5 m alatt vonalra tapadó, 12 m felett mély).
+  Aki a 9 m-es vonalra tapad, betörésre és beugrásra játszik — ellene
+  a fal ne lépjen ki, a segítő-csúszás és a testes fogadás a válasz;
+  aki mélyen áll, annak idő kell a lövés-előkészítéshez — ellene ki
+  kell lépni a lövő-vonalba. Egy réteg, sok felület: `attack_depth`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kocka- és távolság-összegek + két edzői kulcs +
+  csempe), 110. meccsterv-szabály (az ő mély támadásuk × a ti felfutó
+  falatok), 131. edzés-szabály (vonalra lépő támadás: 9 m-en belülről
+  befejezni).
 - **Szélső-bevonás**: ELJUT-E a labda a szélre a támadásaikban. A
   szélső-befejezés azt méri, mennyire eredményes a szélső, ha lő — ez
   azt, hogy egyáltalán megkapja-e a labdát: támadásonként nézzük,

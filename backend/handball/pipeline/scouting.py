@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Támadás-mélységük: a mért kockák és a kapu-távolság összege (m) —
+    # összegek, meccsek közt pontosan összegződnek (átlag = összeg /
+    # kocka).
+    adp_frames: int = 0
+    adp_sum_m: float = 0.0
     # Szélső-bevonásuk: a mért támadások és azok száma, amelyekben
     # kiment a labda a szélre — darabszámok, meccsek közt pontosan
     # összegződnek (arány = wi_with_wing / wi_attacks).
@@ -1687,6 +1692,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Támadás-mélység: milyen messze állnak a kaputól felállt támadásban.
+    if rep.adp_frames >= 100 and rep.adp_sum_m > 0:
+        _adp = rep.adp_sum_m / rep.adp_frames
+        if _adp <= 9.5:
+            keys.append(
+                f"Vonalra tapadnak: a támadóik átlagosan {_adp:.1f} "
+                "m-re állnak a kaputól — betörésre és beugrásra "
+                "játszanak: a falatok NE lépjen ki, a segítő-csúszás "
+                "és a testes fogadás a válasz, a beállót elölről "
+                "kell megfogni.")
+        elif _adp >= 12.0:
+            keys.append(
+                f"Mélyen, hátrahúzódva támadnak (átlagosan "
+                f"{_adp:.1f} m-re a kaputól) — idő kell nekik a "
+                "lövés-előkészítéshez: ki kell lépni a lövő-vonalba, "
+                "mert onnan a távoli lövés az egyetlen fegyverük, és "
+                "a kilépés után is van idő visszazárni.")
 
     # Szélső-bevonás: eljut-e a labda a szélre a támadásaikban.
     if rep.wi_attacks >= 8:
@@ -3928,6 +3951,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import attack_depth as _adp
+        adprec = _adp(match, config)[team.value]
+        if adprec["avg_depth_m"] is not None:
+            rep.adp_frames = adprec["frames"]
+            rep.adp_sum_m = round(
+                adprec["avg_depth_m"] * adprec["frames"], 1)
         from .attack_types import wing_involvement as _win
         winrec = _win(match, config)[team.value]
         rep.wi_attacks = winrec["attacks"]
@@ -5570,6 +5599,22 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 110) Az ő mély támadásuk × a ti felfutó falatok: a kilépés pont
+    # az ő lövés-előkészítésüket töri meg.
+    if opp.adp_frames >= 100 and opp.adp_sum_m > 0 \
+            and own.defline_frames >= 100 and own.defline_sum_m > 0:
+        _adp110 = opp.adp_sum_m / opp.adp_frames
+        _dl110 = own.defline_sum_m / own.defline_frames
+        if _adp110 >= 12.0 and _dl110 >= 7.5:
+            plan.append(
+                f"Mélyen támadnak (átlagosan {_adp110:.1f} m-re a "
+                f"kaputól), a ti falatok pedig amúgy is felfutó "
+                f"({_dl110:.1f} m-en áll) — a kilépés pont az ő "
+                "lövés-előkészítésüket töri meg: a második vonal "
+                "időben lépjen a lövő-vonalba, mert onnan a távoli "
+                "lövés az egyetlen fegyverük, és a mély felállásuk "
+                "miatt van idő visszazárni a betörésre.")
+
     # 109) Az ő közép-központú támadásuk × a ti tömör falatok: a
     # szélső-védőitek nyugodtan segíthetnek befelé.
     if opp.wi_attacks >= 8 and own.defw_frames >= 100:
@@ -6927,6 +6972,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        adp_frames=sum(r.adp_frames for r in reports),
+        adp_sum_m=round(sum(r.adp_sum_m for r in reports), 1),
         wi_attacks=sum(r.wi_attacks for r in reports),
         wi_with_wing=sum(r.wi_with_wing for r in reports),
         lhs_lead_frames=sum(r.lhs_lead_frames for r in reports),

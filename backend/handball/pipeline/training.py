@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 131) Támadás-mélység: ha mélyen, hátrahúzódva támadunk, a
+    # vonalra lépés a téma.
+    try:
+        from .attack_types import attack_depth
+        adp131 = attack_depth(match, config)
+        for side in ("home", "away"):
+            rec131 = adp131[side]
+            if rec131["style"] != "mély (hátrahúzódó)":
+                continue
+            add(side, "támadás", "Vonalra lépő támadás",
+                f"a támadóink átlagosan {rec131['avg_depth_m']:.1f} "
+                "m-re álltak a kaputól — ilyen mélyről csak távoli "
+                "lövés marad, a védelem pedig nyugodtan kiléphet "
+                "ránk",
+                "vonalra lépő támadás: felállt támadás azzal a "
+                "szabállyal, hogy az átlövők a labda átvételekor "
+                "MÁR lépés közben legyenek befelé (a 9 m-es vonalon "
+                "belülre érkezve fejezzenek be vagy adják tovább) — "
+                "a gyakorlat pontot csak 9 m-en belülről leadott "
+                "lövésért vagy beállós befejezésért ad")
+    except Exception:
+        pass
+
     # 130) Szélső-bevonás: ha a labda ki sem megy a szélre, a
     # szélesség-tartás a téma.
     try:

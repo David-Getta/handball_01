@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Támadás-mélység: milyen messze állnak a kaputól (100+ mért kocka;
+  // 9,5 m alatt vonalra tapadó, 12 m felett mély — a backend-kulccsal
+  // azonos küszöbök).
+  String? _attackDepth(Map<String, dynamic> r) {
+    final frames = ((r["adp_frames"] as num?) ?? 0).toInt();
+    final sum = ((r["adp_sum_m"] as num?) ?? 0).toDouble();
+    if (frames < 100 || sum <= 0) return null;
+    final avg = sum / frames;
+    if (avg <= 9.5) {
+      return "vonalra tapadnak: a támadóik átlagosan "
+          "${avg.toStringAsFixed(1)} m-re állnak a kaputól · a falatok "
+          "NE lépjen ki, segítő-csúszás és testes fogadás";
+    }
+    if (avg >= 12.0) {
+      return "mélyen, hátrahúzódva támadnak (átlagosan "
+          "${avg.toStringAsFixed(1)} m-re a kaputól) · ki kell lépni "
+          "a lövő-vonalba";
+    }
+    return null;
+  }
+
   // Szélső-bevonás: eljut-e a labda a szélre (8+ támadás; 60% felett
   // széthúzzák, 30% alatt közép-központú — a backend-kulccsal azonos
   // küszöbök).
@@ -3121,6 +3142,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Védekezési mélység állás szerint", _lineHeightByScore(r)!],
       if (_wingInvolvement(r) != null)
         ["Szélső-bevonás", _wingInvolvement(r)!],
+      if (_attackDepth(r) != null) ["Támadás-mélység", _attackDepth(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -1490,3 +1490,49 @@ def test_wing_involvement_needs_enough_attacks():
     rec = wing_involvement(_wing_match([True, False]))["home"]
     assert rec["attacks"] == 2
     assert rec["share_pct"] is None and rec["verdict"] is None
+
+
+# ---- Támadás-mélység (milyen messze állnak a kaputól) ------------------------
+
+def _depth_match(dist_m, fps=25.0, seconds=6.0):
+    """HAZAI felállt támadás: a támadók a +x kaputól `dist_m` méterre
+    állnak (a labdás középen), a védők a kapu előtt."""
+    frames = []
+    for i in range(int(seconds * fps)):
+        x = 40.0 - dist_m
+        players = [_pl(1, Team.HOME, x, 10.0),
+                   _pl(2, Team.HOME, x, 6.0),
+                   _pl(3, Team.HOME, x, 14.0),
+                   _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                   _pl(21, Team.AWAY, 38.0, 8.0),
+                   _pl(22, Team.AWAY, 38.0, 12.0)]
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_attack_depth_flags_the_line_huggers():
+    """9 m-en belül álló támadók → vonalra tapadó felállás."""
+    from handball.pipeline.attack_types import attack_depth
+
+    rec = attack_depth(_depth_match(8.0))["home"]
+    assert rec["frames"] >= 100
+    assert rec["avg_depth_m"] is not None and rec["avg_depth_m"] <= 9.5
+    assert rec["style"] == "vonalra tapadó"
+
+
+def test_attack_depth_flags_the_deep_attack():
+    """13 m-re hátrahúzódó támadók → mély felállás."""
+    from handball.pipeline.attack_types import attack_depth
+
+    rec = attack_depth(_depth_match(13.0))["home"]
+    assert rec["avg_depth_m"] >= 12.0
+    assert rec["style"] == "mély (hátrahúzódó)"
+
+
+def test_attack_depth_needs_enough_frames():
+    """Kevés mérhető kockánál nincs átlag és nincs ítélet."""
+    from handball.pipeline.attack_types import attack_depth
+
+    rec = attack_depth(_depth_match(10.0, seconds=1.0))["home"]
+    assert rec["avg_depth_m"] is None and rec["style"] is None

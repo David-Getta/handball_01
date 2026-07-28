@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Támadás-mélység: milyen messze álltak a kaputól.
+    try:
+        from .attack_types import attack_depth
+        adp = attack_depth(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_adp = adp[side]
+            if rec_adp["style"] in (None, "kiegyensúlyozott"):
+                continue
+            body += (f" A(z) {name} felállása {rec_adp['style']} volt: "
+                     f"a támadóik átlagosan "
+                     f"{rec_adp['avg_depth_m']:.1f} m-re álltak a "
+                     "kaputól.")
+    except Exception:
+        pass
     # Szélső-bevonás: eljutott-e a labda a szélre.
     try:
         from .attack_types import wing_involvement
