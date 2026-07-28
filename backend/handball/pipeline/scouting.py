@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Fal-csúszásuk késése: a mért védekezett kockák és a mért késés
+    # (mp) szorzata — összegek, hogy meccsek közt súlyozva átlagolható
+    # legyen (átlag-késés = dsl_sum_s / dsl_frames).
+    dsl_frames: int = 0
+    dsl_sum_s: float = 0.0
     # Passz-sebességük: a mért passzok, a sebesség-összeg (m/s) és az
     # éles (12 m/s feletti) passzok száma — összegek, meccsek közt
     # pontosan összegződnek (átlag = összeg / darab).
@@ -1706,6 +1711,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Fal-csúszás: milyen gyorsan igazodik a faluk az oldalváltáshoz.
+    if rep.dsl_frames >= 200 and rep.dsl_sum_s > 0:
+        _dsl_lag = rep.dsl_sum_s / rep.dsl_frames
+        if _dsl_lag >= 0.6:
+            keys.append(
+                f"Lassan csúszik a faluk: {_dsl_lag:.1f} mp késéssel "
+                "követik a labda oldalváltásait — az oldalváltás a "
+                "fegyver ellenük: két-három gyors átjátszás után a "
+                "túloldalon nyílik a rés, oda kell érkeznie a "
+                "befejezőnek.")
+        elif _dsl_lag <= 0.2:
+            keys.append(
+                f"Gyorsan igazodik a faluk (csak {_dsl_lag:.1f} mp "
+                "késéssel követik az oldalváltást) — az átjátszás "
+                "ellenük csak a saját támadásotokat fárasztja: a "
+                "résre indított betörés és a beállós játék a válasz.")
 
     # Passz-sebesség: éles vagy lágy a labdajáratásuk.
     if rep.psp_passes >= 10:
@@ -4017,6 +4039,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import defensive_shift_lag as _dsl
+        dslrec = _dsl(match, config)[team.value]
+        if dslrec["lag_s"] is not None:
+            rep.dsl_frames = dslrec["frames"]
+            rep.dsl_sum_s = round(dslrec["lag_s"] * dslrec["frames"], 1)
         from .decisions import pass_speed as _psp
         psprec = _psp(match, config)[team.value]
         rep.psp_passes = psprec["passes"]
@@ -5711,6 +5738,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 114) Az ő lassan csúszó faluk × a ti oldalváltásaitok: a
+    # keresztpassz pont az ő késésüket bünteti.
+    if opp.dsl_frames >= 200 and opp.dsl_sum_s > 0 \
+            and own.ssw_passes >= 30:
+        _lag114 = opp.dsl_sum_s / opp.dsl_frames
+        _ssw114 = 100.0 * own.ssw_switches / own.ssw_passes
+        if _lag114 >= 0.6 and _ssw114 >= 12.0:
+            plan.append(
+                f"Lassan csúszik a faluk ({_lag114:.1f} mp késéssel "
+                f"követik az oldalváltást), ti pedig amúgy is sokat "
+                f"váltotok oldalt (a támadó passzaitok {_ssw114:.0f}%-a "
+                "keresztpassz) — ezt kell fokozni: két gyors "
+                "átjátszás, és a HARMADIK oldalon már érkezzen a "
+                "befejező, mert a faluk ott még nincs a helyén.")
+
     # 113) Az ő lágy labdajáratásuk × a ti labdaszerzéseitek: a
     # beleérő védekezés pont ellenük fizet ki.
     if opp.psp_passes >= 10 and own.steal_n >= 4:
@@ -7145,6 +7187,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        dsl_frames=sum(r.dsl_frames for r in reports),
+        dsl_sum_s=round(sum(r.dsl_sum_s for r in reports), 1),
         psp_passes=sum(r.psp_passes for r in reports),
         psp_sum_ms=round(sum(r.psp_sum_ms for r in reports), 1),
         psp_fast=sum(r.psp_fast for r in reports),

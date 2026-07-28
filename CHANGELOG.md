@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Fal-csúszás késése**: MILYEN GYORSAN igazodik a faluk az
+  oldalváltáshoz. Az oldalváltás a támadó oldalról méri, milyen
+  gyakran viszik át a labdát — ez a védő oldali válasz: felállt
+  védekezésben a labda oldalirányú helyét vetjük össze a fal
+  y-súlypontjával több késleltetéssel, és azt vesszük a késésüknek,
+  amelynél a kettő a legjobban fedi egymást (200+ védekezett kocka;
+  0,6 mp felett lassú, 0,2 mp alatt gyors). Lassú fal ellen az
+  oldalváltás a fegyver — két-három átjátszás után a túloldalon nyílik
+  a rés; gyors fal ellen az átjátszás csak a saját támadást fárasztja,
+  ott a betörés és a beállós játék a válasz. Egy réteg, sok felület:
+  `defensive_shift_lag` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kocka- és késés-összegek + két
+  edzői kulcs + csempe), 114. meccsterv-szabály (az ő lassan csúszó
+  faluk × a ti oldalváltásaitok), 135. edzés-szabály (eltolás
+  oldalváltásra: a labda érkezése előtt a helyén a fal).
 - **Passz-sebesség**: ÉLES vagy LÁGY a labdajáratásuk. A passz-hossz
   azt mondja meg, mekkora távra passzolnak, a passz-tempó azt, milyen
   sűrűn — ez azt, milyen keményen: a passzoló döntés-pillanata és a

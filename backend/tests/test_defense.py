@@ -1391,3 +1391,54 @@ def test_line_height_by_score_needs_frames():
     rec = line_height_by_score(Match(_meta(), m.frames[:40]))["away"]
     assert rec["level"]["avg_height_m"] is None
     assert rec["verdict"] is None
+
+
+# ---- Fal-csúszás késése -----------------------------------------------------
+
+def _shift_match(lag_frames, fps=25.0, cycles=6, period=50):
+    """A VENDÉG fal a labda oldalváltásait `lag_frames` késéssel követi:
+    a labda y-ja szinuszosan leng, a védők átlag y-ja ugyanaz, eltolva."""
+    import math
+
+    frames = []
+    n = cycles * period
+    for i in range(n + lag_frames):
+        ball_y = 10.0 + 6.0 * math.sin(2 * math.pi * i / period)
+        wall_y = 10.0 + 6.0 * math.sin(
+            2 * math.pi * (i - lag_frames) / period)
+        players = [_pl(1, Team.HOME, 32.0, ball_y),
+                   _pl(21, Team.AWAY, 36.0, wall_y - 2.0),
+                   _pl(22, Team.AWAY, 36.0, wall_y),
+                   _pl(23, Team.AWAY, 36.0, wall_y + 2.0),
+                   _pl(29, Team.AWAY, 39.5, 10.0)]
+        players[-1].role = "kapus"
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=32.0, y=ball_y, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_defensive_shift_lag_measures_the_delay():
+    """20 kocka (0,8 mp) késéssel csúszó fal → lassan csúsznak."""
+    from handball.pipeline.defense import defensive_shift_lag
+
+    rec = defensive_shift_lag(_shift_match(20))["away"]
+    assert rec["frames"] >= 200
+    assert rec["lag_s"] == 0.8
+    assert rec["verdict"] == "lassan csúsznak"
+
+
+def test_defensive_shift_lag_spots_the_quick_wall():
+    """Késés nélkül együtt mozgó fal → gyorsan igazodnak."""
+    from handball.pipeline.defense import defensive_shift_lag
+
+    rec = defensive_shift_lag(_shift_match(0))["away"]
+    assert rec["lag_s"] == 0.0
+    assert rec["verdict"] == "gyorsan igazodnak"
+
+
+def test_defensive_shift_lag_needs_frames():
+    """Kevés védekezett kockánál nincs ítélet."""
+    from handball.pipeline.defense import defensive_shift_lag
+
+    rec = defensive_shift_lag(_shift_match(20, cycles=1, period=40))["away"]
+    assert rec["lag_s"] is None and rec["verdict"] is None

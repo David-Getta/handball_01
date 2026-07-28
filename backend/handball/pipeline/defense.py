@@ -2020,3 +2020,92 @@ def line_height_by_score(match, config=None) -> dict:
         rec["verdict"] = verdict
         out[side] = rec
     return out
+
+
+# Fal-csúszás késése: ennyi védekezett kocka kell az ítélethez, ekkora
+# késleltetésekig nézünk (mp), és e felett lassú, e alatt gyors a
+# csúszásuk.
+SHIFT_MIN_FRAMES = 200
+SHIFT_MAX_LAG_S = 1.2
+SHIFT_STEP_S = 0.1
+SHIFT_SLOW_S = 0.6
+SHIFT_FAST_S = 0.2
+
+
+def defensive_shift_lag(match, config=None) -> dict:
+    """Fal-csúszás késése: MILYEN GYORSAN igazodik a faluk az
+    oldalváltáshoz.
+
+    Az oldalváltás (side_switching) a TÁMADÓ oldalról méri, milyen
+    gyakran viszik át a labdát a másik oldalra — ez a védő oldali
+    válasz: felállt védekezésben összevetjük a labda oldalirányú
+    helyét a fal y-súlypontjával, több késleltetéssel, és azt a
+    késleltetést vesszük a csúszásuk késésének, amelynél a kettő a
+    legjobban fedi egymást.
+
+    Edzőileg: aki lassan csúszik, az ellen az oldalváltás a fegyver —
+    két-három gyors átjátszás után a túloldalon nyílik a rés; aki
+    gyorsan igazodik, annál az oldalváltás csak fárasztja a saját
+    támadást: ott a résre indított betörés és a beállós játék a
+    válasz.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"frames", "lag_s",
+    "verdict"} — a lag_s/verdict None SHIFT_MIN_FRAMES alatt; a verdict
+    "lassan csúsznak" / "gyorsan igazodnak" / None.
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    half = COURT_LENGTH_M / 2.0
+    cy = COURT_WIDTH_M / 2.0
+
+    # Védekezett kockánként: (a labda y-ja, a fal y-súlypontja).
+    series: dict = {"home": [], "away": []}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or f.ball is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén.
+        if abs(holder.x - own_x) > half:
+            continue
+        ys = [p.y for p in f.players
+              if p.team == deff and p.role != "kapus"
+              and abs(p.x - own_x) <= half]
+        if len(ys) < 3:
+            continue
+        series[deff.value].append((f.ball.y - cy,
+                                   sum(ys) / len(ys) - cy))
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = series[side]
+        rec = {"frames": len(rows), "lag_s": None, "verdict": None}
+        if len(rows) >= SHIFT_MIN_FRAMES:
+            best = None
+            lag = 0.0
+            while lag <= SHIFT_MAX_LAG_S + 1e-9:
+                shift = round(lag * fps)
+                if shift >= len(rows):
+                    break
+                # A fal `shift` kockával későbbi helye a labdáéhoz mérve.
+                diffs = [abs(rows[i][0] - rows[i + shift][1])
+                         for i in range(len(rows) - shift)]
+                score = sum(diffs) / len(diffs)
+                if best is None or score < best[1]:
+                    best = (lag, score)
+                lag += SHIFT_STEP_S
+            if best is not None:
+                rec["lag_s"] = round(best[0], 1)
+                rec["verdict"] = ("lassan csúsznak"
+                                  if rec["lag_s"] >= SHIFT_SLOW_S
+                                  else "gyorsan igazodnak"
+                                  if rec["lag_s"] <= SHIFT_FAST_S
+                                  else None)
+        out[side] = rec
+    return out

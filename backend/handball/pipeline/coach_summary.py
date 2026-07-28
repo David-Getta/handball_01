@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Fal-csúszás: milyen gyorsan igazodott a faluk az oldalváltáshoz.
+    try:
+        from .defense import defensive_shift_lag
+        dsl = defensive_shift_lag(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dsl = dsl[side]
+            if rec_dsl["verdict"] is None:
+                continue
+            body += (f" A(z) {name} fala {rec_dsl['verdict']}: "
+                     f"{rec_dsl['lag_s']:.1f} mp késéssel követte a "
+                     "labda oldalváltásait.")
+    except Exception:
+        pass
     # Passz-sebesség: éles vagy lágy volt a labdajáratásuk.
     try:
         from .decisions import pass_speed

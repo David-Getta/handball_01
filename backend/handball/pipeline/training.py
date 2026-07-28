@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 135) Fal-csúszás: ha lassan követjük az oldalváltást, az eltolás
+    # a téma.
+    try:
+        from .defense import defensive_shift_lag
+        dsl135 = defensive_shift_lag(match, config)
+        for side in ("home", "away"):
+            rec135 = dsl135[side]
+            if rec135["verdict"] != "lassan csúsznak":
+                continue
+            add(side, "védekezés", "Eltolás oldalváltásra",
+                f"a falunk {rec135['lag_s']:.1f} mp késéssel követte a "
+                "labda oldalváltásait — két gyors átjátszás után a "
+                "túloldalon rés nyílik, és ott érkezik a befejezőjük",
+                "eltolás oldalváltásra: a fal 6 játékossal áll, a "
+                "támadók csak keresztpasszokat adnak (lövés nélkül) — "
+                "a védőknek a labda ÉRKEZÉSE előtt kell a helyükön "
+                "lenniük, hangos vezényszóval; utána ugyanez "
+                "befejezéssel, ahol minden késve érkezett eltolás "
+                "után az öt védő visszafut a felezővonalig")
+    except Exception:
+        pass
+
     # 134) Passz-sebesség: ha lágy a labdajáratásunk, a feszes passz a
     # téma.
     try:

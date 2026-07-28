@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Fal-csúszás késése: milyen gyorsan igazodik a faluk az
+  // oldalváltáshoz (200+ védekezett kocka; 0,6 mp felett lassú, 0,2 mp
+  // alatt gyors — a backend-kulccsal azonos küszöbök).
+  String? _shiftLag(Map<String, dynamic> r) {
+    final frames = ((r["dsl_frames"] as num?) ?? 0).toInt();
+    final sum = ((r["dsl_sum_s"] as num?) ?? 0).toDouble();
+    if (frames < 200 || sum <= 0) return null;
+    final lag = sum / frames;
+    if (lag >= 0.6) {
+      return "lassan csúszik a faluk: ${lag.toStringAsFixed(1)} mp "
+          "késéssel követik az oldalváltást · két-három gyors "
+          "átjátszás után a túloldalon nyílik a rés";
+    }
+    if (lag <= 0.2) {
+      return "gyorsan igazodik a faluk (${lag.toStringAsFixed(1)} mp "
+          "késés) · az átjátszás nem fizet ki, betörés és beállós "
+          "játék a válasz";
+    }
+    return null;
+  }
+
   // Passz-sebesség: éles vagy lágy a labdajáratásuk (10+ mért passz;
   // 50% felett éles, 20% alatt lágy — a backend-kulccsal azonos
   // küszöbök).
@@ -3217,6 +3238,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_pivotFeeders(r) != null)
         ["Beálló-kiszolgálók", _pivotFeeders(r)!],
       if (_passSpeed(r) != null) ["Passz-sebesség", _passSpeed(r)!],
+      if (_shiftLag(r) != null) ["Fal-csúszás késése", _shiftLag(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
