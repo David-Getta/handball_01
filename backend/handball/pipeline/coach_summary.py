@@ -833,6 +833,28 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Védekezési mélység állás szerint: mikor jött a nyomásuk.
+    try:
+        from .defense import line_height_by_score
+        lhs = line_height_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lhs = lhs[side]
+            if rec_lhs["verdict"] is None:
+                continue
+            if rec_lhs["verdict"] == "hátrányban feljebb lépnek":
+                body += (f" A(z) {name} fala hátrányban feljebb "
+                         f"lépett: {rec_lhs['trailing']['avg_height_m']:.1f} "
+                         f"m-en védekezett hátrányban és "
+                         f"{rec_lhs['leading']['avg_height_m']:.1f} "
+                         "m-en vezetve.")
+            else:
+                body += (f" A(z) {name} vezetve is fent maradt: "
+                         f"{rec_lhs['leading']['avg_height_m']:.1f} "
+                         f"m-en védekezett előnyben és "
+                         f"{rec_lhs['trailing']['avg_height_m']:.1f} "
+                         "m-en hátrányban.")
+    except Exception:
+        pass
     # Támadás-kimenetel: eljutottak-e egyáltalán a befejezésig.
     try:
         from .attack_types import attack_outcomes

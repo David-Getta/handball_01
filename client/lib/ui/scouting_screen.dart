@@ -1297,6 +1297,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Védekezési mélység állás szerint: mikor jön a nyomásuk (100+ mért
+  // kocka mindkét állásban, 0,8 m-es rés — a backend-kulccsal azonos
+  // küszöbök).
+  String? _lineHeightByScore(Map<String, dynamic> r) {
+    final leadF = ((r["lhs_lead_frames"] as num?) ?? 0).toInt();
+    final trailF = ((r["lhs_trail_frames"] as num?) ?? 0).toInt();
+    final leadSum = ((r["lhs_lead_sum_m"] as num?) ?? 0).toDouble();
+    final trailSum = ((r["lhs_trail_sum_m"] as num?) ?? 0).toDouble();
+    if (leadF < 100 || trailF < 100) return null;
+    final lead = leadSum / leadF;
+    final trail = trailSum / trailF;
+    final gap = trail - lead;
+    if (gap >= 0.8) {
+      return "hátrányban feljebb lépnek: hátrányban "
+          "${trail.toStringAsFixed(1)} m-en, vezetve "
+          "${lead.toStringAsFixed(1)} m-en áll a faluk · kapott gól "
+          "után jön a letámadásuk, arra kell kész kihozatal";
+    }
+    if (gap <= -0.8) {
+      return "vezetve is fent maradnak: előnyben "
+          "${lead.toStringAsFixed(1)} m-en, hátrányban "
+          "${trail.toStringAsFixed(1)} m-en áll a faluk · "
+          "letámadás-álló kihozatal kell ellenük";
+    }
+    return null;
+  }
+
   // Támadás-kimenetel: eljutnak-e a befejezésig (8+ támadás; 25%
   // feletti eladás-arány, illetve 85% feletti lövés-arány — a
   // backend-kulccsal azonos küszöbök).
@@ -3069,6 +3096,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-védés posztonként", _gkRoleSaves(r)!],
       if (_attackOutcomes(r) != null)
         ["Támadás-kimenetel", _attackOutcomes(r)!],
+      if (_lineHeightByScore(r) != null)
+        ["Védekezési mélység állás szerint", _lineHeightByScore(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

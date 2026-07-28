@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Védekezési mélységük állás szerint: állásonként a mért kockák és
+    # a magasság-összeg (m) — összegek, meccsek közt pontosan
+    # összegződnek (átlag = összeg / kocka).
+    lhs_lead_frames: int = 0
+    lhs_lead_sum_m: float = 0.0
+    lhs_trail_frames: int = 0
+    lhs_trail_sum_m: float = 0.0
     # Támadás-kimeneteleik: {kimenetel: darab} — mivel zárulnak a
     # támadásaik (lövés / eladás / hetes / egyéb); darabszámok, meccsek
     # közt pontosan összegződnek (arány = kimenetel / összes támadás).
@@ -1675,6 +1682,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Védekezési mélység állás szerint: mikor jön a nyomásuk.
+    if rep.lhs_lead_frames >= 100 and rep.lhs_trail_frames >= 100:
+        _lhs_lead = rep.lhs_lead_sum_m / rep.lhs_lead_frames
+        _lhs_trail = rep.lhs_trail_sum_m / rep.lhs_trail_frames
+        _lhs_gap = _lhs_trail - _lhs_lead
+        if _lhs_gap >= 0.8:
+            keys.append(
+                f"Hátrányban feljebb lépnek: hátrányban "
+                f"{_lhs_trail:.1f} m-en, vezetve {_lhs_lead:.1f} m-en "
+                "áll a faluk — kapott gól után jön a letámadásuk, "
+                "arra kell kész kihozatal (a kapussal együtt "
+                "begyakorolt indítás); ha viszont ti vezettek, "
+                "türelmesen kell játszani, mert a mély faluk a "
+                "kapkodó átlövésre vár.")
+        elif _lhs_gap <= -0.8:
+            keys.append(
+                f"Vezetve is fent maradnak: előnyben {_lhs_lead:.1f} "
+                f"m-en, hátrányban {_lhs_trail:.1f} m-en áll a faluk "
+                "— nem ülnek vissza, tehát a vezetésük ellen a "
+                "letámadás-álló kihozatal a kulcs: gyors első passz "
+                "és két kijelölt felhozó.")
 
     # Támadás-kimenetel: eljutnak-e egyáltalán a befejezésig.
     _ao_rows = rep.attack_outcomes or {}
@@ -3875,6 +3904,16 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import line_height_by_score as _lhs
+        lhsrec = _lhs(match, config)[team.value]
+        rep.lhs_lead_frames = lhsrec["leading"]["frames"]
+        rep.lhs_lead_sum_m = round(
+            (lhsrec["leading"]["avg_height_m"] or 0.0)
+            * lhsrec["leading"]["frames"], 1)
+        rep.lhs_trail_frames = lhsrec["trailing"]["frames"]
+        rep.lhs_trail_sum_m = round(
+            (lhsrec["trailing"]["avg_height_m"] or 0.0)
+            * lhsrec["trailing"]["frames"], 1)
         from .attack_types import attack_outcomes as _aou
         rep.attack_outcomes = dict(
             _aou(match, config)[team.value]["outcomes"])
@@ -5503,6 +5542,25 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 108) Az ő hátrányban feljebb lépő faluk × a ti gyors
+    # középkezdésetek: a letámadásuk pont akkor jön, amikor ti amúgy is
+    # gyorsan indítanátok.
+    if opp.lhs_lead_frames >= 100 and opp.lhs_trail_frames >= 100 \
+            and own.rs_restarts >= 4:
+        _lead108 = opp.lhs_lead_sum_m / opp.lhs_lead_frames
+        _trail108 = opp.lhs_trail_sum_m / opp.lhs_trail_frames
+        _fast108 = 100.0 * own.rs_fast / own.rs_restarts
+        if _trail108 - _lead108 >= 0.8 and _fast108 >= 50.0:
+            plan.append(
+                f"Hátrányban feljebb lépnek (hátrányban "
+                f"{_trail108:.1f} m-en, vezetve {_lead108:.1f} m-en "
+                f"áll a faluk), ti pedig gyorsan indítotok "
+                f"középről (az újraindításaitok {_fast108:.0f}%-ánál "
+                "12 mp-en belül átér a labda) — a gólotok után "
+                "azonnal jön a letámadásuk: pont ilyenkor kell a "
+                "leggyorsabban kezdeni, mert a felfutó faluk mögött "
+                "nagy a tér, és a második passz már helyzet.")
+
     # 107) Az ő lövés nélkül elhaló támadásaik × a ti kettőzésetek: a
     # nyomás pont ott fizet ki, ahol ők amúgy is elakadnak.
     _ao107 = opp.attack_outcomes or {}
@@ -6826,6 +6884,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        lhs_lead_frames=sum(r.lhs_lead_frames for r in reports),
+        lhs_lead_sum_m=round(sum(r.lhs_lead_sum_m for r in reports), 1),
+        lhs_trail_frames=sum(r.lhs_trail_frames for r in reports),
+        lhs_trail_sum_m=round(sum(r.lhs_trail_sum_m for r in reports), 1),
         attack_outcomes=_merge_attack_outcomes(reports),
         gk_role_saves=_merge_gk_role_saves(reports),
         tc_turnovers=sum(r.tc_turnovers for r in reports),

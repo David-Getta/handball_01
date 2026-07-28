@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 129) Védekezési mélység állás szerint: ha vezetve visszaülünk, a
+    # vezetés-védés a téma (a fal helye ne az eredménytől függjön).
+    try:
+        from .defense import line_height_by_score
+        lhs129 = line_height_by_score(match, config)
+        for side in ("home", "away"):
+            rec129 = lhs129[side]
+            if rec129["verdict"] != "hátrányban feljebb lépnek":
+                continue
+            add(side, "védekezés", "Vezetés-védés azonos fallal",
+                f"hátrányban {rec129['trailing']['avg_height_m']:.1f} "
+                f"m-en, vezetve "
+                f"{rec129['leading']['avg_height_m']:.1f} m-en állt a "
+                "falunk — vezetve visszaülünk, és pont akkor "
+                "engedjük felállni az ellenfelet, amikor zárni "
+                "kellene a meccset",
+                "vezetés-védés: edzőmeccs-részlet 3 gólos előnyből "
+                "indítva, azzal a szabállyal, hogy a fal ugyanott áll, "
+                "mint döntetlennél (kijelölt magasság, kilépő "
+                "középső védő) — a gyakorlat csak akkor ér pontot, ha "
+                "az öt perc alatt nem kaptok két gólnál többet")
+    except Exception:
+        pass
+
     # 128) Támadás-kimenetel: ha a támadásaink lövés nélkül halnak el,
     # a befejezésig vitel a téma.
     try:

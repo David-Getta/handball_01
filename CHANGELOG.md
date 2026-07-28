@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Védekezési mélység állás szerint**: ELŐNYBEN vagy HÁTRÁNYBAN
+  jönnek-e előre. A vonal-magasság a meccs egészére adja meg a fal
+  helyét, a támadás-hossz állás szerint pedig a támadó oldal
+  állás-függő viselkedését — ez a kettő kereszteződése: védekező
+  kockánként az állás (vezet / hátrányban / döntetlen) szerint
+  átlagolt fal-magasság (állásonként 100+ mért kocka, 0,8 m-es rés).
+  Ez mondja meg, mikor jön a nyomásuk: aki hátrányban előrelép, annál
+  kapott gól után jön a letámadás — arra kell kész kihozatal; aki
+  vezetve is fent marad, ellene letámadás-álló kihozatal kell. Egy
+  réteg, sok felület: `line_height_by_score` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (állásonkénti kocka- és
+  magasság-összegek + két edzői kulcs + csempe), 108.
+  meccsterv-szabály (az ő hátrányban feljebb lépő faluk × a ti gyors
+  középkezdésetek), 129. edzés-szabály (vezetés-védés azonos fallal).
 - **Támadás-kimenetel**: MIVEL zárulnak a támadásaik. A
   támadás-hatékonyság azt mondja meg, mennyi lesz gól — ez azt, hogy
   eljutnak-e egyáltalán a befejezésig: minden támadás-szakaszt

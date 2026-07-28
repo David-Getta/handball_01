@@ -1269,3 +1269,125 @@ def test_turnover_clusters_needs_enough_turnovers():
     rec = turnover_clusters(_turnover_match([20.0, 20.0]))["home"]
     assert rec["turnovers"] == 3
     assert rec["share_pct"] is None and rec["verdict"] is None
+
+
+# ---- Védekezési mélység állás szerint ---------------------------------------
+
+def _line_score_match(deep_when_leading=True, fps=25.0):
+    """A VENDÉG védekezik a hazai ellen: az első szakaszban döntetlen az
+    állás, majd egy vendég-gól után vezetnek — és a fal helye változik.
+
+    A hazai a +x (vendég) kapura támad, a labdás végig a vendég
+    térfelén van."""
+    frames = []
+    t = 0
+
+    def _defend(seconds, depth):
+        """Vendég védekezés: a védők a saját (+x) kaputól `depth` méterre
+        állnak, a hazai labdás előttük."""
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = [_pl(1, Team.HOME, 32.0, 10.0),
+                       _pl(21, Team.AWAY, 40.0 - depth, 7.0),
+                       _pl(22, Team.AWAY, 40.0 - depth, 13.0),
+                       _pl(29, Team.AWAY, 39.5, 10.0)]
+            players[-1].role = "kapus"
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=32.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _away_goal():
+        """Vendég-gól a −x kapura (a hazai kapujába)."""
+        nonlocal t, frames
+        for i in range(7):
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 8.0, 10.0)],
+                ball=Ball(x=max(0.0, 6.4 - i), y=10.0, confidence=1.0)))
+            t += 1
+
+    # Döntetlennél 7 m-es fal, majd a vendég-gól után (vezetve) mélyebben
+    # vagy magasabban.
+    _defend(6.0, 7.0)
+    _away_goal()
+    _defend(6.0, 5.0 if deep_when_leading else 9.0)
+    return Match(_meta(fps), frames)
+
+
+def test_line_height_by_score_deep_when_leading():
+    """Vezetve 5 m-re, döntetlennél 7 m-re áll a vendég fal → a rés
+    negatív irányban nyílik: vezetve visszaállnak mélyre."""
+    from handball.pipeline.defense import line_height_by_score
+
+    rec = line_height_by_score(_line_score_match())["away"]
+    assert rec["level"]["avg_height_m"] is not None
+    assert rec["leading"]["avg_height_m"] is not None
+    assert rec["leading"]["avg_height_m"] < rec["level"]["avg_height_m"]
+    # Hátrányban nem védekeztek: nincs mért magasság és nincs ítélet.
+    assert rec["trailing"]["avg_height_m"] is None
+    assert rec["gap_m"] is None and rec["verdict"] is None
+
+
+def _line_score_swing_match(fps=25.0):
+    """A VENDÉG előbb hátrányban (hazai gól után), majd vezetve (két
+    vendég-gól után) védekezik — hátrányban 9 m-en, vezetve 5 m-en."""
+    frames = []
+    t = 0
+
+    def _defend(seconds, depth):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = [_pl(1, Team.HOME, 32.0, 10.0),
+                       _pl(21, Team.AWAY, 40.0 - depth, 7.0),
+                       _pl(22, Team.AWAY, 40.0 - depth, 13.0),
+                       _pl(29, Team.AWAY, 39.5, 10.0)]
+            players[-1].role = "kapus"
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=32.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _goal(home):
+        """Gól: a hazai a +x, a vendég a −x kapura lő."""
+        nonlocal t, frames
+        for i in range(7):
+            bx = min(34.0 + i, 40.0) if home else max(6.4 - i, 0.0)
+            who = (_pl(1, Team.HOME, 33.0, 10.0) if home
+                   else _pl(21, Team.AWAY, 8.0, 10.0))
+            frames.append(Frame(t=t, players=[who],
+                                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):    # szünet a lövés-debounce-hoz
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    _goal(home=True)          # 0-1: a vendég hátrányban
+    _defend(6.0, 9.0)
+    _goal(home=False)         # 1-1
+    _goal(home=False)         # 2-1: a vendég vezet
+    _defend(6.0, 5.0)
+    return Match(_meta(fps), frames)
+
+
+def test_line_height_by_score_flags_the_swing():
+    """Hátrányban 9 m-en, vezetve 5 m-en áll a vendég fal → 4 m-es rés:
+    hátrányban feljebb lépnek (vezetve visszaállnak mélyre)."""
+    from handball.pipeline.defense import line_height_by_score
+
+    rec = line_height_by_score(_line_score_swing_match())["away"]
+    assert rec["trailing"]["avg_height_m"] == 9.0
+    assert rec["leading"]["avg_height_m"] == 5.0
+    assert rec["gap_m"] == 4.0
+    assert rec["verdict"] == "hátrányban feljebb lépnek"
+
+
+def test_line_height_by_score_needs_frames():
+    """Kevés védekezett kockánál nincs mért magasság."""
+    from handball.pipeline.defense import line_height_by_score
+
+    m = _line_score_match()
+    rec = line_height_by_score(Match(_meta(), m.frames[:40]))["away"]
+    assert rec["level"]["avg_height_m"] is None
+    assert rec["verdict"] is None

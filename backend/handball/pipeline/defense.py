@@ -1927,3 +1927,96 @@ def turnover_clusters(match, config=None) -> dict:
                               else "szórt hibák")
         out[side] = rec
     return out
+
+
+# Védekezési mélység állás szerint: állásonként ennyi mért kocka kell, és
+# ekkora (méteres) eltérés számít érdemi állás-függő váltásnak.
+LINE_SCORE_MIN_FRAMES = 100
+LINE_SCORE_GAP_M = 0.8
+
+
+def line_height_by_score(match, config=None) -> dict:
+    """Védekezési mélység állás szerint: ELŐNYBEN vagy HÁTRÁNYBAN
+    jönnek-e előre.
+
+    A vonal-magasság (defensive_line_height) a meccs egészére adja meg,
+    milyen mélyen áll a fal — a támadás-hossz állás szerint
+    (pace_by_score) pedig a támadó oldal állás-függő viselkedését. Ez a
+    kettő kereszteződése: védekező kockánként megnézzük a védekező
+    csapat gólkülönbségét, és állásonként (vezet / hátrányban /
+    döntetlen) átlagoljuk a fal magasságát.
+
+    Edzőileg ez mondja meg, mikor jön a nyomásuk: aki hátrányban
+    előrelép, annál a vezetést megszerezve nyugalom lesz, de kapott gól
+    után jön a letámadás — arra kell kész kihozatal; aki vezetve
+    visszaáll mélyre, ellene előnyben türelmesen kell játszani, mert a
+    kapkodó átlövés az ő kezükre játszik.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"leading"/"trailing"/
+    "level": {"frames", "avg_height_m"}, "gap_m", "verdict"} — az
+    avg_height_m None LINE_SCORE_MIN_FRAMES alatt; a gap_m a hátrány- és
+    az előny-beli magasság különbsége (pozitív: hátrányban állnak
+    feljebb), a verdict "hátrányban feljebb lépnek" (vagyis vezetve
+    visszaállnak mélyre) / "vezetve is fent maradnak" / None.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    acc: dict = {side: {k: [0.0, 0] for k in
+                        ("leading", "trailing", "level")}
+                 for side in ("home", "away")}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén van.
+        if abs(holder.x - own_x) > half:
+            continue
+        depths = [abs(p.x - own_x) for p in f.players
+                  if p.team == deff and p.role != "kapus"
+                  and abs(p.x - own_x) <= half]
+        if not depths:
+            continue
+        side = deff.value
+        own = sum(1 for (t, tm) in goals if t < f.t and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < f.t and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        rec = acc[side][state]
+        rec[0] += sum(depths) / len(depths)
+        rec[1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec: dict = {}
+        for state in ("leading", "trailing", "level"):
+            total, n = acc[side][state]
+            rec[state] = {
+                "frames": n,
+                "avg_height_m": (round(total / n, 2)
+                                 if n >= LINE_SCORE_MIN_FRAMES else None)}
+        lead = rec["leading"]["avg_height_m"]
+        trail = rec["trailing"]["avg_height_m"]
+        gap = None
+        verdict = None
+        if lead is not None and trail is not None:
+            gap = round(trail - lead, 2)
+            # A két eset ugyanannak az éremnek a két oldala: pozitív
+            # rés = hátrányban feljebb (előnyben mélyebbre) állnak.
+            if gap >= LINE_SCORE_GAP_M:
+                verdict = "hátrányban feljebb lépnek"
+            elif gap <= -LINE_SCORE_GAP_M:
+                verdict = "vezetve is fent maradnak"
+        rec["gap_m"] = gap
+        rec["verdict"] = verdict
+        out[side] = rec
+    return out
