@@ -1182,3 +1182,33 @@ def test_targeted_defenders_finds_the_soft_spot():
     # Két lövés: nincs elég minta → nincs megnevezett védő.
     few = targeted_defenders(Match(_meta(), frames[:100]))
     assert few["away"]["target"] is None and few["away"]["weak"] is None
+
+
+# ---- Kapott gólok posztonként (melyik poszt ellen szivárognak) ---------------
+
+def test_conceded_by_role_mirrors_goals_by_role():
+    """A hazai szélsőre épülő befejezése a VENDÉG oldalán jelenik meg
+    kapott gólként: az ő faluk a szélső poszt ellen szivárog."""
+    from handball.pipeline.defense import conceded_by_role
+    from handball.pipeline.roles import goals_by_role
+    from tests.test_roles import _role_goal_match
+
+    m = _role_goal_match([2, 2, 2, 2, 1, 1])
+    own = goals_by_role(m)["home"]
+    rec = conceded_by_role(m)["away"]
+    assert rec["goals"] == own["goals"] == 6
+    assert rec["roles"] == own["roles"]
+    assert rec["top"] is not None
+    assert rec["top"]["poszt"] == "szélső" and rec["top"]["goals"] == 4
+    # A hazai nem kapott gólt: nincs poszthoz kötött kapott gólja.
+    assert conceded_by_role(m)["home"]["goals"] == 0
+    assert conceded_by_role(m)["home"]["top"] is None
+
+
+def test_conceded_by_role_needs_enough_goals():
+    """Kevés (5-nél kevesebb) kapott gólnál nincs ítélet."""
+    from handball.pipeline.defense import conceded_by_role
+    from tests.test_roles import _role_goal_match
+
+    rec = conceded_by_role(_role_goal_match([2, 2, 2]))["away"]
+    assert rec["goals"] == 3 and rec["top"] is None

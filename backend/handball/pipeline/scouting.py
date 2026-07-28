@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapott góljaik posztonként: {poszt: gólok} — melyik poszt ellen
+    # szivárog a faluk; darabszámok, meccsek közt pontosan
+    # összegződnek (részarány = poszt / összes kapott gól).
+    conceded_roles: dict = field(default_factory=dict)
     # Poszt szerinti gólmegoszlásuk: {poszt: gólok} — melyik posztról
     # jönnek a góljaik; darabszámok, meccsek közt pontosan
     # összegződnek (részarány = poszt / összes poszthoz kötött gól).
@@ -1656,6 +1660,33 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapott gólok posztonként: melyik poszt ellen szivárog a faluk.
+    _cr_rows = list((rep.conceded_roles or {}).items())
+    _cr_n = sum(n for _, n in _cr_rows)
+    if _cr_n >= 5 and _cr_rows:
+        _cr_rows.sort(key=lambda kv: -kv[1])
+        _cr_poszt, _cr_top = _cr_rows[0]
+        _cr_pct = 100.0 * _cr_top / _cr_n
+        _cr_tie = len(_cr_rows) > 1 and _cr_rows[1][1] == _cr_top
+        if _cr_pct >= 45.0 and not _cr_tie:
+            _cr_what = {
+                "szélső": ("a szélsőiteket kell etetni: szélességben "
+                           "kell tartani a támadást, és a szélső "
+                           "kapja meg a labdát a kifutásuk előtt"),
+                "beálló": ("a beállós játékot kell futtatni: "
+                           "keresztmozgás, beúszás és a beálló "
+                           "kiszolgálása a rés felé"),
+                "átlövő": ("a távoli befejezésre kell építeni: "
+                           "átlövés a kilépésük előtt, illetve a "
+                           "kilépés utáni betörés"),
+                "irányító": ("az irányítótok kapja a lövő-helyzeteket: "
+                             "kettőzés-csali után az ő befejezése jön"),
+            }.get(_cr_poszt, "erre a posztra kell szervezni a támadást")
+            keys.append(
+                f"Egy poszt ellen szivárog a faluk: a kapott góljaik "
+                f"{_cr_pct:.0f}%-a a {_cr_poszt} posztról jön "
+                f"({_cr_top}/{_cr_n}) — {_cr_what}.")
 
     # Poszt szerinti gólmegoszlás: melyik posztra épül a befejezésük.
     _rg_rows = list((rep.role_goals or {}).items())
@@ -3766,6 +3797,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import conceded_by_role as _cbr
+        rep.conceded_roles = dict(_cbr(match, config)[team.value]["roles"])
         from .roles import goals_by_role as _gbr
         rep.role_goals = dict(_gbr(match, config)[team.value]["roles"])
         from .event_detection import assist_zones as _azn
@@ -4512,6 +4545,16 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_conceded_roles(reports) -> dict:
+    """Kapott gólok posztonként: posztonként a kapott gólok összegzése
+    (a gólszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for poszt, n in (r.conceded_roles or {}).items():
+            tally[poszt] = tally.get(poszt, 0) + int(n)
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]))
 
 
 def _merge_role_goals(reports) -> dict:
@@ -5347,6 +5390,29 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 104) Az ő gyenge posztjuk × a ti ugyanonnan szerzett góljaitok:
+    # oda kell szervezni a befejezést, ahol ők engednek.
+    _cr104 = list((opp.conceded_roles or {}).items())
+    _crn104 = sum(n for _, n in _cr104)
+    _og104 = list((own.role_goals or {}).items())
+    _ogn104 = sum(n for _, n in _og104)
+    if _cr104 and _crn104 >= 5 and _og104 and _ogn104 >= 5:
+        _cr104.sort(key=lambda kv: -kv[1])
+        _og104.sort(key=lambda kv: -kv[1])
+        _poszt104, _top104 = _cr104[0]
+        _pct104 = 100.0 * _top104 / _crn104
+        _own104 = dict(_og104).get(_poszt104, 0)
+        _ownpct104 = 100.0 * _own104 / _ogn104
+        if _pct104 >= 45.0 and _ownpct104 >= 30.0:
+            plan.append(
+                f"A kapott góljaik {_pct104:.0f}%-a a {_poszt104} "
+                f"posztról jön ({_top104}/{_crn104}), a ti góljaitok "
+                f"{_ownpct104:.0f}%-a pedig pont onnan született "
+                f"({_own104}/{_ogn104}) — oda kell szervezni a "
+                f"befejezést: a {_poszt104} posztra tervezett "
+                "figurákkal indítsatok, mert ott találkozik az ő "
+                "gyengéjük a ti erősségetekkel.")
 
     # 103) Az ő beállóra épülő befejezésük × a ti beálló-védekezésetek:
     # ha a beállós támadások ellen szivárogtok, ez a meccs kulcsa.
@@ -6586,6 +6652,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        conceded_roles=_merge_conceded_roles(reports),
         role_goals=_merge_role_goals(reports),
         assist_zones=_merge_assist_zones(reports),
         starters=_merge_starters(reports),

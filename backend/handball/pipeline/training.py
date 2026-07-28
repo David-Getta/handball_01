@@ -1343,6 +1343,45 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 125) Kapott gólok posztonként: ha egy poszt ellen szivárgunk, az
+    # adott poszt védekezése a téma.
+    try:
+        from .defense import conceded_by_role
+        cbr125 = conceded_by_role(match, config)
+        _drill125 = {
+            "szélső": ("szélső-védekezés: 1-1 a szélen, a védő "
+                       "időben kifut és a kaputól elfelé tereli a "
+                       "szélsőt, a kapus a rövid sarkot zárja — "
+                       "sorozatban, mindkét oldalon"),
+            "beálló": ("beálló-védekezés: 3-3 a 6 m körül, a "
+                       "középső védő elé áll a beállónak és nem "
+                       "engedi befordulni, a szomszéd hangosan "
+                       "átadja — beúszó beállóval is"),
+            "átlövő": ("átlövés-védekezés: kilépés-gyakorlat a "
+                       "lövő-vonalba felemelt kézzel, majd azonnali "
+                       "visszalépés a résbe, a kapus a blokk mögé "
+                       "rendezve"),
+            "irányító": ("irányító-védekezés: kettőzés a 9 m-en "
+                         "kívül, a labdás irányítót két védő zárja, "
+                         "a többiek csúsznak — a kettőzés utáni "
+                         "visszarendeződéssel együtt"),
+        }
+        for side in ("home", "away"):
+            top125 = cbr125[side]["top"]
+            if top125 is None:
+                continue
+            add(side, "védekezés", f"{top125['poszt'].capitalize()}-védekezés",
+                f"a kapott góljaink {top125['share_pct']:.0f}%-a a "
+                f"{top125['poszt']} posztról jött "
+                f"({top125['goals']}/{cbr125[side]['goals']}) — a "
+                "falunk ezen a poszton szivárog, és egy felkészült "
+                "ellenfél pont oda fog játszani",
+                _drill125.get(top125["poszt"],
+                              "poszt-védekezés: az adott poszt elleni "
+                              "1-1 és segítő-csúszás gyakorlása"))
+    except Exception:
+        pass
+
     # 124) Poszt szerinti gólmegoszlás: ha egy posztra épül a
     # befejezésünk, a poszt-váltogatás a téma.
     try:

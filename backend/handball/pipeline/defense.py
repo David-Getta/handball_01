@@ -1814,3 +1814,48 @@ def targeted_defenders(match, config=None) -> dict:
         out[side] = {"shots": n_sh, "goals": n_go, "players": players,
                      "target": target, "weak": weak}
     return out
+
+
+# Kapott gólok posztonként: ennyi kapott góltól ítélünk, és e feletti
+# részarány jelenti, hogy egy poszt ellen szivárog a védekezés.
+CONCEDED_ROLE_MIN = 5
+CONCEDED_ROLE_SHARE = 45.0
+
+
+def conceded_by_role(match, config=None) -> dict:
+    """Kapott gólok posztonként: MELYIK POSZT ELLEN szivárognak.
+
+    A poszt szerinti gólmegoszlás (goals_by_role) védő-oldali
+    tükörképe: ott az látszik, melyik posztra épül a támadó
+    befejezése — itt az, hogy a fal melyik poszt ellen engedi a
+    gólokat. A gólt a LÖVŐ posztjához kötjük, de a VÉDEKEZŐ csapat
+    oldalán tartjuk nyilván.
+
+    Edzőileg ez mondja meg, hova kell játszani ellenük: ha a kapott
+    góljaik nagy része a szélső posztról jön, a szélsőiteket kell
+    etetni; ha a beállótól, a beállós játékot kell futtatni; ha az
+    átlövőktől, a távoli befejezésre kell építeni.
+
+    Visszatérés csapatonként: {"goals" (poszthoz kötött kapott gól),
+    "roles": {poszt: gólok}, "top": {"poszt", "goals", "share_pct"} |
+    None} — a "top" akkor van kitöltve, ha legalább CONCEDED_ROLE_MIN
+    poszthoz kötött kapott gól van, a vezető poszt részaránya eléri a
+    CONCEDED_ROLE_SHARE-t, és nincs vele holtversenyben másik poszt.
+    """
+    from .roles import goals_by_role
+
+    gbr = goals_by_role(match, config)
+    out: dict = {}
+    for side, opp in (("home", "away"), ("away", "home")):
+        roles = dict(gbr[opp]["roles"])
+        rec = {"goals": gbr[opp]["goals"], "roles": roles, "top": None}
+        items = list(roles.items())
+        if rec["goals"] >= CONCEDED_ROLE_MIN and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["goals"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= CONCEDED_ROLE_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "goals": n,
+                              "share_pct": round(share, 1)}
+        out[side] = rec
+    return out

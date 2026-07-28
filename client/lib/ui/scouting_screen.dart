@@ -1297,6 +1297,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapott gólok posztonként: melyik poszt ellen szivárog a faluk
+  // (5+ kapott gól, 45% feletti vezető poszt, holtverseny nélkül — a
+  // backend-kulccsal azonos küszöbök).
+  String? _concededRoles(Map<String, dynamic> r) {
+    final roles = r["conceded_roles"];
+    if (roles is! Map || roles.isEmpty) return null;
+    final rows = roles.entries
+        .map((e) => [e.key.toString(), ((e.value as num?) ?? 0).toInt()])
+        .toList()
+      ..sort((a, b) => (b[1] as int).compareTo(a[1] as int));
+    final total = rows.fold<int>(0, (s, e) => s + (e[1] as int));
+    if (total < 5) return null;
+    final top = rows.first[1] as int;
+    if (rows.length > 1 && (rows[1][1] as int) == top) return null;
+    final pct = 100.0 * top / total;
+    if (pct < 45.0) return null;
+    const what = {
+      "szélső": "a szélsőiteket kell etetni",
+      "beálló": "a beállós játékot kell futtatni",
+      "átlövő": "a távoli befejezésre kell építeni",
+      "irányító": "az irányítótok kapja a lövő-helyzeteket",
+    };
+    final poszt = rows.first[0] as String;
+    return "a kapott góljaik ${pct.toStringAsFixed(0)}%-a a $poszt "
+        "posztról jön ($top/$total) · ${what[poszt] ?? "erre a posztra "
+            "kell szervezni a támadást"}";
+  }
+
   // Poszt szerinti gólmegoszlás: melyik posztra épül a befejezésük
   // (5+ poszthoz kötött gól, 45% feletti vezető poszt, holtverseny
   // nélkül — a backend-kulccsal azonos küszöbök).
@@ -2949,6 +2977,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_assistZones(r) != null)
         ["Gólpassz-zónák", _assistZones(r)!],
       if (_roleGoals(r) != null) ["Gólmegoszlás posztonként", _roleGoals(r)!],
+      if (_concededRoles(r) != null)
+        ["Kapott gólok posztonként", _concededRoles(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

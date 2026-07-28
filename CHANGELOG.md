@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapott gólok posztonként**: MELYIK POSZT ELLEN szivárognak. A
+  poszt szerinti gólmegoszlás védő-oldali tükre: a gólt a lövő
+  posztjához kötjük, de a védekező csapat oldalán tartjuk nyilván (5+
+  kapott gól, 45%-os vezető poszt, holtverseny nélkül). Ez mondja meg,
+  hova kell játszani ellenük: szélső-gólok ellen a szélsőket etetni,
+  beállós gólok ellen a beállós játékot futtatni, átlövő-gólok ellen a
+  távoli befejezésre építeni, irányító-gólok ellen az irányítónak
+  szervezni a lövő-helyzeteket. Egy réteg, sok felület:
+  `conceded_by_role` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (posztonkénti kapott gólok + edzői
+  kulcs a poszthoz illő támadó utasítással + csempe), 104.
+  meccsterv-szabály (az ő gyenge posztjuk × a ti ugyanonnan szerzett
+  góljaitok), 125. edzés-szabály (poszt-védekezés: az adott poszt
+  elleni 1-1 és segítő-csúszás gyakorlása).
 - **Poszt szerinti gólmegoszlás**: MELYIK POSZTRÓL jönnek a góljaik.
   A poszt-becslés megmondja, ki milyen poszton játszik — ez a réteg a
   gólokat köti a lövő posztjához, vagyis nem a gólfelelősüket, hanem
