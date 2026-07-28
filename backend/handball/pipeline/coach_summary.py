@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kapus-védés posztonként: melyik szögből volt sebezhető a kapus.
+    try:
+        from .goalkeeper import gk_saves_by_role
+        gsr = gk_saves_by_role(match)
+        for side, name in (("home", home), ("away", away)):
+            weak_gsr = gsr[side]["weak"]
+            if weak_gsr is None:
+                continue
+            body += (f" A(z) {name} kapusa a {weak_gsr['poszt']} "
+                     f"posztról volt sebezhető: onnan "
+                     f"{weak_gsr['save_pct']:.0f}%-ot fogott "
+                     f"({weak_gsr['faced']} kapura tartó lövés).")
+    except Exception:
+        pass
     # Hiba-sorozatok: egymás után jöttek-e az eladások.
     try:
         from .defense import turnover_clusters

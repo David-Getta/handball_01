@@ -1297,6 +1297,40 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapus-védés posztonként: melyik szögből sebezhető a kapusuk (8+
+  // kapura tartó lövés, posztonként 4+, 15 százalékpont elmaradás a
+  // csapat-átlagtól — a backend-kulccsal azonos küszöbök).
+  String? _gkRoleSaves(Map<String, dynamic> r) {
+    final roles = r["gk_role_saves"];
+    if (roles is! Map || roles.isEmpty) return null;
+    int faced = 0;
+    int saves = 0;
+    String? weak;
+    double weakPct = 0.0;
+    int weakFaced = 0;
+    roles.forEach((key, value) {
+      if (value is! Map) return;
+      final f = ((value["faced"] as num?) ?? 0).toInt();
+      final sv = ((value["saves"] as num?) ?? 0).toInt();
+      faced += f;
+      saves += sv;
+      if (f < 4) return;
+      final pct = 100.0 * sv / f;
+      if (weak == null || pct < weakPct) {
+        weak = key.toString();
+        weakPct = pct;
+        weakFaced = f;
+      }
+    });
+    if (faced < 8 || weak == null) return null;
+    final avg = 100.0 * saves / faced;
+    if (avg - weakPct < 15.0) return null;
+    return "a kapusuk a $weak posztról sebezhető: onnan "
+        "${weakPct.toStringAsFixed(0)}%-ot fog ($weakFaced lövésből), "
+        "a csapat-átlaga ${avg.toStringAsFixed(0)}% · oda kell "
+        "szervezni a befejezést";
+  }
+
   // Hiba-sorozatok: egymás után jönnek-e az eladásaik (5+ eladás;
   // 50% felett sorozatos, 20% alatt szórt — a backend-kulccsal azonos
   // küszöbök).
@@ -3005,6 +3039,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapott gólok posztonként", _concededRoles(r)!],
       if (_turnoverClusters(r) != null)
         ["Hiba-sorozatok", _turnoverClusters(r)!],
+      if (_gkRoleSaves(r) != null)
+        ["Kapus-védés posztonként", _gkRoleSaves(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

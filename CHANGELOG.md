@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-védés posztonként**: MELYIK SZÖGBŐL sebezhető a kapusuk. A
+  távolság-sávos réteg (`gk_save_ranges`) azt mondja meg, milyen
+  messziről — ez azt, milyen szögből: a kapura tartó lövéseket a lövő
+  posztjához kötjük, és posztonként számolunk védési arányt (8+ lövés,
+  posztonként 4+, 15 százalékpont elmaradás a csapat-átlagtól). A
+  szélső lövése közeli, de éles szögű; az átlövés távoli, de szemből
+  jön — a két kép más. Edzőileg: a leggyengébb posztra kell szervezni
+  a befejezést, és onnan bátran lőni rá. Egy réteg, sok felület:
+  `gk_saves_by_role` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (posztonkénti lövés/védés
+  darabszámok + edzői kulcs + csempe), 106. meccsterv-szabály (az ő
+  kapusuk gyenge szöge × a ti onnan szerzett góljaitok), 127.
+  edzés-szabály (szög-védés: az adott posztról sorozatlövés
+  kilépéssel és sarok-zárással).
 - **Hiba-sorozatok**: EGYMÁS UTÁN jönnek-e az eladások. Az
   eladás-időzítés azt mondja meg, a birtokláson belül mikor adják el a
   labdát — ez azt, hogy a hibák a meccsen belül szóródnak-e, vagy

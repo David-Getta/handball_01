@@ -1171,3 +1171,76 @@ def gk_free_shot_saves(match: Match, config=None) -> dict:
                 r["verdict"] = "önállóan is véd"
         out[side] = r
     return out
+
+
+# Kapus-védés posztonként: ennyi kapura tartó lövés kell egy poszt
+# megítéléséhez, és ekkora (százalékpontos) elmaradás a csapat-átlagtól
+# számít sebezhető posztnak.
+GK_ROLE_MIN_FACED = 4
+GK_ROLE_GAP_PP = 15.0
+
+
+def gk_saves_by_role(match: Match, config=None) -> dict:
+    """Kapus-védés posztonként: MELYIK POSZT lövéseit fogja a kapusuk.
+
+    A távolság-sávos réteg (gk_save_ranges) azt mondja meg, milyen
+    MESSZIRŐL sebezhető a kapus — ez azt, milyen SZÖGBŐL: a rá kaputra
+    érkezett lövéseket a lövő posztjához (estimate_positions) kötjük,
+    és posztonként számolunk védési arányt. A két kép más: a szélső
+    lövése közeli, de éles szögű; az átlövés távoli, de szemből jön.
+
+    Edzőileg: a leggyengébb poszt az, ahonnan bátran kell lőni rá — oda
+    kell szervezni a befejezést, és onnan kell hetes helyett is
+    vállalni a lövést.
+
+    Visszatérés csapatonként (a VÉDŐ oldal = akinek a kapusa a kapuban
+    van): {"on_target", "roles": {poszt: {"faced", "saves",
+    "save_pct"}}, "weak": {"poszt", "save_pct", "faced"} | None} — a
+    "weak" a legrosszabb védési arányú poszt, ha legalább
+    GK_ROLE_MIN_FACED lövés érkezett onnan, és a védés-aránya legalább
+    GK_ROLE_GAP_PP százalékponttal a csapat-átlag alatt van.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    xg = match_xg(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        tally: dict = {}
+        for sh in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if sh["team"] == side or sh["player_id"] is None:
+                continue
+            if sh["outcome"] not in ("goal", "save"):
+                continue  # mellé/blokk: nem kaputra érkezett
+            rec_role = roles[sh["team"]].get(sh["player_id"])
+            if rec_role is None:
+                continue
+            rec = tally.setdefault(rec_role["poszt"],
+                                   {"faced": 0, "saves": 0})
+            rec["faced"] += 1
+            if sh["outcome"] == "save":
+                rec["saves"] += 1
+
+        on_target = sum(r["faced"] for r in tally.values())
+        saves = sum(r["saves"] for r in tally.values())
+        for r in tally.values():
+            r["save_pct"] = round(100.0 * r["saves"] / r["faced"], 1)
+        weak = None
+        cand = [(poszt, r) for poszt, r in tally.items()
+                if r["faced"] >= GK_ROLE_MIN_FACED]
+        if cand and on_target:
+            avg = 100.0 * saves / on_target
+            poszt, r = min(cand, key=lambda kv: kv[1]["save_pct"])
+            if avg - r["save_pct"] >= GK_ROLE_GAP_PP:
+                weak = {"poszt": poszt, "save_pct": r["save_pct"],
+                        "faced": r["faced"]}
+        out[side] = {"on_target": on_target,
+                     "roles": dict(sorted(tally.items(),
+                                          key=lambda kv: -kv[1]["faced"])),
+                     "weak": weak}
+    return out

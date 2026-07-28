@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapusuk védései posztonként: {poszt: {"faced", "saves"}} — melyik
+    # szögből sebezhető; darabszámok, meccsek közt pontosan
+    # összegződnek (védés-arány = saves / faced).
+    gk_role_saves: dict = field(default_factory=dict)
     # Hiba-sorozataik: az eladásaik száma, a sorozatban (egy percen
     # belül egymást követve) érkezők száma és a sorozatok darabszáma —
     # darabszámok, meccsek közt pontosan összegződnek (sorozat-arány =
@@ -1667,6 +1671,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapus-védés posztonként: melyik szögből sebezhető a kapusuk.
+    _gs_rows = list((rep.gk_role_saves or {}).items())
+    _gs_faced = sum(r["faced"] for _, r in _gs_rows)
+    _gs_saves = sum(r["saves"] for _, r in _gs_rows)
+    if _gs_faced >= 8 and _gs_rows:
+        _gs_avg = 100.0 * _gs_saves / _gs_faced
+        _gs_cand = [(poszt, r) for poszt, r in _gs_rows
+                    if r["faced"] >= 4]
+        if _gs_cand:
+            _gs_poszt, _gs_rec = min(
+                _gs_cand, key=lambda kv: kv[1]["saves"] / kv[1]["faced"])
+            _gs_pct = 100.0 * _gs_rec["saves"] / _gs_rec["faced"]
+            if _gs_avg - _gs_pct >= 15.0:
+                keys.append(
+                    f"A kapusuk a {_gs_poszt} posztról sebezhető: "
+                    f"onnan {_gs_pct:.0f}%-ot fog "
+                    f"({_gs_rec['saves']}/{_gs_rec['faced']}), a "
+                    f"csapat-átlaga {_gs_avg:.0f}% — oda kell "
+                    "szervezni a befejezést, és onnan bátran kell "
+                    "lőni rá, mert azt a szöget nem zárja.")
 
     # Hiba-sorozatok: egymás után jönnek-e az eladásaik.
     if rep.tc_turnovers >= 5:
@@ -3824,6 +3849,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .goalkeeper import gk_saves_by_role as _gsr
+        rep.gk_role_saves = {
+            poszt: {"faced": r["faced"], "saves": r["saves"]}
+            for poszt, r in _gsr(match, config)[team.value]["roles"].items()}
         from .defense import turnover_clusters as _tcl
         tclrec = _tcl(match, config)[team.value]
         rep.tc_turnovers = tclrec["turnovers"]
@@ -4577,6 +4606,18 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_gk_role_saves(reports) -> dict:
+    """Kapus-védés posztonként: posztonként a kapura tartó lövések és a
+    védések összegzése (a lövésszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for poszt, rec in (r.gk_role_saves or {}).items():
+            acc = tally.setdefault(poszt, {"faced": 0, "saves": 0})
+            acc["faced"] += int(rec.get("faced", 0))
+            acc["saves"] += int(rec.get("saves", 0))
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]["faced"]))
 
 
 def _merge_conceded_roles(reports) -> dict:
@@ -5422,6 +5463,33 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 106) Az ő kapusuk gyenge szöge × a ti onnan szerzett góljaitok:
+    # oda kell szervezni a befejezést.
+    _gs106 = list((opp.gk_role_saves or {}).items())
+    _gsf106 = sum(r["faced"] for _, r in _gs106)
+    _gss106 = sum(r["saves"] for _, r in _gs106)
+    _og106 = list((own.role_goals or {}).items())
+    _ogn106 = sum(n for _, n in _og106)
+    if _gs106 and _gsf106 >= 8 and _og106 and _ogn106 >= 5:
+        _cand106 = [(poszt, r) for poszt, r in _gs106 if r["faced"] >= 4]
+        if _cand106:
+            _avg106 = 100.0 * _gss106 / _gsf106
+            _poszt106, _rec106 = min(
+                _cand106, key=lambda kv: kv[1]["saves"] / kv[1]["faced"])
+            _pct106 = 100.0 * _rec106["saves"] / _rec106["faced"]
+            _own106 = dict(_og106).get(_poszt106, 0)
+            _ownpct106 = 100.0 * _own106 / _ogn106
+            if _avg106 - _pct106 >= 15.0 and _ownpct106 >= 30.0:
+                plan.append(
+                    f"A kapusuk a {_poszt106} posztról csak "
+                    f"{_pct106:.0f}%-ot fog (csapat-átlaga "
+                    f"{_avg106:.0f}%), a ti góljaitok "
+                    f"{_ownpct106:.0f}%-a pedig pont onnan született "
+                    f"({_own106}/{_ogn106}) — a befejezést oda kell "
+                    f"szervezni: a {_poszt106} kapja a labdát "
+                    "helyzetben, és lőjön bátran, mert azt a szöget "
+                    "a kapusuk nem zárja.")
 
     # 105) Az ő hiba-sorozataik × a ti gyors kontráitok: a második
     # ajándékot azonnal büntetni kell.
@@ -6701,6 +6769,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        gk_role_saves=_merge_gk_role_saves(reports),
         tc_turnovers=sum(r.tc_turnovers for r in reports),
         tc_clustered=sum(r.tc_clustered for r in reports),
         tc_clusters=sum(r.tc_clusters for r in reports),

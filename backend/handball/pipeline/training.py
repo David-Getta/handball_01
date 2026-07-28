@@ -1343,6 +1343,42 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 127) Kapus-védés posztonként: ha egy szögből sebezhető a
+    # kapusunk, az adott szög védése a téma.
+    try:
+        from .goalkeeper import gk_saves_by_role
+        gsr127 = gk_saves_by_role(match, config)
+        _drill127 = {
+            "szélső": ("szélső-szög védése: sorozatlövés a szélről "
+                       "mindkét oldalról, a kapus a rövid sarkot "
+                       "zárja és kilép a szögbe — a védőkkel együtt, "
+                       "hogy a terelés is stimmeljen"),
+            "beálló": ("közeli lövés védése: beállós befejezés 6 "
+                       "m-ről, a kapus kilépéssel csökkenti a szöget, "
+                       "a lábmunka és a nagy test a téma"),
+            "átlövő": ("átlövés védése: sorozatlövés 9-10 m-ről blokk "
+                       "mögül, a kapus a blokkolt oldal ellenkező "
+                       "sarkára rendezkedik — a védőkkel egyeztetett "
+                       "sarok-zárással"),
+            "irányító": ("középső átlövés védése: sorozatlövés a "
+                         "közép-átlövő helyéről, váltott magasságban, "
+                         "a kapus alaphelyzetének javításával"),
+        }
+        for side in ("home", "away"):
+            weak127 = gsr127[side]["weak"]
+            if weak127 is None:
+                continue
+            add(side, "kapus", f"{weak127['poszt'].capitalize()}-szög védése",
+                f"a kapusunk a {weak127['poszt']} posztról csak "
+                f"{weak127['save_pct']:.0f}%-ot fogott "
+                f"({weak127['faced']} kapura tartó lövés) — egy "
+                "felkészült ellenfél pont onnan fogja lövetni",
+                _drill127.get(weak127["poszt"],
+                              "szög-védés: sorozatlövés az adott "
+                              "posztról, kilépéssel és sarok-zárással"))
+    except Exception:
+        pass
+
     # 126) Hiba-sorozatok: ha egy eladás után jön a következő, a
     # hiba utáni rendezés a téma.
     try:
