@@ -1297,6 +1297,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Beálló-kiszolgálók: ki adja be a labdát a beállónak (4+ beadás,
+  // 50% feletti vezető kiszolgáló, holtverseny nélkül — a
+  // backend-kulccsal azonos küszöbök).
+  String? _pivotFeeders(Map<String, dynamic> r) {
+    final rows = r["pivot_feeders"];
+    if (rows is! List || rows.isEmpty) return null;
+    int total = 0;
+    for (final e in rows) {
+      if (e is Map) total += ((e["feeds"] as num?) ?? 0).toInt();
+    }
+    if (total < 4) return null;
+    final top = rows.first;
+    if (top is! Map) return null;
+    final feeds = ((top["feeds"] as num?) ?? 0).toInt();
+    if (rows.length > 1 && rows[1] is Map &&
+        ((rows[1]["feeds"] as num?) ?? 0).toInt() == feeds) {
+      return null;
+    }
+    final pct = 100.0 * feeds / total;
+    if (pct < 50.0) return null;
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a beállójukat a(z) $who játékosuk szolgálja ki: a "
+        "beadások ${pct.toStringAsFixed(0)}%-a ($feeds/$total) · rá "
+        "kell lépni az átadás-vonalba";
+  }
+
   // Hetes-okozó védők: kinél szakad meg a védekezésük hetessel (2+
   // okozott hetes — a backend-kulccsal azonos küszöb).
   String? _sevenConceders(Map<String, dynamic> r) {
@@ -3161,6 +3189,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_attackDepth(r) != null) ["Támadás-mélység", _attackDepth(r)!],
       if (_sevenConceders(r) != null)
         ["Hetes-okozó védők", _sevenConceders(r)!],
+      if (_pivotFeeders(r) != null)
+        ["Beálló-kiszolgálók", _pivotFeeders(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

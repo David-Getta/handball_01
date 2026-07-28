@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Beálló-kiszolgálók**: KI adja be a labdát a beállónak. A
+  beálló-terhelés azt mondja meg, a támadásaik mekkora része megy át a
+  beállón — ez azt, kin keresztül: minden passzt számolunk, amelynek a
+  fogadója a becsült beálló (4+ beadástól, 50%-os vezető
+  kiszolgálónál, holtverseny nélkül). Ha egy ember adja a beadások
+  felét, őt kell zárni: rá kell lépni a beálló-vonalba, és az ő
+  oldalán indítani a kettőzést, mert nélküle a beállójuk kiesik a
+  játékból. Egy réteg, sok felület: `pivot_feeders` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti beadás-darabszámok + edzői kulcs + csempe), 112.
+  meccsterv-szabály (az ő egyszemélyes beálló-kiszolgálásuk × a ti
+  beállós védekezésetek), 133. edzés-szabály (beálló-kiszolgálás több
+  kézből: a beálló egymás után kétszer nem kaphatja ugyanattól).
 - **Hetes-okozó védők**: KINÉL szakad meg a védekezés hetessel. A
   hetes-kiharcolók a támadó oldalról nézik, kit rántanak le — ez a
   védő oldali párja: a hetes-jel előtt a kiharcolóhoz legközelebb álló

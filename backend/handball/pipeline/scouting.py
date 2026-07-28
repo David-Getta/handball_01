@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Beálló-kiszolgálóik: [{"player_id", "jersey", "feeds"}] —
+    # játékosonként a beállónak adott beadások; darabszámok, meccsek
+    # közt pontosan összegződnek (részarány = feeds / összes beadás).
+    pivot_feeders: list = field(default_factory=list)
     # Hetes-okozó védőik: [{"player_id", "conceded"}] — kinél szakad
     # meg a védekezés hetessel; darabszámok, meccsek közt pontosan
     # összegződnek.
@@ -1696,6 +1700,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Beálló-kiszolgálók: kin keresztül él a beállójuk.
+    _pf_rows = rep.pivot_feeders or []
+    _pf_n = sum(p["feeds"] for p in _pf_rows)
+    if _pf_n >= 4 and _pf_rows:
+        _pf_top = _pf_rows[0]
+        _pf_pct = 100.0 * _pf_top["feeds"] / _pf_n
+        _pf_tie = (len(_pf_rows) > 1
+                   and _pf_rows[1]["feeds"] == _pf_top["feeds"])
+        if _pf_pct >= 50.0 and not _pf_tie:
+            _pf_who = (f"{_pf_top['jersey']}-es mezszámú"
+                       if _pf_top.get("jersey") is not None
+                       else f"{_pf_top['player_id']} azonosítójú")
+            keys.append(
+                f"Egy ember szolgálja ki a beállójukat: a(z) "
+                f"{_pf_who} játékosuk adja a beadások "
+                f"{_pf_pct:.0f}%-át ({_pf_top['feeds']}/{_pf_n}) — őt "
+                "kell zárni: rá kell lépni a beálló-vonalba, és az ő "
+                "oldalán indítsátok a kettőzést, mert nélküle a "
+                "beállójuk kiesik a játékból.")
 
     # Hetes-okozó védők: kinél szakad meg a védekezésük hetessel.
     _smc_rows = rep.seven_conceders or []
@@ -3968,6 +3992,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import pivot_feeders as _pfd
+        rep.pivot_feeders = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "feeds": p["feeds"]}
+            for p in _pfd(match, config)[team.value]["players"]]
         from .rules import seven_meter_conceders as _smc
         rep.seven_conceders = [
             dict(row) for row in _smc(match, config)[team.value]["players"]]
@@ -4751,6 +4780,22 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_pivot_feeders(reports) -> list:
+    """Beálló-kiszolgálók: játékosonként a beadások összegzése (a
+    darabszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.pivot_feeders or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "feeds": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["feeds"] += int(row.get("feeds", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["feeds"])]
 
 
 def _merge_seven_conceders(reports) -> list:
@@ -5634,6 +5679,31 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 112) Az ő egyszemélyes beálló-kiszolgálásuk × a ti
+    # beálló-védekezésetek: a kiszolgálót zárva a beállójuk kiesik.
+    _pf112 = opp.pivot_feeders or []
+    _pfn112 = sum(p["feeds"] for p in _pf112)
+    if _pf112 and _pfn112 >= 4 and own.pd_pivot_attacks >= 4:
+        _top112 = _pf112[0]
+        _pct112 = 100.0 * _top112["feeds"] / _pfn112
+        _pv112 = 100.0 * own.pd_pivot_goals / max(1, own.pd_pivot_attacks)
+        _ot112 = (100.0 * own.pd_other_goals
+                  / max(1, own.pd_other_attacks))
+        _tie112 = (len(_pf112) > 1
+                   and _pf112[1]["feeds"] == _top112["feeds"])
+        if _pct112 >= 50.0 and not _tie112 and _pv112 - _ot112 >= 10.0:
+            _who112 = (f"{_top112['jersey']}-es mezszámú"
+                       if _top112.get("jersey") is not None
+                       else f"{_top112['player_id']} azonosítójú")
+            plan.append(
+                f"A beállójukat a(z) {_who112} játékosuk szolgálja ki "
+                f"(a beadások {_pct112:.0f}%-a), ti pedig pont a "
+                f"beállós támadások ellen szivárogtok (azokból "
+                f"{_pv112:.0f}%, a többiből {_ot112:.0f}% gól) — a "
+                "megoldás nem a beállónál van, hanem a "
+                "kiszolgálójánál: rá kell lépni az átadás-vonalba, "
+                "és az ő oldalán kell kettőzni.")
 
     # 111) Az ő hetes-okozó védőjük × a ti hetes-kiharcolóitok: a
     # betörést oda kell irányítani, ahol a kéz megjelenik.
@@ -7029,6 +7099,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pivot_feeders=_merge_pivot_feeders(reports),
         seven_conceders=_merge_seven_conceders(reports),
         adp_frames=sum(r.adp_frames for r in reports),
         adp_sum_m=round(sum(r.adp_sum_m for r in reports), 1),

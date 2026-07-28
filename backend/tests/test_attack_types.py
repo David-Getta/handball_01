@@ -1536,3 +1536,62 @@ def test_attack_depth_needs_enough_frames():
 
     rec = attack_depth(_depth_match(10.0, seconds=1.0))["home"]
     assert rec["avg_depth_m"] is None and rec["style"] is None
+
+
+# ---- Beálló-kiszolgálók (ki adja be a labdát a beállónak) --------------------
+
+def _feeder_match(feeders, fps=25.0):
+    """HAZAI felállás: az 1-es beálló (6 m, közép), a 2-es és 3-as
+    átlövők — a `feeders` elemenként megadja, melyik átlövő adja be a
+    labdát a beállónak."""
+    spots = {1: (34.0, 10.0), 2: (30.0, 5.0), 3: (30.0, 15.0)}
+    frames = []
+    t = 0
+
+    def _hold(holder_id, n):
+        nonlocal t, frames
+        for _ in range(n):
+            players = [_pl(tid, Team.HOME, x, y)
+                       for tid, (x, y) in spots.items()]
+            players.append(_pl(21, Team.AWAY, 38.0, 10.0))
+            hx, hy = spots[holder_id]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+
+    # Poszt-minta a becsléshez; a sorrend végén NEM a beálló birtokol,
+    # hogy a bemelegítés ne adjon plusz beadást.
+    _hold(1, 100)
+    _hold(2, 100)
+    _hold(3, 100)
+    for pid in feeders:
+        _hold(pid, 10)     # a kiszolgáló birtokol
+        _hold(1, 10)       # majd a beálló kapja (passz)
+    return Match(_meta(fps), frames)
+
+
+def test_pivot_feeders_finds_the_single_server():
+    """Hat beadásból ötöt a 2-es ad → ő a beálló kiszolgálója."""
+    from handball.pipeline.attack_types import pivot_feeders
+
+    rec = pivot_feeders(_feeder_match([2, 2, 2, 2, 2, 3]))["home"]
+    assert rec["feeds"] == 6
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 2 and rec["top"]["feeds"] == 5
+
+
+def test_pivot_feeders_shared_service_has_no_top():
+    """Ha két ember fele-fele arányban szolgálja ki a beállót, nincs
+    kiemelt kiszolgáló."""
+    from handball.pipeline.attack_types import pivot_feeders
+
+    rec = pivot_feeders(_feeder_match([2, 3, 2, 3, 2, 3]))["home"]
+    assert rec["feeds"] == 6 and rec["top"] is None
+
+
+def test_pivot_feeders_needs_enough_feeds():
+    """Kevés (4-nél kevesebb) beadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import pivot_feeders
+
+    rec = pivot_feeders(_feeder_match([2, 2]))["home"]
+    assert rec["feeds"] == 2 and rec["top"] is None

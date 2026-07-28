@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 133) Beálló-kiszolgálók: ha egy ember adja a beadások felét, a
+    # kiszolgálás szélesítése a téma.
+    try:
+        from .attack_types import pivot_feeders
+        pf133 = pivot_feeders(match, config)
+        for side in ("home", "away"):
+            top133 = pf133[side]["top"]
+            if top133 is None:
+                continue
+            who133 = (f"a {top133['jersey']}-es mezszámú játékos"
+                      if top133.get("jersey") is not None
+                      else f"a {top133['player_id']} azonosítójú játékos")
+            add(side, "támadás", "Beálló-kiszolgálás több kézből",
+                f"{who133} adta a beállónak menő beadások "
+                f"{top133['share_pct']:.0f}%-át "
+                f"({top133['feeds']}/{pf133[side]['feeds']}) — egy "
+                "felkészült védelem ezt az egy átadás-vonalat zárja, "
+                "és a beállónk kiesik a játékból",
+                "beálló-kiszolgálás több kézből: felállt támadás "
+                "azzal a szabállyal, hogy a beálló egymás után "
+                "kétszer nem kaphatja ugyanattól a játékostól a "
+                "labdát — a beadás jöhet a szélsőtől és a "
+                "kiugró átlövőtől is, és minden beadás után "
+                "azonnali oldalváltás")
+    except Exception:
+        pass
+
     # 132) Hetes-okozó védők: ha egy védőnk sorozatban okoz hetest, a
     # lábbal védekezés a téma.
     try:

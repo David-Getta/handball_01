@@ -2115,3 +2115,68 @@ def attack_depth(match, config=None) -> dict:
                      else "kiegyensúlyozott")
         out[side] = {"frames": n, "avg_depth_m": avg, "style": style}
     return out
+
+
+# Beálló-kiszolgálás: ennyi mért beadás kell az ítélethez, és e feletti
+# részarány jelenti, hogy egy ember szolgálja ki a beállót.
+PIVOT_FEED_MIN = 4
+PIVOT_FEED_SHARE = 50.0
+
+
+def pivot_feeders(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Beálló-kiszolgálók: KI adja be a labdát a beállónak.
+
+    A beálló-terhelés (pivot_usage) azt mondja meg, a támadásaik
+    mekkora része megy át a beállón — ez azt, KIN keresztül: minden
+    olyan passzt számolunk, amelynek a fogadója a becsült beálló, és a
+    passzolóhoz írjuk.
+
+    Edzőileg: ha egy ember adja a beadások felét, őt kell zárni — rá
+    kell lépni a beálló-vonalba, és az ő oldalán kell a kettőzést
+    indítani, mert nélküle a beállójuk kiesik a játékból.
+
+    Visszatérés csapatonként: {"feeds", "players": [{"player_id",
+    "jersey", "feeds", "share_pct"}], "top"} — a lista beadás szerint
+    csökkenő; a "top" az első játékos, ha legalább PIVOT_FEED_MIN mért
+    beadás van, a részaránya eléri a PIVOT_FEED_SHARE-t, és nincs vele
+    holtversenyben másik kiszolgáló.
+    """
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    posts = estimate_positions(match, config)
+    pivots = {side: {tid for tid, r in posts.get(side, {}).items()
+                     if r["poszt"] == "beálló"}
+              for side in ("home", "away")}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for p in detect_passes(match, config):
+        side = p.team.value
+        if p.receiver_id not in pivots[side]:
+            continue
+        if p.passer_id in pivots[side]:
+            continue  # beálló–beálló átadás nem kiszolgálás
+        if p.passer_pos.jersey_number is not None:
+            jersey.setdefault(p.passer_id, p.passer_pos.jersey_number)
+        tally[side][p.passer_id] = tally[side].get(p.passer_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = sum(tally[side].values())
+        players = [{"player_id": pid, "jersey": jersey.get(pid),
+                    "feeds": k,
+                    "share_pct": (round(100.0 * k / n, 1) if n else None)}
+                   for pid, k in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        if n >= PIVOT_FEED_MIN and players \
+                and (players[0]["share_pct"] or 0.0) >= PIVOT_FEED_SHARE:
+            tie = (len(players) > 1
+                   and players[1]["feeds"] == players[0]["feeds"])
+            if not tie:
+                top = players[0]
+        out[side] = {"feeds": n, "players": players, "top": top}
+    return out
