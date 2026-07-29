@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kihozatal-oldal: melyik oldalon indították a támadásokat.
+    try:
+        from .attack_types import buildup_side
+        bus = buildup_side(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bus = bus[side]
+            if rec_bus["dominant"] in (None, "közép"):
+                continue
+            body += (f" A(z) {name} a {rec_bus['dominant']} oldalon "
+                     f"hozta fel a labdát: a támadásaik "
+                     f"{rec_bus['share_pct']:.0f}%-a onnan indult.")
+    except Exception:
+        pass
     # Lepattanó-szerzők: ki nyerte a kipattanókat.
     try:
         from .attack_types import rebound_winners

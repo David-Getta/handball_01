@@ -604,6 +604,12 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kihozatal-oldaluk: sávonként (bal / közép / jobb) a támadások —
+    # darabszámok, meccsek közt pontosan összegződnek (részarány =
+    # sáv / összes támadás).
+    bus_left: int = 0
+    bus_center: int = 0
+    bus_right: int = 0
     # Lepattanó-szerzőik: [{"player_id", "jersey", "rebounds"}] — ki
     # gyűjti a saját lövéseik kipattanóit; darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -1771,6 +1777,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kihozatal-oldal: hova kell szervezni a letámadást.
+    _bus_n = rep.bus_left + rep.bus_center + rep.bus_right
+    if _bus_n >= 8:
+        _bus_best, _bus_cnt = max(
+            (("bal", rep.bus_left), ("közép", rep.bus_center),
+             ("jobb", rep.bus_right)), key=lambda kv: kv[1])
+        _bus_pct = 100.0 * _bus_cnt / _bus_n
+        if _bus_pct >= 50.0 and _bus_best != "közép":
+            keys.append(
+                f"A {_bus_best} oldalon hozzák fel a labdát (a "
+                f"támadásaik {_bus_pct:.0f}%-a onnan indul, "
+                f"{_bus_cnt}/{_bus_n}) — oda kell szervezni a "
+                "letámadást és a kettőzést; a másik oldalon addig "
+                "elég egy ember, mert arra nem is indulnak.")
 
     # Lepattanó-szerzők: ki gyűjti a kipattanóikat.
     _rbw_rows = rep.rebounders or []
@@ -4323,6 +4344,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import buildup_side as _bus
+        busrec = _bus(match, config)[team.value]
+        rep.bus_left = busrec["left"]
+        rep.bus_center = busrec["center"]
+        rep.bus_right = busrec["right"]
         from .attack_types import rebound_winners as _rbw
         rep.rebounders = [
             dict(row) for row in _rbw(match, config)[team.value]["off"]]
@@ -6166,6 +6192,25 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 126) Az ő egyoldalas kihozataluk × a ti elöl szerzett
+    # labdáitok: a letámadást pont oda kell szervezni.
+    _busn126 = opp.bus_left + opp.bus_center + opp.bus_right
+    if _busn126 >= 8 and own.steal_n >= 4:
+        _best126, _cnt126 = max(
+            (("bal", opp.bus_left), ("jobb", opp.bus_right)),
+            key=lambda kv: kv[1])
+        _pct126 = 100.0 * _cnt126 / _busn126
+        _high126 = 100.0 * own.steal_high / max(1, own.steal_n)
+        if _pct126 >= 50.0 and _high126 >= 30.0:
+            plan.append(
+                f"A {_best126} oldalon hozzák fel a labdát (a "
+                f"támadásaik {_pct126:.0f}%-a onnan indul), ti pedig "
+                f"elöl is tudtok szerezni (a labdaszerzéseitek "
+                f"{_high126:.0f}%-a a támadó térfélen) — a "
+                f"letámadást a {_best126} oldalra kell szervezni: két "
+                "ember zárja a felhozatalt, a többiek csúsznak, mert "
+                "a másik oldalra úgysem indulnak.")
+
     # 125) Az ő lepattanó-gyűjtőjük × a ti engedett második rohamaitok:
     # a kipattanó-kísérés a meccs egyik kulcsa.
     _rbw125 = opp.rebounders or []
@@ -7841,6 +7886,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        bus_left=sum(r.bus_left for r in reports),
+        bus_center=sum(r.bus_center for r in reports),
+        bus_right=sum(r.bus_right for r in reports),
         rebounders=_merge_rebounders(reports),
         shooter_ranges=_merge_shooter_ranges(reports),
         sh_shape=_merge_sh_shape(reports),

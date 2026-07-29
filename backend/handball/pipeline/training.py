@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 147) Kihozatal-oldal: ha mindig ugyanarról az oldalról indítunk,
+    # a kihozatal kiszámítható — az oldalváltó indítás a téma.
+    try:
+        from .attack_types import buildup_side
+        bus147 = buildup_side(match, config)
+        for side in ("home", "away"):
+            rec147 = bus147[side]
+            if rec147["dominant"] in (None, "közép"):
+                continue
+            add(side, "támadás", "Oldalváltó kihozatal",
+                f"a támadásaink {rec147['share_pct']:.0f}%-a a "
+                f"{rec147['dominant']} oldalról indult "
+                f"({rec147['attacks']} mért támadás) — egy letámadó "
+                "ellenfél erre az oldalra fogja küldeni a két emberét",
+                "oldalváltó kihozatal: kihozatal-gyakorlat "
+                "letámadással, ahol a kapus felváltva indít a két "
+                "oldalra, és az indítás oldalát a MÁSIK oldal "
+                "szélsőjének hangos jelzése dönti el — a labdának "
+                "három passzon belül át kell érnie a felezővonalon")
+    except Exception:
+        pass
+
     # 146) Lepattanó-szerzők: ha az ellenfél gyűjti a kipattanókat, a
     # kipattanó-kísérés a téma (a saját oldalon a védekező lepattanó).
     try:

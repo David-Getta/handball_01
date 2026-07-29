@@ -1796,3 +1796,57 @@ def test_rebound_winners_needs_enough_cases():
     rec = rebound_winners(_rebound_match([(5, Team.HOME)] * 2))["home"]
     assert rec["off"] and rec["off"][0]["rebounds"] == 2
     assert rec["top_off"] is None
+
+
+# ---- Kihozatal-oldal (melyik oldalon indítják a támadást) --------------------
+
+def _buildup_match(sides, fps=25.0):
+    """HAZAI támadás-sorozat: a `sides` elemenként megadja a támadás
+    indító y-magasságát (nagy y = a támadó bal keze felőli oldal)."""
+    frames = []
+    t = 0
+    for y0 in sides:
+        for i in range(int(3.0 * fps)):
+            x = 24.0 + 0.05 * i
+            players = [_pl(1, Team.HOME, x, y0),
+                       _pl(2, Team.HOME, x - 2.0, 10.0),
+                       _pl(21, Team.AWAY, 37.0, 8.0),
+                       _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=y0, confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):   # vendég-birtoklás: elválasztó
+            players = [_pl(1, Team.HOME, 5.0, 10.0),
+                       _pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0)]
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_buildup_side_finds_the_dominant_side():
+    """Nyolc támadásból hat a +y (bal) oldalról indul → bal oldali
+    kihozatal."""
+    from handball.pipeline.attack_types import buildup_side
+
+    rec = buildup_side(_buildup_match([16.0] * 6 + [4.0] * 2))["home"]
+    assert rec["attacks"] == 8 and rec["left"] == 6
+    assert rec["dominant"] == "bal" and rec["share_pct"] == 75.0
+
+
+def test_buildup_side_balanced_has_no_verdict():
+    """Ha a két oldal és a közép között oszlik, nincs kiemelt oldal."""
+    from handball.pipeline.attack_types import buildup_side
+
+    rec = buildup_side(_buildup_match(
+        [16.0] * 3 + [4.0] * 3 + [10.0] * 2))["home"]
+    assert rec["dominant"] is None and rec["share_pct"] is None
+
+
+def test_buildup_side_needs_enough_attacks():
+    """Kevés (8-nál kevesebb) mért támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import buildup_side
+
+    rec = buildup_side(_buildup_match([16.0] * 4))["home"]
+    assert rec["attacks"] == 4 and rec["dominant"] is None

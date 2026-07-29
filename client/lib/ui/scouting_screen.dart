@@ -1297,6 +1297,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kihozatal-oldal: melyik oldalon indítják a támadást (8+ támadás,
+  // 50% feletti oldal — a backend-kulccsal azonos küszöbök).
+  String? _buildupSide(Map<String, dynamic> r) {
+    final left = ((r["bus_left"] as num?) ?? 0).toInt();
+    final center = ((r["bus_center"] as num?) ?? 0).toInt();
+    final right = ((r["bus_right"] as num?) ?? 0).toInt();
+    final total = left + center + right;
+    if (total < 8) return null;
+    var best = "bal";
+    var cnt = left;
+    if (center > cnt) {
+      best = "közép";
+      cnt = center;
+    }
+    if (right > cnt) {
+      best = "jobb";
+      cnt = right;
+    }
+    final pct = 100.0 * cnt / total;
+    if (pct < 50.0 || best == "közép") return null;
+    return "a $best oldalon hozzák fel a labdát (a támadásaik "
+        "${pct.toStringAsFixed(0)}%-a onnan indul, $cnt/$total) · oda "
+        "kell szervezni a letámadást";
+  }
+
   // Lepattanó-szerzők: ki gyűjti a kipattanóikat (3+ lepattanó — a
   // backend-kulccsal azonos küszöb).
   String? _rebounders(Map<String, dynamic> r) {
@@ -3529,6 +3554,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_shooterRanges(r) != null)
         ["Lövő-távolság", _shooterRanges(r)!],
       if (_rebounders(r) != null) ["Lepattanó-szerzők", _rebounders(r)!],
+      if (_buildupSide(r) != null) ["Kihozatal-oldal", _buildupSide(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

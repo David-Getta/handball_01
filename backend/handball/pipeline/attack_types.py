@@ -2477,3 +2477,70 @@ def rebound_winners(match: Match,
             rec[f"top_{key}"] = top
         out[side] = rec
     return out
+
+
+# Kihozatal-oldal: ennyi mért támadástól ítélünk, és e feletti
+# részarány jelenti, hogy egy oldalon hozzák fel a labdát.
+BUILDUP_SIDE_MIN_ATTACKS = 8
+BUILDUP_SIDE_SHARE = 50.0
+
+
+def buildup_side(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Kihozatal-oldal: MELYIK OLDALON indítják a támadást.
+
+    A támadás-indítók (attack_starters) azt mondják meg, KI hozza fel a
+    labdát, a kapus-indítás oldala (gk_outlet_side) azt, merre kezd a
+    kapus — ez azt, hol jön át a labda: minden támadás-szakasz első
+    kockájában a labda oldalirányú helyét soroljuk bal / közép / jobb
+    sávba (a "bal" a TÁMADÓ bal keze felőli oldal, mint az
+    oldal-részrehajlásnál).
+
+    Edzőileg: ha a kihozataluk fele ugyanazon az oldalon jön, oda kell
+    szervezni a letámadást és a kettőzést — a másik oldalon addig
+    elég egy ember, mert arra nem is indulnak.
+
+    Visszatérés csapatonként: {"attacks", "left", "center", "right",
+    "dominant", "share_pct"} — a dominant/share_pct None
+    BUILDUP_SIDE_MIN_ATTACKS alatt vagy BUILDUP_SIDE_SHARE alatti
+    többségnél; a dominant "bal" / "jobb" / "közép".
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    counts = {side: {"left": 0, "center": 0, "right": 0}
+              for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        first = next((f for f in seq.frames if f.ball is not None), None)
+        if first is None:
+            continue
+        side = seq.team.value
+        d = first.ball.y - cy
+        if config.attacks_toward_x(
+                Team.HOME if side == "home" else Team.AWAY) == 0.0:
+            d = -d  # a -x felé támadónál a bal kéz a -y oldal
+        if d > SIDE_BAND_M:
+            counts[side]["left"] += 1
+        elif d < -SIDE_BAND_M:
+            counts[side]["right"] += 1
+        else:
+            counts[side]["center"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = dict(counts[side])
+        n = rec["left"] + rec["center"] + rec["right"]
+        rec["attacks"] = n
+        rec["dominant"] = rec["share_pct"] = None
+        if n >= BUILDUP_SIDE_MIN_ATTACKS:
+            best = max(("left", "center", "right"), key=lambda k: rec[k])
+            pct = 100.0 * rec[best] / n
+            if pct >= BUILDUP_SIDE_SHARE:
+                rec["dominant"] = {"left": "bal", "right": "jobb",
+                                   "center": "közép"}[best]
+                rec["share_pct"] = round(pct, 1)
+        out[side] = rec
+    return out

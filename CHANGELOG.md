@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kihozatal-oldal**: MELYIK OLDALON indítják a támadást. A
+  támadás-indítók azt mondják meg, ki hozza fel a labdát, a
+  kapus-indítás oldala azt, merre kezd a kapus — ez azt, hol jön át a
+  labda: a támadás-szakaszok első kockájában a labda oldalirányú helye
+  bal / közép / jobb sávban (8+ támadás, 50% feletti oldalnál). Ha a
+  kihozataluk fele ugyanarról az oldalról jön, oda kell szervezni a
+  letámadást és a kettőzést; a másik oldalon addig elég egy ember. Egy
+  réteg, sok felület: `buildup_side` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (sávonkénti
+  támadás-darabszámok + edzői kulcs + csempe), 126. meccsterv-szabály
+  (az ő egyoldalas kihozataluk × a ti elöl szerzett labdáitok), 147.
+  edzés-szabály (oldalváltó kihozatal: a kapus felváltva indít, a
+  szélső hangos jelzésére).
 - **Lepattanó-szerzők**: KI NYERI a kipattanókat. A második roham
   csapat-szinten mondja meg, hányszor szerzik vissza a saját, gólt nem
   érő lövésüket — ez azt, ki: minden nem gólos lövés után az első
