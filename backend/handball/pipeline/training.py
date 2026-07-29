@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 138) Álló támadók: ha valaki labda nélkül alig mozog, a labda
+    # nélküli munka a téma.
+    try:
+        from .tactics import static_attackers
+        sta138 = static_attackers(match, config)
+        for side in ("home", "away"):
+            rec138 = sta138[side]["static"]
+            if rec138 is None:
+                continue
+            who138 = (f"a {rec138['jersey']}-es mezszámú játékos"
+                      if rec138.get("jersey") is not None
+                      else f"a {rec138['player_id']} azonosítójú játékos")
+            add(side, "támadás", "Labda nélküli munka",
+                f"{who138} {rec138['avg_mps']:.2f} m/s-mal mozgott a "
+                f"támadásban, a csapatátlag "
+                f"{sta138[side]['team_avg_mps']:.2f} m/s — az ő "
+                "védőjét bármikor el lehet venni kettőzésre, mert "
+                "labda nélkül nem jelent fenyegetést",
+                "labda nélküli munka: felállt támadás azzal a "
+                "szabállyal, hogy labda nélkül MINDENKINEK mozognia "
+                "kell — minden átadás után indulás (keresztezés, "
+                "beúszás vagy elfutás); az edző fütyülésére a labdás "
+                "megáll, és aki nem mozgásban van, az fut egy "
+                "hosszot")
+    except Exception:
+        pass
+
     # 137) Szélső-befejezés oldalanként: ha az egyik szélsőnk érdemben
     # gyengébben fejez be, az ő szög-befejezése a téma.
     try:

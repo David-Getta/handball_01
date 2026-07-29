@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Álló támadóik: [{"player_id", "jersey", "seconds", "dist_m"}] —
+    # játékosonként a támadásban mért idő és megtett út; összegek,
+    # meccsek közt pontosan összegződnek (átlag = dist_m / seconds).
+    static_attackers: list = field(default_factory=list)
     # Szélső-befejezésük oldalanként: oldalanként a szélső-sávos
     # lövések és góljaik — darabszámok, meccsek közt pontosan
     # összegződnek (gólarány = gól / lövés).
@@ -1724,6 +1728,31 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Álló támadók: kit hagyhat ott a védője.
+    _sta_rows = [p for p in (rep.static_attackers or [])
+                 if p["seconds"] > 0]
+    if _sta_rows:
+        _sta_t = sum(p["seconds"] for p in _sta_rows)
+        _sta_d = sum(p["dist_m"] for p in _sta_rows)
+        _sta_cand = [p for p in _sta_rows if p["seconds"] >= 60.0]
+        if _sta_t > 0 and _sta_cand:
+            _sta_avg = _sta_d / _sta_t
+            _sta_slow = min(_sta_cand,
+                            key=lambda p: p["dist_m"] / p["seconds"])
+            _sta_v = _sta_slow["dist_m"] / _sta_slow["seconds"]
+            if _sta_avg > 0 and (100.0 * (_sta_avg - _sta_v)
+                                 / _sta_avg) >= 30.0:
+                _sta_who = (f"{_sta_slow['jersey']}-es mezszámú"
+                            if _sta_slow.get("jersey") is not None
+                            else f"{_sta_slow['player_id']} azonosítójú")
+                keys.append(
+                    f"A(z) {_sta_who} játékosuk alig mozog a "
+                    f"támadásban ({_sta_v:.2f} m/s a csapatátlag "
+                    f"{_sta_avg:.2f} m/s helyett) — az ő védője "
+                    "nyugodtan otthagyhatja: befelé segíthet, "
+                    "kettőzhet vagy a beállóra léphet, mert az álló "
+                    "ember nem bünteti meg.")
 
     # Szélső-befejezés oldalanként: melyik szélsőjük veszélyes.
     if rep.wfs_left_shots >= 3 and rep.wfs_right_shots >= 3:
@@ -4084,6 +4113,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .tactics import static_attackers as _sta
+        rep.static_attackers = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "seconds": p["seconds"],
+             "dist_m": round(p["avg_mps"] * p["seconds"], 1)}
+            for p in _sta(match, config)[team.value]["players"]]
         from .attack_types import wing_finishing_by_side as _wfs
         wfsrec = _wfs(match, config)[team.value]
         rep.wfs_left_shots = wfsrec["bal"]["shots"]
@@ -4894,6 +4929,27 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_static_attackers(reports) -> list:
+    """Álló támadók: játékosonként a támadásban mért idő és út
+    összegzése (az átlagsebesség szerint NÖVEKVŐ)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.static_attackers or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "seconds": 0.0,
+                                    "dist_m": 0.0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["seconds"] += float(row.get("seconds", 0.0))
+            rec["dist_m"] += float(row.get("dist_m", 0.0))
+    rows = [{"player_id": pid, "jersey": rec["jersey"],
+             "seconds": round(rec["seconds"], 1),
+             "dist_m": round(rec["dist_m"], 1)}
+            for pid, rec in tally.items() if rec["seconds"] > 0]
+    rows.sort(key=lambda r: r["dist_m"] / r["seconds"])
+    return rows
 
 
 def _merge_pivot_feeders(reports) -> list:
@@ -5793,6 +5849,32 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 117) Az ő álló emberük × a ti kettőzésetek: pont onnan lehet
+    # elvenni a védőt a kettőzéshez.
+    _sta117 = [p for p in (opp.static_attackers or [])
+               if p["seconds"] >= 60.0]
+    _all117 = [p for p in (opp.static_attackers or [])
+               if p["seconds"] > 0]
+    if _sta117 and _all117 and own.dbl_holder_frames >= 250:
+        _t117 = sum(p["seconds"] for p in _all117)
+        _d117 = sum(p["dist_m"] for p in _all117)
+        _avg117 = _d117 / _t117 if _t117 else 0.0
+        _slow117 = min(_sta117, key=lambda p: p["dist_m"] / p["seconds"])
+        _v117 = _slow117["dist_m"] / _slow117["seconds"]
+        _dbl117 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        if _avg117 > 0 and (100.0 * (_avg117 - _v117) / _avg117) >= 30.0 \
+                and _dbl117 >= 30.0:
+            _who117 = (f"{_slow117['jersey']}-es mezszámú"
+                       if _slow117.get("jersey") is not None
+                       else f"{_slow117['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who117} játékosuk alig mozog a támadásban "
+                f"({_v117:.2f} m/s a csapatátlag {_avg117:.2f} m/s "
+                f"helyett), ti pedig sokat kettőztök (a labdás-idő "
+                f"{_dbl117:.0f}%-ában) — az ő védőjét kell a "
+                "kettőzésre küldeni: onnan vehető el ember a "
+                "legkisebb kockázattal.")
 
     # 116) Az ő gyenge szélsőjük × a ti kifutó szélső-védekezésetek: a
     # segítést arról az oldalról lehet befelé hozni.
@@ -7288,6 +7370,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        static_attackers=_merge_static_attackers(reports),
         wfs_left_shots=sum(r.wfs_left_shots for r in reports),
         wfs_left_goals=sum(r.wfs_left_goals for r in reports),
         wfs_right_shots=sum(r.wfs_right_shots for r in reports),

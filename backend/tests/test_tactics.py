@@ -456,3 +456,54 @@ def test_formation_switching_separates_switchers_from_one_system():
     assert few["away"]["verdict"] is None
     # A hazai fal nem védekezett → üres.
     assert few["home"]["attacks"] == 0 and few["home"]["verdict"] is None
+
+
+# ---- Álló támadók (ki mozog labda nélkül a legkevesebbet) --------------------
+
+def _static_attacker_match(still_id=5, n=2000, fps=25.0):
+    """HAZAI szervezett támadás: négy támadó cikcakkban mozog, a
+    `still_id` végig ugyanott áll."""
+    frames = []
+    off = 0.0
+    for i in range(n):
+        direction = 1.0 if (i // 25) % 2 == 0 else -1.0
+        off += 0.08 * direction
+        players = []
+        for k, base in ((1, 10.0), (2, 4.0), (3, 7.0), (4, 13.0),
+                        (5, 16.0)):
+            y = base if k == still_id else base + off
+            players.append(_pl(k, Team.HOME, 30.0, y))
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=30.0, y=10.0 + off,
+                                      confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_static_attackers_finds_the_still_player():
+    """A végig egy helyben álló támadó a csapatátlag alatt marad → őt
+    jelöljük álló emberként."""
+    from handball.pipeline.tactics import static_attackers
+
+    rec = static_attackers(_static_attacker_match())["home"]
+    assert rec["team_avg_mps"] is not None
+    assert rec["static"] is not None
+    assert rec["static"]["player_id"] == 5
+    assert rec["static"]["avg_mps"] < rec["team_avg_mps"]
+    # A lista a legkevesebbet mozgóval kezdődik.
+    assert rec["players"][0]["player_id"] == 5
+
+
+def test_static_attackers_all_moving_has_no_verdict():
+    """Ha mindenki egyformán mozog, nincs álló ember."""
+    from handball.pipeline.tactics import static_attackers
+
+    rec = static_attackers(_static_attacker_match(still_id=None))["home"]
+    assert rec["static"] is None
+
+
+def test_static_attackers_needs_enough_seconds():
+    """Kevés mért másodpercnél nincs ítélet."""
+    from handball.pipeline.tactics import static_attackers
+
+    rec = static_attackers(_static_attacker_match(n=200))["home"]
+    assert rec["static"] is None

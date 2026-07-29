@@ -797,3 +797,90 @@ def formation_switching(match: Match,
                 rec["verdict"] = "egy rendszer"
         out[side] = rec
     return out
+
+
+# Álló támadók: ennyi játékos-másodperc kell egy ember megítéléséhez, és
+# ekkora (százalékos) elmaradás a csapatátlagtól számít álló embernek.
+STATIC_ATT_MIN_S = 60.0
+STATIC_ATT_GAP_PCT = 30.0
+
+
+def static_attackers(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Álló támadók: KI mozog labda nélkül a legkevesebbet.
+
+    A támadó-mozgás (attack_motion) csapat-szinten mondja meg, álló
+    vagy mozgásos a támadásuk — ez játékosonként bontja: szervezett
+    támadásban mérjük az egyes támadók átlagsebességét, és a
+    csapatátlaghoz viszonyítjuk.
+
+    Edzőileg: aki érdemben a csapatátlag alatt mozog, azt a védője
+    nyugodtan otthagyhatja — befelé segíthet, kettőzhet vagy a
+    beállóra léphet, mert az álló ember nem bünteti meg. A saját
+    edzésnek pedig kész témája van: labda nélküli munka.
+
+    Visszatérés csapatonként: {"team_avg_mps", "players":
+    [{"player_id", "jersey", "seconds", "avg_mps"}], "static"} — a
+    lista átlagsebesség szerint NÖVEKVŐ (elöl a legkevesebbet
+    mozgóval); a "static" az első játékos, ha van legalább
+    STATIC_ATT_MIN_S mért másodperce, és az átlaga legalább
+    STATIC_ATT_GAP_PCT százalékkal a csapatátlag alatt van.
+    """
+    from ..models.tracking import PositionSource
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    jersey: dict = {}
+    acc: dict = {"home": {}, "away": {}}
+    prev = None
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        side = ("home" if ph == Phase.HOME_ATTACK
+                else "away" if ph == Phase.AWAY_ATTACK else None)
+        if prev is not None and side is not None:
+            dt = (f.t - prev.t) / fps
+            if 0.0 < dt <= 0.5:
+                team = Team.HOME if side == "home" else Team.AWAY
+                prev_pos = {
+                    p.track_id: (p.x, p.y) for p in prev.players
+                    if p.team == team
+                    and p.source == PositionSource.MEASURED
+                    and p.role != "kapus"}
+                for p in f.players:
+                    if (p.team != team
+                            or p.source != PositionSource.MEASURED
+                            or p.role == "kapus"):
+                        continue
+                    pp = prev_pos.get(p.track_id)
+                    if pp is None:
+                        continue
+                    d = math.hypot(p.x - pp[0], p.y - pp[1])
+                    if d / dt > _MOTION_MAX_MPS:
+                        continue  # track-ugrás
+                    if p.jersey_number is not None:
+                        jersey.setdefault(p.track_id, p.jersey_number)
+                    rec = acc[side].setdefault(p.track_id, [0.0, 0.0])
+                    rec[0] += d
+                    rec[1] += dt
+        prev = f
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "seconds": round(t, 1), "avg_mps": round(d / t, 2)}
+                for pid, (d, t) in acc[side].items() if t > 0]
+        rows.sort(key=lambda r: r["avg_mps"])
+        total_d = sum(d for d, _ in acc[side].values())
+        total_t = sum(t for _, t in acc[side].values())
+        team_avg = round(total_d / total_t, 2) if total_t > 0 else None
+        static = None
+        if team_avg:
+            cand = [r for r in rows if r["seconds"] >= STATIC_ATT_MIN_S]
+            if cand:
+                slowest = cand[0]
+                gap = 100.0 * (team_avg - slowest["avg_mps"]) / team_avg
+                if gap >= STATIC_ATT_GAP_PCT:
+                    static = slowest
+        out[side] = {"team_avg_mps": team_avg, "players": rows,
+                     "static": static}
+    return out

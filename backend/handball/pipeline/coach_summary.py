@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Álló támadók: ki mozgott labda nélkül a legkevesebbet.
+    try:
+        from .tactics import static_attackers
+        sta = static_attackers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sta = sta[side]["static"]
+            if rec_sta is None:
+                continue
+            jn = (rec_sta["jersey"]
+                  or _jersey_of_track(match).get(rec_sta["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{rec_sta['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} alig mozgott a támadásban: "
+                     f"{rec_sta['avg_mps']:.2f} m/s a csapatátlag "
+                     f"{sta[side]['team_avg_mps']:.2f} m/s helyett.")
+    except Exception:
+        pass
     # Szélső-befejezés oldalanként: melyik szélsőjük volt veszélyes.
     try:
         from .attack_types import wing_finishing_by_side

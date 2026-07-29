@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Álló támadók**: KI mozog labda nélkül a legkevesebbet. A
+  támadó-mozgás csapat-szinten mondja meg, álló vagy mozgásos a
+  támadásuk — ez játékosonként bontja: szervezett támadásban mért
+  átlagsebesség a csapatátlaghoz viszonyítva (60+ mért másodperc, 30%
+  elmaradás). Aki érdemben a csapatátlag alatt mozog, azt a védője
+  nyugodtan otthagyhatja: befelé segíthet, kettőzhet vagy a beállóra
+  léphet. Egy réteg, sok felület: `static_attackers` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti idő- és út-összegek + edzői kulcs + csempe), 117.
+  meccsterv-szabály (az ő álló emberük × a ti kettőzésetek), 138.
+  edzés-szabály (labda nélküli munka: minden átadás után indulás).
 - **Szélső-befejezés oldalanként**: MELYIK szélsőjük veszélyes. A
   szélső-befejezés a két szélt együtt méri — ez szétbontja: a
   szélső-sávos lövéseket a támadó bal keze felőli és a másik oldalra

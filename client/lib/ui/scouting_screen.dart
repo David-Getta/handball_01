@@ -1297,6 +1297,42 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Álló támadók: ki mozog labda nélkül a legkevesebbet (60+ mért
+  // másodperc, 30%-os elmaradás a csapatátlagtól — a backend-kulccsal
+  // azonos küszöbök).
+  String? _staticAttackers(Map<String, dynamic> r) {
+    final rows = r["static_attackers"];
+    if (rows is! List || rows.isEmpty) return null;
+    double totalT = 0.0;
+    double totalD = 0.0;
+    Map? slow;
+    double slowV = 0.0;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final sec = ((e["seconds"] as num?) ?? 0).toDouble();
+      final dist = ((e["dist_m"] as num?) ?? 0).toDouble();
+      if (sec <= 0) continue;
+      totalT += sec;
+      totalD += dist;
+      if (sec < 60.0) continue;
+      final v = dist / sec;
+      if (slow == null || v < slowV) {
+        slow = e;
+        slowV = v;
+      }
+    }
+    if (totalT <= 0 || slow == null) return null;
+    final avg = totalD / totalT;
+    if (avg <= 0 || 100.0 * (avg - slowV) / avg < 30.0) return null;
+    final who = slow["jersey"] != null
+        ? "${slow["jersey"]}-es"
+        : "${slow["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk alig mozog a támadásban "
+        "(${slowV.toStringAsFixed(2)} m/s a csapatátlag "
+        "${avg.toStringAsFixed(2)} m/s helyett) · az ő védője "
+        "otthagyhatja, befelé segíthet";
+  }
+
   // Szélső-befejezés oldalanként: melyik szélsőjük veszélyes
   // (oldalanként 3+ lövés, 25 százalékpontos eltérés — a
   // backend-kulccsal azonos küszöbök).
@@ -3289,6 +3325,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_pivotSide(r) != null) ["Beálló-oldal", _pivotSide(r)!],
       if (_wingSides(r) != null)
         ["Szélső-befejezés oldalanként", _wingSides(r)!],
+      if (_staticAttackers(r) != null)
+        ["Álló támadók", _staticAttackers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
