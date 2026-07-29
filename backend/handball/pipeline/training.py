@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 141) Védekezés-keménység: ha a falunk sok büntetést hoz, a
+    # szabályos keménység a téma.
+    try:
+        from .defense import defensive_aggression
+        agr141 = defensive_aggression(match, config)
+        for side in ("home", "away"):
+            rec141 = agr141[side]
+            if rec141["verdict"] != "kemény fal":
+                continue
+            add(side, "védekezés", "Szabályos keménység",
+                f"a védekezett támadásaink {rec141['pct']:.0f}%-a "
+                f"végződött hetessel vagy kiállítással "
+                f"({rec141['sevens']} hetes, {rec141['suspensions']} "
+                f"kiállítás {rec141['attacks']} támadásból) — a "
+                "keménység így emberhátrányt és ingyen gólt termel",
+                "szabályos keménység: 1-1 gyakorlat a betörő ellen, "
+                "ahol a védő CSAK a törzzsel és a lábbal állhat "
+                "útba — a kar a labda felé nyúlhat, a testre soha; "
+                "a gyakorlat pontot a szabályos megállításért ad, és "
+                "minden szabálytalanság után a védő ötös sprintje jön")
+    except Exception:
+        pass
+
     # 140) Visszaérés-fegyelem: ha valaki elöl lóg védekezéskor, a
     # visszafutás a téma.
     try:

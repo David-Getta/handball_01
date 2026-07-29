@@ -1490,3 +1490,68 @@ def test_recovery_discipline_needs_frames():
 
     rec = recovery_discipline(_recovery_match(n=150))["away"]
     assert rec["worst"] is None
+
+
+# ---- Védekezés-keménység (mennyi büntetést hoz a fal) -----------------------
+
+def _aggression_match(n_attacks=12, n_sevens=0, fps=25.0):
+    """HAZAI támadás-sorozat a vendég fal ellen; `n_sevens` támadás
+    hetessel zárul (a labda megáll a 7 m-es ponton)."""
+    frames = []
+    t = 0
+
+    def _attack(with_seven):
+        nonlocal t, frames
+        for i in range(int(3.0 * fps)):
+            players = [_pl(1, Team.HOME, 26.0 + 0.02 * i, 10.0),
+                       _pl(2, Team.HOME, 24.0, 14.0),
+                       _pl(21, Team.AWAY, 37.0, 8.0),
+                       _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=26.0 + 0.02 * i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        if with_seven:
+            for _ in range(int(1.5 * fps)):   # a labda áll a 7 m-es ponton
+                frames.append(Frame(
+                    t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+                t += 1
+        for i in range(int(11.0 * fps)):      # vendég-birtoklás (elválasztó)
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0),
+                              _pl(22, Team.AWAY, 15.0, 14.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0, confidence=1.0)))
+            t += 1
+
+    for k in range(n_attacks):
+        _attack(k < n_sevens)
+    return Match(_meta(fps), frames)
+
+
+def test_defensive_aggression_flags_the_hard_wall():
+    """12 védekezett támadás, 3 megítélt hetes → kemény fal."""
+    from handball.pipeline.defense import defensive_aggression
+
+    rec = defensive_aggression(
+        _aggression_match(n_attacks=12, n_sevens=3))["away"]
+    assert rec["attacks"] >= 10 and rec["sevens"] == 3
+    assert rec["pct"] is not None and rec["pct"] >= 12.0
+    assert rec["verdict"] == "kemény fal"
+
+
+def test_defensive_aggression_flags_the_soft_wall():
+    """Büntetés nélküli védekezés → passzív fal."""
+    from handball.pipeline.defense import defensive_aggression
+
+    rec = defensive_aggression(_aggression_match(n_attacks=12))["away"]
+    assert rec["sevens"] == 0 and rec["suspensions"] == 0
+    assert rec["pct"] == 0.0 and rec["verdict"] == "passzív fal"
+
+
+def test_defensive_aggression_needs_enough_attacks():
+    """Kevés védekezett támadásnál nincs ítélet."""
+    from handball.pipeline.defense import defensive_aggression
+
+    rec = defensive_aggression(_aggression_match(n_attacks=4))["away"]
+    assert rec["pct"] is None and rec["verdict"] is None

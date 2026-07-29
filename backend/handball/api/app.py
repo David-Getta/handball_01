@@ -2988,6 +2988,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import defensive_aggression
+            res["defensive_aggression"] = defensive_aggression(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3629,6 +3634,9 @@ def create_app():
                 from ..pipeline.defense import recovery_discipline
                 _layer("recovery_discipline",
                        lambda: recovery_discipline(match))
+                from ..pipeline.defense import defensive_aggression
+                _layer("defensive_aggression",
+                       lambda: defensive_aggression(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

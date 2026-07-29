@@ -2176,3 +2176,62 @@ def recovery_discipline(match, config=None) -> dict:
             worst = cand[0]
         out[side] = {"players": rows, "worst": worst}
     return out
+
+
+# Védekezés-keménység: ennyi védekezett támadástól ítélünk, e feletti
+# büntetés-arány a kemény, e alatti a passzív fal jele.
+AGGR_MIN_ATTACKS = 10
+AGGR_HARD_PCT = 12.0
+AGGR_SOFT_PCT = 4.0
+
+
+def defensive_aggression(match, config=None) -> dict:
+    """Védekezés-keménység: MENNYI BÜNTETÉST hoz a faluk.
+
+    A védekezési nyomás (defensive_pressure) azt méri, milyen közel
+    mennek a labdáshoz, a vonal-magasság (defensive_line_height) azt,
+    hol áll a fal — ez azt, MENNYIBE KERÜL: a védekezett támadásokhoz
+    viszonyítjuk az ellenük megítélt hetesek és a kapott kiállítások
+    számát.
+
+    Edzőileg: a kemény fal ellen a betörés duplán fizet (vagy
+    áthaladtok, vagy hetes és emberelőny jön belőle), és a
+    hetes-lövőtöknek végig hidegvérűnek kell lennie; a passzív fal
+    ellen viszont nem lesz ingyen büntető — ott a figurákkal és a
+    beállós játékkal kell helyzetet csinálni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"attacks", "sevens",
+    "suspensions", "pct", "verdict"} — a pct/verdict None
+    AGGR_MIN_ATTACKS alatt; a verdict "kemény fal" / "passzív fal" /
+    None.
+    """
+    from ..models.tracking import Team
+    from .rules import detect_powerplay, detect_seven_meters
+    from .setplays import segment_attacks
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"attacks": 0, "sevens": 0, "suspensions": 0,
+                        "pct": None, "verdict": None}
+                 for side in ("home", "away")}
+
+    for seq in segment_attacks(match, config):
+        defending = "away" if seq.team == Team.HOME else "home"
+        out[defending]["attacks"] += 1
+    for sm in detect_seven_meters(match, config):
+        defending = "away" if sm["team"] == "home" else "home"
+        out[defending]["sevens"] += 1
+    for w in detect_powerplay(match):
+        out[w["team_down"]]["suspensions"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attacks"] >= AGGR_MIN_ATTACKS:
+            pct = (100.0 * (rec["sevens"] + rec["suspensions"])
+                   / rec["attacks"])
+            rec["pct"] = round(pct, 1)
+            if pct >= AGGR_HARD_PCT:
+                rec["verdict"] = "kemény fal"
+            elif pct <= AGGR_SOFT_PCT:
+                rec["verdict"] = "passzív fal"
+    return out

@@ -1297,6 +1297,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Védekezés-keménység: hoz-e büntetést a faluk (10+ védekezett
+  // támadás; 12% felett kemény, 4% alatt passzív — a backend-kulccsal
+  // azonos küszöbök).
+  String? _defAggression(Map<String, dynamic> r) {
+    final att = ((r["agr_attacks"] as num?) ?? 0).toInt();
+    final sevens = ((r["agr_sevens"] as num?) ?? 0).toInt();
+    final susp = ((r["agr_susp"] as num?) ?? 0).toInt();
+    if (att < 10) return null;
+    final pct = 100.0 * (sevens + susp) / att;
+    if (pct >= 12.0) {
+      return "kemény fal: a védekezett támadásaik "
+          "${pct.toStringAsFixed(0)}%-a hetest vagy kiállítást hoz "
+          "($sevens hetes, $susp kiállítás) · a betörés duplán fizet";
+    }
+    if (pct <= 4.0) {
+      return "passzív fal: a védekezett támadásaiknak csak "
+          "${pct.toStringAsFixed(0)}%-a hoz büntetést ($att támadás) · "
+          "figurákkal és beállós játékkal kell helyzetet csinálni";
+    }
+    return null;
+  }
+
   // Visszaérés-fegyelem: ki lóg elöl védekezéskor (200+ mért kocka,
   // 70% alatti hazaérési arány — a backend-kulccsal azonos küszöbök).
   String? _recoveryDiscipline(Map<String, dynamic> r) {
@@ -3381,6 +3403,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-védés lövés-tempó szerint", _gkSpeedBands(r)!],
       if (_recoveryDiscipline(r) != null)
         ["Visszaérés-fegyelem", _recoveryDiscipline(r)!],
+      if (_defAggression(r) != null)
+        ["Védekezés-keménység", _defAggression(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

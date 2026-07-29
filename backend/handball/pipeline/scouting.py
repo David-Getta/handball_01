@@ -604,6 +604,12 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Védekezés-keménységük: a védekezett támadások, az ellenük ítélt
+    # hetesek és a kapott kiállítások — darabszámok, meccsek közt
+    # pontosan összegződnek (arány = (hetes + kiállítás) / támadás).
+    agr_attacks: int = 0
+    agr_sevens: int = 0
+    agr_susp: int = 0
     # Visszaérés-fegyelmük: [{"player_id", "jersey", "frames",
     # "home_frames"}] — játékosonként a védekezett kockák és azok,
     # amelyekben a saját térfélen volt; darabszámok, meccsek közt
@@ -1740,6 +1746,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Védekezés-keménység: hoz-e büntetést a faluk.
+    if rep.agr_attacks >= 10:
+        _agr_pct = (100.0 * (rep.agr_sevens + rep.agr_susp)
+                    / rep.agr_attacks)
+        if _agr_pct >= 12.0:
+            keys.append(
+                f"Kemény fal: a védekezett támadásaik "
+                f"{_agr_pct:.0f}%-a végződik hetessel vagy "
+                f"kiállítással ({rep.agr_sevens} hetes, "
+                f"{rep.agr_susp} kiállítás) — a betörés duplán fizet "
+                "ellenük: vagy áthaladtok, vagy hetes és emberelőny "
+                "jön belőle, ezért a hetes-lövőtöknek végig "
+                "hidegvérűnek kell maradnia.")
+        elif _agr_pct <= 4.0:
+            keys.append(
+                f"Passzív fal: a védekezett támadásaiknak csak "
+                f"{_agr_pct:.0f}%-a hoz hetest vagy kiállítást "
+                f"({rep.agr_attacks} támadás) — tőlük nem kaptok "
+                "ingyen büntetőt: figurákkal, beállós játékkal és "
+                "oldalváltással kell helyzetet csinálni.")
 
     # Visszaérés-fegyelem: ki lóg elöl védekezéskor.
     _rcd_rows = [p for p in (rep.recovery_players or [])
@@ -4162,6 +4189,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import defensive_aggression as _agr
+        agrrec = _agr(match, config)[team.value]
+        rep.agr_attacks = agrrec["attacks"]
+        rep.agr_sevens = agrrec["sevens"]
+        rep.agr_susp = agrrec["suspensions"]
         from .defense import recovery_discipline as _rcd
         rep.recovery_players = [
             {"player_id": p["player_id"], "jersey": p["jersey"],
@@ -5929,6 +5961,24 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 120) Az ő kemény faluk × a ti hetes-mérlegetek: a betörés
+    # duplán fizet, ha a hetes nálatok kész gól.
+    _own7 = own.seven_takers or []
+    _att120 = sum(p.get("attempts", 0) for p in _own7)
+    _gol120 = sum(p.get("goals", 0) for p in _own7)
+    if opp.agr_attacks >= 10 and _att120 >= 3:
+        _agr120 = (100.0 * (opp.agr_sevens + opp.agr_susp)
+                   / opp.agr_attacks)
+        _conv120 = 100.0 * _gol120 / _att120
+        if _agr120 >= 12.0 and _conv120 >= 70.0:
+            plan.append(
+                f"Kemény fal (a védekezett támadásaik {_agr120:.0f}%-a "
+                f"hetest vagy kiállítást hoz), a ti hetesetek pedig "
+                f"kész gól ({_gol120}/{_att120}, {_conv120:.0f}%) — a "
+                "betörést vállalni kell: minden áthaladás helyzet, "
+                "minden lerántás hetes és emberelőny, és ott ti "
+                "nyertek a mérlegen.")
+
     # 119) Az ő elöl lógó emberük × a ti gyors kapus-indításotok: a
     # kontrát pont az ő oldalán kell vezetni.
     _rcd119 = [p for p in (opp.recovery_players or [])
@@ -7494,6 +7544,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        agr_attacks=sum(r.agr_attacks for r in reports),
+        agr_sevens=sum(r.agr_sevens for r in reports),
+        agr_susp=sum(r.agr_susp for r in reports),
         recovery_players=_merge_recovery_players(reports),
         gsp_hard_faced=sum(r.gsp_hard_faced for r in reports),
         gsp_hard_saves=sum(r.gsp_hard_saves for r in reports),

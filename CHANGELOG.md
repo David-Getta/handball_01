@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Védekezés-keménység**: MENNYI BÜNTETÉST hoz a faluk. A védekezési
+  nyomás azt méri, milyen közel mennek a labdáshoz, a vonal-magasság
+  azt, hol áll a fal — ez azt, mennyibe kerül: a védekezett
+  támadásokhoz viszonyítjuk az ellenük ítélt heteseket és a kapott
+  kiállításokat (10+ védekezett támadás; 12% felett kemény, 4% alatt
+  passzív fal). Kemény fal ellen a betörés duplán fizet (áthaladás
+  vagy hetes + emberelőny), passzív fal ellen nem lesz ingyen
+  büntető — ott figurákkal és beállós játékkal kell helyzetet
+  csinálni. Egy réteg, sok felület: `defensive_aggression` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (támadás-, hetes- és kiállítás-darabszámok + két edzői kulcs +
+  csempe), 120. meccsterv-szabály (az ő kemény faluk × a ti
+  hetes-mérlegetek), 141. edzés-szabály (szabályos keménység: törzzsel
+  és lábbal útba állni, kézzel csak a labdára).
 - **Visszaérés-fegyelem**: KI nem fut vissza védekezni. Az
   átmenet-védekezés csapat-szinten mondja meg, mennyi gyors gólt
   kapnak labdavesztés után — ez játékosonként bontja: a védekezett

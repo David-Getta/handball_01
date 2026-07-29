@@ -833,6 +833,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Védekezés-keménység: mennyi büntetést hozott a faluk.
+    try:
+        from .defense import defensive_aggression
+        agr = defensive_aggression(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_agr = agr[side]
+            if rec_agr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} fala {rec_agr['verdict']} volt: a "
+                     f"védekezett támadásaik {rec_agr['pct']:.0f}%-a "
+                     f"végződött hetessel vagy kiállítással "
+                     f"({rec_agr['sevens']} hetes, "
+                     f"{rec_agr['suspensions']} kiállítás "
+                     f"{rec_agr['attacks']} támadásból).")
+    except Exception:
+        pass
     # Visszaérés-fegyelem: ki nem futott vissza védekezni.
     try:
         from .defense import recovery_discipline
