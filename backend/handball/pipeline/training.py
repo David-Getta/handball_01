@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 145) Lövő-távolság: ha valaki csak távolról lő, a befejezés
+    # közelebb hozása a téma.
+    try:
+        from .attack_types import shooter_ranges
+        shr145 = shooter_ranges(match, config)
+        for side in ("home", "away"):
+            far145 = shr145[side]["far"]
+            if far145 is None:
+                continue
+            who145 = (f"a {far145['jersey']}-es mezszámú játékos"
+                      if far145.get("jersey") is not None
+                      else f"a {far145['player_id']} azonosítójú játékos")
+            add(side, "támadás", "Befejezés közelebbről",
+                f"{who145} átlag {far145['avg_dist_m']:.1f} m-ről lőtt "
+                f"({far145['shots']} lövés) — ilyen távolról a kapus "
+                "és a blokk együtt dolgozik, ezért a lövéseink olcsón "
+                "elvehetők",
+                "befejezés közelebbről: 1-1 és kétszemélyes figura a "
+                "9 m-en, ahol a lövés CSAK a védő mellett elhaladva, "
+                "befelé lépésből jöhet — a gyakorlat a 9 m-en kívüli "
+                "lövést nem fogadja el; utána ugyanez blokkolóval, "
+                "hogy a lövés előtti egy lépés kényszer legyen")
+    except Exception:
+        pass
+
     # 144) Emberhátrány-forma: ha öt emberrel egy formát húzunk, a
     # forma elleni tipikus megoldásokat kell begyakorolni.
     try:

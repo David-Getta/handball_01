@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Lövő-távolság: ki lőtt távolról, ki fejezett be közelről.
+    try:
+        from .attack_types import shooter_ranges
+        shr = shooter_ranges(match)
+        for side, name in (("home", home), ("away", away)):
+            far = shr[side]["far"]
+            if far is None:
+                continue
+            jn = (far["jersey"]
+                  or _jersey_of_track(match).get(far["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{far['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} távolról lőtt: átlag "
+                     f"{far['avg_dist_m']:.1f} m-ről "
+                     f"({far['shots']} lövés).")
+    except Exception:
+        pass
     # Emberhátrány-forma: milyen falat húztak öt emberrel.
     try:
         from .rules import shorthanded_shape

@@ -1297,6 +1297,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Lövő-távolság profil: kire kell kilépni (3+ lövés; 9,5 m felett
+  // távoli lövő — a backend-kulccsal azonos küszöbök).
+  String? _shooterRanges(Map<String, dynamic> r) {
+    final rows = r["shooter_ranges"];
+    if (rows is! List || rows.isEmpty) return null;
+    Map? far;
+    double farAvg = 0.0;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final shots = ((e["shots"] as num?) ?? 0).toInt();
+      final sum = ((e["sum_dist_m"] as num?) ?? 0).toDouble();
+      if (shots < 3) continue;
+      final avg = sum / shots;
+      if (far == null || avg > farAvg) {
+        far = e;
+        farAvg = avg;
+      }
+    }
+    if (far == null || farAvg < 9.5) return null;
+    final who = far["jersey"] != null
+        ? "${far["jersey"]}-es"
+        : "${far["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk távolról lő (átlag "
+        "${farAvg.toStringAsFixed(1)} m, ${far["shots"]} lövés) · rá "
+        "ki kell lépni a lövő-vonalba, mögötte segítővel";
+  }
+
   // Emberhátrány-forma: milyen falat húznak öt emberrel (100+ mért
   // kocka, 60% feletti fő forma — a backend-kulccsal azonos küszöbök).
   String? _shorthandedShape(Map<String, dynamic> r) {
@@ -3483,6 +3510,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberelőny-tempó", _powerplayPace(r)!],
       if (_shorthandedShape(r) != null)
         ["Emberhátrány-forma", _shorthandedShape(r)!],
+      if (_shooterRanges(r) != null)
+        ["Lövő-távolság", _shooterRanges(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

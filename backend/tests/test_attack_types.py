@@ -1688,3 +1688,53 @@ def test_wing_finishing_by_side_similar_sides_have_no_verdict():
     rec = wing_finishing_by_side(_wing_side_match(
         [(17.0, True)] * 3 + [(3.0, True)] * 3))["home"]
     assert rec["strong"] is None and rec["weak"] is None
+
+
+# ---- Lövő-távolság profil (ki lő távolról, ki közelről) ----------------------
+
+def _shooter_range_match(shots):
+    """HAZAI lövés-sorozat: a `shots` elemei (track_id, lövőhely x)
+    párok — a lövő a saját helyéről lő a +x kapura."""
+    frames = []
+    t = 0
+    for (tid, sx) in shots:
+        for i in range(3):
+            frames.append(Frame(t=t + i,
+                                players=[_pl(tid, Team.HOME, sx, 10.0)],
+                                ball=Ball(x=sx, y=10.0, confidence=1.0)))
+        t += 3
+        steps = max(3, int(round(40.5 - sx)))
+        for i in range(1, steps + 1):
+            frames.append(Frame(
+                t=t, players=[_pl(tid, Team.HOME, sx, 10.0)],
+                ball=Ball(x=sx + (40.5 - sx) * i / steps, y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for i in range(20):    # szünet a lövés-debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t += 20
+    return Match(_meta(), frames)
+
+
+def test_shooter_ranges_separates_far_and_close_finishers():
+    """A 7-es 12 m-ről, a 9-es 5 m-ről fejez be → távoli lövő és
+    közeli befejező."""
+    from handball.pipeline.attack_types import shooter_ranges
+
+    rec = shooter_ranges(_shooter_range_match(
+        [(7, 28.0)] * 3 + [(9, 35.0)] * 3))["home"]
+    assert rec["far"] is not None and rec["far"]["player_id"] == 7
+    assert rec["far"]["avg_dist_m"] >= 9.5
+    assert rec["close"] is not None and rec["close"]["player_id"] == 9
+    assert rec["close"]["avg_dist_m"] <= 7.0
+
+
+def test_shooter_ranges_needs_enough_shots():
+    """Kevés (3-nál kevesebb) lövésnél nincs kiemelt lövő."""
+    from handball.pipeline.attack_types import shooter_ranges
+
+    rec = shooter_ranges(_shooter_range_match(
+        [(7, 28.0), (9, 35.0)]))["home"]
+    assert rec["far"] is None and rec["close"] is None

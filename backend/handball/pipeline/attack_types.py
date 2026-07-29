@@ -2336,3 +2336,69 @@ def wing_finishing_by_side(match: Match,
                 rec["weak"] = "jobb" if gap > 0 else "bal"
         out[side] = rec
     return out
+
+
+# Lövő-távolság profil: ennyi mért lövés kell egy ember megítéléséhez.
+SHOOTER_RANGE_MIN_SHOTS = 3
+
+
+def shooter_ranges(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Lövő-távolság profil: KI LŐ TÁVOLRÓL és ki közelről.
+
+    A lövés-távolság profil (shot_ranges) csapat-szinten mondja meg,
+    honnan lőnek — ez játékosonként bontja: lövőnként átlagoljuk a
+    kapu-középtől mért lövés-távolságot (a match_xg lövés-listájából).
+
+    Edzőileg ez osztja szét a védőfeladatokat: a távoli lövőre ki kell
+    lépni (blokk a lövő-vonalba, mögötte segítővel), a közeli
+    befejezőt viszont nem szabad kihúzva várni — ott az elé állás és a
+    testes fogadás a válasz, a fal nem bomolhat meg érte.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "shots", "avg_dist_m"}], "far", "close"} — a lista átlagtávolság
+    szerint csökkenő; a "far" a legtávolabbról lövő (ha az átlaga
+    SHOT_RANGE_MID_M felett van), a "close" a legközelebbről befejező
+    (ha az átlaga SHOT_RANGE_CLOSE_M alatt van), mindkettőhöz legalább
+    SHOOTER_RANGE_MIN_SHOTS lövés kell.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    goal_cy = COURT_WIDTH_M / 2.0
+    xg = match_xg(match, config)
+    jersey: dict = {}
+    for fr in match.frames:
+        for p in fr.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        goal_x = config.attacks_toward_x(
+            Team.HOME if side == "home" else Team.AWAY)
+        acc: dict = {}
+        for sh in xg["shots"]:
+            if sh["team"] != side or sh["player_id"] is None:
+                continue
+            dist = math.hypot(sh["x"] - goal_x, sh["y"] - goal_cy)
+            rec = acc.setdefault(sh["player_id"], [0, 0.0])
+            rec[0] += 1
+            rec[1] += dist
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "shots": n, "avg_dist_m": round(d / n, 1)}
+                for pid, (n, d) in acc.items()]
+        rows.sort(key=lambda r: -r["avg_dist_m"])
+        cand = [r for r in rows if r["shots"] >= SHOOTER_RANGE_MIN_SHOTS]
+        far = close = None
+        if cand:
+            if cand[0]["avg_dist_m"] >= SHOT_RANGE_MID_M:
+                far = cand[0]
+            if cand[-1]["avg_dist_m"] <= SHOT_RANGE_CLOSE_M:
+                close = cand[-1]
+        out[side] = {"players": rows, "far": far, "close": close}
+    return out

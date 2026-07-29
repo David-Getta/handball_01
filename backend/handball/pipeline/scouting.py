@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Lövőik távolság-profilja: [{"player_id", "jersey", "shots",
+    # "sum_dist_m"}] — lövőnként a lövések száma és a távolság-összeg;
+    # összegek, meccsek közt pontosan összegződnek (átlag = összeg /
+    # darab).
+    shooter_ranges: list = field(default_factory=list)
     # Emberhátrány-formájuk: {forma: kocka} — milyen falat húznak öt
     # emberrel; darabszámok, meccsek közt pontosan összegződnek.
     sh_shape: dict = field(default_factory=dict)
@@ -1762,6 +1767,34 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Lövő-távolság: kire kell kilépni, kit kell elöl fogadni.
+    _shr_rows = [p for p in (rep.shooter_ranges or []) if p["shots"] >= 3]
+    if _shr_rows:
+        _shr_far = max(_shr_rows,
+                       key=lambda p: p["sum_dist_m"] / p["shots"])
+        _shr_close = min(_shr_rows,
+                         key=lambda p: p["sum_dist_m"] / p["shots"])
+        _far_avg = _shr_far["sum_dist_m"] / _shr_far["shots"]
+        _close_avg = _shr_close["sum_dist_m"] / _shr_close["shots"]
+        if _far_avg >= 9.5:
+            _far_who = (f"{_shr_far['jersey']}-es mezszámú"
+                        if _shr_far.get("jersey") is not None
+                        else f"{_shr_far['player_id']} azonosítójú")
+            keys.append(
+                f"A(z) {_far_who} játékosuk távolról lő (átlag "
+                f"{_far_avg:.1f} m, {_shr_far['shots']} lövés) — rá ki "
+                "kell lépni a lövő-vonalba, mögötte segítővel, mert "
+                "onnan büntetlenül eltalálja a kaput.")
+        if _close_avg <= 7.0 and _shr_close is not _shr_far:
+            _close_who = (f"{_shr_close['jersey']}-es mezszámú"
+                          if _shr_close.get("jersey") is not None
+                          else f"{_shr_close['player_id']} azonosítójú")
+            keys.append(
+                f"A(z) {_close_who} játékosuk közelről fejez be "
+                f"(átlag {_close_avg:.1f} m, {_shr_close['shots']} "
+                "lövés) — érte a fal nem bomolhat meg: elé kell "
+                "állni és testtel fogadni, nem kihúzva várni.")
 
     # Emberhátrány-forma: milyen falat húznak öt emberrel.
     _shs_rows = list((rep.sh_shape or {}).items())
@@ -4272,6 +4305,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import shooter_ranges as _shr
+        rep.shooter_ranges = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "shots": p["shots"],
+             "sum_dist_m": round(p["avg_dist_m"] * p["shots"], 1)}
+            for p in _shr(match, config)[team.value]["players"]]
         from .rules import shorthanded_shape as _shs
         rep.sh_shape = dict(_shs(match, config)[team.value]["labels"])
         from .rules import powerplay_pace as _ppp
@@ -5119,6 +5158,27 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_shooter_ranges(reports) -> list:
+    """Lövő-távolság profil: lövőnként a lövések és a távolság-összeg
+    összegzése (az átlagtávolság szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.shooter_ranges or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "shots": 0,
+                                    "sum_dist_m": 0.0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["shots"] += int(row.get("shots", 0))
+            rec["sum_dist_m"] += float(row.get("sum_dist_m", 0.0))
+    rows = [{"player_id": pid, "jersey": rec["jersey"],
+             "shots": rec["shots"],
+             "sum_dist_m": round(rec["sum_dist_m"], 1)}
+            for pid, rec in tally.items() if rec["shots"] > 0]
+    rows.sort(key=lambda r: -(r["sum_dist_m"] / r["shots"]))
+    return rows
 
 
 def _merge_sh_shape(reports) -> dict:
@@ -6068,6 +6128,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 124) Az ő távoli lövőjük × a ti blokkjaitok: rá a kilépés
+    # duplán fizet.
+    _shr124 = [p for p in (opp.shooter_ranges or []) if p["shots"] >= 3]
+    if _shr124 and own.blk_attempts >= 4:
+        _far124 = max(_shr124, key=lambda p: p["sum_dist_m"] / p["shots"])
+        _avg124 = _far124["sum_dist_m"] / _far124["shots"]
+        _blk124 = 100.0 * own.blk_for / max(1, own.blk_attempts)
+        if _avg124 >= 9.5 and _blk124 >= 25.0:
+            _who124 = (f"{_far124['jersey']}-es mezszámú"
+                       if _far124.get("jersey") is not None
+                       else f"{_far124['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who124} játékosuk távolról lő (átlag "
+                f"{_avg124:.1f} m, {_far124['shots']} lövés), ti pedig "
+                f"blokkoltok is (a lövéseik {_blk124:.0f}%-ába "
+                "belenyúltatok) — rá kell kilépni: a második vonal "
+                "időben a lövő-vonalba, mögötte segítővel, mert az ő "
+                "lövése a legolcsóbban elvehető helyzetük.")
 
     # 123) Az ő emberhátrány-faluk × a ti emberelőny-hatékonyságotok: a
     # forma megmondja, honnan kell lőni a két perc alatt.
@@ -7706,6 +7785,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        shooter_ranges=_merge_shooter_ranges(reports),
         sh_shape=_merge_sh_shape(reports),
         ppp_pp_attacks=sum(r.ppp_pp_attacks for r in reports),
         ppp_pp_sum_s=round(sum(r.ppp_pp_sum_s for r in reports), 1),

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Lövő-távolság profil**: KI LŐ TÁVOLRÓL és ki közelről. A
+  lövés-távolság profil csapat-szinten mondja meg, honnan lőnek — ez
+  játékosonként bontja: lövőnként átlagolt kapu-távolság (3+ lövéstől;
+  9,5 m felett távoli lövő, 7 m alatt közeli befejező). A távoli
+  lövőre ki kell lépni (blokk a lövő-vonalba, mögötte segítővel), a
+  közeli befejezőért viszont a fal nem bomolhat meg: elé állás és
+  testes fogadás. Egy réteg, sok felület: `shooter_ranges` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (lövőnkénti lövés- és távolság-összegek + két edzői kulcs + csempe),
+  124. meccsterv-szabály (az ő távoli lövőjük × a ti blokkjaitok),
+  145. edzés-szabály (befejezés közelebbről: lövés csak befelé
+  lépésből, a védő mellett elhaladva).
 - **Emberhátrány-forma**: MIT JÁTSZANAK öt emberrel. Az
   emberhátrány-támadás azt mondja meg, mire mennek támadásban a két
   perc alatt, az emberelőny-védekezés azt, mennyit kapnak — ez azt,
