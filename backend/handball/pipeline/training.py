@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 143) Emberelőny-tempó: ha emberelőnyben kapkodunk, a
+    # helyzet-kivárás a téma.
+    try:
+        from .rules import powerplay_pace
+        ppp143 = powerplay_pace(match, config)
+        for side in ("home", "away"):
+            rec143 = ppp143[side]
+            if rec143["verdict"] != "kapkodnak emberelőnyben":
+                continue
+            add(side, "támadás", "Emberelőny kivárással",
+                f"emberelőnyben {rec143['pp_avg_s']:.0f} mp-es "
+                f"támadásokat játszottunk a {rec143['eq_avg_s']:.0f} "
+                f"mp-es átlagunk helyett "
+                f"({rec143['pp_attacks']} emberelőnyös támadás) — a "
+                "két percet elkapkodjuk, és a korai lövésből lesz az "
+                "ellenfél kontrája",
+                "emberelőny kivárással: 6-5 elleni támadójáték azzal "
+                "a szabállyal, hogy a befejezés előtt legalább hat "
+                "passznak és egy oldalváltásnak kell lennie — lőni "
+                "csak 9 m-en belülről vagy üres kapura szabad; a "
+                "gyakorlat eladott labdáért mínuszt ad, hogy a "
+                "türelem legyen a nyerő")
+    except Exception:
+        pass
+
     # 142) Effektív játékidő: szakadozott meccsnél a ritmus-tartás a
     # téma (a leállások utáni újraindulás).
     try:

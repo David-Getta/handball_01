@@ -1297,6 +1297,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Emberelőny-tempó: elnyújtják vagy kapkodják a két percet (3+
+  // emberelőnyös és 5+ egyenlő létszámú támadás, 5 mp-es eltérés — a
+  // backend-kulccsal azonos küszöbök).
+  String? _powerplayPace(Map<String, dynamic> r) {
+    final ppN = ((r["ppp_pp_attacks"] as num?) ?? 0).toInt();
+    final ppS = ((r["ppp_pp_sum_s"] as num?) ?? 0).toDouble();
+    final eqN = ((r["ppp_eq_attacks"] as num?) ?? 0).toInt();
+    final eqS = ((r["ppp_eq_sum_s"] as num?) ?? 0).toDouble();
+    if (ppN < 3 || eqN < 5 || ppS <= 0 || eqS <= 0) return null;
+    final pp = ppS / ppN;
+    final eq = eqS / eqN;
+    final gap = pp - eq;
+    if (gap >= 5.0) {
+      return "elnyújtják az emberelőnyt (${pp.toStringAsFixed(0)} mp-es "
+          "támadások a ${eq.toStringAsFixed(0)} mp-es átlaguk helyett) "
+          "· türelmes, zárt fal kell emberhátrányban";
+    }
+    if (gap <= -5.0) {
+      return "kapkodnak emberelőnyben (${pp.toStringAsFixed(0)} mp-es "
+          "támadások a ${eq.toStringAsFixed(0)} mp-es átlaguk helyett) "
+          "· agresszív, kilépő védekezés fizet ki";
+    }
+    return null;
+  }
+
   // Meccs-ritmus: mennyi a tényleges játék (10+ perc mért játékidő;
   // 80% alatt szakadozott, 92% felett folyamatos — a backend-kulccsal
   // azonos küszöbök).
@@ -3430,6 +3455,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_defAggression(r) != null)
         ["Védekezés-keménység", _defAggression(r)!],
       if (_playingTime(r) != null) ["Meccs-ritmus", _playingTime(r)!],
+      if (_powerplayPace(r) != null)
+        ["Emberelőny-tempó", _powerplayPace(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -827,3 +827,73 @@ def seven_meter_conceders(match: Match,
                else None)
         out[side] = {"players": rows, "top": top}
     return out
+
+
+# Emberelőny-tempó: ennyi mért támadás kell emberelőnyben és egyenlő
+# létszámnál, és ekkora (másodperces) eltérés számít érdemi jelnek.
+PP_PACE_MIN_PP = 3
+PP_PACE_MIN_EQ = 5
+PP_PACE_GAP_S = 5.0
+
+
+def powerplay_pace(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Emberelőny-tempó: ELNYÚJTJÁK vagy KAPKODJÁK az emberelőnyt.
+
+    Az emberelőny-hatékonyság (powerplay_efficiency) azt mondja meg,
+    mennyi gólt hoznak a kiállításokból — ez azt, HOGYAN játsszák: a
+    támadás-szakaszok hosszát vetjük össze emberelőnyben és egyenlő
+    létszámnál.
+
+    Edzőileg: aki emberelőnyben érdemben elnyújtja a támadást, az a
+    biztos helyzetre vár — ellene türelmes, zárt fal kell, mert a
+    kapkodó kilépés pont neki dolgozik; aki emberelőnyben is gyorsan
+    lő, annál a két perc alatt nagy a hibaszázalék: ott az agresszív,
+    kilépő védekezés kifizet.
+
+    Visszatérés csapatonként: {"pp_attacks", "pp_avg_s", "eq_attacks",
+    "eq_avg_s", "gap_s", "verdict"} — az átlagok és a gap None, ha
+    kevés a minta (PP_PACE_MIN_PP / PP_PACE_MIN_EQ); a verdict
+    "elnyújtják emberelőnyben" / "kapkodnak emberelőnyben" / None.
+    """
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    windows = detect_powerplay(match)
+
+    def _down_at(t: int) -> Optional[str]:
+        for w in windows:
+            if w["start_frame"] <= t <= w["end_frame"]:
+                return w["team_down"]
+        return None
+
+    acc = {side: {"pp": [0, 0.0], "eq": [0, 0.0]}
+           for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        down = _down_at(seq.start_t)
+        if down == side:
+            continue  # emberhátrányban támadnak: külön kép (shorthanded)
+        key = "pp" if down is not None else "eq"
+        dur = (seq.end_t - seq.start_t + 1) / fps
+        acc[side][key][0] += 1
+        acc[side][key][1] += dur
+
+    out: dict = {}
+    for side in ("home", "away"):
+        pp_n, pp_s = acc[side]["pp"]
+        eq_n, eq_s = acc[side]["eq"]
+        rec = {"pp_attacks": pp_n, "eq_attacks": eq_n,
+               "pp_avg_s": None, "eq_avg_s": None, "gap_s": None,
+               "verdict": None}
+        if pp_n >= PP_PACE_MIN_PP and eq_n >= PP_PACE_MIN_EQ:
+            rec["pp_avg_s"] = round(pp_s / pp_n, 1)
+            rec["eq_avg_s"] = round(eq_s / eq_n, 1)
+            rec["gap_s"] = round(rec["pp_avg_s"] - rec["eq_avg_s"], 1)
+            if rec["gap_s"] >= PP_PACE_GAP_S:
+                rec["verdict"] = "elnyújtják emberelőnyben"
+            elif rec["gap_s"] <= -PP_PACE_GAP_S:
+                rec["verdict"] = "kapkodnak emberelőnyben"
+        out[side] = rec
+    return out

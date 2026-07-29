@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Emberelőny-tempójuk: emberelőnyben és egyenlő létszámnál a mért
+    # támadások száma és össz-hosszuk (mp) — összegek, meccsek közt
+    # pontosan összegződnek (átlag = összeg / darab).
+    ppp_pp_attacks: int = 0
+    ppp_pp_sum_s: float = 0.0
+    ppp_eq_attacks: int = 0
+    ppp_eq_sum_s: float = 0.0
     # Meccs-ritmusuk: a mért játékidő, a megszakított idő (mp) és a
     # náluk megállt játék megszakításai — összegek, meccsek közt
     # pontosan összegződnek (effektív arány = 1 − stopped / total).
@@ -1752,6 +1759,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Emberelőny-tempó: hogyan játsszák a két percet.
+    if rep.ppp_pp_attacks >= 3 and rep.ppp_eq_attacks >= 5 \
+            and rep.ppp_pp_sum_s > 0 and rep.ppp_eq_sum_s > 0:
+        _ppp_pp = rep.ppp_pp_sum_s / rep.ppp_pp_attacks
+        _ppp_eq = rep.ppp_eq_sum_s / rep.ppp_eq_attacks
+        _ppp_gap = _ppp_pp - _ppp_eq
+        if _ppp_gap >= 5.0:
+            keys.append(
+                f"Elnyújtják az emberelőnyt ({_ppp_pp:.0f} mp-es "
+                f"támadások emberelőnyben, {_ppp_eq:.0f} mp egyenlő "
+                "létszámnál) — a biztos helyzetre várnak: emberhátrányban "
+                "türelmes, zárt falat kell játszani, mert a kapkodó "
+                "kilépés pont nekik dolgozik, és a passzív-jelig ki "
+                "lehet húzni.")
+        elif _ppp_gap <= -5.0:
+            keys.append(
+                f"Kapkodnak emberelőnyben ({_ppp_pp:.0f} mp-es "
+                f"támadások a {_ppp_eq:.0f} mp-es átlaguk helyett) — a "
+                "két perc alatt nagy a hibaszázalékuk: agresszív, "
+                "kilépő védekezéssel kell fogadni őket, mert a korai "
+                "lövésből lesz a ti kontrátok.")
 
     # Meccs-ritmus: szakadozott vagy folyamatos meccsre kell készülni.
     if rep.ptp_total_s >= 600.0:
@@ -4215,6 +4244,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .rules import powerplay_pace as _ppp
+        ppprec = _ppp(match, config)[team.value]
+        rep.ppp_pp_attacks = ppprec["pp_attacks"]
+        rep.ppp_pp_sum_s = round(
+            (ppprec["pp_avg_s"] or 0.0) * ppprec["pp_attacks"], 1)
+        rep.ppp_eq_attacks = ppprec["eq_attacks"]
+        rep.ppp_eq_sum_s = round(
+            (ppprec["eq_avg_s"] or 0.0) * ppprec["eq_attacks"], 1)
         from .stoppages import playing_time_profile as _ptp
         ptprec = _ptp(match, config)[team.value]
         rep.ptp_total_s = ptprec["total_s"]
@@ -5992,6 +6029,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 122) Az ő elnyújtott emberelőnyük × a ti emberhátrány-védekezésetek:
+    # a türelmes fal pont az ő játékukat fárasztja.
+    if opp.ppp_pp_attacks >= 3 and opp.ppp_eq_attacks >= 5 \
+            and opp.ppp_pp_sum_s > 0 and opp.ppp_eq_sum_s > 0 \
+            and own.ppd_seconds >= 90.0:
+        _pp122 = opp.ppp_pp_sum_s / opp.ppp_pp_attacks
+        _eq122 = opp.ppp_eq_sum_s / opp.ppp_eq_attacks
+        _conc122 = 60.0 * own.ppd_conceded / own.ppd_seconds
+        if _pp122 - _eq122 >= 5.0 and _conc122 <= 1.0:
+            plan.append(
+                f"Elnyújtják az emberelőnyt ({_pp122:.0f} mp-es "
+                f"támadások a {_eq122:.0f} mp-es átlaguk helyett), a "
+                f"ti emberhátrány-védekezésetek pedig bírja (percenként "
+                f"{_conc122:.1f} kapott gól) — türelmes, zárt fal kell: "
+                "ne lépjetek ki korán, húzzátok ki a passzív-jelig, "
+                "mert a két perc végén nekik kell kockáztatniuk.")
+
     # 121) Az ő folyamatos meccsképük × a ti szűk rotációtok: a
     # kulcsembereitek pihentetését előre be kell tervezni.
     if opp.ptp_total_s >= 600.0 and own.rotation_matches >= 1:
@@ -7591,6 +7645,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        ppp_pp_attacks=sum(r.ppp_pp_attacks for r in reports),
+        ppp_pp_sum_s=round(sum(r.ppp_pp_sum_s for r in reports), 1),
+        ppp_eq_attacks=sum(r.ppp_eq_attacks for r in reports),
+        ppp_eq_sum_s=round(sum(r.ppp_eq_sum_s for r in reports), 1),
         ptp_total_s=round(sum(r.ptp_total_s for r in reports), 1),
         ptp_stopped_s=round(sum(r.ptp_stopped_s for r in reports), 1),
         ptp_own_stoppages=sum(r.ptp_own_stoppages for r in reports),

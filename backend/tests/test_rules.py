@@ -627,3 +627,68 @@ def test_seven_meter_conceder_needs_two_cases():
         Match(_meta(), _seven_conceder_frames(0, 21)))["away"]
     assert rec["players"] and rec["players"][0]["conceded"] == 1
     assert rec["top"] is None
+
+
+# ---- Emberelőny-tempó -------------------------------------------------------
+
+def _pace_attack(t0, seconds, away_n=6, fps=25.0, attack_s=None):
+    """Hazai támadás a vendég térfelén + rövid vendég-birtoklás
+    elválasztónak; a vendég létszáma `away_n` (5 = emberhátrány)."""
+    frames = []
+    t = t0
+    attack_s = seconds if attack_s is None else attack_s
+    for i in range(int(attack_s * fps)):
+        players = [_pl(100 + k, Team.HOME, 26.0 + 0.01 * i + k * 0.5,
+                       4.0 + k) for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 34.0 + k * 0.5, 4.0 + k)
+                    for k in range(away_n)]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=26.0 + 0.01 * i, y=4.0,
+                                      confidence=1.0)))
+        t += 1
+    for i in range(int(2.0 * fps)):     # vendég-birtoklás: elválasztó
+        players = [_pl(100 + k, Team.HOME, 6.0 + k * 0.5, 4.0 + k)
+                   for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 14.0 - 0.01 * i + k * 0.5,
+                        4.0 + k) for k in range(away_n)]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=14.0 - 0.01 * i, y=4.0,
+                                      confidence=1.0)))
+        t += 1
+    return frames
+
+
+def _pp_pace_match(eq_n=6, eq_s=10.0, pp_n=4, pp_s=20.0, fps=25.0):
+    """`eq_n` egyenlő létszámú hazai támadás `eq_s` hosszal, majd egy
+    kiállítás-ablak `pp_n` hazai támadással, `pp_s` hosszal."""
+    frames = []
+    t = 0
+    for _ in range(eq_n):
+        frames += _pace_attack(t, eq_s)
+        t = frames[-1].t + 1
+    for _ in range(pp_n):
+        frames += _pace_attack(t, pp_s, away_n=5)
+        t = frames[-1].t + 1
+    # A létszám visszaáll (a kiállítás-ablak lezárásához).
+    frames += _pace_attack(t, 10.0)
+    return Match(_meta(fps), frames)
+
+
+def test_powerplay_pace_flags_the_slow_powerplay():
+    """Emberelőnyben 20 mp-es, egyenlő létszámnál 10 mp-es támadások →
+    elnyújtják az emberelőnyt."""
+    from handball.pipeline.rules import powerplay_pace
+
+    rec = powerplay_pace(_pp_pace_match())["home"]
+    assert rec["pp_attacks"] >= 3 and rec["eq_attacks"] >= 5
+    assert rec["gap_s"] is not None and rec["gap_s"] >= 5.0
+    assert rec["verdict"] == "elnyújtják emberelőnyben"
+
+
+def test_powerplay_pace_without_powerplay_has_no_verdict():
+    """Kiállítás nélkül nincs emberelőnyös minta, így nincs ítélet."""
+    from handball.pipeline.rules import powerplay_pace
+
+    rec = powerplay_pace(_pp_pace_match(pp_n=0))["home"]
+    assert rec["pp_attacks"] == 0
+    assert rec["gap_s"] is None and rec["verdict"] is None

@@ -833,6 +833,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Emberelőny-tempó: elnyújtották vagy kapkodták az emberelőnyt.
+    try:
+        from .rules import powerplay_pace
+        ppp = powerplay_pace(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppp = ppp[side]
+            if rec_ppp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_ppp['verdict']}: "
+                     f"{rec_ppp['pp_avg_s']:.0f} mp-es támadások "
+                     f"emberelőnyben, {rec_ppp['eq_avg_s']:.0f} mp "
+                     f"egyenlő létszámnál ({rec_ppp['pp_attacks']} "
+                     "emberelőnyös támadás).")
+    except Exception:
+        pass
     # Effektív játékidő: milyen ritmusú volt a meccs.
     try:
         from .stoppages import playing_time_profile

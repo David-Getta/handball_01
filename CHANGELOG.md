@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Emberelőny-tempó**: ELNYÚJTJÁK vagy KAPKODJÁK az emberelőnyt. Az
+  emberelőny-hatékonyság azt mondja meg, mennyi gólt hoznak a
+  kiállításokból — ez azt, hogyan játsszák: a támadás-szakaszok
+  hosszát vetjük össze emberelőnyben és egyenlő létszámnál (3+
+  emberelőnyös és 5+ egyenlő létszámú támadás, 5 mp-es eltérésnél).
+  Aki elnyújtja, a biztos helyzetre vár — ellene türelmes, zárt fal
+  kell, mert a kapkodó kilépés neki dolgozik; aki emberelőnyben is
+  gyorsan lő, ott az agresszív, kilépő védekezés fizet ki. Egy réteg,
+  sok felület: `powerplay_pace` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (támadás-darabszámok és
+  hossz-összegek + két edzői kulcs + csempe), 122. meccsterv-szabály
+  (az ő elnyújtott emberelőnyük × a ti emberhátrány-védekezésetek),
+  143. edzés-szabály (emberelőny kivárással: hat passz és egy
+  oldalváltás a befejezés előtt).
 - **Effektív játékidő**: MENNYI a tényleges játék a megszakításokhoz
   képest. A megszakítás-felismerés az egyes leállásokat adja, az
   időkérés-időzítés azt, mikor nyúlnak a korongért — ez a meccs
