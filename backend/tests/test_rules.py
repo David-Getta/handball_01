@@ -748,3 +748,59 @@ def test_shorthanded_shape_without_powerplay():
     frames = _roster_frames(0, 90, 6, 6)
     rec = shorthanded_shape(Match(_meta(), frames))["home"]
     assert rec["frames"] == 0 and rec["main"] is None
+
+
+# ---- Kapus-hetesvédés irány szerint ------------------------------------------
+
+def _seven_dir_match(cases, fps=25.0):
+    """Hetes-sorozat: a `cases` elemei (y-magasság, védés?) párok — az
+    y adja az irányt (8,8 = bal, 10 = közép, 11,2 = jobb a dobó
+    szemszögéből a +x kapura)."""
+    frames = []
+    t = 0
+    for (y, save) in cases:
+        for _ in range(30):    # álló labda a 7 m-es ponton
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(7):     # a lövés
+            players = [_pl(1, Team.HOME, 32.0, 10.0)]
+            if save:
+                players.append(PlayerPosition(
+                    track_id=90, team=Team.AWAY, x=39.0, y=y,
+                    role="kapus", source=PositionSource.MEASURED,
+                    confidence=1.0))
+            bx = min(34.0 + i, 39.0 if save else 40.0)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=y, confidence=1.0)))
+            t += 1
+        for i in range(300):   # 12 mp szünet (10 mp hetes-debounce)
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t += 300
+    return Match(_meta(fps), frames)
+
+
+def test_gk_seven_directions_finds_the_weak_corner():
+    """A bal sarokba menő heteseket engedi (3-ból 0 védés), a jobb
+    sarokba menőket fogja (3-ból 3) → a bal a gyenge iránya."""
+    from handball.pipeline.rules import gk_seven_directions
+
+    rec = gk_seven_directions(_seven_dir_match(
+        [(8.8, False)] * 3 + [(11.2, True)] * 3))["away"]
+    assert rec["faced"] == 6
+    assert rec["bal"]["faced"] == 3 and rec["bal"]["save_pct"] == 0.0
+    assert rec["jobb"]["save_pct"] == 100.0
+    assert rec["weak_dir"] is not None
+    assert rec["weak_dir"]["irany"] == "bal"
+
+
+def test_gk_seven_directions_needs_enough_per_direction():
+    """Kevés (3-nál kevesebb) hetesnél az adott irányból nincs ítélet."""
+    from handball.pipeline.rules import gk_seven_directions
+
+    rec = gk_seven_directions(_seven_dir_match(
+        [(8.8, False), (11.2, True)]))["away"]
+    assert rec["faced"] == 2 and rec["weak_dir"] is None

@@ -962,3 +962,65 @@ def shorthanded_shape(match: Match,
                 rec["main_pct"] = round(pct, 1)
         out[side] = rec
     return out
+
+
+# Kapus-hetesvédés irány szerint: irányonként ennyi kapura tartó hetes
+# kell az ítélethez, és ekkora (százalékpontos) különbség számít
+# érdemi oldal-eltérésnek.
+GK7_DIR_MIN = 3
+GK7_DIR_GAP_PP = 25.0
+
+
+def gk_seven_directions(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Kapus-hetesvédés irány szerint: MELYIK SAROKBA menő heteseket
+    fogja a kapusuk.
+
+    A hetes-védés (seven_meter_defense) azt mondja meg, MENNYIT fog a
+    kapusuk — ez azt, MERRE: a hetes-kimenetelek (seven_meter_outcomes)
+    irány-mezőjét (bal / közép / jobb, a DOBÓ szemszögéből) használjuk,
+    és irányonként számolunk védési arányt.
+
+    Edzőileg: a hetes-lövőtöknek kész terve legyen — abba a sarokba
+    kell lőni, ahol a kapusuk a leggyengébb, és nem szabad "érzésre"
+    dönteni a vonalnál.
+
+    Visszatérés csapatonként (a VÉDŐ oldal = akinek a kapusa a
+    kapuban van): {"bal"/"közép"/"jobb": {"faced", "saved",
+    "save_pct"}, "faced", "weak_dir"} — a weak_dir a legrosszabb
+    védési arányú irány, ha van legalább GK7_DIR_MIN kapura tartó
+    hetes onnan, és a védés-aránya legalább GK7_DIR_GAP_PP
+    százalékponttal az összesített alatt van.
+    """
+    config = config or TacticsConfig()
+    out: dict = {}
+    tally = {side: {d: {"faced": 0, "saved": 0}
+                    for d in ("bal", "közép", "jobb")}
+             for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        if sm["outcome"] not in ("gól", "védés") or sm["irany"] is None:
+            continue  # kihagyott/ismeretlen: a kapushoz nem mérhető
+        defending = "away" if sm["team"] == "home" else "home"
+        rec = tally[defending][sm["irany"]]
+        rec["faced"] += 1
+        if sm["outcome"] == "védés":
+            rec["saved"] += 1
+
+    for side in ("home", "away"):
+        dirs = tally[side]
+        faced = sum(r["faced"] for r in dirs.values())
+        saved = sum(r["saved"] for r in dirs.values())
+        for r in dirs.values():
+            r["save_pct"] = (round(100.0 * r["saved"] / r["faced"], 1)
+                             if r["faced"] else None)
+        weak = None
+        cand = [(d, r) for d, r in dirs.items()
+                if r["faced"] >= GK7_DIR_MIN]
+        if cand and faced:
+            avg = 100.0 * saved / faced
+            d, r = min(cand, key=lambda kv: kv[1]["save_pct"])
+            if avg - r["save_pct"] >= GK7_DIR_GAP_PP:
+                weak = {"irany": d, "save_pct": r["save_pct"],
+                        "faced": r["faced"]}
+        out[side] = {**dirs, "faced": faced, "weak_dir": weak}
+    return out

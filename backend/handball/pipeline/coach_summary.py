@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kapus-hetesvédés iránya: melyik sarok volt a gyengéje.
+    try:
+        from .rules import gk_seven_directions
+        g7d = gk_seven_directions(match)
+        for side, name in (("home", home), ("away", away)):
+            weak = g7d[side]["weak_dir"]
+            if weak is None:
+                continue
+            body += (f" A(z) {name} kapusa a {weak['irany']} sarokba "
+                     f"menő heteseknél volt gyenge: onnan "
+                     f"{weak['save_pct']:.0f}%-ot fogott "
+                     f"({weak['faced']} hetes).")
+    except Exception:
+        pass
     # Kihozatal-oldal: melyik oldalon indították a támadásokat.
     try:
         from .attack_types import buildup_side

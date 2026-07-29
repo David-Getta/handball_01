@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 148) Kapus-hetesvédés iránya: ha egy sarokra későn érünk, az a
+    # sarok a téma.
+    try:
+        from .rules import gk_seven_directions
+        g7d148 = gk_seven_directions(match, config)
+        for side in ("home", "away"):
+            weak148 = g7d148[side]["weak_dir"]
+            if weak148 is None:
+                continue
+            add(side, "kapus", f"Hetes-védés: {weak148['irany']} sarok",
+                f"a kapusunk a {weak148['irany']} sarokba menő "
+                f"hetesekből csak {weak148['save_pct']:.0f}%-ot fogott "
+                f"({weak148['faced']} hetes) — egy felkészült "
+                "ellenfél pontosan ide fogja lőni a büntetőt",
+                "hetes-védés sarokra: sorozat-hetesek úgy, hogy a "
+                f"lövők a {weak148['irany']} sarokba lőnek — a kapus "
+                "előbb csak a lábmunkát gyakorolja (oldalra lépés, "
+                "nagy test), majd a lövő karját figyelve indul; a "
+                "sorozat végén vegyes irányok, hogy a felismerés is "
+                "meglegyen")
+    except Exception:
+        pass
+
     # 147) Kihozatal-oldal: ha mindig ugyanarról az oldalról indítunk,
     # a kihozatal kiszámítható — az oldalváltó indítás a téma.
     try:

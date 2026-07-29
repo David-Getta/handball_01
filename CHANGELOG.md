@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-hetesvédés irány szerint**: MELYIK SAROKBA menő heteseket
+  fogja a kapusuk. A hetes-védés azt mondja meg, mennyit fog — ez azt,
+  merre: a hetes-kimenetelek irány-mezőjét (bal / közép / jobb, a dobó
+  szemszögéből) használjuk, és irányonként számolunk védési arányt
+  (irányonként 3+ hetes, 25 százalékpontos elmaradásnál). Így a
+  hetes-lövőnek kész terve lehet: abba a sarokba kell lőni, ahol a
+  kapus a leggyengébb, és nem a vonalnál kell dönteni. Egy réteg, sok
+  felület: `gk_seven_directions` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (irányonkénti hetes- és
+  védés-darabszámok + edzői kulcs + csempe), 127. meccsterv-szabály
+  (az ő kapusuk gyenge hetes-sarka × a ti hetes-mérlegetek), 148.
+  edzés-szabály (hetes-védés sarokra: lábmunka, majd a lövő karját
+  figyelő indulás).
 - **Kihozatal-oldal**: MELYIK OLDALON indítják a támadást. A
   támadás-indítók azt mondják meg, ki hozza fel a labdát, a
   kapus-indítás oldala azt, merre kezd a kapus — ez azt, hol jön át a

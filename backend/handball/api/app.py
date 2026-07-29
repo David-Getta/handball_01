@@ -3023,6 +3023,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import gk_seven_directions
+            res["gk_seven_directions"] = gk_seven_directions(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3682,6 +3687,9 @@ def create_app():
                        lambda: rebound_winners(match))
                 from ..pipeline.attack_types import buildup_side
                 _layer("buildup_side", lambda: buildup_side(match))
+                from ..pipeline.rules import gk_seven_directions
+                _layer("gk_seven_directions",
+                       lambda: gk_seven_directions(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

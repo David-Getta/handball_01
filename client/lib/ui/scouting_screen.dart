@@ -1297,6 +1297,41 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapus-hetesvédés iránya: melyik sarokra ér a legkésőbb
+  // (irányonként 3+ hetes, 25 százalékpontos elmaradás — a
+  // backend-kulccsal azonos küszöbök).
+  String? _gkSevenDirections(Map<String, dynamic> r) {
+    final faced = r["g7d_faced"];
+    final saved = r["g7d_saved"];
+    if (faced is! Map || saved is! Map || faced.isEmpty) return null;
+    int total = 0;
+    int totalSaved = 0;
+    faced.forEach((k, v) {
+      total += ((v as num?) ?? 0).toInt();
+      totalSaved += ((saved[k] as num?) ?? 0).toInt();
+    });
+    if (total < 3) return null;
+    String? weak;
+    double weakPct = 0.0;
+    int weakN = 0;
+    faced.forEach((k, v) {
+      final n = ((v as num?) ?? 0).toInt();
+      if (n < 3) return;
+      final pct = 100.0 * ((saved[k] as num?) ?? 0).toInt() / n;
+      if (weak == null || pct < weakPct) {
+        weak = k.toString();
+        weakPct = pct;
+        weakN = n;
+      }
+    });
+    if (weak == null) return null;
+    final avg = 100.0 * totalSaved / total;
+    if (avg - weakPct < 25.0) return null;
+    return "a kapusuk a $weak sarokra ér a legkésőbb (onnan "
+        "${weakPct.toStringAsFixed(0)}%-ot fog $weakN hetesből, az "
+        "átlaga ${avg.toStringAsFixed(0)}%) · oda kell lőni a hetest";
+  }
+
   // Kihozatal-oldal: melyik oldalon indítják a támadást (8+ támadás,
   // 50% feletti oldal — a backend-kulccsal azonos küszöbök).
   String? _buildupSide(Map<String, dynamic> r) {
@@ -3555,6 +3590,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lövő-távolság", _shooterRanges(r)!],
       if (_rebounders(r) != null) ["Lepattanó-szerzők", _rebounders(r)!],
       if (_buildupSide(r) != null) ["Kihozatal-oldal", _buildupSide(r)!],
+      if (_gkSevenDirections(r) != null)
+        ["Kapus-hetesvédés iránya", _gkSevenDirections(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

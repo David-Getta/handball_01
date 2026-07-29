@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapusuk hetesvédése irány szerint: irányonként (bal / közép /
+    # jobb, a dobó szemszögéből) a kapura tartó hetesek és a fogások —
+    # darabszámok, meccsek közt pontosan összegződnek.
+    g7d_faced: dict = field(default_factory=dict)
+    g7d_saved: dict = field(default_factory=dict)
     # Kihozatal-oldaluk: sávonként (bal / közép / jobb) a támadások —
     # darabszámok, meccsek közt pontosan összegződnek (részarány =
     # sáv / összes támadás).
@@ -1777,6 +1782,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapus-hetesvédés iránya: hova kell lőni a hetest.
+    _g7_faced = rep.g7d_faced or {}
+    _g7_saved = rep.g7d_saved or {}
+    _g7_n = sum(_g7_faced.values())
+    if _g7_n >= 3:
+        _g7_avg = 100.0 * sum(_g7_saved.values()) / _g7_n
+        _g7_cand = [(d, n) for d, n in _g7_faced.items() if n >= 3]
+        if _g7_cand:
+            _g7_dir, _g7_dn = min(
+                _g7_cand,
+                key=lambda kv: _g7_saved.get(kv[0], 0) / kv[1])
+            _g7_pct = 100.0 * _g7_saved.get(_g7_dir, 0) / _g7_dn
+            if _g7_avg - _g7_pct >= 25.0:
+                keys.append(
+                    f"A kapusuk a {_g7_dir} sarokba menő hetesekre ér "
+                    f"a legkésőbb (onnan {_g7_pct:.0f}%-ot fog "
+                    f"{_g7_dn} hetesből, az átlaga {_g7_avg:.0f}%) — a "
+                    "hetes-lövőtöknek kész terve legyen: oda kell "
+                    "lőni, és nem a vonalnál kell eldönteni.")
 
     # Kihozatal-oldal: hova kell szervezni a letámadást.
     _bus_n = rep.bus_left + rep.bus_center + rep.bus_right
@@ -4344,6 +4369,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .rules import gk_seven_directions as _g7d
+        g7drec = _g7d(match, config)[team.value]
+        rep.g7d_faced = {d: g7drec[d]["faced"]
+                         for d in ("bal", "közép", "jobb")}
+        rep.g7d_saved = {d: g7drec[d]["saved"]
+                         for d in ("bal", "közép", "jobb")}
         from .attack_types import buildup_side as _bus
         busrec = _bus(match, config)[team.value]
         rep.bus_left = busrec["left"]
@@ -5205,6 +5236,15 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_dir_counts(reports, field_name: str) -> dict:
+    """Irány szerinti darabszámok összegzése (bal / közép / jobb)."""
+    tally: dict = {}
+    for r in reports:
+        for d, n in (getattr(r, field_name, None) or {}).items():
+            tally[d] = tally.get(d, 0) + int(n)
+    return tally
 
 
 def _merge_rebounders(reports) -> list:
@@ -6191,6 +6231,32 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 127) Az ő kapusuk gyenge hetes-sarka × a ti hetes-mérlegetek: a
+    # hetes-tervet előre le kell beszélni.
+    _g7f127 = opp.g7d_faced or {}
+    _g7s127 = opp.g7d_saved or {}
+    _n127 = sum(_g7f127.values())
+    _own7_127 = own.seven_takers or []
+    _att127 = sum(p.get("attempts", 0) for p in _own7_127)
+    if _n127 >= 3 and _att127 >= 3:
+        _cand127 = [(d, n) for d, n in _g7f127.items() if n >= 3]
+        if _cand127:
+            _avg127 = 100.0 * sum(_g7s127.values()) / _n127
+            _dir127, _dn127 = min(
+                _cand127, key=lambda kv: _g7s127.get(kv[0], 0) / kv[1])
+            _pct127 = 100.0 * _g7s127.get(_dir127, 0) / _dn127
+            _conv127 = (100.0 * sum(p.get("goals", 0)
+                                    for p in _own7_127) / _att127)
+            if _avg127 - _pct127 >= 25.0 and _conv127 <= 80.0:
+                plan.append(
+                    f"A kapusuk a {_dir127} sarokra ér a legkésőbb "
+                    f"(onnan {_pct127:.0f}%-ot fog, az átlaga "
+                    f"{_avg127:.0f}%), a ti hetes-mérlegetek pedig "
+                    f"hagy kívánnivalót ({_conv127:.0f}%) — a "
+                    f"hetes-tervet előre le kell beszélni: a {_dir127} "
+                    "sarok a cél, és a kijelölt lövő ne változtasson "
+                    "a vonalnál.")
 
     # 126) Az ő egyoldalas kihozataluk × a ti elöl szerzett
     # labdáitok: a letámadást pont oda kell szervezni.
@@ -7886,6 +7952,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        g7d_faced=_merge_dir_counts(reports, "g7d_faced"),
+        g7d_saved=_merge_dir_counts(reports, "g7d_saved"),
         bus_left=sum(r.bus_left for r in reports),
         bus_center=sum(r.bus_center for r in reports),
         bus_right=sum(r.bus_right for r in reports),
