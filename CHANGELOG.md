@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Effektív játékidő**: MENNYI a tényleges játék a megszakításokhoz
+  képest. A megszakítás-felismerés az egyes leállásokat adja, az
+  időkérés-időzítés azt, mikor nyúlnak a korongért — ez a meccs
+  ritmusát: a felismert megszakítások összegzett ideje a mért
+  játékidőhöz mérve, és megszakításonként az a csapat, amelyik előtte
+  birtokolt (10+ perc mért játékidőtől; 80% alatt szakadozott, 92%
+  felett folyamatos). Szakadozott meccsképben a ritmus-tartás a
+  feladat (gyors középkezdés, kész terv a leállások utáni első
+  támadásra), folyamatos meccsen a cserék időzítése és a bírás dönt.
+  Egy réteg, sok felület: `playing_time_profile` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (játékidő-
+  és holtidő-összegek + két edzői kulcs + csempe), 121.
+  meccsterv-szabály (az ő folyamatos meccsképük × a ti szűk
+  rotációtok), 142. edzés-szabály (ritmus-tartás: váratlan leállítás
+  után kötött figurából befejezett első támadás).
 - **Védekezés-keménység**: MENNYI BÜNTETÉST hoz a faluk. A védekezési
   nyomás azt méri, milyen közel mennek a labdáshoz, a vonal-magasság
   azt, hol áll a fal — ez azt, mennyibe kerül: a védekezett

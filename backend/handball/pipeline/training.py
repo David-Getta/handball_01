@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 142) Effektív játékidő: szakadozott meccsnél a ritmus-tartás a
+    # téma (a leállások utáni újraindulás).
+    try:
+        from .stoppages import playing_time_profile
+        ptp142 = playing_time_profile(match, config)["home"]
+        if ptp142["verdict"] == "szakadozott meccskép":
+            for side in ("home", "away"):
+                add(side, "taktika", "Ritmus-tartás leállások után",
+                    f"az effektív játékidő {ptp142['effective_pct']:.0f}% "
+                    f"volt ({ptp142['stoppages']} megszakítás, "
+                    f"{ptp142['stopped_s'] / 60.0:.0f} perc holt idő) "
+                    "— a sok leállás széttöri a ritmust, és az "
+                    "újraindulás pillanata dönti el a szakaszokat",
+                    "ritmus-tartás: edzőmeccs-részlet, ahol az edző "
+                    "váratlanul 60-90 másodpercre leállítja a játékot "
+                    "(mint egy sérülés vagy videó-nézés), majd "
+                    "azonnal indít — a leállás alatt a csapatnak "
+                    "mozgásban kell maradnia, és az újraindulás után "
+                    "az ELSŐ támadást kötött figurából kell "
+                    "befejezni")
+    except Exception:
+        pass
+
     # 141) Védekezés-keménység: ha a falunk sok büntetést hoz, a
     # szabályos keménység a téma.
     try:

@@ -238,3 +238,65 @@ def timeout_timing(match: Match,
                 r["verdict"] = "hagyják elszaladni"
         out[side] = r
     return out
+
+
+# Effektív játékidő: ennyi mért perctől ítélünk, e alatti effektív
+# arány számít szakadozottnak, e feletti folyamatosnak.
+EFF_MIN_MINUTES = 10.0
+EFF_BROKEN_PCT = 80.0
+EFF_FLOWING_PCT = 92.0
+
+
+def playing_time_profile(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Effektív játékidő: MENNYI a tényleges játék a megszakításokhoz
+    képest.
+
+    A megszakítás-felismerés (detect_stoppages) az egyes leállásokat
+    adja, az időkérés-időzítés (timeout_timing) azt, mikor nyúlnak a
+    korongért — ez a meccs RITMUSÁT: a felismert megszakítások
+    összegzett ideje a mért játékidőhöz mérve, és megszakításonként az
+    a csapat, amelyik előtte birtokolt (nála állt meg a játék).
+
+    Edzőileg: a szakadozott meccsképben a ritmus-tartás a feladat —
+    gyors középkezdés, a megszakítások utáni első támadásra kész terv,
+    és fegyelem a leállások alatt; a folyamatos meccsen a bírás és a
+    cserék időzítése dönt.
+
+    Visszatérés csapatonként (a megszakítás előtt birtokló csapat
+    szerint): {"total_s", "stopped_s", "effective_pct", "stoppages",
+    "own_stoppages", "own_stopped_s", "verdict"} — a total_s,
+    effective_pct és a verdict a meccsre közös; a verdict None
+    EFF_MIN_MINUTES alatt, egyébként "szakadozott meccskép" /
+    "folyamatos meccs" / None.
+    """
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    total_s = ((frames[-1].t - frames[0].t + 1) / fps) if frames else 0.0
+
+    stops = detect_stoppages(match, config)
+    stopped_s = sum(s["duration_s"] for s in stops)
+    own = {"home": [0, 0.0], "away": [0, 0.0]}
+    for s in stops:
+        if s["likely_team"] in own:
+            own[s["likely_team"]][0] += 1
+            own[s["likely_team"]][1] += s["duration_s"]
+
+    eff_pct = (round(100.0 * (total_s - stopped_s) / total_s, 1)
+               if total_s > 0 else None)
+    verdict = None
+    if total_s >= EFF_MIN_MINUTES * 60.0 and eff_pct is not None:
+        if eff_pct <= EFF_BROKEN_PCT:
+            verdict = "szakadozott meccskép"
+        elif eff_pct >= EFF_FLOWING_PCT:
+            verdict = "folyamatos meccs"
+
+    return {side: {"total_s": round(total_s, 1),
+                   "stopped_s": round(stopped_s, 1),
+                   "effective_pct": eff_pct,
+                   "stoppages": len(stops),
+                   "own_stoppages": own[side][0],
+                   "own_stopped_s": round(own[side][1], 1),
+                   "verdict": verdict}
+            for side in ("home", "away")}

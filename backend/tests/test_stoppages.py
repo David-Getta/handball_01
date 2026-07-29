@@ -274,3 +274,69 @@ def test_timeout_timing_separates_early_and_late_brakes():
     assert one["avg_before"] is None and one["verdict"] is None
     # A vendég nem kért időt.
     assert timeout_timing(_timeout_match([1, 1]))["away"]["timeouts"] == 0
+
+
+# ---- Effektív játékidő -------------------------------------------------------
+
+def test_playing_time_profile_flags_the_broken_match():
+    """11 perc játék, benne két hosszú (2×90 mp) megszakítás → az
+    effektív arány 80% alatt: szakadozott meccskép."""
+    from handball.pipeline.stoppages import playing_time_profile
+
+    fps = 25.0
+    frames = []
+    t = 0
+
+    def _play(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = _players(t, moving=True)
+            hp = players[0]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y,
+                                          confidence=1.0)))
+            t += 1
+
+    def _stop(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=_players(0, moving=False),
+                                ball=None))
+            t += 1
+
+    _play(240)
+    _stop(90)
+    _play(180)
+    _stop(90)
+    _play(60)
+    rec = playing_time_profile(Match(_meta(fps), frames))["home"]
+    assert rec["stoppages"] == 2
+    assert rec["stopped_s"] >= 175.0
+    assert rec["effective_pct"] < 80.0
+    assert rec["verdict"] == "szakadozott meccskép"
+    # A megszakítások előtt a hazai birtokolt: nála állt meg a játék.
+    assert rec["own_stoppages"] == 2
+
+
+def test_playing_time_profile_flags_the_flowing_match():
+    """Megszakítás nélküli 11 perc → folyamatos meccs."""
+    from handball.pipeline.stoppages import playing_time_profile
+
+    fps = 25.0
+    frames = []
+    for t in range(int(660 * fps)):
+        players = _players(t, moving=True)
+        hp = players[0]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+    rec = playing_time_profile(Match(_meta(fps), frames))["home"]
+    assert rec["stoppages"] == 0 and rec["effective_pct"] == 100.0
+    assert rec["verdict"] == "folyamatos meccs"
+
+
+def test_playing_time_profile_needs_enough_minutes():
+    """Rövid (10 percnél kevesebb) felvételnél nincs ítélet."""
+    from handball.pipeline.stoppages import playing_time_profile
+
+    rec = playing_time_profile(_match())["home"]
+    assert rec["verdict"] is None

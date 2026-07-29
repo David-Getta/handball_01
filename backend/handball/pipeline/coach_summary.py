@@ -833,6 +833,17 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Effektív játékidő: milyen ritmusú volt a meccs.
+    try:
+        from .stoppages import playing_time_profile
+        ptp = playing_time_profile(match)["home"]
+        if ptp["verdict"] is not None:
+            body += (f" A meccs {ptp['verdict']} volt: az effektív "
+                     f"játékidő {ptp['effective_pct']:.0f}% "
+                     f"({ptp['stoppages']} megszakítás, "
+                     f"{ptp['stopped_s'] / 60.0:.1f} perc holt idő).")
+    except Exception:
+        pass
     # Védekezés-keménység: mennyi büntetést hozott a faluk.
     try:
         from .defense import defensive_aggression

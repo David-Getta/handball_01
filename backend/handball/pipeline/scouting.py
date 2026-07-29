@@ -604,6 +604,12 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Meccs-ritmusuk: a mért játékidő, a megszakított idő (mp) és a
+    # náluk megállt játék megszakításai — összegek, meccsek közt
+    # pontosan összegződnek (effektív arány = 1 − stopped / total).
+    ptp_total_s: float = 0.0
+    ptp_stopped_s: float = 0.0
+    ptp_own_stoppages: int = 0
     # Védekezés-keménységük: a védekezett támadások, az ellenük ítélt
     # hetesek és a kapott kiállítások — darabszámok, meccsek közt
     # pontosan összegződnek (arány = (hetes + kiállítás) / támadás).
@@ -1746,6 +1752,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Meccs-ritmus: szakadozott vagy folyamatos meccsre kell készülni.
+    if rep.ptp_total_s >= 600.0:
+        _ptp_eff = (100.0 * (rep.ptp_total_s - rep.ptp_stopped_s)
+                    / rep.ptp_total_s)
+        if _ptp_eff <= 80.0:
+            keys.append(
+                f"Szakadozott meccsképre kell készülni: az effektív "
+                f"játékidő {_ptp_eff:.0f}% "
+                f"({rep.ptp_stopped_s / 60.0:.0f} perc holt idő, "
+                f"ebből {rep.ptp_own_stoppages} megszakítás náluk "
+                "állt meg) — a ritmus-tartás a feladat: gyors "
+                "középkezdés, és a megszakítások utáni első "
+                "támadásra legyen kész terv.")
+        elif _ptp_eff >= 92.0:
+            keys.append(
+                f"Folyamatos meccsre kell készülni: az effektív "
+                f"játékidő {_ptp_eff:.0f}% — kevés a szusszanás, "
+                "ezért a cserék időzítése és a bírás dönt: a "
+                "kulcsembereket tervezetten kell pihentetni.")
 
     # Védekezés-keménység: hoz-e büntetést a faluk.
     if rep.agr_attacks >= 10:
@@ -4189,6 +4215,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .stoppages import playing_time_profile as _ptp
+        ptprec = _ptp(match, config)[team.value]
+        rep.ptp_total_s = ptprec["total_s"]
+        rep.ptp_stopped_s = ptprec["stopped_s"]
+        rep.ptp_own_stoppages = ptprec["own_stoppages"]
         from .defense import defensive_aggression as _agr
         agrrec = _agr(match, config)[team.value]
         rep.agr_attacks = agrrec["attacks"]
@@ -5961,6 +5992,22 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 121) Az ő folyamatos meccsképük × a ti szűk rotációtok: a
+    # kulcsembereitek pihentetését előre be kell tervezni.
+    if opp.ptp_total_s >= 600.0 and own.rotation_matches >= 1:
+        _eff121 = (100.0 * (opp.ptp_total_s - opp.ptp_stopped_s)
+                   / opp.ptp_total_s)
+        _used121 = own.rotation_used_sum / own.rotation_matches
+        if _eff121 >= 92.0 and _used121 <= 10.0:
+            plan.append(
+                f"Folyamatos meccsre kell készülni (az effektív "
+                f"játékidő {_eff121:.0f}%), ti pedig szűk rotációval "
+                f"játszotok (átlag {_used121:.0f} bevetett játékos) — "
+                "a pihentetést előre be kell tervezni: kijelölt "
+                "cserepárok, és a kulcsembereitek a második félidő "
+                "elején kapjanak két-három perc szusszanást, mert "
+                "megállás nem lesz.")
+
     # 120) Az ő kemény faluk × a ti hetes-mérlegetek: a betörés
     # duplán fizet, ha a hetes nálatok kész gól.
     _own7 = own.seven_takers or []
@@ -7544,6 +7591,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        ptp_total_s=round(sum(r.ptp_total_s for r in reports), 1),
+        ptp_stopped_s=round(sum(r.ptp_stopped_s for r in reports), 1),
+        ptp_own_stoppages=sum(r.ptp_own_stoppages for r in reports),
         agr_attacks=sum(r.agr_attacks for r in reports),
         agr_sevens=sum(r.agr_sevens for r in reports),
         agr_susp=sum(r.agr_susp for r in reports),

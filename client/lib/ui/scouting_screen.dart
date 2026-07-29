@@ -1297,6 +1297,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Meccs-ritmus: mennyi a tényleges játék (10+ perc mért játékidő;
+  // 80% alatt szakadozott, 92% felett folyamatos — a backend-kulccsal
+  // azonos küszöbök).
+  String? _playingTime(Map<String, dynamic> r) {
+    final total = ((r["ptp_total_s"] as num?) ?? 0).toDouble();
+    final stopped = ((r["ptp_stopped_s"] as num?) ?? 0).toDouble();
+    final own = ((r["ptp_own_stoppages"] as num?) ?? 0).toInt();
+    if (total < 600.0) return null;
+    final eff = 100.0 * (total - stopped) / total;
+    if (eff <= 80.0) {
+      return "szakadozott meccskép: az effektív játékidő "
+          "${eff.toStringAsFixed(0)}% "
+          "(${(stopped / 60.0).toStringAsFixed(0)} perc holt idő, "
+          "ebből $own megszakítás náluk állt meg) · ritmus-tartás, "
+          "gyors középkezdés";
+    }
+    if (eff >= 92.0) {
+      return "folyamatos meccs: az effektív játékidő "
+          "${eff.toStringAsFixed(0)}% · a cserék időzítése és a "
+          "bírás dönt";
+    }
+    return null;
+  }
+
   // Védekezés-keménység: hoz-e büntetést a faluk (10+ védekezett
   // támadás; 12% felett kemény, 4% alatt passzív — a backend-kulccsal
   // azonos küszöbök).
@@ -3405,6 +3429,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszaérés-fegyelem", _recoveryDiscipline(r)!],
       if (_defAggression(r) != null)
         ["Védekezés-keménység", _defAggression(r)!],
+      if (_playingTime(r) != null) ["Meccs-ritmus", _playingTime(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
