@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Visszaérés-fegyelem**: KI nem fut vissza védekezni. Az
+  átmenet-védekezés csapat-szinten mondja meg, mennyi gyors gólt
+  kapnak labdavesztés után — ez játékosonként bontja: a védekezett
+  kockákban ki van a saját térfelén (200+ mért kocka, 70% alatti
+  hazaérési aránynál). Az elöl lógó ember mögött nincs védő: az ő
+  oldalán kell a gyors indítást vezetni, a saját csapatban pedig
+  visszafutás-fegyelem a téma. Egy réteg, sok felület:
+  `recovery_discipline` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (játékosonkénti kocka-darabszámok +
+  edzői kulcs + csempe), 119. meccsterv-szabály (az ő elöl lógó emberük
+  × a ti gyors kapus-indításotok), 140. edzés-szabály
+  (visszafutás-fegyelem: az utolsó támadó a felezővonalig fut vissza).
 - **Kapus-védés lövés-tempó szerint**: a BOMBÁKAT vagy a HELYEZETT
   lövéseket fogja-e a kapusuk. A távolság-sávos réteg azt mondja meg,
   milyen messziről sebezhető, a poszt szerinti azt, milyen szögből —

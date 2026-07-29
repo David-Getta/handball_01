@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Visszaérés-fegyelmük: [{"player_id", "jersey", "frames",
+    # "home_frames"}] — játékosonként a védekezett kockák és azok,
+    # amelyekben a saját térfélen volt; darabszámok, meccsek közt
+    # pontosan összegződnek (arány = home_frames / frames).
+    recovery_players: list = field(default_factory=list)
     # Kapusuk védései lövés-tempó szerint: sávonként (kemény /
     # helyezett) a kapura tartó lövések és a fogások — darabszámok,
     # meccsek közt pontosan összegződnek (védés-arány = saves / faced).
@@ -1735,6 +1740,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Visszaérés-fegyelem: ki lóg elöl védekezéskor.
+    _rcd_rows = [p for p in (rep.recovery_players or [])
+                 if p["frames"] >= 200]
+    if _rcd_rows:
+        _rcd_worst = min(_rcd_rows,
+                         key=lambda p: p["home_frames"] / p["frames"])
+        _rcd_pct = 100.0 * _rcd_worst["home_frames"] / _rcd_worst["frames"]
+        if _rcd_pct < 70.0:
+            _rcd_who = (f"{_rcd_worst['jersey']}-es mezszámú"
+                        if _rcd_worst.get("jersey") is not None
+                        else f"{_rcd_worst['player_id']} azonosítójú")
+            keys.append(
+                f"A(z) {_rcd_who} játékosuk elöl lóg védekezéskor (a "
+                f"védekezett időnek csak {_rcd_pct:.0f}%-ában van a "
+                "saját térfelén) — az ő oldalán kell a gyors "
+                "indítást vezetni: mögötte nincs védő, a kapus "
+                "indítása azonnal helyzetet ér.")
 
     # Kapus-védés lövés-tempó szerint: erővel vagy helyezéssel kell lőni.
     if rep.gsp_hard_faced >= 4 and rep.gsp_placed_faced >= 4:
@@ -4139,6 +4162,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import recovery_discipline as _rcd
+        rep.recovery_players = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "frames": p["frames"], "home_frames": p["home_frames"]}
+            for p in _rcd(match, config)[team.value]["players"]]
         from .goalkeeper import gk_saves_by_speed as _gsp
         gsprec = _gsp(match, config)[team.value]
         rep.gsp_hard_faced = gsprec["hard"]["faced"]
@@ -4961,6 +4989,25 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_recovery_players(reports) -> list:
+    """Visszaérés-fegyelem: játékosonként a védekezett és a saját
+    térfélen töltött kockák összegzése (az arány szerint NÖVEKVŐ)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.recovery_players or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "frames": 0,
+                                    "home_frames": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["frames"] += int(row.get("frames", 0))
+            rec["home_frames"] += int(row.get("home_frames", 0))
+    rows = [{"player_id": pid, **rec}
+            for pid, rec in tally.items() if rec["frames"] > 0]
+    rows.sort(key=lambda r: r["home_frames"] / r["frames"])
+    return rows
 
 
 def _merge_static_attackers(reports) -> list:
@@ -5881,6 +5928,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 119) Az ő elöl lógó emberük × a ti gyors kapus-indításotok: a
+    # kontrát pont az ő oldalán kell vezetni.
+    _rcd119 = [p for p in (opp.recovery_players or [])
+               if p["frames"] >= 200]
+    if _rcd119 and own.rs_restarts >= 4:
+        _worst119 = min(_rcd119,
+                        key=lambda p: p["home_frames"] / p["frames"])
+        _pct119 = 100.0 * _worst119["home_frames"] / _worst119["frames"]
+        _fast119 = 100.0 * own.rs_fast / own.rs_restarts
+        if _pct119 < 70.0 and _fast119 >= 50.0:
+            _who119 = (f"{_worst119['jersey']}-es mezszámú"
+                       if _worst119.get("jersey") is not None
+                       else f"{_worst119['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who119} játékosuk elöl lóg védekezéskor (a "
+                f"védekezett időnek csak {_pct119:.0f}%-ában van a "
+                f"saját térfelén), ti pedig gyorsan indítotok (az "
+                f"újraindításaitok {_fast119:.0f}%-ánál 12 mp-en "
+                "belül átér a labda) — a kontrát az ő oldalán kell "
+                "vezetni: a kapus azonnal arra indítson, mert ott "
+                "eggyel kevesebben állnak vissza.")
 
     # 118) Az ő kapusuk gyenge tempó-sávja × a ti lövőerőtök: a
     # lövés-választást a kapusuk gyengéjéhez kell igazítani.
@@ -7425,6 +7494,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        recovery_players=_merge_recovery_players(reports),
         gsp_hard_faced=sum(r.gsp_hard_faced for r in reports),
         gsp_hard_saves=sum(r.gsp_hard_saves for r in reports),
         gsp_placed_faced=sum(r.gsp_placed_faced for r in reports),

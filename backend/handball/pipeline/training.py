@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 140) Visszaérés-fegyelem: ha valaki elöl lóg védekezéskor, a
+    # visszafutás a téma.
+    try:
+        from .defense import recovery_discipline
+        rcd140 = recovery_discipline(match, config)
+        for side in ("home", "away"):
+            worst140 = rcd140[side]["worst"]
+            if worst140 is None:
+                continue
+            who140 = (f"a {worst140['jersey']}-es mezszámú játékos"
+                      if worst140.get("jersey") is not None
+                      else f"a {worst140['player_id']} azonosítójú játékos")
+            add(side, "védekezés", "Visszafutás-fegyelem",
+                f"{who140} a védekezett időnek csak "
+                f"{worst140['share_pct']:.0f}%-ában volt a saját "
+                "térfelén — mögötte nincs védő, és az ellenfél "
+                "kapusa pont oda fog indítani",
+                "visszafutás-fegyelem: 5-6 elleni visszazárás "
+                "gyakorlása labdaeladásból indítva — az utolsó "
+                "támadó KÖTELEZŐEN a felezővonalig fut vissza, "
+                "mielőtt bárki labdába nyúlhatna; ha nem ér vissza, "
+                "a gyakorlat újraindul, és a támadás gólja duplán "
+                "számít")
+    except Exception:
+        pass
+
     # 139) Kapus-védés lövés-tempó szerint: ha az egyik sávban
     # sebezhető a kapusunk, az a sáv a téma.
     try:

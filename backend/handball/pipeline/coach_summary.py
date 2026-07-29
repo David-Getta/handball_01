@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Visszaérés-fegyelem: ki nem futott vissza védekezni.
+    try:
+        from .defense import recovery_discipline
+        rcd = recovery_discipline(match)
+        for side, name in (("home", home), ("away", away)):
+            worst = rcd[side]["worst"]
+            if worst is None:
+                continue
+            jn = (worst["jersey"]
+                  or _jersey_of_track(match).get(worst["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{worst['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} lógott elöl: a védekezett "
+                     f"időnek csak {worst['share_pct']:.0f}%-ában volt "
+                     "a saját térfelén.")
+    except Exception:
+        pass
     # Kapus-védés lövés-tempó szerint: bombák vagy helyezett lövések.
     try:
         from .goalkeeper import gk_saves_by_speed

@@ -1297,6 +1297,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Visszaérés-fegyelem: ki lóg elöl védekezéskor (200+ mért kocka,
+  // 70% alatti hazaérési arány — a backend-kulccsal azonos küszöbök).
+  String? _recoveryDiscipline(Map<String, dynamic> r) {
+    final rows = r["recovery_players"];
+    if (rows is! List || rows.isEmpty) return null;
+    Map? worst;
+    double worstPct = 0.0;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final frames = ((e["frames"] as num?) ?? 0).toInt();
+      final home = ((e["home_frames"] as num?) ?? 0).toInt();
+      if (frames < 200) continue;
+      final pct = 100.0 * home / frames;
+      if (worst == null || pct < worstPct) {
+        worst = e;
+        worstPct = pct;
+      }
+    }
+    if (worst == null || worstPct >= 70.0) return null;
+    final who = worst["jersey"] != null
+        ? "${worst["jersey"]}-es"
+        : "${worst["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk elöl lóg védekezéskor (a védekezett "
+        "időnek csak ${worstPct.toStringAsFixed(0)}%-ában van a saját "
+        "térfelén) · az ő oldalán vezessétek a kontrát";
+  }
+
   // Kapus-védés lövés-tempó szerint: a bombákat vagy a helyezett
   // lövéseket fogja (sávonként 4+ lövés, 15 százalékpontos eltérés — a
   // backend-kulccsal azonos küszöbök).
@@ -3352,6 +3379,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Álló támadók", _staticAttackers(r)!],
       if (_gkSpeedBands(r) != null)
         ["Kapus-védés lövés-tempó szerint", _gkSpeedBands(r)!],
+      if (_recoveryDiscipline(r) != null)
+        ["Visszaérés-fegyelem", _recoveryDiscipline(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

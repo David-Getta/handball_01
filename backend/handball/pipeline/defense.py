@@ -2109,3 +2109,70 @@ def defensive_shift_lag(match, config=None) -> dict:
                                   else None)
         out[side] = rec
     return out
+
+
+# Visszaérés-fegyelem: ennyi mért játékos-kocka kell egy ember
+# megítéléséhez, és e alatti "hazaérési" arány jelenti, hogy elöl lóg.
+REC_DISC_MIN_FRAMES = 200
+REC_DISC_LOW_PCT = 70.0
+
+
+def recovery_discipline(match, config=None) -> dict:
+    """Visszaérés-fegyelem: KI nem fut vissza védekezni.
+
+    Az átmenet-védekezés (transition_defense) csapat-szinten mondja
+    meg, mennyi gyors gólt kapnak labdavesztés után — ez játékosonként
+    bontja: a védekezett kockákban megnézzük, ki van a SAJÁT
+    térfelén. Aki a védekezett idő nagy részét az ellenfél térfelén
+    tölti, az elöl lóg: nála indul a kontra ellenük.
+
+    Edzőileg: a felderítésben ez mondja meg, melyik oldalon érdemes a
+    gyors indítást vezetni (az elöl lógó ember mögött nincs védő); a
+    saját csapatban pedig a visszafutás-fegyelem edzés-témája.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"players":
+    [{"player_id", "jersey", "frames", "home_frames", "share_pct"}],
+    "worst"} — a lista a hazaérési arány szerint NÖVEKVŐ; a "worst" az
+    első játékos, ha van legalább REC_DISC_MIN_FRAMES mért kockája, és
+    az aránya REC_DISC_LOW_PCT alatt van.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    jersey: dict = {}
+    acc: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt/rendezett védekezés: a labda a védő térfelén.
+        if abs(holder.x - own_x) > half:
+            continue
+        for p in f.players:
+            if p.team != deff or p.role == "kapus":
+                continue
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+            rec = acc[deff.value].setdefault(p.track_id, [0, 0])
+            rec[0] += 1
+            if abs(p.x - own_x) <= half:
+                rec[1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "frames": n, "home_frames": h,
+                 "share_pct": round(100.0 * h / n, 1)}
+                for pid, (n, h) in acc[side].items() if n > 0]
+        rows.sort(key=lambda r: r["share_pct"])
+        worst = None
+        cand = [r for r in rows if r["frames"] >= REC_DISC_MIN_FRAMES]
+        if cand and cand[0]["share_pct"] < REC_DISC_LOW_PCT:
+            worst = cand[0]
+        out[side] = {"players": rows, "worst": worst}
+    return out

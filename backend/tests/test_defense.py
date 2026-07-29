@@ -1442,3 +1442,51 @@ def test_defensive_shift_lag_needs_frames():
 
     rec = defensive_shift_lag(_shift_match(20, cycles=1, period=40))["away"]
     assert rec["lag_s"] is None and rec["verdict"] is None
+
+
+# ---- Visszaérés-fegyelem (ki nem fut vissza védekezni) -----------------------
+
+def _recovery_match(lingering_share=0.6, n=500, fps=25.0):
+    """A VENDÉG védekezik (a hazai a vendég térfelén birtokol): a 21-es
+    és 22-es végig hazaér, a 23-as a kockák `lingering_share` részében
+    elöl (a hazai térfélen) marad."""
+    frames = []
+    for i in range(n):
+        up_front = i < int(n * lingering_share)
+        players = [_pl(1, Team.HOME, 32.0, 10.0),
+                   _pl(21, Team.AWAY, 36.0, 7.0),
+                   _pl(22, Team.AWAY, 36.0, 13.0),
+                   _pl(23, Team.AWAY, 12.0 if up_front else 36.0, 10.0),
+                   _pl(29, Team.AWAY, 39.5, 10.0)]
+        players[-1].role = "kapus"
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=32.0, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_recovery_discipline_flags_the_lingering_player():
+    """A védekezett kockák 60%-ában elöl maradó játékos → ő lóg elöl."""
+    from handball.pipeline.defense import recovery_discipline
+
+    rec = recovery_discipline(_recovery_match())["away"]
+    assert rec["worst"] is not None
+    assert rec["worst"]["player_id"] == 23
+    assert rec["worst"]["share_pct"] == 40.0
+    # A hazaérő védők a lista végén, 100%-kal.
+    assert rec["players"][-1]["share_pct"] == 100.0
+
+
+def test_recovery_discipline_all_back_has_no_verdict():
+    """Ha mindenki hazaér, nincs megjelölt játékos."""
+    from handball.pipeline.defense import recovery_discipline
+
+    rec = recovery_discipline(_recovery_match(lingering_share=0.0))["away"]
+    assert rec["worst"] is None
+
+
+def test_recovery_discipline_needs_frames():
+    """Kevés mért kockánál nincs ítélet."""
+    from handball.pipeline.defense import recovery_discipline
+
+    rec = recovery_discipline(_recovery_match(n=150))["away"]
+    assert rec["worst"] is None
