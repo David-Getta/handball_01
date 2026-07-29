@@ -833,6 +833,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Hajrá-ötös: kik voltak a pályán a döntő szakaszban.
+    try:
+        from .momentum import clutch_lineup
+        cll = clutch_lineup(match)
+        for side, name in (("home", home), ("away", away)):
+            core = cll[side]["core"]
+            if not core:
+                continue
+            jerseys = _jersey_of_track(match)
+            names = []
+            for row in core[:6]:
+                jn = row["jersey"] or jerseys.get(row["player_id"])
+                names.append(str(jn) if jn is not None
+                             else f"#{row['player_id']}")
+            body += (f" A(z) {name} hajrá-emberei: "
+                     f"{', '.join(names)}.")
+    except Exception:
+        pass
     # Kontra-kíséret: hányan futottak fel a lerohanásoknál.
     try:
         from .attack_types import fast_break_support

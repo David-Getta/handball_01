@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hajrá-ötös**: KIK VANNAK A PÁLYÁN a döntő szakaszban. A
+  hajrá-teljesítmény azt mondja meg, ki bírja a meccs végét, a
+  hajrá-gólszerzők azt, ki lő ilyenkor — ez azt, kit küldenek pályára:
+  az utolsó 10 percben játékosonként a pályán töltött kockák (a
+  hajrá-mag legalább 100 mért kockától; rövid felvételen nincs). Ha
+  tudjuk, kik lesznek fent a végén, rájuk lehet tervezni a párosítást;
+  a saját csapatban pedig a hajrá-emberek együtt gyakorolják a záró
+  figurákat. Egy réteg, sok felület: `clutch_lineup` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti kocka-darabszámok + edzői kulcs + csempe), 129.
+  meccsterv-szabály (az ő hajrá-emberük × a ti hajrá-mérlegetek), 150.
+  edzés-szabály (hajrá-ötös begyakorlása: edzés végén, fáradtan, ezzel
+  a felállással).
 - **Kontra-kíséret**: HÁNYAN FUTNAK FEL a lerohanásaiknál. A
   lerohanás-befejezők azt mondják meg, ki fejezi be a kontrát, az
   átmenet-támadás azt, mennyi gólt hoz — ez azt, mekkora erővel

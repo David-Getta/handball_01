@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Hajrá-embereik: [{"player_id", "jersey", "frames"}] — az utolsó
+    # 10 percben a pályán töltött kockák; darabszámok, meccsek közt
+    # pontosan összegződnek (aki több meccsen is fent van, előre kerül).
+    clutch_players: list = field(default_factory=list)
     # Kontra-kíséretük: a mért lerohanások és a felfutó emberek
     # összege — összegek, meccsek közt pontosan összegződnek (átlag =
     # összeg / lerohanás).
@@ -1787,6 +1791,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Hajrá-ötös: kikre kell tervezni a döntő szakaszt.
+    _cll_rows = [p for p in (rep.clutch_players or [])
+                 if p["frames"] > 0][:6]
+    if len(_cll_rows) >= 4:
+        _cll_names = []
+        for _row in _cll_rows:
+            _cll_names.append(
+                f"{_row['jersey']}-es" if _row.get("jersey") is not None
+                else f"#{_row['player_id']}")
+        keys.append(
+            f"A hajrá-embereik: {', '.join(_cll_names)} — a döntő "
+            "szakaszra rájuk kell tervezni a párosítást: a "
+            "kettőzésüket a legjobb befejezőjükre, és előre le kell "
+            "beszélni, kit engedünk lőni.")
 
     # Kontra-kíséret: mennyi emberrel indulnak a lerohanásokra.
     if rep.fbs_breaks >= 3 and rep.fbs_sum_runners > 0:
@@ -4393,6 +4412,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .momentum import clutch_lineup as _cll
+        rep.clutch_players = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "frames": p["frames"]}
+            for p in _cll(match, config)[team.value]["core"]]
         from .attack_types import fast_break_support as _fbs
         fbsrec = _fbs(match, config)[team.value]
         rep.fbs_breaks = fbsrec["breaks"]
@@ -5265,6 +5289,22 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_clutch_players(reports) -> list:
+    """Hajrá-emberek: játékosonként a hajrában töltött kockák
+    összegzése (a kockaszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.clutch_players or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "frames": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["frames"] += int(row.get("frames", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["frames"])]
 
 
 def _merge_dir_counts(reports, field_name: str) -> dict:
@@ -6260,6 +6300,32 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 129) Az ő hajrá-emberük × a ti hajrá-mérlegetek: a záró
+    # szakaszra név szerinti terv kell.
+    _cll129 = [p for p in (opp.clutch_players or []) if p["frames"] > 0]
+    _sc129 = opp.clutch_scorers or []
+    if len(_cll129) >= 4 and _sc129 and own.clutch_matches >= 1:
+        _diff129 = ((own.clutch_goals_for - own.clutch_goals_against)
+                    / own.clutch_matches)
+        _top129 = _sc129[0]
+        _who129 = (f"{_top129['jersey']}-es mezszámú"
+                   if _top129.get("jersey") is not None
+                   else f"{_top129['player_id']} azonosítójú")
+        if _diff129 <= 0.0:
+            _names129 = []
+            for _r129 in _cll129[:6]:
+                _names129.append(
+                    f"{_r129['jersey']}-es"
+                    if _r129.get("jersey") is not None
+                    else f"#{_r129['player_id']}")
+            plan.append(
+                f"A hajrá-embereik ismertek ({', '.join(_names129)}), a "
+                f"hajrá-gólszerzőjük a(z) {_who129} játékos, a ti "
+                f"hajrá-mérlegetek pedig nem pozitív (meccsenként "
+                f"{_diff129:+.1f} gól) — a záró tíz percre név "
+                "szerinti terv kell: rá a kettőzés, és a ti záró "
+                "figuráitokat is előre ki kell osztani.")
 
     # 128) Az ő tömeges kontrájuk × a ti visszazárásotok: a
     # visszarendeződést előre ki kell osztani.
@@ -7998,6 +8064,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        clutch_players=_merge_clutch_players(reports),
         fbs_breaks=sum(r.fbs_breaks for r in reports),
         fbs_sum_runners=round(sum(r.fbs_sum_runners for r in reports), 1),
         g7d_faced=_merge_dir_counts(reports, "g7d_faced"),

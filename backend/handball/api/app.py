@@ -3033,6 +3033,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import clutch_lineup
+            res["clutch_lineup"] = clutch_lineup(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3698,6 +3703,8 @@ def create_app():
                 from ..pipeline.attack_types import fast_break_support
                 _layer("fast_break_support",
                        lambda: fast_break_support(match))
+                from ..pipeline.momentum import clutch_lineup
+                _layer("clutch_lineup", lambda: clutch_lineup(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

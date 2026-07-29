@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 150) Hajrá-ötös: a záró szakasz emberei együtt gyakorolják a
+    # befejezést (a hajrában nincs idő ismerkedni).
+    try:
+        from .momentum import clutch_lineup
+        cll150 = clutch_lineup(match, config)
+        for side in ("home", "away"):
+            core150 = cll150[side]["core"][:6]
+            if len(core150) < 4:
+                continue
+            names150 = []
+            for row in core150:
+                names150.append(
+                    f"{row['jersey']}-es" if row.get("jersey") is not None
+                    else f"#{row['player_id']}")
+            add(side, "taktika", "Hajrá-ötös begyakorlása",
+                f"a döntő tíz percben ez a hat ember volt a pályán "
+                f"({', '.join(names150)}) — a hajrában nincs idő "
+                "ismerkedni, a záró figuráknak automatizmusnak kell "
+                "lenniük",
+                "hajrá-ötös begyakorlása: edzés végén, fáradtan, "
+                "EZZEL a felállással gyakoroljátok a záró "
+                "helyzeteket — utolsó támadás egy gólos hátrányból, "
+                "hetes, és emberelőnyös befejezés; minden szituáció "
+                "kijelölt indítóval és kijelölt befejezővel")
+    except Exception:
+        pass
+
     # 149) Kontra-kíséret: ha magányos kontrát futunk, a kíséret a
     # téma (a lerohanás nem egyemberes műfaj).
     try:

@@ -1249,3 +1249,70 @@ def clutch_turnovers(match: Match, config=None) -> dict:
                 r["verdict"] = "hidegvérű"
         out[side] = r
     return out
+
+
+# Hajrá-ötös: a meccs utolsó ekkora szakaszát nézzük, és ennyi mért
+# kocka kell ahhoz, hogy egy játékos a hajrá-emberek közé kerüljön.
+CLUTCH_LINEUP_WINDOW_S = 600.0
+CLUTCH_LINEUP_MIN_FRAMES = 100
+
+
+def clutch_lineup(match: Match, config=None) -> dict:
+    """Hajrá-ötös: KIK VANNAK A PÁLYÁN a döntő szakaszban.
+
+    A hajrá-teljesítmény (clutch_performance) azt mondja meg, ki bírja
+    a meccs végét, a hajrá-gólszerzők (clutch_scorers) azt, ki lő
+    ilyenkor — ez azt, KIT KÜLDENEK PÁLYÁRA: az utolsó
+    CLUTCH_LINEUP_WINDOW_S másodpercben játékosonként megszámoljuk a
+    pályán töltött kockákat.
+
+    Edzőileg: ha tudjuk, kik lesznek fent a végén, rájuk lehet
+    tervezni a párosítást (kire menjen a kettőzés, kit hagyunk lőni);
+    a saját csapatban pedig a hajrá-emberek együtt gyakorolják a záró
+    figurákat és a hetest.
+
+    Visszatérés csapatonként: {"window_s", "players": [{"player_id",
+    "jersey", "frames", "share_pct"}], "core"} — a lista kockaszám
+    szerint csökkenő, a "core" a hajrá-magot adó, legalább
+    CLUTCH_LINEUP_MIN_FRAMES kockát töltő játékosok listája (üres, ha
+    rövid a felvétel).
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    if not frames:
+        return {side: {"window_s": CLUTCH_LINEUP_WINDOW_S,
+                       "players": [], "core": []}
+                for side in ("home", "away")}
+
+    end_t = frames[-1].t
+    total_s = (end_t - frames[0].t + 1) / fps
+    win_start = end_t - CLUTCH_LINEUP_WINDOW_S * fps
+    jersey: dict = {}
+    acc: dict = {"home": {}, "away": {}}
+    window_frames = 0
+    for f in frames:
+        if f.t < win_start:
+            continue
+        window_frames += 1
+        for p in f.players:
+            if p.role == "kapus":
+                continue
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+            side = p.team.value
+            acc[side][p.track_id] = acc[side].get(p.track_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "frames": n,
+                 "share_pct": (round(100.0 * n / window_frames, 1)
+                               if window_frames else None)}
+                for pid, n in sorted(acc[side].items(),
+                                     key=lambda kv: -kv[1])]
+        core = ([r for r in rows
+                 if r["frames"] >= CLUTCH_LINEUP_MIN_FRAMES]
+                if total_s >= CLUTCH_MIN_DURATION_S else [])
+        out[side] = {"window_s": CLUTCH_LINEUP_WINDOW_S,
+                     "players": rows, "core": core}
+    return out

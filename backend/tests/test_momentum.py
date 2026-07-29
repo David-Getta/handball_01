@@ -818,3 +818,45 @@ def test_clutch_turnovers_flags_pressure_mistakes():
     # Rövid felvétel (10 perc alatt): nem értelmezhető.
     short = clutch_turnovers(Match(_meta(), frames[:5000]))
     assert short == {"available": False}
+
+
+# ---- Hajrá-ötös (kik vannak a pályán a döntő szakaszban) ---------------------
+
+def _clutch_lineup_match(total_s=900.0, late_ids=(1, 2, 3, 4, 5, 6),
+                         fps=25.0):
+    """A meccs első kétharmadában a 11-16-os, az utolsó 10 percben a
+    `late_ids` játékosok vannak a hazai pályán."""
+    frames = []
+    n = int(total_s * fps)
+    late_start = n - int(600.0 * fps)
+    for i in range(n):
+        ids = late_ids if i >= late_start else (11, 12, 13, 14, 15, 16)
+        players = [_pl(pid, Team.HOME, 20.0 + k, 4.0 + k)
+                   for k, pid in enumerate(ids)]
+        players += [_pl(90, Team.AWAY, 30.0, 10.0)]
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_clutch_lineup_lists_the_closing_players():
+    """Az utolsó 10 perc emberei kerülnek a hajrá-magba, a korábbi
+    ötös nem."""
+    from handball.pipeline.momentum import clutch_lineup
+
+    rec = clutch_lineup(_clutch_lineup_match())["home"]
+    core_ids = {p["player_id"] for p in rec["core"]}
+    assert core_ids == {1, 2, 3, 4, 5, 6}
+    assert rec["players"][0]["share_pct"] == 100.0
+    # A korábbi szakasz emberei legfeljebb az ablak-határon lógnak be
+    # egy-két kockával, a hajrá-magba nem kerülnek.
+    early = [p for p in rec["players"] if p["player_id"] == 11]
+    assert not early or early[0]["frames"] <= 2
+
+
+def test_clutch_lineup_short_match_has_no_core():
+    """Rövid (10 percnél kevesebb) felvételen nincs hajrá-mag."""
+    from handball.pipeline.momentum import clutch_lineup
+
+    rec = clutch_lineup(_clutch_lineup_match(total_s=300.0))["home"]
+    assert rec["core"] == []
