@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Lepattanó-szerzőik: [{"player_id", "jersey", "rebounds"}] — ki
+    # gyűjti a saját lövéseik kipattanóit; darabszámok, meccsek közt
+    # pontosan összegződnek.
+    rebounders: list = field(default_factory=list)
     # Lövőik távolság-profilja: [{"player_id", "jersey", "shots",
     # "sum_dist_m"}] — lövőnként a lövések száma és a távolság-összeg;
     # összegek, meccsek közt pontosan összegződnek (átlag = összeg /
@@ -1767,6 +1771,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Lepattanó-szerzők: ki gyűjti a kipattanóikat.
+    _rbw_rows = rep.rebounders or []
+    if _rbw_rows and _rbw_rows[0]["rebounds"] >= 3:
+        _rbw_top = _rbw_rows[0]
+        _rbw_who = (f"{_rbw_top['jersey']}-es mezszámú"
+                    if _rbw_top.get("jersey") is not None
+                    else f"{_rbw_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_rbw_who} játékosuk gyűjti a kipattanókat "
+            f"({_rbw_top['rebounds']} visszaszerzett lepattanó) — a "
+            "blokk után azonnal be kell zárni a teret: a kapus "
+            "kipattanóját a legközelebbi védőnek kell kísérnie, és őt "
+            "kell kiszorítani a 6 m-es térből.")
 
     # Lövő-távolság: kire kell kilépni, kit kell elöl fogadni.
     _shr_rows = [p for p in (rep.shooter_ranges or []) if p["shots"] >= 3]
@@ -4305,6 +4323,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import rebound_winners as _rbw
+        rep.rebounders = [
+            dict(row) for row in _rbw(match, config)[team.value]["off"]]
         from .attack_types import shooter_ranges as _shr
         rep.shooter_ranges = [
             {"player_id": p["player_id"], "jersey": p["jersey"],
@@ -5158,6 +5179,22 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_rebounders(reports) -> list:
+    """Lepattanó-szerzők: játékosonként a visszaszerzett kipattanók
+    összegzése (a darabszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.rebounders or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "rebounds": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["rebounds"] += int(row.get("rebounds", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["rebounds"])]
 
 
 def _merge_shooter_ranges(reports) -> list:
@@ -6128,6 +6165,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 125) Az ő lepattanó-gyűjtőjük × a ti engedett második rohamaitok:
+    # a kipattanó-kísérés a meccs egyik kulcsa.
+    _rbw125 = opp.rebounders or []
+    if _rbw125 and _rbw125[0]["rebounds"] >= 3 and own.sca_opp_misses >= 6:
+        _top125 = _rbw125[0]
+        _sca125 = 100.0 * own.sca_allowed / own.sca_opp_misses
+        if _sca125 >= 30.0:
+            _who125 = (f"{_top125['jersey']}-es mezszámú"
+                       if _top125.get("jersey") is not None
+                       else f"{_top125['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who125} játékosuk gyűjti a kipattanókat "
+                f"({_top125['rebounds']} lepattanó), ti pedig sok "
+                f"második rohamot engedtek (a kimaradt lövéseik "
+                f"{_sca125:.0f}%-a után újra lőttek) — a "
+                "kipattanó-kísérés a kulcs: minden blokk és védés "
+                "után a legközelebbi védő azonnal a labdára megy, és "
+                "őt kell kiszorítani a 6 m-es térből.")
 
     # 124) Az ő távoli lövőjük × a ti blokkjaitok: rá a kilépés
     # duplán fizet.
@@ -7785,6 +7841,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        rebounders=_merge_rebounders(reports),
         shooter_ranges=_merge_shooter_ranges(reports),
         sh_shape=_merge_sh_shape(reports),
         ppp_pp_attacks=sum(r.ppp_pp_attacks for r in reports),

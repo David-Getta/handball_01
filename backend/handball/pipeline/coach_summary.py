@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Lepattanó-szerzők: ki nyerte a kipattanókat.
+    try:
+        from .attack_types import rebound_winners
+        rbw = rebound_winners(match)
+        for side, name in (("home", home), ("away", away)):
+            top_off = rbw[side]["top_off"]
+            if top_off is None:
+                continue
+            jn = (top_off["jersey"]
+                  or _jersey_of_track(match).get(top_off["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_off['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} gyűjtötte a támadó "
+                     f"lepattanókat ({top_off['rebounds']} "
+                     "visszaszerzett kipattanó).")
+    except Exception:
+        pass
     # Lövő-távolság: ki lőtt távolról, ki fejezett be közelről.
     try:
         from .attack_types import shooter_ranges

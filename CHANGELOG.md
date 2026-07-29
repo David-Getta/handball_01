@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Lepattanó-szerzők**: KI NYERI a kipattanókat. A második roham
+  csapat-szinten mondja meg, hányszor szerzik vissza a saját, gólt nem
+  érő lövésüket — ez azt, ki: minden nem gólos lövés után az első
+  azonosított labdabirtokoshoz írjuk a labdát (3+ lepattanótól). A
+  támadó lepattanókat gyűjtő ember ellen a blokk után azonnal be kell
+  zárni a teret, a kapus kipattanóját a legközelebbi védőnek kell
+  kísérnie. Egy réteg, sok felület: `rebound_winners` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti lepattanó-darabszámok + edzői kulcs + csempe), 125.
+  meccsterv-szabály (az ő lepattanó-gyűjtőjük × a ti engedett második
+  rohamaitok), 146. edzés-szabály (kipattanó-kísérés: minden blokk
+  után kötelező labdára indulás).
 - **Lövő-távolság profil**: KI LŐ TÁVOLRÓL és ki közelről. A
   lövés-távolság profil csapat-szinten mondja meg, honnan lőnek — ez
   játékosonként bontja: lövőnként átlagolt kapu-távolság (3+ lövéstől;

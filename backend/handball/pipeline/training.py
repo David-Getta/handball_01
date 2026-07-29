@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 146) Lepattanó-szerzők: ha az ellenfél gyűjti a kipattanókat, a
+    # kipattanó-kísérés a téma (a saját oldalon a védekező lepattanó).
+    try:
+        from .attack_types import rebound_winners
+        rbw146 = rebound_winners(match, config)
+        for side in ("home", "away"):
+            opp146 = "away" if side == "home" else "home"
+            top146 = rbw146[opp146]["top_off"]
+            if top146 is None:
+                continue
+            add(side, "védekezés", "Kipattanó-kísérés",
+                f"az ellenfél egyik embere {top146['rebounds']} "
+                "kipattanót gyűjtött be a saját lövéseik után — a "
+                "blokk és a védés utáni pillanatokban nem zárjuk be a "
+                "6 m-es teret",
+                "kipattanó-kísérés: blokk-gyakorlat, ahol minden "
+                "blokkolt vagy védett lövés után a legközelebbi "
+                "védőnek KÖTELEZŐ a labdára indulnia, a szomszédja "
+                "pedig kiszorítja a beállót a 6 m-es térből — a "
+                "gyakorlat csak akkor ér pontot, ha a lepattanót a "
+                "védekező csapat szerzi meg")
+    except Exception:
+        pass
+
     # 145) Lövő-távolság: ha valaki csak távolról lő, a befejezés
     # közelebb hozása a téma.
     try:

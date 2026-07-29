@@ -2402,3 +2402,78 @@ def shooter_ranges(match: Match,
                 close = cand[-1]
         out[side] = {"players": rows, "far": far, "close": close}
     return out
+
+
+# Lepattanó-szerzők: ennyi megszerzett lepattanó kell egy ember
+# kiemeléséhez (a heurisztika zaja miatt egy-két eset még nem minta).
+REBOUND_MIN = 3
+
+
+def rebound_winners(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Lepattanó-szerzők: KI NYERI a kipattanókat.
+
+    A második roham (second_chance) csapat-szinten mondja meg, hányszor
+    szerzik vissza a saját, gólt nem érő lövésüket — ez azt, KI: minden
+    nem gólos lövés után megkeressük az ELSŐ azonosított labdabirtokost
+    a lepattanó-ablakban, és hozzá írjuk a labdát. Ha a lövő csapata
+    szerzi meg, támadó lepattanó; ha a védekező, védekező lepattanó.
+
+    Edzőileg: a támadó lepattanókat gyűjtő ember ellen a blokk után
+    azonnal be kell zárni a teret (a kapus kipattanóját a védőnek kell
+    kísérnie); a saját oldalon pedig a védekező lepattanó-szerzés a
+    kontra-indítás első lépése.
+
+    Visszatérés csapatonként: {"off": [{"player_id", "jersey",
+    "rebounds"}], "def": [...], "top_off", "top_def"} — az "off" a
+    saját lövés után visszaszerzett labdák, a "def" az ellenfél lövése
+    után megszerzettek; a top-ok csak REBOUND_MIN darabtól.
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(SECOND_CHANCE_WINDOW_S * fps)
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+    jersey: dict = {}
+
+    tally: dict = {"home": {"off": {}, "def": {}},
+                   "away": {"off": {}, "def": {}}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.SHOT:
+            continue  # gól után nincs lepattanó
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            continue
+        # Az első azonosított labdabirtokos a lepattanó-ablakban.
+        winner = None
+        for f in frames[i0 + 1:i0 + 1 + win]:
+            h = ball_holder(f, config)
+            if h is not None:
+                winner = h
+                break
+        if winner is None:
+            continue
+        if winner.jersey_number is not None:
+            jersey.setdefault(winner.track_id, winner.jersey_number)
+        key = "off" if winner.team == e.team else "def"
+        side = winner.team.value
+        tally[side][key][winner.track_id] = (
+            tally[side][key].get(winner.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec: dict = {}
+        for key in ("off", "def"):
+            rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                     "rebounds": n}
+                    for pid, n in sorted(tally[side][key].items(),
+                                         key=lambda kv: -kv[1])]
+            rec[key] = rows
+            top = (rows[0] if rows and rows[0]["rebounds"] >= REBOUND_MIN
+                   else None)
+            rec[f"top_{key}"] = top
+        out[side] = rec
+    return out

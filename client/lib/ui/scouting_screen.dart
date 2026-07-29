@@ -1297,6 +1297,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Lepattanó-szerzők: ki gyűjti a kipattanóikat (3+ lepattanó — a
+  // backend-kulccsal azonos küszöb).
+  String? _rebounders(Map<String, dynamic> r) {
+    final rows = r["rebounders"];
+    if (rows is! List || rows.isEmpty) return null;
+    final top = rows.first;
+    if (top is! Map) return null;
+    final n = ((top["rebounds"] as num?) ?? 0).toInt();
+    if (n < 3) return null;
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk gyűjti a kipattanókat ($n lepattanó) · "
+        "a blokk után azonnal be kell zárni a 6 m-es teret";
+  }
+
   // Lövő-távolság profil: kire kell kilépni (3+ lövés; 9,5 m felett
   // távoli lövő — a backend-kulccsal azonos küszöbök).
   String? _shooterRanges(Map<String, dynamic> r) {
@@ -3512,6 +3528,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberhátrány-forma", _shorthandedShape(r)!],
       if (_shooterRanges(r) != null)
         ["Lövő-távolság", _shooterRanges(r)!],
+      if (_rebounders(r) != null) ["Lepattanó-szerzők", _rebounders(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

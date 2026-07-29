@@ -1738,3 +1738,61 @@ def test_shooter_ranges_needs_enough_shots():
     rec = shooter_ranges(_shooter_range_match(
         [(7, 28.0), (9, 35.0)]))["home"]
     assert rec["far"] is None and rec["close"] is None
+
+
+# ---- Lepattanó-szerzők (ki nyeri a kipattanókat) -----------------------------
+
+def _rebound_match(winners, fps=25.0):
+    """HAZAI kimaradt lövések sorozata: a `winners` elemenként megadja,
+    melyik játékos (track_id, csapat) szerzi meg a kipattanót."""
+    frames = []
+    t = 0
+    for (tid, team) in winners:
+        # Lövés a +x kapura, ami mellé megy (y=5 → nem a kapufák közt).
+        for i in range(3):
+            frames.append(Frame(
+                t=t + i, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 3
+        for i in range(9):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=5.0, confidence=1.0)))
+            t += 1
+        # A kipattanót a megadott játékos szerzi meg.
+        for _ in range(int(2.0 * fps)):
+            frames.append(Frame(
+                t=t, players=[_pl(tid, team, 36.0, 6.0)],
+                ball=Ball(x=36.0, y=6.0, confidence=1.0)))
+            t += 1
+        for i in range(25):    # szünet a lövés-debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t += 25
+    return Match(_meta(fps), frames)
+
+
+def test_rebound_winners_counts_offensive_and_defensive():
+    """Három kipattanót a hazai 5-ös (támadó lepattanó), hármat a
+    vendég 21-es (védekező lepattanó) szerez meg."""
+    from handball.pipeline.attack_types import rebound_winners
+
+    rec = rebound_winners(_rebound_match(
+        [(5, Team.HOME)] * 3 + [(21, Team.AWAY)] * 3))
+    home = rec["home"]
+    away = rec["away"]
+    assert home["top_off"] is not None
+    assert home["top_off"]["player_id"] == 5
+    assert home["top_off"]["rebounds"] == 3
+    assert away["top_def"] is not None
+    assert away["top_def"]["player_id"] == 21
+
+
+def test_rebound_winners_needs_enough_cases():
+    """Kevés (3-nál kevesebb) lepattanónál nincs kiemelt szerző."""
+    from handball.pipeline.attack_types import rebound_winners
+
+    rec = rebound_winners(_rebound_match([(5, Team.HOME)] * 2))["home"]
+    assert rec["off"] and rec["off"][0]["rebounds"] == 2
+    assert rec["top_off"] is None
