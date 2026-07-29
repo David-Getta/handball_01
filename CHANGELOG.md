@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-védés lövés-tempó szerint**: a BOMBÁKAT vagy a HELYEZETT
+  lövéseket fogja-e a kapusuk. A távolság-sávos réteg azt mondja meg,
+  milyen messziről sebezhető, a poszt szerinti azt, milyen szögből —
+  ez azt, milyen tempójú lövés ellen: a kapura tartó lövéseket a mért
+  lövés-sebesség alapján kemény (80 km/h felett) és helyezett sávra
+  bontjuk (sávonként 4+ lövés, 15 százalékpontos eltérésnél). Aki a
+  bombákat fogja, az ellen sarokba helyezve, pattintva kell
+  befejezni; aki a helyezett lövéseket, ott a tempó dönt. Egy réteg,
+  sok felület: `gk_saves_by_speed` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (sávonkénti lövés/védés
+  darabszámok + edzői kulcs + csempe), 118. meccsterv-szabály (az ő
+  kapusuk gyenge tempó-sávja × a ti lövőerőtök), 139. edzés-szabály
+  (az adott sáv védése: reakció-indítás vagy lábmunka és alacsony kéz).
 - **Álló támadók**: KI mozog labda nélkül a legkevesebbet. A
   támadó-mozgás csapat-szinten mondja meg, álló vagy mozgásos a
   támadásuk — ez játékosonként bontja: szervezett támadásban mért

@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kapus-védés lövés-tempó szerint: bombák vagy helyezett lövések.
+    try:
+        from .goalkeeper import gk_saves_by_speed
+        gsp = gk_saves_by_speed(match)
+        for side, name in (("home", home), ("away", away)):
+            weak_gsp = gsp[side]["weak_band"]
+            if weak_gsp is None:
+                continue
+            band = "placed" if weak_gsp == "helyezett" else "hard"
+            other = "hard" if band == "placed" else "placed"
+            body += (f" A(z) {name} kapusa a {weak_gsp} lövések ellen "
+                     f"volt sebezhető: azokból "
+                     f"{gsp[side][band]['save_pct']:.0f}%-ot fogott "
+                     f"({gsp[side][band]['faced']} lövés), a másik "
+                     f"sávban {gsp[side][other]['save_pct']:.0f}%-ot.")
+    except Exception:
+        pass
     # Álló támadók: ki mozgott labda nélkül a legkevesebbet.
     try:
         from .tactics import static_attackers

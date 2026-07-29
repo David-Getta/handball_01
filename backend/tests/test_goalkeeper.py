@@ -1004,3 +1004,80 @@ def test_gk_saves_by_role_needs_enough_shots_per_role():
         [(2, True), (2, True), (1, False)]))["away"]
     assert rec["on_target"] == 3
     assert rec["weak"] is None
+
+
+# ---- Kapus-védés lövés-sebesség szerint --------------------------------------
+
+def _speed_shot(t0, step, save=False):
+    """HAZAI lövés a +x (vendég) kapura: a labda kockánként `step`
+    métert halad (ebből jön a sebesség); save=True → a vendég kapus
+    fogja (a labda 38,6-nál áll meg)."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    sx = 30.0
+    for i in range(3):
+        pls = [PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=10.0,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0),
+               PlayerPosition(track_id=99, team=Team.AWAY, x=39.2,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")]
+        frames.append(Frame(t=t0 + i, players=pls,
+                            ball=Ball(x=sx, y=10.0, confidence=1.0)))
+    t = t0 + 3
+    x = sx
+    target = 38.6 if save else 40.4
+    # Annyi kocka, hogy a lassabb lövés is elérje a célt.
+    n_steps = min(60, int((target - sx) / step) + 3)
+    for i in range(n_steps):
+        x = min(x + step, target)
+        pls = [PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=10.0,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0),
+               PlayerPosition(track_id=99, team=Team.AWAY, x=39.2,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0, role="kapus")]
+        frames.append(Frame(t=t + i, players=pls,
+                            ball=Ball(x=x, y=10.0, confidence=1.0)))
+    return frames
+
+
+def _speed_band_match(shots, fps=25.0):
+    """Lövés-sorozat: a `shots` elemei (kockánkénti lépés, védés?) párok."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+    for (step, save) in shots:
+        frames += _speed_shot(t, step, save=save)
+        t = frames[-1].t + 1
+        for i in range(25):    # szünet a debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t = frames[-1].t + 1
+    return Match(MatchMeta(match_id="gs", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_saves_by_speed_splits_hard_and_placed():
+    """A kemény (1,2 m/kocka ≈ 108 km/h) lövéseket fogja, a helyezett
+    (0,6 m/kocka ≈ 54 km/h) lövéseket nem → a helyezett a gyenge sávja."""
+    from handball.pipeline.goalkeeper import gk_saves_by_speed
+
+    shots = ([(1.2, True)] * 4 + [(0.6, False)] * 4)
+    rec = gk_saves_by_speed(_speed_band_match(shots))["away"]
+    assert rec["hard"]["faced"] == 4 and rec["hard"]["save_pct"] == 100.0
+    assert rec["placed"]["faced"] == 4 and rec["placed"]["save_pct"] == 0.0
+    assert rec["weak_band"] == "helyezett"
+    assert rec["on_target"] == 8
+
+
+def test_gk_saves_by_speed_needs_both_bands():
+    """Ha csak az egyik sávban van elég lövés, nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_saves_by_speed
+
+    rec = gk_saves_by_speed(_speed_band_match([(1.2, True)] * 5))["away"]
+    assert rec["hard"]["faced"] == 5 and rec["placed"]["faced"] == 0
+    assert rec["weak_band"] is None

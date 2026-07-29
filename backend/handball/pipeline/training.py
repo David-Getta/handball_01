@@ -1343,6 +1343,40 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 139) Kapus-védés lövés-tempó szerint: ha az egyik sávban
+    # sebezhető a kapusunk, az a sáv a téma.
+    try:
+        from .goalkeeper import gk_saves_by_speed
+        gsp139 = gk_saves_by_speed(match, config)
+        for side in ("home", "away"):
+            weak139 = gsp139[side]["weak_band"]
+            if weak139 is None:
+                continue
+            band139 = "placed" if weak139 == "helyezett" else "hard"
+            rec139 = gsp139[side][band139]
+            if weak139 == "helyezett":
+                drill139 = ("helyezett lövés védése: sorozatlövés "
+                            "lassabb, sarokba helyezett és pattintott "
+                            "lövésekkel — a kapus ne dőljön el korán, "
+                            "a lábmunka vigye a testet a labda "
+                            "vonalába, és a pattanó labdát alacsony "
+                            "kézzel fogja")
+            else:
+                drill139 = ("kemény lövés védése: sorozatlövés 9 "
+                            "m-ről, teljes erőből, a kapus "
+                            "reakció-indítással (a lövő karjára "
+                            "figyelve) és nagy testtel — a "
+                            "blokkolókkal egyeztetett sarok-zárással")
+            add(side, "kapus", f"{weak139.capitalize()} lövések védése",
+                f"a kapusunk a {weak139} lövésekből csak "
+                f"{rec139['save_pct']:.0f}%-ot fogott "
+                f"({rec139['saves']}/{rec139['faced']}) — egy "
+                "felkészült ellenfél pont ilyen lövéseket fog "
+                "választani",
+                drill139)
+    except Exception:
+        pass
+
     # 138) Álló támadók: ha valaki labda nélkül alig mozog, a labda
     # nélküli munka a téma.
     try:

@@ -1297,6 +1297,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapus-védés lövés-tempó szerint: a bombákat vagy a helyezett
+  // lövéseket fogja (sávonként 4+ lövés, 15 százalékpontos eltérés — a
+  // backend-kulccsal azonos küszöbök).
+  String? _gkSpeedBands(Map<String, dynamic> r) {
+    final hf = ((r["gsp_hard_faced"] as num?) ?? 0).toInt();
+    final hs = ((r["gsp_hard_saves"] as num?) ?? 0).toInt();
+    final pf = ((r["gsp_placed_faced"] as num?) ?? 0).toInt();
+    final ps = ((r["gsp_placed_saves"] as num?) ?? 0).toInt();
+    if (hf < 4 || pf < 4) return null;
+    final hp = 100.0 * hs / hf;
+    final pp = 100.0 * ps / pf;
+    if ((hp - pp).abs() < 15.0) return null;
+    if (hp > pp) {
+      return "a kapusuk a bombákat fogja "
+          "(${hp.toStringAsFixed(0)}%), a helyezett lövéseket nem "
+          "(${pp.toStringAsFixed(0)}%) · sarokba helyezve, "
+          "pattintva kell befejezni";
+    }
+    return "a kapusuk a helyezett lövéseket fogja "
+        "(${pp.toStringAsFixed(0)}%), a keményeket nem "
+        "(${hp.toStringAsFixed(0)}%) · vállalni kell a kemény lövést";
+  }
+
   // Álló támadók: ki mozog labda nélkül a legkevesebbet (60+ mért
   // másodperc, 30%-os elmaradás a csapatátlagtól — a backend-kulccsal
   // azonos küszöbök).
@@ -3327,6 +3350,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szélső-befejezés oldalanként", _wingSides(r)!],
       if (_staticAttackers(r) != null)
         ["Álló támadók", _staticAttackers(r)!],
+      if (_gkSpeedBands(r) != null)
+        ["Kapus-védés lövés-tempó szerint", _gkSpeedBands(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

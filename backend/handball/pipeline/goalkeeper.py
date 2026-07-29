@@ -1244,3 +1244,73 @@ def gk_saves_by_role(match: Match, config=None) -> dict:
                                           key=lambda kv: -kv[1]["faced"])),
                      "weak": weak}
     return out
+
+
+# Kapus-védés lövés-sebesség szerint: sávonként ennyi kapura tartó lövés
+# kell, a sáv-határ (km/h) a kemény és a helyezett lövés közt, és ekkora
+# (százalékpontos) különbség számít érdemi eltérésnek.
+GK_SPEED_MIN_FACED = 4
+GK_SPEED_HARD_KMH = 80.0
+GK_SPEED_GAP_PP = 15.0
+
+
+def gk_saves_by_speed(match: Match, config=None) -> dict:
+    """Kapus-védés lövés-sebesség szerint: a BOMBÁKAT vagy a HELYEZETT
+    lövéseket fogja-e a kapusuk.
+
+    A távolság-sávos réteg (gk_save_ranges) azt mondja meg, milyen
+    messziről sebezhető, a poszt szerinti (gk_saves_by_role) azt,
+    milyen szögből — ez azt, milyen TEMPÓJÚ lövés ellen: a rá kaputra
+    érkezett lövéseket a mért lövés-sebesség alapján kemény
+    (GK_SPEED_HARD_KMH felett) és helyezett sávra bontjuk.
+
+    Edzőileg: aki a bombákat fogja, de a helyezett lövésekre későn ér,
+    az ellen nem erővel, hanem a sarkokba helyezve kell lőni (és
+    fordítva) — a lövők előre tudják, mit válasszanak.
+
+    Visszatérés csapatonként (a VÉDŐ oldal = akinek a kapusa a kapuban
+    van): {"hard"/"placed": {"faced", "saves", "save_pct"},
+    "on_target", "weak_band"} — a weak_band ("kemény" / "helyezett")
+    csak akkor van kitöltve, ha mindkét sávban van legalább
+    GK_SPEED_MIN_FACED lövés, és a védés-arányuk legalább
+    GK_SPEED_GAP_PP százalékponttal eltér.
+    """
+    from .event_detection import shot_speeds
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    speeds = {(s_["t"], s_["team"]): s_["speed_kmh"]
+              for s_ in shot_speeds(match, config)["shots"]}
+    xg = match_xg(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        bands = {"hard": {"faced": 0, "saves": 0},
+                 "placed": {"faced": 0, "saves": 0}}
+        for sh in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if sh["team"] == side:
+                continue
+            if sh["outcome"] not in ("goal", "save"):
+                continue  # mellé/blokk: nem kaputra érkezett
+            kmh = speeds.get((sh["t"], sh["team"]))
+            if kmh is None:
+                continue
+            band = "hard" if kmh >= GK_SPEED_HARD_KMH else "placed"
+            bands[band]["faced"] += 1
+            if sh["outcome"] == "save":
+                bands[band]["saves"] += 1
+        for b in bands.values():
+            b["save_pct"] = (round(100.0 * b["saves"] / b["faced"], 1)
+                             if b["faced"] else None)
+        weak = None
+        if all(bands[b]["faced"] >= GK_SPEED_MIN_FACED
+               for b in ("hard", "placed")):
+            gap = bands["hard"]["save_pct"] - bands["placed"]["save_pct"]
+            if abs(gap) >= GK_SPEED_GAP_PP:
+                weak = "kemény" if gap < 0 else "helyezett"
+        out[side] = {**bands,
+                     "on_target": sum(b["faced"] for b in bands.values()),
+                     "weak_band": weak}
+    return out

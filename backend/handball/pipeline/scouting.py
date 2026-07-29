@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapusuk védései lövés-tempó szerint: sávonként (kemény /
+    # helyezett) a kapura tartó lövések és a fogások — darabszámok,
+    # meccsek közt pontosan összegződnek (védés-arány = saves / faced).
+    gsp_hard_faced: int = 0
+    gsp_hard_saves: int = 0
+    gsp_placed_faced: int = 0
+    gsp_placed_saves: int = 0
     # Álló támadóik: [{"player_id", "jersey", "seconds", "dist_m"}] —
     # játékosonként a támadásban mért idő és megtett út; összegek,
     # meccsek közt pontosan összegződnek (átlag = dist_m / seconds).
@@ -1728,6 +1735,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapus-védés lövés-tempó szerint: erővel vagy helyezéssel kell lőni.
+    if rep.gsp_hard_faced >= 4 and rep.gsp_placed_faced >= 4:
+        _gsp_h = 100.0 * rep.gsp_hard_saves / rep.gsp_hard_faced
+        _gsp_p = 100.0 * rep.gsp_placed_saves / rep.gsp_placed_faced
+        if abs(_gsp_h - _gsp_p) >= 15.0:
+            if _gsp_h > _gsp_p:
+                keys.append(
+                    f"A kapusuk a bombákat fogja ({_gsp_h:.0f}%), a "
+                    f"helyezett lövéseket nem ({_gsp_p:.0f}%) — nem "
+                    "erővel kell lőni rá: a sarkokba helyezve, "
+                    "megemelt vagy pattintott lövéssel jön a gól.")
+            else:
+                keys.append(
+                    f"A kapusuk a helyezett lövéseket fogja "
+                    f"({_gsp_p:.0f}%), a keményeket nem "
+                    f"({_gsp_h:.0f}%) — vele szemben a tempó dönt: "
+                    "vállalni kell a kemény lövést, és nem "
+                    "kicselezni akarni.")
 
     # Álló támadók: kit hagyhat ott a védője.
     _sta_rows = [p for p in (rep.static_attackers or [])
@@ -4113,6 +4139,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .goalkeeper import gk_saves_by_speed as _gsp
+        gsprec = _gsp(match, config)[team.value]
+        rep.gsp_hard_faced = gsprec["hard"]["faced"]
+        rep.gsp_hard_saves = gsprec["hard"]["saves"]
+        rep.gsp_placed_faced = gsprec["placed"]["faced"]
+        rep.gsp_placed_saves = gsprec["placed"]["saves"]
         from .tactics import static_attackers as _sta
         rep.static_attackers = [
             {"player_id": p["player_id"], "jersey": p["jersey"],
@@ -5850,6 +5882,29 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 118) Az ő kapusuk gyenge tempó-sávja × a ti lövőerőtök: a
+    # lövés-választást a kapusuk gyengéjéhez kell igazítani.
+    if opp.gsp_hard_faced >= 4 and opp.gsp_placed_faced >= 4 \
+            and own.spw_team_shots >= 6:
+        _h118 = 100.0 * opp.gsp_hard_saves / opp.gsp_hard_faced
+        _p118 = 100.0 * opp.gsp_placed_saves / opp.gsp_placed_faced
+        _own118 = own.spw_team_sum_kmh / own.spw_team_shots
+        if _p118 - _h118 >= 15.0 and _own118 >= 75.0:
+            plan.append(
+                f"A kapusuk a helyezett lövéseket fogja "
+                f"({_p118:.0f}%), a keményeket nem ({_h118:.0f}%), a "
+                f"ti átlagos lövés-sebességetek pedig "
+                f"{_own118:.0f} km/h — vele szemben a tempó a "
+                "megoldás: vállalni kell a kemény lövést a 9 m-ről, "
+                "és nem a sarkokat keresgélni.")
+        elif _h118 - _p118 >= 15.0:
+            plan.append(
+                f"A kapusuk a bombákat fogja ({_h118:.0f}%), a "
+                f"helyezett lövéseket nem ({_p118:.0f}%) — a "
+                "lövőitek ne erőből próbálkozzanak: sarokba helyezve, "
+                "megemelt vagy pattintott lövéssel kell befejezni, "
+                "és a hetesnél is ez a terv.")
+
     # 117) Az ő álló emberük × a ti kettőzésetek: pont onnan lehet
     # elvenni a védőt a kettőzéshez.
     _sta117 = [p for p in (opp.static_attackers or [])
@@ -7370,6 +7425,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        gsp_hard_faced=sum(r.gsp_hard_faced for r in reports),
+        gsp_hard_saves=sum(r.gsp_hard_saves for r in reports),
+        gsp_placed_faced=sum(r.gsp_placed_faced for r in reports),
+        gsp_placed_saves=sum(r.gsp_placed_saves for r in reports),
         static_attackers=_merge_static_attackers(reports),
         wfs_left_shots=sum(r.wfs_left_shots for r in reports),
         wfs_left_goals=sum(r.wfs_left_goals for r in reports),
