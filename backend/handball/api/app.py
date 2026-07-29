@@ -2963,6 +2963,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import pivot_side
+            res["pivot_side"] = pivot_side(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3589,6 +3594,8 @@ def create_app():
                 from ..pipeline.defense import defensive_shift_lag
                 _layer("defensive_shift_lag",
                        lambda: defensive_shift_lag(match))
+                from ..pipeline.attack_types import pivot_side
+                _layer("pivot_side", lambda: pivot_side(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

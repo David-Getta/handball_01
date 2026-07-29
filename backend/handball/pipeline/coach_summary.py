@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Beálló-oldal: melyik oldalon dolgozott a beállójuk.
+    try:
+        from .attack_types import pivot_side
+        pvs = pivot_side(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pvs = pvs[side]
+            if rec_pvs["dominant"] in (None, "közép"):
+                continue
+            body += (f" A(z) {name} beállója a {rec_pvs['dominant']} "
+                     f"oldalon dolgozott: a mért kockák "
+                     f"{rec_pvs['share_pct']:.0f}%-ában ott állt be.")
+    except Exception:
+        pass
     # Fal-csúszás: milyen gyorsan igazodott a faluk az oldalváltáshoz.
     try:
         from .defense import defensive_shift_lag

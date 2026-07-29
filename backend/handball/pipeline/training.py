@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 136) Beálló-oldal: ha a beállónk mindig ugyanoda áll be,
+    # kiszámítható — az oldalváltó beállózás a téma.
+    try:
+        from .attack_types import pivot_side
+        pvs136 = pivot_side(match, config)
+        for side in ("home", "away"):
+            rec136 = pvs136[side]
+            if rec136["dominant"] in (None, "közép"):
+                continue
+            add(side, "támadás", "Oldalváltó beállózás",
+                f"a beállónk a mért kockák "
+                f"{rec136['share_pct']:.0f}%-ában a "
+                f"{rec136['dominant']} oldalon állt be — a védelem "
+                "erre felkészül, és mindig ugyanaz a védőpár várja",
+                "oldalváltó beállózás: felállt támadás azzal a "
+                "szabállyal, hogy a beálló minden második támadásban "
+                "átvált a másik oldalra, és az átvonuláskor a falon "
+                "BELÜL, a védők háta mögött megy át — a kiszolgálás "
+                "az átvonulás pillanatában érkezzen, hogy az "
+                "átadás-zavart is gyakoroljátok")
+    except Exception:
+        pass
+
     # 135) Fal-csúszás: ha lassan követjük az oldalváltást, az eltolás
     # a téma.
     try:

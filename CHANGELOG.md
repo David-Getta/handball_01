@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Beálló-oldal**: MELYIK OLDALON dolgozik a beállójuk. A
+  beálló-terhelés azt mondja meg, mennyit játszanak rajta, a
+  beálló-kiszolgálás azt, kin keresztül — ez azt, hol: a becsült
+  beálló helyét kockánként bal / közép / jobb sávba soroljuk (a
+  támadó bal keze felőli oldal a "bal", mint az oldal-részrehajlásnál;
+  a sáv-küszöb a beálló szűk mozgásteréhez igazítva 1,5 m). Ha a
+  kockák több mint felében ugyanott áll be, az adott középső-oldalsó
+  védőpárnak kell rá készülnie — ott az átadás-fegyelem és a testes
+  fogadás, a másik oldalon szűkíthető a segítés. Egy réteg, sok
+  felület: `pivot_side` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (sávonkénti kocka-darabszámok +
+  edzői kulcs + csempe), 115. meccsterv-szabály (az ő beállójuk oldala
+  × a ti átjárható védő-oldalatok), 136. edzés-szabály (oldalváltó
+  beállózás: minden második támadásban átvált, a falon belül átvonulva).
 - **Fal-csúszás késése**: MILYEN GYORSAN igazodik a faluk az
   oldalváltáshoz. Az oldalváltás a támadó oldalról méri, milyen
   gyakran viszik át a labdát — ez a védő oldali válasz: felállt

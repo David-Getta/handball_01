@@ -1595,3 +1595,48 @@ def test_pivot_feeders_needs_enough_feeds():
 
     rec = pivot_feeders(_feeder_match([2, 2]))["home"]
     assert rec["feeds"] == 2 and rec["top"] is None
+
+
+# ---- Beálló-oldal (melyik oldalon áll be a beálló) ---------------------------
+
+def _pivot_side_match(pivot_y, frames_n=300, fps=25.0):
+    """HAZAI felállás: az 1-es a beálló (6 m-re a +x kaputól, `pivot_y`
+    magasságban), a 2-es és 3-as átlövők — a labda az átlövőnél."""
+    frames = []
+    for i in range(frames_n):
+        players = [_pl(1, Team.HOME, 34.0, pivot_y),
+                   _pl(2, Team.HOME, 30.0, 6.0),
+                   _pl(3, Team.HOME, 30.0, 14.0),
+                   _pl(21, Team.AWAY, 38.0, 10.0)]
+        frames.append(Frame(t=i, players=players,
+                            ball=Ball(x=30.0, y=6.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_pivot_side_finds_the_working_side():
+    """A +y oldalon (a támadó bal keze felől) dolgozó beálló → bal
+    oldali beállós játék."""
+    from handball.pipeline.attack_types import pivot_side
+
+    rec = pivot_side(_pivot_side_match(13.0))["home"]
+    assert rec["frames"] >= 100
+    assert rec["left"] > rec["right"]
+    assert rec["dominant"] == "bal" and rec["share_pct"] == 100.0
+
+
+def test_pivot_side_center_pivot():
+    """A kapu közepén dolgozó beálló → közép."""
+    from handball.pipeline.attack_types import pivot_side
+
+    rec = pivot_side(_pivot_side_match(10.0))["home"]
+    assert rec["dominant"] == "közép"
+
+
+def test_pivot_side_needs_enough_frames():
+    """Kevés mért kockánál nincs ítélet."""
+    from handball.pipeline.attack_types import pivot_side
+
+    # 99 kocka a 100-as küszöb alatt (a poszt-becsléshez elég, az
+    # ítélethez nem).
+    rec = pivot_side(_pivot_side_match(13.0, frames_n=99))["home"]
+    assert rec["dominant"] is None and rec["share_pct"] is None

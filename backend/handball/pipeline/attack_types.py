@@ -2180,3 +2180,87 @@ def pivot_feeders(match: Match,
                 top = players[0]
         out[side] = {"feeds": n, "players": players, "top": top}
     return out
+
+
+# Beálló-oldal: ennyi mért kocka kell az ítélethez, e feletti részarány
+# jelenti, hogy a beálló egy oldalon dolgozik — a sáv-küszöb a beálló
+# szűk (kapu előtti) mozgásteréhez igazítva szűkebb, mint a lövéseknél.
+PIVOT_SIDE_MIN_FRAMES = 100
+PIVOT_SIDE_SHARE = 55.0
+PIVOT_SIDE_BAND_M = 1.5
+
+
+def pivot_side(match: Match,
+               config: Optional[TacticsConfig] = None) -> dict:
+    """Beálló-oldal: MELYIK OLDALON dolgozik a beállójuk.
+
+    A beálló-terhelés (pivot_usage) azt mondja meg, mennyit játszanak
+    rajta, a beálló-kiszolgálás (pivot_feeders) azt, kin keresztül —
+    ez azt, HOL: a becsült beálló helyét kockánként (saját
+    birtokláskor, a támadó térfélen) bal / közép / jobb sávba soroljuk.
+    A "bal" itt is a TÁMADÓ bal keze felőli oldal, mint az
+    oldal-részrehajlásnál, így a két csapat összevethető.
+
+    Edzőileg: ha a beálló a kockák több mint felében ugyanazon az
+    oldalon áll be, az adott középső-oldalsó védőpárnak kell rá
+    készülnie — ott kell az átadás-fegyelem és a testes fogadás, a
+    másik oldalon pedig szűkíthető a segítés.
+
+    Visszatérés csapatonként: {"frames", "left", "center", "right",
+    "dominant", "share_pct"} — a dominant/share_pct None
+    PIVOT_SIDE_MIN_FRAMES alatt vagy PIVOT_SIDE_SHARE alatti
+    többségnél; a dominant "bal" / "jobb" / "közép".
+    """
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .roles import estimate_positions
+    from .tactics import possession_team
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    posts = estimate_positions(match, config)
+    pivots = {side: {tid for tid, r in posts.get(side, {}).items()
+                     if r["poszt"] == "beálló"}
+              for side in ("home", "away")}
+
+    counts = {side: {"left": 0, "center": 0, "right": 0}
+              for side in ("home", "away")}
+    for fr in match.frames:
+        poss = possession_team(fr, config)
+        if poss is None:
+            continue
+        side = poss.value
+        if not pivots[side]:
+            continue
+        goal_x = config.attacks_toward_x(poss)
+        for p in fr.players:
+            if p.team != poss or p.track_id not in pivots[side]:
+                continue
+            if abs(p.x - goal_x) > 15.0:
+                continue
+            d = p.y - cy
+            if config.attacks_toward_x(
+                    Team.HOME if side == "home" else Team.AWAY) == 0.0:
+                d = -d  # a -x felé támadónál a bal kéz a -y oldal
+            if d > PIVOT_SIDE_BAND_M:
+                counts[side]["left"] += 1
+            elif d < -PIVOT_SIDE_BAND_M:
+                counts[side]["right"] += 1
+            else:
+                counts[side]["center"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = dict(counts[side])
+        n = rec["left"] + rec["center"] + rec["right"]
+        rec["frames"] = n
+        rec["dominant"] = rec["share_pct"] = None
+        if n >= PIVOT_SIDE_MIN_FRAMES:
+            best = max(("left", "center", "right"), key=lambda k: rec[k])
+            pct = 100.0 * rec[best] / n
+            if pct >= PIVOT_SIDE_SHARE:
+                rec["dominant"] = {"left": "bal", "right": "jobb",
+                                   "center": "közép"}[best]
+                rec["share_pct"] = round(pct, 1)
+        out[side] = rec
+    return out

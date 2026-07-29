@@ -1297,6 +1297,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Beálló-oldal: melyik oldalon dolgozik a beállójuk (100+ mért
+  // kocka, 55% feletti oldal — a backend-kulccsal azonos küszöbök).
+  String? _pivotSide(Map<String, dynamic> r) {
+    final left = ((r["pvs_left"] as num?) ?? 0).toInt();
+    final center = ((r["pvs_center"] as num?) ?? 0).toInt();
+    final right = ((r["pvs_right"] as num?) ?? 0).toInt();
+    final total = left + center + right;
+    if (total < 100) return null;
+    var best = "bal";
+    var cnt = left;
+    if (center > cnt) {
+      best = "közép";
+      cnt = center;
+    }
+    if (right > cnt) {
+      best = "jobb";
+      cnt = right;
+    }
+    final pct = 100.0 * cnt / total;
+    if (pct < 55.0 || best == "közép") return null;
+    return "a beállójuk a $best oldalon dolgozik (a mért kockák "
+        "${pct.toStringAsFixed(0)}%-ában) · ott kell a legerősebb "
+        "védőpár és az átadás-fegyelem";
+  }
+
   // Fal-csúszás késése: milyen gyorsan igazodik a faluk az
   // oldalváltáshoz (200+ védekezett kocka; 0,6 mp felett lassú, 0,2 mp
   // alatt gyors — a backend-kulccsal azonos küszöbök).
@@ -3239,6 +3264,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Beálló-kiszolgálók", _pivotFeeders(r)!],
       if (_passSpeed(r) != null) ["Passz-sebesség", _passSpeed(r)!],
       if (_shiftLag(r) != null) ["Fal-csúszás késése", _shiftLag(r)!],
+      if (_pivotSide(r) != null) ["Beálló-oldal", _pivotSide(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -604,6 +604,12 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Beállójuk oldala: sávonként (bal / közép / jobb) a mért kockák —
+    # darabszámok, meccsek közt pontosan összegződnek (részarány =
+    # sáv / összes).
+    pvs_left: int = 0
+    pvs_center: int = 0
+    pvs_right: int = 0
     # Fal-csúszásuk késése: a mért védekezett kockák és a mért késés
     # (mp) szorzata — összegek, hogy meccsek közt súlyozva átlagolható
     # legyen (átlag-késés = dsl_sum_s / dsl_frames).
@@ -1711,6 +1717,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Beálló-oldal: melyik oldalon dolgozik a beállójuk.
+    _pvs_n = rep.pvs_left + rep.pvs_center + rep.pvs_right
+    if _pvs_n >= 100:
+        _pvs_best, _pvs_cnt = max(
+            (("bal", rep.pvs_left), ("közép", rep.pvs_center),
+             ("jobb", rep.pvs_right)), key=lambda kv: kv[1])
+        _pvs_pct = 100.0 * _pvs_cnt / _pvs_n
+        if _pvs_pct >= 55.0 and _pvs_best != "közép":
+            keys.append(
+                f"A beállójuk a {_pvs_best} oldalon dolgozik (a mért "
+                f"kockák {_pvs_pct:.0f}%-ában ott áll be) — az azon "
+                "az oldalon lévő középső-oldalsó védőpárnak kell rá "
+                "készülnie: átadás-fegyelem és testes fogadás ott, a "
+                "másik oldalon pedig szűkíthető a segítés.")
 
     # Fal-csúszás: milyen gyorsan igazodik a faluk az oldalváltáshoz.
     if rep.dsl_frames >= 200 and rep.dsl_sum_s > 0:
@@ -4039,6 +4060,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import pivot_side as _pvs
+        pvsrec = _pvs(match, config)[team.value]
+        rep.pvs_left = pvsrec["left"]
+        rep.pvs_center = pvsrec["center"]
+        rep.pvs_right = pvsrec["right"]
         from .defense import defensive_shift_lag as _dsl
         dslrec = _dsl(match, config)[team.value]
         if dslrec["lag_s"] is not None:
@@ -5738,6 +5764,31 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 115) Az ő beállójuk oldala × a ti gyenge védő-oldalatok: ha
+    # egybeesik, ott kell a segítést megerősíteni.
+    _pvsn115 = opp.pvs_left + opp.pvs_center + opp.pvs_right
+    _wings115 = own.csb_left + own.csb_right
+    if _pvsn115 >= 100 and _wings115 >= 8:
+        _best115, _cnt115 = max(
+            (("bal", opp.pvs_left), ("jobb", opp.pvs_right)),
+            key=lambda kv: kv[1])
+        _pct115 = 100.0 * _cnt115 / _pvsn115
+        _weak115 = "bal" if own.csb_left >= own.csb_right else "jobb"
+        _wpct115 = (100.0 * max(own.csb_left, own.csb_right)
+                    / _wings115)
+        # A támadó bal keze felőli oldal a fal JOBB oldalával néz szembe.
+        _mirror115 = "jobb" if _best115 == "bal" else "bal"
+        if _pct115 >= 55.0 and _wpct115 >= 65.0 \
+                and _mirror115 == _weak115:
+            plan.append(
+                f"A beállójuk a {_best115} oldalukon dolgozik (a mért "
+                f"kockák {_pct115:.0f}%-ában), és pont a ti falatok "
+                f"{_weak115} oldala az átjárható (a kapott "
+                f"szélső-sávos lövések {_wpct115:.0f}%-a onnan jön) — "
+                "ez a két gyengeség egymásra talál: oda kell a "
+                "legerősebb védőpár, előre megbeszélt átadással, és "
+                "onnan ne induljon kilépés a beálló mögül.")
+
     # 114) Az ő lassan csúszó faluk × a ti oldalváltásaitok: a
     # keresztpassz pont az ő késésüket bünteti.
     if opp.dsl_frames >= 200 and opp.dsl_sum_s > 0 \
@@ -7187,6 +7238,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pvs_left=sum(r.pvs_left for r in reports),
+        pvs_center=sum(r.pvs_center for r in reports),
+        pvs_right=sum(r.pvs_right for r in reports),
         dsl_frames=sum(r.dsl_frames for r in reports),
         dsl_sum_s=round(sum(r.dsl_sum_s for r in reports), 1),
         psp_passes=sum(r.psp_passes for r in reports),
