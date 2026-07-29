@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 137) Szélső-befejezés oldalanként: ha az egyik szélsőnk érdemben
+    # gyengébben fejez be, az ő szög-befejezése a téma.
+    try:
+        from .attack_types import wing_finishing_by_side
+        wfs137 = wing_finishing_by_side(match, config)
+        for side in ("home", "away"):
+            rec137 = wfs137[side]
+            if rec137["weak"] is None:
+                continue
+            weak137 = rec137[rec137["weak"]]
+            strong137 = rec137[rec137["strong"]]
+            add(side, "támadás", "Szélső-befejezés éles szögből",
+                f"a {rec137['weak']} szélsőnk "
+                f"{weak137['goal_pct']:.0f}%-ot értékesített "
+                f"({weak137['goals']}/{weak137['shots']}), a másik "
+                f"oldalon {strong137['goal_pct']:.0f}% — a védelem ezt "
+                "kiszámolja, és arra az oldalra engedi rá a lövést",
+                "szélső-befejezés éles szögből: sorozatlövés a "
+                "gyengébb oldalról kapussal, három megoldással "
+                "váltogatva (hosszú sarok emeléssel, rövid sarok "
+                "lapos lövéssel, és a kapus lábai közé) — a szélső "
+                "MINDIG a levegőben, befelé lépve fejezzen be, hogy "
+                "a szöge nyíljon")
+    except Exception:
+        pass
+
     # 136) Beálló-oldal: ha a beállónk mindig ugyanoda áll be,
     # kiszámítható — az oldalváltó beállózás a téma.
     try:

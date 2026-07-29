@@ -1640,3 +1640,51 @@ def test_pivot_side_needs_enough_frames():
     # ítélethez nem).
     rec = pivot_side(_pivot_side_match(13.0, frames_n=99))["home"]
     assert rec["dominant"] is None and rec["share_pct"] is None
+
+
+# ---- Szélső-befejezés oldalanként -------------------------------------------
+
+def _wing_side_match(shots):
+    """HAZAI szélső-lövések sorozata: a `shots` elemei (y, gól?) párok —
+    y=17 a támadó bal keze felőli oldal, y=3 a másik."""
+    frames = []
+    t = 0
+    for (sy, goal) in shots:
+        frames += _wing_or_central_shot(t, 35.0, sy, goal=goal)
+        t = frames[-1].t + 1
+        for i in range(20):    # szünet a lövés-debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t = frames[-1].t + 1
+    return Match(_meta(), frames)
+
+
+def test_wing_finishing_by_side_splits_the_two_wings():
+    """A bal oldali szélső 3-ból 3-at, a jobb 3-ból 0-t értékesít → a
+    bal az erős, a jobb a gyenge oldaluk."""
+    from handball.pipeline.attack_types import wing_finishing_by_side
+
+    rec = wing_finishing_by_side(_wing_side_match(
+        [(17.0, True)] * 3 + [(3.0, False)] * 3))["home"]
+    assert rec["bal"]["shots"] == 3 and rec["bal"]["goal_pct"] == 100.0
+    assert rec["jobb"]["shots"] == 3 and rec["jobb"]["goal_pct"] == 0.0
+    assert rec["strong"] == "bal" and rec["weak"] == "jobb"
+
+
+def test_wing_finishing_by_side_needs_shots_on_both_sides():
+    """Ha csak az egyik oldalon volt lövés, nincs oldal-ítélet."""
+    from handball.pipeline.attack_types import wing_finishing_by_side
+
+    rec = wing_finishing_by_side(_wing_side_match(
+        [(17.0, True)] * 4))["home"]
+    assert rec["bal"]["shots"] == 4 and rec["jobb"]["shots"] == 0
+    assert rec["strong"] is None and rec["weak"] is None
+
+
+def test_wing_finishing_by_side_similar_sides_have_no_verdict():
+    """Ha a két oldal hasonlóan fejez be, nincs kiemelt oldal."""
+    from handball.pipeline.attack_types import wing_finishing_by_side
+
+    rec = wing_finishing_by_side(_wing_side_match(
+        [(17.0, True)] * 3 + [(3.0, True)] * 3))["home"]
+    assert rec["strong"] is None and rec["weak"] is None

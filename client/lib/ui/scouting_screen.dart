@@ -1297,6 +1297,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Szélső-befejezés oldalanként: melyik szélsőjük veszélyes
+  // (oldalanként 3+ lövés, 25 százalékpontos eltérés — a
+  // backend-kulccsal azonos küszöbök).
+  String? _wingSides(Map<String, dynamic> r) {
+    final ls = ((r["wfs_left_shots"] as num?) ?? 0).toInt();
+    final lg = ((r["wfs_left_goals"] as num?) ?? 0).toInt();
+    final rs = ((r["wfs_right_shots"] as num?) ?? 0).toInt();
+    final rg = ((r["wfs_right_goals"] as num?) ?? 0).toInt();
+    if (ls < 3 || rs < 3) return null;
+    final lp = 100.0 * lg / ls;
+    final rp = 100.0 * rg / rs;
+    if ((lp - rp).abs() < 25.0) return null;
+    final strong = lp > rp ? "bal" : "jobb";
+    final weak = lp > rp ? "jobb" : "bal";
+    final sp = lp > rp ? lp : rp;
+    final wp = lp > rp ? rp : lp;
+    return "a $strong szélsőjük a veszélyes "
+        "(${sp.toStringAsFixed(0)}%-os befejezés, a $weak oldalon "
+        "${wp.toStringAsFixed(0)}%) · vele szemben zárni a szöget, a "
+        "gyengébbre rá lehet engedni a lövést";
+  }
+
   // Beálló-oldal: melyik oldalon dolgozik a beállójuk (100+ mért
   // kocka, 55% feletti oldal — a backend-kulccsal azonos küszöbök).
   String? _pivotSide(Map<String, dynamic> r) {
@@ -3265,6 +3287,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_passSpeed(r) != null) ["Passz-sebesség", _passSpeed(r)!],
       if (_shiftLag(r) != null) ["Fal-csúszás késése", _shiftLag(r)!],
       if (_pivotSide(r) != null) ["Beálló-oldal", _pivotSide(r)!],
+      if (_wingSides(r) != null)
+        ["Szélső-befejezés oldalanként", _wingSides(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

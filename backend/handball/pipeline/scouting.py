@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Szélső-befejezésük oldalanként: oldalanként a szélső-sávos
+    # lövések és góljaik — darabszámok, meccsek közt pontosan
+    # összegződnek (gólarány = gól / lövés).
+    wfs_left_shots: int = 0
+    wfs_left_goals: int = 0
+    wfs_right_shots: int = 0
+    wfs_right_goals: int = 0
     # Beállójuk oldala: sávonként (bal / közép / jobb) a mért kockák —
     # darabszámok, meccsek közt pontosan összegződnek (részarány =
     # sáv / összes).
@@ -1717,6 +1724,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Szélső-befejezés oldalanként: melyik szélsőjük veszélyes.
+    if rep.wfs_left_shots >= 3 and rep.wfs_right_shots >= 3:
+        _wfs_l = 100.0 * rep.wfs_left_goals / rep.wfs_left_shots
+        _wfs_r = 100.0 * rep.wfs_right_goals / rep.wfs_right_shots
+        if abs(_wfs_l - _wfs_r) >= 25.0:
+            _wfs_strong = "bal" if _wfs_l > _wfs_r else "jobb"
+            _wfs_weak = "jobb" if _wfs_l > _wfs_r else "bal"
+            _wfs_spct = max(_wfs_l, _wfs_r)
+            _wfs_wpct = min(_wfs_l, _wfs_r)
+            keys.append(
+                f"A {_wfs_strong} szélsőjük a veszélyes "
+                f"({_wfs_spct:.0f}%-os befejezés, a másik oldalon "
+                f"{_wfs_wpct:.0f}%) — vele szemben időben ki kell "
+                f"futni és zárni a szöget (a kapus a rövid sarkot "
+                f"veszi), a {_wfs_weak} szélsőjükre viszont rá lehet "
+                "engedni a lövést: ott a befelé segítés többet ér.")
 
     # Beálló-oldal: melyik oldalon dolgozik a beállójuk.
     _pvs_n = rep.pvs_left + rep.pvs_center + rep.pvs_right
@@ -4060,6 +4084,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import wing_finishing_by_side as _wfs
+        wfsrec = _wfs(match, config)[team.value]
+        rep.wfs_left_shots = wfsrec["bal"]["shots"]
+        rep.wfs_left_goals = wfsrec["bal"]["goals"]
+        rep.wfs_right_shots = wfsrec["jobb"]["shots"]
+        rep.wfs_right_goals = wfsrec["jobb"]["goals"]
         from .attack_types import pivot_side as _pvs
         pvsrec = _pvs(match, config)[team.value]
         rep.pvs_left = pvsrec["left"]
@@ -5764,6 +5794,26 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 116) Az ő gyenge szélsőjük × a ti kifutó szélső-védekezésetek: a
+    # segítést arról az oldalról lehet befelé hozni.
+    if opp.wfs_left_shots >= 3 and opp.wfs_right_shots >= 3 \
+            and own.wg_frames >= 100:
+        _l116 = 100.0 * opp.wfs_left_goals / opp.wfs_left_shots
+        _r116 = 100.0 * opp.wfs_right_goals / opp.wfs_right_shots
+        if abs(_l116 - _r116) >= 25.0:
+            _weak116 = "jobb" if _l116 > _r116 else "bal"
+            _strong116 = "bal" if _l116 > _r116 else "jobb"
+            _wgap116 = 100.0 * own.wg_wide / own.wg_frames
+            if _wgap116 >= 40.0:
+                plan.append(
+                    f"A {_weak116} szélsőjük gyengén fejez be "
+                    f"({min(_l116, _r116):.0f}%, a {_strong116} "
+                    f"oldalon {max(_l116, _r116):.0f}%), a ti falatok "
+                    f"pedig réses (a kockák {_wgap116:.0f}%-ában 3,5 "
+                    "m-nél nagyobb rés van) — a gyenge oldalon rá "
+                    "lehet engedni a lövést, és onnan kell befelé "
+                    "hozni a segítést, hogy a rések bezáruljanak.")
+
     # 115) Az ő beállójuk oldala × a ti gyenge védő-oldalatok: ha
     # egybeesik, ott kell a segítést megerősíteni.
     _pvsn115 = opp.pvs_left + opp.pvs_center + opp.pvs_right
@@ -7238,6 +7288,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        wfs_left_shots=sum(r.wfs_left_shots for r in reports),
+        wfs_left_goals=sum(r.wfs_left_goals for r in reports),
+        wfs_right_shots=sum(r.wfs_right_shots for r in reports),
+        wfs_right_goals=sum(r.wfs_right_goals for r in reports),
         pvs_left=sum(r.pvs_left for r in reports),
         pvs_center=sum(r.pvs_center for r in reports),
         pvs_right=sum(r.pvs_right for r in reports),

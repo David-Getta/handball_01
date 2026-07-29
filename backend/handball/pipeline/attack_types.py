@@ -2264,3 +2264,75 @@ def pivot_side(match: Match,
                 rec["share_pct"] = round(pct, 1)
         out[side] = rec
     return out
+
+
+# Szélső-befejezés oldalanként: oldalanként ennyi lövés kell az
+# ítélethez, és ekkora (százalékpontos) különbség számít érdemi
+# oldal-eltérésnek.
+WING_SIDE_MIN_SHOTS = 3
+WING_SIDE_GAP_PP = 25.0
+
+
+def wing_finishing_by_side(match: Match,
+                           config: Optional[TacticsConfig] = None) -> dict:
+    """Szélső-befejezés oldalanként: MELYIK szélsőjük veszélyes.
+
+    A szélső-befejezés (wing_finishing) a két szélt együtt méri — ez
+    szétbontja: a szélső-sávból leadott lövéseket a TÁMADÓ bal keze
+    felőli ("bal") és a másik ("jobb") oldalra osztjuk, és
+    oldalanként számolunk gólarányt.
+
+    Edzőileg ez osztja szét a védekezési feladatokat: a jól befejező
+    szélső ellen időben ki kell futni és zárni a szöget (a kapus a
+    rövid sarkot veszi), a gyenge szélsőre viszont rá lehet engedni a
+    lövést — ott a befelé segítés többet ér.
+
+    Visszatérés csapatonként: {"bal"/"jobb": {"shots", "goals",
+    "goal_pct"}, "strong", "weak"} — a goal_pct None, ha az adott
+    oldalon nem volt lövés; a "strong"/"weak" csak akkor van kitöltve,
+    ha mindkét oldalon van legalább WING_SIDE_MIN_SHOTS lövés, és a
+    gólarányuk legalább WING_SIDE_GAP_PP százalékponttal tér el.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    xg = match_xg(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        team = Team.HOME if side == "home" else Team.AWAY
+        goal_x = config.attacks_toward_x(team)
+        rec = {"bal": {"shots": 0, "goals": 0, "goal_pct": None},
+               "jobb": {"shots": 0, "goals": 0, "goal_pct": None},
+               "strong": None, "weak": None}
+        for sh in xg["shots"]:
+            if sh["team"] != side:
+                continue
+            dist = math.hypot(sh["x"] - goal_x, sh["y"] - cy)
+            if abs(sh["y"] - cy) < WING_LATERAL_M or dist > WING_MAX_DIST_M:
+                continue
+            d = sh["y"] - cy
+            if goal_x == 0.0:
+                d = -d  # a -x felé támadónál a bal kéz a -y oldal
+            band = "bal" if d > 0 else "jobb"
+            rec[band]["shots"] += 1
+            if sh["outcome"] == "goal":
+                rec[band]["goals"] += 1
+        for band in ("bal", "jobb"):
+            n = rec[band]["shots"]
+            if n:
+                rec[band]["goal_pct"] = round(
+                    100.0 * rec[band]["goals"] / n, 1)
+        if all(rec[b]["shots"] >= WING_SIDE_MIN_SHOTS
+               for b in ("bal", "jobb")):
+            gap = rec["bal"]["goal_pct"] - rec["jobb"]["goal_pct"]
+            if abs(gap) >= WING_SIDE_GAP_PP:
+                rec["strong"] = "bal" if gap > 0 else "jobb"
+                rec["weak"] = "jobb" if gap > 0 else "bal"
+        out[side] = rec
+    return out

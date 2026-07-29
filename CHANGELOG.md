@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Szélső-befejezés oldalanként**: MELYIK szélsőjük veszélyes. A
+  szélső-befejezés a két szélt együtt méri — ez szétbontja: a
+  szélső-sávos lövéseket a támadó bal keze felőli és a másik oldalra
+  osztjuk, és oldalanként számolunk gólarányt (oldalanként 3+ lövés,
+  25 százalékpontos eltérésnél). A jól befejező szélső ellen időben ki
+  kell futni és zárni a szöget (a kapus a rövid sarkot veszi), a
+  gyengére viszont rá lehet engedni a lövést — ott a befelé segítés
+  többet ér. Egy réteg, sok felület: `wing_finishing_by_side` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (oldalankénti lövés/gól darabszámok + edzői kulcs + csempe), 116.
+  meccsterv-szabály (az ő gyenge szélsőjük × a ti réses falatok), 137.
+  edzés-szabály (szélső-befejezés éles szögből: három megoldás
+  váltogatva, mindig befelé lépve).
 - **Beálló-oldal**: MELYIK OLDALON dolgozik a beállójuk. A
   beálló-terhelés azt mondja meg, mennyit játszanak rajta, a
   beálló-kiszolgálás azt, kin keresztül — ez azt, hol: a becsült

@@ -833,6 +833,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Szélső-befejezés oldalanként: melyik szélsőjük volt veszélyes.
+    try:
+        from .attack_types import wing_finishing_by_side
+        wfs = wing_finishing_by_side(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wfs = wfs[side]
+            if rec_wfs["strong"] is None:
+                continue
+            strong = rec_wfs[rec_wfs["strong"]]
+            weak = rec_wfs[rec_wfs["weak"]]
+            body += (f" A(z) {name} {rec_wfs['strong']} szélsője volt "
+                     f"a veszélyes: {strong['goal_pct']:.0f}% "
+                     f"({strong['goals']}/{strong['shots']}), míg a "
+                     f"{rec_wfs['weak']} oldalon "
+                     f"{weak['goal_pct']:.0f}% "
+                     f"({weak['goals']}/{weak['shots']}).")
+    except Exception:
+        pass
     # Beálló-oldal: melyik oldalon dolgozott a beállójuk.
     try:
         from .attack_types import pivot_side
