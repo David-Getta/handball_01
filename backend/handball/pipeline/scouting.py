@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Két beállós játékuk: a mért támadások és azok száma, amelyekben
+    # két emberük is a 6 m-es zónában dolgozott — darabszámok, meccsek
+    # közt pontosan összegződnek (arány = dpv_double / dpv_attacks).
+    dpv_attacks: int = 0
+    dpv_double: int = 0
     # Hajrá-embereik: [{"player_id", "jersey", "frames"}] — az utolsó
     # 10 percben a pályán töltött kockák; darabszámok, meccsek közt
     # pontosan összegződnek (aki több meccsen is fent van, előre kerül).
@@ -1791,6 +1796,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Két beállós játék: hány emberrel dolgoznak a 6 m-en.
+    if rep.dpv_attacks >= 8:
+        _dpv_pct = 100.0 * rep.dpv_double / rep.dpv_attacks
+        if _dpv_pct >= 30.0:
+            keys.append(
+                f"Két beállóval játszanak (a támadásaik "
+                f"{_dpv_pct:.0f}%-ában két emberük is a 6 m-es "
+                f"zónában dolgozik, {rep.dpv_double}/"
+                f"{rep.dpv_attacks}) — a fal közepét tömöríteni kell: "
+                "a két középső védő NE adja át egymásnak a "
+                "beállókat, a szélső védők pedig feljebb léphetnek, "
+                "mert a szélek üresen maradnak.")
+        elif _dpv_pct <= 10.0:
+            keys.append(
+                f"Egy beállós felállást játszanak (a támadásaiknak "
+                f"csak {_dpv_pct:.0f}%-ában van két emberük a 6 m-en) "
+                "— a segítő védő nyugodtan befelé dolgozhat, és a "
+                "beállójuk körül lehet kettőzni.")
 
     # Hajrá-ötös: kikre kell tervezni a döntő szakaszt.
     _cll_rows = [p for p in (rep.clutch_players or [])
@@ -4412,6 +4436,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import double_pivot_usage as _dpv
+        dpvrec = _dpv(match, config)[team.value]
+        rep.dpv_attacks = dpvrec["attacks"]
+        rep.dpv_double = dpvrec["double_attacks"]
         from .momentum import clutch_lineup as _cll
         rep.clutch_players = [
             {"player_id": p["player_id"], "jersey": p["jersey"],
@@ -6301,6 +6329,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 130) Az ő két beállós játékuk × a ti széthúzott falatok: a
+    # közepet tömöríteni kell, a szélek üresen maradnak.
+    if opp.dpv_attacks >= 8 and own.defw_frames >= 100:
+        _dpv130 = 100.0 * opp.dpv_double / opp.dpv_attacks
+        _dw130 = own.defw_sum_m / own.defw_frames
+        if _dpv130 >= 30.0 and _dw130 >= 15.0:
+            plan.append(
+                f"Két beállóval játszanak (a támadásaik "
+                f"{_dpv130:.0f}%-ában két emberük is a 6 m-en van), a "
+                f"ti falatok pedig széthúzott ({_dw130:.1f} m átlagos "
+                "szélesség) — a közepet be kell zárni: a két középső "
+                "védő szorosan egymás mellett, saját beállóval, és a "
+                "szélső védők feljebb lépve, mert a szélek amúgy is "
+                "üresen maradnak.")
+
     # 129) Az ő hajrá-emberük × a ti hajrá-mérlegetek: a záró
     # szakaszra név szerinti terv kell.
     _cll129 = [p for p in (opp.clutch_players or []) if p["frames"] > 0]
@@ -8064,6 +8107,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        dpv_attacks=sum(r.dpv_attacks for r in reports),
+        dpv_double=sum(r.dpv_double for r in reports),
         clutch_players=_merge_clutch_players(reports),
         fbs_breaks=sum(r.fbs_breaks for r in reports),
         fbs_sum_runners=round(sum(r.fbs_sum_runners for r in reports), 1),

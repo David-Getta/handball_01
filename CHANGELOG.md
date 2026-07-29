@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Két beállós játék**: MENNYIT JÁTSZANAK két emberrel a 6 m-en. A
+  beálló-terhelés azt mondja meg, mennyi támadás megy át a beállón, a
+  beálló-oldal azt, hol dolgozik — ez azt, hány emberrel:
+  támadásonként nézzük, a kockák mekkora részében van legalább két
+  támadó a beálló-zónában (8+ támadás; 30% felett két beállós, 10%
+  alatt egy beállós felállás). Két beálló ellen a fal közepét
+  tömöríteni kell — a középső védők nem adhatják át egymásnak a
+  beállókat, a szélső védők feljebb léphetnek; egy beállós felállásnál
+  a segítő védő befelé dolgozhat. Egy réteg, sok felület:
+  `double_pivot_usage` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (támadás-darabszámok + két edzői
+  kulcs + csempe), 130. meccsterv-szabály (az ő két beállós játékuk ×
+  a ti széthúzott falatok), 151. edzés-szabály (közép-tömörítés:
+  minden középső védőnek saját beállója van).
 - **Hajrá-ötös**: KIK VANNAK A PÁLYÁN a döntő szakaszban. A
   hajrá-teljesítmény azt mondja meg, ki bírja a meccs végét, a
   hajrá-gólszerzők azt, ki lő ilyenkor — ez azt, kit küldenek pályára:

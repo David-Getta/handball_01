@@ -3038,6 +3038,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import double_pivot_usage
+            res["double_pivot_usage"] = double_pivot_usage(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3705,6 +3710,9 @@ def create_app():
                        lambda: fast_break_support(match))
                 from ..pipeline.momentum import clutch_lineup
                 _layer("clutch_lineup", lambda: clutch_lineup(match))
+                from ..pipeline.attack_types import double_pivot_usage
+                _layer("double_pivot_usage",
+                       lambda: double_pivot_usage(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

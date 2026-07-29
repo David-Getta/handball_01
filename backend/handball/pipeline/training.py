@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 151) Két beállós játék: ha az ellenfél két beállóval játszik, a
+    # közép-tömörítés a téma (a saját oldalon a felállás variálása).
+    try:
+        from .attack_types import double_pivot_usage
+        dpv151 = double_pivot_usage(match, config)
+        for side in ("home", "away"):
+            opp151 = "away" if side == "home" else "home"
+            rec151 = dpv151[opp151]
+            if rec151["verdict"] != "két beállóval játszanak":
+                continue
+            add(side, "védekezés", "Közép-tömörítés két beálló ellen",
+                f"az ellenfél a támadásaik {rec151['share_pct']:.0f}%-"
+                "ában két emberrel dolgozott a 6 m-en — a két középső "
+                "védőnk így folyamatosan túlterhelt, és az "
+                "átadás-zavarból jönnek a gólok",
+                "közép-tömörítés: 6-0 elleni gyakorlás két beállóval "
+                "szemben, ahol MINDEN középső védőnek SAJÁT beállója "
+                "van (nincs átadás), a szélső védők pedig feljebb "
+                "lépnek a széles átlövőre — a támadók kötelezően "
+                "cserélik a két beálló helyét, hogy a fogás "
+                "folyamatos legyen")
+    except Exception:
+        pass
+
     # 150) Hajrá-ötös: a záró szakasz emberei együtt gyakorolják a
     # befejezést (a hajrában nincs idő ismerkedni).
     try:

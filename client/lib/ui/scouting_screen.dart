@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Két beállós játék: hány emberrel dolgoznak a 6 m-en (8+ támadás;
+  // 30% felett két beállós, 10% alatt egy beállós — a backend-kulccsal
+  // azonos küszöbök).
+  String? _doublePivot(Map<String, dynamic> r) {
+    final att = ((r["dpv_attacks"] as num?) ?? 0).toInt();
+    final dbl = ((r["dpv_double"] as num?) ?? 0).toInt();
+    if (att < 8) return null;
+    final pct = 100.0 * dbl / att;
+    if (pct >= 30.0) {
+      return "két beállóval játszanak (a támadásaik "
+          "${pct.toStringAsFixed(0)}%-ában, $dbl/$att) · a fal közepét "
+          "tömöríteni kell, saját beállóval mindkét középső védőnek";
+    }
+    if (pct <= 10.0) {
+      return "egy beállós felállás (a támadásaiknak csak "
+          "${pct.toStringAsFixed(0)}%-ában van két emberük a 6 m-en) · "
+          "a segítő védő befelé dolgozhat";
+    }
+    return null;
+  }
+
   // Hajrá-ötös: kik vannak a pályán a döntő szakaszban (legalább négy
   // hajrá-ember — a backend-kulccsal azonos küszöb).
   String? _clutchLineup(Map<String, dynamic> r) {
@@ -3634,6 +3655,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_fastBreakSupport(r) != null)
         ["Kontra-kíséret", _fastBreakSupport(r)!],
       if (_clutchLineup(r) != null) ["Hajrá-ötös", _clutchLineup(r)!],
+      if (_doublePivot(r) != null) ["Két beállós játék", _doublePivot(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

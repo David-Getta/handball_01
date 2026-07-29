@@ -1905,3 +1905,60 @@ def test_fast_break_support_needs_enough_breaks():
     rec = fast_break_support(_fast_break_match(runners=4,
                                                n_breaks=2))["home"]
     assert rec["avg_runners"] is None and rec["verdict"] is None
+
+
+# ---- Két beállós játék -------------------------------------------------------
+
+def _double_pivot_match(pivots, n_attacks=10, fps=25.0):
+    """HAZAI támadás-sorozat: `pivots` támadó áll a 6 m-es zónában (a
+    +x kaputól 5-6 m-re), a többi a 9 m-en kívül."""
+    frames = []
+    t = 0
+    for _ in range(n_attacks):
+        for i in range(int(3.0 * fps)):
+            players = [_pl(1, Team.HOME, 28.0, 10.0),
+                       _pl(2, Team.HOME, 28.0, 6.0)]
+            for k in range(pivots):
+                players.append(_pl(5 + k, Team.HOME, 34.5,
+                                   8.0 + 4.0 * k))
+            players += [_pl(21, Team.AWAY, 37.0, 8.0),
+                        _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=28.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):    # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_double_pivot_usage_spots_the_two_pivot_setup():
+    """Két emberrel a 6 m-es zónában → két beállós játék."""
+    from handball.pipeline.attack_types import double_pivot_usage
+
+    rec = double_pivot_usage(_double_pivot_match(pivots=2))["home"]
+    assert rec["attacks"] >= 8
+    assert rec["double_attacks"] == rec["attacks"]
+    assert rec["share_pct"] == 100.0
+    assert rec["verdict"] == "két beállóval játszanak"
+
+
+def test_double_pivot_usage_spots_the_single_pivot():
+    """Egy beállóval → egy beállós felállás."""
+    from handball.pipeline.attack_types import double_pivot_usage
+
+    rec = double_pivot_usage(_double_pivot_match(pivots=1))["home"]
+    assert rec["double_attacks"] == 0 and rec["share_pct"] == 0.0
+    assert rec["verdict"] == "egy beállós felállás"
+
+
+def test_double_pivot_usage_needs_enough_attacks():
+    """Kevés (8-nál kevesebb) mért támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import double_pivot_usage
+
+    rec = double_pivot_usage(_double_pivot_match(pivots=2,
+                                                n_attacks=4))["home"]
+    assert rec["share_pct"] is None and rec["verdict"] is None

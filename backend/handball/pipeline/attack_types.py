@@ -2619,3 +2619,72 @@ def fast_break_support(match: Match,
                 rec["verdict"] = "magányos kontra"
         out[side] = rec
     return out
+
+
+# Két beállós játék: a kaputól ilyen közel számít valaki beálló-zónában
+# lévőnek; a támadás akkor "két beállós", ha a kockái ekkora részében
+# ketten is ott vannak, és ennyi mért támadástól ítélünk.
+DPIV_ZONE_M = 7.5
+DPIV_FRAME_SHARE = 40.0
+DPIV_MIN_ATTACKS = 8
+DPIV_ATTACK_SHARE = 30.0
+
+
+def double_pivot_usage(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Két beállós játék: MENNYIT JÁTSZANAK két emberrel a 6 m-en.
+
+    A beálló-terhelés (pivot_usage) azt mondja meg, mennyi támadás megy
+    át a beállón, a beálló-oldal (pivot_side) azt, hol dolgozik — ez
+    azt, HÁNY emberrel: támadás-szakaszonként megnézzük, a kockák
+    mekkora részében van legalább KÉT támadó a beálló-zónában (a
+    kaputól DPIV_ZONE_M-en belül).
+
+    Edzőileg: a két beállós támadás ellen a fal középső részét
+    tömöríteni kell — a két középső védő nem adhatja át egymásnak a
+    beállókat, és a szélső védők feljebb léphetnek, mert a szélek
+    üresen maradnak; ha viszont alig játszanak két beállóval, a segítő
+    védő nyugodtan befelé dolgozhat.
+
+    Visszatérés csapatonként: {"attacks", "double_attacks",
+    "share_pct", "verdict"} — a share_pct/verdict None
+    DPIV_MIN_ATTACKS alatt; a verdict "két beállóval játszanak" /
+    "egy beállós felállás" / None.
+    """
+    import math
+
+    from .calibration import COURT_WIDTH_M
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+
+    out: dict = {side: {"attacks": 0, "double_attacks": 0,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        goal_x = config.attacks_toward_x(seq.team)
+        inside = 0
+        for fr in seq.frames:
+            n = sum(1 for p in fr.players
+                    if p.team == seq.team and p.role != "kapus"
+                    and math.hypot(p.x - goal_x, p.y - cy) <= DPIV_ZONE_M)
+            if n >= 2:
+                inside += 1
+        rec = out[side]
+        rec["attacks"] += 1
+        if seq.frames and (100.0 * inside / len(seq.frames)
+                           >= DPIV_FRAME_SHARE):
+            rec["double_attacks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attacks"] >= DPIV_MIN_ATTACKS:
+            share = 100.0 * rec["double_attacks"] / rec["attacks"]
+            rec["share_pct"] = round(share, 1)
+            if share >= DPIV_ATTACK_SHARE:
+                rec["verdict"] = "két beállóval játszanak"
+            elif share <= 10.0:
+                rec["verdict"] = "egy beállós felállás"
+    return out

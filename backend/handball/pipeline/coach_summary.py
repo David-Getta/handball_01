@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Két beállós játék: hány emberrel dolgoztak a 6 m-en.
+    try:
+        from .attack_types import double_pivot_usage
+        dpv = double_pivot_usage(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dpv = dpv[side]
+            if rec_dpv["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_dpv['verdict']}: a "
+                     f"támadásaik {rec_dpv['share_pct']:.0f}%-ában "
+                     f"volt két emberük a 6 m-es zónában "
+                     f"({rec_dpv['attacks']} támadás).")
+    except Exception:
+        pass
     # Hajrá-ötös: kik voltak a pályán a döntő szakaszban.
     try:
         from .momentum import clutch_lineup
