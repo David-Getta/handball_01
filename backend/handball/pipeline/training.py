@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 149) Kontra-kíséret: ha magányos kontrát futunk, a kíséret a
+    # téma (a lerohanás nem egyemberes műfaj).
+    try:
+        from .attack_types import fast_break_support
+        fbs149 = fast_break_support(match, config)
+        for side in ("home", "away"):
+            rec149 = fbs149[side]
+            if rec149["verdict"] != "magányos kontra":
+                continue
+            add(side, "támadás", "Kontra-kíséret",
+                f"a lerohanásainknál átlag "
+                f"{rec149['avg_runners']:.1f} emberünk indult el "
+                f"({rec149['breaks']} lerohanás) — egy emberrel a "
+                "kontra megállítható, és a visszaérő védő nyugodtan "
+                "kivárhat",
+                "kontra-kíséret: 3 a 2 elleni gyors indítás a "
+                "kapustól, ahol a labdás mellett KÉT kísérőnek kell "
+                "elérnie a támadó térfelet — a befejezés csak "
+                "átadásból jöhet, egyéni elfutásból nem ér gólt; "
+                "utána ugyanez visszaérő védővel, hogy a döntés is "
+                "gyakorolva legyen")
+    except Exception:
+        pass
+
     # 148) Kapus-hetesvédés iránya: ha egy sarokra későn érünk, az a
     # sarok a téma.
     try:

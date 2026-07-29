@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kontra-kíséret: hányan futottak fel a lerohanásoknál.
+    try:
+        from .attack_types import fast_break_support
+        fbs = fast_break_support(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fbs = fbs[side]
+            if rec_fbs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lerohanásai {rec_fbs['verdict']}-t "
+                     f"mutattak: átlag {rec_fbs['avg_runners']:.1f} "
+                     f"felfutó ember ({rec_fbs['breaks']} lerohanás).")
+    except Exception:
+        pass
     # Kapus-hetesvédés iránya: melyik sarok volt a gyengéje.
     try:
         from .rules import gk_seven_directions

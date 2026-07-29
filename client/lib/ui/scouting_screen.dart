@@ -1297,6 +1297,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kontra-kíséret: hányan futnak fel a lerohanásoknál (3+ lerohanás;
+  // 3,0 felett tömeges, 1,6 alatt magányos — a backend-kulccsal azonos
+  // küszöbök).
+  String? _fastBreakSupport(Map<String, dynamic> r) {
+    final breaks = ((r["fbs_breaks"] as num?) ?? 0).toInt();
+    final sum = ((r["fbs_sum_runners"] as num?) ?? 0).toDouble();
+    if (breaks < 3 || sum <= 0) return null;
+    final avg = sum / breaks;
+    if (avg >= 3.0) {
+      return "tömegesen kontráznak: átlag "
+          "${avg.toStringAsFixed(1)} emberük van elöl a "
+          "lerohanásoknál ($breaks lerohanás) · mindenkinek azonnal "
+          "vissza kell rendeződnie";
+    }
+    if (avg <= 1.6) {
+      return "magányos kontrát futnak (átlag "
+          "${avg.toStringAsFixed(1)} felfutó ember) · elég egy fékező "
+          "játékos, a többiek felállhatnak";
+    }
+    return null;
+  }
+
   // Kapus-hetesvédés iránya: melyik sarokra ér a legkésőbb
   // (irányonként 3+ hetes, 25 százalékpontos elmaradás — a
   // backend-kulccsal azonos küszöbök).
@@ -3592,6 +3614,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_buildupSide(r) != null) ["Kihozatal-oldal", _buildupSide(r)!],
       if (_gkSevenDirections(r) != null)
         ["Kapus-hetesvédés iránya", _gkSevenDirections(r)!],
+      if (_fastBreakSupport(r) != null)
+        ["Kontra-kíséret", _fastBreakSupport(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

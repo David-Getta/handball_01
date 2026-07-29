@@ -1850,3 +1850,58 @@ def test_buildup_side_needs_enough_attacks():
 
     rec = buildup_side(_buildup_match([16.0] * 4))["home"]
     assert rec["attacks"] == 4 and rec["dominant"] is None
+
+
+# ---- Kontra-kíséret (hányan futnak fel a lerohanásoknál) ---------------------
+
+def _fast_break_match(runners, n_breaks=4, fps=25.0):
+    """HAZAI lerohanás-sorozat: `runners` hazai mezőnyjátékos van már a
+    vendég térfelén, míg a labdás 22 m-től 38 m-ig fut."""
+    frames = []
+    t = 0
+    for _ in range(n_breaks):
+        for i in range(int(4.0 * fps)):
+            x = 22.0 + 16.0 * i / (4.0 * fps)
+            players = [_pl(1, Team.HOME, x, 10.0)]
+            for k in range(1, runners):
+                players.append(_pl(1 + k, Team.HOME, x - 1.0, 6.0 + k))
+            players.append(_pl(9, Team.HOME, 1.5, 10.0, role="kapus"))
+            players += [_pl(21, Team.AWAY, 38.0, 8.0),
+                        _pl(22, Team.AWAY, 38.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(int(2.0 * fps)):   # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_fast_break_support_flags_the_mass_break():
+    """Négy felfutó emberrel indított lerohanások → tömeges kontra."""
+    from handball.pipeline.attack_types import fast_break_support
+
+    rec = fast_break_support(_fast_break_match(runners=4))["home"]
+    assert rec["breaks"] >= 3
+    assert rec["avg_runners"] is not None and rec["avg_runners"] >= 3.0
+    assert rec["verdict"] == "tömeges kontra"
+
+
+def test_fast_break_support_flags_the_lonely_break():
+    """Egyedül elfutó labdással → magányos kontra."""
+    from handball.pipeline.attack_types import fast_break_support
+
+    rec = fast_break_support(_fast_break_match(runners=1))["home"]
+    assert rec["avg_runners"] <= 1.6
+    assert rec["verdict"] == "magányos kontra"
+
+
+def test_fast_break_support_needs_enough_breaks():
+    """Kevés (3-nál kevesebb) mért lerohanásnál nincs ítélet."""
+    from handball.pipeline.attack_types import fast_break_support
+
+    rec = fast_break_support(_fast_break_match(runners=4,
+                                               n_breaks=2))["home"]
+    assert rec["avg_runners"] is None and rec["verdict"] is None

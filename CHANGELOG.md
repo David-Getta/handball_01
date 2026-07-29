@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kontra-kíséret**: HÁNYAN FUTNAK FEL a lerohanásaiknál. A
+  lerohanás-befejezők azt mondják meg, ki fejezi be a kontrát, az
+  átmenet-támadás azt, mennyi gólt hoz — ez azt, mekkora erővel
+  indulnak: a lerohanás-szakaszok elején hány saját mezőnyjátékos van
+  már az ellenfél térfelén (3+ lerohanás; 3,0 felett tömeges, 1,6
+  alatt magányos kontra). Tömeges kontra ellen mindenkinek azonnal
+  vissza kell rendeződnie; magányos kontránál elég egy fékező ember, a
+  többiek felállhatnak. Egy réteg, sok felület: `fast_break_support`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (lerohanás- és felfutó-összegek + két edzői kulcs
+  + csempe), 128. meccsterv-szabály (az ő tömeges kontrájuk × a ti
+  visszazárásotok), 149. edzés-szabály (kontra-kíséret: 3 a 2 elleni
+  indítás két kötelező kísérővel).
 - **Kapus-hetesvédés irány szerint**: MELYIK SAROKBA menő heteseket
   fogja a kapusuk. A hetes-védés azt mondja meg, mennyit fog — ez azt,
   merre: a hetes-kimenetelek irány-mezőjét (bal / közép / jobb, a dobó

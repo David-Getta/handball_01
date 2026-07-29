@@ -2544,3 +2544,78 @@ def buildup_side(match: Match,
                 rec["share_pct"] = round(pct, 1)
         out[side] = rec
     return out
+
+
+# Kontra-kíséret: ennyi mért lerohanás kell az ítélethez, a szakasz
+# elejéből ennyi másodpercet nézünk, és e feletti / alatti átlagos
+# felfutó-szám a tömeges, illetve a magányos kontra jele.
+FBS_MIN_BREAKS = 3
+FBS_WINDOW_S = 3.0
+FBS_MANY = 3.0
+FBS_FEW = 1.6
+
+
+def fast_break_support(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Kontra-kíséret: HÁNYAN FUTNAK FEL a lerohanásaiknál.
+
+    A lerohanás-befejezők (fast_break_finishers) azt mondják meg, ki
+    fejezi be a kontrát, az átmenet-támadás (transition_offense) azt,
+    mennyi gólt hoz — ez azt, MEKKORA ERŐVEL indulnak: a lerohanásnak
+    címkézett szakaszok elején megszámoljuk, hány saját mezőnyjátékos
+    van már az ellenfél térfelén.
+
+    Edzőileg: a tömeges kontra ellen mindenkinek azonnal vissza kell
+    rendeződnie (a lövés pillanatában már indulni kell hátra); ha csak
+    egy-két ember fut fel, elég egy fékező játékos, a többiek nyugodtan
+    felállhatnak a felállt védekezésbe.
+
+    Visszatérés csapatonként: {"breaks", "avg_runners", "verdict"} — az
+    átlag és a verdict None FBS_MIN_BREAKS alatt; a verdict "tömeges
+    kontra" / "magányos kontra" / None.
+    """
+    from ..models.tracking import Team
+    from .setplays import segment_attacks
+    from .tactics import COURT_LENGTH_M
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    half = COURT_LENGTH_M / 2.0
+    win = round(FBS_WINDOW_S * fps)
+
+    breaks = {(a["team"], a["start_frame"]): a["type"]
+              for a in classify_attacks(match, config)
+              if a["type"] == AttackType.FAST_BREAK.value}
+
+    acc = {"home": [0, 0.0], "away": [0, 0.0]}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        if (side, seq.start_t) not in breaks:
+            continue
+        goal_x = config.attacks_toward_x(seq.team)
+        counts = []
+        for f in seq.frames:
+            if f.t > seq.start_t + win:
+                break
+            n = sum(1 for p in f.players
+                    if p.team == seq.team and p.role != "kapus"
+                    and abs(p.x - goal_x) <= half)
+            counts.append(n)
+        if not counts:
+            continue
+        acc[side][0] += 1
+        acc[side][1] += sum(counts) / len(counts)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n, total = acc[side]
+        rec = {"breaks": n, "avg_runners": None, "verdict": None}
+        if n >= FBS_MIN_BREAKS:
+            avg = total / n
+            rec["avg_runners"] = round(avg, 1)
+            if avg >= FBS_MANY:
+                rec["verdict"] = "tömeges kontra"
+            elif avg <= FBS_FEW:
+                rec["verdict"] = "magányos kontra"
+        out[side] = rec
+    return out

@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kontra-kíséretük: a mért lerohanások és a felfutó emberek
+    # összege — összegek, meccsek közt pontosan összegződnek (átlag =
+    # összeg / lerohanás).
+    fbs_breaks: int = 0
+    fbs_sum_runners: float = 0.0
     # Kapusuk hetesvédése irány szerint: irányonként (bal / közép /
     # jobb, a dobó szemszögéből) a kapura tartó hetesek és a fogások —
     # darabszámok, meccsek közt pontosan összegződnek.
@@ -1782,6 +1787,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kontra-kíséret: mennyi emberrel indulnak a lerohanásokra.
+    if rep.fbs_breaks >= 3 and rep.fbs_sum_runners > 0:
+        _fbs_avg = rep.fbs_sum_runners / rep.fbs_breaks
+        if _fbs_avg >= 3.0:
+            keys.append(
+                f"Tömegesen kontráznak: a lerohanásaiknál átlag "
+                f"{_fbs_avg:.1f} emberük van már elöl "
+                f"({rep.fbs_breaks} lerohanás) — mindenkinek azonnal "
+                "vissza kell rendeződnie: a lövés pillanatában már "
+                "indulni kell hátra, és a fékező embert előre ki kell "
+                "jelölni.")
+        elif _fbs_avg <= 1.6:
+            keys.append(
+                f"Magányos kontrát futnak (átlag {_fbs_avg:.1f} "
+                f"felfutó ember {rep.fbs_breaks} lerohanásnál) — elég "
+                "egy fékező játékos: ő állítsa meg a labdást, a "
+                "többiek nyugodtan álljanak fel a felállt "
+                "védekezésbe.")
 
     # Kapus-hetesvédés iránya: hova kell lőni a hetest.
     _g7_faced = rep.g7d_faced or {}
@@ -4369,6 +4393,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import fast_break_support as _fbs
+        fbsrec = _fbs(match, config)[team.value]
+        rep.fbs_breaks = fbsrec["breaks"]
+        rep.fbs_sum_runners = round(
+            (fbsrec["avg_runners"] or 0.0) * fbsrec["breaks"], 1)
         from .rules import gk_seven_directions as _g7d
         g7drec = _g7d(match, config)[team.value]
         rep.g7d_faced = {d: g7drec[d]["faced"]
@@ -6232,6 +6261,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 128) Az ő tömeges kontrájuk × a ti visszazárásotok: a
+    # visszarendeződést előre ki kell osztani.
+    if opp.fbs_breaks >= 3 and opp.fbs_sum_runners > 0 \
+            and own.transition_turnovers >= 4:
+        _fbs128 = opp.fbs_sum_runners / opp.fbs_breaks
+        _tg128 = (100.0 * own.transition_goals_against
+                  / own.transition_turnovers)
+        if _fbs128 >= 3.0 and _tg128 >= 20.0:
+            plan.append(
+                f"Tömegesen kontráznak (átlag {_fbs128:.1f} emberük "
+                f"fut fel a lerohanásoknál), ti pedig sok gyors gólt "
+                f"kaptok labdavesztés után (az eladásaitok "
+                f"{_tg128:.0f}%-a után jött az ellenfél gólja) — a "
+                "visszarendeződést előre ki kell osztani: kijelölt "
+                "fékező ember minden támadásnál, és a lövés "
+                "pillanatában a két hátsó már indul vissza.")
+
     # 127) Az ő kapusuk gyenge hetes-sarka × a ti hetes-mérlegetek: a
     # hetes-tervet előre le kell beszélni.
     _g7f127 = opp.g7d_faced or {}
@@ -7952,6 +7998,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        fbs_breaks=sum(r.fbs_breaks for r in reports),
+        fbs_sum_runners=round(sum(r.fbs_sum_runners for r in reports), 1),
         g7d_faced=_merge_dir_counts(reports, "g7d_faced"),
         g7d_saved=_merge_dir_counts(reports, "g7d_saved"),
         bus_left=sum(r.bus_left for r in reports),
