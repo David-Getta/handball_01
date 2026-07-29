@@ -1297,6 +1297,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Emberhátrány-forma: milyen falat húznak öt emberrel (100+ mért
+  // kocka, 60% feletti fő forma — a backend-kulccsal azonos küszöbök).
+  String? _shorthandedShape(Map<String, dynamic> r) {
+    final labels = r["sh_shape"];
+    if (labels is! Map || labels.isEmpty) return null;
+    final rows = labels.entries
+        .map((e) => [e.key.toString(), ((e.value as num?) ?? 0).toInt()])
+        .toList()
+      ..sort((a, b) => (b[1] as int).compareTo(a[1] as int));
+    final total = rows.fold<int>(0, (s, e) => s + (e[1] as int));
+    if (total < 100) return null;
+    final pct = 100.0 * (rows.first[1] as int) / total;
+    if (pct < 60.0) return null;
+    final main = rows.first[0] as String;
+    const what = {
+      "5-0": "mögötte az átlövés szabad, kívülről kell lőni",
+      "4-1": "az előretolt emberük mögé kell beúsztatni a beállót",
+      "3-2": "a szélek és a beálló szabadok, gyors oldalváltás kell",
+    };
+    return "emberhátrányban $main-s falat húznak (a mért kockák "
+        "${pct.toStringAsFixed(0)}%-ában) · ${what[main] ?? "oldalváltás "
+            "és beállós játék a válasz"}";
+  }
+
   // Emberelőny-tempó: elnyújtják vagy kapkodják a két percet (3+
   // emberelőnyös és 5+ egyenlő létszámú támadás, 5 mp-es eltérés — a
   // backend-kulccsal azonos küszöbök).
@@ -3457,6 +3481,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_playingTime(r) != null) ["Meccs-ritmus", _playingTime(r)!],
       if (_powerplayPace(r) != null)
         ["Emberelőny-tempó", _powerplayPace(r)!],
+      if (_shorthandedShape(r) != null)
+        ["Emberhátrány-forma", _shorthandedShape(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

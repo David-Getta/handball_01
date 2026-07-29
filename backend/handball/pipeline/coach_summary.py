@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Emberhátrány-forma: milyen falat húztak öt emberrel.
+    try:
+        from .rules import shorthanded_shape
+        shs = shorthanded_shape(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_shs = shs[side]
+            if rec_shs["main"] is None:
+                continue
+            body += (f" A(z) {name} emberhátrányban {rec_shs['main']}-s "
+                     f"falat húzott (a mért kockák "
+                     f"{rec_shs['main_pct']:.0f}%-ában).")
+    except Exception:
+        pass
     # Emberelőny-tempó: elnyújtották vagy kapkodták az emberelőnyt.
     try:
         from .rules import powerplay_pace

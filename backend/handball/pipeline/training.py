@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 144) Emberhátrány-forma: ha öt emberrel egy formát húzunk, a
+    # forma elleni tipikus megoldásokat kell begyakorolni.
+    try:
+        from .rules import shorthanded_shape
+        shs144 = shorthanded_shape(match, config)
+        for side in ("home", "away"):
+            rec144 = shs144[side]
+            if rec144["main"] is None:
+                continue
+            add(side, "védekezés", f"Emberhátrány {rec144['main']}-ban",
+                f"emberhátrányban a mért kockák "
+                f"{rec144['main_pct']:.0f}%-ában {rec144['main']}-s "
+                "falat húztunk — egy felkészült ellenfél pontosan "
+                "tudja, hol a szabad terület e mögött",
+                "emberhátrány-védekezés: 5-6 elleni gyakorlás a "
+                f"{rec144['main']}-s alapállásból, ahol a támadók "
+                "kötelezően oldalt váltanak minden harmadik passznál "
+                "— a védőknek hangos vezényszóval kell átadniuk, és "
+                "a lövő-vonalba csak akkor lépnek ki, ha mögöttük "
+                "van a segítő")
+    except Exception:
+        pass
+
     # 143) Emberelőny-tempó: ha emberelőnyben kapkodunk, a
     # helyzet-kivárás a téma.
     try:

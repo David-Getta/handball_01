@@ -692,3 +692,59 @@ def test_powerplay_pace_without_powerplay_has_no_verdict():
     rec = powerplay_pace(_pp_pace_match(pp_n=0))["home"]
     assert rec["pp_attacks"] == 0
     assert rec["gap_s"] is None and rec["verdict"] is None
+
+
+# ---- Emberhátrány-forma (mit játszanak öt emberrel) --------------------------
+
+def _sh_shape_match(advanced=0, fps=25.0):
+    """A HAZAI van emberhátrányban (5 mezőnyjátékos a vendég 6-ja
+    ellen); `advanced` játékosuk áll előretolva (a 9 m-es vonalon)."""
+    frames = []
+    t = 0
+
+    def _rosters(seconds, home_n):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = []
+            for k in range(home_n):
+                # Hátsó sáv: 5 m-re a saját (0) kaputól; előretolt: 10 m.
+                depth = 10.0 if k < advanced else 5.0
+                players.append(_pl(100 + k, Team.HOME, depth, 4.0 + k))
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(6)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=12.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    _rosters(30.0, 6)     # normál létszám
+    _rosters(60.0, 5)     # kiállítás: a hazai öt emberrel véd
+    _rosters(30.0, 6)     # visszaáll
+    return Match(_meta(fps), frames)
+
+
+def test_shorthanded_shape_reads_the_flat_wall():
+    """Öt hátsó sávban álló védő → 5-0-s emberhátrány-fal."""
+    from handball.pipeline.rules import shorthanded_shape
+
+    rec = shorthanded_shape(_sh_shape_match())["home"]
+    assert rec["frames"] >= 100
+    assert rec["main"] is not None and rec["main"].startswith("5-0")
+    assert rec["main_pct"] >= 60.0
+
+
+def test_shorthanded_shape_reads_the_advanced_defender():
+    """Egy előretolt védővel a fal címkéje 4-1 jellegű."""
+    from handball.pipeline.rules import shorthanded_shape
+
+    rec = shorthanded_shape(_sh_shape_match(advanced=1))["home"]
+    assert rec["main"] is not None and rec["main"].startswith("4-1")
+
+
+def test_shorthanded_shape_without_powerplay():
+    """Kiállítás nélkül nincs mért kocka és nincs ítélet."""
+    from handball.pipeline.rules import shorthanded_shape
+
+    frames = _roster_frames(0, 90, 6, 6)
+    rec = shorthanded_shape(Match(_meta(), frames))["home"]
+    assert rec["frames"] == 0 and rec["main"] is None

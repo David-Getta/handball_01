@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Emberhátrány-forma**: MIT JÁTSZANAK öt emberrel. Az
+  emberhátrány-támadás azt mondja meg, mire mennek támadásban a két
+  perc alatt, az emberelőny-védekezés azt, mennyit kapnak — ez azt,
+  milyen falat húznak: a kiállítás-ablakokban a hátrányban lévő csapat
+  formáját olvassuk ki kockánként, hátsó-előretolt bontásban (5-0,
+  4-1, 3-2; 100+ mért kocka, 60% feletti fő formánál). Az 5-0 mögött
+  az átlövés szabad, a 4-1 előretolt embere mögé kell beúsztatni a
+  beállót. Egy réteg, sok felület: `shorthanded_shape` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (formánkénti kocka-darabszámok + edzői kulcs + csempe), 123.
+  meccsterv-szabály (az ő emberhátrány-faluk × a ti akadozó
+  emberelőnyötök), 144. edzés-szabály (emberhátrány-védekezés az adott
+  alapállásból, hangos átadással).
 - **Emberelőny-tempó**: ELNYÚJTJÁK vagy KAPKODJÁK az emberelőnyt. Az
   emberelőny-hatékonyság azt mondja meg, mennyi gólt hoznak a
   kiállításokból — ez azt, hogyan játsszák: a támadás-szakaszok

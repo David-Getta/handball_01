@@ -897,3 +897,68 @@ def powerplay_pace(match: Match,
                 rec["verdict"] = "kapkodnak emberelőnyben"
         out[side] = rec
     return out
+
+
+# Emberhátrány-forma: ennyi mért kocka kell az ítélethez, és e feletti
+# részarány jelenti, hogy egy formát játszanak öt emberrel.
+SH_SHAPE_MIN_FRAMES = 100
+SH_SHAPE_MAIN_PCT = 60.0
+
+
+def shorthanded_shape(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Emberhátrány-forma: MIT JÁTSZANAK öt emberrel.
+
+    Az emberhátrány-támadás (shorthanded_attack) azt mondja meg, mire
+    mennek támadásban a két perc alatt, az emberelőny-védekezés
+    (powerplay_defense) azt, mennyit kapnak — ez azt, MILYEN FALAT
+    húznak: a kiállítás-ablakokban a hátrányban lévő csapat formáját
+    olvassuk ki kockánként, hátsó-előretolt bontásban (5-0, 4-1,
+    3-2).
+
+    Edzőileg: az 5-0 mögött az átlövés szabad — kívülről kell lőni és
+    a szélsőket etetni; a 4-1 (előretolt védő) ellen az oldalváltás és
+    a beállós játék a válasz, mert az előretolt ember mögött nyílik a
+    tér.
+
+    Visszatérés csapatonként (a HÁTRÁNYBAN lévő oldal): {"frames",
+    "labels": {forma: kocka}, "main", "main_pct"} — a main/main_pct
+    None SH_SHAPE_MIN_FRAMES alatt vagy SH_SHAPE_MAIN_PCT alatti
+    többségnél.
+    """
+    from .tactics import TacticsConfig, detect_formation
+
+    config = config or TacticsConfig()
+    windows = detect_powerplay(match)
+    tally: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        for w in windows:
+            if not (w["start_frame"] <= f.t <= w["end_frame"]):
+                continue
+            down = w["team_down"]
+            team = Team.HOME if down == "home" else Team.AWAY
+            form = detect_formation(f, team, config)
+            # Öt (vagy kevesebb) mezőnyvédő a hátrány jele; ennél
+            # többnél a címke nem az emberhátrány-falat írja le.
+            if form.defenders < 3 or form.defenders > 5:
+                continue
+            # Emberhátrányban a szokásos név hátsó-előretolt bontású
+            # (5-0, 4-1, 3-2); a hatfős címkéző itt leíró nevet adna.
+            label = f"{form.back}-{form.mid + form.high}"
+            tally[down][label] = tally[down].get(label, 0) + 1
+            break
+
+    out: dict = {}
+    for side in ("home", "away"):
+        labels = dict(sorted(tally[side].items(), key=lambda kv: -kv[1]))
+        n = sum(labels.values())
+        rec = {"frames": n, "labels": labels, "main": None,
+               "main_pct": None}
+        if n >= SH_SHAPE_MIN_FRAMES and labels:
+            main, cnt = next(iter(labels.items()))
+            pct = 100.0 * cnt / n
+            if pct >= SH_SHAPE_MAIN_PCT:
+                rec["main"] = main
+                rec["main_pct"] = round(pct, 1)
+        out[side] = rec
+    return out

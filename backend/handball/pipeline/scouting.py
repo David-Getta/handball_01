@@ -604,6 +604,9 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Emberhátrány-formájuk: {forma: kocka} — milyen falat húznak öt
+    # emberrel; darabszámok, meccsek közt pontosan összegződnek.
+    sh_shape: dict = field(default_factory=dict)
     # Emberelőny-tempójuk: emberelőnyben és egyenlő létszámnál a mért
     # támadások száma és össz-hosszuk (mp) — összegek, meccsek közt
     # pontosan összegződnek (átlag = összeg / darab).
@@ -1759,6 +1762,31 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Emberhátrány-forma: milyen falat húznak öt emberrel.
+    _shs_rows = list((rep.sh_shape or {}).items())
+    _shs_n = sum(n for _, n in _shs_rows)
+    if _shs_n >= 100 and _shs_rows:
+        _shs_rows.sort(key=lambda kv: -kv[1])
+        _shs_main, _shs_cnt = _shs_rows[0]
+        _shs_pct = 100.0 * _shs_cnt / _shs_n
+        if _shs_pct >= 60.0:
+            _shs_what = {
+                "5-0": ("mögötte az átlövés szabad: kívülről kell "
+                        "lőni és a szélsőket etetni, mert öt emberrel "
+                        "nem érnek ki a lövő-vonalba"),
+                "4-1": ("az előretolt emberük mögött nyílik a tér: "
+                        "oldalváltással kell kihúzni, és a beállót "
+                        "pont az ő háta mögé kell beúsztatni"),
+                "3-2": ("két előretolt ember mellett a szélek és a "
+                        "beálló szabadok: gyors oldalváltás és "
+                        "beállós befejezés a válasz"),
+            }.get(_shs_main,
+                  "a forma ellen az oldalváltás és a beállós játék a "
+                  "kiindulás")
+            keys.append(
+                f"Emberhátrányban {_shs_main}-s falat húznak (a mért "
+                f"kockák {_shs_pct:.0f}%-ában) — {_shs_what}.")
 
     # Emberelőny-tempó: hogyan játsszák a két percet.
     if rep.ppp_pp_attacks >= 3 and rep.ppp_eq_attacks >= 5 \
@@ -4244,6 +4272,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .rules import shorthanded_shape as _shs
+        rep.sh_shape = dict(_shs(match, config)[team.value]["labels"])
         from .rules import powerplay_pace as _ppp
         ppprec = _ppp(match, config)[team.value]
         rep.ppp_pp_attacks = ppprec["pp_attacks"]
@@ -5089,6 +5119,16 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_sh_shape(reports) -> dict:
+    """Emberhátrány-forma: formánként a mért kockák összegzése (a
+    kockaszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for label, n in (r.sh_shape or {}).items():
+            tally[label] = tally.get(label, 0) + int(n)
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]))
 
 
 def _merge_recovery_players(reports) -> list:
@@ -6028,6 +6068,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 123) Az ő emberhátrány-faluk × a ti emberelőny-hatékonyságotok: a
+    # forma megmondja, honnan kell lőni a két perc alatt.
+    _shs123 = list((opp.sh_shape or {}).items())
+    _shsn123 = sum(n for _, n in _shs123)
+    if _shs123 and _shsn123 >= 100 and own.pp_shots >= 3:
+        _shs123.sort(key=lambda kv: -kv[1])
+        _main123, _cnt123 = _shs123[0]
+        _pct123 = 100.0 * _cnt123 / _shsn123
+        _eff123 = 100.0 * own.pp_goals / own.pp_shots
+        if _pct123 >= 60.0 and _eff123 <= 50.0:
+            _how123 = ("kívülről kell lőni, mert öt emberrel nem érnek "
+                       "ki a lövő-vonalba" if _main123 == "5-0"
+                       else "az előretolt emberük mögé kell beúsztatni "
+                       "a beállót, oldalváltás után")
+            plan.append(
+                f"Emberhátrányban {_main123}-s falat húznak (a mért "
+                f"kockák {_pct123:.0f}%-ában), a ti emberelőnyötök "
+                f"pedig akadozik ({own.pp_goals}/{own.pp_shots} gól, "
+                f"{_eff123:.0f}%) — a két percre kész terv kell: "
+                f"{_how123}.")
 
     # 122) Az ő elnyújtott emberelőnyük × a ti emberhátrány-védekezésetek:
     # a türelmes fal pont az ő játékukat fárasztja.
@@ -7645,6 +7706,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        sh_shape=_merge_sh_shape(reports),
         ppp_pp_attacks=sum(r.ppp_pp_attacks for r in reports),
         ppp_pp_sum_s=round(sum(r.ppp_pp_sum_s for r in reports), 1),
         ppp_eq_attacks=sum(r.ppp_eq_attacks for r in reports),
