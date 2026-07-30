@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Lerohanás-hatékonyság: mennyi lesz gól a kontrákból (5+ lerohanás;
+  // 65% felett éles, 35% alatt elpuskázott — a backend-kulccsal
+  // azonos küszöbök).
+  String? _fastBreakConversion(Map<String, dynamic> r) {
+    final breaks = ((r["fbc_breaks"] as num?) ?? 0).toInt();
+    final goals = ((r["fbc_goals"] as num?) ?? 0).toInt();
+    if (breaks < 5) return null;
+    final pct = 100.0 * goals / breaks;
+    if (pct >= 65.0) {
+      return "élesen fejezik be a kontrát ($breaks lerohanásból "
+          "$goals gól) · kijelölt fékező ember kell, és lövés után "
+          "senki ne maradjon elöl";
+    }
+    if (pct <= 35.0) {
+      return "elpuskázzák a kontrát ($breaks lerohanásból csak "
+          "$goals gól) · nyugodtan rájuk lehet engedni, a felállt "
+          "támadásuk a veszélyesebb";
+    }
+    return null;
+  }
+
   // Félidő-nyitás: hogyan indulnak a félidők első 5 percében (4+ gól
   // a nyitó ablakokban, 2 gól különbség — a backend-kulccsal azonos
   // küszöbök).
@@ -4203,6 +4224,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés utáni védekezés", _timeoutDefense(r)!],
       if (_halfOpenings(r) != null)
         ["Félidő-nyitás", _halfOpenings(r)!],
+      if (_fastBreakConversion(r) != null)
+        ["Lerohanás-hatékonyság", _fastBreakConversion(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

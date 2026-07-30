@@ -3083,3 +3083,64 @@ def buildup_time(match: Match,
                 rec["verdict"] = "gyorsan hozzák fel"
         out[side] = rec
     return out
+
+
+# Lerohanás-hatékonyság: ennyi mért lerohanás kell az ítélethez, és e
+# feletti / alatti gólarány az éles, illetve az elpuskázott kontra
+# jele.
+FBC_MIN_BREAKS = 5
+FBC_SHARP_PCT = 65.0
+FBC_WASTE_PCT = 35.0
+
+
+def fast_break_conversion(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Lerohanás-hatékonyság: MENNYI LESZ GÓL a kontráikból.
+
+    A lerohanás-arány (fast_break_pct) azt mondja meg, milyen gyakran
+    kontráznak, a kontra-befejezők (fast_break_finishers) azt, ki
+    zárja le őket — ez azt, MEGY-E BE: a lerohanásnak címkézett
+    támadás-szakaszokat nézzük, és megszámoljuk, hányat zárt le a
+    csapat gólja.
+
+    Edzőileg: aki élesen fejezi be a kontrát, ott a visszarendeződés
+    fegyelme dönt — kijelölt fékező ember, és lövés után senki nem
+    marad elöl a kipattanóra; aki elpuskázza, annál a kontra
+    ajándék: nyugodtan rá lehet engedni őket, mert a felállt
+    támadásuk a veszélyesebb.
+
+    Visszatérés csapatonként: {"breaks", "goals", "share_pct",
+    "verdict"} — a share_pct/verdict None FBC_MIN_BREAKS alatt; a
+    verdict "élesen fejezik be a kontrát" / "elpuskázzák a kontrát" /
+    None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"breaks": 0, "goals": 0, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        rec = out[side]
+        rec["breaks"] += 1
+        if any(tm == side and a["start_frame"] <= t <= a["end_frame"] + tail
+               for (t, tm) in goals):
+            rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["breaks"] >= FBC_MIN_BREAKS:
+            share = 100.0 * rec["goals"] / rec["breaks"]
+            rec["share_pct"] = round(share, 1)
+            if share >= FBC_SHARP_PCT:
+                rec["verdict"] = "élesen fejezik be a kontrát"
+            elif share <= FBC_WASTE_PCT:
+                rec["verdict"] = "elpuskázzák a kontrát"
+    return out

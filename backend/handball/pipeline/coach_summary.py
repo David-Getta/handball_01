@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Lerohanás-hatékonyság: mennyi lesz gól a kontrákból.
+    try:
+        from .attack_types import fast_break_conversion
+        fbc = fast_break_conversion(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fbc = fbc[side]
+            if rec_fbc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_fbc['verdict']}: "
+                     f"{rec_fbc['breaks']} lerohanásból "
+                     f"{rec_fbc['goals']} lett gól "
+                     f"({rec_fbc['share_pct']:.0f}%).")
+    except Exception:
+        pass
     # Félidő-nyitás: hogyan indulnak a félidők első 5 percében.
     try:
         from .momentum import half_openings

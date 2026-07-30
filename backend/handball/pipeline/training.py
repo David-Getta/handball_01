@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 176) Lerohanás-hatékonyság: ha a kontráink nem érnek gólt, a
+    # befejezés-döntés a téma.
+    try:
+        from .attack_types import fast_break_conversion
+        fbc176 = fast_break_conversion(match, config)
+        for side in ("home", "away"):
+            rec176 = fbc176[side]
+            if rec176["verdict"] != "elpuskázzák a kontrát":
+                continue
+            add(side, "tamadas", "Kontra-befejezés",
+                f"{rec176['breaks']} lerohanásból csak "
+                f"{rec176['goals']} lett gól "
+                f"({rec176['share_pct']:.0f}%) — a legolcsóbb "
+                "gólhelyzeteinket dobjuk el, pedig ott már csak egy "
+                "döntés van hátra",
+                "kontra-befejezés: 2-1 és 3-2 fogyó létszámú "
+                "gyakorlat futásból, fáradtan — a szabály, hogy a "
+                "labdás a kapus MOZDULÁSÁIG nem dönt, és minden "
+                "menetben ki kell mondani a döntést (passz vagy "
+                "lövés); minden kihagyás után azonnali "
+                "visszarendeződés-sprint")
+    except Exception:
+        pass
+
     # 175) Félidő-nyitás: ha a félidők első perceiben rendre
     # hátrányba kerülünk, a kezdés rutinja a téma.
     try:

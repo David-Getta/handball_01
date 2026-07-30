@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Lerohanás-hatékonyságuk: a mért lerohanásaik száma és a gólig
+    # jutók száma — darabszámok, meccsek közt pontosan összegződnek
+    # (arány = fbc_goals / fbc_breaks).
+    fbc_breaks: int = 0
+    fbc_goals: int = 0
     # Félidő-nyitásuk: a félidők első 5 percében szerzett és kapott
     # góljaik — darabszámok, meccsek közt pontosan összegződnek
     # (mérleg = ho_for - ho_against).
@@ -1929,6 +1934,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Lerohanás-hatékonyság: veszélyes-e rájuk engedni a kontrát.
+    if rep.fbc_breaks >= 5:
+        _fbc_pct = 100.0 * rep.fbc_goals / rep.fbc_breaks
+        if _fbc_pct >= 65.0:
+            keys.append(
+                f"Élesen fejezik be a kontrát ({rep.fbc_breaks} "
+                f"lerohanásból {rep.fbc_goals} gól, "
+                f"{_fbc_pct:.0f}%) — a visszarendeződés fegyelme "
+                "dönt ellenük: kijelölt fékező ember, és lövés után "
+                "senki nem marad elöl a kipattanóra.")
+        elif _fbc_pct <= 35.0:
+            keys.append(
+                f"Elpuskázzák a kontrát ({rep.fbc_breaks} "
+                f"lerohanásból csak {rep.fbc_goals} gól, "
+                f"{_fbc_pct:.0f}%) — a kontra náluk ajándék: "
+                "nyugodtan rájuk lehet engedni, mert a felállt "
+                "támadásuk a veszélyesebb.")
 
     # Félidő-nyitás: mennyire fontosak ellenük az első percek.
     if rep.ho_for + rep.ho_against >= 4:
@@ -4975,6 +4998,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import fast_break_conversion as _fbc
+        fbcrec = _fbc(match, config)[team.value]
+        rep.fbc_breaks = fbcrec["breaks"]
+        rep.fbc_goals = fbcrec["goals"]
         from .momentum import half_openings as _hop
         hoprec = _hop(match, config)[team.value]
         rep.ho_for = hoprec["goals_for"]
@@ -7184,6 +7211,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 155) Az ő elpuskázott kontráik × a ti kevés eladásotok: nyugodt
+    # felállás helyett vállalható a nyitottabb játék.
+    if opp.fbc_breaks >= 5 and own.turnover_total >= 8:
+        _fbc155 = 100.0 * opp.fbc_goals / opp.fbc_breaks
+        _front155 = 100.0 * own.turnover_front / max(1, own.turnover_total)
+        if _fbc155 <= 35.0 and _front155 <= 30.0:
+            plan.append(
+                f"Elpuskázzák a kontrát ({opp.fbc_breaks} "
+                f"lerohanásból {opp.fbc_goals} gól), ti pedig ritkán "
+                f"veszítitek el elöl a labdát (az eladásaitok "
+                f"{_front155:.0f}%-a a támadó harmadban) — nem kell "
+                "biztosításra emberrel hátramaradni: a kipattanóra "
+                "menjen a második hullám, mert az ő kontrájuk "
+                "kevesebbet ér, mint a ti második rohamotok.")
 
     # 154) Az ő lassú félidő-nyitásuk × a ti gyors kezdéseitek: az
     # első öt percben kell eldönteni a félidőket.
@@ -9404,6 +9446,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        fbc_breaks=sum(r.fbc_breaks for r in reports),
+        fbc_goals=sum(r.fbc_goals for r in reports),
         ho_for=sum(r.ho_for for r in reports),
         ho_against=sum(r.ho_against for r in reports),
         tfd_timeouts=sum(r.tfd_timeouts for r in reports),

@@ -2218,3 +2218,47 @@ def test_buildup_time_needs_enough_cases():
     rec = buildup_time(_buildup_time_match([3.0] * 3))["home"]
     assert rec["cases"] == 3 and rec["avg_s"] is None
     assert rec["verdict"] is None
+
+
+# ---- Lerohanás-hatékonyság (mennyi lesz gól a kontrákból) ------------------
+
+def _fbc_match(results, fps=25.0):
+    """Hazai lerohanás-sorozat: a `results` elemei jelzik, gólt ért-e a
+    kontra; a szakaszokat labda nélküli szünet választja el."""
+    frames = []
+    t = 0
+    for scored in results:
+        frames += (_fast_break_goal(t) if scored
+                   else _attack_frames(t, 4.0, 22.0, 33.0))
+        t = frames[-1].t + 1
+        for _ in range(int(4 * fps)):     # szünet: nincs támadó fázis
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_fast_break_conversion_flags_the_sharp_team():
+    """Hat kontrából öt gól → élesen fejezik be a kontrát."""
+    from handball.pipeline.attack_types import fast_break_conversion
+
+    rec = fast_break_conversion(
+        _fbc_match([True] * 5 + [False]))["home"]
+    assert rec["breaks"] == 6 and rec["goals"] == 5
+    assert rec["verdict"] == "élesen fejezik be a kontrát"
+
+
+def test_fast_break_conversion_flags_the_wasteful_team():
+    """Hat kontrából egy gól → elpuskázzák a kontrát."""
+    from handball.pipeline.attack_types import fast_break_conversion
+
+    rec = fast_break_conversion(
+        _fbc_match([True] + [False] * 5))["home"]
+    assert rec["goals"] == 1 and rec["verdict"] == "elpuskázzák a kontrát"
+
+
+def test_fast_break_conversion_needs_enough_breaks():
+    """Kevés (5-nél kevesebb) lerohanásnál nincs ítélet."""
+    from handball.pipeline.attack_types import fast_break_conversion
+
+    rec = fast_break_conversion(_fbc_match([True, False]))["home"]
+    assert rec["share_pct"] is None and rec["verdict"] is None

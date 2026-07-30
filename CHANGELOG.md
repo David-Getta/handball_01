@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Lerohanás-hatékonyság**: MENNYI LESZ GÓL a kontráikból. A
+  lerohanás-arány azt mondja meg, milyen gyakran kontráznak, a
+  kontra-befejezők azt, ki zárja le őket — ez azt, megy-e be: a
+  lerohanásnak címkézett támadás-szakaszokból hányat zárt le a csapat
+  gólja (5+ lerohanás; 65% felett éles, 35% alatt elpuskázott
+  befejezés). Aki élesen fejez be, ott a visszarendeződés fegyelme
+  dönt — kijelölt fékező ember, és lövés után senki nem marad elöl;
+  aki elpuskázza, annál a kontra ajándék, nyugodtan rá lehet engedni.
+  Egy réteg, sok felület: `fast_break_conversion` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (lerohanás- és gól-darabszámok, két edzői kulcs + csempe), 155.
+  meccsterv-szabály (az ő elpuskázott kontráik × a ti kevés elöl
+  elvesztett labdátok), 176. edzés-szabály (kontra-befejezés: fogyó
+  létszámú 2-1 és 3-2 fáradtan, kimondott döntéssel).
+
 - **Félidő-nyitás**: HOGYAN INDULNAK a két félidő első 5 percében. A
   félidő-mérleg a teljes félidőt méri, a hajrá-mérleg az utolsó
   perceket — ez a kezdést: a meccs és a második félidő első 300
