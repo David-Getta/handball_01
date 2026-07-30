@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 159) Hajrá-hibázók: ha egy emberünknél megy el a labda a végén,
+    # a nyomás alatti döntés a téma.
+    try:
+        from .momentum import clutch_turnover_players
+        ctp159 = clutch_turnover_players(match, config)
+        for side in ("home", "away"):
+            top159 = ctp159[side]["top"]
+            if top159 is None:
+                continue
+            who159 = (f"a {top159['jersey']}-es mezszámú játékos"
+                      if top159.get("jersey") is not None
+                      else f"a {top159['player_id']} azonosítójú játékos")
+            add(side, "taktika", "Nyomás alatti döntés",
+                f"a hajrában {who159} veszítette el a labdát a "
+                f"legtöbbször ({top159['turnovers']} eladás a döntő "
+                "szakaszban) — a fáradtság és a tét együtt rontja a "
+                "döntéseit, és ott a legdrágább a hiba",
+                "nyomás alatti döntés: az edzés végén, fáradtan, "
+                "zajban (kiabálás, taps) játszott 5 perces "
+                "meccs-részlet egy gólos hátrányból — kötött "
+                "szabály, hogy a labda nem maradhat két másodpercnél "
+                "tovább senkinél, és minden eladás azonnali "
+                "büntető-sprinttel jár")
+    except Exception:
+        pass
+
     # 158) Csere-kiváltók: ha kapott gólra cserélünk, a tervezett
     # csere-rend a téma.
     try:

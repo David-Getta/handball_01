@@ -3078,6 +3078,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import clutch_turnover_players
+            res["clutch_turnover_players"] = clutch_turnover_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3771,6 +3776,9 @@ def create_app():
                     substitution_triggers)
                 _layer("substitution_triggers",
                        lambda: substitution_triggers(match))
+                from ..pipeline.momentum import clutch_turnover_players
+                _layer("clutch_turnover_players",
+                       lambda: clutch_turnover_players(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -833,6 +833,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Hajrá-hibázók: kinél ment el a labda a végén.
+    try:
+        from .momentum import clutch_turnover_players
+        ctp = clutch_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ctp = ctp[side]["top"]
+            if top_ctp is None:
+                continue
+            jn = (top_ctp["jersey"]
+                  or _jersey_of_track(match).get(top_ctp["player_id"]))
+            who = (f"{jn}-es mezszámú játékosánál" if jn is not None
+                   else f"{top_ctp['player_id']} azonosítójú "
+                        "játékosánál")
+            body += (f" A(z) {name} a hajrában a {who} veszítette el "
+                     f"a labdát a legtöbbször "
+                     f"({top_ctp['turnovers']} eladás).")
+    except Exception:
+        pass
     # Csere-kiváltók: kapott gól után cseréltek-e.
     try:
         from .substitutions import substitution_triggers

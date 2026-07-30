@@ -1316,3 +1316,71 @@ def clutch_lineup(match: Match, config=None) -> dict:
         out[side] = {"window_s": CLUTCH_LINEUP_WINDOW_S,
                      "players": rows, "core": core}
     return out
+
+
+# Hajrá-hibázók: ennyi hajrá-eladástól emeljük ki az embert (a hajrában
+# kevés az esemény, ezért alacsony a küszöb, de egy eset még nem minta).
+CTP_MIN_TURNOVERS = 2
+
+
+def clutch_turnover_players(match: Match, config=None) -> dict:
+    """Hajrá-hibázók: KI ADJA EL a labdát a döntő szakaszban.
+
+    A hajrá-eladás (clutch_turnovers) csapat-szinten mondja meg,
+    megugrik-e az eladás-ütem a végén — ez azt, KINÉL: az utolsó
+    CLUTCH_WINDOW_S másodperc labdaeladásait a vesztes játékoshoz
+    írjuk.
+
+    Edzőileg: a hajrában présbe kell tenni azt, akinél a labda a végén
+    elmegy — rá jöjjön a kettőzés és a passzsáv-zárás, mert nála a
+    legolcsóbb a labdaszerzés, amikor a legtöbbet ér.
+
+    Visszatérés csapatonként: {"window_s", "turnovers", "players":
+    [{"player_id", "jersey", "turnovers"}], "top"} — a "top" az első
+    játékos, ha legalább CTP_MIN_TURNOVERS hajrá-eladása van; rövid
+    felvételen (CLUTCH_MIN_DURATION_S alatt) üres a kép.
+    """
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    empty = {side: {"window_s": CLUTCH_WINDOW_S, "turnovers": 0,
+                    "players": [], "top": None}
+             for side in ("home", "away")}
+    if not frames:
+        return empty
+    total_s = (frames[-1].t - frames[0].t + 1) / fps
+    if total_s < CLUTCH_MIN_DURATION_S:
+        return empty
+
+    win_start = frames[-1].t - CLUTCH_WINDOW_S * fps
+    jersey: dict = {}
+    for f in frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config or TacticsConfig()):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        if e.t < win_start:
+            continue
+        side = e.team.value
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "turnovers": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["turnovers"] >= CTP_MIN_TURNOVERS
+               else None)
+        out[side] = {"window_s": CLUTCH_WINDOW_S,
+                     "turnovers": sum(r["turnovers"] for r in rows),
+                     "players": rows, "top": top}
+    return out

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hajrá-hibázók**: KI ADJA EL a labdát a döntő szakaszban. A
+  hajrá-eladás csapat-szinten mondja meg, megugrik-e az eladás-ütem a
+  végén — ez azt, kinél: az utolsó öt perc labdaeladásait a vesztes
+  játékoshoz írjuk (2+ hajrá-eladástól; rövid felvételen nincs kép). A
+  végén rá kell menni: kettőzés és passzsáv-zárás nála, mert ott a
+  legolcsóbb a labdaszerzés, amikor a legtöbbet ér. Egy réteg, sok
+  felület: `clutch_turnover_players` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (játékosonkénti
+  eladás-darabszámok + edzői kulcs + csempe), 138. meccsterv-szabály
+  (az ő hajrá-hibázójuk × a ti elöl szerzett labdáitok), 159.
+  edzés-szabály (nyomás alatti döntés: fáradtan, zajban játszott záró
+  részlet).
 - **Csere-kiváltók**: KAPOTT GÓL UTÁN cserélnek-e. A csere-blokkok azt
   mondják meg, hogyan cserélnek, a csere-hatás azt, mi lesz belőle —
   ez azt, miért: a cserehullámokat ahhoz kötjük, jött-e kapott gól az

@@ -1297,6 +1297,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Hajrá-hibázók: kinél megy el a labda a döntő szakaszban (2+
+  // hajrá-eladás — a backend-kulccsal azonos küszöb).
+  String? _clutchLosers(Map<String, dynamic> r) {
+    final rows = r["clutch_losers"];
+    if (rows is! List || rows.isEmpty) return null;
+    final top = rows.first;
+    if (top is! Map) return null;
+    final n = ((top["turnovers"] as num?) ?? 0).toInt();
+    if (n < 2) return null;
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a hajrában a(z) $who játékosuknál megy el a labda ($n "
+        "eladás a döntő szakaszban) · a végén rá kell menni, "
+        "kettőzéssel és passzsáv-zárással";
+  }
+
   // Csere-kiváltók: kapott gól után cserélnek-e (4+ csere; 50% felett
   // reaktív, 20% alatt tervezett — a backend-kulccsal azonos
   // küszöbök).
@@ -3813,6 +3830,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Falépítés-idő", _defenseSetupTime(r)!],
       if (_substitutionTriggers(r) != null)
         ["Csere-kiváltók", _substitutionTriggers(r)!],
+      if (_clutchLosers(r) != null) ["Hajrá-hibázók", _clutchLosers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

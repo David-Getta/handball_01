@@ -860,3 +860,50 @@ def test_clutch_lineup_short_match_has_no_core():
 
     rec = clutch_lineup(_clutch_lineup_match(total_s=300.0))["home"]
     assert rec["core"] == []
+
+
+# ---- Hajrá-hibázók (ki adja el a labdát a végén) ----------------------------
+
+def _clutch_turnover_match(late_losers=(3, 3, 5), total_s=900.0,
+                           fps=25.0):
+    """A meccs végén (az utolsó 5 percben) a `late_losers` játékosok
+    adják el a labdát a vendégnek; korábban nincs eladás."""
+    frames = []
+    n = int(total_s * fps)
+    losses = {}
+    for k, pid in enumerate(late_losers):
+        # Az utolsó 5 percen belül, egymástól távol.
+        losses[n - int((240 - k * 60) * fps)] = pid
+
+    holder = (1, Team.HOME)
+    for i in range(n):
+        if i in losses:
+            holder = (losses[i], Team.HOME)
+        elif any(i == t + 30 for t in losses):
+            holder = (21, Team.AWAY)      # a labda a vendéghez kerül
+        elif any(i == t + 120 for t in losses):
+            holder = (1, Team.HOME)       # majd vissza a hazaihoz
+        pid, team = holder
+        frames.append(Frame(
+            t=i, players=[_pl(pid, team, 20.0, 10.0)],
+            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_clutch_turnover_players_finds_the_late_loser():
+    """A hajrában kétszer eladó játékos kerül a lista élére."""
+    from handball.pipeline.momentum import clutch_turnover_players
+
+    rec = clutch_turnover_players(_clutch_turnover_match())["home"]
+    assert rec["turnovers"] >= 2
+    assert rec["top"] is not None and rec["top"]["player_id"] == 3
+    assert rec["top"]["turnovers"] == 2
+
+
+def test_clutch_turnover_players_short_match():
+    """Rövid felvételen nincs hajrá-kép."""
+    from handball.pipeline.momentum import clutch_turnover_players
+
+    rec = clutch_turnover_players(
+        _clutch_turnover_match(total_s=300.0))["home"]
+    assert rec["players"] == [] and rec["top"] is None

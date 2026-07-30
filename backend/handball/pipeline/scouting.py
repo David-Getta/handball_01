@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Hajrá-hibázóik: [{"player_id", "jersey", "turnovers"}] — kinél
+    # megy el a labda a döntő szakaszban; darabszámok, meccsek közt
+    # pontosan összegződnek.
+    clutch_losers: list = field(default_factory=list)
     # Csere-kiváltóik: a mért cserék és azok száma, amelyek kapott gól
     # után jöttek — darabszámok, meccsek közt pontosan összegződnek
     # (arány = stg_after / stg_subs).
@@ -1832,6 +1836,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Hajrá-hibázók: kire kell menni a döntő szakaszban.
+    _ctp_rows = rep.clutch_losers or []
+    if _ctp_rows and _ctp_rows[0]["turnovers"] >= 2:
+        _ctp_top = _ctp_rows[0]
+        _ctp_who = (f"{_ctp_top['jersey']}-es mezszámú"
+                    if _ctp_top.get("jersey") is not None
+                    else f"{_ctp_top['player_id']} azonosítójú")
+        keys.append(
+            f"A hajrában a(z) {_ctp_who} játékosuknál megy el a labda "
+            f"({_ctp_top['turnovers']} eladás a döntő szakaszban) — a "
+            "végén rá kell menni: kettőzés és passzsáv-zárás nála, "
+            "mert ott a legolcsóbb a labdaszerzés, amikor a legtöbbet "
+            "ér.")
 
     # Csere-kiváltók: reagálnak vagy terveznek a kispadon.
     if rep.stg_subs >= 4:
@@ -4590,6 +4608,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .momentum import clutch_turnover_players as _ctp
+        rep.clutch_losers = [
+            dict(row)
+            for row in _ctp(match, config)[team.value]["players"]]
         from .substitutions import substitution_triggers as _stg
         stgrec = _stg(match, config)[team.value]
         rep.stg_subs = stgrec["subs"]
@@ -5505,6 +5527,22 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_clutch_losers(reports) -> list:
+    """Hajrá-hibázók: játékosonként a hajrá-eladások összegzése (a
+    darabszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.clutch_losers or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "turnovers": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["turnovers"] += int(row.get("turnovers", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["turnovers"])]
 
 
 def _merge_pp_shooters(reports) -> list:
@@ -6562,6 +6600,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 138) Az ő hajrá-hibázójuk × a ti hajrá-védekezésetek: a végén
+    # rá kell szervezni a nyomást.
+    _ctp138 = opp.clutch_losers or []
+    if _ctp138 and _ctp138[0]["turnovers"] >= 2 and own.steal_n >= 4:
+        _top138 = _ctp138[0]
+        _high138 = 100.0 * own.steal_high / max(1, own.steal_n)
+        _who138 = (f"{_top138['jersey']}-es mezszámú"
+                   if _top138.get("jersey") is not None
+                   else f"{_top138['player_id']} azonosítójú")
+        if _high138 >= 30.0:
+            plan.append(
+                f"A hajrában a(z) {_who138} játékosuknál megy el a "
+                f"labda ({_top138['turnovers']} eladás a döntő "
+                f"szakaszban), ti pedig elöl is tudtok szerezni (a "
+                f"labdaszerzéseitek {_high138:.0f}%-a a támadó "
+                "térfélen) — a záró percekben rá kell szervezni a "
+                "nyomást: kettőzés az ő oldalán, és minden szerzés "
+                "után azonnali befejezés.")
 
     # 137) Az ő reaktív cseréik × a ti gólsorozataitok: a
     # cserezavart azonnali középkezdéssel kell büntetni.
@@ -8461,6 +8518,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        clutch_losers=_merge_clutch_losers(reports),
         stg_subs=sum(r.stg_subs for r in reports),
         stg_after=sum(r.stg_after for r in reports),
         dst_cases=sum(r.dst_cases for r in reports),
