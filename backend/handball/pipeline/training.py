@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 154) Lövés-távolság esése: ha a hajrára kifelé szorulunk, a
+    # fáradt befejezés a téma.
+    try:
+        from .attack_types import shot_distance_fade
+        sdf154 = shot_distance_fade(match, config)
+        for side in ("home", "away"):
+            rec154 = sdf154[side]
+            if rec154["verdict"] != "kifelé szorulnak":
+                continue
+            add(side, "erőnlét", "Fáradt befejezés",
+                f"a lövéseink átlagos távolsága "
+                f"{rec154['fh_avg_m']:.1f} m-ről "
+                f"{rec154['sh_avg_m']:.1f} m-re nőtt a második "
+                "félidőre — a hajrában már nem vállaljuk a betörést, "
+                "és kívülről lövünk",
+                "fáradt befejezés: az edzés VÉGÉN, fáradtan jön a "
+                "befejezés-blokk — 8-10 betöréses helyzet kapussal, "
+                "ahol a lövés csak 9 m-en belülről ér pontot; "
+                "közben rövid sprint-sorozat, hogy a pulzus a "
+                "meccs-hajrához hasonló legyen")
+    except Exception:
+        pass
+
     # 153) Kapott gólok támadás-típus szerint: ha a gólok nagy része
     # lerohanásból jön, a visszarendeződés a téma.
     try:

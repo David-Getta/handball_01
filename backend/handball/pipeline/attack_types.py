@@ -2767,3 +2767,70 @@ def breakthrough_players(match: Match,
         out[side] = {"entries": sum(r["entries"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Lövés-távolság esése: félidőnként ennyi mért lövés kell, és ekkora
+# (méteres) növekedés számít érdemi kifelé szorulásnak.
+SDF_MIN_SHOTS = 4
+SDF_GAP_M = 1.0
+
+
+def shot_distance_fade(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Lövés-távolság esése: KIFELÉ SZORULNAK-E a hajrára.
+
+    A lövőerő-esés (shot_power_fade) a lövés SEBESSÉGÉT méri
+    félidőnként, a befejezés-esés (finish_fade) a gólarányt — ez a
+    HELYET: félidőnként átlagoljuk a lövések kapu-távolságát.
+
+    Edzőileg: ha a második félidőben érdemben kijjebb kerülnek a
+    lövéseik, elfogy az erő a betörésekhez — a hajrában elég a
+    lövő-vonalba lépni, mert a közeli befejezést már nem vállalják; ha
+    marad a távolság, a fáradás nem a lövés-választásukon látszik.
+
+    Visszatérés csapatonként: {"fh_shots", "fh_avg_m", "sh_shots",
+    "sh_avg_m", "gap_m", "verdict"} — az átlagok és a gap None, ha
+    nincs félidő-jel vagy kevés a lövés; a verdict "kifelé szorulnak"
+    / "bent maradnak" / None.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .halftime import detect_halftime
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    empty = {"fh_shots": 0, "fh_avg_m": None, "sh_shots": 0,
+             "sh_avg_m": None, "gap_m": None, "verdict": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    xg = match_xg(match, config)
+    for side in ("home", "away"):
+        goal_x = config.attacks_toward_x(
+            Team.HOME if side == "home" else Team.AWAY)
+        halves: dict = {"fh": [], "sh": []}
+        for sh in xg["shots"]:
+            if sh["team"] != side:
+                continue
+            dist = math.hypot(sh["x"] - goal_x, sh["y"] - cy)
+            halves["fh" if sh["t"] <= ht else "sh"].append(dist)
+        rec = out[side]
+        rec["fh_shots"] = len(halves["fh"])
+        rec["sh_shots"] = len(halves["sh"])
+        if (len(halves["fh"]) >= SDF_MIN_SHOTS
+                and len(halves["sh"]) >= SDF_MIN_SHOTS):
+            fh_avg = sum(halves["fh"]) / len(halves["fh"])
+            sh_avg = sum(halves["sh"]) / len(halves["sh"])
+            rec["fh_avg_m"] = round(fh_avg, 1)
+            rec["sh_avg_m"] = round(sh_avg, 1)
+            rec["gap_m"] = round(sh_avg - fh_avg, 1)
+            if rec["gap_m"] >= SDF_GAP_M:
+                rec["verdict"] = "kifelé szorulnak"
+            elif rec["gap_m"] <= -SDF_GAP_M:
+                rec["verdict"] = "bent maradnak"
+    return out

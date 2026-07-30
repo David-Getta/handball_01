@@ -2012,3 +2012,60 @@ def test_breakthrough_players_needs_enough_entries():
 
     rec = breakthrough_players(_breakthrough_match([7, 9]))["home"]
     assert rec["entries"] == 2 and rec["top"] is None
+
+
+# ---- Lövés-távolság esése (kifelé szorulnak-e a hajrára) --------------------
+
+def _distance_fade_match(fh_x=33.0, sh_x=28.0, fps=25.0):
+    """Hazai lövések az 1. félidőben `fh_x`-ről, a 2.-ban `sh_x`-ről,
+    közte 100 mp szünettel (a félidő-felismeréshez)."""
+    frames = []
+    t = 0
+
+    def _wall():
+        return [_pl(10 + j, Team.HOME, 20.0, 4.0 + 3.0 * j)
+                for j in range(5)]
+
+    def _shot(sx):
+        nonlocal t, frames
+        for i in range(10):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, sx, 10.0)] + _wall(),
+                ball=Ball(x=min(sx + 1.2 * (i + 1), 40.4), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(42):
+            frames.append(Frame(t=t, players=_wall(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(6):
+        _shot(fh_x)
+    for _ in range(2500):      # 100 mp szünet
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(6):
+        _shot(sh_x)
+    return Match(_meta(fps), frames)
+
+
+def test_shot_distance_fade_flags_the_outward_drift():
+    """A 2. félidőben 12 m-ről lőnek a 7 m helyett → kifelé
+    szorulnak."""
+    from handball.pipeline.attack_types import shot_distance_fade
+
+    rec = shot_distance_fade(_distance_fade_match())["home"]
+    assert rec["fh_shots"] >= 4 and rec["sh_shots"] >= 4
+    assert rec["gap_m"] is not None and rec["gap_m"] >= 1.0
+    assert rec["verdict"] == "kifelé szorulnak"
+
+
+def test_shot_distance_fade_without_halftime():
+    """Félidő-jel nélkül nincs ítélet."""
+    from handball.pipeline.attack_types import shot_distance_fade
+
+    m = _distance_fade_match()
+    no_break = Match(_meta(), [f for f in m.frames if f.players])
+    rec = shot_distance_fade(no_break)["home"]
+    assert rec["gap_m"] is None and rec["verdict"] is None

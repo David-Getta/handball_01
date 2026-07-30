@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Lövés-távolság esése: kifelé szorultak-e a hajrára.
+    try:
+        from .attack_types import shot_distance_fade
+        sdf = shot_distance_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sdf = sdf[side]
+            if rec_sdf["verdict"] != "kifelé szorulnak":
+                continue
+            body += (f" A(z) {name} a hajrára kifelé szorult: a "
+                     f"lövéseik átlagos távolsága "
+                     f"{rec_sdf['fh_avg_m']:.1f} m-ről "
+                     f"{rec_sdf['sh_avg_m']:.1f} m-re nőtt.")
+    except Exception:
+        pass
     # Kapott gólok támadás-típus szerint: melyik műfajból szivárogtak.
     try:
         from .defense import conceded_by_attack_type

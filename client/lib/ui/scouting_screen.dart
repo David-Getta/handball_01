@@ -1297,6 +1297,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Lövés-távolság esése: kifelé szorulnak-e a hajrára (félidőnként
+  // 4+ lövés, 1 m-es növekedés — a backend-kulccsal azonos küszöbök).
+  String? _shotDistanceFade(Map<String, dynamic> r) {
+    final fhN = ((r["sdf_fh_shots"] as num?) ?? 0).toInt();
+    final shN = ((r["sdf_sh_shots"] as num?) ?? 0).toInt();
+    final fhSum = ((r["sdf_fh_sum_m"] as num?) ?? 0).toDouble();
+    final shSum = ((r["sdf_sh_sum_m"] as num?) ?? 0).toDouble();
+    if (fhN < 4 || shN < 4 || fhSum <= 0 || shSum <= 0) return null;
+    final fh = fhSum / fhN;
+    final sh = shSum / shN;
+    if (sh - fh < 1.0) return null;
+    return "a hajrára kifelé szorulnak: a lövéseik átlagos távolsága "
+        "${fh.toStringAsFixed(1)} m-ről ${sh.toStringAsFixed(1)} m-re "
+        "nő · a második félidőben elég a lövő-vonalba lépni";
+  }
+
   // Kapott gólok támadás-típus szerint: melyik műfajból szivárognak
   // (5+ kapott gól, 40% feletti vezető típus, holtverseny nélkül — a
   // backend-kulccsal azonos küszöbök).
@@ -3702,6 +3718,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Áttörő játékosok", _breakthroughPlayers(r)!],
       if (_concededTypes(r) != null)
         ["Kapott gólok műfaj szerint", _concededTypes(r)!],
+      if (_shotDistanceFade(r) != null)
+        ["Lövés-távolság esése", _shotDistanceFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

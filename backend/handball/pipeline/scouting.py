@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Lövés-távolságuk félidőnként: félidőnként a mért lövések és a
+    # távolság-összeg (m) — összegek, meccsek közt pontosan
+    # összegződnek (félidő-átlag = összeg / darab).
+    sdf_fh_shots: int = 0
+    sdf_fh_sum_m: float = 0.0
+    sdf_sh_shots: int = 0
+    sdf_sh_sum_m: float = 0.0
     # Kapott góljaik támadás-típus szerint: {típus: gólok} — melyik
     # műfajból szivárognak; darabszámok, meccsek közt pontosan
     # összegződnek (részarány = típus / összes kapott gól).
@@ -1804,6 +1811,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Lövés-távolság esése: kifelé szorulnak-e a hajrára.
+    if rep.sdf_fh_shots >= 4 and rep.sdf_sh_shots >= 4 \
+            and rep.sdf_fh_sum_m > 0 and rep.sdf_sh_sum_m > 0:
+        _sdf_fh = rep.sdf_fh_sum_m / rep.sdf_fh_shots
+        _sdf_sh = rep.sdf_sh_sum_m / rep.sdf_sh_shots
+        if _sdf_sh - _sdf_fh >= 1.0:
+            keys.append(
+                f"A hajrára kifelé szorulnak: a lövéseik átlagos "
+                f"távolsága {_sdf_fh:.1f} m-ről {_sdf_sh:.1f} m-re nő "
+                "a második félidőben — elfogy az erejük a "
+                "betörésekhez: a hajrában elég a lövő-vonalba lépni, "
+                "a közeli befejezést már nem vállalják.")
 
     # Kapott gólok támadás-típus szerint: melyik műfajból szivárognak.
     _cat_rows = list((rep.conceded_types or {}).items())
@@ -4479,6 +4499,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import shot_distance_fade as _sdf
+        sdfrec = _sdf(match, config)[team.value]
+        rep.sdf_fh_shots = sdfrec["fh_shots"]
+        rep.sdf_fh_sum_m = round(
+            (sdfrec["fh_avg_m"] or 0.0) * sdfrec["fh_shots"], 1)
+        rep.sdf_sh_shots = sdfrec["sh_shots"]
+        rep.sdf_sh_sum_m = round(
+            (sdfrec["sh_avg_m"] or 0.0) * sdfrec["sh_shots"], 1)
         from .defense import conceded_by_attack_type as _cat
         rep.conceded_types = dict(
             _cat(match, config)[team.value]["types"])
@@ -6407,6 +6435,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 133) Az ő kifelé szoruló lövéseik × a ti blokkjaitok: a
+    # hajrában a kilépés viszi el a meccset.
+    if opp.sdf_fh_shots >= 4 and opp.sdf_sh_shots >= 4 \
+            and opp.sdf_fh_sum_m > 0 and opp.sdf_sh_sum_m > 0 \
+            and own.blk_attempts >= 4:
+        _fh133 = opp.sdf_fh_sum_m / opp.sdf_fh_shots
+        _sh133 = opp.sdf_sh_sum_m / opp.sdf_sh_shots
+        _blk133 = 100.0 * own.blk_for / max(1, own.blk_attempts)
+        if _sh133 - _fh133 >= 1.0 and _blk133 >= 25.0:
+            plan.append(
+                f"A hajrára kifelé szorulnak (a lövéseik "
+                f"{_fh133:.1f} m-ről {_sh133:.1f} m-re kerülnek), ti "
+                f"pedig blokkoltok (a lövéseik {_blk133:.0f}%-ába "
+                "belenyúltatok) — a második félidőben fel kell "
+                "vállalni a kilépést: a távoli lövéseiket blokkolni "
+                "kell, mert a betörést már nem vállalják.")
+
     # 132) Az ő lerohanásból kapott góljaik × a ti gyors indításotok:
     # a kontra ellenük a legolcsóbb gólforrás.
     _cat132 = list((opp.conceded_types or {}).items())
@@ -8224,6 +8269,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        sdf_fh_shots=sum(r.sdf_fh_shots for r in reports),
+        sdf_fh_sum_m=round(sum(r.sdf_fh_sum_m for r in reports), 1),
+        sdf_sh_shots=sum(r.sdf_sh_shots for r in reports),
+        sdf_sh_sum_m=round(sum(r.sdf_sh_sum_m for r in reports), 1),
         conceded_types=_merge_conceded_types(reports),
         breakthrough_players=_merge_breakthrough_players(reports),
         dpv_attacks=sum(r.dpv_attacks for r in reports),

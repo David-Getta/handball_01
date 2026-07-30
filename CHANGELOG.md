@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Lövés-távolság esése**: KIFELÉ SZORULNAK-E a hajrára. A
+  lövőerő-esés a lövés sebességét méri félidőnként, a befejezés-esés a
+  gólarányt — ez a helyet: félidőnként átlagolt lövés-távolság
+  (félidőnként 4+ lövés, 1 m-es növekedésnél). Ha a második félidőben
+  kijjebb kerülnek a lövéseik, elfogy az erő a betörésekhez: a
+  hajrában elég a lövő-vonalba lépni, a közeli befejezést már nem
+  vállalják. Egy réteg, sok felület: `shot_distance_fade` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (félidőnkénti lövés- és távolság-összegek + edzői kulcs + csempe),
+  133. meccsterv-szabály (az ő kifelé szoruló lövéseik × a ti
+  blokkjaitok), 154. edzés-szabály (fáradt befejezés: az edzés végén,
+  fáradtan, csak 9 m-en belülről ér pontot a lövés).
 - **Kapott gólok támadás-típus szerint**: MILYEN TÁMADÁSBÓL kapják a
   gólokat. A támadás-hatékonyság a támadó oldalról nézi, melyik műfaj
   eredményes — ez a védő oldali párja: a gólokat a támadás típusához
