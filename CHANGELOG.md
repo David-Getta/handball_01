@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapott gólok támadás-típus szerint**: MILYEN TÁMADÁSBÓL kapják a
+  gólokat. A támadás-hatékonyság a támadó oldalról nézi, melyik műfaj
+  eredményes — ez a védő oldali párja: a gólokat a támadás típusához
+  (lerohanás / gyors indítás / felállt támadás / 7 a 6) kötjük, de a
+  védekező csapat oldalán tartjuk nyilván (5+ kapott gól, 40%-os
+  vezető típus, holtverseny nélkül). Ez rangsorolja a védekezési
+  munkát: lerohanásból kapott gólnál a visszarendeződés a kulcs (nem a
+  fal minősége), felállt támadásból kapottnál a fal szervezése. Egy
+  réteg, sok felület: `conceded_by_attack_type` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (típusonkénti kapott gólok + edzői kulcs + csempe), 132.
+  meccsterv-szabály (az ő lerohanásból kapott góljaik × a ti gyors
+  indításotok), 153. edzés-szabály (visszarendeződés vagy a felállt
+  fal szervezése, a vezető típustól függően).
 - **Áttörő játékosok**: KI JUT BE labdával a falba. A
   betörés-folyosók azt mondják meg, melyik sávban lyukas a fal — ez
   azt, ki viszi be a labdát: támadásonként (emberenként egyszer)

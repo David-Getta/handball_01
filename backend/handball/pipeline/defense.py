@@ -2235,3 +2235,71 @@ def defensive_aggression(match, config=None) -> dict:
             elif pct <= AGGR_SOFT_PCT:
                 rec["verdict"] = "passzív fal"
     return out
+
+
+# Kapott gólok támadás-típus szerint: ennyi típushoz kötött kapott gól
+# kell, és e feletti részarány jelenti, hogy egy műfajból szivárognak.
+CAT_MIN_GOALS = 5
+CAT_SHARE = 40.0
+
+
+def conceded_by_attack_type(match, config=None) -> dict:
+    """Kapott gólok támadás-típus szerint: MILYEN TÁMADÁSBÓL kapják a
+    gólokat.
+
+    A támadás-hatékonyság (attack_efficiency) a támadó oldalról nézi,
+    melyik műfaj mennyire eredményes — ez a védő oldali párja: a
+    gólokat a támadás típusához (lerohanás / gyors indítás / felállt
+    támadás / 7 a 6) kötjük, de a VÉDEKEZŐ csapat oldalán tartjuk
+    nyilván.
+
+    Edzőileg ez rangsorolja a védekezési munkát: ha a kapott góljaik
+    nagy része lerohanásból jön, a visszarendeződés a kulcs (nem a fal
+    minősége); ha felállt támadásból, a fal szervezésén kell dolgozni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals", "types":
+    {típus: gólok}, "top": {"type", "goals", "share_pct"} | None} — a
+    "top" akkor van kitöltve, ha legalább CAT_MIN_GOALS típushoz
+    kötött kapott gól van, a vezető típus részaránya eléri a
+    CAT_SHARE-t, és nincs vele holtversenyben másik típus.
+    """
+    from ..models.tracking import Team
+    from .attack_types import ATTACK_TAIL_S, classify_attacks
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"goals": 0, "types": {}, "top": None}
+                 for side in ("home", "away")}
+    used: set = set()
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        defending = "away" if side == "home" else "home"
+        for i, (t, tm) in enumerate(goals):
+            if i in used or tm != side:
+                continue
+            if not (a["start_frame"] <= t <= a["end_frame"] + tail):
+                continue
+            used.add(i)
+            rec = out[defending]
+            rec["goals"] += 1
+            rec["types"][a["type"]] = rec["types"].get(a["type"], 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["types"] = dict(sorted(rec["types"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["types"].items())
+        if rec["goals"] >= CAT_MIN_GOALS and items:
+            typ, n = items[0]
+            share = 100.0 * n / rec["goals"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= CAT_SHARE and not tie:
+                rec["top"] = {"type": typ, "goals": n,
+                              "share_pct": round(share, 1)}
+    return out

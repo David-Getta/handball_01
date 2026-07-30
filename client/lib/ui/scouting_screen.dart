@@ -1297,6 +1297,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapott gólok támadás-típus szerint: melyik műfajból szivárognak
+  // (5+ kapott gól, 40% feletti vezető típus, holtverseny nélkül — a
+  // backend-kulccsal azonos küszöbök).
+  String? _concededTypes(Map<String, dynamic> r) {
+    final types = r["conceded_types"];
+    if (types is! Map || types.isEmpty) return null;
+    final rows = types.entries
+        .map((e) => [e.key.toString(), ((e.value as num?) ?? 0).toInt()])
+        .toList()
+      ..sort((a, b) => (b[1] as int).compareTo(a[1] as int));
+    final total = rows.fold<int>(0, (s, e) => s + (e[1] as int));
+    if (total < 5) return null;
+    final top = rows.first[1] as int;
+    if (rows.length > 1 && (rows[1][1] as int) == top) return null;
+    final pct = 100.0 * top / total;
+    if (pct < 40.0) return null;
+    final type = rows.first[0] as String;
+    final fast = type.contains("lerohanás") || type.contains("gyors");
+    return "a kapott góljaik ${pct.toStringAsFixed(0)}%-a $type-ból "
+        "jön ($top/$total) · ${fast ? "a visszarendeződésük a gyenge "
+            "pont, gyors indítás termel" : "a felállt faluk a gyenge "
+            "pont, figurákkal kell dolgozni"}";
+  }
+
   // Áttörő játékosok: ki jut be labdával a falba (3+ betörés — a
   // backend-kulccsal azonos küszöb).
   String? _breakthroughPlayers(Map<String, dynamic> r) {
@@ -3676,6 +3700,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_doublePivot(r) != null) ["Két beállós játék", _doublePivot(r)!],
       if (_breakthroughPlayers(r) != null)
         ["Áttörő játékosok", _breakthroughPlayers(r)!],
+      if (_concededTypes(r) != null)
+        ["Kapott gólok műfaj szerint", _concededTypes(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kapott gólok támadás-típus szerint: melyik műfajból szivárogtak.
+    try:
+        from .defense import conceded_by_attack_type
+        cat = conceded_by_attack_type(match)
+        for side, name in (("home", home), ("away", away)):
+            top_cat = cat[side]["top"]
+            if top_cat is None:
+                continue
+            body += (f" A(z) {name} kapott góljainak "
+                     f"{top_cat['share_pct']:.0f}%-a "
+                     f"{top_cat['type']}-ból jött "
+                     f"({top_cat['goals']}/{cat[side]['goals']}).")
+    except Exception:
+        pass
     # Áttörő játékosok: ki vitte be a labdát a falba.
     try:
         from .attack_types import breakthrough_players

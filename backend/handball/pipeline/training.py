@@ -1343,6 +1343,42 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 153) Kapott gólok támadás-típus szerint: ha a gólok nagy része
+    # lerohanásból jön, a visszarendeződés a téma.
+    try:
+        from .defense import conceded_by_attack_type
+        cat153 = conceded_by_attack_type(match, config)
+        for side in ("home", "away"):
+            top153 = cat153[side]["top"]
+            if top153 is None:
+                continue
+            if "lerohanás" in top153["type"] or "gyors" in top153["type"]:
+                add(side, "védekezés", "Visszarendeződés a kontra ellen",
+                    f"a kapott góljaink {top153['share_pct']:.0f}%-a "
+                    f"{top153['type']}-ból jött "
+                    f"({top153['goals']}/{cat153[side]['goals']}) — nem "
+                    "a fal minőségével van baj, hanem azzal, hogy nem "
+                    "érünk vissza",
+                    "visszarendeződés: minden támadás-gyakorlat "
+                    "végén KÖTELEZŐ visszafutás a felezővonalig, "
+                    "majd 4-5 elleni fékezés — az edző a lövés "
+                    "pillanatában indítja az ellentámadást, és csak "
+                    "a rendezetten megállított kontra ér pontot")
+            else:
+                add(side, "védekezés", "Felállt fal szervezése",
+                    f"a kapott góljaink {top153['share_pct']:.0f}%-a "
+                    f"{top153['type']}-ból jött "
+                    f"({top153['goals']}/{cat153[side]['goals']}) — a "
+                    "rendezett fal ellen is szivárgunk, tehát a "
+                    "szervezésen kell dolgozni",
+                    "felállt fal szervezése: 6-0 elleni támadójáték "
+                    "hangos vezényszóval — minden átadásnál a "
+                    "kezdeményező védő bemondja a nevet, és a "
+                    "gyakorlat csak akkor ér pontot, ha a "
+                    "lövés-kényszert a fal hozza ki, nem az idő")
+    except Exception:
+        pass
+
     # 152) Áttörő játékosok: ha az ellenfél egy embere sorozatban
     # betör, a duplázás és a vonal-zárás a téma.
     try:

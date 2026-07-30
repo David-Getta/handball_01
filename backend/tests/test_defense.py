@@ -1555,3 +1555,68 @@ def test_defensive_aggression_needs_enough_attacks():
 
     rec = defensive_aggression(_aggression_match(n_attacks=4))["away"]
     assert rec["pct"] is None and rec["verdict"] is None
+
+
+# ---- Kapott gólok támadás-típus szerint --------------------------------------
+
+def _conceded_type_match(n_breaks=5, n_positional=2, fps=25.0):
+    """HAZAI gólok lerohanásból és felállt támadásból — a VENDÉG
+    kapott góljaiként jelennek meg."""
+    frames = []
+    t = 0
+
+    def _attack(fast):
+        nonlocal t, frames
+        if fast:      # 22 → 38 m négy másodperc alatt: lerohanás
+            n = int(4.0 * fps)
+            x0, x1 = 22.0, 38.0
+        else:         # helyben járó felállt támadás
+            n = int(30.0 * fps)
+            x0, x1 = 26.0, 27.0
+        for i in range(n):
+            x = x0 + (x1 - x0) * i / max(1, n - 1)
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, x, 10.0),
+                              _pl(21, Team.AWAY, 37.0, 12.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):    # gól a +x kapura
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for i in range(int(2.0 * fps)):   # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0, confidence=1.0)))
+            t += 1
+
+    for _ in range(n_breaks):
+        _attack(fast=True)
+    for _ in range(n_positional):
+        _attack(fast=False)
+    return Match(_meta(fps), frames)
+
+
+def test_conceded_by_attack_type_flags_the_fast_breaks():
+    """Öt lerohanásból és két felállt támadásból kapott gól → a
+    lerohanás a vezető műfaj a vendég kapott góljaiban."""
+    from handball.pipeline.defense import conceded_by_attack_type
+
+    rec = conceded_by_attack_type(_conceded_type_match())["away"]
+    assert rec["goals"] >= 5
+    assert rec["top"] is not None
+    assert "lerohanás" in rec["top"]["type"]
+    assert rec["top"]["share_pct"] >= 40.0
+    # A hazai nem kapott gólt.
+    assert conceded_by_attack_type(_conceded_type_match())["home"]["goals"] == 0
+
+
+def test_conceded_by_attack_type_needs_enough_goals():
+    """Kevés (5-nél kevesebb) kapott gólnál nincs ítélet."""
+    from handball.pipeline.defense import conceded_by_attack_type
+
+    rec = conceded_by_attack_type(
+        _conceded_type_match(n_breaks=2, n_positional=1))["away"]
+    assert rec["goals"] == 3 and rec["top"] is None

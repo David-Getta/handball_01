@@ -3048,6 +3048,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import conceded_by_attack_type
+            res["conceded_by_attack_type"] = conceded_by_attack_type(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3722,6 +3727,9 @@ def create_app():
                     breakthrough_players)
                 _layer("breakthrough_players",
                        lambda: breakthrough_players(match))
+                from ..pipeline.defense import conceded_by_attack_type
+                _layer("conceded_by_attack_type",
+                       lambda: conceded_by_attack_type(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

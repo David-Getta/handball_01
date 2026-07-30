@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapott góljaik támadás-típus szerint: {típus: gólok} — melyik
+    # műfajból szivárognak; darabszámok, meccsek közt pontosan
+    # összegződnek (részarány = típus / összes kapott gól).
+    conceded_types: dict = field(default_factory=dict)
     # Áttörő játékosaik: [{"player_id", "jersey", "entries", "goals"}]
     # — ki jut be labdával a 9 m-es körzetbe és hány gólos támadásban;
     # darabszámok, meccsek közt pontosan összegződnek.
@@ -1800,6 +1804,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapott gólok támadás-típus szerint: melyik műfajból szivárognak.
+    _cat_rows = list((rep.conceded_types or {}).items())
+    _cat_n = sum(n for _, n in _cat_rows)
+    if _cat_n >= 5 and _cat_rows:
+        _cat_rows.sort(key=lambda kv: -kv[1])
+        _cat_type, _cat_top = _cat_rows[0]
+        _cat_pct = 100.0 * _cat_top / _cat_n
+        _cat_tie = len(_cat_rows) > 1 and _cat_rows[1][1] == _cat_top
+        if _cat_pct >= 40.0 and not _cat_tie:
+            _cat_what = ("a visszarendeződésük a gyenge pont: a "
+                         "gyors indítás és a korai befejezés termel "
+                         "ellenük" if "lerohanás" in _cat_type
+                         or "gyors" in _cat_type
+                         else "a felállt faluk a gyenge pont: "
+                         "figurákkal, beállós játékkal és "
+                         "oldalváltással kell dolgozni")
+            keys.append(
+                f"A kapott góljaik {_cat_pct:.0f}%-a "
+                f"{_cat_type}-ból jön ({_cat_top}/{_cat_n}) — "
+                f"{_cat_what}.")
 
     # Áttörő játékosok: kire kell duplázni a falban.
     _btp_rows = rep.breakthrough_players or []
@@ -4454,6 +4479,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import conceded_by_attack_type as _cat
+        rep.conceded_types = dict(
+            _cat(match, config)[team.value]["types"])
         from .attack_types import breakthrough_players as _btp
         rep.breakthrough_players = [
             dict(row)
@@ -5339,6 +5367,16 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_conceded_types(reports) -> dict:
+    """Kapott gólok támadás-típus szerint: típusonkénti összegzés (a
+    gólszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for typ, n in (r.conceded_types or {}).items():
+            tally[typ] = tally.get(typ, 0) + int(n)
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]))
 
 
 def _merge_breakthrough_players(reports) -> list:
@@ -6368,6 +6406,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 132) Az ő lerohanásból kapott góljaik × a ti gyors indításotok:
+    # a kontra ellenük a legolcsóbb gólforrás.
+    _cat132 = list((opp.conceded_types or {}).items())
+    _catn132 = sum(n for _, n in _cat132)
+    if _cat132 and _catn132 >= 5 and own.rs_restarts >= 4:
+        _cat132.sort(key=lambda kv: -kv[1])
+        _type132, _top132 = _cat132[0]
+        _pct132 = 100.0 * _top132 / _catn132
+        _fast132 = 100.0 * own.rs_fast / own.rs_restarts
+        if _pct132 >= 40.0 and _fast132 >= 50.0 \
+                and ("lerohanás" in _type132 or "gyors" in _type132):
+            plan.append(
+                f"A kapott góljaik {_pct132:.0f}%-a {_type132}-ból "
+                f"jön, ti pedig gyorsan indítotok (az "
+                f"újraindításaitok {_fast132:.0f}%-ánál 12 mp-en "
+                "belül átér a labda) — a kontra ellenük a legolcsóbb "
+                "gólforrás: minden védés és kapott gól után azonnal "
+                "indítsatok, és a szélsők már a lövés pillanatában "
+                "fussanak.")
 
     # 131) Az ő áttörő emberük × a ti kettőzésetek: a duplázást rá
     # kell tervezni, mert ő nyitja szét a falat.
@@ -8166,6 +8224,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        conceded_types=_merge_conceded_types(reports),
         breakthrough_players=_merge_breakthrough_players(reports),
         dpv_attacks=sum(r.dpv_attacks for r in reports),
         dpv_double=sum(r.dpv_double for r in reports),
