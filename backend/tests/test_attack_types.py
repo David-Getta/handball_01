@@ -2069,3 +2069,51 @@ def test_shot_distance_fade_without_halftime():
     no_break = Match(_meta(), [f for f in m.frames if f.players])
     rec = shot_distance_fade(no_break)["home"]
     assert rec["gap_m"] is None and rec["verdict"] is None
+
+
+# ---- Elzárók (ki áll elzárásba a lövő előtt) --------------------------------
+
+def _screen_setter_match(setters, fps=25.0):
+    """HAZAI őrzött lövések: a `setters` elemenként megadja, melyik
+    társ áll elzárásban a lövő őrzője mellett."""
+    frames = []
+    t = 0
+    for setter_id in setters:
+        players = [_pl(1, Team.HOME, 30.0, 10.0),          # a lövő
+                   _pl(20, Team.AWAY, 31.5, 10.0),         # az őrző
+                   _pl(setter_id, Team.HOME, 31.5, 11.0)]  # az elzáró
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(30.0 + 0.8 * (i + 1), 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=40.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_screen_setters_finds_the_main_screener():
+    """Négy elzárásból hármat ugyanaz a játékos állít → ő az elzáró."""
+    from handball.pipeline.attack_types import screen_setters
+
+    rec = screen_setters(_screen_setter_match([5, 5, 5, 7]))["home"]
+    assert rec["screens"] == 4
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 5 and rec["top"]["screens"] == 3
+
+
+def test_screen_setters_needs_enough_screens():
+    """Kevés (3-nál kevesebb) elzárásnál nincs kiemelt elzáró."""
+    from handball.pipeline.attack_types import screen_setters
+
+    rec = screen_setters(_screen_setter_match([5, 7]))["home"]
+    assert rec["screens"] == 2 and rec["top"] is None

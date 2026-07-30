@@ -1297,6 +1297,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Elzárók: ki állítja az elzárásaikat (3+ elzárás — a
+  // backend-kulccsal azonos küszöb).
+  String? _screenSetters(Map<String, dynamic> r) {
+    final rows = r["screen_setters"];
+    if (rows is! List || rows.isEmpty) return null;
+    final top = rows.first;
+    if (top is! Map) return null;
+    final n = ((top["screens"] as num?) ?? 0).toInt();
+    if (n < 3) return null;
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk állítja az elzárásaikat ($n elzárás) · "
+        "az ő oldalán kell a hangos váltás, és elölről kell fogni";
+  }
+
   // Kapus-bemelegedés: hogyan véd a meccs első tíz percében
   // (szakaszonként 4+ kapura tartó lövés, 15 százalékpontos eltérés —
   // a backend-kulccsal azonos küszöbök).
@@ -3879,6 +3895,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberhátrány-lövők", _shorthandedShooters(r)!],
       if (_gkEarlySaves(r) != null)
         ["Kapus-bemelegedés", _gkEarlySaves(r)!],
+      if (_screenSetters(r) != null) ["Elzárók", _screenSetters(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

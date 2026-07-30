@@ -604,6 +604,9 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Elzáróik: [{"player_id", "jersey", "screens"}] — ki áll elzárásba
+    # a lövőik előtt; darabszámok, meccsek közt pontosan összegződnek.
+    screen_setters: list = field(default_factory=list)
     # Kapusuk meccskezdése: az első tíz percben és utána a kapura tartó
     # lövések és a fogások — darabszámok, meccsek közt pontosan
     # összegződnek (védés-arány = saves / faced).
@@ -1847,6 +1850,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Elzárók: kire kell a váltás-kommunikáció.
+    _scs_rows = rep.screen_setters or []
+    if _scs_rows and _scs_rows[0]["screens"] >= 3:
+        _scs_top = _scs_rows[0]
+        _scs_who = (f"{_scs_top['jersey']}-es mezszámú"
+                    if _scs_top.get("jersey") is not None
+                    else f"{_scs_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_scs_who} játékosuk állítja az elzárásaikat "
+            f"({_scs_top['screens']} elzárás) — az ő oldalán kell a "
+            "váltás-kommunikáció: hangos váltás vagy átcsúszás, és "
+            "őt elölről kell fogni, mert nélküle a lövőjük nem marad "
+            "tisztán.")
 
     # Kapus-bemelegedés: mit ér a meccs eleje ellenük.
     if rep.gke_early_faced >= 4 and rep.gke_rest_faced >= 4:
@@ -4652,6 +4669,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import screen_setters as _scs
+        rep.screen_setters = [
+            dict(row)
+            for row in _scs(match, config)[team.value]["players"]]
         from .goalkeeper import gk_early_saves as _gke
         gkerec = _gke(match, config)[team.value]
         rep.gke_early_faced = gkerec["early"]["faced"]
@@ -6042,6 +6063,22 @@ def _merge_fb_finishers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_screen_setters(reports) -> list:
+    """Elzárók: játékosonként az elzárások összegzése (a darabszám
+    szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.screen_setters or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "screens": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["screens"] += int(row.get("screens", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["screens"])]
+
+
 def _merge_outlet_targets(reports) -> list:
     """Indítás-célpontok darabszámainak pontos összegzése meccsek közt."""
     tally: dict = {}
@@ -6672,6 +6709,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 141) Az ő fő elzárójuk × a ti elzárás-védekezésetek: az ő
+    # oldalán kell a váltás-fegyelem.
+    _scs141 = opp.screen_setters or []
+    if _scs141 and _scs141[0]["screens"] >= 3 \
+            and own.scd_screened_shots >= 4 and own.scd_open_shots >= 4:
+        _top141 = _scs141[0]
+        _scr141 = (100.0 * own.scd_screened_goals
+                   / own.scd_screened_shots)
+        _open141 = 100.0 * own.scd_open_goals / own.scd_open_shots
+        _who141 = (f"{_top141['jersey']}-es mezszámú"
+                   if _top141.get("jersey") is not None
+                   else f"{_top141['player_id']} azonosítójú")
+        if _scr141 - _open141 >= 10.0:
+            plan.append(
+                f"A(z) {_who141} játékosuk állítja az elzárásaikat "
+                f"({_top141['screens']} elzárás), ti pedig pont az "
+                f"elzárásos lövések ellen szivárogtok (azokból "
+                f"{_scr141:.0f}%, a tiszta lövésekből "
+                f"{_open141:.0f}% gól) — az ő oldalán kell a "
+                "váltás-fegyelem: hangos váltás minden elzárásnál, és "
+                "a lövőt nem szabad egy ütemre sem elengedni.")
 
     # 140) Az ő lassan bemelegedő kapusuk × a ti nyitó góljaitok: a
     # meccs eleje kész gólforrás.
@@ -8626,6 +8685,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        screen_setters=_merge_screen_setters(reports),
         gke_early_faced=sum(r.gke_early_faced for r in reports),
         gke_early_saves=sum(r.gke_early_saves for r in reports),
         gke_rest_faced=sum(r.gke_rest_faced for r in reports),

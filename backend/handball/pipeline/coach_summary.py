@@ -833,6 +833,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Elzárók: ki állt elzárásba a lövőik előtt.
+    try:
+        from .attack_types import screen_setters
+        scs = screen_setters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_scs = scs[side]["top"]
+            if top_scs is None:
+                continue
+            jn = (top_scs["jersey"]
+                  or _jersey_of_track(match).get(top_scs["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_scs['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} elzárásait jórészt a {who} "
+                     f"állította ({top_scs['screens']} elzárás).")
+    except Exception:
+        pass
     # Kapus-bemelegedés: hogyan védett a meccs első tíz percében.
     try:
         from .goalkeeper import gk_early_saves

@@ -2834,3 +2834,81 @@ def shot_distance_fade(match: Match,
             elif rec["gap_m"] <= -SDF_GAP_M:
                 rec["verdict"] = "bent maradnak"
     return out
+
+
+# Elzárók: ennyi felismert elzárástól emeljük ki az embert.
+SCS_MIN_SCREENS = 3
+
+
+def screen_setters(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárók: KI ÁLL ELZÁRÁSBA a lövőik előtt.
+
+    Az elzárás-használat (screen_usage) azt mondja meg, a lövéseik
+    mekkora része jön elzárásból — ez azt, KI zár el: lövésenként a
+    lövő őrzője mellett álló társat (a SCREEN_DIST_M-en belüli
+    csapattársat) jegyezzük fel elzáróként.
+
+    Edzőileg: az elzáróra kell a váltás-kommunikáció — az ő oldalán
+    hangosan kell váltani vagy átcsúszni, és őt elölről kell fogni,
+    mert nélküle a lövőjük nem marad tisztán.
+
+    Visszatérés csapatonként: {"screens", "players": [{"player_id",
+    "jersey", "screens"}], "top"} — a "top" az első játékos, ha
+    legalább SCS_MIN_SCREENS elzárása van.
+    """
+    import math
+
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid), None)
+        if shooter is None:
+            continue
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in f.players:
+            if d.team is None or d.team == shooter.team:
+                continue
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue  # szabad lövés: nincs kit elzárni
+        # Az elzáró: az őrző mellett álló (nem lövő) csapattárs.
+        setter = None
+        best_s = SCREEN_DIST_M
+        for p in f.players:
+            if p.team != shooter.team or p.track_id == pid:
+                continue
+            d = math.hypot(p.x - marker.x, p.y - marker.y)
+            if d <= best_s:
+                setter, best_s = p, d
+        if setter is None:
+            continue
+        if setter.jersey_number is not None:
+            jersey.setdefault(setter.track_id, setter.jersey_number)
+        side = sh["team"]
+        tally[side][setter.track_id] = (
+            tally[side].get(setter.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "screens": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0] if rows and rows[0]["screens"] >= SCS_MIN_SCREENS
+               else None)
+        out[side] = {"screens": sum(r["screens"] for r in rows),
+                     "players": rows, "top": top}
+    return out

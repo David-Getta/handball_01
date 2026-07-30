@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Elzárók**: KI ÁLL ELZÁRÁSBA a lövőik előtt. Az elzárás-használat
+  azt mondja meg, a lövéseik mekkora része jön elzárásból — ez azt, ki
+  zár el: lövésenként a lövő őrzője mellett álló csapattársat
+  jegyezzük fel elzáróként (3+ elzárástól). Az ő oldalán kell a
+  váltás-kommunikáció: hangos váltás vagy átcsúszás, és elölről kell
+  fogni, mert nélküle a lövőjük nem marad tisztán. Egy réteg, sok
+  felület: `screen_setters` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (játékosonkénti elzárás-darabszámok
+  + edzői kulcs + csempe), 141. meccsterv-szabály (az ő fő elzárójuk ×
+  a ti elzárás-védekezésetek), 162. edzés-szabály (változatos
+  elzárás-játék: minden támadásban más elzáró, leválással).
 - **Kapus-bemelegedés**: HOGYAN VÉD a meccs első tíz percében. A
   kapus-forma félidőnként a fáradást méri, a nyitány-profil a csapat
   meccskezdését — ez a kapus meccskezdése: a kapura tartó lövéseket

@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 162) Elzárók: ha egy ember állítja az elzárásainkat, a
+    # változatos elzárás-játék a téma.
+    try:
+        from .attack_types import screen_setters
+        scs162 = screen_setters(match, config)
+        for side in ("home", "away"):
+            top162 = scs162[side]["top"]
+            if top162 is None:
+                continue
+            who162 = (f"a {top162['jersey']}-es mezszámú játékos"
+                      if top162.get("jersey") is not None
+                      else f"a {top162['player_id']} azonosítójú játékos")
+            add(side, "támadás", "Változatos elzárás-játék",
+                f"az elzárásaink nagy részét {who162} állította "
+                f"({top162['screens']} elzárás a "
+                f"{scs162[side]['screens']}-ből) — a védelem "
+                "hozzá igazítja a váltásait, és a lövőink nem "
+                "szabadulnak fel",
+                "változatos elzárás-játék: felállt támadás azzal a "
+                "szabállyal, hogy az elzárást minden támadásban MÁS "
+                "ember állítja, és minden második elzárás után "
+                "leválás (az elzáró bemozdul a 6 m-re) — így a "
+                "váltásukat kényszerítitek döntésre")
+    except Exception:
+        pass
+
     # 161) Kapus-bemelegedés: ha a kapusunk lassan melegszik be, a
     # meccs eleji készenlét a téma.
     try:
