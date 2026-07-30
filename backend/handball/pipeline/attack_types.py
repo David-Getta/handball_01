@@ -2688,3 +2688,82 @@ def double_pivot_usage(match: Match,
             elif share <= 10.0:
                 rec["verdict"] = "egy beállós felállás"
     return out
+
+
+# Áttörő játékosok: ennyi betöréstől emeljük ki az embert, és a
+# gól-párosítás ablaka a támadás végéhez képest.
+BTP_MIN_ENTRIES = 3
+
+
+def breakthrough_players(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Áttörő játékosok: KI JUT BE labdával a falba.
+
+    A betörés-folyosók (breakthrough_lanes) azt mondják meg, MELYIK
+    SÁVBAN lyukas a fal — ez azt, KI viszi be a labdát: minden
+    támadás-szakaszban megnézzük, mely labdabirtokosok lépnek be a
+    kapu BREAK_IN_DIST_M-es körzetébe (szakaszonként emberenként
+    egyszer számolva), és hány ilyen betörésből lett gól.
+
+    Edzőileg: az áttörő ember ellen duplázni kell — a védőjének
+    segítőt kell kapnia, és a betörés vonalát a testtel kell zárni,
+    mert ő az, aki a falat szétnyitja a többieknek.
+
+    Visszatérés csapatonként: {"entries", "players": [{"player_id",
+    "jersey", "entries", "goals"}], "top"} — a lista betörés szerint
+    csökkenő; a "top" az első játékos, ha legalább BTP_MIN_ENTRIES
+    betörése van.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+    from .defense import BREAK_IN_DIST_M
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    gy = COURT_WIDTH_M / 2.0
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        goal_x = config.attacks_toward_x(seq.team)
+        scored = any(tm == side
+                     and seq.start_t <= t <= seq.end_t + tail
+                     for (t, tm) in goals)
+        seen: set = set()
+        for fr in seq.frames:
+            h = ball_holder(fr, config)
+            if h is None or h.team != seq.team or h.role == "kapus":
+                continue
+            if h.track_id in seen:
+                continue
+            if math.hypot(h.x - goal_x, h.y - gy) > BREAK_IN_DIST_M:
+                continue
+            seen.add(h.track_id)
+            if h.jersey_number is not None:
+                jersey.setdefault(h.track_id, h.jersey_number)
+            rec = tally[side].setdefault(h.track_id,
+                                         {"entries": 0, "goals": 0})
+            rec["entries"] += 1
+            if scored:
+                rec["goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "entries": r["entries"], "goals": r["goals"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["entries"])]
+        top = (rows[0] if rows and rows[0]["entries"] >= BTP_MIN_ENTRIES
+               else None)
+        out[side] = {"entries": sum(r["entries"] for r in rows),
+                     "players": rows, "top": top}
+    return out

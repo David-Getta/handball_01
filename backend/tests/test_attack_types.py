@@ -1962,3 +1962,53 @@ def test_double_pivot_usage_needs_enough_attacks():
     rec = double_pivot_usage(_double_pivot_match(pivots=2,
                                                 n_attacks=4))["home"]
     assert rec["share_pct"] is None and rec["verdict"] is None
+
+
+# ---- Áttörő játékosok (ki jut be labdával a falba) ---------------------------
+
+def _breakthrough_match(entries, fps=25.0):
+    """HAZAI támadás-sorozat: az `entries` elemenként megadja, melyik
+    hazai játékos viszi be a labdát a kapu 9 m-es körzetébe."""
+    frames = []
+    t = 0
+    for tid in entries:
+        for i in range(int(2.0 * fps)):    # felállás a 9 m-en kívül
+            players = [_pl(tid, Team.HOME, 28.0, 10.0),
+                       _pl(8, Team.HOME, 28.0, 5.0),
+                       _pl(21, Team.AWAY, 37.0, 10.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=28.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):    # betörés: a labdás 33 m-ig megy
+            players = [_pl(tid, Team.HOME, 33.5, 10.0),
+                       _pl(8, Team.HOME, 28.0, 5.0),
+                       _pl(21, Team.AWAY, 37.0, 10.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=33.5, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):    # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_breakthrough_players_finds_the_penetrator():
+    """Négy betörésből hármat ugyanaz a játékos visz be → ő az áttörő."""
+    from handball.pipeline.attack_types import breakthrough_players
+
+    rec = breakthrough_players(_breakthrough_match([7, 7, 7, 9]))["home"]
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 7 and rec["top"]["entries"] == 3
+    assert rec["entries"] == 4
+
+
+def test_breakthrough_players_needs_enough_entries():
+    """Kevés (3-nál kevesebb) betörésnél nincs kiemelt áttörő."""
+    from handball.pipeline.attack_types import breakthrough_players
+
+    rec = breakthrough_players(_breakthrough_match([7, 9]))["home"]
+    assert rec["entries"] == 2 and rec["top"] is None

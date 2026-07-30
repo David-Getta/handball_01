@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Áttörő játékosaik: [{"player_id", "jersey", "entries", "goals"}]
+    # — ki jut be labdával a 9 m-es körzetbe és hány gólos támadásban;
+    # darabszámok, meccsek közt pontosan összegződnek.
+    breakthrough_players: list = field(default_factory=list)
     # Két beállós játékuk: a mért támadások és azok száma, amelyekben
     # két emberük is a 6 m-es zónában dolgozott — darabszámok, meccsek
     # közt pontosan összegződnek (arány = dpv_double / dpv_attacks).
@@ -1796,6 +1800,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Áttörő játékosok: kire kell duplázni a falban.
+    _btp_rows = rep.breakthrough_players or []
+    if _btp_rows and _btp_rows[0]["entries"] >= 3:
+        _btp_top = _btp_rows[0]
+        _btp_who = (f"{_btp_top['jersey']}-es mezszámú"
+                    if _btp_top.get("jersey") is not None
+                    else f"{_btp_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_btp_who} játékosuk töri át a falat "
+            f"({_btp_top['entries']} betörés a 9 m-es körzetbe, ebből "
+            f"{_btp_top['goals']} gólos támadás) — rá duplázni kell: "
+            "a védője kapjon segítőt, és a betörés vonalát testtel "
+            "kell zárni, mert ő nyitja szét a falat a többieknek.")
 
     # Két beállós játék: hány emberrel dolgoznak a 6 m-en.
     if rep.dpv_attacks >= 8:
@@ -4436,6 +4454,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import breakthrough_players as _btp
+        rep.breakthrough_players = [
+            dict(row)
+            for row in _btp(match, config)[team.value]["players"]]
         from .attack_types import double_pivot_usage as _dpv
         dpvrec = _dpv(match, config)[team.value]
         rep.dpv_attacks = dpvrec["attacks"]
@@ -5317,6 +5339,24 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_breakthrough_players(reports) -> list:
+    """Áttörő játékosok: játékosonként a betörések és a gólos
+    támadások összegzése (a betörésszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.breakthrough_players or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "entries": 0,
+                                    "goals": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["entries"] += int(row.get("entries", 0))
+            rec["goals"] += int(row.get("goals", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["entries"])]
 
 
 def _merge_clutch_players(reports) -> list:
@@ -6328,6 +6368,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 131) Az ő áttörő emberük × a ti kettőzésetek: a duplázást rá
+    # kell tervezni, mert ő nyitja szét a falat.
+    _btp131 = opp.breakthrough_players or []
+    if _btp131 and _btp131[0]["entries"] >= 3 \
+            and own.dbl_holder_frames >= 250:
+        _top131 = _btp131[0]
+        _dbl131 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        if _dbl131 >= 30.0:
+            _who131 = (f"{_top131['jersey']}-es mezszámú"
+                       if _top131.get("jersey") is not None
+                       else f"{_top131['player_id']} azonosítójú")
+            plan.append(
+                f"A(z) {_who131} játékosuk töri át a falat "
+                f"({_top131['entries']} betörés), ti pedig tudtok "
+                f"kettőzni (a labdás-idő {_dbl131:.0f}%-ában két védő "
+                "is rálép) — a duplázást rá kell tervezni: amint "
+                "elindul befelé, a szomszéd védő azonnal záródjon be, "
+                "és a testtel kell elvenni a vonalát, nem kézzel.")
 
     # 130) Az ő két beállós játékuk × a ti széthúzott falatok: a
     # közepet tömöríteni kell, a szélek üresen maradnak.
@@ -8107,6 +8166,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        breakthrough_players=_merge_breakthrough_players(reports),
         dpv_attacks=sum(r.dpv_attacks for r in reports),
         dpv_double=sum(r.dpv_double for r in reports),
         clutch_players=_merge_clutch_players(reports),

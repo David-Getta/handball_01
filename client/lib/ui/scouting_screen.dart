@@ -1297,6 +1297,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Áttörő játékosok: ki jut be labdával a falba (3+ betörés — a
+  // backend-kulccsal azonos küszöb).
+  String? _breakthroughPlayers(Map<String, dynamic> r) {
+    final rows = r["breakthrough_players"];
+    if (rows is! List || rows.isEmpty) return null;
+    final top = rows.first;
+    if (top is! Map) return null;
+    final entries = ((top["entries"] as num?) ?? 0).toInt();
+    if (entries < 3) return null;
+    final goals = ((top["goals"] as num?) ?? 0).toInt();
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "a(z) $who játékosuk töri át a falat ($entries betörés, "
+        "ebből $goals gólos támadás) · rá duplázni kell, a vonalát "
+        "testtel zárni";
+  }
+
   // Két beállós játék: hány emberrel dolgoznak a 6 m-en (8+ támadás;
   // 30% felett két beállós, 10% alatt egy beállós — a backend-kulccsal
   // azonos küszöbök).
@@ -3656,6 +3674,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontra-kíséret", _fastBreakSupport(r)!],
       if (_clutchLineup(r) != null) ["Hajrá-ötös", _clutchLineup(r)!],
       if (_doublePivot(r) != null) ["Két beállós játék", _doublePivot(r)!],
+      if (_breakthroughPlayers(r) != null)
+        ["Áttörő játékosok", _breakthroughPlayers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

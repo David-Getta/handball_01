@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 152) Áttörő játékosok: ha az ellenfél egy embere sorozatban
+    # betör, a duplázás és a vonal-zárás a téma.
+    try:
+        from .attack_types import breakthrough_players
+        btp152 = breakthrough_players(match, config)
+        for side in ("home", "away"):
+            opp152 = "away" if side == "home" else "home"
+            top152 = btp152[opp152]["top"]
+            if top152 is None:
+                continue
+            add(side, "védekezés", "Duplázás a betörőre",
+                f"az ellenfél egyik embere {top152['entries']} "
+                f"alkalommal jutott be a 9 m-es körzetbe "
+                f"({top152['goals']} gólos támadás) — a betörés "
+                "vonalát nem zárjuk időben, és a fal utána szétnyílik",
+                "duplázás a betörőre: 2 az 1 elleni gyakorlat, ahol a "
+                "betörő indulására a szomszéd védő AZONNAL bezáródik "
+                "— a labdás védője tereli, a segítő állítja meg "
+                "testtel; kézzel érinteni tilos, a gyakorlat "
+                "szabálytalanságért mínuszt ad")
+    except Exception:
+        pass
+
     # 151) Két beállós játék: ha az ellenfél két beállóval játszik, a
     # közép-tömörítés a téma (a saját oldalon a felállás variálása).
     try:

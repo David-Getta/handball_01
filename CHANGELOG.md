@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Áttörő játékosok**: KI JUT BE labdával a falba. A
+  betörés-folyosók azt mondják meg, melyik sávban lyukas a fal — ez
+  azt, ki viszi be a labdát: támadásonként (emberenként egyszer)
+  számoljuk, ki lép be a kapu 9 m-es körzetébe, és hány ilyen
+  betörésből lett gólos támadás (3+ betöréstől). Az áttörő ember ellen
+  duplázni kell: a védője kapjon segítőt, és a betörés vonalát testtel
+  kell zárni. Egy réteg, sok felület: `breakthrough_players` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti betörés- és gól-darabszámok + edzői kulcs + csempe),
+  131. meccsterv-szabály (az ő áttörő emberük × a ti kettőzésetek),
+  152. edzés-szabály (duplázás a betörőre: a szomszéd védő azonnali
+  bezáródása, testtel).
 - **Két beállós játék**: MENNYIT JÁTSZANAK két emberrel a 6 m-en. A
   beálló-terhelés azt mondja meg, mennyi támadás megy át a beállón, a
   beálló-oldal azt, hol dolgozik — ez azt, hány emberrel:

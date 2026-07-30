@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Áttörő játékosok: ki vitte be a labdát a falba.
+    try:
+        from .attack_types import breakthrough_players
+        btp = breakthrough_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_btp = btp[side]["top"]
+            if top_btp is None:
+                continue
+            jn = (top_btp["jersey"]
+                  or _jersey_of_track(match).get(top_btp["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_btp['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} tört be a legtöbbször a "
+                     f"falba ({top_btp['entries']} betörés, ebből "
+                     f"{top_btp['goals']} gólos támadás).")
+    except Exception:
+        pass
     # Két beállós játék: hány emberrel dolgoztak a 6 m-en.
     try:
         from .attack_types import double_pivot_usage
