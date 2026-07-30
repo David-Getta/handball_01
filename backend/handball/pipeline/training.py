@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 158) Csere-kiváltók: ha kapott gólra cserélünk, a tervezett
+    # csere-rend a téma.
+    try:
+        from .substitutions import substitution_triggers
+        stg158 = substitution_triggers(match, config)
+        for side in ("home", "away"):
+            rec158 = stg158[side]
+            if rec158["verdict"] != "kapott gólra cserélnek":
+                continue
+            add(side, "taktika", "Tervezett csere-rend",
+                f"a cseréink {rec158['share_pct']:.0f}%-a kapott gól "
+                f"után jött ({rec158['after_conceded']}/"
+                f"{rec158['subs']}) — a kispad reagál, nem tervez, és "
+                "a csere pont a legrosszabb pillanatban, a "
+                "középkezdés előtt bontja meg a sorokat",
+                "tervezett csere-rend: a meccs elején rögzített "
+                "csere-pontok (pl. minden 10. percben, illetve "
+                "időkérés után), fix cserepárokkal — az edzőmeccsen "
+                "az edző csak ezekben a percekben cserélhet, kapott "
+                "gól után SOHA; a hajrá-ötös cseréje külön, előre "
+                "bejelentett pillanatban jön")
+    except Exception:
+        pass
+
     # 157) Falépítés-idő: ha lassan állunk fel, a rendeződés a téma.
     try:
         from .defense import defense_setup_time

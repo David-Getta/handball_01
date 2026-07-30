@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Csere-kiváltók: kapott gól után cserélnek-e (4+ csere; 50% felett
+  // reaktív, 20% alatt tervezett — a backend-kulccsal azonos
+  // küszöbök).
+  String? _substitutionTriggers(Map<String, dynamic> r) {
+    final subs = ((r["stg_subs"] as num?) ?? 0).toInt();
+    final after = ((r["stg_after"] as num?) ?? 0).toInt();
+    if (subs < 4) return null;
+    final pct = 100.0 * after / subs;
+    if (pct >= 50.0) {
+      return "kapott gólra cserélnek (a cseréik "
+          "${pct.toStringAsFixed(0)}%-a gól után jön, $after/$subs) · "
+          "gyors gólváltás és azonnali középkezdés ellenük";
+    }
+    if (pct <= 20.0) {
+      return "tervezett a csere-rendjük (a cseréiknek csak "
+          "${pct.toStringAsFixed(0)}%-a jön kapott gól után) · a "
+          "csere-ritmusuk kiszámítható";
+    }
+    return null;
+  }
+
   // Falépítés-idő: mennyi idő alatt áll fel a faluk (4+ mért
   // birtokváltás; 8 mp felett lassú, 5 mp alatt gyors — a
   // backend-kulccsal azonos küszöbök).
@@ -3790,6 +3811,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus emberhátrányban", _gkShorthanded(r)!],
       if (_defenseSetupTime(r) != null)
         ["Falépítés-idő", _defenseSetupTime(r)!],
+      if (_substitutionTriggers(r) != null)
+        ["Csere-kiváltók", _substitutionTriggers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

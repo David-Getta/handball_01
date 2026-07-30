@@ -176,3 +176,73 @@ def test_substitution_blocks_separates_units_from_single_swaps():
     # A vendég nem cserélt.
     assert substitution_blocks(
         _waves_match([2, 2, 1, 1]))["away"]["waves"] == 0
+
+
+# ---- Csere-kiváltók (kapott gól után cserélnek-e) ----------------------------
+
+def _trigger_match(n_waves=4, goals_before=(), fps=25.0):
+    """`n_waves` egyfős hazai cserehullám; a `goals_before` indexű
+    hullámok elé 4 másodperccel vendég-gól kerül (a hazai kap gólt)."""
+    frames = []
+    plan = []
+    tid = 300
+    for k in range(n_waves):
+        # A hullámok közt több mint 30 mp (750 kocka) telik el, hogy egy
+        # gól csak a hozzá tartozó cserét jelölje reaktívnak.
+        t_wave = 400 + k * 900
+        plan.append((t_wave, tid, tid + 1))
+        tid += 2
+    goal_ts = {plan[k][0] - 100 for k in goals_before}
+    total = 400 + n_waves * 900 + 300
+
+    for t in range(total):
+        players = [_pl(1, Team.HOME, 25.0, 10.0)]
+        for (t_wave, out_id, in_id) in plan:
+            if t_wave - 150 <= t <= t_wave:
+                frac = (t - (t_wave - 150)) / 150.0
+                players.append(_pl(out_id, Team.HOME,
+                                   28.0 + (20.0 - 28.0) * frac,
+                                   8.0 + (1.0 - 8.0) * frac))
+            if t_wave + 10 <= t <= t_wave + 150:
+                frac = (t - (t_wave + 10)) / 140.0
+                players.append(_pl(in_id, Team.HOME,
+                                   20.0 + 10.0 * frac,
+                                   1.0 + 11.0 * frac))
+        # Vendég-gól: a labda a hazai (−x) kapuba száguld.
+        goal_now = next((g for g in goal_ts if g <= t <= g + 6), None)
+        if goal_now is not None:
+            ball = Ball(x=max(0.0, 6.4 - (t - goal_now)), y=10.0,
+                        confidence=1.0)
+        else:
+            ball = Ball(x=22.0, y=10.0, confidence=1.0)
+        frames.append(Frame(t=t, players=players, ball=ball))
+    return Match(_meta(fps), frames)
+
+
+def test_substitution_triggers_flags_the_reactive_bench():
+    """Négy cseréből három kapott gól után jön → reaktív csere-rend."""
+    from handball.pipeline.substitutions import substitution_triggers
+
+    rec = substitution_triggers(
+        _trigger_match(goals_before=(0, 1, 2)))["home"]
+    assert rec["subs"] == 4
+    assert rec["after_conceded"] == 3
+    assert rec["share_pct"] == 75.0
+    assert rec["verdict"] == "kapott gólra cserélnek"
+
+
+def test_substitution_triggers_flags_the_planned_bench():
+    """Kapott gól nélküli cserék → tervezett csere-rend."""
+    from handball.pipeline.substitutions import substitution_triggers
+
+    rec = substitution_triggers(_trigger_match())["home"]
+    assert rec["after_conceded"] == 0 and rec["share_pct"] == 0.0
+    assert rec["verdict"] == "tervezett csere-rend"
+
+
+def test_substitution_triggers_needs_enough_subs():
+    """Kevés (4-nél kevesebb) cserénél nincs ítélet."""
+    from handball.pipeline.substitutions import substitution_triggers
+
+    rec = substitution_triggers(_trigger_match(n_waves=2))["home"]
+    assert rec["share_pct"] is None and rec["verdict"] is None

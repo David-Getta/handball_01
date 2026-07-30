@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Csere-kiváltók**: KAPOTT GÓL UTÁN cserélnek-e. A csere-blokkok azt
+  mondják meg, hogyan cserélnek, a csere-hatás azt, mi lesz belőle —
+  ez azt, miért: a cserehullámokat ahhoz kötjük, jött-e kapott gól az
+  előző 30 másodpercben (4+ csere; 50% felett reaktív, 20% alatt
+  tervezett csere-rend). Aki kapott gólra cserél, reagál és nem
+  tervez: a gólsorozat nála cserezavart is okoz, ezért gyors
+  gólváltásra kell játszani. Egy réteg, sok felület:
+  `substitution_triggers` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (csere-darabszámok + két edzői kulcs
+  + csempe), 137. meccsterv-szabály (az ő reaktív cseréik × a ti
+  gólsorozataitok), 158. edzés-szabály (tervezett csere-rend: rögzített
+  csere-pontok, kapott gól után soha).
 - **Falépítés-idő**: MENNYI IDŐ ALATT ÁLL FEL a faluk. Az
   átmenet-védekezés azt mondja meg, mennyi gyors gólt kapnak
   labdavesztés után, a visszaérés-fegyelem azt, ki nem fut vissza — ez

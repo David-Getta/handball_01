@@ -207,3 +207,63 @@ def substitution_blocks(match: Match,
                             else "egyesével")
         out[side] = r
     return out
+
+
+# Csere-kiváltók: ennyi mért csere kell az ítélethez, a kapott gól után
+# ekkora ablakban számít a csere reaktívnak, és e feletti / alatti
+# részarány a reaktív, illetve a tervezett csere-rend jele.
+SUBTRIG_MIN_SUBS = 4
+SUBTRIG_WINDOW_S = 30.0
+SUBTRIG_HIGH_PCT = 50.0
+SUBTRIG_LOW_PCT = 20.0
+
+
+def substitution_triggers(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-kiváltók: KAPOTT GÓL UTÁN cserélnek-e.
+
+    A csere-blokkok (substitution_blocks) azt mondják meg, HOGYAN
+    cserélnek (egyesével vagy egységekben), a csere-hatás
+    (substitution_impact) azt, mi lesz belőle — ez azt, MIÉRT: a
+    cserehullámokat ahhoz kötjük, jött-e kapott gól a megelőző
+    SUBTRIG_WINDOW_S másodpercben.
+
+    Edzőileg: aki jellemzően kapott gól után cserél, az reagál, nem
+    tervez — a gólsorozat nála cserezavart is okoz, ezért a gyors
+    gólváltásra kell játszani (a csere pillanatában azonnal
+    középkezdés); aki tervezetten vált, annál a csere-ritmusuk
+    kiszámítható, és a saját cseréidet ahhoz lehet igazítani.
+
+    Visszatérés csapatonként: {"subs", "after_conceded", "share_pct",
+    "verdict"} — a share_pct/verdict None SUBTRIG_MIN_SUBS alatt; a
+    verdict "kapott gólra cserélnek" / "tervezett csere-rend" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = SUBTRIG_WINDOW_S * fps
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"subs": 0, "after_conceded": 0,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for ev in detect_substitutions(match, config):
+        side = ev["team"]
+        rec = out[side]
+        rec["subs"] += 1
+        if any(tm != side and 0 <= ev["t"] - t <= win
+               for (t, tm) in goals):
+            rec["after_conceded"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["subs"] >= SUBTRIG_MIN_SUBS:
+            share = 100.0 * rec["after_conceded"] / rec["subs"]
+            rec["share_pct"] = round(share, 1)
+            if share >= SUBTRIG_HIGH_PCT:
+                rec["verdict"] = "kapott gólra cserélnek"
+            elif share <= SUBTRIG_LOW_PCT:
+                rec["verdict"] = "tervezett csere-rend"
+    return out

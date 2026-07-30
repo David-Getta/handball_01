@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Csere-kiváltóik: a mért cserék és azok száma, amelyek kapott gól
+    # után jöttek — darabszámok, meccsek közt pontosan összegződnek
+    # (arány = stg_after / stg_subs).
+    stg_subs: int = 0
+    stg_after: int = 0
     # Falépítés-idejük: a mért birtokváltások és a rendezett falig
     # eltelt idő összege (mp) — összegek, meccsek közt pontosan
     # összegződnek (átlag = összeg / eset).
@@ -1827,6 +1832,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Csere-kiváltók: reagálnak vagy terveznek a kispadon.
+    if rep.stg_subs >= 4:
+        _stg_pct = 100.0 * rep.stg_after / rep.stg_subs
+        if _stg_pct >= 50.0:
+            keys.append(
+                f"Kapott gólra cserélnek (a cseréik {_stg_pct:.0f}%-a "
+                f"gól után jön, {rep.stg_after}/{rep.stg_subs}) — "
+                "reagálnak, nem terveznek: a gólsorozat náluk "
+                "cserezavart is okoz, ezért gyors gólváltásra kell "
+                "játszani, és a csere pillanatában azonnal "
+                "középkezdés.")
+        elif _stg_pct <= 20.0:
+            keys.append(
+                f"Tervezett a csere-rendjük (a cseréiknek csak "
+                f"{_stg_pct:.0f}%-a jön kapott gól után) — a "
+                "csere-ritmusuk kiszámítható: a saját cseréiteket "
+                "ahhoz lehet igazítani, és a friss emberük ellen "
+                "időzíteni a támadást.")
 
     # Falépítés-idő: mennyi idő alatt áll fel a faluk.
     if rep.dst_cases >= 4 and rep.dst_sum_s > 0:
@@ -4566,6 +4590,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .substitutions import substitution_triggers as _stg
+        stgrec = _stg(match, config)[team.value]
+        rep.stg_subs = stgrec["subs"]
+        rep.stg_after = stgrec["after_conceded"]
         from .defense import defense_setup_time as _dst
         dstrec = _dst(match, config)[team.value]
         rep.dst_cases = dstrec["cases"]
@@ -6535,6 +6563,19 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 137) Az ő reaktív cseréik × a ti gólsorozataitok: a
+    # cserezavart azonnali középkezdéssel kell büntetni.
+    if opp.stg_subs >= 4 and own.rn_made >= 2:
+        _stg137 = 100.0 * opp.stg_after / opp.stg_subs
+        if _stg137 >= 50.0:
+            plan.append(
+                f"Kapott gólra cserélnek (a cseréik {_stg137:.0f}%-a "
+                f"gól után jön), ti pedig tudtok sorozatot vinni "
+                f"({own.rn_made} gólsorozatotok volt) — a második "
+                "góljuk után azonnal jön a cseréjük: pont ott kell "
+                "gyors középkezdéssel támadni, mert a cserezavarban "
+                "rossz emberek vannak a pályán.")
+
     # 136) Az ő lassan felálló faluk × a ti kontra-kíséretetek: a
     # tömeges indítás pont a rendezetlen fal ellen fizet.
     if opp.dst_cases >= 4 and opp.dst_sum_s > 0 and own.fbs_breaks >= 3 \
@@ -8420,6 +8461,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        stg_subs=sum(r.stg_subs for r in reports),
+        stg_after=sum(r.stg_after for r in reports),
         dst_cases=sum(r.dst_cases for r in reports),
         dst_sum_s=round(sum(r.dst_sum_s for r in reports), 1),
         gsh_sh_faced=sum(r.gsh_sh_faced for r in reports),

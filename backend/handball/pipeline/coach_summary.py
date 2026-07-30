@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Csere-kiváltók: kapott gól után cseréltek-e.
+    try:
+        from .substitutions import substitution_triggers
+        stg = substitution_triggers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_stg = stg[side]
+            if rec_stg["verdict"] != "kapott gólra cserélnek":
+                continue
+            body += (f" A(z) {name} reaktívan cserélt: a cseréik "
+                     f"{rec_stg['share_pct']:.0f}%-a kapott gól után "
+                     f"jött ({rec_stg['after_conceded']}/"
+                     f"{rec_stg['subs']}).")
+    except Exception:
+        pass
     # Falépítés-idő: mennyi idő alatt állt fel a fal.
     try:
         from .defense import defense_setup_time
