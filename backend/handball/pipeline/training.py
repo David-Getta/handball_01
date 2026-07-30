@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 170) Fedezetten lövők: ha valaki nyomás alatt is elhúzza a
+    # ravaszt, a lövés-választás a téma.
+    try:
+        from .defense import covered_shooters
+        cov170 = covered_shooters(match, config)
+        for side in ("home", "away"):
+            top170 = cov170[side]["top"]
+            if top170 is None:
+                continue
+            who170 = (f"a {top170['jersey']}-es mezszámú játékos"
+                      if top170.get("jersey") is not None
+                      else f"a {top170['player_id']} azonosítójú játékos")
+            pct170 = 100.0 * top170["covered"] / top170["shots"]
+            add(side, "támadás", "Lövés-választás nyomás alatt",
+                f"{who170} lövéseinek {pct170:.0f}%-a fedezetten "
+                f"ment el ({top170['covered']}/{top170['shots']}) — a "
+                "fedezett lövés alacsony értékű befejezés, és az "
+                "ellenfél pont ezt engedi neki",
+                "lövés-választás nyomás alatt: felállt támadás "
+                "azzal a szabállyal, hogy fedezett helyzetből TILOS "
+                "lőni — a labdának tovább kell mennie, és csak a "
+                "kiugratásból vagy elzárás utáni szabad helyzetből "
+                "jöhet a befejezés; a gyakorlat a fedezett lövést "
+                "eladásként számolja")
+    except Exception:
+        pass
+
     # 169) Pressz-érzékeny játékosok: ha valakinél a szorítás eladás,
     # a nyomás alatti kiadás a téma.
     try:

@@ -1727,3 +1727,54 @@ def test_high_steal_players_needs_enough_steals():
     rec = high_steal_players(_high_steal_match(
         [(5, True), (7, False)]))["home"]
     assert rec["top"] is None
+
+
+# ---- Fedezetten lövők --------------------------------------------------------
+
+def _covered_shot_match(cases, fps=25.0):
+    """Lövés-sorozat: a `cases` elemei (lövő id, fedezett?) párok — a
+    fedezett lövésnél a védő 1 m-re, egyébként 5 m-re áll."""
+    frames = []
+    t = 0
+    for (pid, covered) in cases:
+        players = [_pl(pid, Team.HOME, 33.0, 10.0),
+                   _pl(30, Team.AWAY, 34.0 if covered else 34.0,
+                       11.0 if covered else 16.0)]
+        for i in range(3):
+            frames.append(Frame(t=t + i, players=players,
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+        t += 3
+        for i in range(9):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for i in range(25):    # szünet a lövés-debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t += 25
+    return Match(_meta(fps), frames)
+
+
+def test_covered_shooters_finds_the_pressure_shooter():
+    """A 9-es hat lövéséből ötöt fedezetten ad le → rá nem kell
+    kilépni."""
+    from handball.pipeline.defense import covered_shooters
+
+    cases = [(9, True)] * 5 + [(9, False)] + [(4, False)] * 5
+    rec = covered_shooters(_covered_shot_match(cases))["home"]
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 9
+    assert rec["top"]["shots"] == 6 and rec["top"]["covered"] == 5
+
+
+def test_covered_shooters_needs_enough_shots():
+    """Kevés (5-nél kevesebb) lövésnél nincs kiemelt lövő."""
+    from handball.pipeline.defense import covered_shooters
+
+    rec = covered_shooters(_covered_shot_match(
+        [(9, True), (9, True), (4, False)]))["home"]
+    assert rec["top"] is None

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Fedezetten lövők**: KI HÚZZA EL a ravaszt nyomás alatt is. A
+  nyomás alatti befejezés csapat-szinten mondja meg, mennyit érnek a
+  fedezett lövéseik — ez azt, ki vállalja őket: lövőnként a lövések és
+  azok közül a fedezettek (5+ lövés, 60% feletti fedezett aránynál).
+  Aki fedezetten is lő, alacsony értékű befejezéseket ad — rá nem kell
+  kilépni, elég a blokk-kéz és a kapus mögé rendezett fal. Egy réteg,
+  sok felület: `covered_shooters` motor, edzői összefoglaló, /analyze
+  + meccs-csomag, felderítés-profil (játékosonkénti lövés- és
+  fedezett-darabszámok + edzői kulcs + csempe), 149.
+  meccsterv-szabály (az ő fedezetten lövő emberük × a ti blokkjaitok),
+  170. edzés-szabály (lövés-választás nyomás alatt: fedezett
+  helyzetből tilos lőni).
 - **Pressz-érzékeny játékosok**: KI VESZÍTI EL a labdát szorításban.
   A pressz-tűrés csapat-szinten mondja meg, mennyivel nő az eladás
   testközeli védő mellett — ez játékosonként bontja: emberenként a

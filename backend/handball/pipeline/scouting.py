@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Fedezetten lövőik: [{"player_id", "jersey", "shots",
+    # "covered"}] — ki lő nyomás alatt is; darabszámok, meccsek közt
+    # pontosan összegződnek.
+    covered_shooters: list = field(default_factory=list)
     # Pressz-érzékeny játékosaik: [{"player_id", "jersey",
     # "press_events", "press_to"}] — ki veszíti el a labdát
     # szorításban; darabszámok, meccsek közt pontosan összegződnek.
@@ -1879,6 +1883,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Fedezetten lövők: kire nem kell kilépni.
+    _cov_rows = [p for p in (rep.covered_shooters or [])
+                 if p["shots"] >= 5
+                 and 100.0 * p["covered"] / p["shots"] >= 60.0]
+    if _cov_rows:
+        _cov_top = _cov_rows[0]
+        _cov_pct = 100.0 * _cov_top["covered"] / _cov_top["shots"]
+        _cov_who = (f"{_cov_top['jersey']}-es mezszámú"
+                    if _cov_top.get("jersey") is not None
+                    else f"{_cov_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_cov_who} játékosuk fedezetten is elhúzza a "
+            f"ravaszt (a lövései {_cov_pct:.0f}%-a fedezett volt, "
+            f"{_cov_top['covered']}/{_cov_top['shots']}) — rá nem "
+            "kell kilépni: elég a blokk-kéz és a kapus mögé "
+            "rendezett fal, mert alacsony értékű lövéseket ad.")
 
     # Pressz-érzékeny játékosok: kire kell küldeni a kettőzést.
     _psp_rows = [p for p in (rep.pressure_players or [])
@@ -4831,6 +4852,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import covered_shooters as _cov
+        rep.covered_shooters = [
+            dict(row)
+            for row in _cov(match, config)[team.value]["players"]]
         from .decisions import pressure_sensitive_players as _psp
         rep.pressure_players = [
             dict(row)
@@ -5872,6 +5897,24 @@ def _merge_breakthrough_players(reports) -> list:
     return [{"player_id": pid, **rec}
             for pid, rec in sorted(tally.items(),
                                    key=lambda kv: -kv[1]["entries"])]
+
+
+def _merge_covered_shooters(reports) -> list:
+    """Fedezetten lövők: játékosonként a lövések és a fedezett
+    lövések összegzése (a fedezett lövés szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.covered_shooters or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "shots": 0,
+                                    "covered": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["shots"] += int(row.get("shots", 0))
+            rec["covered"] += int(row.get("covered", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["covered"])]
 
 
 def _merge_pressure_players(reports) -> list:
@@ -6998,6 +7041,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 149) Az ő fedezetten lövő emberük × a ti blokkjaitok: a
+    # blokk-kéz nála többet ér, mint a kilépés.
+    _cov149 = [p for p in (opp.covered_shooters or [])
+               if p["shots"] >= 5
+               and 100.0 * p["covered"] / p["shots"] >= 60.0]
+    if _cov149 and own.blk_attempts >= 4:
+        _top149 = _cov149[0]
+        _pct149 = 100.0 * _top149["covered"] / _top149["shots"]
+        _blk149 = 100.0 * own.blk_for / max(1, own.blk_attempts)
+        _who149 = (f"{_top149['jersey']}-es mezszámú"
+                   if _top149.get("jersey") is not None
+                   else f"{_top149['player_id']} azonosítójú")
+        if _blk149 >= 25.0:
+            plan.append(
+                f"A(z) {_who149} játékosuk fedezetten is lő (a "
+                f"lövései {_pct149:.0f}%-a fedezett volt), ti pedig "
+                f"blokkoltok (a lövéseik {_blk149:.0f}%-ába "
+                "belenyúltatok) — nála nem kilépni kell, hanem "
+                "blokk-kezet mutatni: hagyjátok lőni fedezetten, és "
+                "a kapus a blokk mögé rendezkedjen.")
 
     # 148) Az ő pressz-érzékeny emberük × a ti kettőzésetek: a
     # szorítást rá kell szervezni.
@@ -9122,6 +9186,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        covered_shooters=_merge_covered_shooters(reports),
         pressure_players=_merge_pressure_players(reports),
         high_stealers=_merge_high_stealers(reports),
         wasteful_shooters=_merge_wasteful_shooters(reports),

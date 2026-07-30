@@ -2452,3 +2452,80 @@ def high_steal_players(match, config=None) -> dict:
         out[side] = {"steals": sum(r["steals"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Fedezetten lövők: ennyi mért lövéstől ítélünk emberenként, és e
+# feletti fedezett arány jelenti, hogy nyomás alatt is elhúzza a
+# ravaszt.
+COV_MIN_SHOTS = 5
+COV_SHARE_PCT = 60.0
+
+
+def covered_shooters(match, config=None) -> dict:
+    """Fedezetten lövők: KI HÚZZA EL a ravaszt nyomás alatt is.
+
+    A nyomás alatti befejezés (pressure_finishing) csapat-szinten
+    mondja meg, mennyit érnek a fedezett lövéseik — ez azt, KI vállalja
+    őket: lövőnként számoljuk a lövéseket és azok közül a fedezetteket
+    (a lövőtől FREE_DEF_RADIUS_M-en belül van védő).
+
+    Edzőileg: aki fedezetten is lő, alacsony értékű befejezéseket ad —
+    rá nem kell kilépni, elég a blokk-kéz és a kapus mögé rendezett
+    fal; aki csak szabadon lő, azt szorítani kell, mert nyomás alatt
+    inkább passzol, és abból lesz a hiba.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"players":
+    [{"player_id", "jersey", "shots", "covered"}], "top"} — a lista
+    fedezett lövés szerint csökkenő; a "top" az a játékos, akinek
+    legalább COV_MIN_SHOTS lövése van, és azok COV_SHARE_PCT-nál
+    nagyobb része fedezett volt.
+    """
+    import math
+
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL) \
+                or e.player_id is None:
+            continue
+        f = by_t.get(e.t)
+        if f is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is None:
+            continue
+        dists = [math.hypot(p.x - shooter.x, p.y - shooter.y)
+                 for p in f.players
+                 if p.team is not None and p.team != e.team
+                 and p.role != "kapus"]
+        if not dists:
+            continue  # nem látszik védő: a fedezettség nem mérhető
+        if shooter.jersey_number is not None:
+            jersey.setdefault(shooter.track_id, shooter.jersey_number)
+        rec = tally[e.team.value].setdefault(e.player_id,
+                                             {"shots": 0, "covered": 0})
+        rec["shots"] += 1
+        if min(dists) <= FREE_DEF_RADIUS_M:
+            rec["covered"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "shots": r["shots"], "covered": r["covered"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["covered"])]
+        top = None
+        for row in rows:
+            if row["shots"] >= COV_MIN_SHOTS and (
+                    100.0 * row["covered"] / row["shots"]
+                    >= COV_SHARE_PCT):
+                top = row
+                break
+        out[side] = {"players": rows, "top": top}
+    return out

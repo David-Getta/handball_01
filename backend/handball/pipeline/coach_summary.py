@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Fedezetten lövők: ki húzta el a ravaszt nyomás alatt is.
+    try:
+        from .defense import covered_shooters
+        cov = covered_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_cov = cov[side]["top"]
+            if top_cov is None:
+                continue
+            jn = (top_cov["jersey"]
+                  or _jersey_of_track(match).get(top_cov["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_cov['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} fedezetten is lőtt "
+                     f"({top_cov['covered']}/{top_cov['shots']} "
+                     "lövése volt fedezett).")
+    except Exception:
+        pass
     # Pressz-érzékeny játékosok: ki veszítette el a labdát szorításban.
     try:
         from .decisions import pressure_sensitive_players

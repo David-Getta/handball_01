@@ -1297,6 +1297,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Fedezetten lövők: ki lő nyomás alatt is (5+ lövés, 60% feletti
+  // fedezett arány — a backend-kulccsal azonos küszöbök).
+  String? _coveredShooters(Map<String, dynamic> r) {
+    final rows = r["covered_shooters"];
+    if (rows is! List || rows.isEmpty) return null;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final shots = ((e["shots"] as num?) ?? 0).toInt();
+      final covered = ((e["covered"] as num?) ?? 0).toInt();
+      if (shots < 5) continue;
+      final pct = 100.0 * covered / shots;
+      if (pct < 60.0) continue;
+      final who = e["jersey"] != null
+          ? "${e["jersey"]}-es"
+          : "${e["player_id"]} azonosítójú";
+      return "a(z) $who játékosuk fedezetten is lő (a lövései "
+          "${pct.toStringAsFixed(0)}%-a fedezett, $covered/$shots) · "
+          "rá nem kell kilépni, elég a blokk-kéz";
+    }
+    return null;
+  }
+
   // Pressz-érzékeny játékosok: ki veszíti el a labdát szorításban (5+
   // nyomott döntés, 30% feletti eladás-arány — a backend-kulccsal
   // azonos küszöbök).
@@ -4064,6 +4086,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elöl szerző védők", _highStealers(r)!],
       if (_pressurePlayers(r) != null)
         ["Pressz-érzékeny játékosok", _pressurePlayers(r)!],
+      if (_coveredShooters(r) != null)
+        ["Fedezetten lövők", _coveredShooters(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
