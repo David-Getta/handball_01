@@ -1318,6 +1318,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Félidő-nyitás: hogyan indulnak a félidők első 5 percében (4+ gól
+  // a nyitó ablakokban, 2 gól különbség — a backend-kulccsal azonos
+  // küszöbök).
+  String? _halfOpenings(Map<String, dynamic> r) {
+    final gf = ((r["ho_for"] as num?) ?? 0).toInt();
+    final ga = ((r["ho_against"] as num?) ?? 0).toInt();
+    if (gf + ga < 4) return null;
+    final diff = gf - ga;
+    if (diff >= 2) {
+      return "jól nyitják a félidőket ($gf-$ga a nyitó öt percekben) "
+          "· az első öt percben biztos, hibátlan játék kell";
+    }
+    if (diff <= -2) {
+      return "lassan indulnak ($gf-$ga a nyitó öt percekben) · pont "
+          "az első öt percben kell rámenni a vezetésért";
+    }
+    return null;
+  }
+
   // Időkérés utáni védekezés: megáll-e a fal a megszakítás után (3+
   // időkérés; 60% felett szivárgó, 20% alatt friss — a
   // backend-kulccsal azonos küszöbök).
@@ -4182,6 +4201,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól utáni letámadás", _pressAfterGoal(r)!],
       if (_timeoutDefense(r) != null)
         ["Időkérés utáni védekezés", _timeoutDefense(r)!],
+      if (_halfOpenings(r) != null)
+        ["Félidő-nyitás", _halfOpenings(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

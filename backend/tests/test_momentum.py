@@ -929,3 +929,49 @@ def test_opening_lineup_empty_match():
 
     rec = opening_lineup(Match(_meta(), []))["home"]
     assert rec["players"] == [] and rec["core"] == []
+
+
+# ---- Félidő-nyitás (hogyan indulnak az első 5 percben) ---------------------
+
+def _half_opening_match(early, late=(), fps=25.0):
+    """`early`: a nyitó 5 percbe eső gólok (True = hazai), `late`: az
+    ablakon kívüli gólok — a gólok között 3 másodperc szünet."""
+    frames = []
+    t = 0
+    for home_goal in early:
+        frames += _goal(t, toward_home_goal=not home_goal)
+        t = frames[-1].t + 1
+        for _ in range(int(3 * fps)):     # szünet: a labda középen áll
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    t = max(t, int(310 * fps))            # ki a nyitó ablakból
+    for home_goal in late:
+        frames += _goal(t, toward_home_goal=not home_goal)
+        t = frames[-1].t + 1
+        for _ in range(int(3 * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_half_openings_flags_the_fast_starter():
+    """A nyitó 5 percben 3-1 → jól nyitják a félidőket (a másik oldal
+    lassan indul); az ablakon kívüli gólok nem számítanak."""
+    from handball.pipeline.momentum import half_openings
+
+    res = half_openings(_half_opening_match(
+        [True, True, False, True], late=[False, False, False]))
+    assert res["home"]["goals_for"] == 3
+    assert res["home"]["goals_against"] == 1
+    assert res["home"]["verdict"] == "jól nyitják a félidőket"
+    assert res["away"]["verdict"] == "lassan indulnak"
+
+
+def test_half_openings_needs_enough_goals():
+    """Kevés (4-nél kevesebb) nyitó gólnál nincs ítélet."""
+    from handball.pipeline.momentum import half_openings
+
+    res = half_openings(_half_opening_match([True, True, False]))
+    assert res["home"]["goals_for"] == 2 and res["home"]["verdict"] is None

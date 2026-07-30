@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Félidő-nyitás: hogyan indulnak a félidők első 5 percében.
+    try:
+        from .momentum import half_openings
+        hop = half_openings(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_hop = hop[side]
+            if rec_hop["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_hop['verdict']}: a félidők "
+                     f"első öt percében {rec_hop['goals_for']}-"
+                     f"{rec_hop['goals_against']} a mérlegük.")
+    except Exception:
+        pass
     # Időkérés utáni védekezés: megáll-e a fal a megszakítás után.
     try:
         from .stoppages import timeout_first_defense

@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Félidő-nyitásuk: a félidők első 5 percében szerzett és kapott
+    # góljaik — darabszámok, meccsek közt pontosan összegződnek
+    # (mérleg = ho_for - ho_against).
+    ho_for: int = 0
+    ho_against: int = 0
     # Időkérés utáni védekezésük: a mért időkéréseik száma és azok
     # száma, amelyek után az ellenfél első rohamából gól esett —
     # darabszámok, meccsek közt pontosan összegződnek (arány =
@@ -1924,6 +1929,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Félidő-nyitás: mennyire fontosak ellenük az első percek.
+    if rep.ho_for + rep.ho_against >= 4:
+        _ho_diff = rep.ho_for - rep.ho_against
+        if _ho_diff >= 2:
+            keys.append(
+                f"Jól nyitják a félidőket ({rep.ho_for}-"
+                f"{rep.ho_against} a mérlegük a félidők első öt "
+                "percében) — ellenük az első öt perc a "
+                "legfontosabb: biztos, hibátlan játék kell, mert egy "
+                "korai szériával elszaladnak.")
+        elif _ho_diff <= -2:
+            keys.append(
+                f"Lassan indulnak ({rep.ho_for}-{rep.ho_against} a "
+                "mérlegük a félidők első öt percében) — pont az "
+                "első öt percben kell rámenni: ott szerezhető meg a "
+                "vezetés, és utána már ők kergetnek.")
 
     # Időkérés utáni védekezés: rohanjunk vagy várjunk az időkérésük
     # után.
@@ -4953,6 +4975,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import half_openings as _hop
+        hoprec = _hop(match, config)[team.value]
+        rep.ho_for = hoprec["goals_for"]
+        rep.ho_against = hoprec["goals_against"]
         from .stoppages import timeout_first_defense as _tfd
         tfdrec = _tfd(match, config)[team.value]
         rep.tfd_timeouts = tfdrec["timeouts"]
@@ -7159,6 +7185,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 154) Az ő lassú félidő-nyitásuk × a ti gyors kezdéseitek: az
+    # első öt percben kell eldönteni a félidőket.
+    if opp.ho_for + opp.ho_against >= 4 and own.ho_for + own.ho_against >= 4:
+        _ho154 = opp.ho_for - opp.ho_against
+        _own154 = own.ho_for - own.ho_against
+        if _ho154 <= -2 and _own154 >= 1:
+            plan.append(
+                f"Lassan indulnak ({opp.ho_for}-{opp.ho_against} a "
+                f"nyitó öt percekben), ti pedig jól kezdtek "
+                f"({own.ho_for}-{own.ho_against}) — mindkét félidő "
+                "első öt percét meccsnek kell venni: a legerősebb "
+                "kezdő hetes, előre megbeszélt első két figura, és "
+                "azonnali letámadás — a vezetést ott kell "
+                "megszerezni.")
+
     # 153) Az ő időkérés utáni szivárgó faluk × a ti gyors
     # indításaitok: az újraindítás után azonnal rohanni kell.
     if opp.tfd_timeouts >= 3 and own.pace_attacks >= 10:
@@ -9363,6 +9404,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        ho_for=sum(r.ho_for for r in reports),
+        ho_against=sum(r.ho_against for r in reports),
         tfd_timeouts=sum(r.tfd_timeouts for r in reports),
         tfd_conceded=sum(r.tfd_conceded for r in reports),
         pag_after_frames=sum(r.pag_after_frames for r in reports),

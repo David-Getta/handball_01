@@ -1445,3 +1445,66 @@ def opening_lineup(match: Match, config=None) -> dict:
         out[side] = {"window_s": OPENING_LINEUP_WINDOW_S,
                      "players": rows, "core": core}
     return out
+
+
+# Félidő-nyitás: ekkora ablakot nézünk a két félidő elején, ennyi gól
+# kell az ítélethez, és ekkora gólkülönbség jelenti a jó, illetve a
+# lassú nyitást.
+HO_WINDOW_S = 300.0
+HO_MIN_GOALS = 4
+HO_DIFF = 2
+
+
+def half_openings(match: Match, config=None) -> dict:
+    """Félidő-nyitás: HOGYAN INDULNAK a két félidő első 5 percében.
+
+    A félidő-mérleg (a fh/sh gólok) a teljes félidőt méri, a
+    hajrá-mérleg az utolsó perceket — ez a KEZDÉST: a meccs és a
+    második félidő első HO_WINDOW_S másodpercében szerzett és kapott
+    gólokat összegezzük.
+
+    Edzőileg: aki jól nyitja a félidőket, az bemelegítés-ből és
+    öltözői beszédből él — ellene az első öt percben a legfontosabb a
+    biztos, hibátlan játék, mert egy korai szériával elszalad; aki
+    lassan indul, annál pont az első öt percben kell rámenni, mert
+    ott szerezhető meg a meccs vezetése.
+
+    Visszatérés csapatonként: {"goals_for", "goals_against", "diff",
+    "verdict"} — a verdict None HO_MIN_GOALS alatt (a két oldal
+    összege); a verdict "jól nyitják a félidőket" / "lassan indulnak"
+    / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = HO_WINDOW_S * fps
+    out = {side: {"goals_for": 0, "goals_against": 0, "diff": 0,
+                  "verdict": None} for side in ("home", "away")}
+    if not match.frames:
+        return out
+
+    starts = [match.frames[0].t]
+    ht = detect_halftime(match)
+    if ht is not None:
+        starts.append(ht)
+
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        if not any(st <= e.t <= st + win for st in starts):
+            continue
+        scorer = e.team.value
+        other = "away" if scorer == "home" else "home"
+        out[scorer]["goals_for"] += 1
+        out[other]["goals_against"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["diff"] = rec["goals_for"] - rec["goals_against"]
+        if rec["goals_for"] + rec["goals_against"] >= HO_MIN_GOALS:
+            if rec["diff"] >= HO_DIFF:
+                rec["verdict"] = "jól nyitják a félidőket"
+            elif rec["diff"] <= -HO_DIFF:
+                rec["verdict"] = "lassan indulnak"
+    return out

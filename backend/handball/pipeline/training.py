@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 175) Félidő-nyitás: ha a félidők első perceiben rendre
+    # hátrányba kerülünk, a kezdés rutinja a téma.
+    try:
+        from .momentum import half_openings
+        hop175 = half_openings(match, config)
+        for side in ("home", "away"):
+            rec175 = hop175[side]
+            if rec175["verdict"] != "lassan indulnak":
+                continue
+            add(side, "jatek", "Félidő-nyitás",
+                f"a félidők első öt percében {rec175['goals_for']}-"
+                f"{rec175['goals_against']} a mérlegünk — a meccs "
+                "elején és a szünet után hideg lábbal, kész terv "
+                "nélkül kezdünk, és utána végig kergetünk",
+                "félidő-nyitás: edzés-végi \"első öt perc\" blokk — "
+                "teljes bemelegítés után élesben induló 5 perces "
+                "meccsrész, előre kiosztott kezdő hetessel és két "
+                "megbeszélt nyitó figurával; a szünet utáni kezdést "
+                "külön is gyakoroljuk: 10 perc állás (öltözői "
+                "beszéd) után azonnal éles kezdés")
+    except Exception:
+        pass
+
     # 174) Időkérés utáni védekezés: ha az időkérésünk után rendre
     # gólt kapunk, a megszakítás utáni védekezés-rend a téma.
     try:

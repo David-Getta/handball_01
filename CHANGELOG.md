@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Félidő-nyitás**: HOGYAN INDULNAK a két félidő első 5 percében. A
+  félidő-mérleg a teljes félidőt méri, a hajrá-mérleg az utolsó
+  perceket — ez a kezdést: a meccs és a második félidő első 300
+  másodpercében szerzett és kapott gólokat összegezzük (4+ gól,
+  2 gólos különbség az ítélethez). Aki jól nyitja a félidőket,
+  bemelegítésből és öltözői beszédből él — ellene az első öt percben
+  a hibátlan játék a legfontosabb; aki lassan indul, annál pont az
+  első öt percben kell rámenni a vezetésért. Egy réteg, sok felület:
+  `half_openings` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (gól-darabszámok, két edzői kulcs + csempe), 154.
+  meccsterv-szabály (az ő lassú félidő-nyitásuk × a ti gyors
+  kezdéseitek), 175. edzés-szabály (félidő-nyitás: élesben induló
+  "első öt perc" blokk, külön a szünet utáni kezdéssel).
+
 - **Időkérés utáni védekezés**: MEGÁLL-E A FAL a megszakítás után.
   Az időkérés utáni első támadás azt méri, mit kezd a saját
   támadásával az időt kérő csapat — ez a másik oldalt: az időkérést
