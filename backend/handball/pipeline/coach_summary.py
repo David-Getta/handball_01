@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kapus-bevonás: mennyire játszottak vissza a kapusnak.
+    try:
+        from .goalkeeper import keeper_involvement
+        kiv = keeper_involvement(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kiv = kiv[side]
+            if rec_kiv["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_kiv['verdict']}: a "
+                     f"birtoklásaik {rec_kiv['share_pct']:.0f}%-ában "
+                     "megjárta a labda a kapust.")
+    except Exception:
+        pass
     # Fedezetten lövők: ki húzta el a ravaszt nyomás alatt is.
     try:
         from .defense import covered_shooters

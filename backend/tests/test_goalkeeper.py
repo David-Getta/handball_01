@@ -1248,3 +1248,71 @@ def test_gk_early_saves_needs_both_windows():
     rec = gk_early_saves(
         _early_gk_match(early_saves=0, early_goals=1))["away"]
     assert rec["gap_pp"] is None and rec["verdict"] is None
+
+
+# ---- Kapus-bevonás (visszajátszás a kapusnak) --------------------------------
+
+def _keeper_involvement_match(back_passes, fps=25.0):
+    """HAZAI támadás-sorozat: a `back_passes` elemenként megadja, hogy
+    az adott támadásban megkapja-e a labdát a hazai kapus."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _players(holder_gk):
+        pls = [PlayerPosition(track_id=1, team=Team.HOME, x=26.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0),
+               PlayerPosition(track_id=9, team=Team.HOME, x=2.0,
+                              y=10.0, role="kapus",
+                              source=PositionSource.MEASURED,
+                              confidence=1.0),
+               PlayerPosition(track_id=21, team=Team.AWAY, x=37.0,
+                              y=10.0, source=PositionSource.MEASURED,
+                              confidence=1.0)]
+        return pls
+
+    for to_keeper in back_passes:
+        for i in range(int(3.0 * fps)):     # támadás a vendég térfélen
+            frames.append(Frame(t=t, players=_players(False),
+                                ball=Ball(x=26.0 + 0.01 * i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        if to_keeper:
+            for _ in range(int(1.0 * fps)):  # visszajátszás a kapusnak
+                frames.append(Frame(t=t, players=_players(True),
+                                    ball=Ball(x=2.0, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+        for i in range(int(1.5 * fps)):     # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[PlayerPosition(
+                    track_id=21, team=Team.AWAY, x=18.0 - 0.05 * i,
+                    y=10.0, source=PositionSource.MEASURED,
+                    confidence=1.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="kiv", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_keeper_involvement_flags_the_back_passing_team():
+    """Tíz támadásból ötben megkapja a labdát a kapus → sokat
+    játszanak vissza."""
+    from handball.pipeline.goalkeeper import keeper_involvement
+
+    rec = keeper_involvement(_keeper_involvement_match(
+        [True] * 5 + [False] * 5))["home"]
+    assert rec["attacks"] >= 8
+    assert rec["share_pct"] is not None and rec["share_pct"] >= 25.0
+    assert rec["verdict"] == "sokat játszanak vissza"
+
+
+def test_keeper_involvement_needs_enough_attacks():
+    """Kevés (8-nál kevesebb) mért támadásnál nincs ítélet."""
+    from handball.pipeline.goalkeeper import keeper_involvement
+
+    rec = keeper_involvement(_keeper_involvement_match(
+        [True, False]))["home"]
+    assert rec["share_pct"] is None and rec["verdict"] is None

@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapus-bevonás: mennyire játszanak vissza a kapusnak (8+ mért
+  // birtoklás; 25% felett sok, 5% alatt semennyi — a
+  // backend-kulccsal azonos küszöbök).
+  String? _keeperInvolvement(Map<String, dynamic> r) {
+    final spells = ((r["kiv_spells"] as num?) ?? 0).toInt();
+    final withGk = ((r["kiv_with"] as num?) ?? 0).toInt();
+    if (spells < 8) return null;
+    final pct = 100.0 * withGk / spells;
+    if (pct >= 25.0) {
+      return "sokat játszanak vissza a kapusnak (a birtoklásaik "
+          "${pct.toStringAsFixed(0)}%-ában) · a letámadásnak rá is ki "
+          "kell terjednie";
+    }
+    if (pct <= 5.0) {
+      return "nem játszanak vissza a kapusnak (a birtoklásaiknak csak "
+          "${pct.toStringAsFixed(0)}%-ában) · a passzsávokat kell "
+          "zárni, a kapusra menni fölösleges";
+    }
+    return null;
+  }
+
   // Fedezetten lövők: ki lő nyomás alatt is (5+ lövés, 60% feletti
   // fedezett arány — a backend-kulccsal azonos küszöbök).
   String? _coveredShooters(Map<String, dynamic> r) {
@@ -4088,6 +4109,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Pressz-érzékeny játékosok", _pressurePlayers(r)!],
       if (_coveredShooters(r) != null)
         ["Fedezetten lövők", _coveredShooters(r)!],
+      if (_keeperInvolvement(r) != null)
+        ["Kapus-bevonás", _keeperInvolvement(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

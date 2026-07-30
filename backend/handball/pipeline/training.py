@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 171) Kapus-bevonás: ha sokat játszunk vissza, a kapus
+    # labdabiztonsága és a kihozatal-rend a téma.
+    try:
+        from .goalkeeper import keeper_involvement
+        kiv171 = keeper_involvement(match, config)
+        for side in ("home", "away"):
+            rec171 = kiv171[side]
+            if rec171["verdict"] != "sokat játszanak vissza":
+                continue
+            add(side, "kapus", "Kapus a kihozatalban",
+                f"a birtoklásaink {rec171['share_pct']:.0f}%-ában "
+                "megjárta a labda a kapust — ez a labda a "
+                "legolvashatóbb, és egy letámadó ellenfél pont ide "
+                "küldi a második emberét",
+                "kapus a kihozatalban: kihozatal-gyakorlat "
+                "letámadással, ahol a kapus KÉT megoldást gyakorol — "
+                "rövid, oldalra vezetett passz a felszabaduló "
+                "szélsőnek, és hosszú indítás a felezővonal mögé; a "
+                "döntést a letámadó második ember helyzete adja, és "
+                "a kapusnak hangosan kell jeleznie")
+    except Exception:
+        pass
+
     # 170) Fedezetten lövők: ha valaki nyomás alatt is elhúzza a
     # ravaszt, a lövés-választás a téma.
     try:

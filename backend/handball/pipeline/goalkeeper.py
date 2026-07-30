@@ -1463,3 +1463,76 @@ def gk_early_saves(match: Match, config=None) -> dict:
                 rec["verdict"] = "azonnal formában"
         out[side] = rec
     return out
+
+
+# Kapus-bevonás: ennyi mért támadástól ítélünk, és e feletti arányban
+# járják meg a kapust a támadásaik.
+KIV_MIN_ATTACKS = 8
+KIV_HIGH_PCT = 25.0
+KIV_LOW_PCT = 5.0
+
+
+def keeper_involvement(match: Match, config=None) -> dict:
+    """Kapus-bevonás: MENNYIRE JÁTSZANAK VISSZA a kapusnak.
+
+    Az indítás-sebesség (outlet_speed) a VÉDÉS utáni indítást méri, a
+    kihozatal-oldal (buildup_side) azt, hol jön át a labda — ez azt,
+    hogy a támadás-építésbe bevonják-e a kapust: BIRTOKLÁSI
+    szakaszonként (a kihozatalt is beleértve, nem csak a támadó
+    térfélen töltött időt) megnézzük, volt-e a kapusuk labdabirtokos.
+
+    Edzőileg: aki sokat játszik vissza, annál a letámadásnak a kapusra
+    is ki kell terjednie — ott hosszú, olvasható passz jön, és a
+    kapusra lépve labdát lehet szerezni; aki soha nem játszik vissza,
+    annál a felállt kihozatal szűk, tehát a passzsávokat kell zárni.
+
+    Visszatérés csapatonként: {"attacks" (mért birtoklási szakaszok),
+    "with_keeper", "share_pct", "verdict"} — a share_pct/verdict None
+    KIV_MIN_ATTACKS alatt; a
+    verdict "sokat játszanak vissza" / "nem játszanak vissza" / None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"attacks": 0, "with_keeper": 0,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+
+    # Birtoklási szakaszok: az azonos csapatnál lévő labda folyamatos
+    # időszakai (a rövid, zajos szakaszokat kihagyjuk).
+    cur_team = None
+    length = 0
+    keeper_seen = False
+
+    def _close():
+        nonlocal cur_team, length, keeper_seen
+        if cur_team is not None and length >= 5:
+            rec = out[cur_team.value]
+            rec["attacks"] += 1
+            if keeper_seen:
+                rec["with_keeper"] += 1
+        cur_team, length, keeper_seen = None, 0, False
+
+    for fr in match.frames:
+        h = ball_holder(fr, config)
+        if h is None:
+            continue
+        if cur_team is None or h.team != cur_team:
+            _close()
+            cur_team = h.team
+        length += 1
+        if h.role == "kapus":
+            keeper_seen = True
+    _close()
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attacks"] >= KIV_MIN_ATTACKS:
+            share = 100.0 * rec["with_keeper"] / rec["attacks"]
+            rec["share_pct"] = round(share, 1)
+            if share >= KIV_HIGH_PCT:
+                rec["verdict"] = "sokat játszanak vissza"
+            elif share <= KIV_LOW_PCT:
+                rec["verdict"] = "nem játszanak vissza"
+    return out

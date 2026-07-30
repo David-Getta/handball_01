@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapus-bevonásuk: a mért birtoklási szakaszok és azok száma,
+    # amelyekben a kapus is birtokolt — darabszámok, meccsek közt
+    # pontosan összegződnek (arány = kiv_with / kiv_spells).
+    kiv_spells: int = 0
+    kiv_with: int = 0
     # Fedezetten lövőik: [{"player_id", "jersey", "shots",
     # "covered"}] — ki lő nyomás alatt is; darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -1883,6 +1888,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapus-bevonás: kiterjedjen-e a letámadás a kapusra.
+    if rep.kiv_spells >= 8:
+        _kiv_pct = 100.0 * rep.kiv_with / rep.kiv_spells
+        if _kiv_pct >= 25.0:
+            keys.append(
+                f"Sokat játszanak vissza a kapusnak (a birtoklásaik "
+                f"{_kiv_pct:.0f}%-ában megjárja a labda a kapust) — a "
+                "letámadásnak rá is ki kell terjednie: onnan hosszú, "
+                "olvasható passz jön, és a kapusra lépve labdát "
+                "lehet szerezni.")
+        elif _kiv_pct <= 5.0:
+            keys.append(
+                f"Nem játszanak vissza a kapusnak (a birtoklásaiknak "
+                f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
+                "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
+                "kell zárni, a kapusra menni fölösleges.")
 
     # Fedezetten lövők: kire nem kell kilépni.
     _cov_rows = [p for p in (rep.covered_shooters or [])
@@ -4852,6 +4874,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .goalkeeper import keeper_involvement as _kiv
+        kivrec = _kiv(match, config)[team.value]
+        rep.kiv_spells = kivrec["attacks"]
+        rep.kiv_with = kivrec["with_keeper"]
         from .defense import covered_shooters as _cov
         rep.covered_shooters = [
             dict(row)
@@ -7042,6 +7068,20 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 150) Az ő kapusra visszajátszásuk × a ti elöl szerzett
+    # labdáitok: a letámadást ki kell terjeszteni a kapusra.
+    if opp.kiv_spells >= 8 and own.steal_n >= 4:
+        _kiv150 = 100.0 * opp.kiv_with / opp.kiv_spells
+        _high150 = 100.0 * own.steal_high / max(1, own.steal_n)
+        if _kiv150 >= 25.0 and _high150 >= 30.0:
+            plan.append(
+                f"Sokat játszanak vissza a kapusnak (a birtoklásaik "
+                f"{_kiv150:.0f}%-ában megjárja a labda a kaput), ti "
+                f"pedig elöl is tudtok szerezni (a labdaszerzéseitek "
+                f"{_high150:.0f}%-a a támadó térfélen) — a "
+                "letámadást ki kell terjeszteni a kapusra: egy ember "
+                "rálép, a többiek a hosszú passz sávjait zárják.")
+
     # 149) Az ő fedezetten lövő emberük × a ti blokkjaitok: a
     # blokk-kéz nála többet ér, mint a kilépés.
     _cov149 = [p for p in (opp.covered_shooters or [])
@@ -9186,6 +9226,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        kiv_spells=sum(r.kiv_spells for r in reports),
+        kiv_with=sum(r.kiv_with for r in reports),
         covered_shooters=_merge_covered_shooters(reports),
         pressure_players=_merge_pressure_players(reports),
         high_stealers=_merge_high_stealers(reports),

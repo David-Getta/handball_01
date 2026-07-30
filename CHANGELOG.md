@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-bevonás**: MENNYIRE JÁTSZANAK VISSZA a kapusnak. Az
+  indítás-sebesség a védés utáni indítást méri, a kihozatal-oldal azt,
+  hol jön át a labda — ez azt, hogy a támadás-építésbe bevonják-e a
+  kapust: birtoklási szakaszonként (a kihozatalt is beleértve)
+  megnézzük, volt-e a kapusuk labdabirtokos (8+ szakasz; 25% felett
+  sok, 5% alatt semennyi). Aki sokat játszik vissza, annál a
+  letámadásnak a kapusra is ki kell terjednie; aki soha, annál a
+  passzsávokat kell zárni. Egy réteg, sok felület:
+  `keeper_involvement` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (szakasz-darabszámok + két edzői
+  kulcs + csempe), 150. meccsterv-szabály (az ő kapusra
+  visszajátszásuk × a ti elöl szerzett labdáitok), 171. edzés-szabály
+  (kapus a kihozatalban: rövid és hosszú megoldás, hangos jelzéssel).
 - **Fedezetten lövők**: KI HÚZZA EL a ravaszt nyomás alatt is. A
   nyomás alatti befejezés csapat-szinten mondja meg, mennyit érnek a
   fedezett lövéseik — ez azt, ki vállalja őket: lövőnként a lövések és
