@@ -846,6 +846,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Felhozatal-idő: milyen gyorsan érnek a támadó térfélre.
+    try:
+        from .attack_types import buildup_time, BUT_SLOW_S
+        but = buildup_time(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_but = but[side]
+            if rec_but["verdict"] is None:
+                continue
+            hint = ("van idő rendezetten felállni ellenük"
+                    if rec_but["avg_s"] >= BUT_SLOW_S
+                    else "a lövés pillanatában indulni kell hátra")
+            body += (f" A(z) {name} {rec_but['verdict']}: átlag "
+                     f"{rec_but['avg_s']:.1f} mp alatt érnek át a "
+                     f"támadó térfélre — {hint}.")
+    except Exception:
+        pass
     # Fedezetten lövők: ki húzta el a ravaszt nyomás alatt is.
     try:
         from .defense import covered_shooters

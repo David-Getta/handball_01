@@ -2168,3 +2168,53 @@ def test_risky_passers_needs_enough_tries():
     rec = risky_passers(_risky_passer_match(
         [(4, True), (4, True), (6, False)]))["home"]
     assert rec["top"] is None
+
+
+# ---- Felhozatal-idő (milyen gyorsan érnek a támadó térfélre) ----------------
+
+def _buildup_time_match(cases, fps=25.0):
+    """HAZAI felhozatalok: a `cases` elemei a térfél-átlépésig eltelt
+    másodpercek — a birtoklásokat egy rövid vendég-labda választja el."""
+    frames = []
+    t = 0
+    for secs in cases:
+        n = max(1, int(round(secs * fps)))
+        for _ in range(n):        # a saját térfélen jár a labda
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(5):        # átlépés a támadó térfélre
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 21.0, 10.0)],
+                                ball=Ball(x=21.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):       # vendég-birtoklás: új szakasz kezdődik
+            frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_buildup_time_slow_team():
+    """Öt felhozatal 8 másodperc alatt → lassan hozzák fel a labdát."""
+    from handball.pipeline.attack_types import buildup_time
+
+    rec = buildup_time(_buildup_time_match([8.0] * 5))["home"]
+    assert rec["cases"] == 5 and rec["avg_s"] == 8.0
+    assert rec["verdict"] == "lassan hozzák fel"
+
+
+def test_buildup_time_fast_team():
+    """Öt felhozatal 3 másodperc alatt → gyorsan hozzák fel a labdát."""
+    from handball.pipeline.attack_types import buildup_time
+
+    rec = buildup_time(_buildup_time_match([3.0] * 5))["home"]
+    assert rec["avg_s"] == 3.0 and rec["verdict"] == "gyorsan hozzák fel"
+
+
+def test_buildup_time_needs_enough_cases():
+    """Kevés (5-nél kevesebb) mért felhozatalnál nincs ítélet."""
+    from handball.pipeline.attack_types import buildup_time
+
+    rec = buildup_time(_buildup_time_match([3.0] * 3))["home"]
+    assert rec["cases"] == 3 and rec["avg_s"] is None
+    assert rec["verdict"] is None

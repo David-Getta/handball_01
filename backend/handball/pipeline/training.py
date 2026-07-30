@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 172) Felhozatal-idő: ha lassan hozzuk fel a labdát, az ellenfél
+    # rendezetten felállhat — a gyors kihozatal a téma.
+    try:
+        from .attack_types import buildup_time
+        but172 = buildup_time(match, config)
+        for side in ("home", "away"):
+            rec172 = but172[side]
+            if rec172["verdict"] != "lassan hozzák fel":
+                continue
+            add(side, "tamadas", "Gyors felhozatal",
+                f"átlag {rec172['avg_s']:.1f} mp alatt érünk át a "
+                "támadó térfélre — ennyi idő alatt bármelyik "
+                "ellenfél rendezetten felállhat, így minden "
+                "támadásunk állóháborúban indul",
+                "gyors felhozatal: kihozatal-gyakorlat stopperrel, a "
+                "cél a felezővonal 4 másodpercen belül — a labda "
+                "előre megy, nem oldalra (első passz mindig a "
+                "leghosszabb szabad társnak), a szélsők azonnal "
+                "szélesre nyitnak, és minden negyedik ismétlés "
+                "üresen hagyott ellenfél-térfélről indul, hogy a "
+                "lerohanás-döntés is beleférjen")
+    except Exception:
+        pass
+
     # 171) Kapus-bevonás: ha sokat játszunk vissza, a kapus
     # labdabiztonsága és a kihozatal-rend a téma.
     try:

@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Felhozatal-idejük: a mért felhozatalok száma és a térfél-
+    # átlépésig eltelt másodpercek összege — darabszám/összeg, meccsek
+    # közt pontosan összegződnek (átlag = but_sum_s / but_cases).
+    but_cases: int = 0
+    but_sum_s: float = 0.0
     # Fedezetten lövőik: [{"player_id", "jersey", "shots",
     # "covered"}] — ki lő nyomás alatt is; darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -1905,6 +1910,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Felhozatal-idő: mennyi idő van rendezetten felállni.
+    if rep.but_cases >= 5:
+        _but_avg = rep.but_sum_s / rep.but_cases
+        if _but_avg >= 7.0:
+            keys.append(
+                f"Lassan hozzák fel a labdát (átlag {_but_avg:.1f} mp "
+                "alatt érnek át a támadó térfélre) — van idő "
+                "rendezetten felállni ellenük: nem a visszafutás, "
+                "hanem a fal szervezése dönt, és ki lehet tolni a "
+                "védekezést a 9-esre.")
+        elif _but_avg <= 4.0:
+            keys.append(
+                f"Gyorsan hozzák fel a labdát (átlag {_but_avg:.1f} mp "
+                "alatt átérnek) — a lövés pillanatában már indulni "
+                "kell hátra, és kell egy kijelölt fékező ember, aki a "
+                "labdást lassítja, amíg a többiek beérnek.")
 
     # Fedezetten lövők: kire nem kell kilépni.
     _cov_rows = [p for p in (rep.covered_shooters or [])
@@ -4878,6 +4900,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import buildup_time as _but
+        butrec = _but(match, config)[team.value]
+        rep.but_cases = butrec["cases"]
+        rep.but_sum_s = (butrec["avg_s"] or 0.0) * butrec["cases"]
         from .defense import covered_shooters as _cov
         rep.covered_shooters = [
             dict(row)
@@ -7068,6 +7094,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 151) Az ő lassú felhozataluk × a ti kevés szabad lövést engedő
+    # falatok: ki lehet tolni a védekezést, van idő felállni.
+    if opp.but_cases >= 5 and own.def_shots_against >= 10:
+        _but151 = opp.but_sum_s / opp.but_cases
+        _free151 = (100.0 * own.def_free_shots
+                    / max(1, own.def_shots_against))
+        if _but151 >= 7.0 and _free151 <= 35.0:
+            plan.append(
+                f"Lassan hozzák fel a labdát (átlag {_but151:.1f} mp "
+                f"alatt érnek át), a ti falatok pedig keveset enged "
+                f"szabadon lőni (a rátok jövő lövések "
+                f"{_free151:.0f}%-a fedezetlen) — toljátok ki a "
+                "védekezést a 9-esre: mire felállnak, a fal már kint "
+                "van, és nincs mögé kerülésre idejük.")
+
     # 150) Az ő kapusra visszajátszásuk × a ti elöl szerzett
     # labdáitok: a letámadást ki kell terjeszteni a kapusra.
     if opp.kiv_spells >= 8 and own.steal_n >= 4:
@@ -9226,6 +9267,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        but_cases=sum(r.but_cases for r in reports),
+        but_sum_s=sum(r.but_sum_s for r in reports),
         kiv_spells=sum(r.kiv_spells for r in reports),
         kiv_with=sum(r.kiv_with for r in reports),
         covered_shooters=_merge_covered_shooters(reports),

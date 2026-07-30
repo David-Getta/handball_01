@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Felhozatal-idő**: MILYEN GYORSAN érnek a támadó térfélre. A
+  középkezdés-tempó csak a kapott gól utáni újraindítást méri, a
+  kihozatal-oldal azt, hol jön át a labda — ez azt, mennyi idő alatt:
+  minden birtoklás-kezdéstől mérjük, hány másodperc múlva lép át a
+  labda a támadó térfélre (5+ mért felhozatal; 7 mp felett lassú, 4 mp
+  alatt gyors). A lassan felhozó ellen van idő rendezetten felállni —
+  ott a fal szervezése dönt, nem a visszafutás; a gyorsan felhozó
+  ellen a lövés pillanatában már indulni kell hátra, és kijelölt
+  fékező ember kell. Egy réteg, sok felület: `buildup_time` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (darabszám + másodperc-összeg, két edzői kulcs + csempe), 151.
+  meccsterv-szabály (az ő lassú felhozataluk × a ti kevés szabad
+  lövést engedő falatok), 172. edzés-szabály (gyors felhozatal:
+  stopperes kihozatal-gyakorlat, cél a felezővonal 4 mp alatt).
+
 - **Kapus-bevonás**: MENNYIRE JÁTSZANAK VISSZA a kapusnak. Az
   indítás-sebesség a védés utáni indítást méri, a kihozatal-oldal azt,
   hol jön át a labda — ez azt, hogy a támadás-építésbe bevonják-e a

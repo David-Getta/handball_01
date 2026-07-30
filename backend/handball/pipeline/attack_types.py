@@ -3001,3 +3001,85 @@ def risky_passers(match: Match,
                 break
         out[side] = {"players": rows, "top": top}
     return out
+
+
+# Felhozatal-idő: ennyi mért birtoklás kell az ítélethez, ekkora
+# ablakban keressük a térfél-átlépést, és e feletti / alatti átlagidő a
+# lassú, illetve a gyors felhozatal jele.
+BUT_MIN_CASES = 5
+BUT_MAX_S = 20.0
+BUT_SLOW_S = 7.0
+BUT_FAST_S = 4.0
+
+
+def buildup_time(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Felhozatal-idő: MENNYI IDŐ ALATT érnek a támadó térfélre.
+
+    A középkezdés-tempó (restart_speed) csak a KAPOTT GÓL utáni
+    újraindítást méri, a kihozatal-oldal (buildup_side) azt, hol jön
+    át a labda — ez azt, MILYEN GYORSAN: minden birtoklás-kezdéstől
+    mérjük, hány másodperc múlva lép át a labda a támadó térfélre.
+
+    Edzőileg: a lassan felhozó csapat ellen van idő rendezetten
+    felállni — ott a fal szervezése dönt, nem a visszafutás; a gyorsan
+    felhozó ellen viszont a lövés pillanatában már indulni kell hátra,
+    és kijelölt fékező ember kell.
+
+    Visszatérés csapatonként: {"cases", "avg_s", "verdict"} — az
+    avg_s/verdict None BUT_MIN_CASES alatt; a verdict "lassan hozzák
+    fel" / "gyorsan hozzák fel" / None.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    half = COURT_LENGTH_M / 2.0
+    horizon = round(BUT_MAX_S * fps)
+
+    # Birtoklás-kezdések: az új birtokos csapat első kockája.
+    starts: list = []
+    prev = None
+    for i, f in enumerate(frames):
+        h = ball_holder(f, config)
+        if h is None:
+            continue
+        if prev is None or h.team != prev:
+            starts.append((i, h.team))
+        prev = h.team
+
+    acc = {"home": [0, 0.0], "away": [0, 0.0]}
+    for idx, team in starts:
+        goal_x = config.attacks_toward_x(team)
+        # Már a támadó térfélen kezdődő birtoklás (labdaszerzés elöl):
+        # ott nincs mit felhozni.
+        f0 = frames[idx]
+        if f0.ball is not None and abs(f0.ball.x - goal_x) <= half:
+            continue
+        cross_i = None
+        for j in range(idx, min(len(frames), idx + horizon)):
+            b = frames[j].ball
+            if b is not None and abs(b.x - goal_x) <= half:
+                cross_i = j
+                break
+        if cross_i is None:
+            continue  # nem ért át az ablakban: nem mérjük
+        acc[team.value][0] += 1
+        acc[team.value][1] += (frames[cross_i].t - f0.t) / fps
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n, total = acc[side]
+        rec = {"cases": n, "avg_s": None, "verdict": None}
+        if n >= BUT_MIN_CASES:
+            avg = total / n
+            rec["avg_s"] = round(avg, 1)
+            if avg >= BUT_SLOW_S:
+                rec["verdict"] = "lassan hozzák fel"
+            elif avg <= BUT_FAST_S:
+                rec["verdict"] = "gyorsan hozzák fel"
+        out[side] = rec
+    return out

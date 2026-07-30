@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Felhozatal-idő: milyen gyorsan érnek a támadó térfélre (5+ mért
+  // felhozatal; 7 mp felett lassú, 4 mp alatt gyors — a
+  // backend-kulccsal azonos küszöbök).
+  String? _buildupTime(Map<String, dynamic> r) {
+    final cases = ((r["but_cases"] as num?) ?? 0).toInt();
+    final sumS = ((r["but_sum_s"] as num?) ?? 0).toDouble();
+    if (cases < 5) return null;
+    final avg = sumS / cases;
+    if (avg >= 7.0) {
+      return "lassan hozzák fel a labdát (átlag "
+          "${avg.toStringAsFixed(1)} mp) · van idő rendezetten "
+          "felállni: a fal szervezése dönt, nem a visszafutás";
+    }
+    if (avg <= 4.0) {
+      return "gyorsan hozzák fel a labdát (átlag "
+          "${avg.toStringAsFixed(1)} mp) · a lövés pillanatában "
+          "indulni kell hátra, kell egy kijelölt fékező ember";
+    }
+    return null;
+  }
+
   // Fedezetten lövők: ki lő nyomás alatt is (5+ lövés, 60% feletti
   // fedezett arány — a backend-kulccsal azonos küszöbök).
   String? _coveredShooters(Map<String, dynamic> r) {
@@ -4111,6 +4132,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fedezetten lövők", _coveredShooters(r)!],
       if (_keeperInvolvement(r) != null)
         ["Kapus-bevonás", _keeperInvolvement(r)!],
+      if (_buildupTime(r) != null)
+        ["Felhozatal-idő", _buildupTime(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
