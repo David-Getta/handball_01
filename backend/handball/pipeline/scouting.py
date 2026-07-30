@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Emberhátrány-lövőik: [{"player_id", "jersey", "shots", "goals"}]
+    # — ki vállalja a befejezést öt emberrel; darabszámok, meccsek közt
+    # pontosan összegződnek.
+    sh_shooters: list = field(default_factory=list)
     # Hajrá-hibázóik: [{"player_id", "jersey", "turnovers"}] — kinél
     # megy el a labda a döntő szakaszban; darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -1836,6 +1840,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Emberhátrány-lövők: ki a kontra-fenyegetésük öt emberrel.
+    _shs_rows = rep.sh_shooters or []
+    if _shs_rows and _shs_rows[0]["shots"] >= 2:
+        _shs_top = _shs_rows[0]
+        _shs_who = (f"{_shs_top['jersey']}-es mezszámú"
+                    if _shs_top.get("jersey") is not None
+                    else f"{_shs_top['player_id']} azonosítójú")
+        keys.append(
+            f"Emberhátrányban a(z) {_shs_who} játékosuk vállalja a "
+            f"befejezést ({_shs_top['shots']} lövés, "
+            f"{_shs_top['goals']} gól) — emberelőnyben ő a "
+            "kontra-fenyegetés: az ő oldalán kell a labdabiztonság, "
+            "és mögötte maradjon egy ember biztosításban.")
 
     # Hajrá-hibázók: kire kell menni a döntő szakaszban.
     _ctp_rows = rep.clutch_losers or []
@@ -4608,6 +4626,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .rules import shorthanded_shooters as _shshoot
+        rep.sh_shooters = [
+            dict(row)
+            for row in _shshoot(match, config)[team.value]["players"]]
         from .momentum import clutch_turnover_players as _ctp
         rep.clutch_losers = [
             dict(row)
@@ -5527,6 +5549,24 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_pp_shooters_rows(reports, field_name: str) -> list:
+    """Lövő-sorok (lövés + gól) összegzése játékosonként, a lövésszám
+    szerint csökkenő sorrendben."""
+    tally: dict = {}
+    for r in reports:
+        for row in (getattr(r, field_name, None) or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "shots": 0,
+                                    "goals": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["shots"] += int(row.get("shots", 0))
+            rec["goals"] += int(row.get("goals", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["shots"])]
 
 
 def _merge_clutch_losers(reports) -> list:
@@ -6600,6 +6640,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 139) Az ő emberhátrányos kontra-fenyegetésük × a ti
+    # emberelőnyös labdaeladásaitok: a biztosítás nem maradhat el.
+    _shs139 = opp.sh_shooters or []
+    if _shs139 and _shs139[0]["shots"] >= 2 and own.pp_shots >= 3:
+        _top139 = _shs139[0]
+        _eff139 = 100.0 * own.pp_goals / own.pp_shots
+        _who139 = (f"{_top139['jersey']}-es mezszámú"
+                   if _top139.get("jersey") is not None
+                   else f"{_top139['player_id']} azonosítójú")
+        if _eff139 <= 60.0:
+            plan.append(
+                f"Emberhátrányban a(z) {_who139} játékosuk vállalja a "
+                f"befejezést ({_top139['shots']} lövés), a ti "
+                f"emberelőnyötök pedig akadozik "
+                f"({own.pp_goals}/{own.pp_shots} gól) — minden "
+                "elveszített emberelőnyös labda az ő kontrája lesz: "
+                "az ő oldalán kell a biztosítás, és a támadást "
+                "biztos befejezéssel kell zárni.")
 
     # 138) Az ő hajrá-hibázójuk × a ti hajrá-védekezésetek: a végén
     # rá kell szervezni a nyomást.
@@ -8518,6 +8577,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        sh_shooters=_merge_pp_shooters_rows(reports, "sh_shooters"),
         clutch_losers=_merge_clutch_losers(reports),
         stg_subs=sum(r.stg_subs for r in reports),
         stg_after=sum(r.stg_after for r in reports),

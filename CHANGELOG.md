@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Emberhátrány-lövők**: KI VÁLLALJA a befejezést öt emberrel. Az
+  emberhátrány-támadás azt mondja meg, mennyit érnek a két perc alatt,
+  az emberhátrány-forma azt, milyen falat húznak — ez azt, ki lő
+  ilyenkor: a kiállítás-ablakokban a hátrányban lévő csapat lövéseit a
+  lövőhöz írjuk (2+ lövéstől). Emberelőnyben ő a kontra-fenyegetés: az
+  ő oldalán kell a labdabiztonság, és mögötte maradjon egy ember
+  biztosításban. Egy réteg, sok felület: `shorthanded_shooters` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti lövés- és gól-darabszámok + edzői kulcs + csempe),
+  139. meccsterv-szabály (az ő emberhátrányos kontra-fenyegetésük × a
+  ti akadozó emberelőnyötök), 160. edzés-szabály (emberhátrányos
+  befejezés: kiugratásból vagy beállós helyzetből, minden támadásban
+  más emberrel).
 - **Hajrá-hibázók**: KI ADJA EL a labdát a döntő szakaszban. A
   hajrá-eladás csapat-szinten mondja meg, megugrik-e az eladás-ütem a
   végén — ez azt, kinél: az utolsó öt perc labdaeladásait a vesztes

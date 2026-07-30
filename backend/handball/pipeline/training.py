@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 160) Emberhátrány-lövők: ha egy ember viszi a hátrányos
+    # befejezést, a hátrányos támadás szélesítése a téma.
+    try:
+        from .rules import shorthanded_shooters
+        shs160 = shorthanded_shooters(match, config)
+        for side in ("home", "away"):
+            top160 = shs160[side]["top"]
+            if top160 is None:
+                continue
+            who160 = (f"a {top160['jersey']}-es mezszámú játékos"
+                      if top160.get("jersey") is not None
+                      else f"a {top160['player_id']} azonosítójú játékos")
+            add(side, "támadás", "Emberhátrányos befejezés",
+                f"emberhátrányban {who160} lőtte a lövéseink nagy "
+                f"részét ({top160['shots']} lövés a "
+                f"{shs160[side]['shots']}-ből) — egy felkészült "
+                "ellenfél rá rendezi a biztosítást, és elfogy a "
+                "kontra-fenyegetésünk",
+                "emberhátrányos befejezés: 5-6 elleni támadójáték "
+                "azzal a szabállyal, hogy a befejezés csak "
+                "kiugratásból vagy beállós helyzetből jöhet, és "
+                "minden támadásban MÁS ember zárja — a cél a "
+                "labdatartás mellett a valós gólveszély, nem a "
+                "kényszerlövés")
+    except Exception:
+        pass
+
     # 159) Hajrá-hibázók: ha egy emberünknél megy el a labda a végén,
     # a nyomás alatti döntés a téma.
     try:

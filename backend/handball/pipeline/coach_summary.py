@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Emberhátrány-lövők: ki vállalta a befejezést öt emberrel.
+    try:
+        from .rules import shorthanded_shooters
+        shs = shorthanded_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_shs = shs[side]["top"]
+            if top_shs is None:
+                continue
+            jn = (top_shs["jersey"]
+                  or _jersey_of_track(match).get(top_shs["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_shs['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} emberhátrányban a {who} vállalta "
+                     f"a befejezést ({top_shs['shots']} lövés, "
+                     f"{top_shs['goals']} gól).")
+    except Exception:
+        pass
     # Hajrá-hibázók: kinél ment el a labda a végén.
     try:
         from .momentum import clutch_turnover_players

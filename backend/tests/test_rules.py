@@ -870,3 +870,67 @@ def test_powerplay_shooters_without_powerplay():
     frames = _roster_frames(0, 90, 6, 6)
     rec = powerplay_shooters(Match(_meta(), frames))["home"]
     assert rec["shots"] == 0 and rec["top"] is None
+
+
+# ---- Emberhátrány-lövők (ki vállalja a befejezést öt emberrel) ---------------
+
+def _sh_shooter_match(shooters, fps=25.0):
+    """A HAZAI van emberhátrányban (5 fő), és a `shooters` listája
+    szerint lőnek a +x kapura a kiállítás-ablakban."""
+    frames = []
+    t = 0
+
+    def _rosters(seconds, home_n, shooter=None):
+        nonlocal t, frames
+        for i in range(int(seconds * fps)):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(home_n)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(6)]
+            if shooter is not None:
+                players.append(_pl(shooter, Team.HOME, 33.0, 10.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _shot(shooter, home_n):
+        nonlocal t, frames
+        for i in range(8):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(home_n)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(6)]
+            players.append(_pl(shooter, Team.HOME, 33.0, 10.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _rosters(2.0, home_n)
+
+    _rosters(30.0, 6)
+    for shooter in shooters:      # a kiállítás-ablak 45 mp-nél hosszabb
+        _rosters(15.0, 5)
+        _shot(shooter, 5)
+    _rosters(30.0, 6)
+    return Match(_meta(fps), frames)
+
+
+def test_shorthanded_shooters_finds_the_counter_threat():
+    """Emberhátrányban háromból kettőt ugyanaz a játékos lő → ő a
+    kontra-fenyegetésük."""
+    from handball.pipeline.rules import shorthanded_shooters
+
+    rec = shorthanded_shooters(_sh_shooter_match([4, 4, 8]))["home"]
+    assert rec["shots"] == 3
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 4 and rec["top"]["shots"] == 2
+
+
+def test_shorthanded_shooters_without_powerplay():
+    """Kiállítás nélkül nincs emberhátrányos lövés és nincs ítélet."""
+    from handball.pipeline.rules import shorthanded_shooters
+
+    rec = shorthanded_shooters(
+        Match(_meta(), _roster_frames(0, 90, 6, 6)))["home"]
+    assert rec["shots"] == 0 and rec["top"] is None
