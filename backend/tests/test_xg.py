@@ -526,3 +526,53 @@ def test_wasteful_shooters_needs_enough_shots():
     rec = wasteful_shooters(_wasteful_match(
         [(8, True), (8, True), (3, False)]))["home"]
     assert rec["top"] is None
+
+
+# ---- Kapott helyzetek minősége (milyen lövéseket enged a fal) --------------
+
+def _ccq_match(positions, fps=25.0):
+    """Hazai lövés-sorozat a megadott (x, y) helyekről — a VENDÉG fal
+    engedte őket; a labda a LÖVŐ helyéről indul, hogy a lövő
+    azonosítható legyen."""
+    frames = []
+    t = 0
+    for (x, y) in positions:
+        for i in range(8):
+            bx = x + (40.0 - x) * min(1.0, i / 5.0)
+            by = y + (10.0 - y) * min(1.0, i / 5.0)
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x, y)],
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+        for _ in range(30):     # szünet: a labda középen áll
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_conceded_chance_quality_flags_the_open_wall():
+    """Nyolc közeli, szemből leadott lövés → a vendég fal nagy
+    helyzeteket enged."""
+    from handball.pipeline.xg import conceded_chance_quality
+
+    rec = conceded_chance_quality(_ccq_match([(35.0, 10.0)] * 8))["away"]
+    assert rec["shots"] == 8 and rec["avg_xga"] > 0.35
+    assert rec["verdict"] == "nagy helyzeteket engednek"
+
+
+def test_conceded_chance_quality_flags_the_tight_wall():
+    """Nyolc távoli, éles szögű lövés → csak nehéz helyzeteket
+    engednek."""
+    from handball.pipeline.xg import conceded_chance_quality
+
+    rec = conceded_chance_quality(_ccq_match([(27.0, 3.0)] * 8))["away"]
+    assert rec["verdict"] == "csak nehéz helyzeteket engednek"
+
+
+def test_conceded_chance_quality_needs_enough_shots():
+    """Kevés (8-nál kevesebb) kapott lövésnél nincs ítélet."""
+    from handball.pipeline.xg import conceded_chance_quality
+
+    rec = conceded_chance_quality(_ccq_match([(35.0, 10.0)] * 4))["away"]
+    assert rec["shots"] == 4 and rec["avg_xga"] is None
+    assert rec["verdict"] is None

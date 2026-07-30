@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kapott helyzeteik minősége: a rájuk jövő lövések száma és a
+    # helyzet-értékük összege — darabszám/összeg, meccsek közt
+    # pontosan összegződnek (átlag = ccq_sum_xga / ccq_shots).
+    ccq_shots: int = 0
+    ccq_sum_xga: float = 0.0
     # Félidő-zárásuk: a félidők utolsó percében indult támadásaik és
     # a gólig jutók száma — darabszámok, meccsek közt pontosan
     # összegződnek (arány = clo_goals / clo_attacks).
@@ -1939,6 +1944,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kapott helyzetek minősége: befelé vagy kívülről támadjunk.
+    if rep.ccq_shots >= 8:
+        _ccq_avg = rep.ccq_sum_xga / rep.ccq_shots
+        if _ccq_avg >= 0.35:
+            keys.append(
+                f"Nagy helyzeteket engednek (a rájuk jövő "
+                f"{rep.ccq_shots} lövés átlagos helyzet-értéke "
+                f"{_ccq_avg:.2f}) — befelé kell játszani ellenük: "
+                "beállós, áttörés, elzárás után kapott labda, mert a "
+                "faluk beengedi a hatos közelébe a támadót.")
+        elif _ccq_avg <= 0.22:
+            keys.append(
+                f"Csak nehéz helyzeteket engednek (a rájuk jövő "
+                f"{rep.ccq_shots} lövés átlagos helyzet-értéke csak "
+                f"{_ccq_avg:.2f}) — a 9 méteres lövés ajándék nekik: "
+                "keresztmozgással és elzárással kell embert kihúzni, "
+                "és a kapus mögé kerülni.")
 
     # Félidő-zárás: mit kezdenek a dudaszó előtti utolsó labdával.
     if rep.clo_attacks >= 3:
@@ -5021,6 +5044,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .xg import conceded_chance_quality as _ccq
+        ccqrec = _ccq(match, config)[team.value]
+        rep.ccq_shots = ccqrec["shots"]
+        rep.ccq_sum_xga = (ccqrec["avg_xga"] or 0.0) * ccqrec["shots"]
         from .momentum import closing_attacks as _clo
         clorec = _clo(match, config)[team.value]
         rep.clo_attacks = clorec["attacks"]
@@ -7238,6 +7265,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 157) Az ő nagy helyzeteket engedő faluk × a ti beállós
+    # góljaitok: befelé kell játszani ellenük.
+    if opp.ccq_shots >= 8 and own.pivot_total_attacks >= 10:
+        _ccq157 = opp.ccq_sum_xga / opp.ccq_shots
+        _piv157 = 100.0 * own.pivot_attacks / max(1, own.pivot_total_attacks)
+        if _ccq157 >= 0.35 and _piv157 >= 15.0:
+            plan.append(
+                f"Nagy helyzeteket engednek (a rájuk jövő lövések "
+                f"átlagos helyzet-értéke {_ccq157:.2f}), ti pedig "
+                f"tudtok beállóst játszani (a támadásaitok "
+                f"{_piv157:.0f}%-ában megy be a labda a beállóhoz) — "
+                "befelé kell játszani: elzárás, beállós-csere és "
+                "áttörés, mert a faluk a hatos közelében nyílik ki.")
 
     # 156) Az ő jól kezelt záró labdájuk × a ti pontos
     # lövés-időzítésetek: a félidő végén az órát kell kihúzni.
@@ -9488,6 +9529,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        ccq_shots=sum(r.ccq_shots for r in reports),
+        ccq_sum_xga=sum(r.ccq_sum_xga for r in reports),
         clo_attacks=sum(r.clo_attacks for r in reports),
         clo_goals=sum(r.clo_goals for r in reports),
         fbc_breaks=sum(r.fbc_breaks for r in reports),

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapott helyzetek minősége**: MILYEN LÖVÉSEKET ENGED a fal. A saját
+  lövés-választást a match_xg lövésenkénti átlaga mutatja — ez a másik
+  oldal: a csapat ELLEN leadott lövések átlagos helyzet-értéke. Nem
+  azt méri, mennyit kapnak, hanem hogy egy-egy lövés mennyire volt
+  ziccer (8+ kapott lövés; 0,35 felett nagy, 0,22 alatt nehéz
+  helyzetek). Aki nagy helyzeteket enged, ott befelé kell játszani —
+  beállós, áttörés, elzárás után kapott labda; aki csak nehezet, annál
+  a 9 méteres lövés ajándék nekik: keresztmozgással, elzárással kell
+  embert kihúzni. Egy réteg, sok felület: `conceded_chance_quality`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (lövés-darabszám + helyzetérték-összeg, két edzői
+  kulcs + csempe), 157. meccsterv-szabály (az ő nagy helyzeteket
+  engedő faluk × a ti beállós játékotok), 178. edzés-szabály (hatos
+  előtti tér: szendvicsben tartott beálló, kettőzés az áttörő elé).
+
 - **Félidő-zárás**: MIT KEZDENEK AZ UTOLSÓ LABDÁVAL. A hajrá-mérleg
   az utolsó perceket méri, a félidő-nyitás a kezdést — ez a két
   félidő utolsó 60 másodpercét: hány támadásuk indul ott, és hányból

@@ -3174,6 +3174,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import conceded_chance_quality
+            res["conceded_chance_quality"] = (
+                conceded_chance_quality(match))
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3921,6 +3927,9 @@ def create_app():
                 from ..pipeline.momentum import closing_attacks
                 _layer("closing_attacks",
                        lambda: closing_attacks(match))
+                from ..pipeline.xg import conceded_chance_quality
+                _layer("conceded_chance_quality",
+                       lambda: conceded_chance_quality(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

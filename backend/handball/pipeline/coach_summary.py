@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kapott helyzetek minősége: milyen lövéseket enged a fal.
+    try:
+        from .xg import conceded_chance_quality
+        ccq = conceded_chance_quality(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ccq = ccq[side]
+            if rec_ccq["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_ccq['verdict']}: a rájuk "
+                     f"jövő {rec_ccq['shots']} lövés átlagos "
+                     f"helyzet-értéke {rec_ccq['avg_xga']:.2f}.")
+    except Exception:
+        pass
     # Félidő-zárás: mit kezdenek az utolsó labdával.
     try:
         from .momentum import closing_attacks

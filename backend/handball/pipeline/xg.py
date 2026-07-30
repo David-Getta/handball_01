@@ -590,3 +590,55 @@ def wasteful_shooters(match: Match,
                 break
         out[side] = {"players": rows, "top": top}
     return out
+
+
+# Kapott helyzetek minősége: ennyi kapott lövés kell az ítélethez, és e
+# feletti / alatti átlagos helyzet-érték a nagy, illetve a nehéz
+# helyzeteket engedő fal jele.
+CCQ_MIN_SHOTS = 8
+CCQ_BIG_XG = 0.35
+CCQ_TIGHT_XG = 0.22
+
+
+def conceded_chance_quality(match: Match,
+                            config: Optional[TacticsConfig] = None) -> dict:
+    """Kapott helyzetek minősége: MILYEN LÖVÉSEKET ENGED a fal.
+
+    A saját lövés-választást a match_xg avg_xg_per_shot mutatja — ez a
+    másik oldal: a csapat ELLEN leadott lövések átlagos
+    helyzet-értéke. Nem azt méri, mennyit kapnak (xGA-összeg), hanem
+    hogy egy-egy lövés mennyire volt ziccer: a fal beengedi-e az
+    ellenfelet, vagy kifelé szorítja.
+
+    Edzőileg: aki nagy helyzeteket enged, annál befelé kell játszani —
+    beállós, áttörés, elzárás után kapott labda; aki csak nehéz
+    helyzeteket enged, annál a 9 méteres lövés ajándék nekik: ott
+    keresztmozgással, elzárással kell embert kihúzni, és a kapus mögé
+    kerülni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldalé): {"shots",
+    "avg_xga", "verdict"} — az avg_xga/verdict None CCQ_MIN_SHOTS
+    alatt; a verdict "nagy helyzeteket engednek" / "csak nehéz
+    helyzeteket engednek" / None.
+    """
+    xg = match_xg(match, config)
+    acc = {"home": [0, 0.0], "away": [0, 0.0]}
+    for sh in xg["shots"]:
+        # A lövést a MÁSIK csapat védekezése engedte.
+        deff = "away" if sh["team"] == "home" else "home"
+        acc[deff][0] += 1
+        acc[deff][1] += sh["xg"]
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n, total = acc[side]
+        rec = {"shots": n, "avg_xga": None, "verdict": None}
+        if n >= CCQ_MIN_SHOTS:
+            avg = total / n
+            rec["avg_xga"] = round(avg, 3)
+            if avg >= CCQ_BIG_XG:
+                rec["verdict"] = "nagy helyzeteket engednek"
+            elif avg <= CCQ_TIGHT_XG:
+                rec["verdict"] = "csak nehéz helyzeteket engednek"
+        out[side] = rec
+    return out

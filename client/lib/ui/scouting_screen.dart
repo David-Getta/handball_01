@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapott helyzetek minősége: milyen lövéseket enged a fal (8+ kapott
+  // lövés; 0,35 felett nagy, 0,22 alatt nehéz helyzetek — a
+  // backend-kulccsal azonos küszöbök).
+  String? _concededChanceQuality(Map<String, dynamic> r) {
+    final shots = ((r["ccq_shots"] as num?) ?? 0).toInt();
+    final sum = ((r["ccq_sum_xga"] as num?) ?? 0).toDouble();
+    if (shots < 8) return null;
+    final avg = sum / shots;
+    if (avg >= 0.35) {
+      return "nagy helyzeteket engednek (a rájuk jövő $shots lövés "
+          "átlaga ${avg.toStringAsFixed(2)}) · befelé kell játszani: "
+          "beállós, áttörés, elzárás után kapott labda";
+    }
+    if (avg <= 0.22) {
+      return "csak nehéz helyzeteket engednek (a rájuk jövő $shots "
+          "lövés átlaga ${avg.toStringAsFixed(2)}) · a 9 méteres "
+          "lövés ajándék nekik, embert kell kihúzni";
+    }
+    return null;
+  }
+
   // Félidő-zárás: mit kezdenek a dudaszó előtti utolsó labdával (3+
   // záró támadás; 50% felett jó, 15% alatt elpuskázott — a
   // backend-kulccsal azonos küszöbök).
@@ -4249,6 +4270,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lerohanás-hatékonyság", _fastBreakConversion(r)!],
       if (_closingAttacks(r) != null)
         ["Félidő-zárás", _closingAttacks(r)!],
+      if (_concededChanceQuality(r) != null)
+        ["Kapott helyzetek", _concededChanceQuality(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

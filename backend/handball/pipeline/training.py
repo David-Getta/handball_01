@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 178) Kapott helyzetek minősége: ha a falunk nagy helyzeteket
+    # enged, a hatos előtti tér védése a téma.
+    try:
+        from .xg import conceded_chance_quality
+        ccq178 = conceded_chance_quality(match, config)
+        for side in ("home", "away"):
+            rec178 = ccq178[side]
+            if rec178["verdict"] != "nagy helyzeteket engednek":
+                continue
+            add(side, "vedekezes", "Hatos előtti tér",
+                f"a ránk jövő {rec178['shots']} lövés átlagos "
+                f"helyzet-értéke {rec178['avg_xga']:.2f} — nem a "
+                "lövések SZÁMA a baj, hanem hogy közelről és "
+                "szemből engedjük őket, ami a kapusnak is "
+                "védhetetlen",
+                "hatos előtti tér: beállós elleni 6-0 gyakorlat, "
+                "ahol a két belső védő MINDIG szendvicsben tartja a "
+                "beállót, és az áttörő elé a szomszéd lép be "
+                "(kettőzés) — a szabály, hogy a hatos előtti sávban "
+                "senki nem kaphat szabad labdát; minden beengedett "
+                "közeli lövés után a fal újra felállva ismétel")
+    except Exception:
+        pass
+
     # 177) Félidő-zárás: ha a dudaszó előtti utolsó labda elhal, a
     # záró támadás rutinja a téma.
     try:
