@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Gól utáni letámadás: saját gól után feljebb megy-e a fal (60+
+  // kocka mindkét oldalon, 1,5 m eltérés — a backend-kulccsal azonos
+  // küszöbök).
+  String? _pressAfterGoal(Map<String, dynamic> r) {
+    final aN = ((r["pag_after_frames"] as num?) ?? 0).toInt();
+    final bN = ((r["pag_base_frames"] as num?) ?? 0).toInt();
+    if (aN < 60 || bN < 60) return null;
+    final a = ((r["pag_after_sum_m"] as num?) ?? 0).toDouble() / aN;
+    final b = ((r["pag_base_sum_m"] as num?) ?? 0).toDouble() / bN;
+    if (a - b >= 1.5) {
+      return "saját góljuk után letámadnak (${a.toStringAsFixed(1)} m "
+          "a szokásos ${b.toStringAsFixed(1)} m helyett) · a kapott "
+          "gól utáni kihozatalt előre meg kell tervezni";
+    }
+    if (b - a >= 1.5) {
+      return "saját góljuk után visszahúzódnak "
+          "(${a.toStringAsFixed(1)} m a szokásos "
+          "${b.toStringAsFixed(1)} m helyett) · ilyenkor nyugodtan "
+          "fel lehet hozni a labdát";
+    }
+    return null;
+  }
+
   // Felhozatal-idő: milyen gyorsan érnek a támadó térfélre (5+ mért
   // felhozatal; 7 mp felett lassú, 4 mp alatt gyors — a
   // backend-kulccsal azonos küszöbök).
@@ -4134,6 +4157,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-bevonás", _keeperInvolvement(r)!],
       if (_buildupTime(r) != null)
         ["Felhozatal-idő", _buildupTime(r)!],
+      if (_pressAfterGoal(r) != null)
+        ["Gól utáni letámadás", _pressAfterGoal(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

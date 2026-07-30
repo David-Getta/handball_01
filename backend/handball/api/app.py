@@ -3149,6 +3149,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import press_after_goal
+            res["press_after_goal"] = press_after_goal(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3880,6 +3885,9 @@ def create_app():
                        lambda: keeper_involvement(match))
                 from ..pipeline.attack_types import buildup_time
                 _layer("buildup_time", lambda: buildup_time(match))
+                from ..pipeline.defense import press_after_goal
+                _layer("press_after_goal",
+                       lambda: press_after_goal(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

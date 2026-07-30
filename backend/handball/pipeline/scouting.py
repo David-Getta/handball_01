@@ -609,6 +609,14 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Gól utáni letámadásuk: a saját góljuk utáni ablakban, illetve
+    # azon kívül mért védekező kockák száma és a fal-magasságok
+    # összege — darabszám/összeg, meccsek közt pontosan összegződnek
+    # (átlagok = pag_*_sum_m / pag_*_frames).
+    pag_after_frames: int = 0
+    pag_after_sum_m: float = 0.0
+    pag_base_frames: int = 0
+    pag_base_sum_m: float = 0.0
     # Felhozatal-idejük: a mért felhozatalok száma és a térfél-
     # átlépésig eltelt másodpercek összege — darabszám/összeg, meccsek
     # közt pontosan összegződnek (átlag = but_sum_s / but_cases).
@@ -1910,6 +1918,27 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Gól utáni letámadás: mire számítson a kihozatalunk a kapott gól
+    # után.
+    if (rep.pag_after_frames >= 60 and rep.pag_base_frames >= 60):
+        _pag_a = rep.pag_after_sum_m / rep.pag_after_frames
+        _pag_b = rep.pag_base_sum_m / rep.pag_base_frames
+        if _pag_a - _pag_b >= 1.5:
+            keys.append(
+                f"Saját góljuk után letámadnak (a faluk {_pag_a:.1f} "
+                f"m-en áll a szokásos {_pag_b:.1f} m helyett) — a "
+                "kapott gól utáni kihozatalt előre meg kell tervezni: "
+                "hosszú indítás a kapustól vagy egy előre kilépő, "
+                "biztos kezű átvevő, és senki ne induljon el a "
+                "középkezdésre bemelegítetlenül.")
+        elif _pag_b - _pag_a >= 1.5:
+            keys.append(
+                f"Saját góljuk után visszahúzódnak (a faluk csak "
+                f"{_pag_a:.1f} m-en áll a szokásos {_pag_b:.1f} m "
+                "helyett) — pont ilyenkor lehet nyugodtan felhozni a "
+                "labdát: nyerjetek időt a felállásra, és a lassú "
+                "kihozatal helyett rendezett támadás jöjjön.")
 
     # Felhozatal-idő: mennyi idő van rendezetten felállni.
     if rep.but_cases >= 5:
@@ -4900,6 +4929,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .defense import press_after_goal as _pag
+        pagrec = _pag(match, config)[team.value]
+        rep.pag_after_frames = pagrec["after_frames"]
+        rep.pag_after_sum_m = ((pagrec["after_m"] or 0.0)
+                               * pagrec["after_frames"])
+        rep.pag_base_frames = pagrec["base_frames"]
+        rep.pag_base_sum_m = ((pagrec["base_m"] or 0.0)
+                              * pagrec["base_frames"])
         from .attack_types import buildup_time as _but
         butrec = _but(match, config)[team.value]
         rep.but_cases = butrec["cases"]
@@ -7094,6 +7131,22 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 152) Az ő gól utáni letámadásuk × a ti gyors kapus-indításaitok:
+    # a kapott gól utáni kihozatal a kapusról induljon hosszan.
+    if (opp.pag_after_frames >= 60 and opp.pag_base_frames >= 60
+            and own.gk_outlets >= 4):
+        _pag152 = (opp.pag_after_sum_m / opp.pag_after_frames
+                   - opp.pag_base_sum_m / opp.pag_base_frames)
+        _fast152 = 100.0 * own.gk_outlet_fast / max(1, own.gk_outlets)
+        if _pag152 >= 1.5 and _fast152 >= 40.0:
+            plan.append(
+                f"Saját góljuk után letámadnak (a faluk {_pag152:.1f} "
+                f"méterrel megy feljebb), a ti kapusotok pedig "
+                f"gyorsan indít (az indításaitok {_fast152:.0f}%-a "
+                "gyors) — a kapott gól utáni kihozatal a kapusról "
+                "induljon, hosszan a letámadó vonal mögé: a "
+                "letámadásuk pont az első passznál a legritkább.")
+
     # 151) Az ő lassú felhozataluk × a ti kevés szabad lövést engedő
     # falatok: ki lehet tolni a védekezést, van idő felállni.
     if opp.but_cases >= 5 and own.def_shots_against >= 10:
@@ -9267,6 +9320,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pag_after_frames=sum(r.pag_after_frames for r in reports),
+        pag_after_sum_m=sum(r.pag_after_sum_m for r in reports),
+        pag_base_frames=sum(r.pag_base_frames for r in reports),
+        pag_base_sum_m=sum(r.pag_base_sum_m for r in reports),
         but_cases=sum(r.but_cases for r in reports),
         but_sum_s=sum(r.but_sum_s for r in reports),
         kiv_spells=sum(r.kiv_spells for r in reports),

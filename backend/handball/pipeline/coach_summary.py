@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Gól utáni letámadás: saját gól után feljebb megy-e a fal.
+    try:
+        from .defense import press_after_goal
+        pag = press_after_goal(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pag = pag[side]
+            if rec_pag["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_pag['verdict']}: saját gól "
+                     f"után {rec_pag['after_m']:.1f} m-en áll a fal a "
+                     f"szokásos {rec_pag['base_m']:.1f} m helyett.")
+    except Exception:
+        pass
     # Felhozatal-idő: milyen gyorsan érnek a támadó térfélre.
     try:
         from .attack_types import buildup_time, BUT_SLOW_S

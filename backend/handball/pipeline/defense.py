@@ -2529,3 +2529,85 @@ def covered_shooters(match, config=None) -> dict:
                 break
         out[side] = {"players": rows, "top": top}
     return out
+
+
+# Gól utáni letámadás: ekkora ablakot nézünk a saját gól után, ennyi
+# mért kocka kell mindkét oldalon, és ennyivel magasabb fal jelenti a
+# letámadást (illetve ennyivel mélyebb a visszahúzódást).
+PAG_WINDOW_S = 20.0
+PAG_MIN_FRAMES = 60
+PAG_UP_M = 1.5
+
+
+def press_after_goal(match, config=None) -> dict:
+    """Gól utáni letámadás: SAJÁT GÓL UTÁN feljebb megy-e a fal.
+
+    A védekezési vonal magassága (defensive_line_height) a teljes
+    meccs átlagát adja — ez azt, hogy a csapat a saját gólja utáni
+    PAG_WINDOW_S másodpercben magasabban védekezik-e, mint egyébként.
+    A lendület kihasználása edzői döntés: aki gól után letámad, az a
+    saját gólját akarja rögtön másodikkal folytatni.
+
+    Edzőileg: aki gól után feljebb megy, annál a kapott gól utáni
+    kihozatalt előre meg kell tervezni — hosszú indítás a kapustól,
+    vagy egy előre kilépő, biztos kezű átvevő; aki gól után
+    visszahúzódik, annál viszont pont ilyenkor lehet nyugodtan
+    felhozni és időt nyerni a felállásra.
+
+    Visszatérés csapatonként: {"after_frames", "base_frames",
+    "after_m", "base_m", "verdict"} — az avg-ek/verdict None
+    PAG_MIN_FRAMES alatt; a verdict "gól után letámadnak" / "gól után
+    visszahúzódnak" / None.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_events
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(PAG_WINDOW_S * fps)
+    half = COURT_LENGTH_M / 2.0
+
+    goals = [(e.t, e.team) for e in detect_events(match, config)
+             if e.type == EventType.GOAL]
+
+    acc = {"home": {"after": [0.0, 0], "base": [0.0, 0]},
+           "away": {"after": [0.0, 0], "base": [0.0, 0]}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén.
+        if abs(holder.x - own_x) > half:
+            continue
+        depths = [abs(p.x - own_x) for p in f.players
+                  if p.team == deff and p.role != "kapus"
+                  and abs(p.x - own_x) <= half]
+        if not depths:
+            continue
+        # A védekező csapat SAJÁT gólja utáni ablakban vagyunk?
+        fresh = any(gt < f.t <= gt + win and gteam == deff
+                    for (gt, gteam) in goals)
+        rec = acc[deff.value]["after" if fresh else "base"]
+        rec[0] += sum(depths) / len(depths)
+        rec[1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        a_sum, a_n = acc[side]["after"]
+        b_sum, b_n = acc[side]["base"]
+        rec = {"after_frames": a_n, "base_frames": b_n,
+               "after_m": None, "base_m": None, "verdict": None}
+        if a_n >= PAG_MIN_FRAMES and b_n >= PAG_MIN_FRAMES:
+            a_avg, b_avg = a_sum / a_n, b_sum / b_n
+            rec["after_m"] = round(a_avg, 2)
+            rec["base_m"] = round(b_avg, 2)
+            if a_avg - b_avg >= PAG_UP_M:
+                rec["verdict"] = "gól után letámadnak"
+            elif b_avg - a_avg >= PAG_UP_M:
+                rec["verdict"] = "gól után visszahúzódnak"
+        out[side] = rec
+    return out

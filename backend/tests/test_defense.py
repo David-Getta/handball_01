@@ -1778,3 +1778,63 @@ def test_covered_shooters_needs_enough_shots():
     rec = covered_shooters(_covered_shot_match(
         [(9, True), (9, True), (4, False)]))["home"]
     assert rec["top"] is None
+
+
+# ---- Gól utáni letámadás (saját gól után feljebb megy-e a fal) --------------
+
+def _press_after_goal_match(after_depth, base_depth, after_frames=200,
+                            base_frames=200):
+    """HAZAI gól, utána `after_frames` kockányi hazai védekezés
+    `after_depth` méteren, majd az ablakon kívül `base_depth` méteren."""
+    frames = []
+    t = 0
+    for i in range(8):                       # hazai gól a +x kapuba
+        frames.append(Frame(
+            t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+            ball=Ball(x=min(34.0 + i, 40.0), y=10.0, confidence=1.0)))
+        t += 1
+
+    def _defense(n, depth):
+        out = []
+        nonlocal t
+        for _ in range(n):
+            out.append(Frame(t=t, players=[
+                _pl(20, Team.AWAY, 8.0, 10.0),          # labdás támadó
+                _pl(10, Team.HOME, depth, 7.0),         # hazai fal
+                _pl(11, Team.HOME, depth, 13.0),
+                _pl(9, Team.HOME, 0.5, 10.0, role="kapus"),
+            ], ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+            t += 1
+        return out
+
+    frames += _defense(after_frames, after_depth)       # a gól utáni ablak
+    t += 600                                            # ki az ablakból
+    frames += _defense(base_frames, base_depth)
+    return Match(_meta(), frames)
+
+
+def test_press_after_goal_finds_the_pressing_team():
+    """Gól után 9 m-es, egyébként 5 m-es fal → gól után letámadnak."""
+    from handball.pipeline.defense import press_after_goal
+
+    rec = press_after_goal(_press_after_goal_match(9.0, 5.0))["home"]
+    assert rec["after_m"] == 9.0 and rec["base_m"] == 5.0
+    assert rec["verdict"] == "gól után letámadnak"
+
+
+def test_press_after_goal_finds_the_dropping_team():
+    """Fordítva (gól után mélyebb fal) → gól után visszahúzódnak."""
+    from handball.pipeline.defense import press_after_goal
+
+    rec = press_after_goal(_press_after_goal_match(5.0, 9.0))["home"]
+    assert rec["verdict"] == "gól után visszahúzódnak"
+
+
+def test_press_after_goal_needs_enough_frames():
+    """Kevés (60-nál kevesebb) gól utáni kocka esetén nincs ítélet."""
+    from handball.pipeline.defense import press_after_goal
+
+    rec = press_after_goal(_press_after_goal_match(
+        9.0, 5.0, after_frames=30))["home"]
+    assert rec["after_frames"] == 30 and rec["verdict"] is None
+    assert rec["after_m"] is None

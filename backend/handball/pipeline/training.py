@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 173) Gól utáni letámadás: ha a saját gólunk után magasabban
+    # védekezünk, a letámadás-rend és a mögötte lévő tér a téma.
+    try:
+        from .defense import press_after_goal
+        pag173 = press_after_goal(match, config)
+        for side in ("home", "away"):
+            rec173 = pag173[side]
+            if rec173["verdict"] != "gól után letámadnak":
+                continue
+            add(side, "vedekezes", "Gól utáni letámadás",
+                f"saját gólunk után {rec173['after_m']:.1f} m-en áll a "
+                f"falunk a szokásos {rec173['base_m']:.1f} m helyett — "
+                "ez jó lendület, de a mögöttünk lévő tér ilyenkor a "
+                "legnagyobb, és egy hosszú kapus-indítás ki is "
+                "használja",
+                "gól utáni letámadás: 6-6 gyakorlat, ahol minden "
+                "góllövés UTÁN azonnal letámadásba fordul a csapat — "
+                "a labdásra kettőzés, a kapus-passz sávja zárva, és "
+                "EGY kijelölt ember hátul marad a hosszú indításra; "
+                "két elveszett labda után visszaállunk, hogy a "
+                "határa is gyakorolt legyen")
+    except Exception:
+        pass
+
     # 172) Felhozatal-idő: ha lassan hozzuk fel a labdát, az ellenfél
     # rendezetten felállhat — a gyors kihozatal a téma.
     try:

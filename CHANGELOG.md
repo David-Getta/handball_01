@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Gól utáni letámadás**: SAJÁT GÓL UTÁN feljebb megy-e a fal. A
+  védekezési vonal magassága a teljes meccs átlagát adja — ez azt,
+  hogy a csapat a saját gólja utáni 20 másodpercben magasabban
+  védekezik-e, mint egyébként (60+ mért kocka mindkét oldalon, 1,5 m
+  eltérés az ítélethez). Aki gól után letámad, annál a kapott gól
+  utáni kihozatalt előre meg kell tervezni — hosszú indítás a
+  kapustól vagy előre kilépő, biztos kezű átvevő; aki gól után
+  visszahúzódik, annál pont ilyenkor lehet nyugodtan felhozni a
+  labdát. Egy réteg, sok felület: `press_after_goal` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kocka-darabszámok + méter-összegek, két edzői kulcs + csempe),
+  152. meccsterv-szabály (az ő gól utáni letámadásuk × a ti gyors
+  kapus-indításaitok), 173. edzés-szabály (gól utáni letámadás:
+  góllövés után azonnal letámadásba forduló 6-6, egy hátul maradó
+  emberrel).
+
 - **Felhozatal-idő**: MILYEN GYORSAN érnek a támadó térfélre. A
   középkezdés-tempó csak a kapott gól utáni újraindítást méri, a
   kihozatal-oldal azt, hol jön át a labda — ez azt, mennyi idő alatt:
