@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-bemelegedés**: HOGYAN VÉD a meccs első tíz percében. A
+  kapus-forma félidőnként a fáradást méri, a nyitány-profil a csapat
+  meccskezdését — ez a kapus meccskezdése: a kapura tartó lövéseket
+  szétválasztjuk az első tíz percre és a maradékra (szakaszonként 4+
+  lövés, 15 százalékpontos eltérésnél). A lassan bemelegedő kapus
+  ellen az elején bátran kell lőni (ott a legolcsóbb a gól), az
+  azonnal formában lévő ellen türelmesen, biztos helyzetekre. Egy
+  réteg, sok felület: `gk_early_saves` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (szakaszonkénti lövés- és
+  védés-darabszámok + két edzői kulcs + csempe), 140.
+  meccsterv-szabály (az ő lassan bemelegedő kapusuk × a ti nyitó
+  góljaitok), 161. edzés-szabály (meccs eleji készenlét: terheléses
+  kapus-bemelegítés a kezdés előtt).
 - **Emberhátrány-lövők**: KI VÁLLALJA a befejezést öt emberrel. Az
   emberhátrány-támadás azt mondja meg, mennyit érnek a két perc alatt,
   az emberhátrány-forma azt, milyen falat húznak — ez azt, ki lő

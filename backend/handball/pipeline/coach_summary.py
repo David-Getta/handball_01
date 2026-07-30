@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kapus-bemelegedés: hogyan védett a meccs első tíz percében.
+    try:
+        from .goalkeeper import gk_early_saves
+        gke = gk_early_saves(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gke = gke[side]
+            if rec_gke["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusa {rec_gke['verdict']}: az "
+                     f"első tíz percben "
+                     f"{rec_gke['early']['save_pct']:.0f}%-ot fogott, "
+                     f"utána {rec_gke['rest']['save_pct']:.0f}%-ot.")
+    except Exception:
+        pass
     # Emberhátrány-lövők: ki vállalta a befejezést öt emberrel.
     try:
         from .rules import shorthanded_shooters

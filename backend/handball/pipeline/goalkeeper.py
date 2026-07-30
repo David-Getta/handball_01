@@ -1390,3 +1390,76 @@ def gk_shorthanded_saves(match: Match, config=None) -> dict:
                 rec["verdict"] = "emberhátrányban visszaesik"
         out[side] = rec
     return out
+
+
+# Kapus-bemelegedés: a meccs eleji ablak hossza, szakaszonként ennyi
+# kapura tartó lövés kell, és ekkora (százalékpontos) különbség számít
+# érdemi eltérésnek.
+GKE_WINDOW_S = 600.0
+GKE_MIN_FACED = 4
+GKE_GAP_PP = 15.0
+
+
+def gk_early_saves(match: Match, config=None) -> dict:
+    """Kapus-bemelegedés: HOGYAN VÉD a meccs első tíz percében.
+
+    A kapus-forma félidőnként (gk_save_fade) a fáradást méri, a
+    nyitány-profil (opening_profile) a csapat meccskezdését — ez a
+    kapus MECCSKEZDÉSE: a rá kaputra érkezett lövéseket szétválasztjuk
+    a meccs első GKE_WINDOW_S másodpercére és a maradékra.
+
+    Edzőileg: a lassan bemelegedő kapus ellen az első tíz percben
+    bátran kell lőni — ott szerezhető olcsó gól, és a korai előny
+    beárazza a meccset; a rögtön formában lévő kapus ellen viszont az
+    elején a biztos helyzetekre kell játszani.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"early": {"faced",
+    "saves", "save_pct"}, "rest": {...}, "gap_pp", "verdict"} — a
+    gap_pp/verdict None, ha bármelyik szakaszban GKE_MIN_FACED alatti
+    a lövésszám; a verdict "lassan melegszik be" / "azonnal formában"
+    / None.
+    """
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    empty = {"early": {"faced": 0, "saves": 0, "save_pct": None},
+             "rest": {"faced": 0, "saves": 0, "save_pct": None},
+             "gap_pp": None, "verdict": None}
+    if not frames:
+        return {side: dict(empty) for side in ("home", "away")}
+
+    cut = frames[0].t + GKE_WINDOW_S * fps
+    xg = match_xg(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"early": {"faced": 0, "saves": 0, "save_pct": None},
+               "rest": {"faced": 0, "saves": 0, "save_pct": None},
+               "gap_pp": None, "verdict": None}
+        for sh in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if sh["team"] == side:
+                continue
+            if sh["outcome"] not in ("goal", "save"):
+                continue  # mellé/blokk: nem kaputra érkezett
+            key = "early" if sh["t"] <= cut else "rest"
+            rec[key]["faced"] += 1
+            if sh["outcome"] == "save":
+                rec[key]["saves"] += 1
+        for key in ("early", "rest"):
+            n = rec[key]["faced"]
+            rec[key]["save_pct"] = (round(100.0 * rec[key]["saves"] / n, 1)
+                                    if n else None)
+        if all(rec[k]["faced"] >= GKE_MIN_FACED
+               for k in ("early", "rest")):
+            gap = rec["early"]["save_pct"] - rec["rest"]["save_pct"]
+            rec["gap_pp"] = round(gap, 1)
+            if gap <= -GKE_GAP_PP:
+                rec["verdict"] = "lassan melegszik be"
+            elif gap >= GKE_GAP_PP:
+                rec["verdict"] = "azonnal formában"
+        out[side] = rec
+    return out

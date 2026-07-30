@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapusuk meccskezdése: az első tíz percben és utána a kapura tartó
+    # lövések és a fogások — darabszámok, meccsek közt pontosan
+    # összegződnek (védés-arány = saves / faced).
+    gke_early_faced: int = 0
+    gke_early_saves: int = 0
+    gke_rest_faced: int = 0
+    gke_rest_saves: int = 0
     # Emberhátrány-lövőik: [{"player_id", "jersey", "shots", "goals"}]
     # — ki vállalja a befejezést öt emberrel; darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -1840,6 +1847,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapus-bemelegedés: mit ér a meccs eleje ellenük.
+    if rep.gke_early_faced >= 4 and rep.gke_rest_faced >= 4:
+        _gke_e = 100.0 * rep.gke_early_saves / rep.gke_early_faced
+        _gke_r = 100.0 * rep.gke_rest_saves / rep.gke_rest_faced
+        if _gke_r - _gke_e >= 15.0:
+            keys.append(
+                f"Lassan melegszik be a kapusuk (az első tíz percben "
+                f"{_gke_e:.0f}%-ot fog a későbbi {_gke_r:.0f}% "
+                "helyett) — a meccs elején bátran kell rá lőni: ott "
+                "szerezhető olcsó gól, és a korai előny beárazza a "
+                "meccset.")
+        elif _gke_e - _gke_r >= 15.0:
+            keys.append(
+                f"Azonnal formában van a kapusuk (az első tíz percben "
+                f"{_gke_e:.0f}%-ot fog a későbbi {_gke_r:.0f}% "
+                "helyett) — a meccs elején nem a lövésszám, hanem a "
+                "helyzet minősége dönt: türelmesen, biztos "
+                "helyzetekre kell játszani.")
 
     # Emberhátrány-lövők: ki a kontra-fenyegetésük öt emberrel.
     _shs_rows = rep.sh_shooters or []
@@ -4626,6 +4652,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .goalkeeper import gk_early_saves as _gke
+        gkerec = _gke(match, config)[team.value]
+        rep.gke_early_faced = gkerec["early"]["faced"]
+        rep.gke_early_saves = gkerec["early"]["saves"]
+        rep.gke_rest_faced = gkerec["rest"]["faced"]
+        rep.gke_rest_saves = gkerec["rest"]["saves"]
         from .rules import shorthanded_shooters as _shshoot
         rep.sh_shooters = [
             dict(row)
@@ -6641,6 +6673,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 140) Az ő lassan bemelegedő kapusuk × a ti nyitó góljaitok: a
+    # meccs eleje kész gólforrás.
+    if opp.gke_early_faced >= 4 and opp.gke_rest_faced >= 4 \
+            and own.open_first_matches >= 1:
+        _e140 = 100.0 * opp.gke_early_saves / opp.gke_early_faced
+        _r140 = 100.0 * opp.gke_rest_saves / opp.gke_rest_faced
+        _first140 = (100.0 * own.open_first_yes
+                     / own.open_first_matches)
+        if _r140 - _e140 >= 15.0 and _first140 >= 50.0:
+            plan.append(
+                f"Lassan melegszik be a kapusuk (az első tíz percben "
+                f"{_e140:.0f}%-ot fog a későbbi {_r140:.0f}% helyett), "
+                f"ti pedig gyakran szerzitek a nyitógólt (a meccsek "
+                f"{_first140:.0f}%-ában) — a meccs elejét meg kell "
+                "nyomni: az első tíz percben vállaljátok a lövést, "
+                "mert ott a legolcsóbb a gól.")
+
     # 139) Az ő emberhátrányos kontra-fenyegetésük × a ti
     # emberelőnyös labdaeladásaitok: a biztosítás nem maradhat el.
     _shs139 = opp.sh_shooters or []
@@ -8577,6 +8626,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        gke_early_faced=sum(r.gke_early_faced for r in reports),
+        gke_early_saves=sum(r.gke_early_saves for r in reports),
+        gke_rest_faced=sum(r.gke_rest_faced for r in reports),
+        gke_rest_saves=sum(r.gke_rest_saves for r in reports),
         sh_shooters=_merge_pp_shooters_rows(reports, "sh_shooters"),
         clutch_losers=_merge_clutch_losers(reports),
         stg_subs=sum(r.stg_subs for r in reports),

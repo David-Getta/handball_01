@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 161) Kapus-bemelegedés: ha a kapusunk lassan melegszik be, a
+    # meccs eleji készenlét a téma.
+    try:
+        from .goalkeeper import gk_early_saves
+        gke161 = gk_early_saves(match, config)
+        for side in ("home", "away"):
+            rec161 = gke161[side]
+            if rec161["verdict"] != "lassan melegszik be":
+                continue
+            add(side, "kapus", "Meccs eleji készenlét",
+                f"a kapusunk az első tíz percben "
+                f"{rec161['early']['save_pct']:.0f}%-ot fogott a "
+                f"későbbi {rec161['rest']['save_pct']:.0f}% helyett — "
+                "a meccs elején olcsó gólokat kapunk, és a korai "
+                "hátrány végigkíséri a mérkőzést",
+                "meccs eleji készenlét: hosszabb, terheléses "
+                "kapus-bemelegítés a meccs előtt — 20-25 éles lövés "
+                "vegyes távolságból és szögből, az utolsó öt lövés "
+                "meccstempóban, közvetlenül a kezdés előtt; edzésen "
+                "ugyanez az első gyakorlat, hidegen kezdve")
+    except Exception:
+        pass
+
     # 160) Emberhátrány-lövők: ha egy ember viszi a hátrányos
     # befejezést, a hátrányos támadás szélesítése a téma.
     try:

@@ -1297,6 +1297,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapus-bemelegedés: hogyan véd a meccs első tíz percében
+  // (szakaszonként 4+ kapura tartó lövés, 15 százalékpontos eltérés —
+  // a backend-kulccsal azonos küszöbök).
+  String? _gkEarlySaves(Map<String, dynamic> r) {
+    final eF = ((r["gke_early_faced"] as num?) ?? 0).toInt();
+    final eS = ((r["gke_early_saves"] as num?) ?? 0).toInt();
+    final rF = ((r["gke_rest_faced"] as num?) ?? 0).toInt();
+    final rS = ((r["gke_rest_saves"] as num?) ?? 0).toInt();
+    if (eF < 4 || rF < 4) return null;
+    final e = 100.0 * eS / eF;
+    final rest = 100.0 * rS / rF;
+    if (rest - e >= 15.0) {
+      return "lassan melegszik be a kapusuk (az első tíz percben "
+          "${e.toStringAsFixed(0)}% a későbbi "
+          "${rest.toStringAsFixed(0)}% helyett) · a meccs elején "
+          "bátran kell rá lőni";
+    }
+    if (e - rest >= 15.0) {
+      return "azonnal formában van a kapusuk (az első tíz percben "
+          "${e.toStringAsFixed(0)}% a későbbi "
+          "${rest.toStringAsFixed(0)}% helyett) · az elején biztos "
+          "helyzetekre kell játszani";
+    }
+    return null;
+  }
+
   // Emberhátrány-lövők: ki vállalja a befejezést öt emberrel (2+
   // emberhátrányban leadott lövés — a backend-kulccsal azonos küszöb).
   String? _shorthandedShooters(Map<String, dynamic> r) {
@@ -3851,6 +3877,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_clutchLosers(r) != null) ["Hajrá-hibázók", _clutchLosers(r)!],
       if (_shorthandedShooters(r) != null)
         ["Emberhátrány-lövők", _shorthandedShooters(r)!],
+      if (_gkEarlySaves(r) != null)
+        ["Kapus-bemelegedés", _gkEarlySaves(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

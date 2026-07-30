@@ -1174,3 +1174,77 @@ def test_gk_shorthanded_saves_needs_both_situations():
     rec = gk_shorthanded_saves(
         _shorthanded_gk_match(sh_saves=0, sh_goals=0))["away"]
     assert rec["gap_pp"] is None and rec["verdict"] is None
+
+
+# ---- Kapus-bemelegedés (a meccs első tíz perce) ------------------------------
+
+def _early_gk_match(early_saves=0, early_goals=4, late_saves=4,
+                    late_goals=0, fps=25.0):
+    """A vendég kapusára érkező lövések: előbb a meccs első tíz
+    percében, majd utána."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(
+                t=t, players=[PlayerPosition(
+                    track_id=99, team=Team.AWAY, x=39.2, y=10.0,
+                    role="kapus", source=PositionSource.MEASURED,
+                    confidence=1.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _shot(save):
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0),
+                       PlayerPosition(track_id=99, team=Team.AWAY,
+                                      x=39.2, y=10.0, role="kapus",
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            bx = min(34.0 + i, 38.6 if save else 40.4)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    _idle(10.0)
+    for _ in range(early_saves):
+        _shot(save=True)
+    for _ in range(early_goals):
+        _shot(save=False)
+    _idle(600.0)          # a tizedik perc után
+    for _ in range(late_saves):
+        _shot(save=True)
+    for _ in range(late_goals):
+        _shot(save=False)
+    return Match(MatchMeta(match_id="gke", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_early_saves_flags_the_slow_starter():
+    """Az első tíz percben 0/4 védés, utána 4/4 → lassan melegszik be."""
+    from handball.pipeline.goalkeeper import gk_early_saves
+
+    rec = gk_early_saves(_early_gk_match())["away"]
+    assert rec["early"]["faced"] == 4 and rec["rest"]["faced"] == 4
+    assert rec["early"]["save_pct"] == 0.0
+    assert rec["rest"]["save_pct"] == 100.0
+    assert rec["verdict"] == "lassan melegszik be"
+
+
+def test_gk_early_saves_needs_both_windows():
+    """Ha a meccs elején nincs elég lövés, nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_early_saves
+
+    rec = gk_early_saves(
+        _early_gk_match(early_saves=0, early_goals=1))["away"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None
