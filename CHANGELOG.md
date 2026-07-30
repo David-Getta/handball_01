@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Időkérés utáni védekezés**: MEGÁLL-E A FAL a megszakítás után.
+  Az időkérés utáni első támadás azt méri, mit kezd a saját
+  támadásával az időt kérő csapat — ez a másik oldalt: az időkérést
+  kérő csapat védekezését nézzük az újraindítás után, és
+  megszámoljuk, hányszor kapott gólt az ellenfél első rohamából (3+
+  időkérés; 60% felett szivárgó, 20% alatt friss fal). Ha az
+  időkérésük után rendre gólt kapnak, a megszakítás náluk nem a
+  védekezésről szólt — azonnal, felállás nélkül kell támadni ellenük;
+  ha a faluk megáll, ott a gyors roham veszteség, kivárás kell. Egy
+  réteg, sok felület: `timeout_first_defense` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (időkérés-darabszámok, két edzői kulcs + csempe), 153.
+  meccsterv-szabály (az ő időkérés utáni szivárgó faluk × a ti gyors
+  indításaitok), 174. edzés-szabály (időkérés utáni védekezés:
+  minden figura-megbeszélés után a kiosztás hangos ismétlése).
+
 - **Gól utáni letámadás**: SAJÁT GÓL UTÁN feljebb megy-e a fal. A
   védekezési vonal magassága a teljes meccs átlagát adja — ez azt,
   hogy a csapat a saját gólja utáni 20 másodpercben magasabban

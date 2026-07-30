@@ -360,3 +360,66 @@ def timeout_first_attack(match: Match,
             elif share <= TFA_LOW_PCT:
                 rec["verdict"] = "üres időkérés"
     return out
+
+
+# Időkérés utáni védekezés: ennyi mért időkérés kell az ítélethez,
+# ekkora ablakban nézzük az ellenfél válaszát, és e feletti / alatti
+# kapott gól arány a rossz, illetve a friss védekezés jele.
+TFD_MIN_TIMEOUTS = 3
+TFD_WINDOW_S = 40.0
+TFD_LEAKY_PCT = 60.0
+TFD_TIGHT_PCT = 20.0
+
+
+def timeout_first_defense(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés utáni védekezés: MEGÁLL-E A FAL a megszakítás után.
+
+    Az időkérés utáni első támadás (timeout_first_attack) azt méri,
+    mit kezd a saját támadásával az időt kérő csapat — ez azt, mi
+    történik a MÁSIK oldalon: az időkérést kérő csapat védekezését
+    nézzük az újraindítás után, és megszámoljuk, hányszor kapott gólt
+    az ellenfél első rohamából.
+
+    Edzőileg: ha az időkérésük után rendre gólt kapnak, a megszakítás
+    nem a védekezésről szólt — ilyenkor érdemes azonnal, felállás
+    nélkül támadni ellenük; ha a faluk az időkérés után rendre
+    megáll, ott a gyors roham veszteség, inkább rendezetten kell
+    felállni és kivárni.
+
+    Visszatérés csapatonként: {"timeouts", "conceded", "share_pct",
+    "verdict"} — a share_pct/verdict None TFD_MIN_TIMEOUTS alatt; a
+    verdict "időkérés után szivárgó fal" / "időkérés után friss fal" /
+    None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TFD_WINDOW_S * fps
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"timeouts": 0, "conceded": 0, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for s in detect_stoppages(match, config):
+        if s["kind"] != "időkérés" or s["likely_team"] is None:
+            continue
+        side = s["likely_team"]
+        rec = out[side]
+        rec["timeouts"] += 1
+        end = s["end_frame"]
+        # Az ELLENFÉL gólja az újraindítás utáni ablakban.
+        if any(tm != side and end < t <= end + win for (t, tm) in goals):
+            rec["conceded"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["timeouts"] >= TFD_MIN_TIMEOUTS:
+            share = 100.0 * rec["conceded"] / rec["timeouts"]
+            rec["share_pct"] = round(share, 1)
+            if share >= TFD_LEAKY_PCT:
+                rec["verdict"] = "időkérés után szivárgó fal"
+            elif share <= TFD_TIGHT_PCT:
+                rec["verdict"] = "időkérés után friss fal"
+    return out

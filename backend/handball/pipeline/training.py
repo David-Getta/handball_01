@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 174) Időkérés utáni védekezés: ha az időkérésünk után rendre
+    # gólt kapunk, a megszakítás utáni védekezés-rend a téma.
+    try:
+        from .stoppages import timeout_first_defense
+        tfd174 = timeout_first_defense(match, config)
+        for side in ("home", "away"):
+            rec174 = tfd174[side]
+            if rec174["verdict"] != "időkérés után szivárgó fal":
+                continue
+            add(side, "vedekezes", "Időkérés utáni védekezés",
+                f"az időkéréseink {rec174['share_pct']:.0f}%-a után "
+                "gólt kaptunk az ellenfél első rohamából — a "
+                "megszakítás alatt a támadást beszéljük meg, a "
+                "védekezés-feladatokat nem, és a hideg lábból induló "
+                "fal az első rohamnál a leglassabb",
+                "időkérés utáni védekezés: edzésen minden "
+                "figura-megbeszélés UTÁN a védekezés következik — a "
+                "kispadról induló 6-6, ahol a megszakítás után az "
+                "ELSŐ feladat a kiosztás hangos ismétlése (ki megy a "
+                "beállóra, ki a lövőre), és csak a második labdánál "
+                "jön a saját támadás")
+    except Exception:
+        pass
+
     # 173) Gól utáni letámadás: ha a saját gólunk után magasabban
     # védekezünk, a letámadás-rend és a mögötte lévő tér a téma.
     try:

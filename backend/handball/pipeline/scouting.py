@@ -609,6 +609,12 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Időkérés utáni védekezésük: a mért időkéréseik száma és azok
+    # száma, amelyek után az ellenfél első rohamából gól esett —
+    # darabszámok, meccsek közt pontosan összegződnek (arány =
+    # tfd_conceded / tfd_timeouts).
+    tfd_timeouts: int = 0
+    tfd_conceded: int = 0
     # Gól utáni letámadásuk: a saját góljuk utáni ablakban, illetve
     # azon kívül mért védekező kockák száma és a fal-magasságok
     # összege — darabszám/összeg, meccsek közt pontosan összegződnek
@@ -1918,6 +1924,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Időkérés utáni védekezés: rohanjunk vagy várjunk az időkérésük
+    # után.
+    if rep.tfd_timeouts >= 3:
+        _tfd_pct = 100.0 * rep.tfd_conceded / rep.tfd_timeouts
+        if _tfd_pct >= 60.0:
+            keys.append(
+                f"Az időkérésük után szivárog a faluk (az "
+                f"időkéréseik {_tfd_pct:.0f}%-a után gól esett az "
+                "első rohamból) — a megszakítás náluk nem a "
+                "védekezésről szól: az újraindítás után azonnal, "
+                "felállás nélkül kell támadni ellenük.")
+        elif _tfd_pct <= 20.0:
+            keys.append(
+                f"Az időkérésük után friss a faluk (az időkéréseik "
+                f"csak {_tfd_pct:.0f}%-a után kaptak gólt az első "
+                "rohamból) — ott a gyors roham veszteség: rendezetten "
+                "kell felállni és kivárni az első hibájukat.")
 
     # Gól utáni letámadás: mire számítson a kihozatalunk a kapott gól
     # után.
@@ -4929,6 +4953,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .stoppages import timeout_first_defense as _tfd
+        tfdrec = _tfd(match, config)[team.value]
+        rep.tfd_timeouts = tfdrec["timeouts"]
+        rep.tfd_conceded = tfdrec["conceded"]
         from .defense import press_after_goal as _pag
         pagrec = _pag(match, config)[team.value]
         rep.pag_after_frames = pagrec["after_frames"]
@@ -7131,6 +7159,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 153) Az ő időkérés utáni szivárgó faluk × a ti gyors
+    # indításaitok: az újraindítás után azonnal rohanni kell.
+    if opp.tfd_timeouts >= 3 and own.pace_attacks >= 10:
+        _tfd153 = 100.0 * opp.tfd_conceded / opp.tfd_timeouts
+        _fb153 = own.fast_break_pct
+        if _tfd153 >= 60.0 and _fb153 >= 20.0:
+            plan.append(
+                f"Az időkérésük után szivárog a faluk (az "
+                f"időkéréseik {_tfd153:.0f}%-a után gól esett az első "
+                f"rohamból), ti pedig tudtok gyorsan támadni (a "
+                f"támadásaitok {_fb153:.0f}%-a lerohanás) — az "
+                "időkérésük utáni újraindításnál ne várjatok "
+                "felállásra: az első labdával azonnal előre, mert "
+                "ilyenkor a leglassabb a szervezésük.")
+
     # 152) Az ő gól utáni letámadásuk × a ti gyors kapus-indításaitok:
     # a kapott gól utáni kihozatal a kapusról induljon hosszan.
     if (opp.pag_after_frames >= 60 and opp.pag_base_frames >= 60
@@ -9320,6 +9363,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        tfd_timeouts=sum(r.tfd_timeouts for r in reports),
+        tfd_conceded=sum(r.tfd_conceded for r in reports),
         pag_after_frames=sum(r.pag_after_frames for r in reports),
         pag_after_sum_m=sum(r.pag_after_sum_m for r in reports),
         pag_base_frames=sum(r.pag_base_frames for r in reports),

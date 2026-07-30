@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Időkérés utáni védekezés: megáll-e a fal a megszakítás után.
+    try:
+        from .stoppages import timeout_first_defense
+        tfd = timeout_first_defense(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tfd = tfd[side]
+            if rec_tfd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_tfd['verdict']}: az "
+                     f"időkéréseik {rec_tfd['share_pct']:.0f}%-a után "
+                     "az ellenfél első rohamából gól esett "
+                     f"({rec_tfd['timeouts']} időkérés).")
+    except Exception:
+        pass
     # Gól utáni letámadás: saját gól után feljebb megy-e a fal.
     try:
         from .defense import press_after_goal

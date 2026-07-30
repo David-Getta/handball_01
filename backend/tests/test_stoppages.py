@@ -403,3 +403,70 @@ def test_timeout_first_attack_needs_enough_timeouts():
 
     rec = timeout_first_attack(_tfa_match([True, False]))["home"]
     assert rec["share_pct"] is None and rec["verdict"] is None
+
+
+# ---- Időkérés utáni védekezés (megáll-e a fal a megszakítás után) -----------
+
+def _tfd_match(conceded_after, fps=25.0):
+    """Hazai időkérés-sorozat: a `conceded_after` elemenként megadja,
+    hogy az adott időkérés után jön-e VENDÉG gól."""
+    frames = []
+    t = 0
+
+    def _play(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = _players(t, moving=True)
+            hp = players[0]      # a hazai 1-es birtokol (ő kér időt)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y,
+                                          confidence=1.0)))
+            t += 1
+
+    for conceded in conceded_after:
+        _play(10)
+        for _ in range(int(20 * fps)):     # időkérés: 20 mp állás
+            frames.append(Frame(t=t, players=_players(0, moving=False),
+                                ball=None))
+            t += 1
+        if conceded:
+            for i in range(7):             # vendég gól a 0-s kapura
+                players = _players(t, moving=True)
+                players.append(PlayerPosition(
+                    track_id=20, team=Team.AWAY, x=6.0, y=10.0,
+                    source=PositionSource.MEASURED, confidence=1.0))
+                frames.append(Frame(
+                    t=t, players=players,
+                    ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        _play(60)
+    return Match(_meta(fps), frames)
+
+
+def test_timeout_first_defense_flags_the_leaky_wall():
+    """Négy időkérésből három után gólt kapnak → szivárgó fal."""
+    from handball.pipeline.stoppages import timeout_first_defense
+
+    rec = timeout_first_defense(
+        _tfd_match([True, True, True, False]))["home"]
+    assert rec["timeouts"] == 4 and rec["conceded"] == 3
+    assert rec["share_pct"] == 75.0
+    assert rec["verdict"] == "időkérés után szivárgó fal"
+
+
+def test_timeout_first_defense_flags_the_fresh_wall():
+    """Ha az időkérések után nem kapnak gólt, friss a fal."""
+    from handball.pipeline.stoppages import timeout_first_defense
+
+    rec = timeout_first_defense(_tfd_match([False] * 4))["home"]
+    assert rec["conceded"] == 0 and rec["share_pct"] == 0.0
+    assert rec["verdict"] == "időkérés után friss fal"
+
+
+def test_timeout_first_defense_needs_enough_timeouts():
+    """Kevés (3-nál kevesebb) időkérésnél nincs ítélet."""
+    from handball.pipeline.stoppages import timeout_first_defense
+
+    rec = timeout_first_defense(_tfd_match([True, True]))["home"]
+    assert rec["timeouts"] == 2 and rec["verdict"] is None

@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Időkérés utáni védekezés: megáll-e a fal a megszakítás után (3+
+  // időkérés; 60% felett szivárgó, 20% alatt friss — a
+  // backend-kulccsal azonos küszöbök).
+  String? _timeoutDefense(Map<String, dynamic> r) {
+    final n = ((r["tfd_timeouts"] as num?) ?? 0).toInt();
+    final conceded = ((r["tfd_conceded"] as num?) ?? 0).toInt();
+    if (n < 3) return null;
+    final pct = 100.0 * conceded / n;
+    if (pct >= 60.0) {
+      return "időkérés után szivárog a faluk (az időkéréseik "
+          "${pct.toStringAsFixed(0)}%-a után gól az első rohamból) · "
+          "az újraindítás után azonnal támadni kell";
+    }
+    if (pct <= 20.0) {
+      return "időkérés után friss a faluk (csak "
+          "${pct.toStringAsFixed(0)}%-a után kaptak gólt) · ott a "
+          "gyors roham veszteség, rendezetten kell felállni";
+    }
+    return null;
+  }
+
   // Gól utáni letámadás: saját gól után feljebb megy-e a fal (60+
   // kocka mindkét oldalon, 1,5 m eltérés — a backend-kulccsal azonos
   // küszöbök).
@@ -4159,6 +4180,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Felhozatal-idő", _buildupTime(r)!],
       if (_pressAfterGoal(r) != null)
         ["Gól utáni letámadás", _pressAfterGoal(r)!],
+      if (_timeoutDefense(r) != null)
+        ["Időkérés utáni védekezés", _timeoutDefense(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
