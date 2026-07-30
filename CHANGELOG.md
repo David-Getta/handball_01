@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hetes-kiharcolás poszt szerint**: MELYIK POSZTRÓL rántják le
+  őket. A hetes-kiharcolók azt mondják meg, kit rántanak le — ez azt,
+  milyen poszton: a kiharcolókat a poszt-becsléshez kötjük (3+
+  poszthoz kötött hetes, 50%-os vezető poszt, holtverseny nélkül). Ha
+  a hetesek zöme a szélsőikről jön, a szélső-védekezésnél tilos a kéz;
+  ha a beállótól, az elé állást kell gyakorolni. Egy réteg, sok
+  felület: `seven_earner_roles` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (posztonkénti darabszámok + edzői
+  kulcs a poszthoz illő utasítással + csempe), 144. meccsterv-szabály
+  (az ő hetes-kiharcolásuk posztja × a ti hetes-okozó védőtök), 165.
+  edzés-szabály (kéz nélküli védekezés az adott poszt ellen).
 - **Időkérés utáni első támadás**: VAN-E KÉSZ FIGURÁJUK. Az
   időkérés-mérleg azt mondja meg, megtörte-e a megszakítás a
   sorozatot, az időkérés-időzítés azt, mikor kérnek időt — ez azt, mit

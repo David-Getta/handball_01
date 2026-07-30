@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Hetes-kiharcolásuk poszt szerint: {poszt: darab} — melyik
+    # posztról rántják le őket; darabszámok, meccsek közt pontosan
+    # összegződnek.
+    seven_earner_roles: dict = field(default_factory=dict)
     # Időkérés utáni első támadásuk: a mért időkérések és az utánuk
     # született góljaik — darabszámok, meccsek közt pontosan
     # összegződnek (arány = tfa_goals / tfa_timeouts).
@@ -1859,6 +1863,36 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Hetes-kiharcolás poszt szerint: hol tilos a kéz.
+    _ser_rows = list((rep.seven_earner_roles or {}).items())
+    _ser_n = sum(n for _, n in _ser_rows)
+    if _ser_n >= 3 and _ser_rows:
+        _ser_rows.sort(key=lambda kv: -kv[1])
+        _ser_poszt, _ser_top = _ser_rows[0]
+        _ser_pct = 100.0 * _ser_top / _ser_n
+        _ser_tie = len(_ser_rows) > 1 and _ser_rows[1][1] == _ser_top
+        if _ser_pct >= 50.0 and not _ser_tie:
+            _ser_what = {
+                "szélső": ("a szélső-védekezésnél tilos a kéz: csak "
+                           "lábbal, testtel szabad terelni, mert a "
+                           "kifutó védő karja hetest ér"),
+                "beálló": ("a beállót elölről kell fogni: a hátulról "
+                           "nyúlás hetest ér, ezért az elé állást "
+                           "kell gyakorolni"),
+                "átlövő": ("a kilépésnél a kar nem mehet a lövő "
+                           "karjára: a blokk felfelé nyitott kézzel "
+                           "megy, különben büntetőt ér"),
+                "irányító": ("a betörésénél a segítő védőnek testtel "
+                             "kell zárnia, mert a kettőzésben a kéz "
+                             "hetest ér"),
+            }.get(_ser_poszt,
+                  "ezen a poszton kell a legfegyelmezettebb kezű "
+                  "védekezés")
+            keys.append(
+                f"A heteseik {_ser_pct:.0f}%-át a {_ser_poszt} "
+                f"posztról harcolják ki ({_ser_top}/{_ser_n}) — "
+                f"{_ser_what}.")
 
     # Időkérés utáni első támadás: kell-e rá külön készülni.
     if rep.tfa_timeouts >= 3:
@@ -4714,6 +4748,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .rules import seven_earner_roles as _ser
+        rep.seven_earner_roles = dict(
+            _ser(match, config)[team.value]["roles"])
         from .stoppages import timeout_first_attack as _tfa
         tfarec = _tfa(match, config)[team.value]
         rep.tfa_timeouts = tfarec["timeouts"]
@@ -6116,6 +6153,16 @@ def _merge_fb_finishers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_earner_roles(reports) -> dict:
+    """Hetes-kiharcolás poszt szerint: posztonkénti összegzés (a
+    darabszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for poszt, n in (r.seven_earner_roles or {}).items():
+            tally[poszt] = tally.get(poszt, 0) + int(n)
+    return dict(sorted(tally.items(), key=lambda kv: -kv[1]))
+
+
 def _merge_risky_passers(reports) -> list:
     """Kockázatos passzolók: játékosonként a hosszú kísérletek és az
     eladások összegzése (az eladás-szám szerint csökkenő)."""
@@ -6780,6 +6827,30 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 144) Az ő hetes-kiharcolásuk posztja × a ti hetes-okozó
+    # védőtök: ott találkozik a két kockázat.
+    _ser144 = list((opp.seven_earner_roles or {}).items())
+    _sern144 = sum(n for _, n in _ser144)
+    _smc144 = own.seven_conceders or []
+    if _ser144 and _sern144 >= 3 and _smc144 \
+            and _smc144[0]["conceded"] >= 2:
+        _ser144.sort(key=lambda kv: -kv[1])
+        _poszt144, _top144 = _ser144[0]
+        _pct144 = 100.0 * _top144 / _sern144
+        _def144 = _smc144[0]
+        _who144 = (f"{_def144['jersey']}-es mezszámú"
+                   if _def144.get("jersey") is not None
+                   else f"{_def144['player_id']} azonosítójú")
+        if _pct144 >= 50.0:
+            plan.append(
+                f"A heteseik {_pct144:.0f}%-át a {_poszt144} "
+                f"posztról harcolják ki, nálatok pedig a(z) {_who144} "
+                f"védő okozta a legtöbb hetest "
+                f"({_def144['conceded']}) — ez a két kockázat "
+                f"egymásra talál: az ő {_poszt144} emberüket ne ő "
+                "fogja, vagy legyen mögötte segítő, és a kéz "
+                "maradjon lent.")
 
     # 143) Az ő időkérés utáni figurájuk × a ti időkérés-mérlegetek:
     # a megszakítás náluk fegyver, nálatok legyen az is.
@@ -8791,6 +8862,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        seven_earner_roles=_merge_earner_roles(reports),
         tfa_timeouts=sum(r.tfa_timeouts for r in reports),
         tfa_goals=sum(r.tfa_goals for r in reports),
         risky_passers=_merge_risky_passers(reports),

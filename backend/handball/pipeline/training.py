@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 165) Hetes-kiharcolás poszt szerint: az ellenfél hetes-forrása
+    # megmondja, melyik posztunkon kell a legfegyelmezettebb kéz.
+    try:
+        from .rules import seven_earner_roles
+        ser165 = seven_earner_roles(match, config)
+        for side in ("home", "away"):
+            opp165 = "away" if side == "home" else "home"
+            top165 = ser165[opp165]["top"]
+            if top165 is None:
+                continue
+            add(side, "védekezés",
+                f"Kéz nélküli védekezés: {top165['poszt']}",
+                f"az ellenfél heteseinek "
+                f"{top165['share_pct']:.0f}%-át a {top165['poszt']} "
+                f"posztról harcolta ki ({top165['count']}/"
+                f"{ser165[opp165]['sevens']}) — ott a mi kezünk "
+                "megy a testre, és abból lesz a büntető",
+                f"kéz nélküli védekezés a {top165['poszt']} ellen: "
+                "1-1 gyakorlat hátrakulcsolt kézzel, majd "
+                "felszabadított kézzel úgy, hogy a kéz csak a "
+                "labdára mehet — az edző minden kéz-kontaktusnál "
+                "fújja a hetest, hogy a fegyelem meccs-szinten is "
+                "meglegyen")
+    except Exception:
+        pass
+
     # 164) Időkérés utáni első támadás: ha nem hoz gólt, a kész
     # figura a téma.
     try:

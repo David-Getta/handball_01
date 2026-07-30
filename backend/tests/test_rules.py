@@ -934,3 +934,53 @@ def test_shorthanded_shooters_without_powerplay():
     rec = shorthanded_shooters(
         Match(_meta(), _roster_frames(0, 90, 6, 6)))["home"]
     assert rec["shots"] == 0 and rec["top"] is None
+
+
+# ---- Hetes-kiharcolás poszt szerint ------------------------------------------
+
+def _ser_match(earner_y=3.0, n_sevens=3, fps=25.0):
+    """Hetes-sorozat, ahol a kiharcoló a `earner_y` magasságban
+    dolgozik (3 = szélső sáv, 10 = közép); a poszt-becsléshez hosszabb
+    birtoklás is jár."""
+    frames = []
+    t = 0
+
+    def _possession(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = [_pl(9, Team.HOME, 36.0, earner_y),
+                       _pl(1, Team.HOME, 28.0, 10.0),
+                       _pl(2, Team.HOME, 30.0, 14.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=28.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(n_sevens):
+        _possession(6.0)
+        for _ in range(50):     # a labda áll a 7 m-es ponton: hetes
+            frames.append(Frame(
+                t=t, players=[_pl(9, Team.HOME, 36.0, earner_y),
+                              _pl(1, Team.HOME, 28.0, 10.0)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        _possession(12.0)
+    return Match(_meta(fps), frames)
+
+
+def test_seven_earner_roles_points_to_the_wing():
+    """A szélső sávban dolgozó kiharcoló → a hetesek a szélsőről
+    jönnek."""
+    from handball.pipeline.rules import seven_earner_roles
+
+    rec = seven_earner_roles(_ser_match())["home"]
+    assert rec["sevens"] >= 3
+    assert rec["top"] is not None and rec["top"]["poszt"] == "szélső"
+
+
+def test_seven_earner_roles_needs_enough_sevens():
+    """Kevés (3-nál kevesebb) hetesnél nincs ítélet."""
+    from handball.pipeline.rules import seven_earner_roles
+
+    rec = seven_earner_roles(_ser_match(n_sevens=2))["home"]
+    assert rec["top"] is None

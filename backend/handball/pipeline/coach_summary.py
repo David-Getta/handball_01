@@ -833,6 +833,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Hetes-kiharcolás poszt szerint: honnan jönnek a hetesek.
+    try:
+        from .rules import seven_earner_roles
+        ser = seven_earner_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ser = ser[side]["top"]
+            if top_ser is None:
+                continue
+            body += (f" A(z) {name} heteseinek "
+                     f"{top_ser['share_pct']:.0f}%-át a "
+                     f"{top_ser['poszt']} posztról harcolták ki "
+                     f"({top_ser['count']}/{ser[side]['sevens']}).")
+    except Exception:
+        pass
     # Időkérés utáni első támadás: volt-e kész figurájuk.
     try:
         from .stoppages import timeout_first_attack

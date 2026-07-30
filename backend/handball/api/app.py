@@ -3108,6 +3108,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_earner_roles
+            res["seven_earner_roles"] = seven_earner_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3816,6 +3821,9 @@ def create_app():
                 from ..pipeline.stoppages import timeout_first_attack
                 _layer("timeout_first_attack",
                        lambda: timeout_first_attack(match))
+                from ..pipeline.rules import seven_earner_roles
+                _layer("seven_earner_roles",
+                       lambda: seven_earner_roles(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

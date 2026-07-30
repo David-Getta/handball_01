@@ -1167,3 +1167,56 @@ def shorthanded_shooters(match: Match,
         out[side] = {"shots": sum(r["shots"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Hetes-kiharcolás poszt szerint: ennyi poszthoz kötött hetestől
+# ítélünk, és e feletti részarány jelenti, hogy egy posztról jönnek.
+SER_MIN_SEVENS = 3
+SER_SHARE = 50.0
+
+
+def seven_earner_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-kiharcolás poszt szerint: MELYIK POSZTRÓL rántják le őket.
+
+    A hetes-kiharcolók (seven_meter_earners) azt mondják meg, KIT
+    rántanak le — ez azt, MILYEN POSZTON: a kiharcolókat a
+    poszt-becsléshez (estimate_positions) kötjük.
+
+    Edzőileg: ha a hetesek zöme a szélsőikről jön, a szélső-védekezésnél
+    tilos a kéz — csak lábbal, testtel szabad terelni; ha a beállótól,
+    az elé állást kell gyakorolni, mert a beálló-fogás hetest ér.
+
+    Visszatérés csapatonként: {"sevens", "roles": {poszt: darab},
+    "top": {"poszt", "count", "share_pct"} | None} — a "top" akkor van
+    kitöltve, ha legalább SER_MIN_SEVENS poszthoz kötött hetes van, a
+    vezető poszt részaránya eléri a SER_SHARE-t, és nincs vele
+    holtversenyben másik poszt.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    out: dict = {side: {"sevens": 0, "roles": {}, "top": None}
+                 for side in ("home", "away")}
+    earners = seven_meter_earners(match, config)
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in earners.get(side, []):
+            info = roles.get(side, {}).get(row["player_id"])
+            if info is None:
+                continue
+            rec["sevens"] += row["earned"]
+            poszt = info["poszt"]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + row["earned"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["roles"].items())
+        if rec["sevens"] >= SER_MIN_SEVENS and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["sevens"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= SER_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "count": n,
+                              "share_pct": round(share, 1)}
+    return out
