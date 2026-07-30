@@ -1384,3 +1384,64 @@ def clutch_turnover_players(match: Match, config=None) -> dict:
                      "turnovers": sum(r["turnovers"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Kezdő hatos: a meccs eleji ablak, és ennyi mért kocka kell ahhoz,
+# hogy egy játékos a kezdő emberek közé kerüljön.
+OPENING_LINEUP_WINDOW_S = 300.0
+OPENING_LINEUP_MIN_FRAMES = 100
+
+
+def opening_lineup(match: Match, config=None) -> dict:
+    """Kezdő hatos: KIKKEL KEZDENEK.
+
+    A nyitány-profil (opening_profile) azt mondja meg, hogyan indítják
+    a meccset, a hajrá-ötös (clutch_lineup) azt, kikkel zárják — ez a
+    másik vége: az első OPENING_LINEUP_WINDOW_S másodpercben
+    játékosonként megszámoljuk a pályán töltött kockákat.
+
+    Edzőileg: ha tudjuk, kikkel kezdenek, az első támadásokra név
+    szerinti terv készíthető (kire megy a kettőzés, kit engedünk
+    lőni), és látszik, kit tartogatnak a kispadon a hajrára.
+
+    Visszatérés csapatonként: {"window_s", "players": [{"player_id",
+    "jersey", "frames", "share_pct"}], "core"} — a lista kockaszám
+    szerint csökkenő, a "core" a legalább OPENING_LINEUP_MIN_FRAMES
+    kockát töltő játékosok listája.
+    """
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    if not frames:
+        return {side: {"window_s": OPENING_LINEUP_WINDOW_S,
+                       "players": [], "core": []}
+                for side in ("home", "away")}
+
+    cut = frames[0].t + OPENING_LINEUP_WINDOW_S * fps
+    jersey: dict = {}
+    acc: dict = {"home": {}, "away": {}}
+    window_frames = 0
+    for f in frames:
+        if f.t > cut:
+            break
+        window_frames += 1
+        for p in f.players:
+            if p.role == "kapus":
+                continue
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+            side = p.team.value
+            acc[side][p.track_id] = acc[side].get(p.track_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "frames": n,
+                 "share_pct": (round(100.0 * n / window_frames, 1)
+                               if window_frames else None)}
+                for pid, n in sorted(acc[side].items(),
+                                     key=lambda kv: -kv[1])]
+        core = [r for r in rows
+                if r["frames"] >= OPENING_LINEUP_MIN_FRAMES]
+        out[side] = {"window_s": OPENING_LINEUP_WINDOW_S,
+                     "players": rows, "core": core}
+    return out

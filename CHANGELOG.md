@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kezdő hatos**: KIKKEL KEZDENEK. A nyitány-profil azt mondja meg,
+  hogyan indítják a meccset, a hajrá-ötös azt, kikkel zárják — ez a
+  másik vége: az első öt percben játékosonként a pályán töltött kockák
+  (a kezdő mag 100+ mért kockától). Így az első támadásokra név
+  szerinti terv készíthető, és látszik, kit tartogatnak a kispadon a
+  hajrára. Egy réteg, sok felület: `opening_lineup` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti kocka-darabszámok + edzői kulcs + csempe), 145.
+  meccsterv-szabály (az ő kezdő hatosuk × a ti akadozó nyitányotok),
+  166. edzés-szabály (nyitó figurák: az edzés elején, hidegen, ezzel a
+  felállással).
 - **Hetes-kiharcolás poszt szerint**: MELYIK POSZTRÓL rántják le
   őket. A hetes-kiharcolók azt mondják meg, kit rántanak le — ez azt,
   milyen poszton: a kiharcolókat a poszt-becsléshez kötjük (3+

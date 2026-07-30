@@ -1297,6 +1297,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kezdő hatos: kikkel kezdenek (legalább négy kezdő ember — a
+  // backend-kulccsal azonos küszöb).
+  String? _openingLineup(Map<String, dynamic> r) {
+    final rows = r["opening_players"];
+    if (rows is! List || rows.length < 4) return null;
+    final names = <String>[];
+    for (final e in rows.take(6)) {
+      if (e is! Map) continue;
+      names.add(e["jersey"] != null
+          ? "${e["jersey"]}-es"
+          : "#${e["player_id"]}");
+    }
+    if (names.length < 4) return null;
+    return "kezdő embereik: ${names.join(", ")} · az első támadásokra "
+        "név szerinti terv készíthető";
+  }
+
   // Hetes-kiharcolás poszt szerint: honnan jönnek a heteseik (3+
   // hetes, 50% feletti vezető poszt, holtverseny nélkül — a
   // backend-kulccsal azonos küszöbök).
@@ -3974,6 +3991,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés utáni támadás", _timeoutFirstAttack(r)!],
       if (_sevenEarnerRoles(r) != null)
         ["Hetes-kiharcolás posztja", _sevenEarnerRoles(r)!],
+      if (_openingLineup(r) != null) ["Kezdő hatos", _openingLineup(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kezdő embereik: [{"player_id", "jersey", "frames"}] — az első öt
+    # percben a pályán töltött kockák; darabszámok, meccsek közt
+    # pontosan összegződnek (aki több meccset kezd, előre kerül).
+    opening_players: list = field(default_factory=list)
     # Hetes-kiharcolásuk poszt szerint: {poszt: darab} — melyik
     # posztról rántják le őket; darabszámok, meccsek közt pontosan
     # összegződnek.
@@ -1863,6 +1867,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kezdő hatos: kikre kell tervezni az első támadásokat.
+    _opl_rows = [p for p in (rep.opening_players or [])
+                 if p["frames"] > 0][:6]
+    if len(_opl_rows) >= 4:
+        _opl_names = []
+        for _row in _opl_rows:
+            _opl_names.append(
+                f"{_row['jersey']}-es" if _row.get("jersey") is not None
+                else f"#{_row['player_id']}")
+        keys.append(
+            f"A kezdő embereik: {', '.join(_opl_names)} — az első "
+            "támadásokra név szerinti terv készíthető: kire megy a "
+            "kettőzés, kit engedünk lőni, és ki marad a kispadon a "
+            "hajrára.")
 
     # Hetes-kiharcolás poszt szerint: hol tilos a kéz.
     _ser_rows = list((rep.seven_earner_roles or {}).items())
@@ -4748,6 +4767,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .momentum import opening_lineup as _opl
+        rep.opening_players = [
+            {"player_id": p["player_id"], "jersey": p["jersey"],
+             "frames": p["frames"]}
+            for p in _opl(match, config)[team.value]["core"]]
         from .rules import seven_earner_roles as _ser
         rep.seven_earner_roles = dict(
             _ser(match, config)[team.value]["roles"])
@@ -5772,6 +5796,22 @@ def _merge_breakthrough_players(reports) -> list:
     return [{"player_id": pid, **rec}
             for pid, rec in sorted(tally.items(),
                                    key=lambda kv: -kv[1]["entries"])]
+
+
+def _merge_clutch_players_rows(reports, field_name: str) -> list:
+    """Játékos-kocka sorok összegzése (a kockaszám szerint
+    csökkenő) — a kezdő és a hajrá-emberekhez egyaránt."""
+    tally: dict = {}
+    for r in reports:
+        for row in (getattr(r, field_name, None) or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "frames": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["frames"] += int(row.get("frames", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["frames"])]
 
 
 def _merge_clutch_players(reports) -> list:
@@ -6827,6 +6867,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 145) Az ő kezdő hatosuk × a ti nyitányotok: az első öt percre
+    # név szerinti terv kell.
+    _opl145 = [p for p in (opp.opening_players or []) if p["frames"] > 0]
+    if len(_opl145) >= 4 and own.open_first_matches >= 1:
+        _first145 = 100.0 * own.open_first_yes / own.open_first_matches
+        if _first145 <= 40.0:
+            _names145 = []
+            for _r145 in _opl145[:6]:
+                _names145.append(
+                    f"{_r145['jersey']}-es"
+                    if _r145.get("jersey") is not None
+                    else f"#{_r145['player_id']}")
+            plan.append(
+                f"A kezdő embereik ismertek ({', '.join(_names145)}), "
+                f"a ti nyitányotok viszont akadozik (a meccsek "
+                f"{_first145:.0f}%-ában szereztétek a nyitógólt) — az "
+                "első öt percre név szerinti terv kell: kijelölt "
+                "védekezés az ő kezdő lövőjükre, és két bejátszott "
+                "nyitó figura a sajátotokban.")
 
     # 144) Az ő hetes-kiharcolásuk posztja × a ti hetes-okozó
     # védőtök: ott találkozik a két kockázat.
@@ -8862,6 +8922,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        opening_players=_merge_clutch_players_rows(
+            reports, "opening_players"),
         seven_earner_roles=_merge_earner_roles(reports),
         tfa_timeouts=sum(r.tfa_timeouts for r in reports),
         tfa_goals=sum(r.tfa_goals for r in reports),

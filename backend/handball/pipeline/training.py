@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 166) Kezdő hatos: a nyitó emberek együtt gyakorolják a meccs
+    # első támadásait (az első öt perc beárazza a mérkőzést).
+    try:
+        from .momentum import opening_lineup
+        opl166 = opening_lineup(match, config)
+        for side in ("home", "away"):
+            core166 = opl166[side]["core"][:6]
+            if len(core166) < 4:
+                continue
+            names166 = []
+            for row in core166:
+                names166.append(
+                    f"{row['jersey']}-es" if row.get("jersey") is not None
+                    else f"#{row['player_id']}")
+            add(side, "taktika", "Nyitó figurák begyakorlása",
+                f"a meccs első öt percében ez a hat ember volt a "
+                f"pályán ({', '.join(names166)}) — a nyitány "
+                "beárazza a mérkőzést, és ott még nincs meccsritmus",
+                "nyitó figurák: az edzés ELEJÉN, hidegen jön két "
+                "bejátszott nyitó támadás EZZEL a felállással "
+                "(kijelölt indító, egy elzárás, kijelölt befejező) — "
+                "utána azonnal védekezés-blokk, hogy a meccskezdés "
+                "ritmusa is meglegyen")
+    except Exception:
+        pass
+
     # 165) Hetes-kiharcolás poszt szerint: az ellenfél hetes-forrása
     # megmondja, melyik posztunkon kell a legfegyelmezettebb kéz.
     try:

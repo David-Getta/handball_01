@@ -907,3 +907,25 @@ def test_clutch_turnover_players_short_match():
     rec = clutch_turnover_players(
         _clutch_turnover_match(total_s=300.0))["home"]
     assert rec["players"] == [] and rec["top"] is None
+
+
+# ---- Kezdő hatos (kikkel kezdenek) ------------------------------------------
+
+def test_opening_lineup_lists_the_starters():
+    """A meccs első öt percének emberei kerülnek a kezdő magba, a
+    később beálló csere nem."""
+    from handball.pipeline.momentum import opening_lineup
+
+    rec = opening_lineup(_clutch_lineup_match(
+        late_ids=(1, 2, 3, 4, 5, 6)))["home"]
+    core_ids = {p["player_id"] for p in rec["core"]}
+    assert core_ids == {11, 12, 13, 14, 15, 16}
+    assert rec["players"][0]["share_pct"] == 100.0
+
+
+def test_opening_lineup_empty_match():
+    """Üres felvételen üres a kép."""
+    from handball.pipeline.momentum import opening_lineup
+
+    rec = opening_lineup(Match(_meta(), []))["home"]
+    assert rec["players"] == [] and rec["core"] == []

@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kezdő hatos: kikkel kezdték a meccset.
+    try:
+        from .momentum import opening_lineup
+        opl = opening_lineup(match)
+        for side, name in (("home", home), ("away", away)):
+            core = opl[side]["core"]
+            if len(core) < 4:
+                continue
+            jerseys = _jersey_of_track(match)
+            names = []
+            for row in core[:6]:
+                jn = row["jersey"] or jerseys.get(row["player_id"])
+                names.append(str(jn) if jn is not None
+                             else f"#{row['player_id']}")
+            body += f" A(z) {name} kezdő emberei: {', '.join(names)}."
+    except Exception:
+        pass
     # Hetes-kiharcolás poszt szerint: honnan jönnek a hetesek.
     try:
         from .rules import seven_earner_roles
