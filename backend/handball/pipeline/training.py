@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 156) Kapus emberhátrányban: ha a kapusunk ilyenkor visszaesik, a
+    # fal nélküli helyzetek védése a téma.
+    try:
+        from .goalkeeper import gk_shorthanded_saves
+        gsh156 = gk_shorthanded_saves(match, config)
+        for side in ("home", "away"):
+            rec156 = gsh156[side]
+            if rec156["verdict"] != "emberhátrányban visszaesik":
+                continue
+            add(side, "kapus", "Kapus emberhátrányban",
+                f"a kapusunk emberhátrányban csak "
+                f"{rec156['sh']['save_pct']:.0f}%-ot fogott a szokásos "
+                f"{rec156['eq']['save_pct']:.0f}% helyett — öt "
+                "emberrel a fal nem ér mindenhová, és a kapus "
+                "egyedül marad a helyzetekkel",
+                "kapus emberhátrányban: 6-5 elleni helyzetgyakorlás "
+                "a kapussal, ahol a lövések a szélekről és a beállós "
+                "helyzetekből jönnek — a kapus a fallal EGYEZTETVE "
+                "választ oldalt (a védő mutatja a zárt sarkot), és "
+                "minden védés után azonnali indítás jön")
+    except Exception:
+        pass
+
     # 155) Emberelőny-lövők: ha egy emberre épül az emberelőnyünk, a
     # befejezés szélesítése a téma.
     try:

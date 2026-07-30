@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus emberhátrányban**: NŐ-E a kapusuk a két perc alatt. Az
+  emberelőny-védekezés azt mondja meg, mennyi gólt kapnak
+  emberhátrányban — ez azt, mennyi múlik a kapuson: a rá kaputra
+  érkezett lövéseket szétválasztjuk emberhátrányra és egyenlő
+  létszámra (helyzetenként 4+ lövés, 15 százalékpontos eltérésnél). Ha
+  a kapusuk ilyenkor feljavul, a két perc nem ingyen gól — türelmes,
+  helyzetre játszó emberelőny kell; ha visszaesik, gyorsan kell
+  befejezni. Egy réteg, sok felület: `gk_shorthanded_saves` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (helyzetenkénti lövés- és védés-darabszámok + két edzői kulcs +
+  csempe), 135. meccsterv-szabály (az ő emberhátrányban visszaeső
+  kapusuk × a ti akadozó emberelőnyötök), 156. edzés-szabály (kapus
+  emberhátrányban: a fallal egyeztetett sarok-választás).
 - **Emberelőny-lövők**: KI FEJEZ BE a két perc alatt. Az
   emberelőny-hatékonyság azt mondja meg, mennyi gólt hoznak a
   kiállításokból, az emberelőny-tempó azt, hogyan játsszák — ez azt,

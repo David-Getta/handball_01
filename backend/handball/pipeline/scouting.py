@@ -604,6 +604,13 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kapusuk emberhátrányban: helyzetenként (emberhátrány / egyenlő
+    # létszám) a kapura tartó lövések és a fogások — darabszámok,
+    # meccsek közt pontosan összegződnek.
+    gsh_sh_faced: int = 0
+    gsh_sh_saves: int = 0
+    gsh_eq_faced: int = 0
+    gsh_eq_saves: int = 0
     # Emberelőny-lövőik: [{"player_id", "jersey", "shots", "goals"}] —
     # ki fejez be a két perc alatt; darabszámok, meccsek közt pontosan
     # összegződnek.
@@ -1815,6 +1822,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kapus emberhátrányban: mit ér a két perc ellenük.
+    if rep.gsh_sh_faced >= 4 and rep.gsh_eq_faced >= 4:
+        _gsh_sh = 100.0 * rep.gsh_sh_saves / rep.gsh_sh_faced
+        _gsh_eq = 100.0 * rep.gsh_eq_saves / rep.gsh_eq_faced
+        if _gsh_sh - _gsh_eq >= 15.0:
+            keys.append(
+                f"A kapusuk emberhátrányban nő ({_gsh_sh:.0f}%-os "
+                f"védés a szokásos {_gsh_eq:.0f}% helyett) — a két "
+                "perc nem ingyen gól: türelmes emberelőnyt kell "
+                "játszani, beállós és szélső-helyzetekkel, nem "
+                "távoli lövéssel.")
+        elif _gsh_eq - _gsh_sh >= 15.0:
+            keys.append(
+                f"A kapusuk emberhátrányban visszaesik "
+                f"({_gsh_sh:.0f}%-os védés a szokásos {_gsh_eq:.0f}% "
+                "helyett) — a fal nélkül maradó kapus sebezhető: "
+                "emberelőnyben gyorsan kell befejezni, mielőtt "
+                "rendeződnek.")
 
     # Emberelőny-lövők: kire kell rendezni az emberhátrányt.
     _pps_rows = rep.pp_shooters or []
@@ -4517,6 +4543,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .goalkeeper import gk_shorthanded_saves as _gsh
+        gshrec = _gsh(match, config)[team.value]
+        rep.gsh_sh_faced = gshrec["sh"]["faced"]
+        rep.gsh_sh_saves = gshrec["sh"]["saves"]
+        rep.gsh_eq_faced = gshrec["eq"]["faced"]
+        rep.gsh_eq_saves = gshrec["eq"]["saves"]
         from .rules import powerplay_shooters as _pps
         rep.pp_shooters = [
             dict(row)
@@ -6475,6 +6507,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 135) Az ő emberhátrányban visszaeső kapusuk × a ti
+    # emberelőny-hatékonyságotok: gyorsan kell befejezni a két percet.
+    if opp.gsh_sh_faced >= 4 and opp.gsh_eq_faced >= 4 \
+            and own.pp_shots >= 3:
+        _sh135 = 100.0 * opp.gsh_sh_saves / opp.gsh_sh_faced
+        _eq135 = 100.0 * opp.gsh_eq_saves / opp.gsh_eq_faced
+        _eff135 = 100.0 * own.pp_goals / own.pp_shots
+        if _eq135 - _sh135 >= 15.0 and _eff135 <= 60.0:
+            plan.append(
+                f"A kapusuk emberhátrányban visszaesik ({_sh135:.0f}% "
+                f"a szokásos {_eq135:.0f}% helyett), a ti "
+                f"emberelőnyötök pedig akadozik "
+                f"({own.pp_goals}/{own.pp_shots} gól) — a két percet "
+                "gyorsan kell lezárni: két-három passz után jöjjön a "
+                "befejezés, amíg a faluk nincs rendezve, mert utána "
+                "a kapusuk sem segít nekik.")
+
     # 134) Az ő emberelőny-befejezőjük × a ti emberhátrány-védekezésetek:
     # a két percre név szerinti terv kell.
     _pps134 = opp.pp_shooters or []
@@ -8328,6 +8377,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        gsh_sh_faced=sum(r.gsh_sh_faced for r in reports),
+        gsh_sh_saves=sum(r.gsh_sh_saves for r in reports),
+        gsh_eq_faced=sum(r.gsh_eq_faced for r in reports),
+        gsh_eq_saves=sum(r.gsh_eq_saves for r in reports),
         pp_shooters=_merge_pp_shooters(reports),
         sdf_fh_shots=sum(r.sdf_fh_shots for r in reports),
         sdf_fh_sum_m=round(sum(r.sdf_fh_sum_m for r in reports), 1),

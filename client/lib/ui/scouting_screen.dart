@@ -1297,6 +1297,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kapus emberhátrányban: nő vagy visszaesik a két perc alatt
+  // (helyzetenként 4+ kapura tartó lövés, 15 százalékpontos eltérés —
+  // a backend-kulccsal azonos küszöbök).
+  String? _gkShorthanded(Map<String, dynamic> r) {
+    final shF = ((r["gsh_sh_faced"] as num?) ?? 0).toInt();
+    final shS = ((r["gsh_sh_saves"] as num?) ?? 0).toInt();
+    final eqF = ((r["gsh_eq_faced"] as num?) ?? 0).toInt();
+    final eqS = ((r["gsh_eq_saves"] as num?) ?? 0).toInt();
+    if (shF < 4 || eqF < 4) return null;
+    final sh = 100.0 * shS / shF;
+    final eq = 100.0 * eqS / eqF;
+    if (sh - eq >= 15.0) {
+      return "a kapusuk emberhátrányban nő "
+          "(${sh.toStringAsFixed(0)}% a szokásos "
+          "${eq.toStringAsFixed(0)}% helyett) · türelmes emberelőnyt "
+          "kell játszani, beállós helyzetekkel";
+    }
+    if (eq - sh >= 15.0) {
+      return "a kapusuk emberhátrányban visszaesik "
+          "(${sh.toStringAsFixed(0)}% a szokásos "
+          "${eq.toStringAsFixed(0)}% helyett) · emberelőnyben gyorsan "
+          "kell befejezni";
+    }
+    return null;
+  }
+
   // Emberelőny-lövők: ki fejez be a két perc alatt (3+ emberelőnyben
   // leadott lövés — a backend-kulccsal azonos küszöb).
   String? _powerplayShooters(Map<String, dynamic> r) {
@@ -3739,6 +3765,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lövés-távolság esése", _shotDistanceFade(r)!],
       if (_powerplayShooters(r) != null)
         ["Emberelőny-lövők", _powerplayShooters(r)!],
+      if (_gkShorthanded(r) != null)
+        ["Kapus emberhátrányban", _gkShorthanded(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

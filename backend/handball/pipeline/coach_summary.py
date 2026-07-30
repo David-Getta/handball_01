@@ -833,6 +833,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kapus emberhátrányban: nőtt-e a kapus a két perc alatt.
+    try:
+        from .goalkeeper import gk_shorthanded_saves
+        gsh = gk_shorthanded_saves(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gsh = gsh[side]
+            if rec_gsh["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusa {rec_gsh['verdict']}: "
+                     f"emberhátrányban "
+                     f"{rec_gsh['sh']['save_pct']:.0f}%-ot fogott, "
+                     f"egyenlő létszámnál "
+                     f"{rec_gsh['eq']['save_pct']:.0f}%-ot.")
+    except Exception:
+        pass
     # Emberelőny-lövők: kire ment a befejezés a két perc alatt.
     try:
         from .rules import powerplay_shooters

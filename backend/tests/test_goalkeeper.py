@@ -1081,3 +1081,96 @@ def test_gk_saves_by_speed_needs_both_bands():
     rec = gk_saves_by_speed(_speed_band_match([(1.2, True)] * 5))["away"]
     assert rec["hard"]["faced"] == 5 and rec["placed"]["faced"] == 0
     assert rec["weak_band"] is None
+
+
+# ---- Kapus emberhátrányban ---------------------------------------------------
+
+def _shorthanded_gk_match(sh_saves=4, sh_goals=0, eq_saves=0,
+                          eq_goals=4, fps=25.0):
+    """A VENDÉG kapusára érkező lövések: előbb egyenlő létszámnál,
+    majd egy kiállítás-ablakban (a vendég 5 fővel véd)."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _roster(seconds, away_n, shooter=False, save=False):
+        nonlocal t, frames
+        for i in range(int(seconds * fps)):
+            players = [PlayerPosition(track_id=100 + k, team=Team.HOME,
+                                      x=15.0 + k, y=4.0 + k,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)
+                       for k in range(6)]
+            players += [PlayerPosition(track_id=200 + k, team=Team.AWAY,
+                                       x=25.0 + k, y=4.0 + k,
+                                       source=PositionSource.MEASURED,
+                                       confidence=1.0)
+                        for k in range(away_n)]
+            players.append(PlayerPosition(track_id=99, team=Team.AWAY,
+                                          x=39.2, y=10.0, role="kapus",
+                                          source=PositionSource.MEASURED,
+                                          confidence=1.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _shot(away_n, save):
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0),
+                       PlayerPosition(track_id=99, team=Team.AWAY,
+                                      x=39.2, y=10.0, role="kapus",
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            players += [PlayerPosition(track_id=200 + k, team=Team.AWAY,
+                                       x=25.0 + k, y=4.0 + k,
+                                       source=PositionSource.MEASURED,
+                                       confidence=1.0)
+                        for k in range(away_n)]
+            bx = min(34.0 + i, 38.6 if save else 40.4)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _roster(2.0, away_n)
+
+    _roster(20.0, 6)
+    for _ in range(eq_saves):
+        _shot(6, save=True)
+    for _ in range(eq_goals):
+        _shot(6, save=False)
+    _roster(20.0, 5)          # kiállítás-ablak indul (45 mp-nél hosszabb)
+    for _ in range(sh_saves):
+        _shot(5, save=True)
+    for _ in range(sh_goals):
+        _shot(5, save=False)
+    _roster(20.0, 5)
+    _roster(20.0, 6)          # a létszám visszaáll
+    return Match(MatchMeta(match_id="gsh", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_shorthanded_saves_flags_the_rising_keeper():
+    """Emberhátrányban 4/4 védés, egyenlő létszámnál 0/4 → a kapus a
+    két perc alatt nő."""
+    from handball.pipeline.goalkeeper import gk_shorthanded_saves
+
+    rec = gk_shorthanded_saves(_shorthanded_gk_match())["away"]
+    assert rec["sh"]["faced"] >= 4 and rec["eq"]["faced"] >= 4
+    assert rec["sh"]["save_pct"] == 100.0
+    assert rec["eq"]["save_pct"] == 0.0
+    assert rec["verdict"] == "emberhátrányban nő"
+
+
+def test_gk_shorthanded_saves_needs_both_situations():
+    """Kiállítás nélkül nincs emberhátrányos minta, így nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_shorthanded_saves
+
+    rec = gk_shorthanded_saves(
+        _shorthanded_gk_match(sh_saves=0, sh_goals=0))["away"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None

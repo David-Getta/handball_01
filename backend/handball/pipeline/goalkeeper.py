@@ -1314,3 +1314,79 @@ def gk_saves_by_speed(match: Match, config=None) -> dict:
                      "on_target": sum(b["faced"] for b in bands.values()),
                      "weak_band": weak}
     return out
+
+
+# Kapus emberhátrányban: helyzetenként ennyi kapura tartó lövés kell, és
+# ekkora (százalékpontos) különbség számít érdemi eltérésnek.
+GKSH_MIN_FACED = 4
+GKSH_GAP_PP = 15.0
+
+
+def gk_shorthanded_saves(match: Match, config=None) -> dict:
+    """Kapus emberhátrányban: NŐ-E a kapusuk a két perc alatt.
+
+    Az emberelőny-védekezés (powerplay_defense) azt mondja meg, mennyi
+    gólt kapnak emberhátrányban — ez azt, MENNYI MÚLIK A KAPUSON: a rá
+    kaputra érkezett lövéseket szétválasztjuk emberhátrányban és
+    egyenlő létszámnál, és mindkettőre védési arányt számolunk.
+
+    Edzőileg: ha a kapusuk emberhátrányban feljavul, a két perc nem
+    ingyen gól — türelmes, helyzetre játszó emberelőnyt kell játszani
+    (beállós és szélső-helyzetek, nem távoli lövés); ha visszaesik, a
+    gyors befejezés a jó választás, mert a fal nélkül maradó kapus
+    sebezhető.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"sh": {"faced", "saves",
+    "save_pct"}, "eq": {...}, "gap_pp", "verdict"} — a gap_pp/verdict
+    None, ha bármelyik helyzetben GKSH_MIN_FACED alatti a lövésszám; a
+    verdict "emberhátrányban nő" / "emberhátrányban visszaesik" /
+    None.
+    """
+    from .rules import detect_powerplay
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    windows = detect_powerplay(match)
+
+    def _down_at(t: int):
+        for w in windows:
+            if w["start_frame"] <= t <= w["end_frame"]:
+                return w["team_down"]
+        return None
+
+    xg = match_xg(match, config)
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"sh": {"faced": 0, "saves": 0, "save_pct": None},
+               "eq": {"faced": 0, "saves": 0, "save_pct": None},
+               "gap_pp": None, "verdict": None}
+        for shot in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if shot["team"] == side:
+                continue
+            if shot["outcome"] not in ("goal", "save"):
+                continue  # mellé/blokk: nem kaputra érkezett
+            down = _down_at(shot["t"])
+            if down == side:
+                key = "sh"
+            elif down is None:
+                key = "eq"
+            else:
+                continue  # ők voltak emberelőnyben: külön kép
+            rec[key]["faced"] += 1
+            if shot["outcome"] == "save":
+                rec[key]["saves"] += 1
+        for key in ("sh", "eq"):
+            n = rec[key]["faced"]
+            rec[key]["save_pct"] = (round(100.0 * rec[key]["saves"] / n, 1)
+                                    if n else None)
+        if all(rec[k]["faced"] >= GKSH_MIN_FACED for k in ("sh", "eq")):
+            gap = rec["sh"]["save_pct"] - rec["eq"]["save_pct"]
+            rec["gap_pp"] = round(gap, 1)
+            if gap >= GKSH_GAP_PP:
+                rec["verdict"] = "emberhátrányban nő"
+            elif gap <= -GKSH_GAP_PP:
+                rec["verdict"] = "emberhátrányban visszaesik"
+        out[side] = rec
+    return out
