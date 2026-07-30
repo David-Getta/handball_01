@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Kockázatos passzolóik: [{"player_id", "jersey", "tries",
+    # "turnovers"}] — kinek a hosszú labdái foghatók el; darabszámok,
+    # meccsek közt pontosan összegződnek.
+    risky_passers: list = field(default_factory=list)
     # Elzáróik: [{"player_id", "jersey", "screens"}] — ki áll elzárásba
     # a lövőik előtt; darabszámok, meccsek közt pontosan összegződnek.
     screen_setters: list = field(default_factory=list)
@@ -1850,6 +1854,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Kockázatos passzolók: kinek a passzsávjába kell beállni.
+    _rsk_rows = [p for p in (rep.risky_passers or [])
+                 if p["tries"] >= 4
+                 and 100.0 * p["turnovers"] / p["tries"] >= 40.0]
+    if _rsk_rows:
+        _rsk_top = _rsk_rows[0]
+        _rsk_pct = 100.0 * _rsk_top["turnovers"] / _rsk_top["tries"]
+        _rsk_who = (f"{_rsk_top['jersey']}-es mezszámú"
+                    if _rsk_top.get("jersey") is not None
+                    else f"{_rsk_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_rsk_who} játékosuk hosszú labdái elfoghatók (a "
+            f"hosszú kísérletei {_rsk_pct:.0f}%-a elveszett, "
+            f"{_rsk_top['turnovers']}/{_rsk_top['tries']}) — az ő "
+            "passzsávjába kell beállni: a letámadás és a sávba lépés "
+            "nála azonnal labdát hoz.")
 
     # Elzárók: kire kell a váltás-kommunikáció.
     _scs_rows = rep.screen_setters or []
@@ -4669,6 +4690,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .attack_types import risky_passers as _rsk
+        rep.risky_passers = [
+            dict(row)
+            for row in _rsk(match, config)[team.value]["players"]]
         from .attack_types import screen_setters as _scs
         rep.screen_setters = [
             dict(row)
@@ -6063,6 +6088,24 @@ def _merge_fb_finishers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_risky_passers(reports) -> list:
+    """Kockázatos passzolók: játékosonként a hosszú kísérletek és az
+    eladások összegzése (az eladás-szám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.risky_passers or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "tries": 0,
+                                    "turnovers": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["tries"] += int(row.get("tries", 0))
+            rec["turnovers"] += int(row.get("turnovers", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["turnovers"])]
+
+
 def _merge_screen_setters(reports) -> list:
     """Elzárók: játékosonként az elzárások összegzése (a darabszám
     szerint csökkenő)."""
@@ -6709,6 +6752,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 142) Az ő kockázatos passzolójuk × a ti labdaszerzéseitek: az ő
+    # passzsávja kész gólforrás.
+    _rsk142 = [p for p in (opp.risky_passers or [])
+               if p["tries"] >= 4
+               and 100.0 * p["turnovers"] / p["tries"] >= 40.0]
+    if _rsk142 and own.steal_n >= 4:
+        _top142 = _rsk142[0]
+        _pct142 = 100.0 * _top142["turnovers"] / _top142["tries"]
+        _high142 = 100.0 * own.steal_high / max(1, own.steal_n)
+        _who142 = (f"{_top142['jersey']}-es mezszámú"
+                   if _top142.get("jersey") is not None
+                   else f"{_top142['player_id']} azonosítójú")
+        if _high142 >= 30.0:
+            plan.append(
+                f"A(z) {_who142} játékosuk hosszú labdái elfoghatók "
+                f"(a kísérletei {_pct142:.0f}%-a elveszett), ti pedig "
+                f"elöl is tudtok szerezni (a labdaszerzéseitek "
+                f"{_high142:.0f}%-a a támadó térfélen) — az ő "
+                "passzsávjába kell beállni: a második védő olvassa "
+                "az ő kezét, és minden elfogott labda azonnali "
+                "kontra.")
 
     # 141) Az ő fő elzárójuk × a ti elzárás-védekezésetek: az ő
     # oldalán kell a váltás-fegyelem.
@@ -8685,6 +8750,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        risky_passers=_merge_risky_passers(reports),
         screen_setters=_merge_screen_setters(reports),
         gke_early_faced=sum(r.gke_early_faced for r in reports),
         gke_early_saves=sum(r.gke_early_saves for r in reports),

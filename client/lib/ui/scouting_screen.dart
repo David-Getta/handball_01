@@ -1297,6 +1297,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Kockázatos passzolók: kinek a hosszú labdái foghatók el (4+
+  // hosszú kísérlet, 40% feletti eladás-arány — a backend-kulccsal
+  // azonos küszöbök).
+  String? _riskyPassers(Map<String, dynamic> r) {
+    final rows = r["risky_passers"];
+    if (rows is! List || rows.isEmpty) return null;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final tries = ((e["tries"] as num?) ?? 0).toInt();
+      final tos = ((e["turnovers"] as num?) ?? 0).toInt();
+      if (tries < 4) continue;
+      final pct = 100.0 * tos / tries;
+      if (pct < 40.0) continue;
+      final who = e["jersey"] != null
+          ? "${e["jersey"]}-es"
+          : "${e["player_id"]} azonosítójú";
+      return "a(z) $who játékosuk hosszú labdái elfoghatók (a "
+          "kísérletei ${pct.toStringAsFixed(0)}%-a elveszett, "
+          "$tos/$tries) · az ő passzsávjába kell beállni";
+    }
+    return null;
+  }
+
   // Elzárók: ki állítja az elzárásaikat (3+ elzárás — a
   // backend-kulccsal azonos küszöb).
   String? _screenSetters(Map<String, dynamic> r) {
@@ -3896,6 +3919,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_gkEarlySaves(r) != null)
         ["Kapus-bemelegedés", _gkEarlySaves(r)!],
       if (_screenSetters(r) != null) ["Elzárók", _screenSetters(r)!],
+      if (_riskyPassers(r) != null)
+        ["Kockázatos passzolók", _riskyPassers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

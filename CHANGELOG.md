@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kockázatos passzolók**: KINEK a hosszú labdái foghatók el. A
+  passz-kockázat csapat-szinten mondja meg, a hosszú passzaik
+  gyakrabban vesznek-e el — ez játékosonként bontja: a hosszú
+  továbbítási kísérleteket és azok közül az eladásokat a kiinduló
+  játékoshoz írjuk (4+ hosszú kísérlet, 40% feletti eladás-aránynál).
+  Az ő passzsávjába kell beállni: a letámadás és a sávba lépés nála
+  azonnal labdát hoz. Egy réteg, sok felület: `risky_passers` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (játékosonkénti kísérlet- és eladás-darabszámok + edzői kulcs +
+  csempe), 142. meccsterv-szabály (az ő kockázatos passzolójuk × a ti
+  elöl szerzett labdáitok), 163. edzés-szabály (hosszú passz
+  technikája: mellmagasságban, a futó társ elé vezetve).
 - **Elzárók**: KI ÁLL ELZÁRÁSBA a lövőik előtt. Az elzárás-használat
   azt mondja meg, a lövéseik mekkora része jön elzárásból — ez azt, ki
   zár el: lövésenként a lövő őrzője mellett álló csapattársat

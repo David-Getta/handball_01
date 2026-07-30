@@ -2912,3 +2912,92 @@ def screen_setters(match: Match,
         out[side] = {"screens": sum(r["screens"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Kockázatos passzolók: ennyi hosszú kísérlettől ítélünk emberenként,
+# és e feletti eladás-arány jelenti, hogy nála elfogható a labda.
+RISKY_MIN_TRIES = 4
+RISKY_TO_PCT = 40.0
+
+
+def risky_passers(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Kockázatos passzolók: KINEK a hosszú labdái foghatók el.
+
+    A passz-kockázat (pass_risk) csapat-szinten mondja meg, a hosszú
+    passzaik gyakrabban vesznek-e el — ez játékosonként bontja: a
+    hosszú (PASSRISK_LONG_M feletti) továbbítási kísérleteket és
+    azok közül az eladásokat a kiinduló játékoshoz írjuk.
+
+    Edzőileg: az ő hosszú passzsávjába kell beállni — a letámadás és
+    a sávba lépés nála azonnal labdát hoz, a saját oldalon pedig az
+    ő passz-technikája (feszes, előre vezetett labda) az edzés-téma.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "tries", "turnovers"}], "top"} — a lista eladás-szám szerint
+    csökkenő; a "top" az a játékos, akinek legalább RISKY_MIN_TRIES
+    hosszú kísérlete van, és az eladás-aránya eléri a RISKY_TO_PCT-t.
+    """
+    import math
+
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config):
+        if e.type not in (EventType.PASS, EventType.TURNOVER):
+            continue
+        if e.player_id is None:
+            continue
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            continue
+        f = match.frames[i0]
+        by_id = {p.track_id: p for p in f.players}
+        passer = by_id.get(e.player_id)
+        if passer is None:
+            continue
+        if e.type == EventType.PASS:
+            rid = (e.detail or {}).get("receiver_id")
+            taker = by_id.get(rid) if rid is not None else None
+        else:
+            taker = None
+            if f.ball is not None:
+                best = None
+                for p in f.players:
+                    if p.team is None or p.team == e.team:
+                        continue
+                    d = math.hypot(p.x - f.ball.x, p.y - f.ball.y)
+                    if best is None or d < best:
+                        taker, best = p, d
+        if taker is None:
+            continue
+        if math.hypot(taker.x - passer.x,
+                      taker.y - passer.y) < PASSRISK_LONG_M:
+            continue  # rövid passz: nem ebbe a képbe tartozik
+        if passer.jersey_number is not None:
+            jersey.setdefault(passer.track_id, passer.jersey_number)
+        rec = tally[e.team.value].setdefault(passer.track_id,
+                                             {"tries": 0,
+                                              "turnovers": 0})
+        rec["tries"] += 1
+        if e.type == EventType.TURNOVER:
+            rec["turnovers"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "tries": r["tries"], "turnovers": r["turnovers"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["turnovers"])]
+        top = None
+        for row in rows:
+            if row["tries"] >= RISKY_MIN_TRIES and (
+                    100.0 * row["turnovers"] / row["tries"]
+                    >= RISKY_TO_PCT):
+                top = row
+                break
+        out[side] = {"players": rows, "top": top}
+    return out

@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 163) Kockázatos passzolók: ha valakinek a hosszú labdái
+    # elvesznek, a passz-technika a téma.
+    try:
+        from .attack_types import risky_passers
+        rsk163 = risky_passers(match, config)
+        for side in ("home", "away"):
+            top163 = rsk163[side]["top"]
+            if top163 is None:
+                continue
+            who163 = (f"a {top163['jersey']}-es mezszámú játékos"
+                      if top163.get("jersey") is not None
+                      else f"a {top163['player_id']} azonosítójú játékos")
+            pct163 = 100.0 * top163["turnovers"] / top163["tries"]
+            add(side, "támadás", "Hosszú passz technikája",
+                f"{who163} hosszú labdáinak {pct163:.0f}%-a elveszett "
+                f"({top163['turnovers']}/{top163['tries']}) — az "
+                "ilyen labda ívesen, késve érkezik, és az ellenfél "
+                "abból indít kontrát",
+                "hosszú passz technikája: páros gyakorlat 15-20 "
+                "m-ről, ahol a labdát MELLMAGASSÁGBAN, a futó társ "
+                "elé kell vezetni — előbb álló fogadóval, majd "
+                "induló szélsővel, végül védővel a sávban; a "
+                "gyakorlat az íves, magas labdát nem fogadja el")
+    except Exception:
+        pass
+
     # 162) Elzárók: ha egy ember állítja az elzárásainkat, a
     # változatos elzárás-játék a téma.
     try:

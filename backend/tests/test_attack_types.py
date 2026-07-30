@@ -2117,3 +2117,54 @@ def test_screen_setters_needs_enough_screens():
 
     rec = screen_setters(_screen_setter_match([5, 7]))["home"]
     assert rec["screens"] == 2 and rec["top"] is None
+
+
+# ---- Kockázatos passzolók (kinek a hosszú labdái foghatók el) ---------------
+
+def _risky_passer_match(cases, fps=25.0):
+    """Hosszú továbbítási kísérletek: a `cases` elemei (passzoló id,
+    elveszett?) párok — a fogadó 12 méterre áll."""
+    frames = []
+    t = 0
+    for (pid, lost) in cases:
+        taker = (_pl(20, Team.AWAY, 30.0, 22.0) if lost
+                 else _pl(2, Team.HOME, 30.0, 22.0))
+        pls = [_pl(pid, Team.HOME, 30.0, 10.0), taker]
+        for _ in range(5):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(5):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=22.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(5):    # a labda visszakerül a passzolóhoz
+            frames.append(Frame(
+                t=t, players=[_pl(pid, Team.HOME, 30.0, 10.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_risky_passers_finds_the_loose_passer():
+    """A 4-es hat hosszú labdájából négy elveszik → nála elfogható a
+    labda."""
+    from handball.pipeline.attack_types import risky_passers
+
+    cases = [(4, True)] * 4 + [(4, False)] * 2 + [(6, False)] * 4
+    rec = risky_passers(_risky_passer_match(cases))["home"]
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 4
+    assert rec["top"]["tries"] == 6 and rec["top"]["turnovers"] == 4
+
+
+def test_risky_passers_needs_enough_tries():
+    """Kevés (4-nél kevesebb) hosszú kísérletnél nincs kiemelt
+    passzoló."""
+    from handball.pipeline.attack_types import risky_passers
+
+    rec = risky_passers(_risky_passer_match(
+        [(4, True), (4, True), (6, False)]))["home"]
+    assert rec["top"] is None

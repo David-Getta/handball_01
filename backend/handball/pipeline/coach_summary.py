@@ -833,6 +833,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Kockázatos passzolók: kinek a hosszú labdái vesztek el.
+    try:
+        from .attack_types import risky_passers
+        rsk = risky_passers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_rsk = rsk[side]["top"]
+            if top_rsk is None:
+                continue
+            jn = (top_rsk["jersey"]
+                  or _jersey_of_track(match).get(top_rsk["player_id"]))
+            who = (f"{jn}-es mezszámú játékosának" if jn is not None
+                   else f"{top_rsk['player_id']} azonosítójú "
+                        "játékosának")
+            body += (f" A(z) {name} a {who} hosszú labdái vesztek el "
+                     f"a leggyakrabban "
+                     f"({top_rsk['turnovers']}/{top_rsk['tries']}).")
+    except Exception:
+        pass
     # Elzárók: ki állt elzárásba a lövőik előtt.
     try:
         from .attack_types import screen_setters
