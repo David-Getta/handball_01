@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Falépítés-idő**: MENNYI IDŐ ALATT ÁLL FEL a faluk. Az
+  átmenet-védekezés azt mondja meg, mennyi gyors gólt kapnak
+  labdavesztés után, a visszaérés-fegyelem azt, ki nem fut vissza — ez
+  azt, mennyi idő a rendezett falig: birtokváltásonként mérjük, hány
+  másodperc múlva áll legalább öt mezőnyvédőjük a saját kapu 12 m-es
+  zónájában (4+ eset; 8 mp felett lassú, 5 mp alatt gyors). Lassan
+  felálló fal ellen a gyors indítás termel, gyorsan rendeződő fal
+  ellen a kontra kockázat. Egy réteg, sok felület:
+  `defense_setup_time` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (eset- és idő-összegek + két edzői
+  kulcs + csempe), 136. meccsterv-szabály (az ő lassan felálló faluk ×
+  a ti kontra-kíséretetek), 157. edzés-szabály (gyors falépítés:
+  stopperrel mért öt másodperces rendeződés).
 - **Kapus emberhátrányban**: NŐ-E a kapusuk a két perc alatt. Az
   emberelőny-védekezés azt mondja meg, mennyi gólt kapnak
   emberhátrányban — ez azt, mennyi múlik a kapuson: a rá kaputra

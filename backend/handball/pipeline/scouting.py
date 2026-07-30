@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Falépítés-idejük: a mért birtokváltások és a rendezett falig
+    # eltelt idő összege (mp) — összegek, meccsek közt pontosan
+    # összegződnek (átlag = összeg / eset).
+    dst_cases: int = 0
+    dst_sum_s: float = 0.0
     # Kapusuk emberhátrányban: helyzetenként (emberhátrány / egyenlő
     # létszám) a kapura tartó lövések és a fogások — darabszámok,
     # meccsek közt pontosan összegződnek.
@@ -1822,6 +1827,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Falépítés-idő: mennyi idő alatt áll fel a faluk.
+    if rep.dst_cases >= 4 and rep.dst_sum_s > 0:
+        _dst_avg = rep.dst_sum_s / rep.dst_cases
+        if _dst_avg >= 8.0:
+            keys.append(
+                f"Lassan áll fel a faluk (átlag {_dst_avg:.1f} "
+                f"másodperc a rendezett falig, {rep.dst_cases} mért "
+                "birtokváltás) — a gyors indítás termel ellenük: a "
+                "kapus azonnal indítson, a szélsők pedig már a lövés "
+                "pillanatában fussanak.")
+        elif _dst_avg <= 5.0:
+            keys.append(
+                f"Gyorsan rendeződik a faluk (átlag {_dst_avg:.1f} "
+                "másodperc a rendezett falig) — a kontra ellenük "
+                "kockázat: a felállt támadásra kell építeni, és csak "
+                "biztos helyzetnél szabad vállalni a gyors "
+                "befejezést.")
 
     # Kapus emberhátrányban: mit ér a két perc ellenük.
     if rep.gsh_sh_faced >= 4 and rep.gsh_eq_faced >= 4:
@@ -4543,6 +4566,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import defense_setup_time as _dst
+        dstrec = _dst(match, config)[team.value]
+        rep.dst_cases = dstrec["cases"]
+        rep.dst_sum_s = round(
+            (dstrec["avg_s"] or 0.0) * dstrec["cases"], 1)
         from .goalkeeper import gk_shorthanded_saves as _gsh
         gshrec = _gsh(match, config)[team.value]
         rep.gsh_sh_faced = gshrec["sh"]["faced"]
@@ -6507,6 +6535,21 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 136) Az ő lassan felálló faluk × a ti kontra-kíséretetek: a
+    # tömeges indítás pont a rendezetlen fal ellen fizet.
+    if opp.dst_cases >= 4 and opp.dst_sum_s > 0 and own.fbs_breaks >= 3 \
+            and own.fbs_sum_runners > 0:
+        _dst136 = opp.dst_sum_s / opp.dst_cases
+        _fbs136 = own.fbs_sum_runners / own.fbs_breaks
+        if _dst136 >= 8.0 and _fbs136 >= 2.5:
+            plan.append(
+                f"Lassan áll fel a faluk (átlag {_dst136:.1f} "
+                f"másodperc a rendezett falig), ti pedig többedmagatokkal "
+                f"indultok kontrára (átlag {_fbs136:.1f} felfutó ember) "
+                "— ezt kell futtatni: minden megszerzett labda után "
+                "azonnali indítás, és a második hullám is fusson, mert "
+                "a faluk még nincs a helyén.")
+
     # 135) Az ő emberhátrányban visszaeső kapusuk × a ti
     # emberelőny-hatékonyságotok: gyorsan kell befejezni a két percet.
     if opp.gsh_sh_faced >= 4 and opp.gsh_eq_faced >= 4 \
@@ -8377,6 +8420,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        dst_cases=sum(r.dst_cases for r in reports),
+        dst_sum_s=round(sum(r.dst_sum_s for r in reports), 1),
         gsh_sh_faced=sum(r.gsh_sh_faced for r in reports),
         gsh_sh_saves=sum(r.gsh_sh_saves for r in reports),
         gsh_eq_faced=sum(r.gsh_eq_faced for r in reports),

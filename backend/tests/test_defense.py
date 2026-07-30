@@ -1620,3 +1620,67 @@ def test_conceded_by_attack_type_needs_enough_goals():
     rec = conceded_by_attack_type(
         _conceded_type_match(n_breaks=2, n_positional=1))["away"]
     assert rec["goals"] == 3 and rec["top"] is None
+
+
+# ---- Falépítés-idő (mennyi idő alatt áll fel a fal) --------------------------
+
+def _setup_time_match(delay_s, n_cases=5, fps=25.0):
+    """Birtokváltás-sorozat: a VENDÉG védői `delay_s` másodperc múlva
+    érnek vissza a saját (+x) kapujuk 12 m-es zónájába."""
+    frames = []
+    t = 0
+
+    def _defenders(back):
+        """A vendég öt mezőnyvédője: elöl (22 m) vagy a kapu előtt."""
+        x = 34.0 if back else 22.0
+        return [_pl(20 + k, Team.AWAY, x, 6.0 + k) for k in range(5)]
+
+    for _ in range(n_cases):
+        # A vendég birtokol (a hazai védekezik).
+        for _ in range(int(2.0 * fps)):
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 20.0, 10.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Birtokváltás: a hazai kapja meg — a vendég védekezni kezd.
+        for _ in range(int(delay_s * fps)):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 24.0, 10.0)]
+                + _defenders(back=False),
+                ball=Ball(x=24.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(3.0 * fps)):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 26.0, 10.0)]
+                + _defenders(back=True),
+                ball=Ball(x=26.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_defense_setup_time_flags_the_slow_wall():
+    """10 másodperces visszaérés → lassan állnak fel."""
+    from handball.pipeline.defense import defense_setup_time
+
+    rec = defense_setup_time(_setup_time_match(delay_s=10.0))["away"]
+    assert rec["cases"] >= 4
+    assert rec["avg_s"] is not None and rec["avg_s"] >= 8.0
+    assert rec["verdict"] == "lassan állnak fel"
+
+
+def test_defense_setup_time_flags_the_quick_wall():
+    """3 másodperces visszaérés → gyorsan rendeződnek."""
+    from handball.pipeline.defense import defense_setup_time
+
+    rec = defense_setup_time(_setup_time_match(delay_s=3.0))["away"]
+    assert rec["avg_s"] <= 5.0
+    assert rec["verdict"] == "gyorsan rendeződnek"
+
+
+def test_defense_setup_time_needs_enough_cases():
+    """Kevés mért birtokváltásnál nincs ítélet."""
+    from handball.pipeline.defense import defense_setup_time
+
+    rec = defense_setup_time(_setup_time_match(delay_s=10.0,
+                                               n_cases=2))["away"]
+    assert rec["avg_s"] is None and rec["verdict"] is None

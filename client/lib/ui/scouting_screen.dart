@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Falépítés-idő: mennyi idő alatt áll fel a faluk (4+ mért
+  // birtokváltás; 8 mp felett lassú, 5 mp alatt gyors — a
+  // backend-kulccsal azonos küszöbök).
+  String? _defenseSetupTime(Map<String, dynamic> r) {
+    final cases = ((r["dst_cases"] as num?) ?? 0).toInt();
+    final sum = ((r["dst_sum_s"] as num?) ?? 0).toDouble();
+    if (cases < 4 || sum <= 0) return null;
+    final avg = sum / cases;
+    if (avg >= 8.0) {
+      return "lassan áll fel a faluk (átlag "
+          "${avg.toStringAsFixed(1)} mp a rendezett falig, $cases mért "
+          "birtokváltás) · a gyors indítás termel ellenük";
+    }
+    if (avg <= 5.0) {
+      return "gyorsan rendeződik a faluk (átlag "
+          "${avg.toStringAsFixed(1)} mp) · a kontra kockázat, a "
+          "felállt támadásra kell építeni";
+    }
+    return null;
+  }
+
   // Kapus emberhátrányban: nő vagy visszaesik a két perc alatt
   // (helyzetenként 4+ kapura tartó lövés, 15 százalékpontos eltérés —
   // a backend-kulccsal azonos küszöbök).
@@ -3767,6 +3788,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberelőny-lövők", _powerplayShooters(r)!],
       if (_gkShorthanded(r) != null)
         ["Kapus emberhátrányban", _gkShorthanded(r)!],
+      if (_defenseSetupTime(r) != null)
+        ["Falépítés-idő", _defenseSetupTime(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

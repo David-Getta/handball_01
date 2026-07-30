@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Falépítés-idő: mennyi idő alatt állt fel a fal.
+    try:
+        from .defense import defense_setup_time
+        dst = defense_setup_time(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dst = dst[side]
+            if rec_dst["verdict"] is None:
+                continue
+            body += (f" A(z) {name} fala {rec_dst['verdict']}: átlag "
+                     f"{rec_dst['avg_s']:.1f} másodperc a rendezett "
+                     f"falig ({rec_dst['cases']} mért birtokváltás).")
+    except Exception:
+        pass
     # Kapus emberhátrányban: nőtt-e a kapus a két perc alatt.
     try:
         from .goalkeeper import gk_shorthanded_saves

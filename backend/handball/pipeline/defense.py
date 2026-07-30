@@ -2303,3 +2303,85 @@ def conceded_by_attack_type(match, config=None) -> dict:
                 rec["top"] = {"type": typ, "goals": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Falépítés-idő: ennyi mért eset kell az ítélethez, ennyi védő számít
+# rendezett falnak, ennyi méteren belül a saját kaputól, és e feletti /
+# alatti átlagidő a lassú, illetve a gyors felállás jele.
+SETUP_MIN_CASES = 4
+SETUP_DEFENDERS = 5
+SETUP_ZONE_M = 12.0
+SETUP_MAX_S = 20.0
+SETUP_SLOW_S = 8.0
+SETUP_FAST_S = 5.0
+
+
+def defense_setup_time(match, config=None) -> dict:
+    """Falépítés-idő: MENNYI IDŐ ALATT ÁLL FEL a faluk.
+
+    Az átmenet-védekezés (transition_defense) azt mondja meg, mennyi
+    gyors gólt kapnak labdavesztés után, a visszaérés-fegyelem
+    (recovery_discipline) azt, ki nem fut vissza — ez azt, MENNYI IDŐ
+    a rendezett falig: minden birtokváltásnál mérjük, hány másodperc
+    múlva áll legalább SETUP_DEFENDERS mezőnyvédőjük a saját kapuhoz
+    SETUP_ZONE_M-en belül.
+
+    Edzőileg: a lassan felálló fal ellen a gyors indítás termel — a
+    kapus azonnal indítson, és a szélsők a lövés pillanatában
+    fussanak; a gyorsan rendeződő fal ellen a kontra kockázat, ott a
+    felállt támadásra kell építeni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"cases", "avg_s",
+    "verdict"} — az avg_s/verdict None SETUP_MIN_CASES alatt; a
+    verdict "lassan állnak fel" / "gyorsan rendeződnek" / None.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    horizon = round(SETUP_MAX_S * fps)
+
+    # Birtokváltások: az új birtokos csapat ellenfele kezd védekezni.
+    changes: list = []
+    prev = None
+    for i, f in enumerate(frames):
+        h = ball_holder(f, config)
+        if h is None:
+            continue
+        if prev is not None and h.team != prev:
+            changes.append((i, Team.AWAY if h.team == Team.HOME
+                            else Team.HOME))
+        prev = h.team
+
+    acc = {"home": [0, 0.0], "away": [0, 0.0]}
+    for idx, deff in changes:
+        own_x = config.own_goal_x(deff)
+        setup_i = None
+        for j in range(idx, min(len(frames), idx + horizon)):
+            n = sum(1 for p in frames[j].players
+                    if p.team == deff and p.role != "kapus"
+                    and abs(p.x - own_x) <= SETUP_ZONE_M)
+            if n >= SETUP_DEFENDERS:
+                setup_i = j
+                break
+        if setup_i is None:
+            continue  # a felállás nem látszik az ablakban: nem mérjük
+        acc[deff.value][0] += 1
+        acc[deff.value][1] += (frames[setup_i].t - frames[idx].t) / fps
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n, total = acc[side]
+        rec = {"cases": n, "avg_s": None, "verdict": None}
+        if n >= SETUP_MIN_CASES:
+            avg = total / n
+            rec["avg_s"] = round(avg, 1)
+            if avg >= SETUP_SLOW_S:
+                rec["verdict"] = "lassan állnak fel"
+            elif avg <= SETUP_FAST_S:
+                rec["verdict"] = "gyorsan rendeződnek"
+        out[side] = rec
+    return out

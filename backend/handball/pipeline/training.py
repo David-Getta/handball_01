@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 157) Falépítés-idő: ha lassan állunk fel, a rendeződés a téma.
+    try:
+        from .defense import defense_setup_time
+        dst157 = defense_setup_time(match, config)
+        for side in ("home", "away"):
+            rec157 = dst157[side]
+            if rec157["verdict"] != "lassan állnak fel":
+                continue
+            add(side, "védekezés", "Gyors falépítés",
+                f"átlag {rec157['avg_s']:.1f} másodperc telt el a "
+                f"rendezett falunk felállásáig "
+                f"({rec157['cases']} mért birtokváltás) — ennyi idő "
+                "alatt az ellenfél már befejezi a támadást",
+                "gyors falépítés: labdavesztés-jelre a hat védőnek "
+                "KÖTELEZŐ öt másodpercen belül elfoglalnia a "
+                "helyét — az edző stopperrel méri, és a késés "
+                "sprinttel jár; utána ugyanez ellenfél-indítással, "
+                "hogy a fékezés és a felállás egyszerre menjen")
+    except Exception:
+        pass
+
     # 156) Kapus emberhátrányban: ha a kapusunk ilyenkor visszaesik, a
     # fal nélküli helyzetek védése a téma.
     try:
