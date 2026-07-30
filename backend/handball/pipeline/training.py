@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 177) Félidő-zárás: ha a dudaszó előtti utolsó labda elhal, a
+    # záró támadás rutinja a téma.
+    try:
+        from .momentum import closing_attacks
+        clo177 = closing_attacks(match, config)
+        for side in ("home", "away"):
+            rec177 = clo177[side]
+            if rec177["verdict"] != "elpuskázzák a záró labdát":
+                continue
+            add(side, "tamadas", "Záró labda",
+                f"a félidők utolsó percében {rec177['attacks']} "
+                f"támadásunkból csak {rec177['goals']} lett gól — az "
+                "ingyen kapott utolsó labdát dobjuk el, pedig ott "
+                "nincs kockázat: rosszabb, mint a semmi, csak a korai "
+                "lövés",
+                "záró labda: óra elleni gyakorlat — 45 másodperc a "
+                "kijelzőn, egy támadás, és a szabály, hogy a lövés "
+                "csak az utolsó 8 másodpercben jöhet; a figurát "
+                "előre kimondjuk, a kapus is beáll támadóban, és "
+                "minden korai lövés büntetése visszafutás")
+    except Exception:
+        pass
+
     # 176) Lerohanás-hatékonyság: ha a kontráink nem érnek gólt, a
     # befejezés-döntés a téma.
     try:

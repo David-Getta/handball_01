@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Félidő-zárásuk: a félidők utolsó percében indult támadásaik és
+    # a gólig jutók száma — darabszámok, meccsek közt pontosan
+    # összegződnek (arány = clo_goals / clo_attacks).
+    clo_attacks: int = 0
+    clo_goals: int = 0
     # Lerohanás-hatékonyságuk: a mért lerohanásaik száma és a gólig
     # jutók száma — darabszámok, meccsek közt pontosan összegződnek
     # (arány = fbc_goals / fbc_breaks).
@@ -1934,6 +1939,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Félidő-zárás: mit kezdenek a dudaszó előtti utolsó labdával.
+    if rep.clo_attacks >= 3:
+        _clo_pct = 100.0 * rep.clo_goals / rep.clo_attacks
+        if _clo_pct >= 50.0:
+            keys.append(
+                f"Jól kezelik a záró labdát (a félidők utolsó "
+                f"percében {rep.clo_attacks} támadásból "
+                f"{rep.clo_goals} gól) — a félidő végén nem szabad "
+                "idő előtt lőni ellenük: az órát ki kell húzni, hogy "
+                "ne kapjanak még egy záró támadást.")
+        elif _clo_pct <= 15.0:
+            keys.append(
+                f"Elpuskázzák a záró labdát (a félidők utolsó "
+                f"percében {rep.clo_attacks} támadásból csak "
+                f"{rep.clo_goals} gól) — nyugodtan vissza lehet adni "
+                "nekik az utolsó labdát: a záró támadásuk ajándék, "
+                "nem kockázat.")
 
     # Lerohanás-hatékonyság: veszélyes-e rájuk engedni a kontrát.
     if rep.fbc_breaks >= 5:
@@ -4998,6 +5021,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import closing_attacks as _clo
+        clorec = _clo(match, config)[team.value]
+        rep.clo_attacks = clorec["attacks"]
+        rep.clo_goals = clorec["goals"]
         from .attack_types import fast_break_conversion as _fbc
         fbcrec = _fbc(match, config)[team.value]
         rep.fbc_breaks = fbcrec["breaks"]
@@ -7211,6 +7238,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 156) Az ő jól kezelt záró labdájuk × a ti pontos
+    # lövés-időzítésetek: a félidő végén az órát kell kihúzni.
+    if opp.clo_attacks >= 3 and own.shtim_n >= 5:
+        _clo156 = 100.0 * opp.clo_goals / opp.clo_attacks
+        _early156 = 100.0 * own.shtim_early / max(1, own.shtim_n)
+        if _clo156 >= 50.0 and _early156 <= 40.0:
+            plan.append(
+                f"Jól kezelik a záró labdát (a félidők utolsó "
+                f"percében {opp.clo_attacks} támadásból "
+                f"{opp.clo_goals} gól), ti pedig ritkán kapkodtok a "
+                f"lövéssel (a lövéseitek csak {_early156:.0f}%-a jön "
+                "korán) — a félidő végén a saját támadásotokat az "
+                "órára kell időzíteni: úgy zárjátok le, hogy nekik "
+                "már ne maradjon idejük egy záró rohamra.")
 
     # 155) Az ő elpuskázott kontráik × a ti kevés eladásotok: nyugodt
     # felállás helyett vállalható a nyitottabb játék.
@@ -9446,6 +9488,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        clo_attacks=sum(r.clo_attacks for r in reports),
+        clo_goals=sum(r.clo_goals for r in reports),
         fbc_breaks=sum(r.fbc_breaks for r in reports),
         fbc_goals=sum(r.fbc_goals for r in reports),
         ho_for=sum(r.ho_for for r in reports),

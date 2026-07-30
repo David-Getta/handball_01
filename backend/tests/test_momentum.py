@@ -975,3 +975,65 @@ def test_half_openings_needs_enough_goals():
 
     res = half_openings(_half_opening_match([True, True, False]))
     assert res["home"]["goals_for"] == 2 and res["home"]["verdict"] is None
+
+
+# ---- Félidő-zárás (mit kezdenek az utolsó labdával) ------------------------
+
+def _clo_pl(track_id, team, x, y, role=None):
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0,
+                          role=role)
+
+
+def _closing_match(results, fps=25.0):
+    """Hazai záró támadások: a `results` elemei jelzik, gólt ért-e a
+    támadás; a szakaszok a felvétel utolsó perceibe esnek."""
+    frames = []
+    t = 0
+    for scored in results:
+        n = int(4.0 * fps)
+        for i in range(n):                 # támadás: 22 → 33 m
+            x = 22.0 + 11.0 * i / max(1, n - 1)
+            frames.append(Frame(t=t, players=[
+                _clo_pl(1, Team.HOME, x, 10.0),
+                _clo_pl(20, Team.AWAY, 37.0, 8.0),
+                _clo_pl(9, Team.AWAY, 39.5, 10.0, role="kapus"),
+            ], ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        if scored:
+            for i in range(7):             # gól a +x kapuba
+                frames.append(Frame(t=t, players=[
+                    _clo_pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(int(4.0 * fps)):    # szünet: nincs támadó fázis
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_closing_attacks_flags_the_cool_finisher():
+    """Négy záró támadásból három gól → jól kezelik a záró labdát."""
+    from handball.pipeline.momentum import closing_attacks
+
+    rec = closing_attacks(_closing_match([True, True, True, False]))["home"]
+    assert rec["attacks"] == 4 and rec["goals"] == 3
+    assert rec["verdict"] == "jól kezelik a záró labdát"
+
+
+def test_closing_attacks_flags_the_wasteful_team():
+    """Ha egyik záró támadásból sem lesz gól, elpuskázzák a záró
+    labdát."""
+    from handball.pipeline.momentum import closing_attacks
+
+    rec = closing_attacks(_closing_match([False] * 4))["home"]
+    assert rec["goals"] == 0 and rec["verdict"] == "elpuskázzák a záró labdát"
+
+
+def test_closing_attacks_needs_enough_attacks():
+    """Kevés (3-nál kevesebb) záró támadásnál nincs ítélet."""
+    from handball.pipeline.momentum import closing_attacks
+
+    rec = closing_attacks(_closing_match([True, False]))["home"]
+    assert rec["attacks"] == 2 and rec["verdict"] is None

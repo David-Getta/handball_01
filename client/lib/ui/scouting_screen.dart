@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Félidő-zárás: mit kezdenek a dudaszó előtti utolsó labdával (3+
+  // záró támadás; 50% felett jó, 15% alatt elpuskázott — a
+  // backend-kulccsal azonos küszöbök).
+  String? _closingAttacks(Map<String, dynamic> r) {
+    final att = ((r["clo_attacks"] as num?) ?? 0).toInt();
+    final goals = ((r["clo_goals"] as num?) ?? 0).toInt();
+    if (att < 3) return null;
+    final pct = 100.0 * goals / att;
+    if (pct >= 50.0) {
+      return "jól kezelik a záró labdát ($att záró támadásból $goals "
+          "gól) · a félidő végén ki kell húzni az órát, ne kapjanak "
+          "még egy támadást";
+    }
+    if (pct <= 15.0) {
+      return "elpuskázzák a záró labdát ($att záró támadásból csak "
+          "$goals gól) · nyugodtan vissza lehet adni nekik az utolsó "
+          "labdát";
+    }
+    return null;
+  }
+
   // Lerohanás-hatékonyság: mennyi lesz gól a kontrákból (5+ lerohanás;
   // 65% felett éles, 35% alatt elpuskázott — a backend-kulccsal
   // azonos küszöbök).
@@ -4226,6 +4247,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Félidő-nyitás", _halfOpenings(r)!],
       if (_fastBreakConversion(r) != null)
         ["Lerohanás-hatékonyság", _fastBreakConversion(r)!],
+      if (_closingAttacks(r) != null)
+        ["Félidő-zárás", _closingAttacks(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

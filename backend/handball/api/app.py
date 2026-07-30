@@ -3169,6 +3169,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import closing_attacks
+            res["closing_attacks"] = closing_attacks(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3913,6 +3918,9 @@ def create_app():
                     fast_break_conversion)
                 _layer("fast_break_conversion",
                        lambda: fast_break_conversion(match))
+                from ..pipeline.momentum import closing_attacks
+                _layer("closing_attacks",
+                       lambda: closing_attacks(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

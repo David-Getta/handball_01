@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Félidő-zárás: mit kezdenek az utolsó labdával.
+    try:
+        from .momentum import closing_attacks
+        clo = closing_attacks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_clo = clo[side]
+            if rec_clo["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_clo['verdict']}: a félidők "
+                     f"utolsó percében {rec_clo['attacks']} "
+                     f"támadásukból {rec_clo['goals']} lett gól.")
+    except Exception:
+        pass
     # Lerohanás-hatékonyság: mennyi lesz gól a kontrákból.
     try:
         from .attack_types import fast_break_conversion

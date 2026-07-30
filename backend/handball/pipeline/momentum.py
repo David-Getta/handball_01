@@ -1508,3 +1508,76 @@ def half_openings(match: Match, config=None) -> dict:
             elif rec["diff"] <= -HO_DIFF:
                 rec["verdict"] = "lassan indulnak"
     return out
+
+
+# Félidő-zárás: ekkora ablakot nézünk a két félidő vége előtt, ennyi
+# mért támadás kell az ítélethez, és e feletti / alatti gólarány a jó,
+# illetve az elpuskázott záró labda jele.
+CLO_WINDOW_S = 60.0
+CLO_MIN_ATTACKS = 3
+CLO_GOOD_PCT = 50.0
+CLO_WASTE_PCT = 15.0
+
+
+def closing_attacks(match: Match, config=None) -> dict:
+    """Félidő-zárás: MIT KEZDENEK AZ UTOLSÓ LABDÁVAL.
+
+    A hajrá-mérleg (clutch_performance) az utolsó perceket méri, a
+    félidő-nyitás (half_openings) a kezdést — ez a két félidő utolsó
+    CLO_WINDOW_S másodpercét: hány támadásuk indul ott, és hányból
+    lesz gól. Ez a dudaszó előtti utolsó labda kezelése: időhúzás,
+    figura, biztos befejezés.
+
+    Edzőileg: aki a záró labdát rendre gólig viszi, annál a félidő
+    végén nem szabad idő előtt lőni — az óra a mi barátunk, és a
+    labdát ki kell húzni; aki elpuskázza, annál pont fordítva: érdemes
+    gyorsan visszaadni a labdát, mert a záró támadásuk ajándék.
+
+    Visszatérés csapatonként: {"attacks", "goals", "share_pct",
+    "verdict"} — a share_pct/verdict None CLO_MIN_ATTACKS alatt; a
+    verdict "jól kezelik a záró labdát" / "elpuskázzák a záró labdát"
+    / None.
+    """
+    from .attack_types import ATTACK_TAIL_S, classify_attacks
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = CLO_WINDOW_S * fps
+    out = {side: {"attacks": 0, "goals": 0, "share_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    if not match.frames:
+        return out
+
+    # Záró ablakok: a második félidő vége, és — ha van szünet — az
+    # első félidő vége.
+    ends = [match.frames[-1].t]
+    ht = detect_halftime(match)
+    if ht is not None:
+        ends.append(ht)
+
+    tail = round(ATTACK_TAIL_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    for a in classify_attacks(match, config):
+        if not any(end - win <= a["start_frame"] <= end for end in ends):
+            continue
+        side = a["team"]
+        rec = out[side]
+        rec["attacks"] += 1
+        if any(tm == side
+               and a["start_frame"] <= t <= a["end_frame"] + tail
+               for (t, tm) in goals):
+            rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attacks"] >= CLO_MIN_ATTACKS:
+            share = 100.0 * rec["goals"] / rec["attacks"]
+            rec["share_pct"] = round(share, 1)
+            if share >= CLO_GOOD_PCT:
+                rec["verdict"] = "jól kezelik a záró labdát"
+            elif share <= CLO_WASTE_PCT:
+                rec["verdict"] = "elpuskázzák a záró labdát"
+    return out

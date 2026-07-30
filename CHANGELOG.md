@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Félidő-zárás**: MIT KEZDENEK AZ UTOLSÓ LABDÁVAL. A hajrá-mérleg
+  az utolsó perceket méri, a félidő-nyitás a kezdést — ez a két
+  félidő utolsó 60 másodpercét: hány támadásuk indul ott, és hányból
+  lesz gól (3+ záró támadás; 50% felett jó, 15% alatt elpuskázott
+  kezelés). Aki a záró labdát gólig viszi, annál a félidő végén nem
+  szabad idő előtt lőni — az órát ki kell húzni; aki elpuskázza,
+  annál a záró támadás ajándék, nyugodtan vissza lehet adni a labdát.
+  Egy réteg, sok felület: `closing_attacks` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (támadás- és
+  gól-darabszámok, két edzői kulcs + csempe), 156. meccsterv-szabály
+  (az ő jól kezelt záró labdájuk × a ti pontos lövés-időzítésetek),
+  177. edzés-szabály (záró labda: óra elleni gyakorlat, lövés csak az
+  utolsó 8 másodpercben).
+
 - **Lerohanás-hatékonyság**: MENNYI LESZ GÓL a kontráikból. A
   lerohanás-arány azt mondja meg, milyen gyakran kontráznak, a
   kontra-befejezők azt, ki zárja le őket — ez azt, megy-e be: a
