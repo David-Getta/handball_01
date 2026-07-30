@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Pontatlan lövők**: KINEK a lövései mennek mellé. A
+  célzás-pontosság csapat-szinten mondja meg, a lövéseikből mennyi
+  tart kapura — ez játékosonként bontja: lövőnként a kísérletek és a
+  kaput elkerülő lövések (5+ lövés, 40% feletti mellé-aránynál).
+  Akinek a lövései rendre elkerülik a kaput, arra rá lehet engedni a
+  lövést: nála a kilépés fölösleges kockázat, és a mellé lövés utáni
+  kidobás azonnali indítás. Egy réteg, sok felület:
+  `wasteful_shooters` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (játékosonkénti lövés- és
+  mellé-darabszámok + edzői kulcs + csempe), 146. meccsterv-szabály
+  (az ő pontatlan lövőjük × a ti gyors kapus-indításotok), 167.
+  edzés-szabály (kapura tartó lövés: célzás-blokk, fáradtan is).
 - **Kezdő hatos**: KIKKEL KEZDENEK. A nyitány-profil azt mondja meg,
   hogyan indítják a meccset, a hajrá-ötös azt, kikkel zárják — ez a
   másik vége: az első öt percben játékosonként a pályán töltött kockák

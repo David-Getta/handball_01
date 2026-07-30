@@ -1343,6 +1343,32 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 167) Pontatlan lövők: ha valakinek a lövései elkerülik a kaput,
+    # a célzás a téma.
+    try:
+        from .xg import wasteful_shooters
+        wst167 = wasteful_shooters(match, config)
+        for side in ("home", "away"):
+            top167 = wst167[side]["top"]
+            if top167 is None:
+                continue
+            who167 = (f"a {top167['jersey']}-es mezszámú játékos"
+                      if top167.get("jersey") is not None
+                      else f"a {top167['player_id']} azonosítójú játékos")
+            pct167 = (100.0 * top167["off_target"] / top167["shots"])
+            add(side, "támadás", "Kapura tartó lövés",
+                f"{who167} lövéseinek {pct167:.0f}%-a elkerülte a "
+                f"kaput ({top167['off_target']}/{top167['shots']}) — a "
+                "mellé lövés a legolcsóbb támadás-halál: nincs "
+                "lepattanó, csak ellenfél-indítás",
+                "kapura tartó lövés: célzás-blokk kapussal, ahol a "
+                "kapuban két sarokba tett jelzés a cél — a lövés "
+                "csak akkor ér pontot, ha kapura megy; a "
+                "gyakorlatot fáradtan is le kell futtatni, mert a "
+                "pontatlanság a meccs végén nő")
+    except Exception:
+        pass
+
     # 166) Kezdő hatos: a nyitó emberek együtt gyakorolják a meccs
     # első támadásait (az első öt perc beárazza a mérkőzést).
     try:

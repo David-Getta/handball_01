@@ -833,6 +833,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Pontatlan lövők: kinek a lövései kerülték el a kaput.
+    try:
+        from .xg import wasteful_shooters
+        wst = wasteful_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_wst = wst[side]["top"]
+            if top_wst is None:
+                continue
+            jn = (top_wst["jersey"]
+                  or _jersey_of_track(match).get(top_wst["player_id"]))
+            who = (f"{jn}-es mezszámú játékosának" if jn is not None
+                   else f"{top_wst['player_id']} azonosítójú "
+                        "játékosának")
+            body += (f" A(z) {name} a {who} lövései kerülték el a "
+                     f"leggyakrabban a kaput "
+                     f"({top_wst['off_target']}/{top_wst['shots']}).")
+    except Exception:
+        pass
     # Kezdő hatos: kikkel kezdték a meccset.
     try:
         from .momentum import opening_lineup

@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Pontatlan lövőik: [{"player_id", "jersey", "shots",
+    # "off_target"}] — kinek a lövései kerülik el a kaput;
+    # darabszámok, meccsek közt pontosan összegződnek.
+    wasteful_shooters: list = field(default_factory=list)
     # Kezdő embereik: [{"player_id", "jersey", "frames"}] — az első öt
     # percben a pályán töltött kockák; darabszámok, meccsek közt
     # pontosan összegződnek (aki több meccset kezd, előre kerül).
@@ -1867,6 +1871,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Pontatlan lövők: kire lehet ráengedni a lövést.
+    _wst_rows = [p for p in (rep.wasteful_shooters or [])
+                 if p["shots"] >= 5
+                 and 100.0 * p["off_target"] / p["shots"] >= 40.0]
+    if _wst_rows:
+        _wst_top = _wst_rows[0]
+        _wst_pct = 100.0 * _wst_top["off_target"] / _wst_top["shots"]
+        _wst_who = (f"{_wst_top['jersey']}-es mezszámú"
+                    if _wst_top.get("jersey") is not None
+                    else f"{_wst_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_wst_who} játékosuk lövései elkerülik a kaput (a "
+            f"lövései {_wst_pct:.0f}%-a, "
+            f"{_wst_top['off_target']}/{_wst_top['shots']}) — rá rá "
+            "lehet engedni a lövést: nála a kilépés fölösleges "
+            "kockázat, a mellé lövés utáni kidobás pedig azonnali "
+            "indítás nektek.")
 
     # Kezdő hatos: kikre kell tervezni az első támadásokat.
     _opl_rows = [p for p in (rep.opening_players or [])
@@ -4767,6 +4789,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .xg import wasteful_shooters as _wst
+        rep.wasteful_shooters = [
+            dict(row)
+            for row in _wst(match, config)[team.value]["players"]]
         from .momentum import opening_lineup as _opl
         rep.opening_players = [
             {"player_id": p["player_id"], "jersey": p["jersey"],
@@ -5796,6 +5822,24 @@ def _merge_breakthrough_players(reports) -> list:
     return [{"player_id": pid, **rec}
             for pid, rec in sorted(tally.items(),
                                    key=lambda kv: -kv[1]["entries"])]
+
+
+def _merge_wasteful_shooters(reports) -> list:
+    """Pontatlan lövők: játékosonként a lövések és a kaput elkerülő
+    lövések összegzése (a mellé-lövés szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.wasteful_shooters or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "shots": 0,
+                                    "off_target": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["shots"] += int(row.get("shots", 0))
+            rec["off_target"] += int(row.get("off_target", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["off_target"])]
 
 
 def _merge_clutch_players_rows(reports, field_name: str) -> list:
@@ -6867,6 +6911,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 146) Az ő pontatlan lövőjük × a ti gyors kapus-indításotok: a
+    # mellé lövése ajándék kontra.
+    _wst146 = [p for p in (opp.wasteful_shooters or [])
+               if p["shots"] >= 5
+               and 100.0 * p["off_target"] / p["shots"] >= 40.0]
+    if _wst146 and own.rs_restarts >= 4:
+        _top146 = _wst146[0]
+        _pct146 = 100.0 * _top146["off_target"] / _top146["shots"]
+        _fast146 = 100.0 * own.rs_fast / own.rs_restarts
+        _who146 = (f"{_top146['jersey']}-es mezszámú"
+                   if _top146.get("jersey") is not None
+                   else f"{_top146['player_id']} azonosítójú")
+        if _fast146 >= 50.0:
+            plan.append(
+                f"A(z) {_who146} játékosuk lövései elkerülik a kaput "
+                f"(a lövései {_pct146:.0f}%-a), ti pedig gyorsan "
+                f"indítotok (az újraindításaitok {_fast146:.0f}%-ánál "
+                "12 mp-en belül átér a labda) — rá kell engedni a "
+                "lövést, és a kapus már a lövés pillanatában "
+                "készüljön az indításra: az ő mellé lövése kész "
+                "kontra nektek.")
 
     # 145) Az ő kezdő hatosuk × a ti nyitányotok: az első öt percre
     # név szerinti terv kell.
@@ -8922,6 +8988,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        wasteful_shooters=_merge_wasteful_shooters(reports),
         opening_players=_merge_clutch_players_rows(
             reports, "opening_players"),
         seven_earner_roles=_merge_earner_roles(reports),

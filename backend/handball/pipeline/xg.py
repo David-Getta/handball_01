@@ -531,3 +531,62 @@ def shot_release(match: Match,
                 r["style"] = "labdafogó"
         out[side] = r
     return out
+
+
+# Pontatlan lövők: ennyi mért lövéstől ítélünk emberenként, és e
+# feletti mellé-arány jelenti, hogy rá lehet engedni a lövést.
+WASTEFUL_MIN_SHOTS = 5
+WASTEFUL_MISS_PCT = 40.0
+
+
+def wasteful_shooters(match: Match,
+                      config: Optional[XGConfig] = None) -> dict:
+    """Pontatlan lövők: KINEK a lövései mennek mellé.
+
+    A célzás-pontosság (shot_accuracy) csapat-szinten mondja meg, a
+    lövéseikből mennyi tart kapura — ez játékosonként bontja: lövőnként
+    számoljuk a kísérleteket és a kaput elkerülő (mellé/blokk)
+    lövéseket.
+
+    Edzőileg: akinek a lövései rendre elkerülik a kaput, arra rá lehet
+    engedni a lövést — nála a kilépés fölösleges kockázat, és a mellé
+    lövés utáni kidobás azonnali indítás nektek.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "shots", "off_target"}], "top"} — a lista mellé-lövés szerint
+    csökkenő; a "top" az a játékos, akinek legalább
+    WASTEFUL_MIN_SHOTS lövése van, és a mellé-aránya eléri a
+    WASTEFUL_MISS_PCT-t.
+    """
+    jersey: dict = {}
+    for fr in match.frames:
+        for p in fr.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        if pid is None:
+            continue
+        rec = tally[sh["team"]].setdefault(pid, {"shots": 0,
+                                                 "off_target": 0})
+        rec["shots"] += 1
+        if sh["outcome"] not in ("goal", "save"):
+            rec["off_target"] += 1  # mellé vagy blokkolt: nem kapura
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "shots": r["shots"], "off_target": r["off_target"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["off_target"])]
+        top = None
+        for row in rows:
+            if row["shots"] >= WASTEFUL_MIN_SHOTS and (
+                    100.0 * row["off_target"] / row["shots"]
+                    >= WASTEFUL_MISS_PCT):
+                top = row
+                break
+        out[side] = {"players": rows, "top": top}
+    return out

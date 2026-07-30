@@ -1297,6 +1297,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Pontatlan lövők: kinek a lövései kerülik el a kaput (5+ lövés,
+  // 40% feletti mellé-arány — a backend-kulccsal azonos küszöbök).
+  String? _wastefulShooters(Map<String, dynamic> r) {
+    final rows = r["wasteful_shooters"];
+    if (rows is! List || rows.isEmpty) return null;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final shots = ((e["shots"] as num?) ?? 0).toInt();
+      final off = ((e["off_target"] as num?) ?? 0).toInt();
+      if (shots < 5) continue;
+      final pct = 100.0 * off / shots;
+      if (pct < 40.0) continue;
+      final who = e["jersey"] != null
+          ? "${e["jersey"]}-es"
+          : "${e["player_id"]} azonosítójú";
+      return "a(z) $who játékosuk lövései elkerülik a kaput (a "
+          "lövései ${pct.toStringAsFixed(0)}%-a, $off/$shots) · rá rá "
+          "lehet engedni a lövést";
+    }
+    return null;
+  }
+
   // Kezdő hatos: kikkel kezdenek (legalább négy kezdő ember — a
   // backend-kulccsal azonos küszöb).
   String? _openingLineup(Map<String, dynamic> r) {
@@ -3992,6 +4014,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_sevenEarnerRoles(r) != null)
         ["Hetes-kiharcolás posztja", _sevenEarnerRoles(r)!],
       if (_openingLineup(r) != null) ["Kezdő hatos", _openingLineup(r)!],
+      if (_wastefulShooters(r) != null)
+        ["Pontatlan lövők", _wastefulShooters(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

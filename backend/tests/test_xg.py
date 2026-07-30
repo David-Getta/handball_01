@@ -478,3 +478,51 @@ def test_shot_release_separates_catch_and_shoot_from_holders():
     # Kevés lövés: nincs ítélet.
     few = shot_release(Match(_meta(), frames[:150]))
     assert few["home"]["style"] is None
+
+
+# ---- Pontatlan lövők (kinek a lövései mennek mellé) -------------------------
+
+def _wasteful_match(cases, fps=25.0):
+    """Lövés-sorozat: a `cases` elemei (lövő id, mellé?) párok — a
+    mellé lövés a kapufák mellett (y=5) hagyja el a pályát."""
+    frames = []
+    t = 0
+    for (pid, off) in cases:
+        for i in range(3):
+            frames.append(Frame(
+                t=t + i, players=[_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 3
+        for i in range(9):
+            frames.append(Frame(
+                t=t, players=[_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.4),
+                          y=5.0 if off else 10.0, confidence=1.0)))
+            t += 1
+        for i in range(25):    # szünet a lövés-debounce-hoz
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t += 25
+    return Match(_meta(fps), frames)
+
+
+def test_wasteful_shooters_finds_the_off_target_shooter():
+    """A 8-as hat lövéséből négy elkerüli a kaput → rá lehet engedni a
+    lövést."""
+    from handball.pipeline.xg import wasteful_shooters
+
+    cases = [(8, True)] * 4 + [(8, False)] * 2 + [(3, False)] * 5
+    rec = wasteful_shooters(_wasteful_match(cases))["home"]
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 8
+    assert rec["top"]["shots"] == 6 and rec["top"]["off_target"] == 4
+
+
+def test_wasteful_shooters_needs_enough_shots():
+    """Kevés (5-nél kevesebb) lövésnél nincs kiemelt lövő."""
+    from handball.pipeline.xg import wasteful_shooters
+
+    rec = wasteful_shooters(_wasteful_match(
+        [(8, True), (8, True), (3, False)]))["home"]
+    assert rec["top"] is None
