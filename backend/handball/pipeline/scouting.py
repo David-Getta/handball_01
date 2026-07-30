@@ -604,6 +604,11 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Időkérés utáni első támadásuk: a mért időkérések és az utánuk
+    # született góljaik — darabszámok, meccsek közt pontosan
+    # összegződnek (arány = tfa_goals / tfa_timeouts).
+    tfa_timeouts: int = 0
+    tfa_goals: int = 0
     # Kockázatos passzolóik: [{"player_id", "jersey", "tries",
     # "turnovers"}] — kinek a hosszú labdái foghatók el; darabszámok,
     # meccsek közt pontosan összegződnek.
@@ -1854,6 +1859,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Időkérés utáni első támadás: kell-e rá külön készülni.
+    if rep.tfa_timeouts >= 3:
+        _tfa_pct = 100.0 * rep.tfa_goals / rep.tfa_timeouts
+        if _tfa_pct >= 60.0:
+            keys.append(
+                f"Kész figurájuk van az időkérés utánra (az "
+                f"időkéréseik {_tfa_pct:.0f}%-a után gólt szereztek, "
+                f"{rep.tfa_goals}/{rep.tfa_timeouts}) — arra a "
+                "támadásra előre fel kell készülni: kijelölt "
+                "védekezés, a beállójuk elé állás, és a kapus is "
+                "tudja, ki fog lőni.")
+        elif _tfa_pct <= 20.0:
+            keys.append(
+                f"Üres az időkérésük (az időkéréseik csak "
+                f"{_tfa_pct:.0f}%-a után jött gól, "
+                f"{rep.tfa_timeouts} időkérés) — nem hoz megoldást a "
+                "megszakítás: elég a szokásos fal, nem kell külön "
+                "készülni az utána jövő támadásukra.")
 
     # Kockázatos passzolók: kinek a passzsávjába kell beállni.
     _rsk_rows = [p for p in (rep.risky_passers or [])
@@ -4690,6 +4714,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .stoppages import timeout_first_attack as _tfa
+        tfarec = _tfa(match, config)[team.value]
+        rep.tfa_timeouts = tfarec["timeouts"]
+        rep.tfa_goals = tfarec["goals"]
         from .attack_types import risky_passers as _rsk
         rep.risky_passers = [
             dict(row)
@@ -6753,6 +6781,19 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 143) Az ő időkérés utáni figurájuk × a ti időkérés-mérlegetek:
+    # a megszakítás náluk fegyver, nálatok legyen az is.
+    if opp.tfa_timeouts >= 3 and own.tfa_timeouts >= 3:
+        _opp143 = 100.0 * opp.tfa_goals / opp.tfa_timeouts
+        _own143 = 100.0 * own.tfa_goals / own.tfa_timeouts
+        if _opp143 >= 60.0 and _own143 <= 40.0:
+            plan.append(
+                f"Az időkéréseik után {_opp143:.0f}%-ban betalálnak, "
+                f"a ti időkéréseitek után csak {_own143:.0f}%-ban "
+                "— két teendő: az ő megszakításuk utáni támadásukra "
+                "kijelölt védekezéssel kell készülni, a sajátotokat "
+                "pedig kész figurával kell zárni, nem beszéddel.")
+
     # 142) Az ő kockázatos passzolójuk × a ti labdaszerzéseitek: az ő
     # passzsávja kész gólforrás.
     _rsk142 = [p for p in (opp.risky_passers or [])
@@ -8750,6 +8791,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        tfa_timeouts=sum(r.tfa_timeouts for r in reports),
+        tfa_goals=sum(r.tfa_goals for r in reports),
         risky_passers=_merge_risky_passers(reports),
         screen_setters=_merge_screen_setters(reports),
         gke_early_faced=sum(r.gke_early_faced for r in reports),

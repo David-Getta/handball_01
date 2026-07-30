@@ -833,6 +833,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Időkérés utáni első támadás: volt-e kész figurájuk.
+    try:
+        from .stoppages import timeout_first_attack
+        tfa = timeout_first_attack(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tfa = tfa[side]
+            if rec_tfa["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérései után az első támadás "
+                     f"{rec_tfa['share_pct']:.0f}%-ban gólt hozott "
+                     f"({rec_tfa['goals']}/{rec_tfa['timeouts']}).")
+    except Exception:
+        pass
     # Kockázatos passzolók: kinek a hosszú labdái vesztek el.
     try:
         from .attack_types import risky_passers

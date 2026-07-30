@@ -3103,6 +3103,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stoppages import timeout_first_attack
+            res["timeout_first_attack"] = timeout_first_attack(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3808,6 +3813,9 @@ def create_app():
                 _layer("screen_setters", lambda: screen_setters(match))
                 from ..pipeline.attack_types import risky_passers
                 _layer("risky_passers", lambda: risky_passers(match))
+                from ..pipeline.stoppages import timeout_first_attack
+                _layer("timeout_first_attack",
+                       lambda: timeout_first_attack(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

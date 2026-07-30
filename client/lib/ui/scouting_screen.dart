@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Időkérés utáni első támadás: van-e kész figurájuk (3+ időkérés;
+  // 60% felett kész figura, 20% alatt üres időkérés — a
+  // backend-kulccsal azonos küszöbök).
+  String? _timeoutFirstAttack(Map<String, dynamic> r) {
+    final n = ((r["tfa_timeouts"] as num?) ?? 0).toInt();
+    final goals = ((r["tfa_goals"] as num?) ?? 0).toInt();
+    if (n < 3) return null;
+    final pct = 100.0 * goals / n;
+    if (pct >= 60.0) {
+      return "kész figurájuk van az időkérés utánra (az időkéréseik "
+          "${pct.toStringAsFixed(0)}%-a után gól jött, $goals/$n) · "
+          "arra a támadásra előre fel kell készülni";
+    }
+    if (pct <= 20.0) {
+      return "üres az időkérésük (csak "
+          "${pct.toStringAsFixed(0)}%-a után jött gól, $n időkérés) · "
+          "nem kell külön készülni az utána jövő támadásukra";
+    }
+    return null;
+  }
+
   // Kockázatos passzolók: kinek a hosszú labdái foghatók el (4+
   // hosszú kísérlet, 40% feletti eladás-arány — a backend-kulccsal
   // azonos küszöbök).
@@ -3921,6 +3942,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_screenSetters(r) != null) ["Elzárók", _screenSetters(r)!],
       if (_riskyPassers(r) != null)
         ["Kockázatos passzolók", _riskyPassers(r)!],
+      if (_timeoutFirstAttack(r) != null)
+        ["Időkérés utáni támadás", _timeoutFirstAttack(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 164) Időkérés utáni első támadás: ha nem hoz gólt, a kész
+    # figura a téma.
+    try:
+        from .stoppages import timeout_first_attack
+        tfa164 = timeout_first_attack(match, config)
+        for side in ("home", "away"):
+            rec164 = tfa164[side]
+            if rec164["verdict"] != "üres időkérés":
+                continue
+            add(side, "taktika", "Időkérés utáni figura",
+                f"az időkéréseink csak {rec164['share_pct']:.0f}%-a "
+                f"után jött gól ({rec164['goals']}/"
+                f"{rec164['timeouts']}) — a megszakítás így nem "
+                "fegyver, csak szusszanás",
+                "időkérés utáni figura: két-három BEJÁTSZOTT "
+                "záró-figura, amit az időkérésnél csak be kell "
+                "mondani (kijelölt indító, kijelölt befejező, "
+                "egy elzárás) — edzésen 20 másodperces "
+                "megbeszéléssel indítva gyakoroljátok, hogy meccsen "
+                "is beférjen a szünetbe")
+    except Exception:
+        pass
+
     # 163) Kockázatos passzolók: ha valakinek a hosszú labdái
     # elvesznek, a passz-technika a téma.
     try:

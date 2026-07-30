@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Időkérés utáni első támadás**: VAN-E KÉSZ FIGURÁJUK. Az
+  időkérés-mérleg azt mondja meg, megtörte-e a megszakítás a
+  sorozatot, az időkérés-időzítés azt, mikor kérnek időt — ez azt, mit
+  kezdenek vele: az időkérést kérő csapat első támadását nézzük az
+  újraindítás után (3+ időkérés; 60% felett kész figura, 20% alatt
+  üres időkérés). Aki rendre betalál, arra a támadásra előre fel kell
+  készülni (kijelölt védekezés, a beállójuk elé állás); akinél elhal,
+  ott elég a szokásos fal. Egy réteg, sok felület:
+  `timeout_first_attack` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (időkérés- és gól-darabszámok + két
+  edzői kulcs + csempe), 143. meccsterv-szabály (az ő időkérés utáni
+  figurájuk × a ti időkérés-mérlegetek), 164. edzés-szabály (időkérés
+  utáni figura: két-három bejátszott záró-figura, 20 másodperces
+  megbeszéléssel).
 - **Kockázatos passzolók**: KINEK a hosszú labdái foghatók el. A
   passz-kockázat csapat-szinten mondja meg, a hosszú passzaik
   gyakrabban vesznek-e el — ez játékosonként bontja: a hosszú

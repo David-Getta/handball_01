@@ -300,3 +300,63 @@ def playing_time_profile(match: Match,
                    "own_stopped_s": round(own[side][1], 1),
                    "verdict": verdict}
             for side in ("home", "away")}
+
+
+# Időkérés utáni első támadás: ennyi mért időkérés kell az ítélethez, és
+# e feletti / alatti gólarány a kész figura, illetve az üres időkérés
+# jele. Az első támadást ekkora ablakban keressük az újraindítás után.
+TFA_MIN_TIMEOUTS = 3
+TFA_WINDOW_S = 40.0
+TFA_HIGH_PCT = 60.0
+TFA_LOW_PCT = 20.0
+
+
+def timeout_first_attack(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés utáni első támadás: VAN-E KÉSZ FIGURÁJUK.
+
+    Az időkérés-mérleg (timeout_record) azt mondja meg, megtörte-e a
+    megszakítás a sorozatot, az időkérés-időzítés (timeout_timing)
+    azt, mikor kérnek időt — ez azt, MIT KEZDENEK VELE: az időkérést
+    kérő csapat első támadását nézzük az újraindítás után, és
+    megszámoljuk, hányból lett gól.
+
+    Edzőileg: aki az időkérések után rendre betalál, annak kész
+    figurája van — arra a támadásra előre fel kell készülni (kijelölt
+    védekezés, a beállójuk elé állás); akinél az első támadás rendre
+    elhal, ott az időkérés nem hoz megoldást, elég a szokásos fal.
+
+    Visszatérés csapatonként: {"timeouts", "goals", "share_pct",
+    "verdict"} — a share_pct/verdict None TFA_MIN_TIMEOUTS alatt; a
+    verdict "kész figura az időkérés után" / "üres időkérés" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TFA_WINDOW_S * fps
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"timeouts": 0, "goals": 0, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for s in detect_stoppages(match, config):
+        if s["kind"] != "időkérés" or s["likely_team"] is None:
+            continue
+        side = s["likely_team"]
+        rec = out[side]
+        rec["timeouts"] += 1
+        end = s["end_frame"]
+        if any(tm == side and end < t <= end + win for (t, tm) in goals):
+            rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["timeouts"] >= TFA_MIN_TIMEOUTS:
+            share = 100.0 * rec["goals"] / rec["timeouts"]
+            rec["share_pct"] = round(share, 1)
+            if share >= TFA_HIGH_PCT:
+                rec["verdict"] = "kész figura az időkérés után"
+            elif share <= TFA_LOW_PCT:
+                rec["verdict"] = "üres időkérés"
+    return out

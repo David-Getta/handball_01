@@ -340,3 +340,66 @@ def test_playing_time_profile_needs_enough_minutes():
 
     rec = playing_time_profile(_match())["home"]
     assert rec["verdict"] is None
+
+
+# ---- Időkérés utáni első támadás ---------------------------------------------
+
+def _tfa_match(scored_after, fps=25.0):
+    """Hazai időkérés-sorozat: a `scored_after` elemenként megadja,
+    hogy az adott időkérés után jön-e hazai gól."""
+    frames = []
+    t = 0
+
+    def _play(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = _players(t, moving=True)
+            hp = players[0]      # a hazai 1-es birtokol (ő kér időt)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y,
+                                          confidence=1.0)))
+            t += 1
+
+    for scored in scored_after:
+        _play(10)
+        for _ in range(int(20 * fps)):     # időkérés: 20 mp állás
+            frames.append(Frame(t=t, players=_players(0, moving=False),
+                                ball=None))
+            t += 1
+        if scored:
+            for i in range(7):             # hazai gól a +x kapura
+                frames.append(Frame(
+                    t=t, players=_players(t, moving=True),
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        _play(60)
+    return Match(_meta(fps), frames)
+
+
+def test_timeout_first_attack_flags_the_ready_play():
+    """Négy időkérésből három után gól jön → kész figurájuk van."""
+    from handball.pipeline.stoppages import timeout_first_attack
+
+    rec = timeout_first_attack(
+        _tfa_match([True, True, True, False]))["home"]
+    assert rec["timeouts"] == 4 and rec["goals"] == 3
+    assert rec["share_pct"] == 75.0
+    assert rec["verdict"] == "kész figura az időkérés után"
+
+
+def test_timeout_first_attack_flags_the_empty_timeout():
+    """Ha az időkérések után nem jön gól, üres az időkérés."""
+    from handball.pipeline.stoppages import timeout_first_attack
+
+    rec = timeout_first_attack(_tfa_match([False] * 4))["home"]
+    assert rec["goals"] == 0 and rec["share_pct"] == 0.0
+    assert rec["verdict"] == "üres időkérés"
+
+
+def test_timeout_first_attack_needs_enough_timeouts():
+    """Kevés (3-nál kevesebb) időkérésnél nincs ítélet."""
+    from handball.pipeline.stoppages import timeout_first_attack
+
+    rec = timeout_first_attack(_tfa_match([True, False]))["home"]
+    assert rec["share_pct"] is None and rec["verdict"] is None
