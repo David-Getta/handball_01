@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Emberelőny-lövők**: KI FEJEZ BE a két perc alatt. Az
+  emberelőny-hatékonyság azt mondja meg, mennyi gólt hoznak a
+  kiállításokból, az emberelőny-tempó azt, hogyan játsszák — ez azt,
+  kire megy a befejezés: a kiállítás-ablakokban leadott lövéseket a
+  lövőhöz írjuk (3+ lövéstől). Emberhátrányban a fal nem érhet
+  mindenhová, ezért a befejezőjükre kell rendezni: az ő oldalán jöjjön
+  a kilépés vagy a kettőzés. Egy réteg, sok felület:
+  `powerplay_shooters` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (játékosonkénti lövés- és
+  gól-darabszámok + edzői kulcs + csempe), 134. meccsterv-szabály (az
+  ő emberelőny-befejezőjük × a ti emberhátrány-védekezésetek), 155.
+  edzés-szabály (emberelőny több befejezővel: ugyanaz az ember nem
+  fejezhet be kétszer egymás után).
 - **Lövés-távolság esése**: KIFELÉ SZORULNAK-E a hajrára. A
   lövőerő-esés a lövés sebességét méri félidőnként, a befejezés-esés a
   gólarányt — ez a helyet: félidőnként átlagolt lövés-távolság

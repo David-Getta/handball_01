@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 155) Emberelőny-lövők: ha egy emberre épül az emberelőnyünk, a
+    # befejezés szélesítése a téma.
+    try:
+        from .rules import powerplay_shooters
+        pps155 = powerplay_shooters(match, config)
+        for side in ("home", "away"):
+            top155 = pps155[side]["top"]
+            if top155 is None:
+                continue
+            who155 = (f"a {top155['jersey']}-es mezszámú játékos"
+                      if top155.get("jersey") is not None
+                      else f"a {top155['player_id']} azonosítójú játékos")
+            add(side, "támadás", "Emberelőny több befejezővel",
+                f"emberelőnyben {who155} adta le a lövéseink "
+                f"nagy részét ({top155['shots']} lövés a "
+                f"{pps155[side]['shots']}-ből) — egy felkészült "
+                "ellenfél rá rendezi a falat, és elfogy az "
+                "emberelőnyünk",
+                "emberelőny több befejezővel: 6-5 elleni gyakorlás "
+                "azzal a szabállyal, hogy ugyanaz az ember nem "
+                "fejezhet be kétszer egymás után — a figurákat úgy "
+                "kell felépíteni, hogy a beálló és a szélső is "
+                "helyzetbe kerüljön, és minden befejezés előtt "
+                "legyen egy oldalváltás")
+    except Exception:
+        pass
+
     # 154) Lövés-távolság esése: ha a hajrára kifelé szorulunk, a
     # fáradt befejezés a téma.
     try:

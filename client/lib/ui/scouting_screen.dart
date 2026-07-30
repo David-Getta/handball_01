@@ -1297,6 +1297,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Emberelőny-lövők: ki fejez be a két perc alatt (3+ emberelőnyben
+  // leadott lövés — a backend-kulccsal azonos küszöb).
+  String? _powerplayShooters(Map<String, dynamic> r) {
+    final rows = r["pp_shooters"];
+    if (rows is! List || rows.isEmpty) return null;
+    final top = rows.first;
+    if (top is! Map) return null;
+    final shots = ((top["shots"] as num?) ?? 0).toInt();
+    if (shots < 3) return null;
+    final goals = ((top["goals"] as num?) ?? 0).toInt();
+    final who = top["jersey"] != null
+        ? "${top["jersey"]}-es"
+        : "${top["player_id"]} azonosítójú";
+    return "emberelőnyben a(z) $who játékosuk fejez be ($shots lövés, "
+        "$goals gól) · emberhátrányban rá kell rendezni a falat";
+  }
+
   // Lövés-távolság esése: kifelé szorulnak-e a hajrára (félidőnként
   // 4+ lövés, 1 m-es növekedés — a backend-kulccsal azonos küszöbök).
   String? _shotDistanceFade(Map<String, dynamic> r) {
@@ -3720,6 +3737,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapott gólok műfaj szerint", _concededTypes(r)!],
       if (_shotDistanceFade(r) != null)
         ["Lövés-távolság esése", _shotDistanceFade(r)!],
+      if (_powerplayShooters(r) != null)
+        ["Emberelőny-lövők", _powerplayShooters(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

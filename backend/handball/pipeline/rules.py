@@ -1024,3 +1024,75 @@ def gk_seven_directions(match: Match,
                         "faced": r["faced"]}
         out[side] = {**dirs, "faced": faced, "weak_dir": weak}
     return out
+
+
+# Emberelőny-lövők: ennyi emberelőnyben leadott lövéstől emeljük ki az
+# embert (ennyi alatt a kép még véletlen).
+PPS_MIN_SHOTS = 3
+
+
+def powerplay_shooters(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Emberelőny-lövők: KI FEJEZ BE a két perc alatt.
+
+    Az emberelőny-hatékonyság (powerplay_efficiency) azt mondja meg,
+    mennyi gólt hoznak a kiállításokból, az emberelőny-tempó
+    (powerplay_pace) azt, hogyan játsszák — ez azt, KIRE megy a
+    befejezés: a kiállítás-ablakokban leadott lövéseket a lövőhöz
+    írjuk.
+
+    Edzőileg: emberhátrányban a fal nem érhet mindenhová, ezért a
+    befejezőjükre kell rendezni — az ő oldalán kell a kettőzés vagy a
+    kilépés, a többieket pedig rá lehet engedni.
+
+    Visszatérés csapatonként: {"shots", "players": [{"player_id",
+    "jersey", "shots", "goals"}], "top"} — a lista lövésszám szerint
+    csökkenő; a "top" az első játékos, ha legalább PPS_MIN_SHOTS
+    emberelőnyben leadott lövése van.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    windows = detect_powerplay(match)
+    if not windows:
+        return {side: {"shots": 0, "players": [], "top": None}
+                for side in ("home", "away")}
+
+    def _down_at(t: int) -> Optional[str]:
+        for w in windows:
+            if w["start_frame"] <= t <= w["end_frame"]:
+                return w["team_down"]
+        return None
+
+    jersey: dict = {}
+    for fr in match.frames:
+        for p in fr.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL) \
+                or e.player_id is None:
+            continue
+        side = e.team.value
+        down = _down_at(e.t)
+        if down is None or down == side:
+            continue  # egyenlő létszám vagy emberhátrány: nem ide tartozik
+        rec = tally[side].setdefault(e.player_id,
+                                     {"shots": 0, "goals": 0})
+        rec["shots"] += 1
+        if e.type == EventType.GOAL:
+            rec["goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "shots": r["shots"], "goals": r["goals"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["shots"])]
+        top = (rows[0] if rows and rows[0]["shots"] >= PPS_MIN_SHOTS
+               else None)
+        out[side] = {"shots": sum(r["shots"] for r in rows),
+                     "players": rows, "top": top}
+    return out

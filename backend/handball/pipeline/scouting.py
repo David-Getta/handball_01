@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Emberelőny-lövőik: [{"player_id", "jersey", "shots", "goals"}] —
+    # ki fejez be a két perc alatt; darabszámok, meccsek közt pontosan
+    # összegződnek.
+    pp_shooters: list = field(default_factory=list)
     # Lövés-távolságuk félidőnként: félidőnként a mért lövések és a
     # távolság-összeg (m) — összegek, meccsek közt pontosan
     # összegződnek (félidő-átlag = összeg / darab).
@@ -1811,6 +1815,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Emberelőny-lövők: kire kell rendezni az emberhátrányt.
+    _pps_rows = rep.pp_shooters or []
+    if _pps_rows and _pps_rows[0]["shots"] >= 3:
+        _pps_top = _pps_rows[0]
+        _pps_who = (f"{_pps_top['jersey']}-es mezszámú"
+                    if _pps_top.get("jersey") is not None
+                    else f"{_pps_top['player_id']} azonosítójú")
+        keys.append(
+            f"Emberelőnyben a(z) {_pps_who} játékosuk fejez be "
+            f"({_pps_top['shots']} lövés, {_pps_top['goals']} gól) — "
+            "emberhátrányban rá kell rendezni a falat: az ő oldalán "
+            "jöjjön a kilépés vagy a kettőzés, a többieket pedig rá "
+            "lehet engedni.")
 
     # Lövés-távolság esése: kifelé szorulnak-e a hajrára.
     if rep.sdf_fh_shots >= 4 and rep.sdf_sh_shots >= 4 \
@@ -4499,6 +4517,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .rules import powerplay_shooters as _pps
+        rep.pp_shooters = [
+            dict(row)
+            for row in _pps(match, config)[team.value]["players"]]
         from .attack_types import shot_distance_fade as _sdf
         sdfrec = _sdf(match, config)[team.value]
         rep.sdf_fh_shots = sdfrec["fh_shots"]
@@ -5395,6 +5417,24 @@ def _merge_plus_minus(reports) -> list:
             for pid, rec in sorted(
                 tally.items(),
                 key=lambda kv: -(kv[1]["for"] - kv[1]["against"]))]
+
+
+def _merge_pp_shooters(reports) -> list:
+    """Emberelőny-lövők: játékosonként a lövések és a gólok összegzése
+    (a lövésszám szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.pp_shooters or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "shots": 0,
+                                    "goals": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["shots"] += int(row.get("shots", 0))
+            rec["goals"] += int(row.get("goals", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["shots"])]
 
 
 def _merge_conceded_types(reports) -> dict:
@@ -6434,6 +6474,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 134) Az ő emberelőny-befejezőjük × a ti emberhátrány-védekezésetek:
+    # a két percre név szerinti terv kell.
+    _pps134 = opp.pp_shooters or []
+    if _pps134 and _pps134[0]["shots"] >= 3 and own.ppd_seconds >= 90.0:
+        _top134 = _pps134[0]
+        _conc134 = 60.0 * own.ppd_conceded / own.ppd_seconds
+        _who134 = (f"{_top134['jersey']}-es mezszámú"
+                   if _top134.get("jersey") is not None
+                   else f"{_top134['player_id']} azonosítójú")
+        if _conc134 >= 1.0:
+            plan.append(
+                f"Emberelőnyben a(z) {_who134} játékosuk fejez be "
+                f"({_top134['shots']} lövés, {_top134['goals']} gól), "
+                f"a ti emberhátrány-védekezésetek pedig szivárog "
+                f"(percenként {_conc134:.1f} kapott gól) — a két "
+                "percre név szerinti terv kell: rá lépjen ki a "
+                "kijelölt védő, és a kapus is az ő lövésére "
+                "készüljön.")
 
     # 133) Az ő kifelé szoruló lövéseik × a ti blokkjaitok: a
     # hajrában a kilépés viszi el a meccset.
@@ -8269,6 +8328,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pp_shooters=_merge_pp_shooters(reports),
         sdf_fh_shots=sum(r.sdf_fh_shots for r in reports),
         sdf_fh_sum_m=round(sum(r.sdf_fh_sum_m for r in reports), 1),
         sdf_sh_shots=sum(r.sdf_sh_shots for r in reports),

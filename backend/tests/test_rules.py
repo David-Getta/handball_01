@@ -804,3 +804,69 @@ def test_gk_seven_directions_needs_enough_per_direction():
     rec = gk_seven_directions(_seven_dir_match(
         [(8.8, False), (11.2, True)]))["away"]
     assert rec["faced"] == 2 and rec["weak_dir"] is None
+
+
+# ---- Emberelőny-lövők (ki fejez be a két perc alatt) -------------------------
+
+def _pp_shooter_match(shooters, fps=25.0):
+    """A VENDÉG emberhátrányban (5 fő), a hazai `shooters` listája
+    szerint lőnek a +x kapura a kiállítás-ablakban."""
+    frames = []
+    t = 0
+
+    def _rosters(seconds, away_n, shooter=None):
+        nonlocal t, frames
+        for i in range(int(seconds * fps)):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(6)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(away_n)]
+            if shooter is not None:
+                players.append(_pl(shooter, Team.HOME, 33.0, 10.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _shot(shooter, away_n):
+        nonlocal t, frames
+        for i in range(8):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(6)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(away_n)]
+            players.append(_pl(shooter, Team.HOME, 33.0, 10.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _rosters(2.0, away_n)     # szünet a lövés-debounce-hoz
+
+    _rosters(30.0, 6)             # normál létszám
+    # A kiállítás-ablaknak legalább 45 mp-ig kell tartania, hogy a
+    # felismerés emberhátrányként lássa.
+    for shooter in shooters:      # kiállítás-ablak: hazai emberelőny
+        _rosters(15.0, 5)
+        _shot(shooter, 5)
+    _rosters(30.0, 6)             # visszaáll
+    return Match(_meta(fps), frames)
+
+
+def test_powerplay_shooters_finds_the_finisher():
+    """Négy emberelőnyös lövésből hármat ugyanaz a játékos ad le → ő a
+    befejezőjük emberelőnyben."""
+    from handball.pipeline.rules import powerplay_shooters
+
+    rec = powerplay_shooters(_pp_shooter_match([7, 7, 7, 9]))["home"]
+    assert rec["shots"] == 4
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 7 and rec["top"]["shots"] == 3
+
+
+def test_powerplay_shooters_without_powerplay():
+    """Kiállítás nélkül nincs emberelőnyös lövés és nincs ítélet."""
+    from handball.pipeline.rules import powerplay_shooters
+
+    frames = _roster_frames(0, 90, 6, 6)
+    rec = powerplay_shooters(Match(_meta(), frames))["home"]
+    assert rec["shots"] == 0 and rec["top"] is None

@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Emberelőny-lövők: kire ment a befejezés a két perc alatt.
+    try:
+        from .rules import powerplay_shooters
+        pps = powerplay_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pps = pps[side]["top"]
+            if top_pps is None:
+                continue
+            jn = (top_pps["jersey"]
+                  or _jersey_of_track(match).get(top_pps["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_pps['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} emberelőnyben a {who} fejezett be "
+                     f"a legtöbbször ({top_pps['shots']} lövés, "
+                     f"{top_pps['goals']} gól).")
+    except Exception:
+        pass
     # Lövés-távolság esése: kifelé szorultak-e a hajrára.
     try:
         from .attack_types import shot_distance_fade
