@@ -331,3 +331,69 @@ def test_pass_speed_needs_enough_passes():
 
     rec = pass_speed(_speed_match(flight_frames=10, n_passes=4))["home"]
     assert rec["avg_ms"] is None and rec["label"] is None
+
+
+# ---- Pressz-érzékeny játékosok ----------------------------------------------
+
+def _pressure_match(cases, fps=25.0):
+    """Nyomott labdás döntések: a `cases` elemei (játékos id,
+    elveszett?) párok — a labdás mellett végig ott a védő."""
+    frames = []
+    t = 0
+    for (pid, lost) in cases:
+        # A labdás és a rászorító védő (1 m-re).
+        for _ in range(6):
+            frames.append(Frame(
+                t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
+                              _pl(30, Team.AWAY, 26.0, 10.0),
+                              _pl(9, Team.HOME, 20.0, 16.0)],
+                ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+            t += 1
+        if lost:
+            # A labda az ellenfélhez kerül: nyomott eladás.
+            for _ in range(6):
+                frames.append(Frame(
+                    t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
+                                  _pl(30, Team.AWAY, 26.0, 10.0)],
+                    ball=Ball(x=26.0, y=10.0, confidence=1.0)))
+                t += 1
+        else:
+            # A labda a szabadon álló társhoz megy: nyomott, de sikeres.
+            for _ in range(6):
+                frames.append(Frame(
+                    t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
+                                  _pl(30, Team.AWAY, 26.0, 10.0),
+                                  _pl(9, Team.HOME, 20.0, 16.0)],
+                    ball=Ball(x=20.0, y=16.0, confidence=1.0)))
+                t += 1
+            for _ in range(6):   # a labda visszakerül a vizsgált emberhez
+                frames.append(Frame(
+                    t=t, players=[_pl(pid, Team.HOME, 25.0, 10.0),
+                                  _pl(30, Team.AWAY, 26.0, 10.0),
+                                  _pl(9, Team.HOME, 20.0, 16.0)],
+                    ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+                t += 1
+    return Match(MatchMeta(match_id="psp", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_pressure_sensitive_players_finds_the_weak_link():
+    """Aki hat nyomott döntéséből négyszer veszíti el a labdát → rá
+    kell küldeni a kettőzést."""
+    from handball.pipeline.decisions import pressure_sensitive_players
+
+    cases = [(4, True)] * 4 + [(4, False)] * 2
+    rec = pressure_sensitive_players(_pressure_match(cases))["home"]
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 4
+    assert rec["top"]["press_to"] == 4
+
+
+def test_pressure_sensitive_players_needs_enough_events():
+    """Kevés (5-nél kevesebb) nyomott döntésnél nincs kiemelt
+    játékos."""
+    from handball.pipeline.decisions import pressure_sensitive_players
+
+    rec = pressure_sensitive_players(
+        _pressure_match([(4, True), (4, True)]))["home"]
+    assert rec["top"] is None

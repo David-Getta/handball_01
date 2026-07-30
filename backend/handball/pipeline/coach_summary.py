@@ -833,6 +833,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Pressz-érzékeny játékosok: ki veszítette el a labdát szorításban.
+    try:
+        from .decisions import pressure_sensitive_players
+        psp = pressure_sensitive_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_psp = psp[side]["top"]
+            if top_psp is None:
+                continue
+            jn = (top_psp["jersey"]
+                  or _jersey_of_track(match).get(top_psp["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_psp['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} veszítette el a labdát a "
+                     f"legtöbbször szorításban "
+                     f"({top_psp['press_to']}/"
+                     f"{top_psp['press_events']} nyomott döntés).")
+    except Exception:
+        pass
     # Elöl szerző védők: ki szedte a labdát a támadó térfélen.
     try:
         from .defense import high_steal_players

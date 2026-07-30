@@ -1343,6 +1343,33 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 169) Pressz-érzékeny játékosok: ha valakinél a szorítás eladás,
+    # a nyomás alatti kiadás a téma.
+    try:
+        from .decisions import pressure_sensitive_players
+        psp169 = pressure_sensitive_players(match, config)
+        for side in ("home", "away"):
+            top169 = psp169[side]["top"]
+            if top169 is None:
+                continue
+            who169 = (f"a {top169['jersey']}-es mezszámú játékos"
+                      if top169.get("jersey") is not None
+                      else f"a {top169['player_id']} azonosítójú játékos")
+            pct169 = (100.0 * top169["press_to"]
+                      / top169["press_events"])
+            add(side, "támadás", "Nyomás alatti kiadás",
+                f"{who169} nyomott döntéseinek {pct169:.0f}%-a "
+                f"eladás lett ({top169['press_to']}/"
+                f"{top169['press_events']}) — egy felkészült ellenfél "
+                "rá küldi a kettőzést, és onnan indítja a kontrát",
+                "nyomás alatti kiadás: 2 az 1 elleni gyakorlat, ahol "
+                "a labdást testközelből szorítják — a szabály, hogy "
+                "a labda EGY érintéssel megy tovább a szabad társhoz, "
+                "és a passz a szorítás ELLENKEZŐ oldalára indul; "
+                "utána ugyanez fáradtan, kiabálás mellett")
+    except Exception:
+        pass
+
     # 168) Elöl szerző védők: ha van ilyen emberünk, a letámadás
     # köré lehet védekezést építeni.
     try:

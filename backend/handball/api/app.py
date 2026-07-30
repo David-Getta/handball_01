@@ -3128,6 +3128,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import pressure_sensitive_players
+            res["pressure_sensitive_players"] = (
+                pressure_sensitive_players(match))
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3847,6 +3853,10 @@ def create_app():
                 from ..pipeline.defense import high_steal_players
                 _layer("high_steal_players",
                        lambda: high_steal_players(match))
+                from ..pipeline.decisions import (
+                    pressure_sensitive_players)
+                _layer("pressure_sensitive_players",
+                       lambda: pressure_sensitive_players(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

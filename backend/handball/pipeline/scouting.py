@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Pressz-érzékeny játékosaik: [{"player_id", "jersey",
+    # "press_events", "press_to"}] — ki veszíti el a labdát
+    # szorításban; darabszámok, meccsek közt pontosan összegződnek.
+    pressure_players: list = field(default_factory=list)
     # Elöl szerző védőik: [{"player_id", "jersey", "steals", "high"}]
     # — ki szed labdát a támadó térfélen; darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -1875,6 +1879,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Pressz-érzékeny játékosok: kire kell küldeni a kettőzést.
+    _psp_rows = [p for p in (rep.pressure_players or [])
+                 if p["press_events"] >= 5
+                 and 100.0 * p["press_to"] / p["press_events"] >= 30.0]
+    if _psp_rows:
+        _psp_top = _psp_rows[0]
+        _psp_pct = (100.0 * _psp_top["press_to"]
+                    / _psp_top["press_events"])
+        _psp_who = (f"{_psp_top['jersey']}-es mezszámú"
+                    if _psp_top.get("jersey") is not None
+                    else f"{_psp_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_psp_who} játékosuk pressz-érzékeny (a nyomott "
+            f"döntései {_psp_pct:.0f}%-a eladás lett, "
+            f"{_psp_top['press_to']}/{_psp_top['press_events']}) — rá "
+            "kell küldeni a kettőzést: nála a szorítás nem kockázat, "
+            "hanem labdaszerzés.")
 
     # Elöl szerző védők: kinek az oldalán nem szabad kihozni a labdát.
     _hsp_rows = [p for p in (rep.high_stealers or [])
@@ -4809,6 +4831,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .decisions import pressure_sensitive_players as _psp
+        rep.pressure_players = [
+            dict(row)
+            for row in _psp(match, config)[team.value]["players"]]
         from .defense import high_steal_players as _hsp
         rep.high_stealers = [
             dict(row)
@@ -5846,6 +5872,25 @@ def _merge_breakthrough_players(reports) -> list:
     return [{"player_id": pid, **rec}
             for pid, rec in sorted(tally.items(),
                                    key=lambda kv: -kv[1]["entries"])]
+
+
+def _merge_pressure_players(reports) -> list:
+    """Pressz-érzékeny játékosok: játékosonként a nyomott döntések és
+    az azokból lett eladások összegzése (az eladás szerint
+    csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.pressure_players or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "press_events": 0,
+                                    "press_to": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["press_events"] += int(row.get("press_events", 0))
+            rec["press_to"] += int(row.get("press_to", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["press_to"])]
 
 
 def _merge_high_stealers(reports) -> list:
@@ -6953,6 +6998,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 148) Az ő pressz-érzékeny emberük × a ti kettőzésetek: a
+    # szorítást rá kell szervezni.
+    _psp148 = [p for p in (opp.pressure_players or [])
+               if p["press_events"] >= 5
+               and 100.0 * p["press_to"] / p["press_events"] >= 30.0]
+    if _psp148 and own.dbl_holder_frames >= 250:
+        _top148 = _psp148[0]
+        _pct148 = 100.0 * _top148["press_to"] / _top148["press_events"]
+        _dbl148 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        _who148 = (f"{_top148['jersey']}-es mezszámú"
+                   if _top148.get("jersey") is not None
+                   else f"{_top148['player_id']} azonosítójú")
+        if _dbl148 >= 30.0:
+            plan.append(
+                f"A(z) {_who148} játékosuk pressz-érzékeny (a nyomott "
+                f"döntései {_pct148:.0f}%-a eladás lett), ti pedig "
+                f"sokat kettőztök (a labdás-idő {_dbl148:.0f}%-ában) "
+                "— a kettőzést rá kell szervezni: amint nála van a "
+                "labda, jöjjön a második ember, mert nála a szorítás "
+                "labdaszerzés.")
 
     # 147) Az ő elöl szedő védőjük × a ti kihozatal-oldalatok: a
     # felhozatalt a másik oldalra kell vinni.
@@ -9056,6 +9122,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pressure_players=_merge_pressure_players(reports),
         high_stealers=_merge_high_stealers(reports),
         wasteful_shooters=_merge_wasteful_shooters(reports),
         opening_players=_merge_clutch_players_rows(

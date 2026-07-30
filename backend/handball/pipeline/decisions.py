@@ -528,3 +528,100 @@ def pass_speed(match: Match,
                      "avg_ms": round(total / n, 1) if ok else None,
                      "fast": fast, "fast_pct": fast_pct, "label": label}
     return out
+
+
+# Pressz-érzékeny játékosok: ennyi nyomott döntéstől ítélünk
+# emberenként, és e feletti eladás-arány jelenti, hogy szorításban
+# elveszíti a labdát.
+PSP_MIN_PRESS = 5
+PSP_TO_PCT = 30.0
+
+
+def pressure_sensitive_players(match: Match,
+                               config: Optional[TacticsConfig] = None
+                               ) -> dict:
+    """Pressz-érzékeny játékosok: KI VESZÍTI EL a labdát szorításban.
+
+    A pressz-tűrés (pass_security_under_pressure) csapat-szinten
+    mondja meg, mennyivel nő az eladás testközeli védő mellett — ez
+    játékosonként bontja: emberenként számoljuk a NYOMOTT (a
+    PRESS_TIGHT_M-en belül védővel meghozott) labdás döntéseket és
+    azok közül az eladásokat.
+
+    Edzőileg: a pressz-érzékeny emberre kell küldeni a kettőzést — az
+    ő szorítása nem kockázat, hanem labdaszerzés; a saját oldalon
+    pedig neki a nyomás alatti kiadás a gyakorlandó.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "press_events", "press_to"}], "top"} — a lista nyomott eladás
+    szerint csökkenő; a "top" az a játékos, akinek legalább
+    PSP_MIN_PRESS nyomott döntése van, és az eladás-aránya eléri a
+    PSP_TO_PCT-t.
+    """
+    import math
+
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+
+    def _tight(frame: Frame, pos, team) -> bool:
+        dists = [math.hypot(p.x - pos.x, p.y - pos.y)
+                 for p in frame.players
+                 if p.team != team and p.role != "kapus"]
+        return bool(dists) and min(dists) <= PRESS_TIGHT_M
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+
+    def _rec(side, pid):
+        return tally[side].setdefault(pid, {"press_events": 0,
+                                            "press_to": 0})
+
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        if not _tight(pe.decision_frame, pe.passer_pos, pe.team):
+            continue
+        if pe.passer_pos.jersey_number is not None:
+            jersey.setdefault(pe.passer_id, pe.passer_pos.jersey_number)
+        _rec(pe.team.value, pe.passer_id)["press_events"] += 1
+
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        i0 = idx_of.get(e.t)
+        if i0 is None:
+            continue
+        # A vesztes utolsó ismert pozíciója az esemény előtti kockákon.
+        for j in range(i0 - 1, max(-1, i0 - 13), -1):
+            loser = next((p for p in frames[j].players
+                          if p.track_id == e.player_id), None)
+            if loser is None:
+                continue
+            if _tight(frames[j], loser, e.team):
+                if loser.jersey_number is not None:
+                    jersey.setdefault(loser.track_id,
+                                      loser.jersey_number)
+                rec = _rec(e.team.value, e.player_id)
+                rec["press_events"] += 1
+                rec["press_to"] += 1
+            break
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "press_events": r["press_events"],
+                 "press_to": r["press_to"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["press_to"])]
+        top = None
+        for row in rows:
+            if row["press_events"] >= PSP_MIN_PRESS and (
+                    100.0 * row["press_to"] / row["press_events"]
+                    >= PSP_TO_PCT):
+                top = row
+                break
+        out[side] = {"players": rows, "top": top}
+    return out

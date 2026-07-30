@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Pressz-érzékeny játékosok**: KI VESZÍTI EL a labdát szorításban.
+  A pressz-tűrés csapat-szinten mondja meg, mennyivel nő az eladás
+  testközeli védő mellett — ez játékosonként bontja: emberenként a
+  nyomott labdás döntések és azok közül az eladások (5+ nyomott
+  döntés, 30% feletti eladás-aránynál). A pressz-érzékeny emberre kell
+  küldeni a kettőzést: nála a szorítás nem kockázat, hanem
+  labdaszerzés. Egy réteg, sok felület: `pressure_sensitive_players`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (játékosonkénti darabszámok + edzői kulcs +
+  csempe), 148. meccsterv-szabály (az ő pressz-érzékeny emberük × a ti
+  kettőzésetek), 169. edzés-szabály (nyomás alatti kiadás: egy
+  érintés, a szorítás ellenkező oldalára).
 - **Elöl szerző védők**: KI SZED LABDÁT a támadó térfélen. A
   labdaszerzők azt mondják meg, ki szerzi a labdákat, a
   szerzés-magasság azt, hol történik ez csapat-szinten — ez a kettő

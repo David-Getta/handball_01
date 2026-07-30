@@ -1297,6 +1297,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Pressz-érzékeny játékosok: ki veszíti el a labdát szorításban (5+
+  // nyomott döntés, 30% feletti eladás-arány — a backend-kulccsal
+  // azonos küszöbök).
+  String? _pressurePlayers(Map<String, dynamic> r) {
+    final rows = r["pressure_players"];
+    if (rows is! List || rows.isEmpty) return null;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final events = ((e["press_events"] as num?) ?? 0).toInt();
+      final tos = ((e["press_to"] as num?) ?? 0).toInt();
+      if (events < 5) continue;
+      final pct = 100.0 * tos / events;
+      if (pct < 30.0) continue;
+      final who = e["jersey"] != null
+          ? "${e["jersey"]}-es"
+          : "${e["player_id"]} azonosítójú";
+      return "a(z) $who játékosuk pressz-érzékeny (a nyomott döntései "
+          "${pct.toStringAsFixed(0)}%-a eladás lett, $tos/$events) · "
+          "rá kell küldeni a kettőzést";
+    }
+    return null;
+  }
+
   // Elöl szerző védők: ki szed labdát a támadó térfélen (3+ szerzés,
   // 50% feletti elöl-arány — a backend-kulccsal azonos küszöbök).
   String? _highStealers(Map<String, dynamic> r) {
@@ -4039,6 +4062,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Pontatlan lövők", _wastefulShooters(r)!],
       if (_highStealers(r) != null)
         ["Elöl szerző védők", _highStealers(r)!],
+      if (_pressurePlayers(r) != null)
+        ["Pressz-érzékeny játékosok", _pressurePlayers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
