@@ -1297,6 +1297,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   // Labdatartás-idő: kinél áll meg a labda (5+ labdás szakasz, 0,8 mp
   // a csapatátlag felett; a backend-kulccsal azonos küszöbök).
+  // Elöl szerző védők: ki szed labdát a támadó térfélen (3+ szerzés,
+  // 50% feletti elöl-arány — a backend-kulccsal azonos küszöbök).
+  String? _highStealers(Map<String, dynamic> r) {
+    final rows = r["high_stealers"];
+    if (rows is! List || rows.isEmpty) return null;
+    for (final e in rows) {
+      if (e is! Map) continue;
+      final steals = ((e["steals"] as num?) ?? 0).toInt();
+      final high = ((e["high"] as num?) ?? 0).toInt();
+      if (steals < 3) continue;
+      if (100.0 * high / steals < 50.0) continue;
+      final who = e["jersey"] != null
+          ? "${e["jersey"]}-es"
+          : "${e["player_id"]} azonosítójú";
+      return "a(z) $who játékosuk elöl szedi a labdákat "
+          "($high/$steals szerzés a támadó térfelükön) · az ő oldalán "
+          "ne vezessétek a kihozatalt";
+    }
+    return null;
+  }
+
   // Pontatlan lövők: kinek a lövései kerülik el a kaput (5+ lövés,
   // 40% feletti mellé-arány — a backend-kulccsal azonos küszöbök).
   String? _wastefulShooters(Map<String, dynamic> r) {
@@ -4016,6 +4037,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       if (_openingLineup(r) != null) ["Kezdő hatos", _openingLineup(r)!],
       if (_wastefulShooters(r) != null)
         ["Pontatlan lövők", _wastefulShooters(r)!],
+      if (_highStealers(r) != null)
+        ["Elöl szerző védők", _highStealers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

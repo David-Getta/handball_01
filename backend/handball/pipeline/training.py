@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 168) Elöl szerző védők: ha van ilyen emberünk, a letámadás
+    # köré lehet védekezést építeni.
+    try:
+        from .defense import high_steal_players
+        hsp168 = high_steal_players(match, config)
+        for side in ("home", "away"):
+            top168 = hsp168[side]["top"]
+            if top168 is None:
+                continue
+            who168 = (f"a {top168['jersey']}-es mezszámú játékos"
+                      if top168.get("jersey") is not None
+                      else f"a {top168['player_id']} azonosítójú játékos")
+            add(side, "védekezés", "Letámadás a szerzőnk köré",
+                f"{who168} a szerzéseinek nagy részét a támadó "
+                f"térfélen hozta ({top168['high']}/"
+                f"{top168['steals']}) — ez a képesség csak akkor ér "
+                "gólt, ha a csapat együtt lép vele",
+                "letámadás a szerzőnk köré: 6-6 elleni gyakorlás, "
+                "ahol a kijelölt szerzőnk indítja a preszt (ő megy a "
+                "felhozóra), a többiek pedig sávot zárnak mögötte — "
+                "a szerzés után kötelező az azonnali befejezés hat "
+                "másodpercen belül")
+    except Exception:
+        pass
+
     # 167) Pontatlan lövők: ha valakinek a lövései elkerülik a kaput,
     # a célzás a téma.
     try:

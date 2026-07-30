@@ -833,6 +833,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          f"kért időt ({rec_tt['timeouts']} időkérés).")
     except Exception:
         pass
+    # Elöl szerző védők: ki szedte a labdát a támadó térfélen.
+    try:
+        from .defense import high_steal_players
+        hsp = high_steal_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_hsp = hsp[side]["top"]
+            if top_hsp is None:
+                continue
+            jn = (top_hsp["jersey"]
+                  or _jersey_of_track(match).get(top_hsp["player_id"]))
+            who = (f"{jn}-es mezszámú játékosa" if jn is not None
+                   else f"{top_hsp['player_id']} azonosítójú játékosa")
+            body += (f" A(z) {name} {who} elöl szedte a labdákat "
+                     f"({top_hsp['high']}/{top_hsp['steals']} "
+                     "szerzés a támadó térfélen).")
+    except Exception:
+        pass
     # Pontatlan lövők: kinek a lövései kerülték el a kaput.
     try:
         from .xg import wasteful_shooters

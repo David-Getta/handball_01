@@ -604,6 +604,10 @@ class ScoutingReport:
     # kapott gólok összege és a hajrában (utolsó 10 perc) kértek
     # száma — darabszámok, meccsek közt pontosan összegződnek (átlag =
     # sum_before / timeouts).
+    # Elöl szerző védőik: [{"player_id", "jersey", "steals", "high"}]
+    # — ki szed labdát a támadó térfélen; darabszámok, meccsek közt
+    # pontosan összegződnek.
+    high_stealers: list = field(default_factory=list)
     # Pontatlan lövőik: [{"player_id", "jersey", "shots",
     # "off_target"}] — kinek a lövései kerülik el a kaput;
     # darabszámok, meccsek közt pontosan összegződnek.
@@ -1871,6 +1875,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pm_min:.0f} perc alatt) — vele szemben kell a "
                 "legerősebb védekezés, és őt kell fárasztani: menjetek "
                 "rá védekezésben is.")
+
+    # Elöl szerző védők: kinek az oldalán nem szabad kihozni a labdát.
+    _hsp_rows = [p for p in (rep.high_stealers or [])
+                 if p["steals"] >= 3
+                 and 100.0 * p["high"] / p["steals"] >= 50.0]
+    if _hsp_rows:
+        _hsp_top = _hsp_rows[0]
+        _hsp_who = (f"{_hsp_top['jersey']}-es mezszámú"
+                    if _hsp_top.get("jersey") is not None
+                    else f"{_hsp_top['player_id']} azonosítójú")
+        keys.append(
+            f"A(z) {_hsp_who} játékosuk elöl szedi a labdákat "
+            f"({_hsp_top['high']}/{_hsp_top['steals']} szerzés a "
+            "támadó térfelükön) — az ő oldalán nem szabad a "
+            "kihozatalt vezetni: a kapus a másik oldalra indítson, és "
+            "a felhozó ne fusson a sávjába.")
 
     # Pontatlan lövők: kire lehet ráengedni a lövést.
     _wst_rows = [p for p in (rep.wasteful_shooters or [])
@@ -4789,6 +4809,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
             for p in _pm(match, config)[team.value]["players"]]
         from .tactics import formation_switching as _fsw
         fswrec = _fsw(match, config)[team.value]
+        from .defense import high_steal_players as _hsp
+        rep.high_stealers = [
+            dict(row)
+            for row in _hsp(match, config)[team.value]["players"]]
         from .xg import wasteful_shooters as _wst
         rep.wasteful_shooters = [
             dict(row)
@@ -5822,6 +5846,24 @@ def _merge_breakthrough_players(reports) -> list:
     return [{"player_id": pid, **rec}
             for pid, rec in sorted(tally.items(),
                                    key=lambda kv: -kv[1]["entries"])]
+
+
+def _merge_high_stealers(reports) -> list:
+    """Elöl szerző védők: játékosonként a szerzések és az elöl
+    szerzettek összegzése (az elöl-szerzés szerint csökkenő)."""
+    tally: dict = {}
+    for r in reports:
+        for row in (r.high_stealers or []):
+            rec = tally.setdefault(row["player_id"],
+                                   {"jersey": None, "steals": 0,
+                                    "high": 0})
+            if rec["jersey"] is None:
+                rec["jersey"] = row.get("jersey")
+            rec["steals"] += int(row.get("steals", 0))
+            rec["high"] += int(row.get("high", 0))
+    return [{"player_id": pid, **rec}
+            for pid, rec in sorted(tally.items(),
+                                   key=lambda kv: -kv[1]["high"])]
 
 
 def _merge_wasteful_shooters(reports) -> list:
@@ -6911,6 +6953,32 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 147) Az ő elöl szedő védőjük × a ti kihozatal-oldalatok: a
+    # felhozatalt a másik oldalra kell vinni.
+    _hsp147 = [p for p in (opp.high_stealers or [])
+               if p["steals"] >= 3
+               and 100.0 * p["high"] / p["steals"] >= 50.0]
+    _busn147 = own.bus_left + own.bus_center + own.bus_right
+    if _hsp147 and _busn147 >= 8:
+        _top147 = _hsp147[0]
+        _best147, _cnt147 = max(
+            (("bal", own.bus_left), ("jobb", own.bus_right)),
+            key=lambda kv: kv[1])
+        _pct147 = 100.0 * _cnt147 / _busn147
+        _who147 = (f"{_top147['jersey']}-es mezszámú"
+                   if _top147.get("jersey") is not None
+                   else f"{_top147['player_id']} azonosítójú")
+        if _pct147 >= 50.0:
+            plan.append(
+                f"A(z) {_who147} játékosuk elöl szedi a labdákat "
+                f"({_top147['high']}/{_top147['steals']} szerzés a "
+                f"támadó térfelükön), ti pedig jellemzően a "
+                f"{_best147} oldalon hozzátok fel a labdát (a "
+                f"támadásaitok {_pct147:.0f}%-a) — ezt tudatosan kell "
+                "váltani: a kihozatalt vigyétek az ő oldalával "
+                "szemben, és a kapus mindig a szabad oldalra "
+                "indítson.")
 
     # 146) Az ő pontatlan lövőjük × a ti gyors kapus-indításotok: a
     # mellé lövése ajándék kontra.
@@ -8988,6 +9056,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        high_stealers=_merge_high_stealers(reports),
         wasteful_shooters=_merge_wasteful_shooters(reports),
         opening_players=_merge_clutch_players_rows(
             reports, "opening_players"),

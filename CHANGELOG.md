@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Elöl szerző védők**: KI SZED LABDÁT a támadó térfélen. A
+  labdaszerzők azt mondják meg, ki szerzi a labdákat, a
+  szerzés-magasság azt, hol történik ez csapat-szinten — ez a kettő
+  kereszteződése: játékosonként hány szerzés születik a saját támadó
+  térfélen (3+ szerzés, 50% feletti elöl-aránynál). Az elöl szedő
+  ember oldalán nem szabad a kihozatalt vezetni: a kapus a másik
+  oldalra indítson. Egy réteg, sok felület: `high_steal_players`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (játékosonkénti szerzés-darabszámok + edzői kulcs
+  + csempe), 147. meccsterv-szabály (az ő elöl szedő védőjük × a ti
+  kihozatal-oldalatok), 168. edzés-szabály (letámadás a szerzőnk köré).
 - **Pontatlan lövők**: KINEK a lövései mennek mellé. A
   célzás-pontosság csapat-szinten mondja meg, a lövéseikből mennyi
   tart kapura — ez játékosonként bontja: lövőnként a kísérletek és a

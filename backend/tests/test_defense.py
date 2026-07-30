@@ -1684,3 +1684,46 @@ def test_defense_setup_time_needs_enough_cases():
     rec = defense_setup_time(_setup_time_match(delay_s=10.0,
                                                n_cases=2))["away"]
     assert rec["avg_s"] is None and rec["verdict"] is None
+
+
+# ---- Elöl szerző védők -------------------------------------------------------
+
+def _high_steal_match(cases, fps=25.0):
+    """Labdaszerzés-sorozat: a `cases` elemei (szerző id, elöl?)
+    párok — a hazai szerez, elöl = a vendég térfelén (x=30)."""
+    frames = []
+    t = 0
+    for (pid, high) in cases:
+        x = 30.0 if high else 8.0
+        for _ in range(10):     # a vendég birtokol
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, x, 10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):     # a hazai szerzi meg
+            frames.append(Frame(
+                t=t, players=[_pl(pid, Team.HOME, x, 10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_high_steal_players_finds_the_front_stealer():
+    """Aki négy szerzéséből hármat elöl szed → az ő oldalán nem
+    szabad kihozni a labdát."""
+    from handball.pipeline.defense import high_steal_players
+
+    rec = high_steal_players(_high_steal_match(
+        [(5, True)] * 3 + [(5, False)] + [(7, False)] * 3))["home"]
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 5
+    assert rec["top"]["steals"] == 4 and rec["top"]["high"] == 3
+
+
+def test_high_steal_players_needs_enough_steals():
+    """Kevés (3-nál kevesebb) szerzésnél nincs kiemelt védő."""
+    from handball.pipeline.defense import high_steal_players
+
+    rec = high_steal_players(_high_steal_match(
+        [(5, True), (7, False)]))["home"]
+    assert rec["top"] is None

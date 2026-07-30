@@ -2385,3 +2385,70 @@ def defense_setup_time(match, config=None) -> dict:
                 rec["verdict"] = "gyorsan rendeződnek"
         out[side] = rec
     return out
+
+
+# Elöl szerző védők: ennyi labdaszerzéstől ítélünk emberenként, és e
+# feletti "elöl" arány jelenti, hogy a támadó térfélen dolgozik.
+HSP_MIN_STEALS = 3
+HSP_HIGH_PCT = 50.0
+
+
+def high_steal_players(match, config=None) -> dict:
+    """Elöl szerző védők: KI SZED LABDÁT a támadó térfélen.
+
+    A labdaszerzők (ball_winners) azt mondják meg, KI szerzi a
+    labdákat, a szerzés-magasság (steal_height) azt, HOL történik ez
+    csapat-szinten — ez a kettő kereszteződése: játékosonként bontjuk,
+    hány szerzésük születik a SAJÁT támadó térfelükön (letámadásból).
+
+    Edzőileg: az elöl szedő ember oldalán nem szabad a kihozatalt
+    vezetni — vele szemben a kapus a másik oldalra indítson, és a
+    felhozó ne fusson a sávjába.
+
+    Visszatérés csapatonként: {"steals", "players": [{"player_id",
+    "jersey", "steals", "high"}], "top"} — a lista elöl-szerzés
+    szerint csökkenő; a "top" az a játékos, akinek legalább
+    HSP_MIN_STEALS szerzése van, és azok HSP_HIGH_PCT-nál nagyobb
+    része a támadó térfélen történt.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    prev = None
+    for f in match.frames:
+        h = ball_holder(f, config)
+        if h is None:
+            continue
+        if prev is not None and h.team != prev:
+            if h.jersey_number is not None:
+                jersey.setdefault(h.track_id, h.jersey_number)
+            rec = tally[h.team.value].setdefault(h.track_id,
+                                                 {"steals": 0,
+                                                  "high": 0})
+            rec["steals"] += 1
+            goal_x = config.attacks_toward_x(h.team)
+            if abs(h.x - goal_x) <= half:
+                rec["high"] += 1   # a saját támadó térfelén szerzett
+        prev = h.team
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "steals": r["steals"], "high": r["high"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["high"])]
+        top = None
+        for row in rows:
+            if row["steals"] >= HSP_MIN_STEALS and (
+                    100.0 * row["high"] / row["steals"]
+                    >= HSP_HIGH_PCT):
+                top = row
+                break
+        out[side] = {"steals": sum(r["steals"] for r in rows),
+                     "players": rows, "top": top}
+    return out
