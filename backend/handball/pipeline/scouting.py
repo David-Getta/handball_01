@@ -609,6 +609,13 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kapusuk állás szerint: hátrányban és egyébként kapura kapott
+    # lövések + védések — darabszámok, meccsek közt pontosan
+    # összegződnek (arányok külön-külön).
+    gks_trail_faced: int = 0
+    gks_trail_saves: int = 0
+    gks_other_faced: int = 0
+    gks_other_saves: int = 0
     # Szorult játékuk: hátrányban és egyébként mért támadó-kockák és
     # szélesség-összegek — darabszám/összeg, meccsek közt pontosan
     # összegződnek (átlag = wbs_*_sum_m / wbs_*_frames).
@@ -2026,6 +2033,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kapus állás szerint: mennyit ér a kapusuk, ha vezettek.
+    if rep.gks_trail_faced >= 4 and rep.gks_other_faced >= 4:
+        _gks_t = 100.0 * rep.gks_trail_saves / rep.gks_trail_faced
+        _gks_o = 100.0 * rep.gks_other_saves / rep.gks_other_faced
+        if _gks_t - _gks_o >= 15.0:
+            keys.append(
+                f"Hátrányban feljavul a kapusuk ({_gks_t:.0f}% a "
+                f"védés-aránya a szokásos {_gks_o:.0f}% helyett) — ha "
+                "vezettek, csak kidolgozott helyzetet lőjetek rá: a "
+                "bravúrjaiból lendület lesz, és a rossz lövés őket "
+                "hozza vissza a meccsbe.")
+        elif _gks_o - _gks_t >= 15.0:
+            keys.append(
+                f"Hátrányban összeesik a kapusuk (csak {_gks_t:.0f}% "
+                f"a védés-aránya a szokásos {_gks_o:.0f}% helyett) — "
+                "ha vezettek, bátran jöhet a távoli lövés is: a "
+                "megingott kapus minden újabb góllal tovább csúszik.")
 
     # Szorult játék: mi történik velük, ha vezettek ellenük.
     if rep.wbs_trail_frames >= 100 and rep.wbs_other_frames >= 100:
@@ -5387,6 +5412,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .goalkeeper import gk_saves_by_score as _gks
+        gksrec = _gks(match, config)[team.value]
+        rep.gks_trail_faced = gksrec["trail"]["faced"]
+        rep.gks_trail_saves = gksrec["trail"]["saves"]
+        rep.gks_other_faced = gksrec["other"]["faced"]
+        rep.gks_other_saves = gksrec["other"]["saves"]
         from .attack_types import width_by_score as _wbs
         wbsrec = _wbs(match, config)[team.value]
         rep.wbs_trail_frames = wbsrec["trail_frames"]
@@ -7684,6 +7715,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 174) Az ő hátrányban összeeső kapusuk × a ti lövőerőtök: előnyben
+    # rá kell lőni a megingott kapusra.
+    if (opp.gks_trail_faced >= 4 and opp.gks_other_faced >= 4
+            and own.shot_speed_n >= 5):
+        _gks174_t = 100.0 * opp.gks_trail_saves / opp.gks_trail_faced
+        _gks174_o = 100.0 * opp.gks_other_saves / opp.gks_other_faced
+        _spd174 = own.shot_speed_sum_kmh / own.shot_speed_n
+        if _gks174_o - _gks174_t >= 15.0 and _spd174 >= 70.0:
+            plan.append(
+                f"Hátrányban összeesik a kapusuk (a védés-aránya "
+                f"{_gks174_o:.0f}%-ról {_gks174_t:.0f}%-ra esik), ti "
+                f"pedig keményen lőtök (átlag {_spd174:.0f} km/h) — "
+                "ha megvan az előny, ne kímélje senki: a kinti "
+                "bombák is mehetnek, a megingott kapus minden újabb "
+                "góllal tovább csúszik.")
 
     # 173) Az ő hátrányban beszűkülő támadásuk × a ti blokkjaitok: ha
     # vezettek, a közép bebetonozása mindent visz.
@@ -10299,6 +10346,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        gks_trail_faced=sum(r.gks_trail_faced for r in reports),
+        gks_trail_saves=sum(r.gks_trail_saves for r in reports),
+        gks_other_faced=sum(r.gks_other_faced for r in reports),
+        gks_other_saves=sum(r.gks_other_saves for r in reports),
         wbs_trail_frames=sum(r.wbs_trail_frames for r in reports),
         wbs_trail_sum_m=sum(r.wbs_trail_sum_m for r in reports),
         wbs_other_frames=sum(r.wbs_other_frames for r in reports),

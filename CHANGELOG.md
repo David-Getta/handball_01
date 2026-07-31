@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus állás szerint**: HÁTRÁNYBAN FELJAVUL vagy ÖSSZEESIK-E a
+  kapusuk. A védés-esés az idő szerint bontja a kapus teljesítményét
+  — ez az állás szerint: a rá kaputra érkezett lövéseket
+  szétválasztjuk aszerint, hogy a csapata épp hátrányban volt-e
+  (állapotonként 4+ lövés, 15 százalékpont az ítélethez). A
+  hátrányban feljavuló kapusra vezetésnél csak kidolgozott helyzetet
+  szabad lőni — a bravúrjaiból lendület lesz; az összeeső kapusra
+  bátran jöhet a távoli lövés is. Egy réteg, sok felület:
+  `gk_saves_by_score` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (állapotonkénti lövés- és
+  védés-darabszámok, két edzői kulcs + csempe), 174.
+  meccsterv-szabály (az ő összeeső kapusuk × a ti lövőerőtök), 195.
+  edzés-szabály (kapus-újraindítás: gól utáni rutin-protokoll,
+  hátrány-szimulált védés-sorozat).
+
 - **Szorult játék**: HÁTRÁNYBAN mennyire húzzák szét a pályát. A
   támadás-szélesség a teljes meccs átlagát adja — ez állás szerint
   bontja: külön mérjük a támadók oldalirányú terjedelmét hátrányban

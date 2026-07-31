@@ -1383,3 +1383,76 @@ def test_seven_keeper_swaps_needs_two_swaps():
 
     rec = seven_keeper_swaps(_svk_match(swap=True, sevens=1))["away"]
     assert rec["swaps"] == 1 and rec["verdict"] is None
+
+
+# ---- Kapus állás szerint (hátrányban feljavul-e) ----------------------------
+
+def _gks_match(trail_saves, other_saves, fps=25.0):
+    """A vendég kapusra lövünk. Az egál-szakaszban minden hazai gólra
+    vendég-egyenlítés jön, így az állás nem billen; aztán egy
+    megválaszolatlan hazai gól után a vendég hátrányban kapja a
+    trail_saves lövéseit."""
+    frames = []
+    t = 0
+
+    def _pause():
+        nonlocal t
+        for _ in range(60):
+            frames.append(Frame(t=t, players=[
+                _svk_pl(1, Team.HOME, 20.0, 6.0)],
+                ball=Ball(x=20.0, y=6.0, confidence=1.0)))
+            t += 1
+
+    def _away_goal():
+        nonlocal t
+        for i in range(8):     # vendég gól a 0-s kapuba (egyenlítés)
+            frames.append(Frame(t=t, players=[
+                _svk_pl(21, Team.AWAY, 7.0, 10.0)],
+                ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        _pause()
+
+    def _shot(save):
+        nonlocal t
+        frames.extend(_shot_sequence(t, gk_track=9, save=save))
+        t = frames[-1].t + 1
+        _pause()
+
+    for save in other_saves:   # egál-szakasz
+        _shot(save)
+        if not save:
+            _away_goal()
+    _shot(False)               # megválaszolatlan hazai gól: hátrány
+    for save in trail_saves:
+        _shot(save)
+    return _match(frames, fps)
+
+
+def test_gk_saves_by_score_flags_the_clutch_keeper():
+    """Egálban 1/4 védés, hátrányban 4/4 → hátrányban feljavul."""
+    from handball.pipeline.goalkeeper import gk_saves_by_score
+
+    rec = gk_saves_by_score(_gks_match(
+        trail_saves=[True] * 4, other_saves=[True, False, False, False]))["away"]
+    assert rec["trail"]["faced"] == 4 and rec["trail"]["saves"] == 4
+    assert rec["other"]["faced"] == 5
+    assert rec["verdict"] == "hátrányban feljavul a kapusuk"
+
+
+def test_gk_saves_by_score_flags_the_collapsing_keeper():
+    """Egálban 4/4 védés, hátrányban 0/4 → hátrányban összeesik."""
+    from handball.pipeline.goalkeeper import gk_saves_by_score
+
+    rec = gk_saves_by_score(_gks_match(
+        trail_saves=[False] * 4, other_saves=[True] * 4))["away"]
+    assert rec["verdict"] == "hátrányban összeesik a kapusuk"
+
+
+def test_gk_saves_by_score_needs_shots_in_both_states():
+    """Ha valamelyik állapotban kevés a minta, nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_saves_by_score
+
+    rec = gk_saves_by_score(_gks_match(
+        trail_saves=[True] * 2, other_saves=[True] * 4))["away"]
+    assert rec["verdict"] is None

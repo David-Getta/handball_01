@@ -1590,3 +1590,75 @@ def seven_keeper_swaps(match: Match, config=None) -> dict:
         if out[side]["swaps"] >= SVK_MIN_SWAPS:
             out[side]["verdict"] = "hetesre kapust cserélnek"
     return out
+
+
+# Kapus állás szerint: állapotonként ennyi kapura tartó lövés kell, és
+# ekkora (százalékpontos) különbség számít érdemi eltérésnek.
+GKS_MIN_FACED = 4
+GKS_GAP_PP = 15.0
+
+
+def gk_saves_by_score(match: Match, config=None) -> dict:
+    """Kapus állás szerint: HÁTRÁNYBAN FELJAVUL vagy ÖSSZEESIK-E.
+
+    A védés-esés (gk_save_fade) az idő szerint bontja a kapus
+    teljesítményét — ez az állás szerint: a rá kaputra érkezett
+    lövéseket szétválasztjuk aszerint, hogy a csapata épp hátrányban
+    volt-e, és külön védés-arányt számolunk.
+
+    Edzőileg: a hátrányban feljavuló kapus meccsben tartja a
+    csapatát — ellene vezetésnél nem a lövések SZÁMA, hanem a
+    minősége dönt: csak kidolgozott helyzetet szabad rá lőni, mert a
+    bravúrjaiból lendület lesz; a hátrányban összeeső kapusra viszont
+    vezetésnél bátran jöhet a távoli lövés is.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"trail"/"other":
+    {"faced", "saves", "save_pct"}, "verdict"} — a verdict None, ha
+    bármelyik állapotban GKS_MIN_FACED alatti a minta; a verdict
+    "hátrányban feljavul a kapusuk" / "hátrányban összeesik a
+    kapusuk" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    def _score_at(t: int) -> dict:
+        sc = {"home": 0, "away": 0}
+        for (gt, tm) in goals:
+            if gt < t:
+                sc[tm] += 1
+        return sc
+
+    xg = match_xg(match, config)
+    out: dict = {}
+    for side in ("home", "away"):
+        bands = {"trail": {"faced": 0, "saves": 0},
+                 "other": {"faced": 0, "saves": 0}}
+        for sh in xg["shots"]:
+            if sh["team"] == side:
+                continue
+            if sh["outcome"] not in ("goal", "save"):
+                continue
+            sc = _score_at(sh["t"])
+            other_side = "away" if side == "home" else "home"
+            band = "trail" if sc[side] < sc[other_side] else "other"
+            bands[band]["faced"] += 1
+            if sh["outcome"] == "save":
+                bands[band]["saves"] += 1
+        for b in bands.values():
+            b["save_pct"] = (round(100.0 * b["saves"] / b["faced"], 1)
+                             if b["faced"] else None)
+        verdict = None
+        if all(bands[b]["faced"] >= GKS_MIN_FACED
+               for b in ("trail", "other")):
+            gap = bands["trail"]["save_pct"] - bands["other"]["save_pct"]
+            if gap >= GKS_GAP_PP:
+                verdict = "hátrányban feljavul a kapusuk"
+            elif gap <= -GKS_GAP_PP:
+                verdict = "hátrányban összeesik a kapusuk"
+        out[side] = {**bands, "verdict": verdict}
+    return out

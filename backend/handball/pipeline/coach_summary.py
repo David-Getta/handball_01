@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kapus állás szerint: hátrányban feljavul-e.
+    try:
+        from .goalkeeper import gk_saves_by_score
+        gks = gk_saves_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gks = gks[side]
+            if rec_gks["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusa állás-érzékeny: "
+                     f"{rec_gks['verdict'].replace(' a kapusuk', '')} "
+                     f"(hátrányban {rec_gks['trail']['save_pct']:.0f}%, "
+                     f"egyébként {rec_gks['other']['save_pct']:.0f}% a "
+                     "védés-aránya).")
+    except Exception:
+        pass
     # Szorult játék: hátrányban mennyire húzzák szét a pályát.
     try:
         from .attack_types import width_by_score

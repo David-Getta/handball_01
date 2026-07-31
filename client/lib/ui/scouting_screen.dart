@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapus állás szerint: hátrányban feljavul-e (állapotonként 4+
+  // kapura tartó lövés, 15 százalékpont — a backend-kulccsal azonos
+  // küszöbök).
+  String? _gkSavesByScore(Map<String, dynamic> r) {
+    final tF = ((r["gks_trail_faced"] as num?) ?? 0).toInt();
+    final oF = ((r["gks_other_faced"] as num?) ?? 0).toInt();
+    if (tF < 4 || oF < 4) return null;
+    final t = 100.0 * ((r["gks_trail_saves"] as num?) ?? 0).toInt() / tF;
+    final o = 100.0 * ((r["gks_other_saves"] as num?) ?? 0).toInt() / oF;
+    if (t - o >= 15.0) {
+      return "hátrányban feljavul a kapusuk "
+          "(${t.toStringAsFixed(0)}% a szokásos "
+          "${o.toStringAsFixed(0)}% helyett) · vezetésnél csak "
+          "kidolgozott helyzetet lőjetek rá";
+    }
+    if (o - t >= 15.0) {
+      return "hátrányban összeesik a kapusuk (csak "
+          "${t.toStringAsFixed(0)}%) · vezetésnél bátran jöhet a "
+          "távoli lövés is";
+    }
+    return null;
+  }
+
   // Szorult játék: hátrányban mennyire húzzák szét a pályát (100+
   // kocka mindkét állapotban, 2 m különbség — a backend-kulccsal
   // azonos küszöbök).
@@ -4661,6 +4684,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszaállás", _postPowerplay(r)!],
       if (_widthByScore(r) != null)
         ["Szorult játék", _widthByScore(r)!],
+      if (_gkSavesByScore(r) != null)
+        ["Kapus állás szerint", _gkSavesByScore(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

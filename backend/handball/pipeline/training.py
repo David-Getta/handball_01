@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 195) Kapus állás szerint: ha a kapusunk hátrányban összeesik, a
+    # mentális újraindítás a téma.
+    try:
+        from .goalkeeper import gk_saves_by_score
+        gks195 = gk_saves_by_score(match, config)
+        for side in ("home", "away"):
+            rec195 = gks195[side]
+            if rec195["verdict"] != "hátrányban összeesik a kapusuk":
+                continue
+            add(side, "kapus", "Kapus-újraindítás",
+                f"hátrányban {rec195['trail']['save_pct']:.0f}%-ra "
+                f"esik a kapusunk védés-aránya (a szokásos "
+                f"{rec195['other']['save_pct']:.0f}% helyett) — pont "
+                "akkor fogy el, amikor a csapatnak a legnagyobb "
+                "szüksége lenne rá",
+                "kapus-újraindítás: rutin-protokoll kapott gól utánra "
+                "(kortyolás, sapka-igazítás, egy kulcsszó a "
+                "beállásra) + hátrány-szimulált védés-sorozat: az "
+                "edző 0-2-es állást hirdet, és a kapus csak akkor "
+                "zárhatja a menetet, ha egymás után két lövést "
+                "megfog — a bravúr-élmény hátrányban is beépül")
+    except Exception:
+        pass
+
     # 194) Szorult játék: ha hátrányban beszűkülünk, a nyomás alatti
     # szélesség-tartás a téma.
     try:
