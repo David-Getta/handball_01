@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 210) Labda-forgatás: ha egy irányba forgatunk, a kétirányú
+    # játék a téma.
+    try:
+        from .attack_types import circulation_direction
+        cir210 = circulation_direction(match, config)
+        for side in ("home", "away"):
+            rec210 = cir210[side]
+            if rec210["verdict"] is None:
+                continue
+            _dir210 = ("balra" if rec210["verdict"] == "balra forgatnak"
+                       else "jobbra")
+            add(side, "tamadas", "Kétirányú forgatás",
+                f"a forgásunk egyirányú ({rec210['left']} balra, "
+                f"{rec210['right']} jobbra tartó oldalpassz) — a "
+                "felkészült ellenfél a megszokott sávunkat zárja, és "
+                "a kettőzést a forgás végpontjára időzíti",
+                "kétirányú forgatás: figura-gyakorlás tükrözve — "
+                "minden bejáratott figurát a másik oldalra is "
+                "megtanulunk, és az edzésmeccsen kötelező a "
+                "forgásváltás minden harmadik támadásban; a gyenge "
+                "irányú átadásokat külön passz-blokk erősíti")
+    except Exception:
+        pass
+
     # 209) Elzárás-páros: ha a párosunk kiszámítható, a figura
     # variálása a téma.
     try:

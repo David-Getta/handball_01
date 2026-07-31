@@ -3544,3 +3544,62 @@ def screen_pairs(match: Match,
                    if top is not None else None)
         out[side] = {"pairs": pairs, "top": top, "verdict": verdict}
     return out
+
+
+# Labda-forgatás iránya: ennyi oldalpassz kell az ítélethez, és e
+# feletti részarány jelenti az egyirányú forgatást.
+CIR_MIN_PASSES = 20
+CIR_DOM_PCT = 60.0
+
+
+def circulation_direction(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Labda-forgatás iránya: MERRE JÁRATJÁK a labdát felállt támadásban.
+
+    A passz-irány (pass_direction) az előre-hátra tengelyt méri — ez
+    az oldalirányt: minden érdemi oldalpassznál megnézzük, a támadó
+    szemszögéből balra vagy jobbra megy-e a labda. A legtöbb csapat
+    forgása aszimmetrikus — a fő lövő oldalára tolják a játékot.
+
+    Edzőileg: az egyirányba forgató csapat ellen a kettőzés a forgás
+    VÉGPONTJÁN ér a legtöbbet — oda érkezik a labda, amikor lőni
+    akarnak; és az ellenirányba terelés (a megszokott sáv zárása)
+    kizökkenti a teljes ritmusukat.
+
+    Visszatérés csapatonként: {"passes", "left", "right", "verdict"} —
+    a verdict None CIR_MIN_PASSES alatt vagy kiegyenlített forgásnál;
+    a verdict "balra forgatnak" / "jobbra forgatnak" / None.
+    """
+    from .decisions import detect_passes
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    out = {side: {"passes": 0, "left": 0, "right": 0, "verdict": None}
+           for side in ("home", "away")}
+    for pe in detect_passes(match, config):
+        f = by_t.get(pe.t)
+        if f is None or pe.passer_pos is None:
+            continue
+        recv = next((p for p in f.players
+                     if p.track_id == pe.receiver_id), None)
+        if recv is None:
+            continue
+        dy = recv.y - pe.passer_pos.y
+        if abs(dy) < 2.0:
+            continue   # nem érdemi oldalmozgás
+        goal_x = config.attacks_toward_x(pe.team)
+        # A +x kapura támadva a +y a támadó bal keze felé esik.
+        left = (dy > 0) if goal_x > 0 else (dy < 0)
+        rec = out[pe.team.value]
+        rec["passes"] += 1
+        rec["left" if left else "right"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["passes"] >= CIR_MIN_PASSES:
+            lp = 100.0 * rec["left"] / rec["passes"]
+            if lp >= CIR_DOM_PCT:
+                rec["verdict"] = "balra forgatnak"
+            elif lp <= 100.0 - CIR_DOM_PCT:
+                rec["verdict"] = "jobbra forgatnak"
+    return out

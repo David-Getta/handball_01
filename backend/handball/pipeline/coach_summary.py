@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Labda-forgatás iránya: merre járatják a labdát.
+    try:
+        from .attack_types import circulation_direction
+        cir = circulation_direction(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cir = cir[side]
+            if rec_cir["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadásban {rec_cir['verdict']}: "
+                     f"{rec_cir['left']} balra és {rec_cir['right']} "
+                     "jobbra tartó oldalpassz.")
+    except Exception:
+        pass
     # Elzárás-páros: ki zár kinek.
     try:
         from .attack_types import screen_pairs

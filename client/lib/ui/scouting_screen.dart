@@ -1318,6 +1318,22 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Labda-forgatás iránya: merre járatják a labdát (20+ oldalpassz,
+  // 60% részarány — a backend-kulccsal azonos küszöbök).
+  String? _circulationDirection(Map<String, dynamic> r) {
+    final left = ((r["cir_left"] as num?) ?? 0).toInt();
+    final right = ((r["cir_right"] as num?) ?? 0).toInt();
+    final total = left + right;
+    if (total < 20) return null;
+    final lp = 100.0 * left / total;
+    if (lp < 60.0 && lp > 40.0) return null;
+    final dir = lp >= 60.0 ? "balra" : "jobbra";
+    final pct = (lp >= 60.0 ? lp : 100 - lp).toStringAsFixed(0);
+    return "egy irányba forgatnak ($dir megy az oldalpasszaik "
+        "$pct%-a) · kettőzés a forgás végpontján, terelés az "
+        "ellenirányba";
+  }
+
   // Elzárás-páros: ki zár kinek (3+ közös lövés — a backend-kulccsal
   // azonos küszöb).
   String? _screenPairs(Map<String, dynamic> r) {
@@ -5040,6 +5056,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szélső-kifutás", _wingCloseouts(r)!],
       if (_screenPairs(r) != null)
         ["Elzárás-páros", _screenPairs(r)!],
+      if (_circulationDirection(r) != null)
+        ["Labda-forgatás", _circulationDirection(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

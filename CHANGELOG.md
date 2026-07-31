@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Labda-forgatás iránya**: MERRE JÁRATJÁK a labdát felállt
+  támadásban. A passz-irány az előre-hátra tengelyt méri — ez az
+  oldalirányt: minden érdemi oldalpassznál megnézzük, a támadó
+  szemszögéből balra vagy jobbra megy-e a labda (20+ oldalpassz, 60%
+  részarány az ítélethez). Az egyirányba forgató csapat ellen a
+  kettőzés a forgás végpontján ér a legtöbbet, az ellenirányba
+  terelés pedig kizökkenti a ritmusukat. Egy réteg, sok felület:
+  `circulation_direction` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (irány szerinti darabszámok, edzői
+  kulcs + csempe), 189. meccsterv-szabály (az ő egyirányú forgásuk ×
+  a ti sáv-záró védekezésetek), 210. edzés-szabály (kétirányú
+  forgatás: tükrözött figurák, kötelező forgásváltás).
+
 - **Elzárás-páros**: KI ZÁR KINEK — a bejáratott elzáró-lövő kettős.
   Az elzárás-emberek azt mondják meg, ki zár a legtöbbet — ez azt,
   kinek: minden elzárásból leadott lövésnél az (elzáró, lövő) párost

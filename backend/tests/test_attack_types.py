@@ -2536,3 +2536,66 @@ def test_screen_pairs_scattered_duos_no_verdict():
 
     rec = screen_pairs(_screen_setter_match([5, 6, 7]))["home"]
     assert rec["top"] is None and rec["verdict"] is None
+
+
+# ---- Labda-forgatás iránya (merre járatják a labdát) ------------------------
+
+def _cir_match(n_left, n_right, fps=25.0):
+    """Hazai oldalpasszok: n_left passz +y (balra), n_right passz -y
+    irányba; a passzoló és a fogadó 6 méterre áll egymástól."""
+    frames = []
+    t = 0
+    for direction, count in (("left", n_left), ("right", n_right)):
+        for _ in range(count):
+            y1, y2 = (7.0, 13.0) if direction == "left" else (13.0, 7.0)
+            for _ in range(6):     # a passzoló birtokol
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 28.0, y1),
+                    _pl(2, Team.HOME, 28.0, y2)],
+                    ball=Ball(x=28.0, y=y1, confidence=1.0)))
+                t += 1
+            for i in range(4):     # a labda átszáll a fogadóhoz
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 28.0, y1),
+                    _pl(2, Team.HOME, 28.0, y2)],
+                    ball=Ball(x=28.0,
+                              y=y1 + (y2 - y1) * (i + 1) / 4.0,
+                              confidence=1.0)))
+                t += 1
+            for _ in range(6):     # a fogadónál a labda
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 28.0, y1),
+                    _pl(2, Team.HOME, 28.0, y2)],
+                    ball=Ball(x=28.0, y=y2, confidence=1.0)))
+                t += 1
+            for _ in range(6):     # vendég-labda: nincs visszapassz
+                frames.append(Frame(t=t, players=[
+                    _pl(21, Team.AWAY, 20.0, 16.0)],
+                    ball=Ball(x=20.0, y=16.0, confidence=1.0)))
+                t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_circulation_direction_flags_the_left_leaning_team():
+    """Húsz balra és öt jobbra passz → balra forgatnak."""
+    from handball.pipeline.attack_types import circulation_direction
+
+    rec = circulation_direction(_cir_match(20, 5))["home"]
+    assert rec["passes"] >= 20 and rec["left"] > rec["right"]
+    assert rec["verdict"] == "balra forgatnak"
+
+
+def test_circulation_direction_balanced_no_verdict():
+    """Kiegyenlített forgásnál nincs ítélet."""
+    from handball.pipeline.attack_types import circulation_direction
+
+    rec = circulation_direction(_cir_match(12, 12))["home"]
+    assert rec["verdict"] is None
+
+
+def test_circulation_direction_needs_enough_passes():
+    """Kevés (20-nál kevesebb) oldalpassznál nincs ítélet."""
+    from handball.pipeline.attack_types import circulation_direction
+
+    rec = circulation_direction(_cir_match(8, 2))["home"]
+    assert rec["verdict"] is None

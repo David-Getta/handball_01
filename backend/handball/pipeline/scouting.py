@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Labda-forgatásuk: balra és jobbra tartó oldalpasszaik száma —
+    # darabszámok, meccsek közt pontosan összegződnek.
+    cir_left: int = 0
+    cir_right: int = 0
     # Elzárás-párosaik: (elzáró, lövő) kettősök közös lövés-számai
     # [{"setter_id", "shooter_id", "shots"}] — darabszámok, meccsek
     # közt páros szerint összegződnek.
@@ -2103,6 +2107,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Labda-forgatás: hol érdemes kettőzni és merre terelni.
+    _cir_total = rep.cir_left + rep.cir_right
+    if _cir_total >= 20:
+        _cir_lp = 100.0 * rep.cir_left / _cir_total
+        if _cir_lp >= 60.0 or _cir_lp <= 40.0:
+            _cir_dir = "balra" if _cir_lp >= 60.0 else "jobbra"
+            keys.append(
+                f"Egy irányba forgatnak ({_cir_dir} megy az "
+                f"oldalpasszaik {max(_cir_lp, 100 - _cir_lp):.0f}%-a) "
+                "— a kettőzés a forgás végpontján ér a legtöbbet, és "
+                "az ellenirányba terelés (a megszokott sáv zárása) "
+                "kizökkenti a ritmusukat.")
 
     # Elzárás-páros: melyik kettősükre kell párban készülni.
     _scp_acc: dict = {}
@@ -5712,6 +5729,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import circulation_direction as _cir
+        cirrec = _cir(match, config)[team.value]
+        rep.cir_left = cirrec["left"]
+        rep.cir_right = cirrec["right"]
         from .attack_types import screen_pairs as _scp
         rep.scp_pairs = [dict(pr) for pr in
                          _scp(match, config)[team.value]["pairs"]]
@@ -8079,6 +8100,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 189) Az ő egyirányú forgásuk × a ti sáv-záró védekezésetek: az
+    # ellenirányba terelés kizökkenti őket.
+    _cir189_total = opp.cir_left + opp.cir_right
+    if _cir189_total >= 20 and own.stt_steals >= 6:
+        _cir189_lp = 100.0 * opp.cir_left / _cir189_total
+        _stt189 = 100.0 * own.stt_int / max(1, own.stt_steals)
+        if (_cir189_lp >= 60.0 or _cir189_lp <= 40.0) and _stt189 >= 60.0:
+            _cir189_dir = "balra" if _cir189_lp >= 60.0 else "jobbra"
+            plan.append(
+                f"Egy irányba forgatnak ({_cir189_dir} megy az "
+                f"oldalpasszaik {max(_cir189_lp, 100 - _cir189_lp):.0f}"
+                f"%-a), ti pedig a passzsávakat zárjátok (a "
+                f"szerzéseitek {_stt189:.0f}%-a elfogás) — zárjátok a "
+                "megszokott forgás-sávot: a kényszerített ellenirányú "
+                "passzaik lesznek a legkönnyebb elfogásaitok.")
 
     # 188) Az ő bejáratott elzárás-párosuk × a ti hangos
     # védekezésetek: a kettősük ellen kettősben kell készülni.
@@ -10982,6 +11019,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        cir_left=sum(r.cir_left for r in reports),
+        cir_right=sum(r.cir_right for r in reports),
         scp_pairs=_merge_screen_pairs(reports),
         wco_shots=sum(r.wco_shots for r in reports),
         wco_sum_m=sum(r.wco_sum_m for r in reports),
