@@ -609,6 +609,13 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Fal-fáradásuk: félidőnként a rájuk jövő lövések száma és a
+    # helyzet-értékük összege — darabszám/összeg, meccsek közt
+    # pontosan összegződnek (átlag = wf_*_sum_xga / wf_*_shots).
+    wf_fh_shots: int = 0
+    wf_fh_sum_xga: float = 0.0
+    wf_sh_shots: int = 0
+    wf_sh_sum_xga: float = 0.0
     # Pad-góljaik: a lövőhöz köthető góljaik és ebből a padról
     # beállók góljai — darabszámok, meccsek közt pontosan összegződnek
     # (arány = ben_bench / ben_goals).
@@ -1954,6 +1961,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Fal-fáradás: mikorra időzítsük a belső játékot.
+    if rep.wf_fh_shots >= 5 and rep.wf_sh_shots >= 5:
+        _wf_fh = rep.wf_fh_sum_xga / rep.wf_fh_shots
+        _wf_sh = rep.wf_sh_sum_xga / rep.wf_sh_shots
+        if _wf_sh - _wf_fh >= 0.08:
+            keys.append(
+                f"A második félidőre kinyílik a faluk (a kapott "
+                f"lövéseik átlagos helyzet-értéke {_wf_fh:.2f}-ról "
+                f"{_wf_sh:.2f}-ra nő) — a belső játékot (beállós, "
+                "betörés) a második félidőre tartogassátok: az elején "
+                "a kinti lövés is jó, a végén már befelé kell menni.")
+        elif _wf_fh - _wf_sh >= 0.08:
+            keys.append(
+                f"A második félidőre áll össze a faluk (a kapott "
+                f"lövéseik átlagos helyzet-értéke {_wf_fh:.2f}-ról "
+                f"{_wf_sh:.2f}-ra esik) — az első félidőben kell "
+                "megszerezni az előnyt: a szünet után bezár a bolt, "
+                "ott már a türelmes figura-játék marad.")
 
     # Pad-gólok: fárasztható-e a góltermelésük.
     if rep.ben_goals >= 6:
@@ -5090,6 +5116,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .xg import wall_fade as _wf
+        wfrec = _wf(match, config)[team.value]
+        rep.wf_fh_shots = wfrec["fh_shots"]
+        rep.wf_fh_sum_xga = ((wfrec["fh_avg_xga"] or 0.0)
+                             * wfrec["fh_shots"])
+        rep.wf_sh_shots = wfrec["sh_shots"]
+        rep.wf_sh_sum_xga = ((wfrec["sh_avg_xga"] or 0.0)
+                             * wfrec["sh_shots"])
         from .momentum import bench_scoring as _ben
         benrec = _ben(match, config)[team.value]
         rep.ben_goals = benrec["goals"]
@@ -7319,6 +7353,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 160) Az ő második félidőre kinyíló faluk × a ti betöréseitek: a
+    # belső játékot a második félidőre kell tartogatni.
+    if (opp.wf_fh_shots >= 5 and opp.wf_sh_shots >= 5
+            and own.break_entries >= 8):
+        _wf160_fh = opp.wf_fh_sum_xga / opp.wf_fh_shots
+        _wf160_sh = opp.wf_sh_sum_xga / opp.wf_sh_shots
+        if _wf160_sh - _wf160_fh >= 0.08:
+            plan.append(
+                f"A második félidőre kinyílik a faluk (a kapott "
+                f"lövéseik átlagos helyzet-értéke {_wf160_fh:.2f}-ról "
+                f"{_wf160_sh:.2f}-ra nő), ti pedig tudtok betörni "
+                f"({own.break_entries} betörés) — az első félidőben "
+                "érjétek be a kinti lövéssel és fárasszátok a falat, "
+                "a betöréseket és a beállós játékot a második "
+                "félidőre tartogassátok: akkor már nyílik a rés.")
 
     # 159) Az ő csak-kezdők termelésük × a ti mély rotációtok: a
     # tempóval kell elfárasztani a gólfelelőseiket.
@@ -9612,6 +9662,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        wf_fh_shots=sum(r.wf_fh_shots for r in reports),
+        wf_fh_sum_xga=sum(r.wf_fh_sum_xga for r in reports),
+        wf_sh_shots=sum(r.wf_sh_shots for r in reports),
+        wf_sh_sum_xga=sum(r.wf_sh_sum_xga for r in reports),
         ben_goals=sum(r.ben_goals for r in reports),
         ben_bench=sum(r.ben_bench for r in reports),
         stt_steals=sum(r.stt_steals for r in reports),

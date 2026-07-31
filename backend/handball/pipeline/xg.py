@@ -642,3 +642,65 @@ def conceded_chance_quality(match: Match,
                 rec["verdict"] = "csak nehéz helyzeteket engednek"
         out[side] = rec
     return out
+
+
+# Fal-fáradás: félidőnként ennyi kapott lövés kell az ítélethez, és
+# ekkora átlagos helyzetérték-emelkedés jelenti a kinyíló (vagy
+# csökkenés az összeálló) falat.
+WF_MIN_SHOTS = 5
+WF_RISE_XG = 0.08
+
+
+def wall_fade(match: Match,
+              config: Optional[TacticsConfig] = None) -> dict:
+    """Fal-fáradás: MELYIK FÉLIDŐBEN nyílik ki a fal.
+
+    A kapott helyzetek minősége (conceded_chance_quality) a teljes
+    meccset nézi — ez félidőnként: a csapat ELLEN leadott lövések
+    átlagos helyzet-értékét külön mérjük a két félidőben. Ha a második
+    félidőben nő meg, a fal fáradással nyílik ki; ha csökken, a
+    védekezés a szünet után áll össze.
+
+    Edzőileg: a második félidőre kinyíló fal ellen a belső játékot
+    (beállós, betörés) a második félidőre kell tartogatni — az elején
+    kintről is jó a lövés, a végén már befelé kell menni; az összeálló
+    fal ellen fordítva: az első félidőben kell megszerezni a
+    gól-előnyt, mert a szünet után bezár a bolt.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldalé): {"fh_shots",
+    "fh_avg_xga", "sh_shots", "sh_avg_xga", "verdict"} — az átlagok
+    None a félidőnkénti WF_MIN_SHOTS alatt (vagy ha nincs felismert
+    szünet); a verdict "a második félidőre kinyílik a faluk" / "a
+    második félidőre áll össze a faluk" / None.
+    """
+    from .halftime import detect_halftime
+
+    empty = {"fh_shots": 0, "fh_avg_xga": None,
+             "sh_shots": 0, "sh_avg_xga": None, "verdict": None}
+    out = {"home": dict(empty), "away": dict(empty)}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    acc = {side: {"fh": [0, 0.0], "sh": [0, 0.0]}
+           for side in ("home", "away")}
+    for sh in match_xg(match, config)["shots"]:
+        deff = "away" if sh["team"] == "home" else "home"
+        half = "fh" if sh["t"] <= ht else "sh"
+        acc[deff][half][0] += 1
+        acc[deff][half][1] += sh["xg"]
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fh_n, fh_sum = acc[side]["fh"]
+        sh_n, sh_sum = acc[side]["sh"]
+        rec["fh_shots"], rec["sh_shots"] = fh_n, sh_n
+        if fh_n >= WF_MIN_SHOTS and sh_n >= WF_MIN_SHOTS:
+            fh_avg, sh_avg = fh_sum / fh_n, sh_sum / sh_n
+            rec["fh_avg_xga"] = round(fh_avg, 3)
+            rec["sh_avg_xga"] = round(sh_avg, 3)
+            if sh_avg - fh_avg >= WF_RISE_XG:
+                rec["verdict"] = "a második félidőre kinyílik a faluk"
+            elif fh_avg - sh_avg >= WF_RISE_XG:
+                rec["verdict"] = "a második félidőre áll össze a faluk"
+    return out

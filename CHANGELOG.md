@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Fal-fáradás**: MELYIK FÉLIDŐBEN nyílik ki a fal. A kapott
+  helyzetek minősége a teljes meccset nézi — ez félidőnként: a csapat
+  ellen leadott lövések átlagos helyzet-értékét külön mérjük a két
+  félidőben (félidőnként 5+ lövés, 0,08 xG-változás az ítélethez). A
+  második félidőre kinyíló fal ellen a belső játékot (beállós,
+  betörés) a második félidőre kell tartogatni; az összeálló fal ellen
+  az első félidőben kell megszerezni az előnyt, mert a szünet után
+  bezár a bolt. Egy réteg, sok felület: `wall_fade` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (félidőnkénti darabszám + helyzetérték-összeg, két edzői kulcs +
+  csempe), 160. meccsterv-szabály (az ő kinyíló faluk × a ti
+  betöréseitek), 181. edzés-szabály (fal-állóképesség: védekezés
+  fáradtan, hangos belső-váltásokkal).
+
 - **Pad-gólok**: A KISPAD IS TERMEL-E, vagy csak a kezdők. A kezdő
   hatos azt mondja meg, kikkel kezdenek, a rotáció azt, hányan
   játszanak — ez azt, ki szerzi a gólokat: a lövőhöz köthető gólokat

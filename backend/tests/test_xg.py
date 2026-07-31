@@ -576,3 +576,87 @@ def test_conceded_chance_quality_needs_enough_shots():
     rec = conceded_chance_quality(_ccq_match([(35.0, 10.0)] * 4))["away"]
     assert rec["shots"] == 4 and rec["avg_xga"] is None
     assert rec["verdict"] is None
+
+
+# ---- Fal-fáradás (melyik félidőben nyílik ki a fal) ------------------------
+
+def _wf_active(t0, seconds, fps=25.0):
+    """Aktív játék lövés nélkül: 10 mért játékos a labdától távol."""
+    frames = []
+    for i in range(int(seconds * fps)):
+        players = [_pl(100 + k, Team.HOME, 8.0 + k, 15.0 + 0.5 * k)
+                   for k in range(5)]
+        players += [_pl(200 + k, Team.AWAY, 30.0 + k, 16.0 + 0.5 * k)
+                    for k in range(5)]
+        frames.append(Frame(t=t0 + int(i), players=players,
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    return frames
+
+
+def _wf_shot(t0, x, y, fps=25.0):
+    """Hazai lövés (x, y)-ból a +x kapura, aktív háttérrel."""
+    frames = []
+    for i in range(8):
+        bx = x + (40.0 - x) * min(1.0, i / 5.0)
+        by = y + (10.0 - y) * min(1.0, i / 5.0)
+        players = [_pl(1, Team.HOME, x, y)]
+        players += [_pl(100 + k, Team.HOME, 8.0 + k, 15.0 + 0.5 * k)
+                    for k in range(5)]
+        players += [_pl(200 + k, Team.AWAY, 30.0 + k, 16.0 + 0.5 * k)
+                    for k in range(5)]
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+    return frames
+
+
+def _wf_match(fh_pos, sh_pos, fps=25.0):
+    """1. félidő lövései fh_pos-ból, szünet, 2. félidő lövései
+    sh_pos-ból — a VENDÉG fal engedte őket."""
+    frames = []
+    t = 0
+
+    def _half(positions):
+        nonlocal t
+        for (x, y) in positions:
+            frames.extend(_wf_shot(t, x, y, fps))
+            t = frames[-1].t + 1
+            frames.extend(_wf_active(t, 2.0, fps))
+            t = frames[-1].t + 1
+
+    _half(fh_pos)
+    frames.extend(_wf_active(t, 100.0, fps))     # kitöltés a szünetig
+    t = frames[-1].t + 1
+    for i in range(int(90 * fps)):               # szünet: üres pálya
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    _half(sh_pos)
+    frames.extend(_wf_active(t, 100.0, fps))
+    return Match(_meta(fps), frames)
+
+
+def test_wall_fade_flags_the_opening_wall():
+    """Az 1. félidőben csak távoli-éles, a 2.-ban közeli-szemből jövő
+    lövések → a vendég fal a második félidőre nyílik ki."""
+    from handball.pipeline.xg import wall_fade
+
+    rec = wall_fade(_wf_match([(27.0, 3.0)] * 6, [(35.0, 10.0)] * 6))["away"]
+    assert rec["fh_shots"] == 6 and rec["sh_shots"] == 6
+    assert rec["sh_avg_xga"] > rec["fh_avg_xga"]
+    assert rec["verdict"] == "a második félidőre kinyílik a faluk"
+
+
+def test_wall_fade_flags_the_settling_wall():
+    """Fordított sorrendben a fal a szünet után áll össze."""
+    from handball.pipeline.xg import wall_fade
+
+    rec = wall_fade(_wf_match([(35.0, 10.0)] * 6, [(27.0, 3.0)] * 6))["away"]
+    assert rec["verdict"] == "a második félidőre áll össze a faluk"
+
+
+def test_wall_fade_needs_enough_shots_per_half():
+    """Félidőnként 5-nél kevesebb kapott lövésnél nincs ítélet."""
+    from handball.pipeline.xg import wall_fade
+
+    rec = wall_fade(_wf_match([(35.0, 10.0)] * 3, [(27.0, 3.0)] * 3))["away"]
+    assert rec["fh_shots"] == 3 and rec["fh_avg_xga"] is None
+    assert rec["verdict"] is None

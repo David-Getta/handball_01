@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Fal-fáradás: melyik félidőben nyílik ki a fal (félidőnként 5+
+  // kapott lövés, 0,08 xG-változás — a backend-kulccsal azonos
+  // küszöbök).
+  String? _wallFade(Map<String, dynamic> r) {
+    final fhN = ((r["wf_fh_shots"] as num?) ?? 0).toInt();
+    final shN = ((r["wf_sh_shots"] as num?) ?? 0).toInt();
+    if (fhN < 5 || shN < 5) return null;
+    final fh = ((r["wf_fh_sum_xga"] as num?) ?? 0).toDouble() / fhN;
+    final sh = ((r["wf_sh_sum_xga"] as num?) ?? 0).toDouble() / shN;
+    if (sh - fh >= 0.08) {
+      return "a második félidőre kinyílik a faluk "
+          "(${fh.toStringAsFixed(2)} → ${sh.toStringAsFixed(2)} "
+          "kapott helyzet-átlag) · a belső játékot a második félidőre "
+          "tartogassátok";
+    }
+    if (fh - sh >= 0.08) {
+      return "a második félidőre áll össze a faluk "
+          "(${fh.toStringAsFixed(2)} → ${sh.toStringAsFixed(2)}) · az "
+          "első félidőben kell megszerezni az előnyt";
+    }
+    return null;
+  }
+
   // Pad-gólok: a kispad is termel-e (6+ lövőhöz köthető gól; 35%
   // felett mély, 10% alatt csak-kezdők — a backend-kulccsal azonos
   // küszöbök).
@@ -4318,6 +4341,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Labdaszerzés-típus", _stealTypes(r)!],
       if (_benchScoring(r) != null)
         ["Pad-gólok", _benchScoring(r)!],
+      if (_wallFade(r) != null)
+        ["Fal-fáradás", _wallFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

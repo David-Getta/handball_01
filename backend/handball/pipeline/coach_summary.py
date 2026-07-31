@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Fal-fáradás: melyik félidőben nyílik ki a fal.
+    try:
+        from .xg import wall_fade
+        wf = wall_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wf = wf[side]
+            if rec_wf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} falánál {rec_wf['verdict']}: a "
+                     f"kapott lövések átlagos helyzet-értéke "
+                     f"{rec_wf['fh_avg_xga']:.2f}-ról "
+                     f"{rec_wf['sh_avg_xga']:.2f}-ra változott a "
+                     "szünet után.")
+    except Exception:
+        pass
     # Pad-gólok: a kispad is termel-e, vagy csak a kezdők.
     try:
         from .momentum import bench_scoring

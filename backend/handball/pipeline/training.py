@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 181) Fal-fáradás: ha a falunk a második félidőre kinyílik, a
+    # védekezés állóképessége a téma.
+    try:
+        from .xg import wall_fade
+        wf181 = wall_fade(match, config)
+        for side in ("home", "away"):
+            rec181 = wf181[side]
+            if rec181["verdict"] != "a második félidőre kinyílik a faluk":
+                continue
+            add(side, "vedekezes", "Fal-állóképesség",
+                f"a kapott lövések átlagos helyzet-értéke "
+                f"{rec181['fh_avg_xga']:.2f}-ról "
+                f"{rec181['sh_avg_xga']:.2f}-ra nő a szünet után — "
+                "nem több lövést kapunk, hanem egyre jobbakat: a "
+                "fáradó lábak késve lépnek, és a fal a hatos előtt "
+                "nyílik ki",
+                "fal-állóképesség: védekezés-gyakorlat fáradtan — "
+                "kör-edzés vagy futás UTÁN 6-0 elleni védekezés, "
+                "ahol csak az számít hibának, ha a hatos előtt "
+                "szabad lövés születik; a belső védők párban "
+                "beszélnek (átadás hangosan), és a menet addig tart, "
+                "amíg három tiszta zárás össze nem jön")
+    except Exception:
+        pass
+
     # 180) Pad-gólok: ha csak a kezdők termelnek, a második sor
     # gólbátorsága a téma.
     try:
