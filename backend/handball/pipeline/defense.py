@@ -2927,3 +2927,79 @@ def pivot_guards(match, config=None) -> dict:
         out[side] = {"frames": counted[side], "guards": rows,
                      "top": top, "verdict": verdict}
     return out
+
+
+# Szélső-kifutás: ennyi szélső-lövés kell az ítélethez, és e feletti /
+# alatti átlagos védő-távolság a késői, illetve a zárt kifutás jele.
+WCO_MIN_SHOTS = 4
+WCO_LATE_M = 2.5
+WCO_TIGHT_M = 1.2
+
+
+def wing_closeouts(match, config=None) -> dict:
+    """Szélső-kifutás: IDŐBEN ÉRNEK-E KI a szélső lövéseire.
+
+    A poszt szerinti kapott gólok (conceded_by_role) azt mondják meg,
+    a szélsők ellen szivárognak-e — ez azt, MIÉRT: az ellenfél
+    szélső-posztú lövőinek lövéseinél megmérjük, milyen messze volt a
+    legközelebbi védő a lövés pillanatában. A nagy átlagos távolság
+    késői kifutást jelent — a szélső kényelmesen, teljes szögből lő.
+
+    Edzőileg: a későn kifutó fal ellen a széljáték ingyen terem —
+    gyors oldalváltásokkal oda kell hordani a labdát; a szélsőt zárt
+    fal ellen viszont a szélső-bejátszás zsákutca, a szélre húzott
+    védelem mögött a beálló szabadul fel.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"shots", "sum_m",
+    "avg_m", "verdict"} — az avg_m/verdict None WCO_MIN_SHOTS alatt;
+    a verdict "későn érnek ki a szélre" / "zárják a szélsőt" / None.
+    """
+    import math
+
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    posts = estimate_positions(match, config)
+    wings = {side: {tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] == "szélső"}
+             for side in ("home", "away")}
+
+    acc = {"home": [0, 0.0], "away": [0, 0.0]}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None or e.player_id not in wings[e.team.value]:
+            continue
+        f = by_t.get(e.t)
+        if f is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is None:
+            continue
+        deff = "away" if e.team.value == "home" else "home"
+        dists = [math.hypot(p.x - shooter.x, p.y - shooter.y)
+                 for p in f.players
+                 if p.team.value == deff and p.role != "kapus"]
+        if not dists:
+            continue
+        acc[deff][0] += 1
+        acc[deff][1] += min(dists)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n, total = acc[side]
+        rec = {"shots": n, "sum_m": round(total, 1), "avg_m": None,
+               "verdict": None}
+        if n >= WCO_MIN_SHOTS:
+            avg = total / n
+            rec["avg_m"] = round(avg, 2)
+            if avg >= WCO_LATE_M:
+                rec["verdict"] = "későn érnek ki a szélre"
+            elif avg <= WCO_TIGHT_M:
+                rec["verdict"] = "zárják a szélsőt"
+        out[side] = rec
+    return out

@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Szélső-kifutásuk: az ellenük leadott szélső-lövések száma és a
+    # legközelebbi védő távolság-összege — darabszám/összeg, meccsek
+    # közt pontosan összegződnek (átlag = wco_sum_m / wco_shots).
+    wco_shots: int = 0
+    wco_sum_m: float = 0.0
     # Csend-törőik: gólcsend-törések [{"player_id", "breaks"}] —
     # darabszámok, meccsek közt játékos szerint összegződnek.
     drb_players: list = field(default_factory=list)
@@ -2094,6 +2099,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Szélső-kifutás: érdemes-e szélesen játszani ellenük.
+    if rep.wco_shots >= 4:
+        _wco_avg = rep.wco_sum_m / rep.wco_shots
+        if _wco_avg >= 2.5:
+            keys.append(
+                f"Későn érnek ki a szélre (átlag {_wco_avg:.1f} m-re "
+                "volt a védőjük a lövő szélsőtől) — a széljáték ingyen "
+                "terem ellenük: gyors oldalváltásokkal hordjatok "
+                "labdát a szélsőitekre.")
+        elif _wco_avg <= 1.2:
+            keys.append(
+                f"Zárják a szélsőt (átlag {_wco_avg:.1f} m-en volt a "
+                "védőjük a lövéskor) — a szélső-bejátszás zsákutca: a "
+                "szélre húzott védelmük mögött a beállót keressétek.")
 
     # Csend-törők: kihez menekül a labda, amikor áll a szekerük.
     _drb_per: dict = {}
@@ -5672,6 +5692,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .defense import wing_closeouts as _wco
+        wcorec = _wco(match, config)[team.value]
+        rep.wco_shots = wcorec["shots"]
+        rep.wco_sum_m = wcorec["sum_m"]
         from .momentum import drought_breakers as _drb
         rep.drb_players = [dict(pr) for pr in
                            _drb(match, config)[team.value]["players"]]
@@ -8032,6 +8056,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 187) Az ő késői szél-kifutásuk × a ti szélső-góljaitok: oda kell
+    # hordani a labdát.
+    if (opp.wco_shots >= 4 and own.wing_total_goals >= 8):
+        _wco187 = opp.wco_sum_m / opp.wco_shots
+        _wing187 = 100.0 * own.wing_goals / max(1, own.wing_total_goals)
+        if _wco187 >= 2.5 and _wing187 >= 35.0:
+            plan.append(
+                f"Későn érnek ki a szélre (átlag {_wco187:.1f} m-re a "
+                f"védőjük a lövő szélsőtől), a ti széljátékotok pedig "
+                f"él (a góljaitok {_wing187:.0f}%-a szélről jön) — "
+                "gyors oldalváltásokkal hordjátok a labdát a "
+                "szélsőitekre: teljes szögből, kényelmesen lőhetnek.")
 
     # 186) Az ő válság-lövőjük × a ti sorozataitok: a lendületetek
     # alatt névre szólóan zárjátok a szelepüket.
@@ -10892,6 +10929,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        wco_shots=sum(r.wco_shots for r in reports),
+        wco_sum_m=sum(r.wco_sum_m for r in reports),
         drb_players=_merge_drb_players(reports),
         hh_streaks=[st for r in reports for st in (r.hh_streaks or [])],
         gcs_cold_faced=sum(r.gcs_cold_faced for r in reports),

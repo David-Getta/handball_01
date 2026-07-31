@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Szélső-kifutás**: IDŐBEN ÉRNEK-E KI a szélső lövéseire. A poszt
+  szerinti kapott gólok azt mondják meg, a szélsők ellen
+  szivárognak-e — ez azt, miért: a szélső-posztú lövők lövéseinél
+  megmérjük a legközelebbi védő távolságát a lövés pillanatában (4+
+  lövés; 2,5 m felett késői, 1,2 m alatt zárt kifutás). A későn
+  kifutó fal ellen a széljáték ingyen terem — gyors oldalváltásokkal
+  kell oda hordani a labdát; a zárt fal ellen a beálló szabadul fel.
+  Egy réteg, sok felület: `wing_closeouts` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (lövés-darabszám +
+  távolság-összeg, két edzői kulcs + csempe), 187. meccsterv-szabály
+  (az ő késői kifutásuk × a ti szélső-góljaitok), 208. edzés-szabály
+  (szél-kifutás időzítése: indulás a passz levegőben létekor).
+
 - **Csend-törők**: KI DOBJA a gólcsendet megtörő gólt. A
   gólcsend-elemzés a leghosszabb szárazságot méri — ez azt, ki vet
   véget neki: az 5+ perces saját gólcsend utáni gól lövője csend-törő

@@ -2045,3 +2045,60 @@ def test_pivot_guards_needs_enough_frames():
 
     rec = pivot_guards(_pivot_guard_match(n=200))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Szélső-kifutás (időben érnek-e ki a szélső lövéseire) ------------------
+
+def _wco_match(def_dist, n_shots=5, fps=25.0):
+    """A hazai szélső (2-es) lő; a vendég legközelebbi védője
+    def_dist méterre áll tőle."""
+    frames = []
+    t = 0
+    for _ in range(150):        # poszt-minta: a 2-es a szélső sávban
+        frames.append(Frame(t=t, players=[
+            _pl(2, Team.HOME, 36.0, 2.0),
+            _pl(3, Team.HOME, 28.0, 10.0),
+            _pl(21, Team.AWAY, 30.0, 16.0)],
+            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(n_shots):
+        for i in range(8):      # a szélső lövése a +x kapura
+            frames.append(Frame(t=t, players=[
+                _pl(2, Team.HOME, 36.0, 2.0),
+                _pl(21, Team.AWAY, 36.0, 2.0 + def_dist),
+                _pl(29, Team.AWAY, 39.5, 10.0, role="kapus")],
+                ball=Ball(x=min(36.0 + i, 40.0),
+                          y=2.0 + 8.0 * min(1.0, i / 4.0),
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):     # szünet
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0)],
+                ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_wing_closeouts_flags_the_late_wall():
+    """A védő 4 m-re áll a lövő szélsőtől → későn érnek ki."""
+    from handball.pipeline.defense import wing_closeouts
+
+    rec = wing_closeouts(_wco_match(4.0))["away"]
+    assert rec["shots"] == 5 and rec["avg_m"] >= 2.5
+    assert rec["verdict"] == "későn érnek ki a szélre"
+
+
+def test_wing_closeouts_flags_the_tight_wall():
+    """1 m-en belüli védőnél zárják a szélsőt."""
+    from handball.pipeline.defense import wing_closeouts
+
+    rec = wing_closeouts(_wco_match(1.0))["away"]
+    assert rec["verdict"] == "zárják a szélsőt"
+
+
+def test_wing_closeouts_needs_enough_shots():
+    """Kevés (4-nél kevesebb) szélső-lövésnél nincs ítélet."""
+    from handball.pipeline.defense import wing_closeouts
+
+    rec = wing_closeouts(_wco_match(4.0, n_shots=2))["away"]
+    assert rec["shots"] == 2 and rec["verdict"] is None

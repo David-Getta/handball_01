@@ -1318,6 +1318,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szélső-kifutás: időben érnek-e ki a szélső lövéseire (4+ lövés;
+  // 2,5 m felett késői, 1,2 m alatt zárt — a backend-kulccsal azonos
+  // küszöbök).
+  String? _wingCloseouts(Map<String, dynamic> r) {
+    final shots = ((r["wco_shots"] as num?) ?? 0).toInt();
+    final sum = ((r["wco_sum_m"] as num?) ?? 0).toDouble();
+    if (shots < 4) return null;
+    final avg = sum / shots;
+    if (avg >= 2.5) {
+      return "későn érnek ki a szélre (átlag "
+          "${avg.toStringAsFixed(1)} m-re a védő a lövő szélsőtől) · "
+          "gyors oldalváltásokkal a szélsőitekre hordjatok labdát";
+    }
+    if (avg <= 1.2) {
+      return "zárják a szélsőt (átlag ${avg.toStringAsFixed(1)} m) · "
+          "a szélső-bejátszás zsákutca, a beállót keressétek";
+    }
+    return null;
+  }
+
   // Csend-törők: ki töri meg a gólcsendjüket (2+ törés — a
   // backend-kulccsal azonos küszöb).
   String? _droughtBreakers(Map<String, dynamic> r) {
@@ -4992,6 +5012,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Forró kéz", _hotHands(r)!],
       if (_droughtBreakers(r) != null)
         ["Csend-törők", _droughtBreakers(r)!],
+      if (_wingCloseouts(r) != null)
+        ["Szélső-kifutás", _wingCloseouts(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

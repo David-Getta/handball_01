@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Szélső-kifutás: időben érnek-e ki a szélső lövéseire.
+    try:
+        from .defense import wing_closeouts
+        wco = wing_closeouts(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wco = wco[side]
+            if rec_wco["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védekezéséről kiderült: "
+                     f"{rec_wco['verdict']} (átlag "
+                     f"{rec_wco['avg_m']:.1f} m-re volt a legközelebbi "
+                     "védő a lövő szélsőtől).")
+    except Exception:
+        pass
     # Csend-törők: ki dobja a gólcsendet megtörő gólt.
     try:
         from .momentum import drought_breakers

@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 208) Szélső-kifutás: ha későn érünk ki a szélre, a kifutás-
+    # időzítés a téma.
+    try:
+        from .defense import wing_closeouts
+        wco208 = wing_closeouts(match, config)
+        for side in ("home", "away"):
+            rec208 = wco208[side]
+            if rec208["verdict"] != "későn érnek ki a szélre":
+                continue
+            add(side, "vedekezes", "Szél-kifutás időzítése",
+                f"átlag {rec208['avg_m']:.1f} m-re volt a védőnk a "
+                "lövő szélsőtől — a szélső kényelmesen, teljes "
+                "szögből lőhetett, és ez nem a kapus hibája",
+                "szél-kifutás időzítése: oldalváltás-gyakorlat, ahol "
+                "a szélső védő már a beadó passz LEVEGŐBEN LÉTEKOR "
+                "indul (nem az átvételkor) — a cél az érkezés a "
+                "lövő karjáig az első lendületvételre; minden késői "
+                "kifutást a videón külön jelölünk, és a kapussal "
+                "közös szög-zárás egészíti ki")
+    except Exception:
+        pass
+
     # 207) Csend-törők: ha a gólcsendjeinket mindig más töri meg
     # (nincs válság-lövőnk), a vész-megoldás kijelölése a téma.
     try:
