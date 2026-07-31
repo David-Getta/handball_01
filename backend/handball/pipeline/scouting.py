@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Hetes utáni perceik: adott heteseik és az utánuk kapott további
+    # gólok — darabszámok, meccsek közt pontosan összegződnek.
+    psl_sevens: int = 0
+    psl_extra: int = 0
     # Labda-forgatásuk: balra és jobbra tartó oldalpasszaik száma —
     # darabszámok, meccsek közt pontosan összegződnek.
     cir_left: int = 0
@@ -2107,6 +2111,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Hetes utáni percek: duplán ér-e az ellenük megítélt hetes.
+    if rep.psl_sevens >= 3 and rep.psl_extra >= 2:
+        keys.append(
+            f"A hetes utáni percben is büntethetők ({rep.psl_sevens} "
+            f"adott hetesük után {rep.psl_extra} további gólt kaptak) "
+            "— a hetes körüli leállás megtöri a védekezés-ritmusukat: "
+            "a hetesetek utáni támadást is kész figurával játsszátok "
+            "meg, amíg rendezetlenek.")
 
     # Labda-forgatás: hol érdemes kettőzni és merre terelni.
     _cir_total = rep.cir_left + rep.cir_right
@@ -5729,6 +5742,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .rules import post_seven_lapses as _psl
+        pslrec = _psl(match, config)[team.value]
+        rep.psl_sevens = pslrec["sevens_against"]
+        rep.psl_extra = pslrec["extra_conceded"]
         from .attack_types import circulation_direction as _cir
         cirrec = _cir(match, config)[team.value]
         rep.cir_left = cirrec["left"]
@@ -8100,6 +8117,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 190) Az ő hetes utáni leragadásuk × a ti kiharcolt heteseitek: a
+    # hetesetek duplán érhet.
+    _psl190_earned = sum((own.seven_earner_roles or {}).values())
+    if (opp.psl_sevens >= 3 and opp.psl_extra >= 2
+            and _psl190_earned >= 3):
+        plan.append(
+            f"A hetes utáni percben is büntethetők ({opp.psl_extra} "
+            f"további kapott gól a heteseik után), ti pedig rendre "
+            f"kiharcoljátok a hetest ({_psl190_earned} megítélt "
+            "büntető) — minden hetesetek után azonnal kész figurával "
+            "támadjatok újra: a reklamáló, átrendeződő faluk ellen a "
+            "hetes utáni perc a legkönnyebb gólszerzési ablakotok.")
 
     # 189) Az ő egyirányú forgásuk × a ti sáv-záró védekezésetek: az
     # ellenirányba terelés kizökkenti őket.
@@ -11019,6 +11049,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        psl_sevens=sum(r.psl_sevens for r in reports),
+        psl_extra=sum(r.psl_extra for r in reports),
         cir_left=sum(r.cir_left for r in reports),
         cir_right=sum(r.cir_right for r in reports),
         scp_pairs=_merge_screen_pairs(reports),

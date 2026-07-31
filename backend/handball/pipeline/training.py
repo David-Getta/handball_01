@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 211) Hetes utáni percek: ha az adott hetes után is kapunk rá, a
+    # hetes körüli újrarendeződés a téma.
+    try:
+        from .rules import post_seven_lapses
+        psl211 = post_seven_lapses(match, config)
+        for side in ("home", "away"):
+            rec211 = psl211[side]
+            if rec211["verdict"] is None:
+                continue
+            add(side, "vedekezes", "Hetes utáni újrarendeződés",
+                f"{rec211['sevens_against']} adott hetesünk után "
+                f"{rec211['extra_conceded']} további gólt kaptunk — a "
+                "hetes körüli leállás alatt reklamálunk és "
+                "átrendeződünk, az újraindítás pedig készületlenül "
+                "ér minket",
+                "hetes utáni újrarendeződés: minden edzésbeli hetes "
+                "után kötelező 10 másodperces protokoll — a fal "
+                "hangosan újraszámol (ki kit fog), a kapus jelzi a "
+                "felállást, és a hetes kimenetelétől függetlenül "
+                "azonnal éles védekezés következik; a reklamálás a "
+                "gyakorlatban is azonnali hátrányt ér")
+    except Exception:
+        pass
+
     # 210) Labda-forgatás: ha egy irányba forgatunk, a kétirányú
     # játék a téma.
     try:

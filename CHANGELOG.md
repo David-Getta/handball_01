@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hetes utáni percek**: LERAGADNAK-E az adott hetes után. A
+  hetes-rétegek magát a büntetőt mérik — ez az utóhatását: az ellenük
+  ítélt hetes utáni percben nézzük a további kapott gólokat, a
+  hetes-lövés saját ablakát átugorva (3+ adott hetes, 2+ további
+  kapott gól az ítélethez). A hetes körüli leállás sok csapat
+  védekezés-ritmusát megtöri — ellenük a hetes utáni támadást is kész
+  figurával kell megjátszani. Egy réteg, sok felület:
+  `post_seven_lapses` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (hetes- és gól-darabszámok, edzői
+  kulcs + csempe), 190. meccsterv-szabály (az ő hetes utáni
+  leragadásuk × a ti kiharcolt heteseitek), 211. edzés-szabály (hetes
+  utáni újrarendeződés: 10 másodperces protokoll).
+
 - **Labda-forgatás iránya**: MERRE JÁRATJÁK a labdát felállt
   támadásban. A passz-irány az előre-hátra tengelyt méri — ez az
   oldalirányt: minden érdemi oldalpassznál megnézzük, a támadó

@@ -1109,3 +1109,59 @@ def test_post_powerplay_needs_enough_returns():
 
     rec = post_powerplay(_post_pp_match("away", cycles=1))["home"]
     assert rec["returns"] == 1 and rec["verdict"] is None
+
+
+# ---- Hetes utáni percek (leragadnak-e az adott hetes után) ------------------
+
+def _psl_match(with_extra, sevens=3, fps=25.0):
+    """Hazai hetesek (a vendég adja); ha with_extra, a hetes utáni
+    percben további hazai mezőnygól is esik."""
+    frames = []
+    t = 0
+    for _ in range(sevens):
+        for _ in range(30):    # a labda áll a +x 7 m-es ponton
+            frames.append(Frame(t=t, players=[
+                _pl(k + 100, Team.HOME, 15.0 + k, 4.0 + k)
+                for k in range(6)] + [
+                _pl(k + 200, Team.AWAY, 25.0 + k, 4.0 + k)
+                for k in range(6)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        frames.extend(_roster_frames(t, 20, 6, 6, fps))
+        t = frames[-1].t + 1
+        if with_extra:
+            for i in range(8):     # további hazai gól az ablakban
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        frames.extend(_roster_frames(t, 60, 6, 6, fps))
+        t = frames[-1].t + 1
+    return Match(_meta(), frames)
+
+
+def test_post_seven_lapses_flags_the_stalled_defense():
+    """Három adott hetes után rendre további gól jön → a hetes utáni
+    percben is büntetik őket."""
+    from handball.pipeline.rules import post_seven_lapses
+
+    rec = post_seven_lapses(_psl_match(True))["away"]
+    assert rec["sevens_against"] == 3 and rec["extra_conceded"] >= 2
+    assert rec["verdict"] == "a hetes utáni percben is büntetik őket"
+
+
+def test_post_seven_lapses_clean_restart_no_verdict():
+    """Ha a hetes után nincs további gól, nincs jelzés."""
+    from handball.pipeline.rules import post_seven_lapses
+
+    rec = post_seven_lapses(_psl_match(False))["away"]
+    assert rec["extra_conceded"] == 0 and rec["verdict"] is None
+
+
+def test_post_seven_lapses_needs_enough_sevens():
+    """Kevés (3-nál kevesebb) adott hetesnél nincs ítélet."""
+    from handball.pipeline.rules import post_seven_lapses
+
+    rec = post_seven_lapses(_psl_match(True, sevens=2))["away"]
+    assert rec["sevens_against"] == 2 and rec["verdict"] is None

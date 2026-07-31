@@ -1318,6 +1318,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hetes utáni percek: leragadnak-e az adott hetes után (3+ hetes,
+  // 2+ további kapott gól — a backend-kulccsal azonos küszöbök).
+  String? _postSevenLapses(Map<String, dynamic> r) {
+    final sevens = ((r["psl_sevens"] as num?) ?? 0).toInt();
+    final extra = ((r["psl_extra"] as num?) ?? 0).toInt();
+    if (sevens < 3 || extra < 2) return null;
+    return "a hetes utáni percben is büntethetők ($sevens adott "
+        "hetes után $extra további kapott gól) · a hetesetek utáni "
+        "támadást is kész figurával játsszátok meg";
+  }
+
   // Labda-forgatás iránya: merre járatják a labdát (20+ oldalpassz,
   // 60% részarány — a backend-kulccsal azonos küszöbök).
   String? _circulationDirection(Map<String, dynamic> r) {
@@ -5058,6 +5069,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elzárás-páros", _screenPairs(r)!],
       if (_circulationDirection(r) != null)
         ["Labda-forgatás", _circulationDirection(r)!],
+      if (_postSevenLapses(r) != null)
+        ["Hetes utáni percek", _postSevenLapses(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

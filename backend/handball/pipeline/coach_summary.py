@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Hetes utáni percek: leragadnak-e az adott hetes után.
+    try:
+        from .rules import post_seven_lapses
+        psl = post_seven_lapses(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_psl = psl[side]
+            if rec_psl["verdict"] is None:
+                continue
+            body += (f" A(z) {name} a hetes utáni percben is kapott "
+                     f"rá: {rec_psl['sevens_against']} adott hetesük "
+                     f"után {rec_psl['extra_conceded']} további gól "
+                     "esett.")
+    except Exception:
+        pass
     # Labda-forgatás iránya: merre járatják a labdát.
     try:
         from .attack_types import circulation_direction

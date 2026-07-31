@@ -1337,3 +1337,58 @@ def post_powerplay(match: Match,
             elif diff >= PPP_DIFF:
                 rec["verdict"] = "a visszaálló emberrel feltámadnak"
     return out
+
+
+# Hetes utáni percek: a hetes-esemény után ennyivel kezdődő és eddig
+# tartó ablakban nézzük a további kapott gólokat, ennyi adott hetes
+# kell az ítélethez, és ennyi plusz kapott gól jelenti a leragadást.
+PSL_SKIP_S = 15.0
+PSL_WINDOW_S = 75.0
+PSL_MIN_SEVENS = 3
+PSL_MIN_EXTRA = 2
+
+
+def post_seven_lapses(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes utáni percek: LERAGADNAK-E az adott hetes után.
+
+    A hetes-rétegek magát a büntetőt mérik — ez az utóhatását: az
+    adott (ellenük ítélt) hetes utáni percben nézzük a TOVÁBBI kapott
+    gólokat (a hetes-lövés saját ablakát átugorva). A hetes körüli
+    leállás sok csapat védekezés-ritmusát megtöri — reklamálás,
+    átrendeződés, és a következő támadás máris bent van.
+
+    Edzőileg: aki a hetes után is kap rá, annál az ellenük megítélt
+    hetes duplán ér — a hetes utáni támadást is kész figurával kell
+    megjátszani; a saját oldalon a hetes utáni első védekezés hangos
+    újrarendezést kap, mielőtt a játék újraindul.
+
+    Visszatérés csapatonként (az ADÓ oldal): {"sevens_against",
+    "extra_conceded", "verdict"} — a verdict None PSL_MIN_SEVENS
+    alatt; a verdict "a hetes utáni percben is büntetik őket" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    skip = round(PSL_SKIP_S * fps)
+    win = round(PSL_WINDOW_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out = {side: {"sevens_against": 0, "extra_conceded": 0,
+                  "verdict": None} for side in ("home", "away")}
+    for ev in detect_seven_meters(match, config):
+        conceder = "away" if ev["team"] == "home" else "home"
+        rec = out[conceder]
+        rec["sevens_against"] += 1
+        for (t, tm) in goals:
+            if ev["t"] + skip < t <= ev["t"] + win and tm != conceder:
+                rec["extra_conceded"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["sevens_against"] >= PSL_MIN_SEVENS
+                and rec["extra_conceded"] >= PSL_MIN_EXTRA):
+            rec["verdict"] = "a hetes utáni percben is büntetik őket"
+    return out
