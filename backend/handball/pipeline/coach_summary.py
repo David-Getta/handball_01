@@ -846,6 +846,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Egyirányú játékosok: váltott sorokkal játszanak-e.
+    try:
+        from .roles import phase_specialists
+        phs = phase_specialists(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_phs = phs[side]
+            if rec_phs["verdict"] is None:
+                continue
+            d_ids = ", ".join(str(r["player_id"])
+                              for r in rec_phs["def_specialists"][:2])
+            a_ids = ", ".join(str(r["player_id"])
+                              for r in rec_phs["atk_specialists"][:2])
+            body += (f" A(z) {name} váltott sorokkal játszik: a(z) "
+                     f"{d_ids} azonosítójú(ak) csak védekeznek, a(z) "
+                     f"{a_ids} azonosítójú(ak) csak támadnak.")
+    except Exception:
+        pass
     # Sprint-veszély: ki viszi a kontrát.
     try:
         from .stats import sprint_threats

@@ -141,3 +141,62 @@ def test_goals_by_role_needs_enough_goals():
 
     rec = goals_by_role(_role_goal_match([2, 2, 2]))["home"]
     assert rec["goals"] == 3 and rec["top"] is None
+
+
+# ---- Egyirányú játékosok (védő- és támadó-specialisták) ---------------------
+
+def _phase_match(block_frames=1600, specialists=True):
+    """Váltakozó birtoklás: hazai, majd vendég labda. Ha specialists
+    igaz, a hazai 3-as csak védekezéskor, a 4-es csak támadáskor van
+    fent; az 1-es mindig."""
+    frames = []
+    t = 0
+    for phase in ("atk", "def"):
+        holder = (_pl(1, Team.HOME, 20.0, 10.0) if phase == "atk"
+                  else _pl(21, Team.AWAY, 20.0, 10.0))
+        for _ in range(block_frames):
+            players = [holder, _pl(1, Team.HOME, 20.0, 10.0)] \
+                if phase == "def" else [holder]
+            if specialists:
+                if phase == "def":
+                    players.append(_pl(3, Team.HOME, 10.0, 10.0))
+                else:
+                    players.append(_pl(4, Team.HOME, 30.0, 10.0))
+            else:
+                players.append(_pl(3, Team.HOME, 10.0, 10.0))
+                players.append(_pl(4, Team.HOME, 30.0, 10.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="ph", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_phase_specialists_finds_the_swapped_units():
+    """A 3-as csak védekezik, a 4-es csak támad → váltott sorokkal
+    játszanak."""
+    from handball.pipeline.roles import phase_specialists
+
+    rec = phase_specialists(_phase_match())["home"]
+    def_ids = [r["player_id"] for r in rec["def_specialists"]]
+    atk_ids = [r["player_id"] for r in rec["atk_specialists"]]
+    assert 3 in def_ids and 4 in atk_ids
+    assert rec["verdict"] == "váltott sorokkal játszanak"
+
+
+def test_phase_specialists_two_way_players_no_verdict():
+    """Ha mindenki mindkét fázisban fent van, nincs váltott sor."""
+    from handball.pipeline.roles import phase_specialists
+
+    rec = phase_specialists(_phase_match(specialists=False))["home"]
+    assert rec["def_specialists"] == [] and rec["atk_specialists"] == []
+    assert rec["verdict"] is None
+
+
+def test_phase_specialists_needs_enough_frames():
+    """Kevés (1500-nál kevesebb) fázis-kockánál nincs ítélet."""
+    from handball.pipeline.roles import phase_specialists
+
+    rec = phase_specialists(_phase_match(block_frames=400))["home"]
+    assert rec["verdict"] is None

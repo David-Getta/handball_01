@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Egyirányú játékosok**: KI JÁTSZIK CSAK VÉDEKEZNI vagy CSAK
+  TÁMADNI. A csere-blokkok azt mondják meg, egységekben cserélnek-e —
+  ez azt, kik az egységek: játékosonként megszámoljuk, a pályán
+  töltött kockáiból mennyi esett a csapata védekezésére (1500+ kocka,
+  75% részarány a specialistához). Ha védő- és támadó-specialista is
+  van, a csapat váltott sorokkal játszik — a csere pillanatában
+  sebezhető: a gyors középkezdés rossz embereket talál a pályán, a
+  fent ragadt támadót pedig meg kell támadni. Egy réteg, sok felület:
+  `phase_specialists` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (játékosonkénti fázis-kockák
+  összegzéssel, edzői kulcs + csempe), 169. meccsterv-szabály (az ő
+  váltott soraik × a ti gyors középkezdésetek), 190. edzés-szabály
+  (sorváltás-ütem: stopperes váltás, névre szólóan jelzett fent
+  ragadt emberek).
+
 - **Sprint-veszély**: KI VISZI A KONTRÁT. A sprint-statisztika
   terhelés-monitornak készült — ez az ellenfél-olvasata: csapatonként
   kigyűjtjük, ki hányszor sprintel, és van-e ember, akire a csapat

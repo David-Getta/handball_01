@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Egyirányú játékosok: váltott sorokkal játszanak-e (1500+ kocka,
+  // 75% fázis-részarány — a backend-kulccsal azonos küszöbök).
+  String? _phaseSpecialists(Map<String, dynamic> r) {
+    final rows = r["phs_players"];
+    if (rows is! List) return null;
+    int? defId;
+    int? atkId;
+    for (final pr in rows) {
+      if (pr is! Map<String, dynamic>) continue;
+      final frames = ((pr["frames"] as num?) ?? 0).toInt();
+      if (frames < 1500) continue;
+      final defShare =
+          100.0 * ((pr["def_frames"] as num?) ?? 0).toInt() / frames;
+      final pid = ((pr["player_id"] as num?) ?? 0).toInt();
+      if (defShare >= 75.0) defId ??= pid;
+      if (defShare <= 25.0) atkId ??= pid;
+    }
+    if (defId == null || atkId == null) return null;
+    return "váltott sorokkal játszanak (a(z) $defId azonosítójú csak "
+        "védekezik, a(z) $atkId csak támad) · a csere pillanatában "
+        "gyors középkezdéssel büntethetők";
+  }
+
   // Sprint-veszély: ki viszi a kontrát (10+ csapat-sprint, 30%
   // részesedés — a backend-kulccsal azonos küszöbök).
   String? _sprintThreats(Map<String, dynamic> r) {
@@ -4538,6 +4561,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes-kapuscsere", _sevenKeeperSwaps(r)!],
       if (_sprintThreats(r) != null)
         ["Sprint-veszély", _sprintThreats(r)!],
+      if (_phaseSpecialists(r) != null)
+        ["Váltott sorok", _phaseSpecialists(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Egyirányú játékosaik: játékosonként a fázis-besorolt kockák és
+    # ebből a védekezésben töltöttek [{"player_id", "jersey",
+    # "frames", "def_frames"}] — darabszámok, meccsek közt pontosan
+    # összegződnek (játékos szerint).
+    phs_players: list = field(default_factory=list)
     # Sprint-veszélyük: játékosonként a sprintek száma és a sprint-táv
     # [{"player_id", "jersey", "sprints", "sprint_m"}] — darabszám/
     # összeg, meccsek közt pontosan összegződnek (játékos szerint).
@@ -1999,6 +2004,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Egyirányú játékosok: sebezhető-e a támadás-védekezés váltásuk.
+    _phs_meas = [r for r in (rep.phs_players or [])
+                 if r["frames"] >= 1500]
+    _phs_def = [r for r in _phs_meas
+                if 100.0 * r["def_frames"] / r["frames"] >= 75.0]
+    _phs_atk = [r for r in _phs_meas
+                if 100.0 * r["def_frames"] / r["frames"] <= 25.0]
+    if _phs_def and _phs_atk:
+        keys.append(
+            f"Váltott sorokkal játszanak (a(z) "
+            f"{_phs_def[0]['player_id']} azonosítójú csak védekezik, "
+            f"a(z) {_phs_atk[0]['player_id']} azonosítójú csak "
+            "támad) — a csere pillanatában sebezhetők: a gyors "
+            "középkezdés és a szerzés utáni azonnali indítás rossz "
+            "embereket talál a pályán, a fent ragadt támadójukat "
+            "pedig meg kell támadni.")
 
     # Sprint-veszély: kire kell a névre szóló fékező-feladat.
     _spt_rows = rep.spt_players or []
@@ -5275,6 +5297,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .roles import phase_specialists as _phs
+        phsrec = _phs(match, config)[team.value]
+        rep.phs_players = [dict(pr) for pr in phsrec["players"]]
         from .stats import sprint_threats as _spt
         sptrec = _spt(match, config)[team.value]
         rep.spt_players = [dict(pr) for pr in sptrec["players"]]
@@ -7547,6 +7572,25 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 169) Az ő váltott soraik × a ti gyors középkezdésetek: a csere
+    # ütemében kell újraindítani.
+    _phs169 = [r for r in (opp.phs_players or []) if r["frames"] >= 1500]
+    _phs169_def = [r for r in _phs169
+                   if 100.0 * r["def_frames"] / r["frames"] >= 75.0]
+    _phs169_atk = [r for r in _phs169
+                   if 100.0 * r["def_frames"] / r["frames"] <= 25.0]
+    if (_phs169_def and _phs169_atk and own.rs_restarts >= 4):
+        _rs169 = 100.0 * own.rs_fast / max(1, own.rs_restarts)
+        if _rs169 >= 40.0:
+            plan.append(
+                "Váltott sorokkal játszanak (külön védekező és támadó "
+                f"egységük van), ti pedig gyorsan indítjátok újra a "
+                f"játékot (az újraindításaitok {_rs169:.0f}%-a "
+                "gyors) — a középkezdés és a szerzés utáni indítás a "
+                "cseréjük ütemére menjen: amíg a váltás tart, rossz "
+                "emberek vannak fent, és a fent ragadt támadójuknál "
+                "kell befejezni.")
+
     # 168) Az ő kijelölt kontra-emberük × a ti lassú felhozatalotok: a
     # fékező-feladat nálatok nem választás, hanem kényszer.
     _spt168 = opp.spt_players or []
@@ -9694,6 +9738,24 @@ def _merge_shooter_overperf(reports) -> list:
             for pid, d in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_phase_players(reports) -> list:
+    """Egyirányú játékosok összegzése: játékos szerint összeadott
+    fázis- és védekezés-kockák."""
+    acc: dict = {}
+    jersey: dict = {}
+    for r in reports:
+        for pr in (r.phs_players or []):
+            pid = pr["player_id"]
+            n, d = acc.get(pid, (0, 0))
+            acc[pid] = (n + pr["frames"], d + pr["def_frames"])
+            if pr.get("jersey") is not None:
+                jersey.setdefault(pid, pr["jersey"])
+    return [{"player_id": pid, "jersey": jersey.get(pid),
+             "frames": n, "def_frames": d}
+            for pid, (n, d) in sorted(acc.items(),
+                                      key=lambda kv: -kv[1][0])]
+
+
 def _merge_sprint_threats(reports) -> list:
     """Sprint-veszély összegzése: játékos szerint összeadott sprintek
     és sprint-táv."""
@@ -10051,6 +10113,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        phs_players=_merge_phase_players(reports),
         spt_players=_merge_sprint_threats(reports),
         svk_sevens=sum(r.svk_sevens for r in reports),
         svk_swaps=sum(r.svk_swaps for r in reports),

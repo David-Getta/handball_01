@@ -131,3 +131,70 @@ def goals_by_role(match: Match,
                 rec["top"] = {"poszt": poszt, "goals": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Egyirányú játékosok: ennyi fázis-besorolt kocka kell egy játékoshoz,
+# és e feletti védekező (vagy ez alatti, azaz támadó) részarány teszi
+# specialistává.
+PHS_MIN_FRAMES = 1500
+PHS_SPEC_PCT = 75.0
+
+
+def phase_specialists(match: Match, config=None) -> dict:
+    """Egyirányú játékosok: KI JÁTSZIK CSAK VÉDEKEZNI vagy CSAK TÁMADNI.
+
+    A csere-blokkok azt mondják meg, egységekben cserélnek-e — ez azt,
+    KIK az egységek: játékosonként megszámoljuk, a pályán töltött
+    (labdabirtokosos) kockáiból mennyi esett a saját csapata
+    védekezésére. Aki szinte csak védekezéskor van fent, az
+    védő-specialista; aki szinte csak támadáskor, az támadó-
+    specialista — a kettő együtt a támadás-védekezés váltott sor.
+
+    Edzőileg: a váltott sorral játszó csapat a csere pillanatában
+    sebezhető — a gyors középkezdés és a szerzés utáni azonnali
+    indítás rossz embereket talál a pályán; ha pedig a támadó-
+    specialistát sikerül védekezésben fent ragasztani (gyors
+    átmenettel), őt kell megtámadni.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "jersey",
+    "frames", "def_frames"}], "def_specialists", "atk_specialists",
+    "verdict"} — a players a fázis-besorolt kockák szerint csökkenő;
+    a verdict "váltott sorokkal játszanak", ha védő- ÉS támadó-
+    specialista is van, különben None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    jersey: dict[int, int] = {}
+    acc: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        for p in f.players:
+            if p.role == "kapus":
+                continue
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+            rec = acc[p.team.value].setdefault(p.track_id, [0, 0])
+            rec[0] += 1
+            if p.team != holder.team:
+                rec[1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "frames": n, "def_frames": d}
+                for tid, (n, d) in sorted(acc[side].items(),
+                                          key=lambda kv: -kv[1][0])]
+        defs = [r for r in rows if r["frames"] >= PHS_MIN_FRAMES
+                and 100.0 * r["def_frames"] / r["frames"] >= PHS_SPEC_PCT]
+        atks = [r for r in rows if r["frames"] >= PHS_MIN_FRAMES
+                and 100.0 * r["def_frames"] / r["frames"]
+                <= 100.0 - PHS_SPEC_PCT]
+        verdict = ("váltott sorokkal játszanak"
+                   if defs and atks else None)
+        out[side] = {"players": rows, "def_specialists": defs,
+                     "atk_specialists": atks, "verdict": verdict}
+    return out

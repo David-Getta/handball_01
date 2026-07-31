@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 190) Egyirányú játékosok: ha váltott sorokkal játszunk, a
+    # váltás-ütem a téma.
+    try:
+        from .roles import phase_specialists
+        phs190 = phase_specialists(match, config)
+        for side in ("home", "away"):
+            rec190 = phs190[side]
+            if rec190["verdict"] != "váltott sorokkal játszanak":
+                continue
+            add(side, "taktika", "Sorváltás-ütem",
+                "váltott sorokkal játszunk (külön védekező és támadó "
+                "egység) — a fegyver csak akkor él, ha a váltás "
+                "gyorsabb, mint az ellenfél átmenete: minden lassú "
+                "csere egy ütemre rossz felállást hagy a pályán",
+                "sorváltás-ütem: átmenet-gyakorlat stopperrel, ahol a "
+                "váltó egység már a lövésünk pillanatában a "
+                "cserezónánál áll — a cél, hogy a teljes sorváltás a "
+                "labda térfél-átérése ELŐTT lezáruljon; a "
+                "gyakorlatvezető időnként gyors középkezdést rendel "
+                "el, és minden fent ragadt embert névre szólóan "
+                "jelzünk")
+    except Exception:
+        pass
+
     # 189) Sprint-veszély: ha a kontra-teher egy emberen van, a
     # második hullám bekapcsolása a téma.
     try:
