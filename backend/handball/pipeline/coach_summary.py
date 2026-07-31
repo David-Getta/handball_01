@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Forró kéz: van-e sorozatlövőjük.
+    try:
+        from .momentum import hot_hands
+        hh = hot_hands(match)
+        for side, name in (("home", home), ("away", away)):
+            top_hh = hh[side]["top"]
+            if top_hh is None:
+                continue
+            body += (f" A(z) {name} sorozatlövője a(z) "
+                     f"{top_hh['player_id']} azonosítójú volt: "
+                     f"{top_hh['streaks']} gólsorozat, a leghosszabb "
+                     f"{top_hh['longest']} egymás utáni gól.")
+    except Exception:
+        pass
     # Kapus-hidegedés: hideg kézzel beesik-e a védése.
     try:
         from .goalkeeper import gk_cold_streaks

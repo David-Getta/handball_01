@@ -1256,3 +1256,33 @@ def test_clutch_ball_hogs_needs_enough_frames():
 
     rec = clutch_ball_hogs(_cbh_match(0.5, total=150))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Forró kéz (van-e sorozatlövőjük) ---------------------------------------
+
+def test_hot_hands_finds_the_streak_shooter():
+    """A 7-es kétszer is két egymás utáni gólt dob → sorozatlövő."""
+    from handball.pipeline.momentum import hot_hands
+
+    rec = hot_hands(_bench_match([7, 7, 1, 7, 7, 1]))["home"]
+    assert rec["goals"] == 6
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7
+    assert rec["top"]["streaks"] == 2
+    assert rec["verdict"] == "van sorozatlövőjük"
+
+
+def test_hot_hands_alternating_scorers_no_verdict():
+    """Felváltva dobott góloknál nincs sorozatlövő."""
+    from handball.pipeline.momentum import hot_hands
+
+    rec = hot_hands(_bench_match([7, 1, 7, 1, 7, 1]))["home"]
+    assert rec["streaks"] == [] and rec["verdict"] is None
+
+
+def test_hot_hands_single_long_streak_counts():
+    """Egyetlen háromgólos sorozat is elég az ítélethez."""
+    from handball.pipeline.momentum import hot_hands
+
+    rec = hot_hands(_bench_match([1, 7, 7, 7, 1, 1]))["home"]
+    assert rec["top"] is not None and rec["top"]["longest"] >= 3
+    assert rec["verdict"] == "van sorozatlövőjük"

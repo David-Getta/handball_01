@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Forró kéz**: VAN-E SOROZATLÖVŐJÜK. A gólfelelős-koncentráció a
+  teljes meccs eloszlását nézi — ez a sorozatokat: a csapat góljait
+  időrendben olvasva megszámoljuk, ki dob egymás után többet (2+
+  kétgólos sorozat vagy egy 3+ hosszú az ítélethez). A sorozatlövő
+  ellen az ELSŐ gólja után kell reagálni — őrzés-váltás vagy kettőzés
+  rá, mielőtt lendületbe jönne; a saját forró kezű embert tudatosan
+  kell játékba hozni. Egy réteg, sok felület: `hot_hands` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (gólsorozat-lista játékos szerinti összegzéssel, edzői kulcs +
+  csempe), 185. meccsterv-szabály (az ő sorozatlövőjük × a ti aktív
+  védekezésetek), 206. edzés-szabály (sorozat-törő reakció: kötelező
+  őrzés-váltás a gólszerzőre).
+
 - **Kapus-hidegedés**: HIDEG KÉZZEL beesik-e a védése. A védés-esés
   az idő előrehaladtát méri — ez a ritmust: minden rá kaputra érkező
   lövésnél megnézzük, mennyi ideje nem kapott lövést a kapus, és a

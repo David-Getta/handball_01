@@ -609,6 +609,9 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Forró kezük: gólsorozataik [{"player_id", "length"}] — meccsek
+    # közt listaként összegződnek (játékos szerint darab + leghosszabb).
+    hh_streaks: list = field(default_factory=list)
     # Kapus-hidegedésük: hosszú csend utáni és ritmusban kapott
     # kapura tartó lövések + védések — darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -2088,6 +2091,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Forró kéz: kire kell azonnal reagálni az első gólja után.
+    _hh_per: dict = {}
+    for _hh_st in (rep.hh_streaks or []):
+        _hh_rec = _hh_per.setdefault(
+            _hh_st["player_id"], {"streaks": 0, "longest": 0})
+        _hh_rec["streaks"] += 1
+        _hh_rec["longest"] = max(_hh_rec["longest"], _hh_st["length"])
+    _hh_cands = [(pid, r) for pid, r in _hh_per.items()
+                 if r["streaks"] >= 2 or r["longest"] >= 3]
+    if _hh_cands:
+        _hh_pid, _hh_top = max(_hh_cands,
+                               key=lambda kv: (kv[1]["streaks"],
+                                               kv[1]["longest"]))
+        keys.append(
+            f"Van sorozatlövőjük: a(z) {_hh_pid} azonosítójú "
+            f"{_hh_top['streaks']} gólsorozatot dobott (leghosszabb: "
+            f"{_hh_top['longest']}) — az ELSŐ gólja után azonnal "
+            "reagáljatok: őrzés-váltás vagy kettőzés rá, mielőtt "
+            "lendületbe jönne.")
 
     # Kapus-hidegedés: érdemes-e éheztetni a kapusukat.
     if rep.gcs_cold_faced >= 4 and rep.gcs_warm_faced >= 4:
@@ -5632,6 +5655,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import hot_hands as _hh
+        rep.hh_streaks = [dict(st) for st in
+                          _hh(match, config)[team.value]["streaks"]]
         from .goalkeeper import gk_cold_streaks as _gcs
         gcsrec = _gcs(match, config)[team.value]
         rep.gcs_cold_faced = gcsrec["cold"]["faced"]
@@ -7986,6 +8012,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 185) Az ő sorozatlövőjük × a ti páros-védekezésetek: az első
+    # gólja után azonnal váltott őrzés jön rá.
+    _hh185: dict = {}
+    for _hh185_st in (opp.hh_streaks or []):
+        _r185 = _hh185.setdefault(_hh185_st["player_id"],
+                                  {"streaks": 0, "longest": 0})
+        _r185["streaks"] += 1
+        _r185["longest"] = max(_r185["longest"], _hh185_st["length"])
+    _hh185_c = [(pid, r) for pid, r in _hh185.items()
+                if r["streaks"] >= 2 or r["longest"] >= 3]
+    if _hh185_c and own.steal_n >= 4:
+        _hh185_pid, _hh185_top = max(
+            _hh185_c, key=lambda kv: (kv[1]["streaks"],
+                                      kv[1]["longest"]))
+        plan.append(
+            f"Van sorozatlövőjük (a(z) {_hh185_pid} azonosítójú, "
+            f"{_hh185_top['streaks']} sorozat), ti pedig aktív "
+            f"védekezők vagytok ({own.steal_n} labdaszerzés) — az "
+            "első gólja legyen egyben jelzés is: a következő "
+            "támadásban váltott őrzés és korai kettőzés megy rá, "
+            "a sorozat nem indulhat el.")
 
     # 184) Az ő hidegen sebezhető kapusuk × a ti türelmes játékotok:
     # az éheztetés után jöjjön a kidolgozott lövés.
@@ -10795,6 +10843,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        hh_streaks=[st for r in reports for st in (r.hh_streaks or [])],
         gcs_cold_faced=sum(r.gcs_cold_faced for r in reports),
         gcs_cold_saves=sum(r.gcs_cold_saves for r in reports),
         gcs_warm_faced=sum(r.gcs_warm_faced for r in reports),

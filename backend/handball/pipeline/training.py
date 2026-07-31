@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 206) Forró kéz: ha az ellenfélnél sorozatlövő volt, a sorozat-
+    # törő reakció a téma. (Saját oldalról: a forró kéz etetése.)
+    try:
+        from .momentum import hot_hands
+        hh206 = hot_hands(match, config)
+        for side in ("home", "away"):
+            top206 = hh206["away" if side == "home" else "home"]["top"]
+            if top206 is None:
+                continue
+            add(side, "vedekezes", "Sorozat-törő reakció",
+                f"az ellenfél sorozatlövője ({top206['player_id']} "
+                f"azonosító) {top206['streaks']} gólsorozatot dobott "
+                f"ránk (leghosszabb: {top206['longest']}) — az első "
+                "gólja után nem reagáltunk, és a második-harmadik "
+                "már lendületből jött",
+                "sorozat-törő reakció: edzésmeccsen minden kapott "
+                "gól után hangos kijelölés (ki dobta, ki őrzi), és a "
+                "gólszerzőre a következő védekezésben kötelező "
+                "őrzés-váltás vagy korai kettőzés — a szabály "
+                "beépüléséig a reakció elmaradása külön jelzést kap "
+                "a videó-visszanézésen")
+    except Exception:
+        pass
+
     # 205) Kapus-hidegedés: ha a kapusunk hidegen sebezhető, a csendes
     # percek rutinja a téma.
     try:

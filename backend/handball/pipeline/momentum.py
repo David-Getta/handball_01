@@ -1854,3 +1854,72 @@ def clutch_ball_hogs(match: Match, config=None) -> dict:
         out[side] = {"frames": counted[side], "players": rows,
                      "top": top, "verdict": verdict}
     return out
+
+
+# Forró kéz: legalább ennyi egymást követő saját gól ugyanattól a
+# lövőtől számít sorozatnak, és ennyi sorozat (vagy egy ennél hosszabb)
+# kell az ítélethez.
+HOT_STREAK_LEN = 2
+HOT_MIN_STREAKS = 2
+HOT_LONG_STREAK = 3
+
+
+def hot_hands(match: Match, config=None) -> dict:
+    """Forró kéz: VAN-E SOROZATLÖVŐJÜK, aki egymás után dobja a gólokat.
+
+    A gólfelelős-koncentráció (shot_concentration) a teljes meccs
+    eloszlását nézi — ez a sorozatokat: a csapat góljait időrendben
+    végigolvasva megszámoljuk, ki dob egymás után többet (a csapat
+    két szomszédos gólja ugyanattól a lövőtől). A forró kéz valós
+    edzői jel: aki lendületbe jön, az a következő támadásban is
+    magához veszi a labdát.
+
+    Edzőileg: a sorozatlövő ellen az ELSŐ gólja után kell reagálni —
+    őrzés-váltás vagy kettőzés rá, mielőtt a második-harmadik jönne;
+    a saját csapatban pedig a forró kezű embert tudatosan kell
+    játékba hozni, amíg tart a lendülete.
+
+    Visszatérés csapatonként: {"goals", "streaks": [{"player_id",
+    "length"}], "top", "verdict"} — a top/verdict None, ha nincs elég
+    sorozat; a verdict "van sorozatlövőjük" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    goals: dict = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL and e.player_id is not None:
+            goals[e.team.value].append(e.player_id)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        seq = goals[side]
+        streaks: list = []
+        i = 0
+        while i < len(seq):
+            j = i
+            while j + 1 < len(seq) and seq[j + 1] == seq[i]:
+                j += 1
+            if j - i + 1 >= HOT_STREAK_LEN:
+                streaks.append({"player_id": seq[i],
+                                "length": j - i + 1})
+            i = j + 1
+        per_player: dict = {}
+        for st in streaks:
+            rec = per_player.setdefault(
+                st["player_id"], {"player_id": st["player_id"],
+                                  "streaks": 0, "longest": 0})
+            rec["streaks"] += 1
+            rec["longest"] = max(rec["longest"], st["length"])
+        top = None
+        verdict = None
+        cands = [r for r in per_player.values()
+                 if r["streaks"] >= HOT_MIN_STREAKS
+                 or r["longest"] >= HOT_LONG_STREAK]
+        if cands:
+            top = max(cands, key=lambda r: (r["streaks"], r["longest"]))
+            verdict = "van sorozatlövőjük"
+        out[side] = {"goals": len(seq), "streaks": streaks,
+                     "top": top, "verdict": verdict}
+    return out

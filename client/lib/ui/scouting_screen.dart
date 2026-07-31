@@ -1318,6 +1318,37 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Forró kéz: van-e sorozatlövőjük (2+ sorozat vagy 3+ hosszú — a
+  // backend-kulccsal azonos küszöbök).
+  String? _hotHands(Map<String, dynamic> r) {
+    final rows = r["hh_streaks"];
+    if (rows is! List || rows.isEmpty) return null;
+    final per = <int, List<int>>{};
+    for (final st in rows) {
+      if (st is! Map<String, dynamic>) continue;
+      final pid = ((st["player_id"] as num?) ?? 0).toInt();
+      final len = ((st["length"] as num?) ?? 0).toInt();
+      final rec = per.putIfAbsent(pid, () => [0, 0]);
+      rec[0] += 1;
+      if (len > rec[1]) rec[1] = len;
+    }
+    int? topPid;
+    List<int>? top;
+    per.forEach((pid, rec) {
+      if (rec[0] < 2 && rec[1] < 3) return;
+      if (top == null ||
+          rec[0] > top![0] ||
+          (rec[0] == top![0] && rec[1] > top![1])) {
+        topPid = pid;
+        top = rec;
+      }
+    });
+    if (topPid == null) return null;
+    return "van sorozatlövőjük (a(z) $topPid azonosítójú, "
+        "${top![0]} gólsorozat, leghosszabb: ${top![1]}) · az első "
+        "gólja után azonnal őrzés-váltás vagy kettőzés";
+  }
+
   // Kapus-hidegedés: hideg kézzel beesik-e a védése (vödrönként 4+
   // lövés, 15 százalékpont — a backend-kulccsal azonos küszöbök).
   String? _gkColdStreaks(Map<String, dynamic> r) {
@@ -4932,6 +4963,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fal-magasság ellen", _attackVsWallHeight(r)!],
       if (_gkColdStreaks(r) != null)
         ["Kapus-hidegedés", _gkColdStreaks(r)!],
+      if (_hotHands(r) != null)
+        ["Forró kéz", _hotHands(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
