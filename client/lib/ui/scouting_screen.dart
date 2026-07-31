@@ -1318,6 +1318,42 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Negyedóra-profil: melyik meccs-szakasz az övék (40+ mért perc,
+  // 3 gólos negyedóra-különbség — a backend-kulccsal azonos
+  // küszöbök).
+  String? _quarterProfile(Map<String, dynamic> r) {
+    final mins = ((r["qp_min"] as num?) ?? 0).toDouble();
+    final qFor = r["qp_for"];
+    final qAg = r["qp_against"];
+    if (mins < 40.0 || qFor is! Map || qAg is! Map) return null;
+    String? bestQ;
+    var bestD = -999;
+    String? worstQ;
+    var worstD = 999;
+    for (final q in ["1", "2", "3", "4"]) {
+      final d = (((qFor[q] as num?) ?? 0).toInt()) -
+          (((qAg[q] as num?) ?? 0).toInt());
+      if (d > bestD) {
+        bestD = d;
+        bestQ = q;
+      }
+      if (d < worstD) {
+        worstD = d;
+        worstQ = q;
+      }
+    }
+    if (bestD >= 3) {
+      return "a(z) $bestQ. negyedóra az övék (+$bestD gólkülönbség) · "
+          "az erős szakaszuk előtt jöjjön a saját időkérés és a "
+          "friss sor";
+    }
+    if (worstD <= -3) {
+      return "a(z) $worstQ. negyedórában esnek szét ($worstD) · oda "
+          "kell tempót és friss cseréket időzíteni";
+    }
+    return null;
+  }
+
   // Beálló-őr: ki őrzi a beállót (300+ őrzés-kocka, 60% részesedés —
   // a backend-kulccsal azonos küszöbök).
   String? _pivotGuards(Map<String, dynamic> r) {
@@ -4757,6 +4793,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés-csomag", _timeoutSubCombo(r)!],
       if (_pivotGuards(r) != null)
         ["Beálló-őr", _pivotGuards(r)!],
+      if (_quarterProfile(r) != null)
+        ["Negyedóra-profil", _quarterProfile(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

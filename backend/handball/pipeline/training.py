@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 199) Negyedóra-profil: ha van visszatérő hullámvölgyünk, a
+    # szakasz-terv a téma.
+    try:
+        from .momentum import quarter_profile
+        qp199 = quarter_profile(match, config)
+        for side in ("home", "away"):
+            worst199 = qp199[side]["worst"]
+            if worst199 is None:
+                continue
+            add(side, "taktika", "Negyedóra-terv",
+                f"a(z) {worst199['quarter']}. negyedóra rendre "
+                f"elúszik ({worst199['diff']} a gólkülönbségünk "
+                "ott) — a meccseink egy órarendszerű hullámvölgyben "
+                "dőlnek el, és ez tervezéssel kezelhető",
+                "negyedóra-terv: a gyenge szakasz elejére előre "
+                "beírt csere-hullám és egy kötelező időkérés-pont "
+                "kerül (ha a különbség ott 2 fölé nő) — az "
+                "edzésmeccseken ugyanezt a 15 percet emelt "
+                "intenzitással játsszuk, hogy a hullámvölgy "
+                "fiziológiás oka (frissesség, koncentráció) "
+                "célzottan edzve legyen")
+    except Exception:
+        pass
+
     # 198) Beálló-őr: ha a beálló-őrzésünk egy emberen áll, az
     # őrzés-váltás a téma.
     try:

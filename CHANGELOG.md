@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Negyedóra-profil**: MELYIK MECCS-SZAKASZ AZ ÖVÉK az óra szerint.
+  A sorozat-elemzés esemény-alapú — ez óra-alapú: a gólokat 15 perces
+  negyedórákba soroljuk, és negyedóránként gólkülönbséget számolunk
+  (40+ mért perc, 3 gólos különbség az ítélethez). Az erős
+  negyedórájuk előtt kell a saját időkérés és a friss sor; a gyenge
+  negyedórájukra tempót kell időzíteni, mert ott esnek szét. Egy
+  réteg, sok felület: `quarter_profile` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (negyedóránkénti
+  gól-darabszámok kulcs szerinti összegzéssel, két edzői kulcs +
+  csempe), 178. meccsterv-szabály (az ő gyenge negyedórájuk × a ti
+  mély rotációtok), 199. edzés-szabály (negyedóra-terv: előre beírt
+  csere-hullám és időkérés-pont a hullámvölgyre).
+
 - **Beálló-őr**: KI ŐRZI az ellenfél beállóját. A beálló-védekezés
   azt mondja meg, mennyire bírja a fal a beállót — ez azt, ki a
   felelőse: felállt védekezésben megkeressük a becsült beállóhoz

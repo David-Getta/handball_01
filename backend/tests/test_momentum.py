@@ -1147,3 +1147,67 @@ def test_restart_targets_needs_enough_restarts():
 
     rec = restart_targets(_restart_match([21, 21]))["away"]
     assert rec["restarts"] == 2 and rec["verdict"] is None
+
+
+# ---- Negyedóra-profil (melyik meccs-szakasz az övék) ------------------------
+
+def _quarter_match(home_goal_minutes, away_goal_minutes, minutes=60.0,
+                   fps=5.0):
+    """Gólok a megadott percekben; a felvétel `minutes` hosszú."""
+    events = sorted([(m, "home") for m in home_goal_minutes] +
+                    [(m, "away") for m in away_goal_minutes])
+    frames = []
+    t = 0
+    total = int(minutes * 60 * fps)
+    ei = 0
+    while t < total:
+        if ei < len(events) and t >= int(events[ei][0] * 60 * fps):
+            side = events[ei][1]
+            for i in range(8):
+                if side == "home":
+                    frames.append(Frame(t=t, players=[
+                        _clo_pl(1, Team.HOME, 33.0, 10.0)],
+                        ball=Ball(x=min(33.0 + i * 2.5, 40.0), y=10.0,
+                                  confidence=1.0)))
+                else:
+                    frames.append(Frame(t=t, players=[
+                        _clo_pl(21, Team.AWAY, 7.0, 10.0)],
+                        ball=Ball(x=max(7.0 - i * 2.5, 0.0), y=10.0,
+                                  confidence=1.0)))
+                t += 1
+            ei += 1
+        else:
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_quarter_profile_finds_the_strong_quarter():
+    """Négy hazai gól a 4. negyedórában → van erős negyedórájuk."""
+    from handball.pipeline.momentum import quarter_profile
+
+    rec = quarter_profile(_quarter_match(
+        [46.0, 49.0, 52.0, 55.0], [5.0]))["home"]
+    assert rec["for"].get("4") == 4
+    assert rec["best"] == {"quarter": "4", "diff": 4}
+    assert rec["verdict"] == "van erős negyedórájuk"
+
+
+def test_quarter_profile_even_match_has_no_verdict():
+    """Szétszórt góloknál nincs kiemelt negyedóra."""
+    from handball.pipeline.momentum import quarter_profile
+
+    rec = quarter_profile(_quarter_match(
+        [5.0, 20.0, 35.0, 50.0], [10.0, 25.0, 40.0, 55.0]))["home"]
+    assert rec["best"] is None and rec["verdict"] is None
+
+
+def test_quarter_profile_needs_long_recording():
+    """Rövid (40 percnél rövidebb) felvételen nincs ítélet."""
+    from handball.pipeline.momentum import quarter_profile
+
+    rec = quarter_profile(_quarter_match(
+        [5.0, 8.0, 11.0, 14.0], [], minutes=20.0))["home"]
+    assert rec["verdict"] is None

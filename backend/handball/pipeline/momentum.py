@@ -1722,3 +1722,66 @@ def restart_targets(match: Match, config=None) -> dict:
         out[side] = {"restarts": restarts[side], "players": players,
                      "top": top, "verdict": verdict}
     return out
+
+
+# Negyedóra-profil: legalább ennyi perc felvétel kell az ítélethez, és
+# ekkora negyedórán belüli gólkülönbség emeli ki az erős, illetve a
+# gyenge szakaszt.
+QP_MIN_DURATION_MIN = 40.0
+QP_DIFF = 3
+
+
+def quarter_profile(match: Match, config=None) -> dict:
+    """Negyedóra-profil: MELYIK MECCS-SZAKASZ AZ ÖVÉK az óra szerint.
+
+    A sorozat-elemzés (runs) esemény-alapú — ez óra-alapú: a gólokat
+    15 perces negyedórákba soroljuk, és negyedóránként gólkülönbséget
+    számolunk. Sok csapatnak van visszatérő erős szakasza (bemelegedő
+    kezdés, halálos rajt, hajrá-gép) — az óra szerinti minta előre
+    tervezhetővé teszi az időkérést és a rotációt.
+
+    Edzőileg: az ő erős negyedórájuk ELŐTT kell a saját időkérés és a
+    friss sor — ne az ő lendületükben kapkodjatok; a gyenge
+    negyedórájukra pedig tempót kell időzíteni, mert ott esnek szét.
+
+    Visszatérés csapatonként: {"for": {negyedóra: gól},
+    "against": {...}, "best", "worst", "verdict"} — a negyedóra kulcs
+    "1".."4"; a best/worst/verdict None QP_MIN_DURATION_MIN alatti
+    felvételnél vagy QP_DIFF alatti különbségnél; a verdict
+    "van erős negyedórájuk" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    minutes = (0.0 if not match.frames else
+               (match.frames[-1].t - match.frames[0].t) / fps / 60.0)
+    t0 = match.frames[0].t if match.frames else 0
+
+    out = {side: {"for": {}, "against": {}, "best": None,
+                  "worst": None, "verdict": None}
+           for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        q = str(min(3, int((e.t - t0) / fps / 60.0 // 15)) + 1)
+        scorer = e.team.value
+        other = "away" if scorer == "home" else "home"
+        out[scorer]["for"][q] = out[scorer]["for"].get(q, 0) + 1
+        out[other]["against"][q] = out[other]["against"].get(q, 0) + 1
+
+    if minutes < QP_MIN_DURATION_MIN:
+        return out
+    for side in ("home", "away"):
+        rec = out[side]
+        diffs = {q: rec["for"].get(q, 0) - rec["against"].get(q, 0)
+                 for q in ("1", "2", "3", "4")}
+        best_q = max(diffs, key=lambda q: diffs[q])
+        worst_q = min(diffs, key=lambda q: diffs[q])
+        if diffs[best_q] >= QP_DIFF:
+            rec["best"] = {"quarter": best_q, "diff": diffs[best_q]}
+            rec["verdict"] = "van erős negyedórájuk"
+        if diffs[worst_q] <= -QP_DIFF:
+            rec["worst"] = {"quarter": worst_q, "diff": diffs[worst_q]}
+    return out

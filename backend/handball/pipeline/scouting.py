@@ -609,6 +609,12 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Negyedóra-profiljuk: negyedóránkénti lőtt és kapott gólok
+    # ({"1".."4": gól}) + a mért percek — darabszámok/összegek, meccsek
+    # közt pontosan összegződnek (kulcs szerint összeadva).
+    qp_for: dict = field(default_factory=dict)
+    qp_against: dict = field(default_factory=dict)
+    qp_min: float = 0.0
     # Beálló-őrük: védőnként a beálló-őrzés kockái [{"player_id",
     # "jersey", "frames"}] + az összes mért őrzés-kocka — darabszámok,
     # meccsek közt pontosan összegződnek (játékos szerint).
@@ -2049,6 +2055,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Negyedóra-profil: mikorra időzítsük az időkérést és a friss sort.
+    if rep.qp_min >= 40.0:
+        _qp_diffs = {q: rep.qp_for.get(q, 0) - rep.qp_against.get(q, 0)
+                     for q in ("1", "2", "3", "4")}
+        _qp_best = max(_qp_diffs, key=lambda q: _qp_diffs[q])
+        _qp_worst = min(_qp_diffs, key=lambda q: _qp_diffs[q])
+        if _qp_diffs[_qp_best] >= 3:
+            keys.append(
+                f"A(z) {_qp_best}. negyedóra az övék "
+                f"(+{_qp_diffs[_qp_best]} ott a gólkülönbségük) — az "
+                "erős szakaszuk ELŐTT jöjjön a saját időkérés és a "
+                "friss sor: ne az ő lendületükben kelljen kapkodni.")
+        if _qp_diffs[_qp_worst] <= -3:
+            keys.append(
+                f"A(z) {_qp_worst}. negyedórában esnek szét "
+                f"({_qp_diffs[_qp_worst]} ott a gólkülönbségük) — oda "
+                "kell tempót időzíteni: pörgetett cserék és gyors "
+                "középkezdések, amíg tart a hullámvölgyük.")
 
     # Beálló-őr: kire épül a belső védekezésük.
     if rep.pvg_frames >= 300 and rep.pvg_guards:
@@ -5476,6 +5501,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import quarter_profile as _qp
+        qprec = _qp(match, config)[team.value]
+        rep.qp_for = dict(qprec["for"])
+        rep.qp_against = dict(qprec["against"])
+        _qfps = match.meta.fps if match.meta.fps > 0 else 25.0
+        rep.qp_min = ((match.frames[-1].t - match.frames[0].t)
+                      / _qfps / 60.0) if match.frames else 0.0
         from .defense import pivot_guards as _pvg
         pvgrec = _pvg(match, config)[team.value]
         rep.pvg_frames = pvgrec["frames"]
@@ -7795,6 +7827,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 178) Az ő gyenge negyedórájuk × a ti mély rotációtok: a
+    # hullámvölgyükre a friss sor jön.
+    if opp.qp_min >= 40.0 and own.rotation_matches >= 1:
+        _qp178 = {q: opp.qp_for.get(q, 0) - opp.qp_against.get(q, 0)
+                  for q in ("1", "2", "3", "4")}
+        _qp178_worst = min(_qp178, key=lambda q: _qp178[q])
+        _rot178 = own.rotation_used_sum / max(1, own.rotation_matches)
+        if _qp178[_qp178_worst] <= -3 and _rot178 >= 9.0:
+            plan.append(
+                f"A(z) {_qp178_worst}. negyedórában esnek szét "
+                f"({_qp178[_qp178_worst]} ott a gólkülönbségük), ti "
+                f"pedig mélyen rotáltok (átlag {_rot178:.0f} ember "
+                "kap érdemi szerepet) — pont oda időzítsétek a friss "
+                "sort és a pörgetett tempót: a hullámvölgyükben kell "
+                "megnyerni a meccset.")
 
     # 177) Az ő egy-emberes beálló-őrzésük × a ti elzárásaitok: az
     # elzárás célpontja a beálló-őr legyen.
@@ -10489,6 +10537,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        qp_for=_merge_role_counts([r.qp_for for r in reports]),
+        qp_against=_merge_role_counts([r.qp_against for r in reports]),
+        qp_min=sum(r.qp_min for r in reports),
         pvg_frames=sum(r.pvg_frames for r in reports),
         pvg_guards=_merge_pivot_guards(reports),
         tsc_timeouts=sum(r.tsc_timeouts for r in reports),

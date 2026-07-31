@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Negyedóra-profil: melyik meccs-szakasz az övék.
+    try:
+        from .momentum import quarter_profile
+        qp = quarter_profile(match)
+        for side, name in (("home", home), ("away", away)):
+            best_qp = qp[side]["best"]
+            if best_qp is None:
+                continue
+            body += (f" A(z) {name} erős negyedórája a(z) "
+                     f"{best_qp['quarter']}. volt "
+                     f"(+{best_qp['diff']} a gólkülönbségük ott).")
+    except Exception:
+        pass
     # Beálló-őr: ki őrzi az ellenfél beállóját.
     try:
         from .defense import pivot_guards
