@@ -1318,6 +1318,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Elzárás-páros: ki zár kinek (3+ közös lövés — a backend-kulccsal
+  // azonos küszöb).
+  String? _screenPairs(Map<String, dynamic> r) {
+    final rows = r["scp_pairs"];
+    if (rows is! List || rows.isEmpty) return null;
+    final acc = <String, int>{};
+    for (final pr in rows) {
+      if (pr is! Map<String, dynamic>) continue;
+      final key = "${pr["setter_id"]}→${pr["shooter_id"]}";
+      acc[key] = (acc[key] ?? 0) + ((pr["shots"] as num?) ?? 0).toInt();
+    }
+    String? topKey;
+    var topN = 0;
+    acc.forEach((k, n) {
+      if (n > topN) {
+        topKey = k;
+        topN = n;
+      }
+    });
+    if (topKey == null || topN < 3) return null;
+    return "bejáratott elzárás-párosuk van ($topKey, $topN közös "
+        "lövés) · párban védekezzetek: korai kilépés az elzárás elé";
+  }
+
   // Szélső-kifutás: időben érnek-e ki a szélső lövéseire (4+ lövés;
   // 2,5 m felett késői, 1,2 m alatt zárt — a backend-kulccsal azonos
   // küszöbök).
@@ -5014,6 +5038,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Csend-törők", _droughtBreakers(r)!],
       if (_wingCloseouts(r) != null)
         ["Szélső-kifutás", _wingCloseouts(r)!],
+      if (_screenPairs(r) != null)
+        ["Elzárás-páros", _screenPairs(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

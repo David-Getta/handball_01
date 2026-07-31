@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Elzárás-páros: ki zár kinek.
+    try:
+        from .attack_types import screen_pairs
+        scp = screen_pairs(match)
+        for side, name in (("home", home), ("away", away)):
+            top_scp = scp[side]["top"]
+            if top_scp is None:
+                continue
+            body += (f" A(z) {name} bejáratott elzárás-párosa: a(z) "
+                     f"{top_scp['setter_id']} azonosítójú zárt a(z) "
+                     f"{top_scp['shooter_id']} azonosítójúnak "
+                     f"({top_scp['shots']} közös lövés).")
+    except Exception:
+        pass
     # Szélső-kifutás: időben érnek-e ki a szélső lövéseire.
     try:
         from .defense import wing_closeouts

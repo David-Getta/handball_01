@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 209) Elzárás-páros: ha a párosunk kiszámítható, a figura
+    # variálása a téma.
+    try:
+        from .attack_types import screen_pairs
+        scp209 = screen_pairs(match, config)
+        for side in ("home", "away"):
+            top209 = scp209[side]["top"]
+            if top209 is None:
+                continue
+            add(side, "tamadas", "Elzárás-variálás",
+                f"az elzárásaink egy párosra járnak (a(z) "
+                f"{top209['setter_id']} zár a(z) "
+                f"{top209['shooter_id']} azonosítójúnak, "
+                f"{top209['shots']} közös lövés) — a felkészült "
+                "ellenfél párban fog készülni, és az elzárásunk "
+                "hatástalanná válik",
+                "elzárás-variálás: ugyanaz az elzárás-figura három "
+                "változatban — másik oldalra, másik lövővel, és "
+                "ál-elzárással (a zár után leperdülés a kapura); az "
+                "edzésmeccsen a fő páros csak minden harmadik "
+                "elzárást játszhatja, hogy a többi változat is "
+                "élessé váljon")
+    except Exception:
+        pass
+
     # 208) Szélső-kifutás: ha későn érünk ki a szélre, a kifutás-
     # időzítés a téma.
     try:

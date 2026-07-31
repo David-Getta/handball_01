@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Elzárás-páros**: KI ZÁR KINEK — a bejáratott elzáró-lövő kettős.
+  Az elzárás-emberek azt mondják meg, ki zár a legtöbbet — ez azt,
+  kinek: minden elzárásból leadott lövésnél az (elzáró, lövő) párost
+  jegyezzük fel (3+ közös lövés a bejáratott kettőshöz). A páros
+  ellen a védekezés is párban készül — az elzáró őrzője előre szól, a
+  lövő őrzője az elzárás előtt lép ki; a saját párost a
+  kiszámíthatóságtól kell védeni. Egy réteg, sok felület:
+  `screen_pairs` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (páros szerinti darabszámok összegzéssel, edzői
+  kulcs + csempe), 188. meccsterv-szabály (az ő elzárás-párosuk × a
+  ti blokkjaitok), 209. edzés-szabály (elzárás-variálás: három
+  változat, korlátozott fő páros).
+
 - **Szélső-kifutás**: IDŐBEN ÉRNEK-E KI a szélső lövéseire. A poszt
   szerinti kapott gólok azt mondják meg, a szélsők ellen
   szivárognak-e — ez azt, miért: a szélső-posztú lövők lövéseinél

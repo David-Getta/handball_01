@@ -3466,3 +3466,81 @@ def attack_vs_wall_height(match: Match,
             elif gap >= AVW_GAP_PP:
                 rec["verdict"] = "a felfutó falat megbüntetik"
     return out
+
+
+# Elzárás-páros: ennyi közös elzárás-lövés kell a bejáratott pároshoz.
+SCP_MIN_PAIR = 3
+
+
+def screen_pairs(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárás-páros: KI ZÁR KINEK — a bejáratott elzáró-lövő kettős.
+
+    Az elzárás-emberek (screen_setters) azt mondják meg, ki zár a
+    legtöbbet — ez azt, KINEK: minden elzárásból leadott lövésnél az
+    (elzáró, lövő) párost jegyezzük fel. A kézilabdában az elzárás
+    kettőn múlik: ha ugyanaz a páros dolgozik újra és újra, a
+    kettősük bejáratott figura.
+
+    Edzőileg: a bejáratott páros ellen a védekezés is párban készül —
+    az elzáró őrzője előre szól, a lövő őrzője pedig az elzárás
+    ELŐTT lép ki, hogy ne szoruljon mögé; a saját párosunkat pedig
+    védeni kell a kiszámíthatóságtól: másik oldalra is járjon a
+    figura.
+
+    Visszatérés csapatonként: {"pairs": [{"setter_id", "shooter_id",
+    "shots"}], "top", "verdict"} — a top/verdict None SCP_MIN_PAIR
+    közös lövés alatt; a verdict "bejáratott elzárás-párosuk van" /
+    None.
+    """
+    import math
+
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    tally: dict = {"home": {}, "away": {}}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid), None)
+        if shooter is None:
+            continue
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in f.players:
+            if d.team is None or d.team == shooter.team:
+                continue
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue
+        setter = None
+        best_s = SCREEN_DIST_M
+        for p in f.players:
+            if p.team != shooter.team or p.track_id == pid:
+                continue
+            d = math.hypot(p.x - marker.x, p.y - marker.y)
+            if d <= best_s:
+                setter, best_s = p, d
+        if setter is None:
+            continue
+        side = sh["team"]
+        key = (setter.track_id, pid)
+        tally[side][key] = tally[side].get(key, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        pairs = [{"setter_id": s_, "shooter_id": sh_, "shots": n}
+                 for (s_, sh_), n in sorted(tally[side].items(),
+                                            key=lambda kv: -kv[1])]
+        top = (pairs[0] if pairs and pairs[0]["shots"] >= SCP_MIN_PAIR
+               else None)
+        verdict = ("bejáratott elzárás-párosuk van"
+                   if top is not None else None)
+        out[side] = {"pairs": pairs, "top": top, "verdict": verdict}
+    return out

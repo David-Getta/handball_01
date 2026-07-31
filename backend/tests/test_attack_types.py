@@ -2513,3 +2513,26 @@ def test_attack_vs_wall_height_needs_both_buckets():
     rec = attack_vs_wall_height(_avw_match(
         [False] * 2, [True] * 5))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Elzárás-páros (ki zár kinek) ------------------------------------------
+
+def test_screen_pairs_finds_the_drilled_duo():
+    """Négy elzárásból hármat az 5-ös állít az 1-esnek → bejáratott
+    páros."""
+    from handball.pipeline.attack_types import screen_pairs
+
+    rec = screen_pairs(_screen_setter_match([5, 5, 5, 7]))["home"]
+    assert rec["top"] is not None
+    assert rec["top"]["setter_id"] == 5
+    assert rec["top"]["shooter_id"] == 1
+    assert rec["top"]["shots"] == 3
+    assert rec["verdict"] == "bejáratott elzárás-párosuk van"
+
+
+def test_screen_pairs_scattered_duos_no_verdict():
+    """Ha minden elzárást más állít, nincs bejáratott páros."""
+    from handball.pipeline.attack_types import screen_pairs
+
+    rec = screen_pairs(_screen_setter_match([5, 6, 7]))["home"]
+    assert rec["top"] is None and rec["verdict"] is None

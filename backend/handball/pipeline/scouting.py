@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Elzárás-párosaik: (elzáró, lövő) kettősök közös lövés-számai
+    # [{"setter_id", "shooter_id", "shots"}] — darabszámok, meccsek
+    # közt páros szerint összegződnek.
+    scp_pairs: list = field(default_factory=list)
     # Szélső-kifutásuk: az ellenük leadott szélső-lövések száma és a
     # legközelebbi védő távolság-összege — darabszám/összeg, meccsek
     # közt pontosan összegződnek (átlag = wco_sum_m / wco_shots).
@@ -2099,6 +2103,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Elzárás-páros: melyik kettősükre kell párban készülni.
+    _scp_acc: dict = {}
+    for _scp_pr in (rep.scp_pairs or []):
+        _scp_key = (_scp_pr["setter_id"], _scp_pr["shooter_id"])
+        _scp_acc[_scp_key] = _scp_acc.get(_scp_key, 0) + _scp_pr["shots"]
+    if _scp_acc:
+        _scp_top = max(_scp_acc, key=lambda k: _scp_acc[k])
+        if _scp_acc[_scp_top] >= 3:
+            keys.append(
+                f"Bejáratott elzárás-párosuk van (a(z) {_scp_top[0]} "
+                f"azonosítójú zár a(z) {_scp_top[1]} azonosítójúnak, "
+                f"{_scp_acc[_scp_top]} közös lövés) — párban "
+                "védekezzetek ellene: az elzáró őrzője előre szól, a "
+                "lövő őrzője pedig az elzárás előtt lép ki, hogy ne "
+                "szoruljon mögé.")
 
     # Szélső-kifutás: érdemes-e szélesen játszani ellenük.
     if rep.wco_shots >= 4:
@@ -5692,6 +5712,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import screen_pairs as _scp
+        rep.scp_pairs = [dict(pr) for pr in
+                         _scp(match, config)[team.value]["pairs"]]
         from .defense import wing_closeouts as _wco
         wcorec = _wco(match, config)[team.value]
         rep.wco_shots = wcorec["shots"]
@@ -8056,6 +8079,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 188) Az ő bejáratott elzárás-párosuk × a ti hangos
+    # védekezésetek: a kettősük ellen kettősben kell készülni.
+    _scp188: dict = {}
+    for _scp188_pr in (opp.scp_pairs or []):
+        _k188 = (_scp188_pr["setter_id"], _scp188_pr["shooter_id"])
+        _scp188[_k188] = _scp188.get(_k188, 0) + _scp188_pr["shots"]
+    if _scp188 and own.blk_attempts >= 4:
+        _scp188_top = max(_scp188, key=lambda k: _scp188[k])
+        if _scp188[_scp188_top] >= 3:
+            plan.append(
+                f"Bejáratott elzárás-párosuk van (a(z) "
+                f"{_scp188_top[0]} zár a(z) {_scp188_top[1]} "
+                f"azonosítójúnak, {_scp188[_scp188_top]} közös "
+                f"lövés), ti pedig blokk-erős csapat vagytok "
+                f"({own.blk_attempts} kísérlet) — a kettősük ellen "
+                "kettősben készüljetek: korai kilépés az elzárás elé, "
+                "és a blokk-kéz eleve a lövő erős oldalán.")
 
     # 187) Az ő késői szél-kifutásuk × a ti szélső-góljaitok: oda kell
     # hordani a labdát.
@@ -10513,6 +10554,18 @@ def _merge_role_counts(dicts) -> dict:
     return dict(sorted(acc.items(), key=lambda kv: -kv[1]))
 
 
+def _merge_screen_pairs(reports) -> list:
+    """Elzárás-párosok összegzése: (elzáró, lövő) kulcs szerint."""
+    acc: dict = {}
+    for r in reports:
+        for pr in (r.scp_pairs or []):
+            key = (pr["setter_id"], pr["shooter_id"])
+            acc[key] = acc.get(key, 0) + pr["shots"]
+    return [{"setter_id": s_, "shooter_id": sh_, "shots": n}
+            for (s_, sh_), n in sorted(acc.items(),
+                                       key=lambda kv: -kv[1])]
+
+
 def _merge_drb_players(reports) -> list:
     """Csend-törők összegzése: játékos szerint összeadott törések."""
     acc: dict = {}
@@ -10929,6 +10982,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        scp_pairs=_merge_screen_pairs(reports),
         wco_shots=sum(r.wco_shots for r in reports),
         wco_sum_m=sum(r.wco_sum_m for r in reports),
         drb_players=_merge_drb_players(reports),
