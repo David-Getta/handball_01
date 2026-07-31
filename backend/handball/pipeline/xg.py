@@ -704,3 +704,67 @@ def wall_fade(match: Match,
             elif fh_avg - sh_avg >= WF_RISE_XG:
                 rec["verdict"] = "a második félidőre áll össze a faluk"
     return out
+
+
+# Lövés-választás állás szerint: állapotonként ennyi lövés kell az
+# ítélethez, és ekkora átlagos helyzetérték-esés (vagy -többlet) a
+# kapkodó, illetve a türelmes hátrány-játék jele.
+SQS_MIN_SHOTS = 5
+SQS_GAP_XG = 0.08
+
+
+def shot_quality_by_score(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Lövés-választás állás szerint: HÁTRÁNYBAN ELKAPKODJÁK-E.
+
+    Az előny-kezelés (pace_by_score) a támadás-hosszot méri állás
+    szerint — ez a lövés-minőséget: a leadott lövések átlagos
+    helyzet-értékét (xG) külön számoljuk, amikor a csapat hátrányban
+    van, és amikor nem. A hátrány stressz-teszt: van, aki ilyenkor
+    rossz, kis esélyű lövésekbe menekül, és van, aki a nyomás alatt
+    is végigjátssza a támadást.
+
+    Edzőileg: a hátrányban kapkodó csapat ellen a vezetés önmagát
+    védi — nyugodt fal, semmi kockázat, a rossz lövéseik nektek
+    dolgoznak; a hátrányban is türelmes csapat ellen a vezetés sosem
+    biztonságos, a hajrában is teljes fegyelem kell.
+
+    Visszatérés csapatonként: {"trail_shots", "trail_avg_xg",
+    "other_shots", "other_avg_xg", "verdict"} — az átlagok None
+    SQS_MIN_SHOTS alatt; a verdict "hátrányban elkapkodják a
+    lövéseket" / "hátrányban is türelmesek" / None.
+    """
+    xg = match_xg(match, config)
+    goals = sorted((sh["t"], sh["team"]) for sh in xg["shots"]
+                   if sh["outcome"] == "goal")
+
+    acc = {side: {"trail": [0, 0.0], "other": [0, 0.0]}
+           for side in ("home", "away")}
+    for sh in xg["shots"]:
+        side = sh["team"]
+        other = "away" if side == "home" else "home"
+        sc = {"home": 0, "away": 0}
+        for (gt, tm) in goals:
+            if gt < sh["t"]:
+                sc[tm] += 1
+        bucket = "trail" if sc[side] < sc[other] else "other"
+        acc[side][bucket][0] += 1
+        acc[side][bucket][1] += sh["xg"]
+
+    out: dict = {}
+    for side in ("home", "away"):
+        t_n, t_sum = acc[side]["trail"]
+        o_n, o_sum = acc[side]["other"]
+        rec = {"trail_shots": t_n, "trail_avg_xg": None,
+               "other_shots": o_n, "other_avg_xg": None,
+               "verdict": None}
+        if t_n >= SQS_MIN_SHOTS and o_n >= SQS_MIN_SHOTS:
+            t_avg, o_avg = t_sum / t_n, o_sum / o_n
+            rec["trail_avg_xg"] = round(t_avg, 3)
+            rec["other_avg_xg"] = round(o_avg, 3)
+            if o_avg - t_avg >= SQS_GAP_XG:
+                rec["verdict"] = "hátrányban elkapkodják a lövéseket"
+            elif t_avg - o_avg >= SQS_GAP_XG:
+                rec["verdict"] = "hátrányban is türelmesek"
+        out[side] = rec
+    return out

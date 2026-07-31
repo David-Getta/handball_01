@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Lövés-választás állás szerint**: HÁTRÁNYBAN ELKAPKODJÁK-E. Az
+  előny-kezelés a támadás-hosszot méri állás szerint — ez a
+  lövés-minőséget: a leadott lövések átlagos helyzet-értékét (xG)
+  külön számoljuk hátrányban és egyébként (állapotonként 5+ lövés,
+  0,08 xG-különbség az ítélethez). A hátrányban kapkodó csapat ellen
+  a vezetés önmagát védi — a rossz lövéseik nektek dolgoznak; a
+  hátrányban is türelmes ellen a vezetés sosem biztonságos. Egy
+  réteg, sok felület: `shot_quality_by_score` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (állapotonkénti lövés- és helyzetérték-összegek, két edzői kulcs +
+  csempe), 175. meccsterv-szabály (az ő kapkodó lövéseik × a ti gyors
+  gólra váltásotok), 196. edzés-szabály (helyzet-válogatás nyomás
+  alatt: zöld/piros minősített lövések hátrányból indulva).
+
 - **Kapus állás szerint**: HÁTRÁNYBAN FELJAVUL vagy ÖSSZEESIK-E a
   kapusuk. A védés-esés az idő szerint bontja a kapus teljesítményét
   — ez az állás szerint: a rá kaputra érkezett lövéseket

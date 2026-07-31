@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Lövés-választás állás szerint: hátrányban elkapkodják-e.
+    try:
+        from .xg import shot_quality_by_score
+        sqs = shot_quality_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sqs = sqs[side]
+            if rec_sqs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_sqs['verdict']}: a lövéseik "
+                     f"átlagos helyzet-értéke {rec_sqs['other_avg_xg']:.2f}"
+                     f"-ról {rec_sqs['trail_avg_xg']:.2f}-ra változott "
+                     "hátrányban.")
+    except Exception:
+        pass
     # Kapus állás szerint: hátrányban feljavul-e.
     try:
         from .goalkeeper import gk_saves_by_score

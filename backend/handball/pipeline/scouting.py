@@ -609,6 +609,13 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Lövés-választásuk állás szerint: hátrányban és egyébként leadott
+    # lövések + helyzetérték-összegek — darabszám/összeg, meccsek közt
+    # pontosan összegződnek (átlag = sqs_*_sum_xg / sqs_*_shots).
+    sqs_trail_shots: int = 0
+    sqs_trail_sum_xg: float = 0.0
+    sqs_other_shots: int = 0
+    sqs_other_sum_xg: float = 0.0
     # Kapusuk állás szerint: hátrányban és egyébként kapura kapott
     # lövések + védések — darabszámok, meccsek közt pontosan
     # összegződnek (arányok külön-külön).
@@ -2033,6 +2040,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Lövés-választás állás szerint: önmagát védi-e a vezetésetek.
+    if rep.sqs_trail_shots >= 5 and rep.sqs_other_shots >= 5:
+        _sqs_t = rep.sqs_trail_sum_xg / rep.sqs_trail_shots
+        _sqs_o = rep.sqs_other_sum_xg / rep.sqs_other_shots
+        if _sqs_o - _sqs_t >= 0.08:
+            keys.append(
+                f"Hátrányban elkapkodják a lövéseket (az átlagos "
+                f"helyzet-értékük {_sqs_o:.2f}-ról {_sqs_t:.2f}-ra "
+                "esik) — ha vezettek, a meccs önmagát nyeri: nyugodt "
+                "fal, semmi kockázat, a rossz lövéseik nektek "
+                "dolgoznak.")
+        elif _sqs_t - _sqs_o >= 0.08:
+            keys.append(
+                f"Hátrányban is türelmesek (az átlagos "
+                f"helyzet-értékük {_sqs_t:.2f} hátrányban is) — a "
+                "vezetés ellenük sosem biztonságos: a hajrában is "
+                "teljes védekezés-fegyelem kell, mert nem fognak "
+                "kapkodni.")
 
     # Kapus állás szerint: mennyit ér a kapusuk, ha vezettek.
     if rep.gks_trail_faced >= 4 and rep.gks_other_faced >= 4:
@@ -5412,6 +5438,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .xg import shot_quality_by_score as _sqs
+        sqsrec = _sqs(match, config)[team.value]
+        rep.sqs_trail_shots = sqsrec["trail_shots"]
+        rep.sqs_trail_sum_xg = ((sqsrec["trail_avg_xg"] or 0.0)
+                                * sqsrec["trail_shots"])
+        rep.sqs_other_shots = sqsrec["other_shots"]
+        rep.sqs_other_sum_xg = ((sqsrec["other_avg_xg"] or 0.0)
+                                * sqsrec["other_shots"])
         from .goalkeeper import gk_saves_by_score as _gks
         gksrec = _gks(match, config)[team.value]
         rep.gks_trail_faced = gksrec["trail"]["faced"]
@@ -7715,6 +7749,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 175) Az ő hátrányban kapkodó lövéseik × a ti lepattanó-uralmatok:
+    # vezetésnél a rossz lövéseikből ti indultok.
+    if (opp.sqs_trail_shots >= 5 and opp.sqs_other_shots >= 5
+            and opp.sqs_other_sum_xg / opp.sqs_other_shots
+            - opp.sqs_trail_sum_xg / opp.sqs_trail_shots >= 0.08
+            and own.trans_steals >= 4 and own.trans_quick_goals >= 2):
+        _sqs175_conv = 100.0 * own.trans_quick_goals / own.trans_steals
+        plan.append(
+            "Hátrányban elkapkodják a lövéseket, ti pedig a szerzett "
+            f"labdát gyorsan gólra váltjátok ({own.trans_quick_goals}/"
+            f"{own.trans_steals}, {_sqs175_conv:.0f}%) — ha vezettek, "
+            "minden elkapkodott lövésük indítás nektek: a kapus-"
+            "labdára és a lepattanóra kész kifutó párossal a "
+            "hibáikból kontra lesz, és a különbség magától nő.")
 
     # 174) Az ő hátrányban összeeső kapusuk × a ti lövőerőtök: előnyben
     # rá kell lőni a megingott kapusra.
@@ -10346,6 +10395,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        sqs_trail_shots=sum(r.sqs_trail_shots for r in reports),
+        sqs_trail_sum_xg=sum(r.sqs_trail_sum_xg for r in reports),
+        sqs_other_shots=sum(r.sqs_other_shots for r in reports),
+        sqs_other_sum_xg=sum(r.sqs_other_sum_xg for r in reports),
         gks_trail_faced=sum(r.gks_trail_faced for r in reports),
         gks_trail_saves=sum(r.gks_trail_saves for r in reports),
         gks_other_faced=sum(r.gks_other_faced for r in reports),

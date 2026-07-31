@@ -660,3 +660,79 @@ def test_wall_fade_needs_enough_shots_per_half():
     rec = wall_fade(_wf_match([(35.0, 10.0)] * 3, [(27.0, 3.0)] * 3))["away"]
     assert rec["fh_shots"] == 3 and rec["fh_avg_xga"] is None
     assert rec["verdict"] is None
+
+
+# ---- Lövés-választás állás szerint (hátrányban elkapkodják-e) --------------
+
+def _sqs_shot(t0, x, y):
+    """Hazai kapufa-mellé lövés (x, y)-ból: a labda a lövőtől indul a
+    +x kapu MELLÉ, így az állás nem változik."""
+    frames = []
+    for i in range(8):
+        bx = x + (40.0 - x) * min(1.0, i / 5.0)
+        by = y + (4.0 - y) * min(1.0, i / 5.0)
+        frames.append(Frame(t=t0 + i, players=[_pl(1, Team.HOME, x, y)],
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+    return frames
+
+
+def _sqs_match(other_pos, trail_pos, fps=25.0):
+    """Egál-lövések other_pos-ból, egy kapott gól, majd hátrány-lövések
+    trail_pos-ból."""
+    frames = []
+    t = 0
+
+    def _pause():
+        nonlocal t
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for (x, y) in other_pos:
+        frames.extend(_sqs_shot(t, x, y))
+        t = frames[-1].t + 1
+        _pause()
+    for i in range(8):        # vendég gól a 0-s kapuba: hazai hátrány
+        frames.append(Frame(t=t, players=[
+            _pl(21, Team.AWAY, 7.0, 10.0)],
+            ball=Ball(x=max(6.0 - i, 0.0), y=10.0, confidence=1.0)))
+        t += 1
+    _pause()
+    for (x, y) in trail_pos:
+        frames.extend(_sqs_shot(t, x, y))
+        t = frames[-1].t + 1
+        _pause()
+    return Match(_meta(fps), frames)
+
+
+def test_shot_quality_by_score_flags_the_rushing_team():
+    """Egálban közeli, hátrányban távoli-éles lövések → hátrányban
+    elkapkodják."""
+    from handball.pipeline.xg import shot_quality_by_score
+
+    rec = shot_quality_by_score(_sqs_match(
+        [(35.0, 10.0)] * 6, [(27.0, 3.0)] * 6))["home"]
+    assert rec["other_shots"] == 6 and rec["trail_shots"] == 6
+    assert rec["other_avg_xg"] > rec["trail_avg_xg"]
+    assert rec["verdict"] == "hátrányban elkapkodják a lövéseket"
+
+
+def test_shot_quality_by_score_flags_the_patient_team():
+    """Fordítva (hátrányban jobb helyzetek) → hátrányban is
+    türelmesek."""
+    from handball.pipeline.xg import shot_quality_by_score
+
+    rec = shot_quality_by_score(_sqs_match(
+        [(27.0, 3.0)] * 6, [(35.0, 10.0)] * 6))["home"]
+    assert rec["verdict"] == "hátrányban is türelmesek"
+
+
+def test_shot_quality_by_score_needs_shots_in_both_states():
+    """Állapotonként 5-nél kevesebb lövésnél nincs ítélet."""
+    from handball.pipeline.xg import shot_quality_by_score
+
+    rec = shot_quality_by_score(_sqs_match(
+        [(35.0, 10.0)] * 6, [(27.0, 3.0)] * 3))["home"]
+    assert rec["trail_shots"] == 3 and rec["verdict"] is None

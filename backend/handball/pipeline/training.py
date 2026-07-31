@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 196) Lövés-választás állás szerint: ha hátrányban elkapkodjuk a
+    # lövéseket, a nyomás alatti helyzet-válogatás a téma.
+    try:
+        from .xg import shot_quality_by_score
+        sqs196 = shot_quality_by_score(match, config)
+        for side in ("home", "away"):
+            rec196 = sqs196[side]
+            if rec196["verdict"] != "hátrányban elkapkodják a lövéseket":
+                continue
+            add(side, "tamadas", "Helyzet-válogatás nyomás alatt",
+                f"hátrányban {rec196['other_avg_xg']:.2f}-ról "
+                f"{rec196['trail_avg_xg']:.2f}-ra esik a lövéseink "
+                "átlagos helyzet-értéke — pont akkor lövünk rosszat, "
+                "amikor minden támadás számít, és a kis esélyű "
+                "lövés duplán büntet: nem lesz gól, és kontra jön "
+                "belőle",
+                "helyzet-válogatás nyomás alatt: hátrányból (0-2) "
+                "induló edzésmeccs, ahol csak a 0,3 feletti "
+                "helyzet-értékű lövés ér gólt (a kispad hangosan "
+                "minősíti: zöld/piros) — két piros lövés után a "
+                "támadó sor büntető-visszafutást fut, és a menet "
+                "csak türelmes, kidolgozott góllal zárható")
+    except Exception:
+        pass
+
     # 195) Kapus állás szerint: ha a kapusunk hátrányban összeesik, a
     # mentális újraindítás a téma.
     try:
