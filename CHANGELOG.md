@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Csend-törők**: KI DOBJA a gólcsendet megtörő gólt. A
+  gólcsend-elemzés a leghosszabb szárazságot méri — ez azt, ki vet
+  véget neki: az 5+ perces saját gólcsend utáni gól lövője csend-törő
+  jóváírást kap (2+ törés a kiemelt válság-lövőhöz). Az ellenfél
+  válság-lövőjét pont a saját sorozatunk alatt kell a legszorosabban
+  fogni — hozzá menekül a labda, amikor áll a szekerük. Egy réteg,
+  sok felület: `drought_breakers` motor, edzői összefoglaló, /analyze
+  + meccs-csomag, felderítés-profil (törés-darabszámok játékos
+  szerinti összegzéssel, edzői kulcs + csempe), 186.
+  meccsterv-szabály (az ő válság-lövőjük × a ti sorozataitok), 207.
+  edzés-szabály (válság-lövő kijelölése: vész-figura megnevezett
+  befejezővel).
+
 - **Forró kéz**: VAN-E SOROZATLÖVŐJÜK. A gólfelelős-koncentráció a
   teljes meccs eloszlását nézi — ez a sorozatokat: a csapat góljait
   időrendben olvasva megszámoljuk, ki dob egymás után többet (2+

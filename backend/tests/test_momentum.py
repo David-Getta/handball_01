@@ -1286,3 +1286,55 @@ def test_hot_hands_single_long_streak_counts():
     rec = hot_hands(_bench_match([1, 7, 7, 7, 1, 1]))["home"]
     assert rec["top"] is not None and rec["top"]["longest"] >= 3
     assert rec["verdict"] == "van sorozatlövőjük"
+
+
+# ---- Csend-törők (ki dobja a gólcsendet megtörő gólt) -----------------------
+
+def _drb_match(goal_plan, fps=5.0):
+    """Hazai gólok: a `goal_plan` elemei (perc, lövő-azonosító) párok."""
+    frames = []
+    t = 0
+    for (minute, pid) in sorted(goal_plan):
+        target = int(minute * 60 * fps)
+        while t < target:
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=[
+                _clo_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(33.0 + i * 2.5, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_drought_breakers_finds_the_crisis_scorer():
+    """A 7-es kétszer is 5+ perces csendet tör meg → válság-lövő."""
+    from handball.pipeline.momentum import drought_breakers
+
+    rec = drought_breakers(_drb_match(
+        [(1.0, 1), (2.0, 1), (9.0, 7), (10.0, 1), (17.0, 7)]))["home"]
+    assert rec["droughts_broken"] == 2
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7
+    assert rec["verdict"] == "van válság-lövőjük"
+
+
+def test_drought_breakers_spread_breaks_no_verdict():
+    """Ha a töréseket más-más lövő dobja, nincs kiemelt ember."""
+    from handball.pipeline.momentum import drought_breakers
+
+    rec = drought_breakers(_drb_match(
+        [(1.0, 1), (9.0, 7), (17.0, 8)]))["home"]
+    assert rec["droughts_broken"] == 2 and rec["top"] is None
+    assert rec["verdict"] is None
+
+
+def test_drought_breakers_dense_goals_no_droughts():
+    """Sűrű gólok között nincs mérhető csend."""
+    from handball.pipeline.momentum import drought_breakers
+
+    rec = drought_breakers(_drb_match(
+        [(1.0, 7), (2.0, 7), (3.0, 7)]))["home"]
+    assert rec["droughts_broken"] == 0 and rec["verdict"] is None

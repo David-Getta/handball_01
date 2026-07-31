@@ -609,6 +609,9 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Csend-törőik: gólcsend-törések [{"player_id", "breaks"}] —
+    # darabszámok, meccsek közt játékos szerint összegződnek.
+    drb_players: list = field(default_factory=list)
     # Forró kezük: gólsorozataik [{"player_id", "length"}] — meccsek
     # közt listaként összegződnek (játékos szerint darab + leghosszabb).
     hh_streaks: list = field(default_factory=list)
@@ -2091,6 +2094,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Csend-törők: kihez menekül a labda, amikor áll a szekerük.
+    _drb_per: dict = {}
+    for _drb_pr in (rep.drb_players or []):
+        _drb_per[_drb_pr["player_id"]] = (
+            _drb_per.get(_drb_pr["player_id"], 0) + _drb_pr["breaks"])
+    if _drb_per:
+        _drb_pid = max(_drb_per, key=lambda k: _drb_per[k])
+        if _drb_per[_drb_pid] >= 2:
+            keys.append(
+                f"Van válság-lövőjük: a(z) {_drb_pid} azonosítójú "
+                f"{_drb_per[_drb_pid]} gólcsendet tört meg — a saját "
+                "sorozatotok alatt őt fogjátok a legszorosabban: "
+                "hozzá menekül a labda, amikor áll a szekerük.")
 
     # Forró kéz: kire kell azonnal reagálni az első gólja után.
     _hh_per: dict = {}
@@ -5655,6 +5672,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import drought_breakers as _drb
+        rep.drb_players = [dict(pr) for pr in
+                           _drb(match, config)[team.value]["players"]]
         from .momentum import hot_hands as _hh
         rep.hh_streaks = [dict(st) for st in
                           _hh(match, config)[team.value]["streaks"]]
@@ -8012,6 +8032,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 186) Az ő válság-lövőjük × a ti sorozataitok: a lendületetek
+    # alatt névre szólóan zárjátok a szelepüket.
+    _drb186: dict = {}
+    for _drb186_pr in (opp.drb_players or []):
+        _drb186[_drb186_pr["player_id"]] = (
+            _drb186.get(_drb186_pr["player_id"], 0)
+            + _drb186_pr["breaks"])
+    if _drb186 and own.rn_made >= 2:
+        _drb186_pid = max(_drb186, key=lambda k: _drb186[k])
+        if _drb186[_drb186_pid] >= 2:
+            plan.append(
+                f"Van válság-lövőjük (a(z) {_drb186_pid} azonosítójú, "
+                f"{_drb186[_drb186_pid]} csend-törés), ti pedig tudtok "
+                f"sorozatot építeni ({own.rn_made} gólsorozat) — amikor "
+                "elkaptátok a fonalat, őt zárjátok név szerint: ha a "
+                "szelepük nem nyílik ki, a sorozatotok duplán fáj "
+                "nekik.")
 
     # 185) Az ő sorozatlövőjük × a ti páros-védekezésetek: az első
     # gólja után azonnal váltott őrzés jön rá.
@@ -10438,6 +10476,17 @@ def _merge_role_counts(dicts) -> dict:
     return dict(sorted(acc.items(), key=lambda kv: -kv[1]))
 
 
+def _merge_drb_players(reports) -> list:
+    """Csend-törők összegzése: játékos szerint összeadott törések."""
+    acc: dict = {}
+    for r in reports:
+        for pr in (r.drb_players or []):
+            acc[pr["player_id"]] = (acc.get(pr["player_id"], 0)
+                                    + pr["breaks"])
+    return [{"player_id": pid, "breaks": n}
+            for pid, n in sorted(acc.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_cbh_players(reports) -> list:
     """Hajrá-birtokosok összegzése: játékos szerint összeadott labdás
     kockák."""
@@ -10843,6 +10892,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        drb_players=_merge_drb_players(reports),
         hh_streaks=[st for r in reports for st in (r.hh_streaks or [])],
         gcs_cold_faced=sum(r.gcs_cold_faced for r in reports),
         gcs_cold_saves=sum(r.gcs_cold_saves for r in reports),

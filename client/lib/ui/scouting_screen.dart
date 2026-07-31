@@ -1318,6 +1318,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Csend-törők: ki töri meg a gólcsendjüket (2+ törés — a
+  // backend-kulccsal azonos küszöb).
+  String? _droughtBreakers(Map<String, dynamic> r) {
+    final rows = r["drb_players"];
+    if (rows is! List || rows.isEmpty) return null;
+    final per = <int, int>{};
+    for (final pr in rows) {
+      if (pr is! Map<String, dynamic>) continue;
+      final pid = ((pr["player_id"] as num?) ?? 0).toInt();
+      per[pid] = (per[pid] ?? 0) + ((pr["breaks"] as num?) ?? 0).toInt();
+    }
+    int? topPid;
+    var topN = 0;
+    per.forEach((pid, n) {
+      if (n > topN) {
+        topPid = pid;
+        topN = n;
+      }
+    });
+    if (topPid == null || topN < 2) return null;
+    return "van válság-lövőjük (a(z) $topPid azonosítójú, $topN "
+        "csend-törés) · a sorozatotok alatt őt fogjátok a "
+        "legszorosabban";
+  }
+
   // Forró kéz: van-e sorozatlövőjük (2+ sorozat vagy 3+ hosszú — a
   // backend-kulccsal azonos küszöbök).
   String? _hotHands(Map<String, dynamic> r) {
@@ -4965,6 +4990,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-hidegedés", _gkColdStreaks(r)!],
       if (_hotHands(r) != null)
         ["Forró kéz", _hotHands(r)!],
+      if (_droughtBreakers(r) != null)
+        ["Csend-törők", _droughtBreakers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

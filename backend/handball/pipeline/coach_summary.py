@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Csend-törők: ki dobja a gólcsendet megtörő gólt.
+    try:
+        from .momentum import drought_breakers
+        drb = drought_breakers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_drb = drb[side]["top"]
+            if top_drb is None:
+                continue
+            body += (f" A(z) {name} válság-lövője a(z) "
+                     f"{top_drb['player_id']} azonosítójú volt: "
+                     f"{top_drb['breaks']} gólcsendet tört meg.")
+    except Exception:
+        pass
     # Forró kéz: van-e sorozatlövőjük.
     try:
         from .momentum import hot_hands

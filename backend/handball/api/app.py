@@ -3322,6 +3322,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import drought_breakers
+            res["drought_breakers"] = drought_breakers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4149,6 +4154,9 @@ def create_app():
                        lambda: gk_cold_streaks(match))
                 from ..pipeline.momentum import hot_hands
                 _layer("hot_hands", lambda: hot_hands(match))
+                from ..pipeline.momentum import drought_breakers
+                _layer("drought_breakers",
+                       lambda: drought_breakers(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

@@ -1923,3 +1923,64 @@ def hot_hands(match: Match, config=None) -> dict:
         out[side] = {"goals": len(seq), "streaks": streaks,
                      "top": top, "verdict": verdict}
     return out
+
+
+# Csend-törők: legalább ekkora saját gólcsend megtörése számít, és
+# ennyi törés kell a kiemelt válság-lövőhöz.
+DRB_GAP_S = 300.0
+DRB_MIN_BREAKS = 2
+
+
+def drought_breakers(match: Match, config=None) -> dict:
+    """Csend-törők: KI DOBJA a gólcsendet megtörő gólt.
+
+    A gólcsend-elemzés a leghosszabb szárazságot méri — ez azt, ki
+    vet véget neki: minden olyan gólnál, amely a csapat legalább
+    DRB_GAP_S másodperces gólcsendje után esett, a lövő csend-törő
+    jóváírást kap. Aki rendre ilyenkor vállal és betalál, az a
+    csapat válság-lövője.
+
+    Edzőileg: az ellenfél válság-lövőjét pont a saját sorozatunk
+    alatt kell a legszorosabban fogni — hozzá menekül a labda, amikor
+    áll a szekerük; a saját válság-lövőnket pedig tudatosan kell
+    játékba hozni, amikor beáll a csend.
+
+    Visszatérés csapatonként: {"droughts_broken", "players":
+    [{"player_id", "breaks"}], "top", "verdict"} — a top/verdict
+    None DRB_MIN_BREAKS alatti egyéni törésnél; a verdict "van
+    válság-lövőjük" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    gap = DRB_GAP_S * fps
+
+    goals: dict = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        if e.type == EventType.GOAL:
+            goals[e.team.value].append((e.t, e.player_id))
+
+    out: dict = {}
+    for side in ("home", "away"):
+        tally: dict = {}
+        broken = 0
+        prev_t = None
+        for (t, pid) in goals[side]:
+            if prev_t is not None and t - prev_t >= gap:
+                broken += 1
+                if pid is not None:
+                    tally[pid] = tally.get(pid, 0) + 1
+            prev_t = t
+        players = [{"player_id": pid, "breaks": n}
+                   for pid, n in sorted(tally.items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        verdict = None
+        if players and players[0]["breaks"] >= DRB_MIN_BREAKS:
+            top = players[0]
+            verdict = "van válság-lövőjük"
+        out[side] = {"droughts_broken": broken, "players": players,
+                     "top": top, "verdict": verdict}
+    return out

@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 207) Csend-törők: ha a gólcsendjeinket mindig más töri meg
+    # (nincs válság-lövőnk), a vész-megoldás kijelölése a téma.
+    try:
+        from .momentum import drought_breakers
+        drb207 = drought_breakers(match, config)
+        for side in ("home", "away"):
+            rec207 = drb207[side]
+            if rec207["droughts_broken"] < 2 or rec207["top"] is not None:
+                continue
+            add(side, "tamadas", "Válság-lövő kijelölése",
+                f"{rec207['droughts_broken']} hosszú gólcsendünk volt, "
+                "és mindig más törte meg — vész-helyzetben nincs "
+                "kijelölt megoldásunk, a csend ezért nyúlik hosszúra",
+                "válság-lövő kijelölése: két begyakorolt vész-figura "
+                "egy megnevezett befejezővel — az edzésmeccsen minden "
+                "3 perces gólcsend után kötelező a vész-figura, és a "
+                "kijelölt lövő zárja; a szerep meccsenként előre "
+                "kihirdetve, hogy csendben mindenki tudja, kihez "
+                "megy a labda")
+    except Exception:
+        pass
+
     # 206) Forró kéz: ha az ellenfélnél sorozatlövő volt, a sorozat-
     # törő reakció a téma. (Saját oldalról: a forró kéz etetése.)
     try:
