@@ -1785,3 +1785,72 @@ def quarter_profile(match: Match, config=None) -> dict:
         if diffs[worst_q] <= -QP_DIFF:
             rec["worst"] = {"quarter": worst_q, "diff": diffs[worst_q]}
     return out
+
+
+# Hajrá-labdabirtoklás: ennyi mért labdás kocka kell a hajrában, és e
+# feletti részesedés jelenti az egy kézben lévő végjátékot.
+CBH_MIN_FRAMES = 200
+CBH_TOP_PCT = 35.0
+
+
+def clutch_ball_hogs(match: Match, config=None) -> dict:
+    """Hajrá-labdabirtoklás: EGY KÉZBEN VAN-E a végjátékuk.
+
+    A hajrá-ötös (clutch_lineup) azt mondja meg, kik vannak fent a
+    végén, a hajrá-emberek (clutch_scorers) azt, ki lő — ez azt,
+    KINÉL VAN A LABDA: az utolsó CLUTCH_WINDOW_S másodperc labdás
+    kockáit játékosonként számoljuk. Sok csapat végjátéka egyetlen
+    irányítón fut keresztül — ha ő kézben tartja a labdát, a többiek
+    csak befejeznek.
+
+    Edzőileg: az egy kézben futó végjáték ellen a hajrá-kettőzés a
+    recept — nem a lövőket kell fogni, hanem A kezet: ha tőle elvenni
+    vagy őt korán labdához nem engedni sikerül, a záró figuráik el
+    sem indulnak.
+
+    Visszatérés csapatonként: {"frames", "players": [{"player_id",
+    "jersey", "frames"}], "top", "verdict"} — a top/verdict None
+    CBH_MIN_FRAMES mért kocka alatt vagy CBH_TOP_PCT alatti
+    részesedésnél; a verdict "egy kézben van a végjátékuk" / None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    if not match.frames:
+        return {side: {"frames": 0, "players": [], "top": None,
+                       "verdict": None} for side in ("home", "away")}
+    cut = match.frames[-1].t - CLUTCH_WINDOW_S * fps
+
+    jersey: dict = {}
+    acc: dict = {"home": {}, "away": {}}
+    counted = {"home": 0, "away": 0}
+    for f in match.frames:
+        if f.t < cut:
+            continue
+        h = ball_holder(f, config)
+        if h is None or h.role == "kapus":
+            continue
+        if h.jersey_number is not None:
+            jersey.setdefault(h.track_id, h.jersey_number)
+        side = h.team.value
+        counted[side] += 1
+        acc[side][h.track_id] = acc[side].get(h.track_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "frames": n}
+                for tid, n in sorted(acc[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = None
+        verdict = None
+        if counted[side] >= CBH_MIN_FRAMES and rows:
+            share = 100.0 * rows[0]["frames"] / counted[side]
+            if share >= CBH_TOP_PCT:
+                top = rows[0]
+                verdict = "egy kézben van a végjátékuk"
+        out[side] = {"frames": counted[side], "players": rows,
+                     "top": top, "verdict": verdict}
+    return out

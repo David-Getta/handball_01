@@ -3286,6 +3286,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import clutch_ball_hogs
+            res["clutch_ball_hogs"] = clutch_ball_hogs(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4091,6 +4096,9 @@ def create_app():
                 from ..pipeline.momentum import quarter_profile
                 _layer("quarter_profile",
                        lambda: quarter_profile(match))
+                from ..pipeline.momentum import clutch_ball_hogs
+                _layer("clutch_ball_hogs",
+                       lambda: clutch_ball_hogs(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

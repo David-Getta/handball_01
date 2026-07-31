@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Hajrá-labdabirtoklásuk: játékosonkénti hajrá-labdás kockák
+    # [{"player_id", "jersey", "frames"}] + az összes mért hajrá-kocka
+    # — darabszámok, meccsek közt pontosan összegződnek.
+    cbh_frames: int = 0
+    cbh_players: list = field(default_factory=list)
     # Negyedóra-profiljuk: negyedóránkénti lőtt és kapott gólok
     # ({"1".."4": gól}) + a mért percek — darabszámok/összegek, meccsek
     # közt pontosan összegződnek (kulcs szerint összeadva).
@@ -2055,6 +2060,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Hajrá-labdabirtoklás: kit kell kettőzni a végjátékban.
+    if rep.cbh_frames >= 200 and rep.cbh_players:
+        _cbh_top = max(rep.cbh_players, key=lambda r: r["frames"])
+        if 100.0 * _cbh_top["frames"] / rep.cbh_frames >= 35.0:
+            keys.append(
+                f"Egy kézben van a végjátékuk: a hajrá labdás idejének "
+                f"nagy részét a(z) {_cbh_top['player_id']} azonosítójú "
+                "viszi — a hajrá-kettőzés rá menjen: ha tőle elveszitek "
+                "a labdát, vagy korán labdához sem engeditek, a záró "
+                "figuráik el sem indulnak.")
 
     # Negyedóra-profil: mikorra időzítsük az időkérést és a friss sort.
     if rep.qp_min >= 40.0:
@@ -5501,6 +5517,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import clutch_ball_hogs as _cbh
+        cbhrec = _cbh(match, config)[team.value]
+        rep.cbh_frames = cbhrec["frames"]
+        rep.cbh_players = [dict(pr) for pr in cbhrec["players"]]
         from .momentum import quarter_profile as _qp
         qprec = _qp(match, config)[team.value]
         rep.qp_for = dict(qprec["for"])
@@ -7828,6 +7848,20 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 179) Az ő egy kézben futó végjátékuk × a ti pressz-termelésetek:
+    # a hajrá-kettőzés célszemélye adott.
+    if (opp.cbh_frames >= 200 and opp.cbh_players
+            and own.stt_steals >= 6):
+        _cbh179 = max(opp.cbh_players, key=lambda r: r["frames"])
+        if 100.0 * _cbh179["frames"] / opp.cbh_frames >= 35.0:
+            plan.append(
+                f"Egy kézben van a végjátékuk (a(z) "
+                f"{_cbh179['player_id']} azonosítójú viszi a hajrá "
+                f"labdás idejét), ti pedig jó labdaszerzők vagytok "
+                f"({own.stt_steals} szerzés) — az utolsó öt percben "
+                "a kettőzés név szerint rá menjen: vegyétek el tőle "
+                "a labdát, és a záró figuráik el sem indulnak.")
+
     # 178) Az ő gyenge negyedórájuk × a ti mély rotációtok: a
     # hullámvölgyükre a friss sor jön.
     if opp.qp_min >= 40.0 and own.rotation_matches >= 1:
@@ -10147,6 +10181,21 @@ def _merge_role_counts(dicts) -> dict:
     return dict(sorted(acc.items(), key=lambda kv: -kv[1]))
 
 
+def _merge_cbh_players(reports) -> list:
+    """Hajrá-birtokosok összegzése: játékos szerint összeadott labdás
+    kockák."""
+    acc: dict = {}
+    jersey: dict = {}
+    for r in reports:
+        for pr in (r.cbh_players or []):
+            pid = pr["player_id"]
+            acc[pid] = acc.get(pid, 0) + pr["frames"]
+            if pr.get("jersey") is not None:
+                jersey.setdefault(pid, pr["jersey"])
+    return [{"player_id": pid, "jersey": jersey.get(pid), "frames": n}
+            for pid, n in sorted(acc.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_pivot_guards(reports) -> list:
     """Beálló-őrök összegzése: játékos szerint összeadott
     őrzés-kockák."""
@@ -10537,6 +10586,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        cbh_frames=sum(r.cbh_frames for r in reports),
+        cbh_players=_merge_cbh_players(reports),
         qp_for=_merge_role_counts([r.qp_for for r in reports]),
         qp_against=_merge_role_counts([r.qp_against for r in reports]),
         qp_min=sum(r.qp_min for r in reports),

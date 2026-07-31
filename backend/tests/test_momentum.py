@@ -1211,3 +1211,48 @@ def test_quarter_profile_needs_long_recording():
     rec = quarter_profile(_quarter_match(
         [5.0, 8.0, 11.0, 14.0], [], minutes=20.0))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Hajrá-labdabirtoklás (egy kézben van-e a végjáték) ---------------------
+
+def _cbh_match(hog_share, total=6000, fps=25.0):
+    """Az utolsó percek labdás kockáinak hog_share hányada a hazai
+    7-esé, a többi felváltva a 8-asé és 9-esé."""
+    frames = []
+    for t in range(total):
+        cycle = t % 100
+        if cycle < int(100 * hog_share):
+            holder = _clo_pl(7, Team.HOME, 28.0, 10.0)
+        elif cycle % 2 == 0:
+            holder = _clo_pl(8, Team.HOME, 30.0, 6.0)
+        else:
+            holder = _clo_pl(9, Team.HOME, 30.0, 14.0)
+        frames.append(Frame(t=t, players=[holder],
+                            ball=Ball(x=holder.x, y=holder.y,
+                                      confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_clutch_ball_hogs_finds_the_one_hand():
+    """A hajrá-birtoklás fele a 7-esé → egy kézben van a végjátékuk."""
+    from handball.pipeline.momentum import clutch_ball_hogs
+
+    rec = clutch_ball_hogs(_cbh_match(0.5))["home"]
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7
+    assert rec["verdict"] == "egy kézben van a végjátékuk"
+
+
+def test_clutch_ball_hogs_spread_endgame_no_verdict():
+    """Megosztott hajrá-birtoklásnál nincs kiemelt kéz."""
+    from handball.pipeline.momentum import clutch_ball_hogs
+
+    rec = clutch_ball_hogs(_cbh_match(0.34))["home"]
+    assert rec["top"] is None and rec["verdict"] is None
+
+
+def test_clutch_ball_hogs_needs_enough_frames():
+    """Kevés (200-nál kevesebb) mért labdás kockánál nincs ítélet."""
+    from handball.pipeline.momentum import clutch_ball_hogs
+
+    rec = clutch_ball_hogs(_cbh_match(0.5, total=150))["home"]
+    assert rec["verdict"] is None

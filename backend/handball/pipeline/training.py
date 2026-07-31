@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 200) Hajrá-labdabirtoklás: ha a végjátékunk egy kézben van, a
+    # másodlagos játékszervezés a téma.
+    try:
+        from .momentum import clutch_ball_hogs
+        cbh200 = clutch_ball_hogs(match, config)
+        for side in ("home", "away"):
+            top200 = cbh200[side]["top"]
+            if top200 is None:
+                continue
+            add(side, "tamadas", "Második játékszervező",
+                f"a hajrá labdás idejének nagy részét egy ember viszi "
+                f"(a(z) {top200['player_id']} azonosítójú) — ha őt a "
+                "végjátékban kettőzik vagy kipontozódik, nincs, aki "
+                "átvegye a záró figurák szervezését",
+                "második játékszervező: a hajrá-figurákat két "
+                "indítási ponttal gyakoroljuk — ugyanaz a figura "
+                "elindítható az irányítótól ÉS az átlövőtől is; az "
+                "edzésmeccsek utolsó öt percében az első számú "
+                "szervező kötelezően csali (labda nélkül köt le két "
+                "védőt), és a záró támadást a második ember vezeti")
+    except Exception:
+        pass
+
     # 199) Negyedóra-profil: ha van visszatérő hullámvölgyünk, a
     # szakasz-terv a téma.
     try:

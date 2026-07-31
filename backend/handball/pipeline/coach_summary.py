@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Hajrá-labdabirtoklás: egy kézben van-e a végjátékuk.
+    try:
+        from .momentum import clutch_ball_hogs
+        cbh = clutch_ball_hogs(match)
+        for side, name in (("home", home), ("away", away)):
+            top_cbh = cbh[side]["top"]
+            if top_cbh is None:
+                continue
+            body += (f" A(z) {name} végjátéka egy kézben volt: a "
+                     f"hajrá labdás idejének nagy részét a(z) "
+                     f"{top_cbh['player_id']} azonosítójú vitte "
+                     f"({top_cbh['frames']}/{cbh[side]['frames']} "
+                     "kocka).")
+    except Exception:
+        pass
     # Negyedóra-profil: melyik meccs-szakasz az övék.
     try:
         from .momentum import quarter_profile

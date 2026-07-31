@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hajrá-labdabirtoklás: egy kézben van-e a végjáték (200+ hajrá-
+  // kocka, 35% részesedés — a backend-kulccsal azonos küszöbök).
+  String? _clutchBallHogs(Map<String, dynamic> r) {
+    final frames = ((r["cbh_frames"] as num?) ?? 0).toInt();
+    final rows = r["cbh_players"];
+    if (frames < 200 || rows is! List || rows.isEmpty) return null;
+    Map<String, dynamic>? top;
+    for (final pr in rows) {
+      if (pr is Map<String, dynamic> &&
+          (top == null ||
+              ((pr["frames"] as num?) ?? 0) >
+                  ((top["frames"] as num?) ?? 0))) {
+        top = pr;
+      }
+    }
+    if (top == null) return null;
+    final topF = ((top["frames"] as num?) ?? 0).toInt();
+    if (100.0 * topF / frames < 35.0) return null;
+    return "egy kézben van a végjátékuk (a(z) ${top["player_id"]} "
+        "azonosítójú viszi a hajrá labdás idejét) · a hajrá-kettőzés "
+        "név szerint rá menjen";
+  }
+
   // Negyedóra-profil: melyik meccs-szakasz az övék (40+ mért perc,
   // 3 gólos negyedóra-különbség — a backend-kulccsal azonos
   // küszöbök).
@@ -4795,6 +4818,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Beálló-őr", _pivotGuards(r)!],
       if (_quarterProfile(r) != null)
         ["Negyedóra-profil", _quarterProfile(r)!],
+      if (_clutchBallHogs(r) != null)
+        ["Hajrá-birtoklás", _clutchBallHogs(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

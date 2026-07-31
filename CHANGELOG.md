@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hajrá-labdabirtoklás**: EGY KÉZBEN VAN-E a végjátékuk. A
+  hajrá-ötös azt mondja meg, kik vannak fent a végén, a hajrá-emberek
+  azt, ki lő — ez azt, kinél van a labda: az utolsó öt perc labdás
+  kockáit játékosonként számoljuk (200+ mért kocka, 35% részesedés az
+  ítélethez). Az egy kézben futó végjáték ellen a hajrá-kettőzés a
+  recept — nem a lövőket kell fogni, hanem A kezet. Egy réteg, sok
+  felület: `clutch_ball_hogs` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (játékosonkénti hajrá-kockák
+  összegzéssel, edzői kulcs + csempe), 179. meccsterv-szabály (az ő
+  egy kézben futó végjátékuk × a ti labdaszerzésetek), 200.
+  edzés-szabály (második játékszervező: kétindítású hajrá-figurák,
+  csali-szerep).
+
 - **Negyedóra-profil**: MELYIK MECCS-SZAKASZ AZ ÖVÉK az óra szerint.
   A sorozat-elemzés esemény-alapú — ez óra-alapú: a gólokat 15 perces
   negyedórákba soroljuk, és negyedóránként gólkülönbséget számolunk
