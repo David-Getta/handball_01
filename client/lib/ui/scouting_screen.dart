@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Labdaszerzés-típus: elfogják vagy leszerelik a labdát (6+ szerzés;
+  // 60% felett sáv-záró, 25% alatt testre menő — a backend-kulccsal
+  // azonos küszöbök).
+  String? _stealTypes(Map<String, dynamic> r) {
+    final steals = ((r["stt_steals"] as num?) ?? 0).toInt();
+    final ints = ((r["stt_int"] as num?) ?? 0).toInt();
+    if (steals < 6) return null;
+    final pct = 100.0 * ints / steals;
+    if (pct >= 60.0) {
+      return "a passzsávakat zárják ($steals szerzésből $ints "
+          "elfogott passz) · keresztbe lebegtetni tilos, rövid "
+          "passzok és betörések kellenek";
+    }
+    if (pct <= 25.0) {
+      return "testre mennek szerelni ($steals szerzésből csak $ints "
+          "elfogás) · gyors labdajáratással megelőzhető a kontakt, a "
+          "keresztpassz vállalható";
+    }
+    return null;
+  }
+
   // Kapott helyzetek minősége: milyen lövéseket enged a fal (8+ kapott
   // lövés; 0,35 felett nagy, 0,22 alatt nehéz helyzetek — a
   // backend-kulccsal azonos küszöbök).
@@ -4272,6 +4293,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Félidő-zárás", _closingAttacks(r)!],
       if (_concededChanceQuality(r) != null)
         ["Kapott helyzetek", _concededChanceQuality(r)!],
+      if (_stealTypes(r) != null)
+        ["Labdaszerzés-típus", _stealTypes(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

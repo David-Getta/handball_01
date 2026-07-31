@@ -2611,3 +2611,73 @@ def press_after_goal(match, config=None) -> dict:
                 rec["verdict"] = "gól után visszahúzódnak"
         out[side] = rec
     return out
+
+
+# Labdaszerzés-típus: legalább ekkora birtokos nélküli rés (mp) számít
+# röptében elfogott passznak, ennyi szerzés kell az ítélethez, és e
+# feletti / alatti elfogás-arány a passzsáv-záró, illetve a testre menő
+# védekezés jele.
+STT_GAP_S = 0.2
+STT_MIN_STEALS = 6
+STT_INT_PCT = 60.0
+STT_TACKLE_PCT = 25.0
+
+
+def steal_types(match, config=None) -> dict:
+    """Labdaszerzés-típus: ELFOGJÁK vagy LESZERELIK a labdát.
+
+    A labdaszerzők (ball_winners) azt mondják meg, KI szerez, az elöl
+    szerzők (high_steal_players) azt, HOL — ez azt, HOGYAN: ha a
+    birtokos-váltás előtt a labda legalább STT_GAP_S másodpercig
+    senkinél sem volt (röptében járt), a szerzés passz-elfogás; ha a
+    labda kézből kézbe került, szerelés a támadó testén.
+
+    Edzőileg: a passzsávakat záró csapat ellen nem szabad keresztbe
+    lebegtetni — rövid, közvetlen passzok és betörések kellenek; a
+    testre menő csapat ellen a gyors labdajáratás a fegyver: a labda
+    hamarabb megy tovább, mint ahogy a kontakt megérkezne, a
+    keresztpassz pedig nyugodtan vállalható.
+
+    Visszatérés csapatonként (a SZERZŐ oldal): {"steals",
+    "interceptions", "tackles", "int_pct", "verdict"} — az
+    int_pct/verdict None STT_MIN_STEALS alatt; a verdict "a
+    passzsávakat zárják" / "testre mennek" / None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    gap_frames = max(1, round(STT_GAP_S * fps))
+
+    out = {side: {"steals": 0, "interceptions": 0, "tackles": 0,
+                  "int_pct": None, "verdict": None}
+           for side in ("home", "away")}
+    prev = None
+    prev_i = None
+    for i, f in enumerate(match.frames):
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        if (prev is not None and holder.team != prev.team
+                and holder.role != "kapus"):
+            rec = out[holder.team.value]
+            rec["steals"] += 1
+            # Mekkora rés volt az előző birtokos óta? Nagy rés = a
+            # labda röptében járt, a szerző a passzt fogta el.
+            if i - prev_i >= gap_frames + 1:
+                rec["interceptions"] += 1
+            else:
+                rec["tackles"] += 1
+        prev, prev_i = holder, i
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["steals"] >= STT_MIN_STEALS:
+            pct = 100.0 * rec["interceptions"] / rec["steals"]
+            rec["int_pct"] = round(pct, 1)
+            if pct >= STT_INT_PCT:
+                rec["verdict"] = "a passzsávakat zárják"
+            elif pct <= STT_TACKLE_PCT:
+                rec["verdict"] = "testre mennek"
+    return out

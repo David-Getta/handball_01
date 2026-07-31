@@ -1838,3 +1838,61 @@ def test_press_after_goal_needs_enough_frames():
         9.0, 5.0, after_frames=30))["home"]
     assert rec["after_frames"] == 30 and rec["verdict"] is None
     assert rec["after_m"] is None
+
+
+# ---- Labdaszerzés-típus (elfogás vagy szerelés) ----------------------------
+
+def _steal_types_match(kinds, fps=25.0):
+    """Vendég labdaszerzés-sorozat: a `kinds` elemei "int" (röptében
+    elfogott passz) vagy "tackle" (kézből kézbe, testre szerelés)."""
+    frames = []
+    t = 0
+
+    def _hold(pid, team, x, n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 20.0, 10.0),
+                _pl(21, Team.AWAY, 28.0, 10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    for kind in kinds:
+        _hold(1, Team.HOME, 20.0, 10)          # hazai birtoklás
+        if kind == "int":
+            for _ in range(7):                 # a labda röptében jár
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 20.0, 10.0),
+                    _pl(21, Team.AWAY, 28.0, 10.0)],
+                    ball=Ball(x=24.0, y=10.0, confidence=1.0)))
+                t += 1
+        _hold(21, Team.AWAY, 28.0, 10)         # a vendégnél a labda
+    return Match(_meta(fps), frames)
+
+
+def test_steal_types_flags_the_lane_closers():
+    """Hat szerzésből öt röptében elfogott passz → a passzsávakat
+    zárják."""
+    from handball.pipeline.defense import steal_types
+
+    rec = steal_types(_steal_types_match(["int"] * 5 + ["tackle"]))["away"]
+    assert rec["steals"] == 6 and rec["interceptions"] == 5
+    assert rec["verdict"] == "a passzsávakat zárják"
+
+
+def test_steal_types_flags_the_body_tacklers():
+    """Hat szerzésből öt kézből kézbe (testre szerelés) → testre
+    mennek."""
+    from handball.pipeline.defense import steal_types
+
+    rec = steal_types(_steal_types_match(["tackle"] * 5 + ["int"]))["away"]
+    assert rec["tackles"] == 5 and rec["verdict"] == "testre mennek"
+
+
+def test_steal_types_needs_enough_steals():
+    """Kevés (6-nál kevesebb) szerzésnél nincs ítélet."""
+    from handball.pipeline.defense import steal_types
+
+    rec = steal_types(_steal_types_match(["int"] * 3))["away"]
+    assert rec["steals"] == 3 and rec["int_pct"] is None
+    assert rec["verdict"] is None

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Labdaszerzés-típus**: ELFOGJÁK vagy LESZERELIK a labdát. A
+  labdaszerzők azt mondják meg, ki szerez, az elöl szerzők azt, hol —
+  ez azt, hogyan: ha a birtokos-váltás előtt a labda röptében járt
+  (senkinél sem volt), a szerzés passz-elfogás; ha kézből kézbe
+  került, testre szerelés (6+ szerzés; 60% felett sáv-záró, 25% alatt
+  testre menő). A sáv-záró ellen keresztbe lebegtetni tilos — rövid,
+  közvetlen passzok és betörések kellenek; a testre menő ellen a
+  gyors labdajáratás a fegyver, és a keresztpassz vállalható. Egy
+  réteg, sok felület: `steal_types` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (szerzés- és
+  elfogás-darabszámok, két edzői kulcs + csempe), 158.
+  meccsterv-szabály (az ő testre menő védekezésük × a ti
+  széljátékotok), 179. edzés-szabály (passzsáv-olvasás:
+  árnyék-védekezés kontakt nélkül, elfogás után azonnali indítással).
+
 - **Kapott helyzetek minősége**: MILYEN LÖVÉSEKET ENGED a fal. A saját
   lövés-választást a match_xg lövésenkénti átlaga mutatja — ez a másik
   oldal: a csapat ELLEN leadott lövések átlagos helyzet-értéke. Nem

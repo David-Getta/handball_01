@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Labdaszerzés-típusuk: a szerzéseik és ebből a röptében elfogott
+    # passzok száma — darabszámok, meccsek közt pontosan összegződnek
+    # (arány = stt_int / stt_steals).
+    stt_steals: int = 0
+    stt_int: int = 0
     # Kapott helyzeteik minősége: a rájuk jövő lövések száma és a
     # helyzet-értékük összege — darabszám/összeg, meccsek közt
     # pontosan összegződnek (átlag = ccq_sum_xga / ccq_shots).
@@ -1944,6 +1949,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Labdaszerzés-típus: mitől kell óvni a saját passzjátékunkat.
+    if rep.stt_steals >= 6:
+        _stt_pct = 100.0 * rep.stt_int / rep.stt_steals
+        if _stt_pct >= 60.0:
+            keys.append(
+                f"A passzsávakat zárják (a {rep.stt_steals} "
+                f"szerzésükből {rep.stt_int} röptében elfogott passz) "
+                "— keresztbe lebegtetni tilos ellenük: rövid, "
+                "közvetlen passzok és betörések kellenek, a hosszú "
+                "átemelést hagyjátok el.")
+        elif _stt_pct <= 25.0:
+            keys.append(
+                f"Testre mennek szerelni (a {rep.stt_steals} "
+                f"szerzésükből csak {rep.stt_int} passz-elfogás) — a "
+                "gyors labdajáratás a fegyver ellenük: a labda "
+                "hamarabb menjen tovább, mint ahogy a kontakt "
+                "megérkezik, és a keresztpassz nyugodtan vállalható.")
 
     # Kapott helyzetek minősége: befelé vagy kívülről támadjunk.
     if rep.ccq_shots >= 8:
@@ -5044,6 +5067,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .defense import steal_types as _stt
+        sttrec = _stt(match, config)[team.value]
+        rep.stt_steals = sttrec["steals"]
+        rep.stt_int = sttrec["interceptions"]
         from .xg import conceded_chance_quality as _ccq
         ccqrec = _ccq(match, config)[team.value]
         rep.ccq_shots = ccqrec["shots"]
@@ -7265,6 +7292,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 158) Az ő testre menő védekezésük × a ti széljátékotok: a
+    # keresztpasszt nem zárják, szélesen lehet járatni.
+    if opp.stt_steals >= 6 and own.wing_total_goals >= 8:
+        _stt158 = 100.0 * opp.stt_int / opp.stt_steals
+        _wing158 = 100.0 * own.wing_goals / max(1, own.wing_total_goals)
+        if _stt158 <= 25.0 and _wing158 >= 35.0:
+            plan.append(
+                f"Testre mennek szerelni (a szerzéseiknek csak "
+                f"{_stt158:.0f}%-a passz-elfogás), a ti széljátékotok "
+                f"pedig él (a góljaitok {_wing158:.0f}%-a szélről "
+                "jön) — nyugodtan járassátok szélesen: a "
+                "keresztpasszt nem zárják, a szélsők futópasszal "
+                "kapják a labdát, mielőtt a kontakt megérkezne.")
 
     # 157) Az ő nagy helyzeteket engedő faluk × a ti beállós
     # góljaitok: befelé kell játszani ellenük.
@@ -9529,6 +9570,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        stt_steals=sum(r.stt_steals for r in reports),
+        stt_int=sum(r.stt_int for r in reports),
         ccq_shots=sum(r.ccq_shots for r in reports),
         ccq_sum_xga=sum(r.ccq_sum_xga for r in reports),
         clo_attacks=sum(r.clo_attacks for r in reports),

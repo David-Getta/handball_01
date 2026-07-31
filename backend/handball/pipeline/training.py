@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 179) Labdaszerzés-típus: ha minden szerzésünk testre menő
+    # szerelés, a passzsáv-olvasás a téma.
+    try:
+        from .defense import steal_types
+        stt179 = steal_types(match, config)
+        for side in ("home", "away"):
+            rec179 = stt179[side]
+            if rec179["verdict"] != "testre mennek":
+                continue
+            add(side, "vedekezes", "Passzsáv-olvasás",
+                f"a {rec179['steals']} labdaszerzésünkből csak "
+                f"{rec179['interceptions']} röptében elfogott passz — "
+                "mindent kontaktból szerzünk, ami fault és kiállítást "
+                "kockáztat, miközben az elfogott passz ingyen "
+                "indítást adna",
+                "passzsáv-olvasás: árnyék-védekezés gyakorlat, ahol a "
+                "védő NEM érhet a támadóhoz — labdát csak a passzsávba "
+                "lépve szerezhet; a támadók kötelezően keresztbe "
+                "járatnak, a védők a passzoló válla és szeme alapján "
+                "mozdulnak, és minden elfogás után azonnali indítás "
+                "zárja a menetet")
+    except Exception:
+        pass
+
     # 178) Kapott helyzetek minősége: ha a falunk nagy helyzeteket
     # enged, a hatos előtti tér védése a téma.
     try:

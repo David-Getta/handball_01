@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Labdaszerzés-típus: elfogják vagy leszerelik a labdát.
+    try:
+        from .defense import steal_types
+        stt = steal_types(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_stt = stt[side]
+            if rec_stt["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védekezésben {rec_stt['verdict']}"
+                     f": {rec_stt['steals']} labdaszerzésükből "
+                     f"{rec_stt['interceptions']} röptében elfogott "
+                     "passz.")
+    except Exception:
+        pass
     # Kapott helyzetek minősége: milyen lövéseket enged a fal.
     try:
         from .xg import conceded_chance_quality
