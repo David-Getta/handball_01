@@ -1456,3 +1456,47 @@ def test_gk_saves_by_score_needs_shots_in_both_states():
     rec = gk_saves_by_score(_gks_match(
         trail_saves=[True] * 2, other_saves=[True] * 4))["away"]
     assert rec["verdict"] is None
+
+
+# ---- Kapus-gól veszély (rádob-e a kapusuk az üres kapura) -------------------
+
+def _gkg_match(keeper_shoots, fps=25.0):
+    """A vendég kapus (ha keeper_shoots) a saját kapuja elől átdobja a
+    labdát az üres hazai (0-s) kapuba."""
+    frames = []
+    t = 0
+    for _ in range(100):       # alapjáték: a kapus a kapujában
+        frames.append(Frame(t=t, players=[
+            _svk_pl(90, Team.AWAY, 39.0, 10.0, role="kapus"),
+            _svk_pl(1, Team.HOME, 20.0, 6.0)],
+            ball=Ball(x=20.0, y=6.0, confidence=1.0)))
+        t += 1
+    shooter = (_svk_pl(90, Team.AWAY, 38.0, 10.0, role="kapus")
+               if keeper_shoots else _svk_pl(21, Team.AWAY, 38.0, 10.0))
+    for _ in range(5):         # a dobó birtokol
+        frames.append(Frame(t=t, players=[shooter],
+                            ball=Ball(x=38.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(10):        # átívelés az üres 0-s kapuba
+        frames.append(Frame(t=t, players=[shooter],
+                            ball=Ball(x=max(38.0 - i * 4.5, 0.0),
+                                      y=10.0, confidence=1.0)))
+        t += 1
+    return _match(frames, fps)
+
+
+def test_gk_goal_threat_flags_the_scoring_keeper():
+    """A kapus átívelése az üres kapuba → gólveszélyes a kapusuk."""
+    from handball.pipeline.goalkeeper import gk_goal_threat
+
+    rec = gk_goal_threat(_gkg_match(True))["away"]
+    assert rec["attempts"] >= 1 and rec["goals"] >= 1
+    assert rec["verdict"] == "gólveszélyes a kapusuk"
+
+
+def test_gk_goal_threat_field_scorer_no_flag():
+    """Ha mezőnyjátékos dobja ugyanazt a gólt, nincs kapus-jelzés."""
+    from handball.pipeline.goalkeeper import gk_goal_threat
+
+    rec = gk_goal_threat(_gkg_match(False))["away"]
+    assert rec["attempts"] == 0 and rec["verdict"] is None

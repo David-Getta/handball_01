@@ -1662,3 +1662,52 @@ def gk_saves_by_score(match: Match, config=None) -> dict:
                 verdict = "hátrányban összeesik a kapusuk"
         out[side] = {**bands, "verdict": verdict}
     return out
+
+
+# Kapus-gól: ennyi kapus-gól vagy -kísérlet kell a jelzéshez.
+GKG_MIN_ATTEMPTS = 1
+
+
+def gk_goal_threat(match: Match, config=None) -> dict:
+    """Kapus-gól veszély: RÁDOB-E A KAPUSUK az üres kapura.
+
+    A modern kézilabdában a 7 a 6 ára, hogy a kapu üresen marad — és
+    egyre több kapus dob rá a saját kapujából vagy a mezőnyből.
+    Megszámoljuk a kapus-jelölésű játékoshoz köthető kapura tartó
+    lövéseket és gólokat.
+
+    Edzőileg: a gólveszélyes kapus ellen a 7 a 6 alatt mindig legyen
+    kijelölt visszafutó, aki labdavesztésnél elsőként ér a kapu
+    síkjába, a hosszú labdáknál pedig a kapus-kidobásra is zárni kell
+    a sávot; a saját csapatban a kapus rádobása gyakorolható fegyver.
+
+    Visszatérés csapatonként (a DOBÓ kapus oldala): {"attempts",
+    "goals", "verdict"} — a verdict "gólveszélyes a kapusuk", ha van
+    legalább GKG_MIN_ATTEMPTS kísérlet, különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    keepers: set = set()
+    for f in match.frames:
+        for p in f.players:
+            if p.role == ROLE_GOALKEEPER:
+                keepers.add(p.track_id)
+
+    out = {side: {"attempts": 0, "goals": 0, "verdict": None}
+           for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None or e.player_id not in keepers:
+            continue
+        rec = out[e.team.value]
+        rec["attempts"] += 1
+        if e.type == EventType.GOAL:
+            rec["goals"] += 1
+
+    for side in ("home", "away"):
+        if out[side]["attempts"] >= GKG_MIN_ATTEMPTS:
+            out[side]["verdict"] = "gólveszélyes a kapusuk"
+    return out

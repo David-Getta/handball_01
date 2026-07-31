@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-gól veszély**: RÁDOB-E A KAPUSUK az üres kapura. A modern
+  kézilabdában a 7 a 6 ára az üres kapu — megszámoljuk a
+  kapus-jelölésű játékoshoz köthető kapura tartó lövéseket és gólokat
+  (már 1 kísérlet jelzést ad). A gólveszélyes kapus ellen a 7 a 6
+  alatt mindig legyen kijelölt visszafutó, aki labdavesztésnél
+  elsőként ér a kapu síkjába; a saját csapatban a kapus rádobása
+  gyakorolható fegyver. Egy réteg, sok felület: `gk_goal_threat`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (kísérlet- és gól-darabszámok, edzői kulcs +
+  csempe), 181. meccsterv-szabály (az ő gólveszélyes kapusuk × a ti 7
+  a 6-otok), 202. edzés-szabály (üres kapu védése: kijelölt
+  visszafutó sprint a kapu síkjába).
+
 - **Hosszú állás utáni játék**: KIZÖKKENTI-E ŐKET a hosszú
   megszakítás. Az időkérés-rétegek a rövid, kért szünetet mérik — ez
   a hosszút (sérülés, technikai állás): a megszakítások utáni két

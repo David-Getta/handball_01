@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 202) Kapus-gól veszély: ha az ellenfél kapusa dobott már ránk,
+    # az üres kapu védése a téma. (Saját oldalon: gyakorolható fegyver.)
+    try:
+        from .goalkeeper import gk_goal_threat
+        gkg202 = gk_goal_threat(match, config)
+        for side in ("home", "away"):
+            other202 = gkg202["away" if side == "home" else "home"]
+            if other202["verdict"] is None:
+                continue
+            add(side, "taktika", "Üres kapu védése",
+                f"az ellenfél kapusa gólveszélyes volt ellenünk "
+                f"({other202['attempts']} kapura dobás, "
+                f"{other202['goals']} gól) — a 7 a 6-unk alatt az "
+                "üres kapunk nyitott célpont",
+                "üres kapu védése: 7 a 6 gyakorlat, ahol "
+                "labdavesztésnél egy előre kijelölt játékos (mindig "
+                "a legközelebbi hátsó) azonnal a kapu síkjába "
+                "sprintel — a kapus-átívelést a sávban álló ember "
+                "blokkolja; a lövésünk pillanatában pedig senki nem "
+                "fordít hátat a labdának")
+    except Exception:
+        pass
+
     # 201) Hosszú állás utáni játék: ha a megszakítások kizökkentenek
     # minket, az újraindulás-rutin a téma.
     try:

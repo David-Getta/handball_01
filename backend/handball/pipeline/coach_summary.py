@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kapus-gól veszély: rádob-e a kapusuk az üres kapura.
+    try:
+        from .goalkeeper import gk_goal_threat
+        gkg = gk_goal_threat(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gkg = gkg[side]
+            if rec_gkg["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusa gólveszélyes: "
+                     f"{rec_gkg['attempts']} kapura dobásából "
+                     f"{rec_gkg['goals']} gól lett.")
+    except Exception:
+        pass
     # Hosszú állás utáni játék: kizökkenti-e őket a megszakítás.
     try:
         from .stoppages import long_break_response

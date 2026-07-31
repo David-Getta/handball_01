@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kapus-gól veszélyük: a kapusuk kapura dobásai és góljai —
+    # darabszámok, meccsek közt pontosan összegződnek.
+    gkg_attempts: int = 0
+    gkg_goals: int = 0
     # Hosszú állásaik utáni játék: mért hosszú megszakítások és az
     # utánuk lévő két perc gólmérlege — darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -2066,6 +2070,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kapus-gól veszély: szabad-e üresen hagyni a kaputokat.
+    if rep.gkg_attempts >= 1:
+        keys.append(
+            f"Gólveszélyes a kapusuk ({rep.gkg_attempts} kapura "
+            f"dobás, {rep.gkg_goals} gól) — a 7 a 6-otok alatt mindig "
+            "legyen kijelölt visszafutó, aki labdavesztésnél elsőként "
+            "ér a kapu síkjába, és a kapus-kidobásnál is zárjátok a "
+            "hosszú sávot.")
 
     # Hosszú állás utáni játék: kié az újraindítás pillanata.
     if rep.lbr_breaks >= 2:
@@ -5541,6 +5554,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .goalkeeper import gk_goal_threat as _gkg
+        gkgrec = _gkg(match, config)[team.value]
+        rep.gkg_attempts = gkgrec["attempts"]
+        rep.gkg_goals = gkgrec["goals"]
         from .stoppages import long_break_response as _lbr
         lbrrec = _lbr(match, config)[team.value]
         rep.lbr_breaks = lbrrec["breaks"]
@@ -7876,6 +7893,17 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 181) Az ő gólveszélyes kapusuk × a ti 7 a 6-otok: üres kapunál
+    # kötelező a kijelölt visszafutó.
+    if opp.gkg_attempts >= 1 and own.en_windows >= 2:
+        plan.append(
+            f"Gólveszélyes a kapusuk ({opp.gkg_attempts} kapura "
+            f"dobás, {opp.gkg_goals} gól), ti pedig sokat játszotok "
+            f"lehozott kapussal ({own.en_windows} szakasz) — a 7 a "
+            "6-otok idejére nevezzetek ki visszafutó-felelőst: "
+            "labdavesztés pillanatában ő indul a kapu síkjába, "
+            "különben a kapusuk azonnal rádob.")
 
     # 180) Az ő kizökkenő újrakezdésük × a ti figura-kincsetek: a
     # hosszú állás utáni első támadás előre lebeszélve.
@@ -10627,6 +10655,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        gkg_attempts=sum(r.gkg_attempts for r in reports),
+        gkg_goals=sum(r.gkg_goals for r in reports),
         lbr_breaks=sum(r.lbr_breaks for r in reports),
         lbr_for=sum(r.lbr_for for r in reports),
         lbr_against=sum(r.lbr_against for r in reports),

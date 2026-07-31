@@ -1318,6 +1318,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapus-gól veszély: rádob-e a kapusuk az üres kapura (1+ kísérlet
+  // — a backend-kulccsal azonos küszöb).
+  String? _gkGoalThreat(Map<String, dynamic> r) {
+    final att = ((r["gkg_attempts"] as num?) ?? 0).toInt();
+    final goals = ((r["gkg_goals"] as num?) ?? 0).toInt();
+    if (att < 1) return null;
+    return "gólveszélyes a kapusuk ($att kapura dobás, $goals gól) · "
+        "a 7 a 6 alatt kijelölt visszafutó kell a kapu síkjába";
+  }
+
   // Hosszú állás utáni játék: kizökkenti-e őket (2+ hosszú
   // megszakítás, 2 gólos különbség — a backend-kulccsal azonos
   // küszöbök).
@@ -4842,6 +4852,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hajrá-birtoklás", _clutchBallHogs(r)!],
       if (_longBreakResponse(r) != null)
         ["Hosszú állások", _longBreakResponse(r)!],
+      if (_gkGoalThreat(r) != null)
+        ["Kapus-gól veszély", _gkGoalThreat(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
