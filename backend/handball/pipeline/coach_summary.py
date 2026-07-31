@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kilépő védő: van-e előretolt ember a falban.
+    try:
+        from .defense import advanced_defender
+        adv = advanced_defender(match)
+        for side, name in (("home", home), ("away", away)):
+            top_adv = adv[side]["top"]
+            if top_adv is None:
+                continue
+            body += (f" A(z) {name} falában kilépő védő játszik: a(z) "
+                     f"{top_adv['player_id']} azonosítójú átlag "
+                     f"{top_adv['avg_depth_m']:.1f} m-en, "
+                     f"{adv[side]['gap_m']:.1f} méterrel a társai "
+                     "előtt.")
+    except Exception:
+        pass
     # Középkezdés-átvevő: kinél indul újra a játék a kapott gól után.
     try:
         from .momentum import restart_targets

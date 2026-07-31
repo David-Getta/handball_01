@@ -2758,3 +2758,82 @@ def steal_launch(match, config=None) -> dict:
             elif pct <= STL_SAFE_PCT:
                 rec["verdict"] = "szerzés után biztosítanak"
     return out
+
+
+# Kilépő védő: ennyi mért védekező kocka kell egy játékoshoz, és
+# ennyivel a társak átlaga előtt álló védő számít kilépőnek (5-1 /
+# 3-2-1 jelleg).
+ADV_MIN_FRAMES = 100
+ADV_GAP_M = 2.5
+
+
+def advanced_defender(match, config=None) -> dict:
+    """Kilépő védő: VAN-E ELŐRETOLT EMBERÜK a falban, és ki az.
+
+    A vonal-magasság (defensive_line_height) a fal átlagos helyét
+    adja — ez a fal ALAKJÁT: felállt védekezésben játékosonként
+    mérjük a saját kaputól vett átlagos távolságot, és megnézzük,
+    van-e a társai átlagánál legalább ADV_GAP_M méterrel előrébb
+    álló védő (az 5-1 vagy 3-2-1 kilépője).
+
+    Edzőileg: a kilépő védő mögött nyílik a tér — elzárást kell rá
+    vinni, és a háta mögé befutó emberrel 2 az 1-et játszani; a saját
+    csapatban pedig a kilépő mögötti biztosítás külön edzés-téma,
+    mert a kilépés csak akkor ér valamit, ha mögötte zár a sor.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"players":
+    [{"player_id", "jersey", "frames", "avg_depth_m"}], "top",
+    "gap_m", "verdict"} — a top/gap_m/verdict None, ha nincs elég
+    mért kocka vagy nincs kiugró ember; a verdict "van kilépő
+    védőjük" / None.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    jersey: dict = {}
+    acc: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        # Csak felállt védekezés: a labdás a védekező csapat térfelén.
+        if abs(holder.x - own_x) > half:
+            continue
+        for p in f.players:
+            if p.team != deff or p.role == "kapus":
+                continue
+            if abs(p.x - own_x) > half:
+                continue
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+            rec = acc[deff.value].setdefault(p.track_id, [0, 0.0])
+            rec[0] += 1
+            rec[1] += abs(p.x - own_x)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "frames": n, "avg_depth_m": round(total / n, 2)}
+                for tid, (n, total) in acc[side].items()
+                if n >= ADV_MIN_FRAMES]
+        rows.sort(key=lambda r: -r["avg_depth_m"])
+        top = None
+        gap = None
+        verdict = None
+        if len(rows) >= 3:
+            cand = rows[0]
+            others = rows[1:]
+            base = (sum(r["avg_depth_m"] * r["frames"] for r in others)
+                    / sum(r["frames"] for r in others))
+            gap = round(cand["avg_depth_m"] - base, 2)
+            if gap >= ADV_GAP_M:
+                top = cand
+                verdict = "van kilépő védőjük"
+        out[side] = {"players": rows, "top": top, "gap_m": gap,
+                     "verdict": verdict}
+    return out

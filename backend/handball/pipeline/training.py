@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 187) Kilépő védő: ha előretolt emberrel védekezünk, a mögötte
+    # lévő tér biztosítása a téma.
+    try:
+        from .defense import advanced_defender
+        adv187 = advanced_defender(match, config)
+        for side in ("home", "away"):
+            top187 = adv187[side]["top"]
+            if top187 is None:
+                continue
+            add(side, "vedekezes", "Kilépő mögötti biztosítás",
+                f"kilépő védővel játszunk (a(z) "
+                f"{top187['player_id']} azonosítójú "
+                f"{adv187[side]['gap_m']:.1f} méterrel a sor előtt "
+                "áll) — a kilépés csak akkor ér valamit, ha a háta "
+                "mögötti teret a sor zárja, különben ott ingyen "
+                "kapunk beállós-gólt",
+                "kilépő mögötti biztosítás: 5-1 elleni támadás-"
+                "gyakorlat, ahol a támadók KÖTELEZŐEN a kilépő háta "
+                "mögé játszanak — a két belső védő hangosan vált "
+                "(ki csúszik be a beállóra), a kilépő pedig "
+                "megtanulja, mikor kell visszazárnia; a menet hibája "
+                "minden szabad labda a kilépő mögötti sávban")
+    except Exception:
+        pass
+
     # 186) Középkezdés-átvevő: ha a saját újraindításunk egy emberre
     # jár, a középkezdés-variálás a téma.
     try:

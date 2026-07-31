@@ -3220,6 +3220,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import advanced_defender
+            res["advanced_defender"] = advanced_defender(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3987,6 +3992,9 @@ def create_app():
                 from ..pipeline.momentum import restart_targets
                 _layer("restart_targets",
                        lambda: restart_targets(match))
+                from ..pipeline.defense import advanced_defender
+                _layer("advanced_defender",
+                       lambda: advanced_defender(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

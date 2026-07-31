@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kilépő védő**: VAN-E ELŐRETOLT EMBERÜK a falban, és ki az. A
+  vonal-magasság a fal átlagos helyét adja — ez a fal alakját:
+  felállt védekezésben játékosonként mérjük a saját kaputól vett
+  átlagos távolságot, és megnézzük, van-e a társai átlagánál legalább
+  2,5 méterrel előrébb álló védő (az 5-1 vagy 3-2-1 kilépője; 3+ mért
+  védő kell). A kilépő háta mögött nyílik a tér — elzárást kell rá
+  vinni, és a mögé befutó emberrel 2 az 1-et játszani; a saját
+  csapatban a kilépő mögötti biztosítás külön edzés-téma. Egy réteg,
+  sok felület: `advanced_defender` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (védőnkénti kocka- és
+  mélység-összegek, edzői kulcs + csempe), 166. meccsterv-szabály (az
+  ő kilépő védőjük × a ti elzárás-használatotok), 187. edzés-szabály
+  (kilépő mögötti biztosítás: hangos belső-váltás, kötelező hát mögé
+  játszás).
+
 - **Középkezdés-átvevő**: KINÉL indul újra a játék a kapott gól után.
   A középkezdés-tempó azt méri, milyen gyorsan ér át a labda — ez
   azt, kinél: a kapott gól utáni ablakban megkeressük a gólt kapó

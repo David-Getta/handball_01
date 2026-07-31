@@ -1318,6 +1318,43 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kilépő védő: van-e előretolt ember a falban (3+ mért védő, 2,5 m
+  // előny — a backend-kulccsal azonos küszöbök).
+  String? _advancedDefender(Map<String, dynamic> r) {
+    final rows = r["adv_players"];
+    if (rows is! List) return null;
+    final measured = <Map<String, dynamic>>[];
+    for (final pr in rows) {
+      if (pr is Map<String, dynamic> &&
+          ((pr["frames"] as num?) ?? 0).toInt() >= 100) {
+        measured.add(pr);
+      }
+    }
+    if (measured.length < 3) return null;
+    measured.sort((a, b) {
+      final da = ((a["depth_sum_m"] as num?) ?? 0).toDouble() /
+          ((a["frames"] as num?) ?? 1).toInt();
+      final db = ((b["depth_sum_m"] as num?) ?? 0).toDouble() /
+          ((b["frames"] as num?) ?? 1).toInt();
+      return db.compareTo(da);
+    });
+    final top = measured.first;
+    var oFrames = 0;
+    var oSum = 0.0;
+    for (final pr in measured.skip(1)) {
+      oFrames += ((pr["frames"] as num?) ?? 0).toInt();
+      oSum += ((pr["depth_sum_m"] as num?) ?? 0).toDouble();
+    }
+    if (oFrames == 0) return null;
+    final gap = ((top["depth_sum_m"] as num?) ?? 0).toDouble() /
+            ((top["frames"] as num?) ?? 1).toInt() -
+        oSum / oFrames;
+    if (gap < 2.5) return null;
+    return "kilépő védővel játszanak (a(z) ${top["player_id"]} "
+        "azonosítójú ${gap.toStringAsFixed(1)} m-rel a sor előtt) · "
+        "elzárást rá, és a háta mögé befutó emberrel 2 az 1-et";
+  }
+
   // Középkezdés-átvevő: kinél indul újra a játék (4+ újraindítás, 50%
   // részesedés — a backend-kulccsal azonos küszöbök).
   String? _restartTargets(Map<String, dynamic> r) {
@@ -4461,6 +4498,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Váltópárok", _swapPairs(r)!],
       if (_restartTargets(r) != null)
         ["Középkezdés-átvevő", _restartTargets(r)!],
+      if (_advancedDefender(r) != null)
+        ["Kilépő védő", _advancedDefender(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

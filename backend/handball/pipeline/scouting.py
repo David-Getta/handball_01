@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kilépő védőjük: védőnként a felállt védekezésben mért kockák és
+    # a kaputávolság-összeg [{"player_id", "jersey", "frames",
+    # "depth_sum_m"}] — darabszám/összeg, meccsek közt pontosan
+    # összegződnek (átlag = depth_sum_m / frames).
+    adv_players: list = field(default_factory=list)
     # Középkezdés-átvevőik: a mért újraindításaik száma és az átvevők
     # [{"player_id", "jersey", "takes"}] — darabszámok, meccsek közt
     # pontosan összegződnek (játékos szerint összeadva).
@@ -1985,6 +1990,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kilépő védő: hol nyílik a tér a faluk mögött.
+    _adv_rows = [r for r in (rep.adv_players or [])
+                 if r["frames"] >= 100]
+    if len(_adv_rows) >= 3:
+        _adv_rows = sorted(_adv_rows,
+                           key=lambda r: -(r["depth_sum_m"]
+                                           / r["frames"]))
+        _adv_top = _adv_rows[0]
+        _adv_others = _adv_rows[1:]
+        _adv_base = (sum(r["depth_sum_m"] for r in _adv_others)
+                     / max(1, sum(r["frames"] for r in _adv_others)))
+        _adv_gap = _adv_top["depth_sum_m"] / _adv_top["frames"] - _adv_base
+        if _adv_gap >= 2.5:
+            keys.append(
+                f"Kilépő védővel játszanak (a(z) "
+                f"{_adv_top['player_id']} azonosítójú "
+                f"{_adv_gap:.1f} méterrel a társai előtt áll) — a "
+                "háta mögött nyílik a tér: elzárást kell rá vinni, "
+                "és a mögé befutó emberrel 2 az 1-et játszani.")
 
     # Középkezdés-átvevő: van-e névre szóló célpontja a gól utáni
     # letámadásnak.
@@ -5218,6 +5243,13 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .defense import advanced_defender as _adv
+        advrec = _adv(match, config)[team.value]
+        rep.adv_players = [
+            {"player_id": r["player_id"], "jersey": r["jersey"],
+             "frames": r["frames"],
+             "depth_sum_m": r["avg_depth_m"] * r["frames"]}
+            for r in advrec["players"]]
         from .momentum import restart_targets as _rst
         rstrec = _rst(match, config)[team.value]
         rep.rst_restarts = rstrec["restarts"]
@@ -7476,6 +7508,28 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 166) Az ő kilépő védőjük × a ti elzárás-használatotok: az
+    # elzárás a kilépőn ér a legtöbbet.
+    _adv166 = [r for r in (opp.adv_players or []) if r["frames"] >= 100]
+    if len(_adv166) >= 3 and own.scu_shots >= 6:
+        _adv166 = sorted(_adv166,
+                         key=lambda r: -(r["depth_sum_m"] / r["frames"]))
+        _a166_top = _adv166[0]
+        _a166_base = (sum(r["depth_sum_m"] for r in _adv166[1:])
+                      / max(1, sum(r["frames"] for r in _adv166[1:])))
+        _a166_gap = (_a166_top["depth_sum_m"] / _a166_top["frames"]
+                     - _a166_base)
+        _scu166 = 100.0 * own.scu_screened / max(1, own.scu_shots)
+        if _a166_gap >= 2.5 and _scu166 >= 30.0:
+            plan.append(
+                f"Kilépő védővel játszanak (a(z) "
+                f"{_a166_top['player_id']} azonosítójú "
+                f"{_a166_gap:.1f} méterrel a sor előtt áll), ti pedig "
+                f"jól használjátok az elzárást (az őrzött lövéseitek "
+                f"{_scu166:.0f}%-a elzárásból jön) — az elzárás rajta "
+                "ér a legtöbbet: tegyétek a kilépőre, és a mögé "
+                "befutó ember 2 az 1-et kap a maradék sorral.")
+
     # 165) Az ő fix középkezdés-emberük × a ti gól utáni
     # letámadásotok: névre szóló célpont a felezőnél.
     if (opp.rst_restarts >= 4 and opp.rst_players
@@ -9570,6 +9624,24 @@ def _merge_shooter_overperf(reports) -> list:
             for pid, d in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_adv_players(reports) -> list:
+    """Kilépő-védő jelöltek összegzése: játékos szerint összeadott
+    kockák és mélység-összegek."""
+    acc: dict = {}
+    jersey: dict = {}
+    for r in reports:
+        for pr in (r.adv_players or []):
+            pid = pr["player_id"]
+            n, s_ = acc.get(pid, (0, 0.0))
+            acc[pid] = (n + pr["frames"], s_ + pr["depth_sum_m"])
+            if pr.get("jersey") is not None:
+                jersey.setdefault(pid, pr["jersey"])
+    return [{"player_id": pid, "jersey": jersey.get(pid),
+             "frames": n, "depth_sum_m": s_}
+            for pid, (n, s_) in sorted(acc.items(),
+                                       key=lambda kv: -kv[1][0])]
+
+
 def _merge_restart_targets(reports) -> list:
     """Középkezdés-átvevők összegzése: játékos szerint összeadott
     átvétel-darabszámok, csökkenő sorrendben."""
@@ -9891,6 +9963,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        adv_players=_merge_adv_players(reports),
         rst_restarts=sum(r.rst_restarts for r in reports),
         rst_players=_merge_restart_targets(reports),
         swp_swaps=sum(r.swp_swaps for r in reports),

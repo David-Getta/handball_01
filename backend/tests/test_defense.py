@@ -1954,3 +1954,49 @@ def test_steal_launch_needs_enough_steals():
     rec = steal_launch(_steal_launch_match(["fast"] * 3))["away"]
     assert rec["steals"] == 3 and rec["fwd_pct"] is None
     assert rec["verdict"] is None
+
+
+# ---- Kilépő védő (van-e előretolt ember a falban) ---------------------------
+
+def _advanced_defender_match(stepper_depth, n_frames=150):
+    """A HAZAI fal a saját (0-s) kapunál véd: két mély védő 6 m-en, a
+    15-ös track a megadott mélységen; a vendég a hazai térfélen
+    birtokol."""
+    frames = []
+    for t in range(n_frames):
+        players = [
+            _pl(20, Team.AWAY, 8.0, 10.0),            # labdás támadó
+            _pl(10, Team.HOME, 6.0, 7.0),
+            _pl(11, Team.HOME, 6.0, 13.0),
+            _pl(15, Team.HOME, stepper_depth, 10.0),  # jelölt kilépő
+            _pl(9, Team.HOME, 0.5, 10.0, role="kapus"),
+        ]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=8.0, y=10.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_advanced_defender_finds_the_stepper():
+    """A 15-ös 10 m-en áll a társak 6 m-e előtt → van kilépő védőjük."""
+    from handball.pipeline.defense import advanced_defender
+
+    rec = advanced_defender(_advanced_defender_match(10.0))["home"]
+    assert rec["top"] is not None and rec["top"]["player_id"] == 15
+    assert rec["gap_m"] >= 2.5
+    assert rec["verdict"] == "van kilépő védőjük"
+
+
+def test_advanced_defender_flat_wall_has_no_verdict():
+    """Lapos falnál (mindenki 6-7 m-en) nincs kilépő."""
+    from handball.pipeline.defense import advanced_defender
+
+    rec = advanced_defender(_advanced_defender_match(7.0))["home"]
+    assert rec["top"] is None and rec["verdict"] is None
+
+
+def test_advanced_defender_needs_enough_frames():
+    """Kevés mért kockánál (100 alatt) nincs ítélet."""
+    from handball.pipeline.defense import advanced_defender
+
+    rec = advanced_defender(_advanced_defender_match(10.0, n_frames=50))["home"]
+    assert rec["players"] == [] and rec["verdict"] is None
