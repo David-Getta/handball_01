@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-hidegedés**: HIDEG KÉZZEL beesik-e a védése. A védés-esés
+  az idő előrehaladtát méri — ez a ritmust: minden rá kaputra érkező
+  lövésnél megnézzük, mennyi ideje nem kapott lövést a kapus, és a
+  hosszú csend (3 perc) utáni lövésekre külön védés-arányt számolunk
+  (vödrönként 4+ lövés, 15 százalékpont az ítélethez). A hidegen
+  sebezhető kapus ellen az éheztetés fegyver — türelmes birtoklás
+  után jöjjön a kidolgozott lövés; a hidegen is stabil ellen ritmusból
+  kell kizökkenteni. Egy réteg, sok felület: `gk_cold_streaks` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (vödrönkénti lövés- és védés-darabszámok, két edzői kulcs +
+  csempe), 184. meccsterv-szabály (az ő hideg kapusuk × a ti türelmes
+  labdajáratásotok), 205. edzés-szabály (kapus-melegentartás:
+  szimulált csend-blokkok, aktivitás-rutin).
+
 - **Fal-magasság elleni játék**: MEGBÜNTETIK-E A FELFUTÓ FALAT. A
   vonal-magasság a falat írja le — ez a támadó válaszát: minden
   támadásnál megmérjük az ellenfél falának átlagos magasságát, és

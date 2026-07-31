@@ -1318,6 +1318,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapus-hidegedés: hideg kézzel beesik-e a védése (vödrönként 4+
+  // lövés, 15 százalékpont — a backend-kulccsal azonos küszöbök).
+  String? _gkColdStreaks(Map<String, dynamic> r) {
+    final cF = ((r["gcs_cold_faced"] as num?) ?? 0).toInt();
+    final wF = ((r["gcs_warm_faced"] as num?) ?? 0).toInt();
+    if (cF < 4 || wF < 4) return null;
+    final c = 100.0 * ((r["gcs_cold_saves"] as num?) ?? 0).toInt() / cF;
+    final w = 100.0 * ((r["gcs_warm_saves"] as num?) ?? 0).toInt() / wF;
+    if (w - c >= 15.0) {
+      return "hidegen sebezhető a kapusuk (csend után "
+          "${c.toStringAsFixed(0)}%, ritmusban "
+          "${w.toStringAsFixed(0)}%) · éheztessétek, és a csend "
+          "végén jöjjön a kidolgozott lövés";
+    }
+    if (c - w >= 15.0) {
+      return "hidegen is stabil a kapusuk "
+          "(${c.toStringAsFixed(0)}% csend után) · az éheztetés nem "
+          "működik, ritmusból kell kizökkenteni";
+    }
+    return null;
+  }
+
   // Fal-magasság elleni játék: megbüntetik-e a felfutó falat
   // (vödrönként 5+ támadás, 20 százalékpont — a backend-kulccsal
   // azonos küszöbök).
@@ -4908,6 +4930,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontra-forrás", _breakSources(r)!],
       if (_attackVsWallHeight(r) != null)
         ["Fal-magasság ellen", _attackVsWallHeight(r)!],
+      if (_gkColdStreaks(r) != null)
+        ["Kapus-hidegedés", _gkColdStreaks(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

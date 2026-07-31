@@ -1711,3 +1711,69 @@ def gk_goal_threat(match: Match, config=None) -> dict:
         if out[side]["attempts"] >= GKG_MIN_ATTEMPTS:
             out[side]["verdict"] = "gólveszélyes a kapusuk"
     return out
+
+
+# Kapus-hidegedés: ennyi lövés-mentes idő után számít hidegnek a kapus,
+# vödrönként ennyi kapura tartó lövés kell, és ekkora (százalékpontos)
+# védés-különbség dönt.
+GCS_COLD_GAP_S = 180.0
+GCS_MIN_FACED = 4
+GCS_GAP_PP = 15.0
+
+
+def gk_cold_streaks(match: Match, config=None) -> dict:
+    """Kapus-hidegedés: HIDEG KÉZZEL beesik-e a védése.
+
+    A védés-esés (gk_save_fade) az idő előrehaladtát méri — ez a
+    ritmust: minden rá kaputra érkező lövésnél megnézzük, mennyi ideje
+    nem kapott lövést a kapus. A hosszú csend után (GCS_COLD_GAP_S
+    felett) érkező lövés a "hideg" vödörbe kerül, a többi a "melegbe",
+    és külön védés-arányt számolunk.
+
+    Edzőileg: a hidegen sebezhető kapus ellen az éheztetés fegyver —
+    hosszú, türelmes birtoklás után jöjjön a kidolgozott lövés, pont
+    amikor rég nem volt dolga; a saját kapusnak pedig aktivitás-rutin
+    kell a csendes percekre, hogy ne hidegen érje az első labda.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"cold"/"warm":
+    {"faced", "saves", "save_pct"}, "verdict"} — a verdict None a
+    vödrönkénti GCS_MIN_FACED alatt; a verdict "hidegen sebezhető a
+    kapusuk" / "hidegen is stabil a kapusuk" / None.
+    """
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    gap = GCS_COLD_GAP_S * fps
+    xg = match_xg(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        bands = {"cold": {"faced": 0, "saves": 0},
+                 "warm": {"faced": 0, "saves": 0}}
+        last_t = None
+        for sh in sorted(xg["shots"], key=lambda s_: s_["t"]):
+            if sh["team"] == side:
+                continue
+            if sh["outcome"] not in ("goal", "save"):
+                continue
+            band = ("cold" if last_t is None or sh["t"] - last_t >= gap
+                    else "warm")
+            bands[band]["faced"] += 1
+            if sh["outcome"] == "save":
+                bands[band]["saves"] += 1
+            last_t = sh["t"]
+        for b in bands.values():
+            b["save_pct"] = (round(100.0 * b["saves"] / b["faced"], 1)
+                             if b["faced"] else None)
+        verdict = None
+        if all(bands[b]["faced"] >= GCS_MIN_FACED
+               for b in ("cold", "warm")):
+            diff = bands["warm"]["save_pct"] - bands["cold"]["save_pct"]
+            if diff >= GCS_GAP_PP:
+                verdict = "hidegen sebezhető a kapusuk"
+            elif diff <= -GCS_GAP_PP:
+                verdict = "hidegen is stabil a kapusuk"
+        out[side] = {**bands, "verdict": verdict}
+    return out

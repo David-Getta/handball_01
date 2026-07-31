@@ -3312,6 +3312,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_cold_streaks
+            res["gk_cold_streaks"] = gk_cold_streaks(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4134,6 +4139,9 @@ def create_app():
                     attack_vs_wall_height)
                 _layer("attack_vs_wall_height",
                        lambda: attack_vs_wall_height(match))
+                from ..pipeline.goalkeeper import gk_cold_streaks
+                _layer("gk_cold_streaks",
+                       lambda: gk_cold_streaks(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

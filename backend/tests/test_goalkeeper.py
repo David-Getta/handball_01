@@ -1500,3 +1500,59 @@ def test_gk_goal_threat_field_scorer_no_flag():
 
     rec = gk_goal_threat(_gkg_match(False))["away"]
     assert rec["attempts"] == 0 and rec["verdict"] is None
+
+
+# ---- Kapus-hidegedés (hideg kézzel beesik-e a védése) -----------------------
+
+def _gcs_match(cold_saves, warm_saves, fps=25.0):
+    """A vendég kapus hosszú csendek után kapja a cold_saves lövéseit,
+    sűrűn a warm_saves lövéseit."""
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[
+                _svk_pl(1, Team.HOME, 20.0, 6.0)],
+                ball=Ball(x=20.0, y=6.0, confidence=1.0)))
+            t += 1
+
+    def _shot(save):
+        nonlocal t
+        frames.extend(_shot_sequence(t, gk_track=9, save=save))
+        t = frames[-1].t + 1
+
+    for save in cold_saves:      # minden lövés előtt 200 mp csend
+        _idle(200.0)
+        _shot(save)
+    for save in warm_saves:      # sűrű lövések (10 mp-enként)
+        _idle(10.0)
+        _shot(save)
+    return _match(frames, fps)
+
+
+def test_gk_cold_streaks_flags_the_cold_prone_keeper():
+    """Hidegen 0/4, melegen 4/4 védés → hidegen sebezhető."""
+    from handball.pipeline.goalkeeper import gk_cold_streaks
+
+    rec = gk_cold_streaks(_gcs_match([False] * 4, [True] * 4))["away"]
+    assert rec["cold"]["faced"] == 4 and rec["warm"]["faced"] == 4
+    assert rec["verdict"] == "hidegen sebezhető a kapusuk"
+
+
+def test_gk_cold_streaks_flags_the_always_ready_keeper():
+    """Hidegen 4/4, melegen 1/4 → hidegen is stabil."""
+    from handball.pipeline.goalkeeper import gk_cold_streaks
+
+    rec = gk_cold_streaks(_gcs_match(
+        [True] * 4, [True, False, False, False]))["away"]
+    assert rec["verdict"] == "hidegen is stabil a kapusuk"
+
+
+def test_gk_cold_streaks_needs_shots_in_both_bands():
+    """Ha valamelyik vödörben kevés a lövés, nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_cold_streaks
+
+    rec = gk_cold_streaks(_gcs_match([False] * 2, [True] * 4))["away"]
+    assert rec["verdict"] is None

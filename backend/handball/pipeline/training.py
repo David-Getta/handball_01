@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 205) Kapus-hidegedés: ha a kapusunk hidegen sebezhető, a csendes
+    # percek rutinja a téma.
+    try:
+        from .goalkeeper import gk_cold_streaks
+        gcs205 = gk_cold_streaks(match, config)
+        for side in ("home", "away"):
+            rec205 = gcs205[side]
+            if rec205["verdict"] != "hidegen sebezhető a kapusuk":
+                continue
+            add(side, "kapus", "Kapus-melegentartás",
+                f"hosszú csend után {rec205['cold']['save_pct']:.0f}%, "
+                f"ritmusban {rec205['warm']['save_pct']:.0f}% a "
+                "kapusunk védés-aránya — pont az első, váratlan "
+                "lövésnél a legdrágább a hidegség",
+                "kapus-melegentartás: a csendes percekre aktivitás-"
+                "rutin épül (mozgás a kapuban, hangos irányítás, "
+                "falhoz igazítás) + edzésen szimulált csend-blokkok: "
+                "3 perc lövés nélkül, majd előre nem jelzett első "
+                "lövés — a menet csak akkor zárul, ha az első hideg "
+                "lövésből három egymás után fogott")
+    except Exception:
+        pass
+
     # 204) Fal-magasság elleni játék: ha a felfutó fal megfog minket,
     # a prés elleni megoldások a téma.
     try:

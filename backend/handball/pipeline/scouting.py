@@ -609,6 +609,13 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kapus-hidegedésük: hosszú csend utáni és ritmusban kapott
+    # kapura tartó lövések + védések — darabszámok, meccsek közt
+    # pontosan összegződnek.
+    gcs_cold_faced: int = 0
+    gcs_cold_saves: int = 0
+    gcs_warm_faced: int = 0
+    gcs_warm_saves: int = 0
     # Fal-magasság elleni játékuk: felfutó és mély fal ellen vívott
     # támadásaik + góljaik — darabszámok, meccsek közt pontosan
     # összegződnek.
@@ -2081,6 +2088,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kapus-hidegedés: érdemes-e éheztetni a kapusukat.
+    if rep.gcs_cold_faced >= 4 and rep.gcs_warm_faced >= 4:
+        _gcs_c = 100.0 * rep.gcs_cold_saves / rep.gcs_cold_faced
+        _gcs_w = 100.0 * rep.gcs_warm_saves / rep.gcs_warm_faced
+        if _gcs_w - _gcs_c >= 15.0:
+            keys.append(
+                f"Hidegen sebezhető a kapusuk (hosszú csend után "
+                f"{_gcs_c:.0f}%, ritmusban {_gcs_w:.0f}% a "
+                "védés-aránya) — éheztessétek: hosszú, türelmes "
+                "birtoklás után jöjjön a kidolgozott lövés, pont "
+                "amikor rég nem volt dolga.")
+        elif _gcs_c - _gcs_w >= 15.0:
+            keys.append(
+                f"Hidegen is stabil a kapusuk ({_gcs_c:.0f}% a "
+                "hosszú csendek után) — az éheztetés nála nem "
+                "működik: inkább a sorozatos, gyors befejezésekkel "
+                "kell ritmusból kizökkenteni.")
 
     # Fal-magasság elleni játék: milyen magas fallal védekezzetek.
     if (rep.avw_high_attacks >= 5 and rep.avw_deep_attacks >= 5):
@@ -5607,6 +5632,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .goalkeeper import gk_cold_streaks as _gcs
+        gcsrec = _gcs(match, config)[team.value]
+        rep.gcs_cold_faced = gcsrec["cold"]["faced"]
+        rep.gcs_cold_saves = gcsrec["cold"]["saves"]
+        rep.gcs_warm_faced = gcsrec["warm"]["faced"]
+        rep.gcs_warm_saves = gcsrec["warm"]["saves"]
         from .attack_types import attack_vs_wall_height as _avw
         avwrec = _avw(match, config)[team.value]
         rep.avw_high_attacks = avwrec["high"]["attacks"]
@@ -7955,6 +7986,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 184) Az ő hidegen sebezhető kapusuk × a ti türelmes játékotok:
+    # az éheztetés után jöjjön a kidolgozott lövés.
+    if (opp.gcs_cold_faced >= 4 and opp.gcs_warm_faced >= 4
+            and own.pass_attacks >= 10):
+        _gcs184_c = 100.0 * opp.gcs_cold_saves / opp.gcs_cold_faced
+        _gcs184_w = 100.0 * opp.gcs_warm_saves / opp.gcs_warm_faced
+        _pt184 = own.pass_total / max(1, own.pass_attacks)
+        if _gcs184_w - _gcs184_c >= 15.0 and _pt184 >= 6.0:
+            plan.append(
+                f"Hidegen sebezhető a kapusuk (hosszú csend után "
+                f"{_gcs184_c:.0f}% a védés-aránya), ti pedig türelmesen "
+                f"járatjátok a labdát (átlag {_pt184:.0f} passz "
+                "támadásonként) — éheztessétek ki: hosszú birtoklás, "
+                "és a kidolgozott lövés pont a csend végén érkezzen.")
 
     # 183) Az ő présre nincs válaszuk × a ti magas falatok: kilépős
     # védekezéssel kell fojtogatni őket.
@@ -10749,6 +10795,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        gcs_cold_faced=sum(r.gcs_cold_faced for r in reports),
+        gcs_cold_saves=sum(r.gcs_cold_saves for r in reports),
+        gcs_warm_faced=sum(r.gcs_warm_faced for r in reports),
+        gcs_warm_saves=sum(r.gcs_warm_saves for r in reports),
         avw_high_attacks=sum(r.avw_high_attacks for r in reports),
         avw_high_goals=sum(r.avw_high_goals for r in reports),
         avw_deep_attacks=sum(r.avw_deep_attacks for r in reports),

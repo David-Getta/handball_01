@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kapus-hidegedés: hideg kézzel beesik-e a védése.
+    try:
+        from .goalkeeper import gk_cold_streaks
+        gcs = gk_cold_streaks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gcs = gcs[side]
+            if rec_gcs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusáról kiderült: "
+                     f"{rec_gcs['verdict'].replace(' a kapusuk', '')} "
+                     f"(hosszú csend után {rec_gcs['cold']['save_pct']:.0f}%, "
+                     f"ritmusban {rec_gcs['warm']['save_pct']:.0f}% a "
+                     "védés-aránya).")
+    except Exception:
+        pass
     # Fal-magasság elleni játék: megbüntetik-e a felfutó falat.
     try:
         from .attack_types import attack_vs_wall_height
