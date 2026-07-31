@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Pad-góljaik: a lövőhöz köthető góljaik és ebből a padról
+    # beállók góljai — darabszámok, meccsek közt pontosan összegződnek
+    # (arány = ben_bench / ben_goals).
+    ben_goals: int = 0
+    ben_bench: int = 0
     # Labdaszerzés-típusuk: a szerzéseik és ebből a röptében elfogott
     # passzok száma — darabszámok, meccsek közt pontosan összegződnek
     # (arány = stt_int / stt_steals).
@@ -1949,6 +1954,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Pad-gólok: fárasztható-e a góltermelésük.
+    if rep.ben_goals >= 6:
+        _ben_pct = 100.0 * rep.ben_bench / rep.ben_goals
+        if _ben_pct <= 10.0:
+            keys.append(
+                f"Csak a kezdőik termelnek (a {rep.ben_goals} lövőhöz "
+                f"köthető góljukból {rep.ben_bench} jött a padról) — "
+                "fárasszátok őket: pörgetett tempó és letámadás "
+                "mellett a hat emberük a második félidőre elfogy, és "
+                "a padon nincs, aki átvegye a terhet.")
+        elif _ben_pct >= 35.0:
+            keys.append(
+                f"A kispaduk is termel (a góljaik {_ben_pct:.0f}%-a "
+                "padról beállóktól jön) — a tempó önmagában nem töri "
+                "meg őket: minden sorukra névre szóló párosítás-terv "
+                "kell, a cseréik után is tartani kell a kijelölt "
+                "embereket.")
 
     # Labdaszerzés-típus: mitől kell óvni a saját passzjátékunkat.
     if rep.stt_steals >= 6:
@@ -5067,6 +5090,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import bench_scoring as _ben
+        benrec = _ben(match, config)[team.value]
+        rep.ben_goals = benrec["goals"]
+        rep.ben_bench = benrec["bench_goals"]
         from .defense import steal_types as _stt
         sttrec = _stt(match, config)[team.value]
         rep.stt_steals = sttrec["steals"]
@@ -7292,6 +7319,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 159) Az ő csak-kezdők termelésük × a ti mély rotációtok: a
+    # tempóval kell elfárasztani a gólfelelőseiket.
+    if (opp.ben_goals >= 6 and opp.rotation_matches >= 0
+            and own.rotation_matches >= 1):
+        _ben159 = 100.0 * opp.ben_bench / opp.ben_goals
+        _rot159 = own.rotation_used_sum / max(1, own.rotation_matches)
+        if _ben159 <= 10.0 and _rot159 >= 9.0:
+            plan.append(
+                f"Csak a kezdőik termelnek gólt (a góljaik "
+                f"{_ben159:.0f}%-a jön a padról), ti pedig mélyen "
+                f"rotáltok (átlag {_rot159:.0f} embernek jut érdemi "
+                "szerep) — pörgessétek a tempót és a cseréket: az ő "
+                "hat emberük fusson a ti tíz emberetek ellen, a "
+                "második félidőre elfogy a lábuk és a gólerejük.")
 
     # 158) Az ő testre menő védekezésük × a ti széljátékotok: a
     # keresztpasszt nem zárják, szélesen lehet járatni.
@@ -9570,6 +9612,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        ben_goals=sum(r.ben_goals for r in reports),
+        ben_bench=sum(r.ben_bench for r in reports),
         stt_steals=sum(r.stt_steals for r in reports),
         stt_int=sum(r.stt_int for r in reports),
         ccq_shots=sum(r.ccq_shots for r in reports),

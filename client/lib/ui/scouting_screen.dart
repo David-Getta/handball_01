@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Pad-gólok: a kispad is termel-e (6+ lövőhöz köthető gól; 35%
+  // felett mély, 10% alatt csak-kezdők — a backend-kulccsal azonos
+  // küszöbök).
+  String? _benchScoring(Map<String, dynamic> r) {
+    final goals = ((r["ben_goals"] as num?) ?? 0).toInt();
+    final bench = ((r["ben_bench"] as num?) ?? 0).toInt();
+    if (goals < 6) return null;
+    final pct = 100.0 * bench / goals;
+    if (pct <= 10.0) {
+      return "csak a kezdőik termelnek ($goals gólból $bench a "
+          "padról) · fárasztani kell őket: pörgetett tempóval a "
+          "második félidőre elfogynak";
+    }
+    if (pct >= 35.0) {
+      return "a kispaduk is termel (a góljaik "
+          "${pct.toStringAsFixed(0)}%-a padról jön) · minden sorukra "
+          "névre szóló párosítás-terv kell";
+    }
+    return null;
+  }
+
   // Labdaszerzés-típus: elfogják vagy leszerelik a labdát (6+ szerzés;
   // 60% felett sáv-záró, 25% alatt testre menő — a backend-kulccsal
   // azonos küszöbök).
@@ -4295,6 +4316,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapott helyzetek", _concededChanceQuality(r)!],
       if (_stealTypes(r) != null)
         ["Labdaszerzés-típus", _stealTypes(r)!],
+      if (_benchScoring(r) != null)
+        ["Pad-gólok", _benchScoring(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

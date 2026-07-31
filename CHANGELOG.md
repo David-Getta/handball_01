@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Pad-gólok**: A KISPAD IS TERMEL-E, vagy csak a kezdők. A kezdő
+  hatos azt mondja meg, kikkel kezdenek, a rotáció azt, hányan
+  játszanak — ez azt, ki szerzi a gólokat: a lövőhöz köthető gólokat
+  kettéosztjuk a kezdő mag és a padról beállók között (6+ gól; 35%
+  felett mély, 10% alatt csak-kezdők termelés). Akinél csak a kezdők
+  termelnek, azt fárasztani kell — pörgetett tempó mellett a hat
+  emberük a második félidőre elfogy; akinél a pad is termel, ott
+  minden sorra névre szóló párosítás-terv kell. Egy réteg, sok
+  felület: `bench_scoring` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (gól-darabszámok, két edzői kulcs +
+  csempe), 159. meccsterv-szabály (az ő csak-kezdők termelésük × a ti
+  mély rotációtok), 180. edzés-szabály (pad-termelés: a második sor
+  zárja a félidőket, duplán érő hajrá-gólokkal).
+
 - **Labdaszerzés-típus**: ELFOGJÁK vagy LESZERELIK a labdát. A
   labdaszerzők azt mondják meg, ki szerez, az elöl szerzők azt, hol —
   ez azt, hogyan: ha a birtokos-váltás előtt a labda röptében járt

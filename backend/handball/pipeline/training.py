@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 180) Pad-gólok: ha csak a kezdők termelnek, a második sor
+    # gólbátorsága a téma.
+    try:
+        from .momentum import bench_scoring
+        ben180 = bench_scoring(match, config)
+        for side in ("home", "away"):
+            rec180 = ben180[side]
+            if rec180["verdict"] != "csak a kezdők termelnek":
+                continue
+            add(side, "tamadas", "Pad-termelés",
+                f"a {rec180['goals']} lövőhöz köthető gólunkból csak "
+                f"{rec180['bench_goals']} jött a padról — ha a kezdő "
+                "sor elfárad vagy kipontozódik, nincs, aki átvegye a "
+                "gólfelelősséget",
+                "pad-termelés: edzésmeccs, ahol a második sor zárja "
+                "mindkét félidőt, és az utolsó öt perc gólja duplán "
+                "számít — a padról beállók kapják a kijelölt "
+                "figurákat, és minden beálló első támadásában "
+                "kötelező a lövésig vitt megoldás, hogy a "
+                "gólbátorság beépüljön")
+    except Exception:
+        pass
+
     # 179) Labdaszerzés-típus: ha minden szerzésünk testre menő
     # szerelés, a passzsáv-olvasás a téma.
     try:

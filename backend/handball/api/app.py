@@ -3185,6 +3185,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import bench_scoring
+            res["bench_scoring"] = bench_scoring(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3937,6 +3942,8 @@ def create_app():
                        lambda: conceded_chance_quality(match))
                 from ..pipeline.defense import steal_types
                 _layer("steal_types", lambda: steal_types(match))
+                from ..pipeline.momentum import bench_scoring
+                _layer("bench_scoring", lambda: bench_scoring(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

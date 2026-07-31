@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Pad-gólok: a kispad is termel-e, vagy csak a kezdők.
+    try:
+        from .momentum import bench_scoring
+        ben = bench_scoring(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ben = ben[side]
+            if rec_ben["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadójátékában {rec_ben['verdict']}"
+                     f": {rec_ben['goals']} lövőhöz köthető góljukból "
+                     f"{rec_ben['bench_goals']} jött a padról.")
+    except Exception:
+        pass
     # Labdaszerzés-típus: elfogják vagy leszerelik a labdát.
     try:
         from .defense import steal_types

@@ -1581,3 +1581,58 @@ def closing_attacks(match: Match, config=None) -> dict:
             elif share <= CLO_WASTE_PCT:
                 rec["verdict"] = "elpuskázzák a záró labdát"
     return out
+
+
+# Pad-gólok: ennyi lövőhöz köthető gól kell az ítélethez, és e
+# feletti / alatti pad-arány a mélyen termelő, illetve a csak a
+# kezdőkre épülő támadójáték jele.
+BEN_MIN_GOALS = 6
+BEN_DEEP_PCT = 35.0
+BEN_THIN_PCT = 10.0
+
+
+def bench_scoring(match: Match, config=None) -> dict:
+    """Pad-gólok: A KISPAD IS TERMEL-E, vagy csak a kezdők.
+
+    A kezdő hatos (opening_lineup) azt mondja meg, kikkel kezdenek, a
+    rotáció azt, hányan játszanak — ez azt, KI SZERZI A GÓLOKAT: a
+    lövőhöz köthető gólokat kettéosztjuk a kezdő mag (a meccs első
+    perceiben pályán lévők) és a padról beállók között.
+
+    Edzőileg: akinél csak a kezdők termelnek, azt fárasztani kell —
+    pörgetett tempó és letámadás mellett a hat emberük elfogy a
+    második félidőre; akinél a pad is termel, ott a tempó önmagában
+    nem törik meg, minden sorukra névre szóló párosítás-terv kell.
+
+    Visszatérés csapatonként: {"goals", "bench_goals", "bench_pct",
+    "verdict"} — a bench_pct/verdict None BEN_MIN_GOALS alatt; a
+    verdict "a kispad is termel" / "csak a kezdők termelnek" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    core = {side: {r["player_id"]
+                   for r in opening_lineup(match, config)[side]["core"]}
+            for side in ("home", "away")}
+
+    out = {side: {"goals": 0, "bench_goals": 0, "bench_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        rec = out[e.team.value]
+        rec["goals"] += 1
+        if e.player_id not in core[e.team.value]:
+            rec["bench_goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["goals"] >= BEN_MIN_GOALS:
+            pct = 100.0 * rec["bench_goals"] / rec["goals"]
+            rec["bench_pct"] = round(pct, 1)
+            if pct >= BEN_DEEP_PCT:
+                rec["verdict"] = "a kispad is termel"
+            elif pct <= BEN_THIN_PCT:
+                rec["verdict"] = "csak a kezdők termelnek"
+    return out

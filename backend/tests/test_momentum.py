@@ -1037,3 +1037,58 @@ def test_closing_attacks_needs_enough_attacks():
 
     rec = closing_attacks(_closing_match([True, False]))["home"]
     assert rec["attacks"] == 2 and rec["verdict"] is None
+
+
+# ---- Pad-gólok (a kispad is termel-e) --------------------------------------
+
+def _bench_match(scorers, fps=25.0):
+    """Az 1-es a kezdő mag (a nyitányt végigjátssza); a `scorers`
+    elemei az egyes gólok lövői (1 = kezdő, 7 = padról beálló)."""
+    frames = []
+    t = 0
+    for _ in range(150):     # nyitány: az 1-es (és a vendég 21-es) fent
+        frames.append(Frame(t=t, players=[
+            _clo_pl(1, Team.HOME, 10.0, 10.0),
+            _clo_pl(21, Team.AWAY, 30.0, 16.0)],
+            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for pid in scorers:
+        for i in range(8):   # gól a +x kapuba, a labda a lövőtől indul
+            frames.append(Frame(t=t, players=[
+                _clo_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(33.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):  # szünet a gólok közt
+            frames.append(Frame(t=t, players=[
+                _clo_pl(1, Team.HOME, 10.0, 10.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_bench_scoring_flags_the_starter_only_team():
+    """Hat gól, mind a kezdő 1-estől → csak a kezdők termelnek."""
+    from handball.pipeline.momentum import bench_scoring
+
+    rec = bench_scoring(_bench_match([1] * 6))["home"]
+    assert rec["goals"] == 6 and rec["bench_goals"] == 0
+    assert rec["verdict"] == "csak a kezdők termelnek"
+
+
+def test_bench_scoring_flags_the_deep_team():
+    """Hat gólból három a padról beálló 7-estől → a kispad is termel."""
+    from handball.pipeline.momentum import bench_scoring
+
+    rec = bench_scoring(_bench_match([1, 7, 1, 7, 1, 7]))["home"]
+    assert rec["bench_goals"] == 3
+    assert rec["verdict"] == "a kispad is termel"
+
+
+def test_bench_scoring_needs_enough_goals():
+    """Kevés (6-nál kevesebb) lövőhöz köthető gólnál nincs ítélet."""
+    from handball.pipeline.momentum import bench_scoring
+
+    rec = bench_scoring(_bench_match([1, 1, 1]))["home"]
+    assert rec["goals"] == 3 and rec["bench_pct"] is None
+    assert rec["verdict"] is None
