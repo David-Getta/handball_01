@@ -1318,6 +1318,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hetes-fáradás: mikor adják a heteseket (4+ adott hetes, 2-es
+  // félidők közti többlet — a backend-kulccsal azonos küszöbök).
+  String? _sevensFade(Map<String, dynamic> r) {
+    final fh = ((r["s7f_fh"] as num?) ?? 0).toInt();
+    final sh = ((r["s7f_sh"] as num?) ?? 0).toInt();
+    if (fh + sh < 4) return null;
+    if (sh - fh >= 2) {
+      return "a második félidőben adják a heteseket ($fh az elsőben, "
+          "$sh a másodikban) · a szünet után testre vitt labda "
+          "hetest ér";
+    }
+    if (fh - sh >= 2) {
+      return "az elején adják a heteseket ($fh az elsőben, $sh a "
+          "másodikban) · az első percekben kell a beállóst és a "
+          "betörést erőltetni";
+    }
+    return null;
+  }
+
   // Fal-fáradás: melyik félidőben nyílik ki a fal (félidőnként 5+
   // kapott lövés, 0,08 xG-változás — a backend-kulccsal azonos
   // küszöbök).
@@ -4343,6 +4362,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Pad-gólok", _benchScoring(r)!],
       if (_wallFade(r) != null)
         ["Fal-fáradás", _wallFade(r)!],
+      if (_sevensFade(r) != null)
+        ["Hetes-fáradás", _sevensFade(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -3195,6 +3195,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import sevens_fade
+            res["sevens_fade"] = sevens_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3951,6 +3956,8 @@ def create_app():
                 _layer("bench_scoring", lambda: bench_scoring(match))
                 from ..pipeline.xg import wall_fade
                 _layer("wall_fade", lambda: wall_fade(match))
+                from ..pipeline.rules import sevens_fade
+                _layer("sevens_fade", lambda: sevens_fade(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

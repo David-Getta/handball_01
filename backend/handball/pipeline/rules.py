@@ -1220,3 +1220,56 @@ def seven_earner_roles(match: Match,
                 rec["top"] = {"poszt": poszt, "count": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Hetes-fáradás: legalább ennyi adott hetes kell az ítélethez, és
+# ekkora félidők közti többlet jelenti a fáradással (vagy az elején,
+# hidegen) adott heteseket.
+S7F_MIN_CONCEDED = 4
+S7F_GAP = 2
+
+
+def sevens_fade(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-fáradás: MIKOR ADJÁK a heteseket.
+
+    A hetes-adók (seven_meter_conceders) azt mondják meg, KI ellen
+    ítélik, a szabálytalanság-fáradás (discipline_fade) a kiállítások
+    idejét — ez a hetesekét: a csapat által ADOTT (az ellenfélnek
+    megítélt) heteseket félidőnként számoljuk.
+
+    Edzőileg: aki a második félidőben adja a heteseket, az fáradva
+    már kézzel véd — ott a szünet után be kell vinni a labdát a
+    testre, mert jön az ajándék; aki az elején ad, az hidegen
+    kapkod — az első percekben kell a beállóst és a betörést erőltetni.
+
+    Visszatérés csapatonként (az ADÓ oldal): {"fh", "sh", "verdict"}
+    — a verdict None, ha nincs felismert szünet vagy kevés a hetes; a
+    verdict "a második félidőben adják a heteseket" / "az elején
+    adják a heteseket" / None.
+    """
+    from .halftime import detect_halftime
+
+    out = {side: {"fh": 0, "sh": 0, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    for ev in detect_seven_meters(match, config):
+        conceder = "away" if ev["team"] == "home" else "home"
+        rec = out[conceder]
+        if ev["t"] <= ht:
+            rec["fh"] += 1
+        else:
+            rec["sh"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        total = rec["fh"] + rec["sh"]
+        if total >= S7F_MIN_CONCEDED:
+            if rec["sh"] - rec["fh"] >= S7F_GAP:
+                rec["verdict"] = "a második félidőben adják a heteseket"
+            elif rec["fh"] - rec["sh"] >= S7F_GAP:
+                rec["verdict"] = "az elején adják a heteseket"
+    return out

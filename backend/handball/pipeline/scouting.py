@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Hetes-fáradásuk: az adott heteseik száma félidőnként —
+    # darabszámok, meccsek közt pontosan összegződnek.
+    s7f_fh: int = 0
+    s7f_sh: int = 0
     # Fal-fáradásuk: félidőnként a rájuk jövő lövések száma és a
     # helyzet-értékük összege — darabszám/összeg, meccsek közt
     # pontosan összegződnek (átlag = wf_*_sum_xga / wf_*_shots).
@@ -1961,6 +1965,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Hetes-fáradás: mikor jön az ajándék a testre vitt labdáért.
+    if rep.s7f_fh + rep.s7f_sh >= 4:
+        if rep.s7f_sh - rep.s7f_fh >= 2:
+            keys.append(
+                f"A második félidőben adják a heteseket ({rep.s7f_fh} "
+                f"az elsőben, {rep.s7f_sh} a másodikban) — fáradva "
+                "már kézzel védenek: a szünet után be kell vinni a "
+                "labdát a testre, a beállós és a betörés ilyenkor "
+                "hetest ér.")
+        elif rep.s7f_fh - rep.s7f_sh >= 2:
+            keys.append(
+                f"Az elején adják a heteseket ({rep.s7f_fh} az "
+                f"elsőben, {rep.s7f_sh} a másodikban) — hidegen "
+                "kapkodnak: az első percekben kell a beállóst és a "
+                "betörést erőltetni, amíg össze nem áll a faluk.")
 
     # Fal-fáradás: mikorra időzítsük a belső játékot.
     if rep.wf_fh_shots >= 5 and rep.wf_sh_shots >= 5:
@@ -5116,6 +5136,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .rules import sevens_fade as _s7f
+        s7frec = _s7f(match, config)[team.value]
+        rep.s7f_fh = s7frec["fh"]
+        rep.s7f_sh = s7frec["sh"]
         from .xg import wall_fade as _wf
         wfrec = _wf(match, config)[team.value]
         rep.wf_fh_shots = wfrec["fh_shots"]
@@ -7353,6 +7377,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 161) Az ő fáradva adott heteseik × a ti beállós játékotok: a
+    # második félidőben a testre vitt labda ingyen hetest ér.
+    if (opp.s7f_fh + opp.s7f_sh >= 4 and opp.s7f_sh - opp.s7f_fh >= 2
+            and own.pivot_total_attacks >= 10):
+        _piv161 = 100.0 * own.pivot_attacks / max(1, own.pivot_total_attacks)
+        if _piv161 >= 15.0:
+            plan.append(
+                f"A második félidőben adják a heteseket ({opp.s7f_fh} "
+                f"az elsőben, {opp.s7f_sh} a másodikban), ti pedig "
+                f"tudtok beállóst játszani (a támadásaitok "
+                f"{_piv161:.0f}%-ában megy be a labda a beállóhoz) — "
+                "a szünet után vigyétek a testre a labdát: a fáradó "
+                "kéz belenyúl, és jön az ingyen hetes.")
 
     # 160) Az ő második félidőre kinyíló faluk × a ti betöréseitek: a
     # belső játékot a második félidőre kell tartogatni.
@@ -9662,6 +9700,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        s7f_fh=sum(r.s7f_fh for r in reports),
+        s7f_sh=sum(r.s7f_sh for r in reports),
         wf_fh_shots=sum(r.wf_fh_shots for r in reports),
         wf_fh_sum_xga=sum(r.wf_fh_sum_xga for r in reports),
         wf_sh_shots=sum(r.wf_sh_shots for r in reports),

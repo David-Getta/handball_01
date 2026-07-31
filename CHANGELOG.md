@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hetes-fáradás**: MIKOR ADJÁK a heteseket. A hetes-adók azt
+  mondják meg, ki ellen ítélik, a szabálytalanság-fáradás a
+  kiállítások idejét — ez a hetesekét: a csapat által adott heteseket
+  félidőnként számoljuk (4+ hetes, 2-es félidők közti többlet az
+  ítélethez). Aki a második félidőben adja, az fáradva már kézzel véd
+  — a szünet után be kell vinni a labdát a testre; aki az elején, az
+  hidegen kapkod — az első percekben kell a beállóst és a betörést
+  erőltetni. Egy réteg, sok felület: `sevens_fade` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (félidőnkénti darabszámok, két edzői kulcs + csempe), 161.
+  meccsterv-szabály (az ő fáradva adott heteseik × a ti beállós
+  játékotok), 182. edzés-szabály (hetes nélküli hajrá: fáradt
+  test-védekezés hát mögötti kézzel).
+
 - **Fal-fáradás**: MELYIK FÉLIDŐBEN nyílik ki a fal. A kapott
   helyzetek minősége a teljes meccset nézi — ez félidőnként: a csapat
   ellen leadott lövések átlagos helyzet-értékét külön mérjük a két

@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Hetes-fáradás: mikor adják a heteseket.
+    try:
+        from .rules import sevens_fade
+        s7f = sevens_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_s7f = s7f[side]
+            if rec_s7f["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_s7f['verdict']} "
+                     f"({rec_s7f['fh']} az elsőben, {rec_s7f['sh']} a "
+                     "másodikban).")
+    except Exception:
+        pass
     # Fal-fáradás: melyik félidőben nyílik ki a fal.
     try:
         from .xg import wall_fade

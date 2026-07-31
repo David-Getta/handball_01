@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 182) Hetes-fáradás: ha fáradtan adjuk a heteseket, a kéz nélküli
+    # test-védekezés a téma.
+    try:
+        from .rules import sevens_fade
+        s7f182 = sevens_fade(match, config)
+        for side in ("home", "away"):
+            rec182 = s7f182[side]
+            if rec182["verdict"] != "a második félidőben adják a heteseket":
+                continue
+            add(side, "vedekezes", "Hetes nélküli hajrá",
+                f"az adott heteseink zöme a második félidőre esik "
+                f"({rec182['fh']} az elsőben, {rec182['sh']} a "
+                "másodikban) — fáradva már kézzel védünk, és a "
+                "kapkodó belenyúlás hetest meg időleges emberhátrányt "
+                "ér",
+                "hetes nélküli hajrá: fáradt állapotban (futás vagy "
+                "kör-edzés után) 6-0 elleni test-védekezés, ahol a "
+                "kéz a hát mögött van — labdát csak lábmunkával, "
+                "testtel lehet fogni; minden kézzel belenyúlás "
+                "azonnali hetes a gyakorlatban is, és a menet csak "
+                "három tiszta zárás után áll meg")
+    except Exception:
+        pass
+
     # 181) Fal-fáradás: ha a falunk a második félidőre kinyílik, a
     # védekezés állóképessége a téma.
     try:

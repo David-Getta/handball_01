@@ -984,3 +984,63 @@ def test_seven_earner_roles_needs_enough_sevens():
 
     rec = seven_earner_roles(_ser_match(n_sevens=2))["home"]
     assert rec["top"] is None
+
+
+# ---- Hetes-fáradás (mikor adják a heteseket) --------------------------------
+
+def _sevens_fade_match(fh_sevens, sh_sevens, fps=25.0):
+    """Hazai heteseket (a vendég adja őket) szórunk a két félidőbe;
+    a szünetet üres pálya jelzi."""
+    frames = []
+    t = 0
+
+    def _seven_block(count):
+        nonlocal t
+        for _ in range(count):
+            for _ in range(30):    # a labda áll a +x 7 m-es ponton
+                frames.append(Frame(
+                    t=t, players=[_pl(100 + k, Team.HOME, 15.0 + k,
+                                      4.0 + k) for k in range(6)] +
+                    [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                     for k in range(6)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+                t += 1
+            fill = _roster_frames(t, 11, 6, 6, fps)   # debounce-nyi játék
+            frames.extend(fill)
+            t = frames[-1].t + 1
+
+    _seven_block(fh_sevens)
+    frames.extend(_roster_frames(t, 30, 6, 6, fps))
+    t = frames[-1].t + 1
+    for _ in range(int(90 * fps)):                     # szünet: üres pálya
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    _seven_block(sh_sevens)
+    frames.extend(_roster_frames(t, 30, 6, 6, fps))
+    return Match(_meta(), frames)
+
+
+def test_sevens_fade_flags_the_tiring_defense():
+    """Egy első és három második félidei adott hetes → a második
+    félidőben adják a heteseket."""
+    from handball.pipeline.rules import sevens_fade
+
+    rec = sevens_fade(_sevens_fade_match(1, 3))["away"]
+    assert rec["fh"] == 1 and rec["sh"] == 3
+    assert rec["verdict"] == "a második félidőben adják a heteseket"
+
+
+def test_sevens_fade_flags_the_cold_start():
+    """Fordítva (három az elején, egy a végén) → az elején adják."""
+    from handball.pipeline.rules import sevens_fade
+
+    rec = sevens_fade(_sevens_fade_match(3, 1))["away"]
+    assert rec["verdict"] == "az elején adják a heteseket"
+
+
+def test_sevens_fade_needs_enough_sevens():
+    """Kevés (4-nél kevesebb) adott hetesnél nincs ítélet."""
+    from handball.pipeline.rules import sevens_fade
+
+    rec = sevens_fade(_sevens_fade_match(1, 2))["away"]
+    assert rec["fh"] + rec["sh"] == 3 and rec["verdict"] is None
