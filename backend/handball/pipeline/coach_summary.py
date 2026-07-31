@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Hosszú állás utáni játék: kizökkenti-e őket a megszakítás.
+    try:
+        from .stoppages import long_break_response
+        lbr = long_break_response(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lbr = lbr[side]
+            if rec_lbr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} csapatát a hosszú megszakítások "
+                     f"{'meglódítják' if 'meglódulnak' in rec_lbr['verdict'] else 'kizökkentik'}"
+                     f": az állások utáni mérlegük "
+                     f"{rec_lbr['goals_for']}-"
+                     f"{rec_lbr['goals_against']}.")
+    except Exception:
+        pass
     # Hajrá-labdabirtoklás: egy kézben van-e a végjátékuk.
     try:
         from .momentum import clutch_ball_hogs

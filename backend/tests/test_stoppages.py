@@ -546,3 +546,78 @@ def test_timeout_sub_combo_needs_enough_timeouts():
 
     rec = timeout_sub_combo(_tsc_match([True]))["home"]
     assert rec["timeouts"] == 1 and rec["verdict"] is None
+
+
+# ---- Hosszú állás utáni játék (kizökkenti-e őket) ---------------------------
+
+def _lbr_match(scorer_sides, fps=25.0):
+    """Hosszú (150 mp-es) megszakítások; mindegyik után a
+    `scorer_sides` szerinti csapat szerez gólt."""
+    frames = []
+    t = 0
+    for side in scorer_sides:
+        for _ in range(int(20 * fps)):        # játék
+            players = _players(t, moving=True)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=players[0].x, y=players[0].y,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(150 * fps)):       # hosszú állás
+            frames.append(Frame(t=t, players=_players(0, moving=False),
+                                ball=None))
+            t += 1
+        for _ in range(int(5 * fps)):         # újraindulás
+            players = _players(t, moving=True)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):                    # gól az ablakon belül
+            if side == "home":
+                frames.append(Frame(t=t, players=[PlayerPosition(
+                    track_id=1, team=Team.HOME, x=33.0, y=10.0,
+                    source=PositionSource.MEASURED, confidence=1.0)],
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+            else:
+                frames.append(Frame(t=t, players=[PlayerPosition(
+                    track_id=21, team=Team.AWAY, x=7.0, y=10.0,
+                    source=PositionSource.MEASURED, confidence=1.0)],
+                    ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                              confidence=1.0)))
+            t += 1
+        for _ in range(int(10 * fps)):        # levezetés
+            players = _players(t, moving=True)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_long_break_response_flags_the_surger():
+    """Két hosszú állás után is a hazai talál be → ők meglódulnak, a
+    vendéget kizökkenti."""
+    from handball.pipeline.stoppages import long_break_response
+
+    res = long_break_response(_lbr_match(["home", "home"]))
+    assert res["home"]["breaks"] == 2
+    assert res["home"]["verdict"] == "a hosszú állások után meglódulnak"
+    assert res["away"]["verdict"] == "a hosszú állások kizökkentik őket"
+
+
+def test_long_break_response_split_no_verdict():
+    """Ha a két állás után más-más csapat talál be, nincs ítélet."""
+    from handball.pipeline.stoppages import long_break_response
+
+    res = long_break_response(_lbr_match(["home", "away"]))
+    assert res["home"]["verdict"] is None
+    assert res["away"]["verdict"] is None
+
+
+def test_long_break_response_needs_enough_breaks():
+    """Egyetlen hosszú állásnál nincs ítélet."""
+    from handball.pipeline.stoppages import long_break_response
+
+    res = long_break_response(_lbr_match(["home"]))
+    assert res["home"]["breaks"] == 1 and res["home"]["verdict"] is None

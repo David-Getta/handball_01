@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 201) Hosszú állás utáni játék: ha a megszakítások kizökkentenek
+    # minket, az újraindulás-rutin a téma.
+    try:
+        from .stoppages import long_break_response
+        lbr201 = long_break_response(match, config)
+        for side in ("home", "away"):
+            rec201 = lbr201[side]
+            if rec201["verdict"] != "a hosszú állások kizökkentik őket":
+                continue
+            add(side, "taktika", "Újraindulás-rutin",
+                f"a hosszú megszakítások utáni mérlegünk "
+                f"{rec201['goals_for']}-{rec201['goals_against']} — "
+                "a váratlan állás után hidegen és fejben máshol "
+                "térünk vissza, és az első két perc rendre elúszik",
+                "újraindulás-rutin: az edzésen váratlan 3 perces "
+                "állásokat rendelünk el (mindenki leül), majd azonnal "
+                "éles 2 perces szakasz jön, amelynek az eredményét "
+                "külön mérjük — a visszatérésre kötelező protokoll "
+                "épül: 30 mp mozgás, hangos feladat-egyeztetés, és "
+                "az első támadás mindig begyakorolt figura")
+    except Exception:
+        pass
+
     # 200) Hajrá-labdabirtoklás: ha a végjátékunk egy kézben van, a
     # másodlagos játékszervezés a téma.
     try:

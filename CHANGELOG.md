@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hosszú állás utáni játék**: KIZÖKKENTI-E ŐKET a hosszú
+  megszakítás. Az időkérés-rétegek a rövid, kért szünetet mérik — ez
+  a hosszút (sérülés, technikai állás): a megszakítások utáni két
+  perc gólmérlegét számoljuk mindkét oldalra (2+ hosszú állás, 2
+  gólos különbség az ítélethez). A kizökkenő csapat ellen az
+  újraindítás a ti pillanatotok — kész figurával és letámadással; a
+  meglóduló ellen az első védekezés kapjon extra figyelmet. Egy
+  réteg, sok felület: `long_break_response` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (állás- és
+  gól-darabszámok, két edzői kulcs + csempe), 180. meccsterv-szabály
+  (az ő kizökkenő újrakezdésük × a ti figura-kincsetek), 201.
+  edzés-szabály (újraindulás-rutin: váratlan állások + kötelező
+  visszatérési protokoll).
+
 - **Hajrá-labdabirtoklás**: EGY KÉZBEN VAN-E a végjátékuk. A
   hajrá-ötös azt mondja meg, kik vannak fent a végén, a hajrá-emberek
   azt, ki lő — ez azt, kinél van a labda: az utolsó öt perc labdás

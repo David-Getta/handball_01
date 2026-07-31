@@ -609,6 +609,12 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Hosszú állásaik utáni játék: mért hosszú megszakítások és az
+    # utánuk lévő két perc gólmérlege — darabszámok, meccsek közt
+    # pontosan összegződnek.
+    lbr_breaks: int = 0
+    lbr_for: int = 0
+    lbr_against: int = 0
     # Hajrá-labdabirtoklásuk: játékosonkénti hajrá-labdás kockák
     # [{"player_id", "jersey", "frames"}] + az összes mért hajrá-kocka
     # — darabszámok, meccsek közt pontosan összegződnek.
@@ -2060,6 +2066,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Hosszú állás utáni játék: kié az újraindítás pillanata.
+    if rep.lbr_breaks >= 2:
+        _lbr_diff = rep.lbr_for - rep.lbr_against
+        if _lbr_diff <= -2:
+            keys.append(
+                f"A hosszú állások kizökkentik őket (a megszakítások "
+                f"utáni mérlegük {rep.lbr_for}-{rep.lbr_against}) — "
+                "minden sérülés-szünet és technikai állás a ti "
+                "pillanatotok: kész figurával és letámadással "
+                "jöjjetek ki belőle, amíg ők hidegek.")
+        elif _lbr_diff >= 2:
+            keys.append(
+                f"A hosszú állások után meglódulnak (a megszakítások "
+                f"utáni mérlegük {rep.lbr_for}-{rep.lbr_against}) — "
+                "az újraindítás utáni első védekezés extra figyelmet "
+                "kapjon, és az állás alatt a pad is mozogjon: ne ők "
+                "kapcsoljanak vissza elsőnek.")
 
     # Hajrá-labdabirtoklás: kit kell kettőzni a végjátékban.
     if rep.cbh_frames >= 200 and rep.cbh_players:
@@ -5517,6 +5541,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .stoppages import long_break_response as _lbr
+        lbrrec = _lbr(match, config)[team.value]
+        rep.lbr_breaks = lbrrec["breaks"]
+        rep.lbr_for = lbrrec["goals_for"]
+        rep.lbr_against = lbrrec["goals_against"]
         from .momentum import clutch_ball_hogs as _cbh
         cbhrec = _cbh(match, config)[team.value]
         rep.cbh_frames = cbhrec["frames"]
@@ -7847,6 +7876,18 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 180) Az ő kizökkenő újrakezdésük × a ti figura-kincsetek: a
+    # hosszú állás utáni első támadás előre lebeszélve.
+    if (opp.lbr_breaks >= 2 and opp.lbr_for - opp.lbr_against <= -2
+            and own.num_figures >= 3):
+        plan.append(
+            f"A hosszú állások kizökkentik őket (a megszakítások "
+            f"utáni mérlegük {opp.lbr_for}-{opp.lbr_against}), nektek "
+            f"pedig van begyakorolt figurátok ({own.num_figures} "
+            "felismert figura) — minden hosszú állás után előre "
+            "lebeszélt figurával induljatok: az ő hideg perceikben "
+            "a kész terv aránytalanul sokat ér.")
 
     # 179) Az ő egy kézben futó végjátékuk × a ti pressz-termelésetek:
     # a hajrá-kettőzés célszemélye adott.
@@ -10586,6 +10627,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        lbr_breaks=sum(r.lbr_breaks for r in reports),
+        lbr_for=sum(r.lbr_for for r in reports),
+        lbr_against=sum(r.lbr_against for r in reports),
         cbh_frames=sum(r.cbh_frames for r in reports),
         cbh_players=_merge_cbh_players(reports),
         qp_for=_merge_role_counts([r.qp_for for r in reports]),

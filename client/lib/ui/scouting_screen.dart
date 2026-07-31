@@ -1318,6 +1318,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hosszú állás utáni játék: kizökkenti-e őket (2+ hosszú
+  // megszakítás, 2 gólos különbség — a backend-kulccsal azonos
+  // küszöbök).
+  String? _longBreakResponse(Map<String, dynamic> r) {
+    final breaks = ((r["lbr_breaks"] as num?) ?? 0).toInt();
+    final gf = ((r["lbr_for"] as num?) ?? 0).toInt();
+    final ga = ((r["lbr_against"] as num?) ?? 0).toInt();
+    if (breaks < 2) return null;
+    if (gf - ga <= -2) {
+      return "a hosszú állások kizökkentik őket ($gf-$ga a "
+          "megszakítások utáni mérlegük) · minden sérülés-szünet a "
+          "ti pillanatotok, kész figurával gyertek ki";
+    }
+    if (gf - ga >= 2) {
+      return "a hosszú állások után meglódulnak ($gf-$ga) · az "
+          "újraindítás utáni első védekezés extra figyelmet kapjon";
+    }
+    return null;
+  }
+
   // Hajrá-labdabirtoklás: egy kézben van-e a végjáték (200+ hajrá-
   // kocka, 35% részesedés — a backend-kulccsal azonos küszöbök).
   String? _clutchBallHogs(Map<String, dynamic> r) {
@@ -4820,6 +4840,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Negyedóra-profil", _quarterProfile(r)!],
       if (_clutchBallHogs(r) != null)
         ["Hajrá-birtoklás", _clutchBallHogs(r)!],
+      if (_longBreakResponse(r) != null)
+        ["Hosszú állások", _longBreakResponse(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -484,3 +484,66 @@ def timeout_sub_combo(match: Match,
             elif pct <= 100.0 - TSC_COMBO_PCT:
                 rec["verdict"] = "az időkérésük tiszta taktika"
     return out
+
+
+# Hosszú állás utáni játék: ekkora ablakot nézünk a hosszú megszakítás
+# után, ennyi mért állás kell az ítélethez, és ekkora gólkülönbség
+# jelenti a meglóduló, illetve a kizökkenő újrakezdést.
+LBR_WINDOW_S = 120.0
+LBR_MIN_BREAKS = 2
+LBR_DIFF = 2
+
+
+def long_break_response(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hosszú állás utáni játék: KIZÖKKENTI-E ŐKET a hosszú megszakítás.
+
+    Az időkérés-rétegek a rövid, kért szünetet mérik — ez a hosszút
+    (sérülés, technikai állás): a hosszú megszakítások utáni
+    LBR_WINDOW_S másodperc gólmérlegét számoljuk mindkét oldalra. A
+    váratlan, hosszú állás nem taktikai szünet: van, aki hidegen
+    lefagy utána, és van, aki elsőnek kapcsol vissza.
+
+    Edzőileg: a hosszú állás után kizökkenő csapat ellen az
+    újraindítás a ti pillanatotok — kész figurával és letámadással
+    kell jönni, amíg hidegek; a meglóduló csapat ellen az újraindítás
+    utáni első védekezés kapjon extra figyelmet, és a saját
+    bemelegítés (padon is mozogni) kötelező.
+
+    Visszatérés csapatonként: {"breaks", "goals_for", "goals_against",
+    "verdict"} — a verdict None LBR_MIN_BREAKS alatt; a verdict "a
+    hosszú állások után meglódulnak" / "a hosszú állások kizökkentik
+    őket" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(LBR_WINDOW_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out = {side: {"breaks": 0, "goals_for": 0, "goals_against": 0,
+                  "verdict": None} for side in ("home", "away")}
+    for st in detect_stoppages(match, config):
+        if st["kind"] != "hosszú megszakítás":
+            continue
+        for side in ("home", "away"):
+            rec = out[side]
+            rec["breaks"] += 1
+            for (t, tm) in goals:
+                if st["end_frame"] < t <= st["end_frame"] + win:
+                    if tm == side:
+                        rec["goals_for"] += 1
+                    else:
+                        rec["goals_against"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["breaks"] >= LBR_MIN_BREAKS:
+            diff = rec["goals_for"] - rec["goals_against"]
+            if diff >= LBR_DIFF:
+                rec["verdict"] = "a hosszú állások után meglódulnak"
+            elif diff <= -LBR_DIFF:
+                rec["verdict"] = "a hosszú állások kizökkentik őket"
+    return out

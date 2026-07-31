@@ -3291,6 +3291,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stoppages import long_break_response
+            res["long_break_response"] = long_break_response(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4099,6 +4104,10 @@ def create_app():
                 from ..pipeline.momentum import clutch_ball_hogs
                 _layer("clutch_ball_hogs",
                        lambda: clutch_ball_hogs(match))
+                from ..pipeline.stoppages import (
+                    long_break_response)
+                _layer("long_break_response",
+                       lambda: long_break_response(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
