@@ -609,6 +609,12 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Futás-mérlegük: a mezőnyjátékosaik mért futott táv-összege, az
+    # ellenfeleiké, és a mért percek — összegek, meccsek közt pontosan
+    # összegződnek (fajlagos = dbt_m / dbt_min).
+    dbt_m: float = 0.0
+    dbt_opp_m: float = 0.0
+    dbt_min: float = 0.0
     # Egyirányú játékosaik: játékosonként a fázis-besorolt kockák és
     # ebből a védekezésben töltöttek [{"player_id", "jersey",
     # "frames", "def_frames"}] — darabszámok, meccsek közt pontosan
@@ -2004,6 +2010,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Futás-mérleg: vállalható-e velük a futóverseny.
+    if rep.dbt_min >= 10.0 and rep.dbt_m > 0 and rep.dbt_opp_m > 0:
+        if rep.dbt_m >= rep.dbt_opp_m * 1.10:
+            keys.append(
+                f"Túlfutják az ellenfeleiket "
+                f"({rep.dbt_m / rep.dbt_min:.0f} m/perc a mezőny-"
+                "futásmennyiségük) — velük nem szabad futóversenyt "
+                "vállalni: lassított tempó, felállt fal és hosszú "
+                "támadások, hogy a futóerejük ne érjen semmit.")
+        elif rep.dbt_m <= rep.dbt_opp_m * 0.90:
+            keys.append(
+                f"Túlfutja őket az ellenfél (csak "
+                f"{rep.dbt_m / rep.dbt_min:.0f} m/perc a mezőny-"
+                "futásmennyiségük) — a tempó a fegyver ellenük: gyors "
+                "középkezdés, korai indítások és második hullám, mert "
+                "a visszazárásuk rendre késik.")
 
     # Egyirányú játékosok: sebezhető-e a támadás-védekezés váltásuk.
     _phs_meas = [r for r in (rep.phs_players or [])
@@ -5297,6 +5320,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .stats import distance_battle as _dbt
+        dbtres = _dbt(match, config)
+        rep.dbt_m = dbtres[team.value]["distance_m"]
+        rep.dbt_opp_m = dbtres["away" if team.value == "home"
+                               else "home"]["distance_m"]
+        _dfps = match.meta.fps if match.meta.fps > 0 else 25.0
+        rep.dbt_min = ((match.frames[-1].t - match.frames[0].t)
+                       / _dfps / 60.0) if match.frames else 0.0
         from .roles import phase_specialists as _phs
         phsrec = _phs(match, config)[team.value]
         rep.phs_players = [dict(pr) for pr in phsrec["players"]]
@@ -7571,6 +7602,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 170) Az ő kifutott lábuk × a ti tempótok: a futóversenyt ti
+    # nyeritek, vállaljátok fel.
+    if (opp.dbt_min >= 10.0 and opp.dbt_m > 0 and opp.dbt_opp_m > 0
+            and own.pace_minutes >= 10.0):
+        _pace170 = own.pace_attacks / max(0.1, own.pace_minutes)
+        if opp.dbt_m <= opp.dbt_opp_m * 0.90 and _pace170 >= 2.2:
+            plan.append(
+                f"Túlfutja őket az ellenfél (csak "
+                f"{opp.dbt_m / max(0.1, opp.dbt_min):.0f} m/perc a "
+                f"futásmennyiségük), ti pedig tempós meccseket "
+                f"játszotok ({_pace170:.1f} támadás/perc) — "
+                "vállaljátok fel a futóversenyt: gyors középkezdés "
+                "és korai indítások minden labdánál, a második "
+                "félidőre elfogy a lábuk.")
 
     # 169) Az ő váltott soraik × a ti gyors középkezdésetek: a csere
     # ütemében kell újraindítani.
@@ -10113,6 +10159,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        dbt_m=sum(r.dbt_m for r in reports),
+        dbt_opp_m=sum(r.dbt_opp_m for r in reports),
+        dbt_min=sum(r.dbt_min for r in reports),
         phs_players=_merge_phase_players(reports),
         spt_players=_merge_sprint_threats(reports),
         svk_sevens=sum(r.svk_sevens for r in reports),

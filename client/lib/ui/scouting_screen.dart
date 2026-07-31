@@ -1318,6 +1318,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Futás-mérleg: melyik csapat futja túl a másikat (10+ mért perc,
+  // 10% táv-többlet — a backend-kulccsal azonos küszöbök).
+  String? _distanceBattle(Map<String, dynamic> r) {
+    final own = ((r["dbt_m"] as num?) ?? 0).toDouble();
+    final opp = ((r["dbt_opp_m"] as num?) ?? 0).toDouble();
+    final mins = ((r["dbt_min"] as num?) ?? 0).toDouble();
+    if (mins < 10.0 || own <= 0 || opp <= 0) return null;
+    final perMin = (own / mins).toStringAsFixed(0);
+    if (own >= opp * 1.10) {
+      return "túlfutják az ellenfeleiket ($perMin m/perc) · nem "
+          "szabad futóversenyt vállalni: lassított tempó, felállt "
+          "fal";
+    }
+    if (own <= opp * 0.90) {
+      return "túlfutja őket az ellenfél (csak $perMin m/perc) · a "
+          "tempó a fegyver: gyors középkezdés, korai indítások";
+    }
+    return null;
+  }
+
   // Egyirányú játékosok: váltott sorokkal játszanak-e (1500+ kocka,
   // 75% fázis-részarány — a backend-kulccsal azonos küszöbök).
   String? _phaseSpecialists(Map<String, dynamic> r) {
@@ -4563,6 +4583,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Sprint-veszély", _sprintThreats(r)!],
       if (_phaseSpecialists(r) != null)
         ["Váltott sorok", _phaseSpecialists(r)!],
+      if (_distanceBattle(r) != null)
+        ["Futás-mérleg", _distanceBattle(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

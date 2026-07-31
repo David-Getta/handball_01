@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 191) Futás-mérleg: ha az ellenfél túlfut minket, az alap-
+    # állóképesség és az okos futás a téma.
+    try:
+        from .stats import distance_battle
+        dbt191 = distance_battle(match, config)
+        for side in ("home", "away"):
+            rec191 = dbt191[side]
+            if rec191["verdict"] != "túlfutja őket az ellenfél":
+                continue
+            add(side, "taktika", "Futás-mérleg",
+                f"az ellenfél túlfutott minket (a mezőnyünk "
+                f"{rec191['distance_m']:.0f} métert tett meg, "
+                "érdemben kevesebbet, mint ők) — a második labdákra "
+                "és a visszazárásba rendre később érünk oda, és ez "
+                "nem taktika kérdése, hanem lábé",
+                "futás-mérleg: intervallum-alap növelése (heti két "
+                "futóblokk meccstempó feletti szakaszokkal) + okos "
+                "futás gyakorlat — a támadás-befejezés után az első "
+                "három lépés KÖTELEZŐEN sprint hátra, és a "
+                "videó-visszanézésen a sétáló visszazárásokat névre "
+                "szólóan jelöljük")
+    except Exception:
+        pass
+
     # 190) Egyirányú játékosok: ha váltott sorokkal játszunk, a
     # váltás-ütem a téma.
     try:

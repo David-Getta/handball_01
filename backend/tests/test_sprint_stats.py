@@ -396,3 +396,60 @@ def test_sprint_threats_needs_enough_sprints():
 
     rec = sprint_threats(_sprint_threat_match({21: 4, 22: 1}))["away"]
     assert rec["team_sprints"] == 5 and rec["verdict"] is None
+
+
+# ---- Futás-mérleg (melyik csapat futja túl a másikat) -----------------------
+
+def _distance_battle_match(home_step, away_step, minutes=12.0, fps=5.0):
+    """A hazai és a vendég mezőnyjátékosok kockánként adott métert
+    lépnek (ide-oda ingázva); 12 percnyi felvétel."""
+    n = int(minutes * 60 * fps)
+    frames = []
+    hx, ax = 10.0, 30.0
+    hdir, adir = 1.0, 1.0
+    for t in range(n):
+        hx += home_step * hdir
+        ax += away_step * adir
+        if not 5.0 <= hx <= 18.0:
+            hdir *= -1.0
+            hx += 2 * home_step * hdir
+        if not 22.0 <= ax <= 35.0:
+            adir *= -1.0
+            ax += 2 * away_step * adir
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=1, team=Team.HOME, x=hx, y=8.0),
+            PlayerPosition(track_id=2, team=Team.HOME, x=hx, y=12.0),
+            PlayerPosition(track_id=21, team=Team.AWAY, x=ax, y=8.0),
+            PlayerPosition(track_id=22, team=Team.AWAY, x=ax, y=12.0),
+        ]))
+    return Match(
+        meta=MatchMeta(match_id="d", home_team="H", away_team="A", fps=fps),
+        frames=frames)
+
+
+def test_distance_battle_flags_the_running_team():
+    """A hazaiak kétszer annyit mozognak → túlfutják az ellenfelüket,
+    a vendégeket túlfutja az ellenfél."""
+    from handball.pipeline.stats import distance_battle
+
+    res = distance_battle(_distance_battle_match(0.2, 0.1))
+    assert res["home"]["verdict"] == "túlfutják az ellenfelüket"
+    assert res["away"]["verdict"] == "túlfutja őket az ellenfél"
+    assert res["home"]["distance_m"] > res["away"]["distance_m"]
+
+
+def test_distance_battle_even_match_has_no_verdict():
+    """Közel azonos futásmennyiségnél nincs ítélet."""
+    from handball.pipeline.stats import distance_battle
+
+    res = distance_battle(_distance_battle_match(0.2, 0.195))
+    assert res["home"]["verdict"] is None
+    assert res["away"]["verdict"] is None
+
+
+def test_distance_battle_needs_enough_minutes():
+    """Rövid (10 percnél kevesebb) felvételen nincs ítélet."""
+    from handball.pipeline.stats import distance_battle
+
+    res = distance_battle(_distance_battle_match(0.2, 0.1, minutes=5.0))
+    assert res["home"]["verdict"] is None

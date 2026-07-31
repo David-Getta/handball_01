@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Futás-mérleg: melyik csapat futja túl a másikat.
+    try:
+        from .stats import distance_battle
+        dbt = distance_battle(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dbt = dbt[side]
+            if rec_dbt["verdict"] != "túlfutják az ellenfelüket":
+                continue
+            body += (f" A(z) {name} túlfutotta az ellenfelét "
+                     f"({rec_dbt['distance_m']:.0f} m a mezőny-"
+                     "futásmennyiségük).")
+    except Exception:
+        pass
     # Egyirányú játékosok: váltott sorokkal játszanak-e.
     try:
         from .roles import phase_specialists

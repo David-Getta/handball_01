@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Futás-mérleg**: MELYIK CSAPAT FUTJA TÚL a másikat. A
+  játékos-statisztika terhelés-monitor — ez a csapat-olvasata: a
+  mezőnyjátékosok mért futott távját csapatonként összegezzük, és
+  összevetjük a két oldalt (10+ mért perc, 10% táv-többlet az
+  ítélethez). A futócsapattal nem szabad futóversenyt vállalni —
+  lassított tempó, felállt fal; a keveset futó ellen a tempó a
+  fegyver: gyors középkezdés, korai indítások, második hullám. Egy
+  réteg, sok felület: `distance_battle` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (táv- és perc-összegek,
+  két edzői kulcs + csempe), 170. meccsterv-szabály (az ő kifutott
+  lábuk × a ti tempótok), 191. edzés-szabály (futás-mérleg:
+  intervallum-alap + kötelező három sprint-lépés hátra).
+
 - **Egyirányú játékosok**: KI JÁTSZIK CSAK VÉDEKEZNI vagy CSAK
   TÁMADNI. A csere-blokkok azt mondják meg, egységekben cserélnek-e —
   ez azt, kik az egységek: játékosonként megszámoljuk, a pályán

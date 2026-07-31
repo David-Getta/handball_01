@@ -751,3 +751,62 @@ def sprint_threats(match: Match, config=None) -> dict:
         out[side] = {"team_sprints": total, "players": rows,
                      "top": top, "verdict": verdict}
     return out
+
+
+# Futás-mérleg: legalább ennyi mért játékperc kell az ítélethez, és
+# ekkora táv-többlet jelenti, hogy az egyik csapat túlfutja a másikat.
+DBT_MIN_MIN = 10.0
+DBT_GAP_PCT = 10.0
+
+
+def distance_battle(match: Match, config=None) -> dict:
+    """Futás-mérleg: MELYIK CSAPAT FUTJA TÚL a másikat.
+
+    A játékos-statisztika (compute_player_stats) terhelés-monitor —
+    ez a csapat-olvasata: a mezőnyjátékosok mért futott távját
+    csapatonként összegezzük, és összevetjük a két oldalt. Aki
+    érdemben többet fut, az diktálja az átmeneteket; aki alul marad,
+    az rendre később ér oda a második labdákra és a visszazárásba.
+
+    Edzőileg: a futócsapattal nem szabad futóversenyt vállalni —
+    lassított tempó, felállt fal és hosszú támadások jönnek ellene; a
+    keveset futó csapat ellen viszont pont a tempó a fegyver: gyors
+    középkezdés, korai indítások, második hullám.
+
+    Visszatérés csapatonként: {"distance_m", "per_min_m", "verdict"}
+    — a verdict None DBT_MIN_MIN mért perc alatt; a verdict "túlfutják
+    az ellenfelüket" / "túlfutja őket az ellenfél" / None.
+    """
+    keeper: set = set()
+    team_of: dict[int, str] = {}
+    for f in match.frames:
+        for p in f.players:
+            team_of.setdefault(p.track_id, p.team.value)
+            if p.role == "kapus":
+                keeper.add(p.track_id)
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    minutes = (0.0 if not match.frames else
+               (match.frames[-1].t - match.frames[0].t) / fps / 60.0)
+
+    stats = compute_player_stats(match)
+    dist = {"home": 0.0, "away": 0.0}
+    for tid, s in stats.items():
+        if tid in keeper or team_of.get(tid) is None:
+            continue
+        dist[team_of[tid]] += s.distance_m
+
+    out: dict = {}
+    for side in ("home", "away"):
+        other = dist["away" if side == "home" else "home"]
+        own = dist[side]
+        rec = {"distance_m": round(own, 1),
+               "per_min_m": (round(own / minutes, 1) if minutes else None),
+               "verdict": None}
+        if minutes >= DBT_MIN_MIN and own > 0 and other > 0:
+            if own >= other * (1.0 + DBT_GAP_PCT / 100.0):
+                rec["verdict"] = "túlfutják az ellenfelüket"
+            elif own <= other * (1.0 - DBT_GAP_PCT / 100.0):
+                rec["verdict"] = "túlfutja őket az ellenfél"
+        out[side] = rec
+    return out
