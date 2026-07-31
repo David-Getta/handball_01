@@ -1318,6 +1318,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Poszt-hibák: melyik poszt veszíti el a labdát (6+ eladás, 40%
+  // részarány, holtverseny nélkül — a backend-kulccsal azonos
+  // küszöbök).
+  String? _turnoversByRole(Map<String, dynamic> r) {
+    final roles = r["tbr_roles"];
+    if (roles is! Map) return null;
+    var total = 0;
+    String? topPost;
+    var topN = 0;
+    var tie = false;
+    roles.forEach((k, v) {
+      final n = ((v as num?) ?? 0).toInt();
+      total += n;
+      if (n > topN) {
+        topPost = k.toString();
+        topN = n;
+        tie = false;
+      } else if (n == topN && n > 0) {
+        tie = true;
+      }
+    });
+    if (total < 6 || topPost == null || tie) return null;
+    if (100.0 * topN / total < 40.0) return null;
+    return "a labdaeladásaik a(z) $topPost posztról jönnek "
+        "($topN/$total eladás) · ott érdemes zavarni, oda menjen a "
+        "kettőzés";
+  }
+
   // Futás-mérleg: melyik csapat futja túl a másikat (10+ mért perc,
   // 10% táv-többlet — a backend-kulccsal azonos küszöbök).
   String? _distanceBattle(Map<String, dynamic> r) {
@@ -4585,6 +4613,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Váltott sorok", _phaseSpecialists(r)!],
       if (_distanceBattle(r) != null)
         ["Futás-mérleg", _distanceBattle(r)!],
+      if (_turnoversByRole(r) != null)
+        ["Poszt-hibák", _turnoversByRole(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

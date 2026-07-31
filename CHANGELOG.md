@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Poszt-hibák**: MELYIK POSZTJUK veszíti el a labdát. A labdaeladók
+  a hibázó embert nevezik meg, a hiba-zónák a helyet — ez a posztot:
+  a labdaeladásokat a vesztes becsült posztjához kötjük (6+ eladás,
+  40% részarány, holtverseny nélkül), így a minta akkor is látszik,
+  ha a nevek meccsről meccsre cserélődnek. Ez mondja meg, melyik
+  passzsávban érdemes zavarni: beállónál a bejátszás-vonalra lépés,
+  irányítónál a felső kettőzés, szélsőnél a szélső-bejátszások
+  vadászata. Egy réteg, sok felület: `turnovers_by_role` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (poszt szerinti darabszámok kulcs szerinti összegzéssel, edzői
+  kulcs + csempe), 171. meccsterv-szabály (az ő hibázó posztjuk × a
+  ti passzsáv-zárásotok), 192. edzés-szabály (poszt-labdabiztonság:
+  célzott blokk az érintett posztnak).
+
 - **Futás-mérleg**: MELYIK CSAPAT FUTJA TÚL a másikat. A
   játékos-statisztika terhelés-monitor — ez a csapat-olvasata: a
   mezőnyjátékosok mért futott távját csapatonként összegezzük, és

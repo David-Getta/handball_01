@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Poszt-hibák: melyik poszt veszíti el a labdát.
+    try:
+        from .roles import turnovers_by_role
+        tbr = turnovers_by_role(match)
+        for side, name in (("home", home), ("away", away)):
+            top_tbr = tbr[side]["top"]
+            if top_tbr is None:
+                continue
+            body += (f" A(z) {name} labdaeladásainak "
+                     f"{top_tbr['share_pct']:.0f}%-a a(z) "
+                     f"{top_tbr['poszt']} posztról jött "
+                     f"({top_tbr['turnovers']} eladás).")
+    except Exception:
+        pass
     # Futás-mérleg: melyik csapat futja túl a másikat.
     try:
         from .stats import distance_battle

@@ -609,7 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
-    # Futás-mérlegük: a mezőnyjátékosaik mért futott táv-összege, az
+    # Poszt-hibáik: labdaeladásaik poszt szerinti darabszámai
+    # ({poszt: eladások}) — darabszámok, meccsek közt pontosan
+    # összegződnek (kulcs szerint összeadva).
+    tbr_roles: dict = field(default_factory=dict)
+    # Futás-mérlegük: a mezőnyjátékosaik mért táv-összege, az
     # ellenfeleiké, és a mért percek — összegek, meccsek közt pontosan
     # összegződnek (fajlagos = dbt_m / dbt_min).
     dbt_m: float = 0.0
@@ -2010,6 +2014,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Poszt-hibák: melyik passzsávban érdemes zavarni.
+    _tbr_total = sum((rep.tbr_roles or {}).values())
+    if _tbr_total >= 6 and rep.tbr_roles:
+        _tbr_items = sorted(rep.tbr_roles.items(), key=lambda kv: -kv[1])
+        _tbr_poszt, _tbr_n = _tbr_items[0]
+        _tbr_tie = len(_tbr_items) > 1 and _tbr_items[1][1] == _tbr_n
+        if 100.0 * _tbr_n / _tbr_total >= 40.0 and not _tbr_tie:
+            keys.append(
+                f"A labdaeladásaik a(z) {_tbr_poszt} posztról jönnek "
+                f"({_tbr_n}/{_tbr_total} eladás) — ott érdemes "
+                "zavarni: a beállónál a bejátszás-vonalra lépés, az "
+                "irányítónál a felső kettőzés, a szélsőnél a "
+                "szélső-bejátszások vadászata termel labdát.")
 
     # Futás-mérleg: vállalható-e velük a futóverseny.
     if rep.dbt_min >= 10.0 and rep.dbt_m > 0 and rep.dbt_opp_m > 0:
@@ -5320,6 +5338,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .roles import turnovers_by_role as _tbr
+        rep.tbr_roles = dict(_tbr(match, config)[team.value]["roles"])
         from .stats import distance_battle as _dbt
         dbtres = _dbt(match, config)
         rep.dbt_m = dbtres[team.value]["distance_m"]
@@ -7603,6 +7623,26 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 171) Az ő hibázó posztjuk × a ti passzsáv-zárásotok: a sávot az
+    # ő leggyengébb posztjára kell tenni.
+    _tbr171_total = sum((opp.tbr_roles or {}).values())
+    if _tbr171_total >= 6 and opp.tbr_roles and own.stt_steals >= 6:
+        _tbr171 = sorted(opp.tbr_roles.items(), key=lambda kv: -kv[1])
+        _tbr171_poszt, _tbr171_n = _tbr171[0]
+        _tbr171_tie = (len(_tbr171) > 1
+                       and _tbr171[1][1] == _tbr171_n)
+        _stt171 = 100.0 * own.stt_int / max(1, own.stt_steals)
+        if (100.0 * _tbr171_n / _tbr171_total >= 40.0
+                and not _tbr171_tie and _stt171 >= 60.0):
+            plan.append(
+                f"A labdaeladásaik a(z) {_tbr171_poszt} posztról "
+                f"jönnek ({_tbr171_n}/{_tbr171_total} eladás), ti "
+                f"pedig a passzsávakat zárjátok (a szerzéseitek "
+                f"{_stt171:.0f}%-a elfogott passz) — a sáv-zárást az "
+                f"ő {_tbr171_poszt} posztjára állítsátok: oda "
+                "csúszzon a kettőzés, és az elfogásból azonnal "
+                "indulhat a kontra.")
+
     # 170) Az ő kifutott lábuk × a ti tempótok: a futóversenyt ti
     # nyeritek, vállaljátok fel.
     if (opp.dbt_min >= 10.0 and opp.dbt_m > 0 and opp.dbt_opp_m > 0
@@ -9784,6 +9824,15 @@ def _merge_shooter_overperf(reports) -> list:
             for pid, d in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_role_counts(dicts) -> dict:
+    """Poszt szerinti darabszámok összegzése kulcs szerint."""
+    acc: dict = {}
+    for d in dicts:
+        for k, v in (d or {}).items():
+            acc[k] = acc.get(k, 0) + v
+    return dict(sorted(acc.items(), key=lambda kv: -kv[1]))
+
+
 def _merge_phase_players(reports) -> list:
     """Egyirányú játékosok összegzése: játékos szerint összeadott
     fázis- és védekezés-kockák."""
@@ -10159,6 +10208,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        tbr_roles=_merge_role_counts([r.tbr_roles for r in reports]),
         dbt_m=sum(r.dbt_m for r in reports),
         dbt_opp_m=sum(r.dbt_opp_m for r in reports),
         dbt_min=sum(r.dbt_min for r in reports),

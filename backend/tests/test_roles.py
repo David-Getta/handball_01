@@ -200,3 +200,69 @@ def test_phase_specialists_needs_enough_frames():
 
     rec = phase_specialists(_phase_match(block_frames=400))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Poszt-hibák (melyik poszt veszíti el a labdát) -------------------------
+
+def _role_turnover_match(losers, warmup=150):
+    """Poszt-mintát adó birtoklás, majd a `losers` szerint egy-egy
+    labdaeladás: a vesztes birtokol, aztán a labdát a mellette álló
+    vendég szerzi meg."""
+    frames = []
+    t = 0
+    for _ in range(warmup):
+        players, ball = _lineup()
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+    taker = _pl(21, Team.AWAY, 20.0, 16.0)   # a szerző vendég helye
+    for tid in losers:
+        sx, sy = _SPOTS[tid]
+        for i in range(1, 61):     # a labda lassan a veszteshez ér
+            f_ = i / 60.0
+            frames.append(Frame(
+                t=t, players=_lineup()[0] + [taker],
+                ball=Ball(x=28.5 + (sx - 28.5) * f_,
+                          y=10.0 + (sy - 10.0) * f_, confidence=1.0)))
+            t += 1
+        for _ in range(5):         # a vesztes birtokol
+            frames.append(Frame(t=t, players=_lineup()[0] + [taker],
+                                ball=Ball(x=sx, y=sy, confidence=1.0)))
+            t += 1
+        for _ in range(10):        # a labda a vendégnél terem (szerzés)
+            frames.append(Frame(t=t, players=_lineup()[0] + [taker],
+                                ball=Ball(x=20.0, y=16.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):        # vissza a középre, új kör
+            players, ball = _lineup()
+            frames.append(Frame(t=t, players=[taker] + players,
+                                ball=ball))
+            t += 1
+    return Match(MatchMeta(match_id="rt", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_turnovers_by_role_finds_the_leaky_post():
+    """Hat eladásból négy a szélsőé → a szélső-bejátszás vadászható."""
+    from handball.pipeline.roles import turnovers_by_role
+
+    rec = turnovers_by_role(_role_turnover_match([2, 2, 2, 2, 1, 1]))["home"]
+    assert rec["turnovers"] == 6
+    assert rec["roles"]["szélső"] == 4
+    assert rec["top"] is not None
+    assert rec["top"]["poszt"] == "szélső" and rec["top"]["turnovers"] == 4
+
+
+def test_turnovers_by_role_balanced_has_no_top():
+    """Holtversenyben álló posztoknál nincs kiemelt hibázó."""
+    from handball.pipeline.roles import turnovers_by_role
+
+    rec = turnovers_by_role(_role_turnover_match([1, 1, 1, 2, 2, 2]))["home"]
+    assert rec["turnovers"] == 6 and rec["top"] is None
+
+
+def test_turnovers_by_role_needs_enough_turnovers():
+    """Kevés (6-nál kevesebb) poszthoz kötött eladásnál nincs ítélet."""
+    from handball.pipeline.roles import turnovers_by_role
+
+    rec = turnovers_by_role(_role_turnover_match([2, 2, 2]))["home"]
+    assert rec["turnovers"] == 3 and rec["top"] is None

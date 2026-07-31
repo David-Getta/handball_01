@@ -198,3 +198,62 @@ def phase_specialists(match: Match, config=None) -> dict:
         out[side] = {"players": rows, "def_specialists": defs,
                      "atk_specialists": atks, "verdict": verdict}
     return out
+
+
+# Poszt-hibák: ennyi poszthoz kötött labdaeladás kell az ítélethez, és
+# e feletti részarány emeli ki a hibázó posztot.
+ROLE_TO_MIN = 6
+ROLE_TO_SHARE = 40.0
+
+
+def turnovers_by_role(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-hibák: MELYIK POSZTJUK veszíti el a labdát.
+
+    A labdaeladók (turnover_players) a hibázó EMBERT nevezik meg, a
+    hiba-zónák (turnover_zones) a helyet — ez a posztot: a
+    labdaeladásokat a vesztes becsült posztjához kötjük, így akkor is
+    látszik a minta, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez mondja meg, melyik passzsávban érdemes zavarni: ha a
+    beállójuk szórja el a bejátszásokat, a beálló-vonalra kell lépni;
+    ha az irányítójuk, a felső kettőzés termel; ha a szélsőjük, a
+    szélső-bejátszásokat lehet vadászni.
+
+    Visszatérés csapatonként: {"turnovers" (poszthoz kötött eladások),
+    "roles": {poszt: eladások}, "top": {"poszt", "turnovers",
+    "share_pct"} | None} — a "top" akkor van kitöltve, ha legalább
+    ROLE_TO_MIN poszthoz kötött eladás van, a vezető poszt részaránya
+    eléri a ROLE_TO_SHARE-t, és nincs holtverseny.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    out: dict = {side: {"turnovers": 0, "roles": {}, "top": None}
+                 for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        rec = out[side]
+        rec["turnovers"] += 1
+        poszt = rec_role["poszt"]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["roles"].items())
+        if rec["turnovers"] >= ROLE_TO_MIN and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["turnovers"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= ROLE_TO_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "turnovers": n,
+                              "share_pct": round(share, 1)}
+    return out

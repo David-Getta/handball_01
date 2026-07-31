@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 192) Poszt-hibák: ha egy posztunk szórja a labdát, a poszt-
+    # specifikus labdabiztonság a téma.
+    try:
+        from .roles import turnovers_by_role
+        tbr192 = turnovers_by_role(match, config)
+        for side in ("home", "away"):
+            top192 = tbr192[side]["top"]
+            if top192 is None:
+                continue
+            add(side, "tamadas", "Poszt-labdabiztonság",
+                f"a labdaeladásaink {top192['share_pct']:.0f}%-a a(z) "
+                f"{top192['poszt']} posztról jön "
+                f"({top192['turnovers']} eladás) — nem szétszórt "
+                "hiba, hanem egy poszt sávját olvassa az ellenfél",
+                "poszt-labdabiztonság: az érintett poszt kap célzott "
+                "blokkot — beállónál kétkezes átvétel-gyakorlat "
+                "kontakt alatt, irányítónál passz-csel és sávváltás "
+                "kettőzés ellen, szélsőnél a bejátszás időzítése a "
+                "kifutó védő mögé; a blokk végén 5-5, ahol az adott "
+                "poszt hibája két pontot ér az ellenfélnek")
+    except Exception:
+        pass
+
     # 191) Futás-mérleg: ha az ellenfél túlfut minket, az alap-
     # állóképesség és az okos futás a téma.
     try:
