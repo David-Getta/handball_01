@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 212) Ziccer-befejezők: ha egy emberünk a nagy helyzeteket is
+    # kihagyja, a ziccer-rutin a téma.
+    try:
+        from .xg import big_chance_finishers
+        bcf212 = big_chance_finishers(match, config)
+        for side in ("home", "away"):
+            shaky212 = bcf212[side]["shaky"]
+            if shaky212 is None:
+                continue
+            add(side, "tamadas", "Ziccer-rutin",
+                f"a(z) {shaky212['player_id']} azonosítójú a nagy "
+                f"helyzeteit is kihagyja "
+                f"({shaky212['goals']}/{shaky212['chances']}) — a "
+                "kihagyott ziccer duplán büntet: elmarad a gól, és "
+                "kontra indul belőle",
+                "ziccer-rutin: fáradt állapotban vívott befejezés-"
+                "sorozat a hatosról — kapus ellen, időkényszerrel, és "
+                "minden kihagyás után azonnali visszafutás; a "
+                "döntést leegyszerűsítjük (két bevált befejezés "
+                "sarkonként), és a videón a kihagyások mintáját "
+                "külön nézzük vissza")
+    except Exception:
+        pass
+
     # 211) Hetes utáni percek: ha az adott hetes után is kapunk rá, a
     # hetes körüli újrarendeződés a téma.
     try:

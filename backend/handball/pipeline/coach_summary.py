@@ -846,6 +846,25 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Ziccer-befejezők: ki értékesíti a nagy helyzeteket.
+    try:
+        from .xg import big_chance_finishers
+        bcf = big_chance_finishers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bcf = bcf[side]
+            if rec_bcf["safe"] is not None:
+                sf = rec_bcf["safe"]
+                body += (f" A(z) {name} ziccer-biztos befejezője a(z) "
+                         f"{sf['player_id']} azonosítójú "
+                         f"({sf['goals']}/{sf['chances']} nagy "
+                         "helyzet).")
+            if rec_bcf["shaky"] is not None:
+                sk = rec_bcf["shaky"]
+                body += (f" A(z) {name} nagy helyzeteit a(z) "
+                         f"{sk['player_id']} azonosítójú rendre "
+                         f"kihagyta ({sk['goals']}/{sk['chances']}).")
+    except Exception:
+        pass
     # Hetes utáni percek: leragadnak-e az adott hetes után.
     try:
         from .rules import post_seven_lapses

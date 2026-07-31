@@ -736,3 +736,46 @@ def test_shot_quality_by_score_needs_shots_in_both_states():
     rec = shot_quality_by_score(_sqs_match(
         [(35.0, 10.0)] * 6, [(27.0, 3.0)] * 3))["home"]
     assert rec["trail_shots"] == 3 and rec["verdict"] is None
+
+
+# ---- Ziccer-befejezők (ki értékesíti a nagy helyzeteket) --------------------
+
+def _bcf_match(cases, fps=25.0):
+    """Hazai ziccerek a hatosról: a `cases` elemei (lövő, gól-e)
+    párok."""
+    frames = []
+    t = 0
+    for (pid, scored) in cases:
+        for i in range(8):
+            bx = 35.0 + 5.0 * min(1.0, i / 4.0)
+            by = 10.0 if scored else 10.0 - 6.0 * min(1.0, i / 4.0)
+            frames.append(Frame(t=t, players=[_pl(pid, Team.HOME,
+                                                  35.0, 10.0)],
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_big_chance_finishers_finds_safe_and_shaky():
+    """A 7-es 4/4 ziccert belő, a 9-es 1/4-et → biztos és bizonytalan
+    befejező."""
+    from handball.pipeline.xg import big_chance_finishers
+
+    rec = big_chance_finishers(_bcf_match(
+        [(7, True)] * 4 + [(9, True)] + [(9, False)] * 3))["home"]
+    assert rec["safe"] is not None and rec["safe"]["player_id"] == 7
+    assert rec["shaky"] is not None and rec["shaky"]["player_id"] == 9
+
+
+def test_big_chance_finishers_needs_enough_chances():
+    """Kevés (3-nál kevesebb) ziccernél nincs kiemelt befejező."""
+    from handball.pipeline.xg import big_chance_finishers
+
+    rec = big_chance_finishers(_bcf_match(
+        [(7, True), (7, True), (9, False)]))["home"]
+    assert rec["safe"] is None and rec["shaky"] is None

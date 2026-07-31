@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Ziccer-befejezőik: játékosonként a nagy helyzetek és góljaik
+    # [{"player_id", "chances", "goals"}] — darabszámok, meccsek közt
+    # játékos szerint összegződnek.
+    bcf_players: list = field(default_factory=list)
     # Hetes utáni perceik: adott heteseik és az utánuk kapott további
     # gólok — darabszámok, meccsek közt pontosan összegződnek.
     psl_sevens: int = 0
@@ -2111,6 +2115,33 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Ziccer-befejezők: kinél kell a helyzetet már előbb megelőzni.
+    _bcf_acc: dict = {}
+    for _bcf_pr in (rep.bcf_players or []):
+        _bcf_rec = _bcf_acc.setdefault(_bcf_pr["player_id"], [0, 0])
+        _bcf_rec[0] += _bcf_pr["chances"]
+        _bcf_rec[1] += _bcf_pr["goals"]
+    for _bcf_pid, (_bcf_c, _bcf_g) in sorted(_bcf_acc.items(),
+                                             key=lambda kv: -kv[1][0]):
+        if _bcf_c < 3:
+            continue
+        _bcf_pct = 100.0 * _bcf_g / _bcf_c
+        if _bcf_pct >= 80.0:
+            keys.append(
+                f"Ziccer-biztos befejezőjük a(z) {_bcf_pid} "
+                f"azonosítójú ({_bcf_g}/{_bcf_c} nagy helyzet) — nála "
+                "a helyzetet már a kialakulása előtt kell megelőzni: "
+                "korábbi besegítés, mert amit a hatoson megkap, az "
+                "gól.")
+            break
+        if _bcf_pct <= 40.0:
+            keys.append(
+                f"A(z) {_bcf_pid} azonosítójú a nagy helyzeteket is "
+                f"kihagyja ({_bcf_g}/{_bcf_c}) — a fal vállalhatja, "
+                "hogy inkább őt engedi helyzetbe a veszélyesebb "
+                "társak helyett.")
+            break
 
     # Hetes utáni percek: duplán ér-e az ellenük megítélt hetes.
     if rep.psl_sevens >= 3 and rep.psl_extra >= 2:
@@ -5742,6 +5773,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .xg import big_chance_finishers as _bcf
+        rep.bcf_players = [dict(pr) for pr in
+                           _bcf(match, config)[team.value]["players"]]
         from .rules import post_seven_lapses as _psl
         pslrec = _psl(match, config)[team.value]
         rep.psl_sevens = pslrec["sevens_against"]
@@ -8117,6 +8151,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 191) Az ő ziccer-biztos befejezőjük × a ti korai besegítésetek:
+    # nála a helyzet kialakulását kell megelőzni.
+    _bcf191: dict = {}
+    for _bcf191_pr in (opp.bcf_players or []):
+        _r191 = _bcf191.setdefault(_bcf191_pr["player_id"], [0, 0])
+        _r191[0] += _bcf191_pr["chances"]
+        _r191[1] += _bcf191_pr["goals"]
+    _bcf191_safe = [(pid, c, g) for pid, (c, g) in _bcf191.items()
+                    if c >= 3 and 100.0 * g / c >= 80.0]
+    if _bcf191_safe and own.blk_attempts >= 4:
+        _pid191, _c191, _g191 = max(_bcf191_safe,
+                                    key=lambda x: x[1])
+        plan.append(
+            f"Ziccer-biztos befejezőjük a(z) {_pid191} azonosítójú "
+            f"({_g191}/{_c191} nagy helyzet), ti pedig aktív "
+            f"blokk-csapat vagytok ({own.blk_attempts} kísérlet) — "
+            "nála ne a lövést próbáljátok fogni, hanem a helyzet "
+            "kialakulását: korai besegítés és a bejátszó-sáv zárása, "
+            "mert amit a hatoson megkap, az gól.")
 
     # 190) Az ő hetes utáni leragadásuk × a ti kiharcolt heteseitek: a
     # hetesetek duplán érhet.
@@ -10621,6 +10675,19 @@ def _merge_role_counts(dicts) -> dict:
     return dict(sorted(acc.items(), key=lambda kv: -kv[1]))
 
 
+def _merge_bcf_players(reports) -> list:
+    """Ziccer-befejezők összegzése játékos szerint."""
+    acc: dict = {}
+    for r in reports:
+        for pr in (r.bcf_players or []):
+            rec = acc.setdefault(pr["player_id"], [0, 0])
+            rec[0] += pr["chances"]
+            rec[1] += pr["goals"]
+    return [{"player_id": pid, "chances": c, "goals": g}
+            for pid, (c, g) in sorted(acc.items(),
+                                      key=lambda kv: -kv[1][0])]
+
+
 def _merge_screen_pairs(reports) -> list:
     """Elzárás-párosok összegzése: (elzáró, lövő) kulcs szerint."""
     acc: dict = {}
@@ -11049,6 +11116,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        bcf_players=_merge_bcf_players(reports),
         psl_sevens=sum(r.psl_sevens for r in reports),
         psl_extra=sum(r.psl_extra for r in reports),
         cir_left=sum(r.cir_left for r in reports),

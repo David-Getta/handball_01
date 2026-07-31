@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Ziccer-befejezők**: KI ÉRTÉKESÍTI a nagy helyzeteket. A pazarló
+  lövők minden lövést néznek — ez csak a ziccereket: játékosonként
+  számoljuk a 0,5 feletti helyzet-értékű lövéseket és góljaikat (3+
+  ziccer; 80% felett biztos, 40% alatt bizonytalan befejező). A
+  ziccer-biztos ellen a helyzetet már a kialakulása előtt kell
+  megelőzni; a bizonytalannál a fal vállalhatja, hogy inkább őt
+  engedi helyzetbe. Egy réteg, sok felület: `big_chance_finishers`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (játékosonkénti ziccer-darabszámok összegzéssel,
+  két edzői kulcs + csempe), 191. meccsterv-szabály (az ő
+  ziccer-biztos befejezőjük × a ti korai besegítésetek), 212.
+  edzés-szabály (ziccer-rutin: fáradt befejezés-sorozat
+  időkényszerrel).
+
 - **Hetes utáni percek**: LERAGADNAK-E az adott hetes után. A
   hetes-rétegek magát a büntetőt mérik — ez az utóhatását: az ellenük
   ítélt hetes utáni percben nézzük a további kapott gólokat, a

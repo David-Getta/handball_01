@@ -1318,6 +1318,41 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Ziccer-befejezők: ki értékesíti a nagy helyzeteket (3+ ziccer;
+  // 80% felett biztos, 40% alatt bizonytalan — a backend-kulccsal
+  // azonos küszöbök).
+  String? _bigChanceFinishers(Map<String, dynamic> r) {
+    final rows = r["bcf_players"];
+    if (rows is! List || rows.isEmpty) return null;
+    final acc = <int, List<int>>{};
+    for (final pr in rows) {
+      if (pr is! Map<String, dynamic>) continue;
+      final pid = ((pr["player_id"] as num?) ?? 0).toInt();
+      final rec = acc.putIfAbsent(pid, () => [0, 0]);
+      rec[0] += ((pr["chances"] as num?) ?? 0).toInt();
+      rec[1] += ((pr["goals"] as num?) ?? 0).toInt();
+    }
+    final pids = acc.keys.toList()
+      ..sort((a, b) => acc[b]![0].compareTo(acc[a]![0]));
+    for (final pid in pids) {
+      final c = acc[pid]![0];
+      final g = acc[pid]![1];
+      if (c < 3) continue;
+      final pct = 100.0 * g / c;
+      if (pct >= 80.0) {
+        return "ziccer-biztos befejezőjük a(z) $pid azonosítójú "
+            "($g/$c nagy helyzet) · a helyzetet már a kialakulása "
+            "előtt kell megelőzni";
+      }
+      if (pct <= 40.0) {
+        return "a(z) $pid azonosítójú a ziccereket is kihagyja "
+            "($g/$c) · vállalható, hogy inkább őt engeditek "
+            "helyzetbe";
+      }
+    }
+    return null;
+  }
+
   // Hetes utáni percek: leragadnak-e az adott hetes után (3+ hetes,
   // 2+ további kapott gól — a backend-kulccsal azonos küszöbök).
   String? _postSevenLapses(Map<String, dynamic> r) {
@@ -5071,6 +5106,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Labda-forgatás", _circulationDirection(r)!],
       if (_postSevenLapses(r) != null)
         ["Hetes utáni percek", _postSevenLapses(r)!],
+      if (_bigChanceFinishers(r) != null)
+        ["Ziccer-befejezők", _bigChanceFinishers(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

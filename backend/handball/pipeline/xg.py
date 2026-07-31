@@ -768,3 +768,60 @@ def shot_quality_by_score(match: Match,
                 rec["verdict"] = "hátrányban is türelmesek"
         out[side] = rec
     return out
+
+
+# Ziccer-befejezők: ennyi nagy helyzet kell egy játékoshoz, és e
+# feletti / alatti értékesítés a biztos, illetve a bizonytalan
+# befejező jele.
+BCF_MIN_CHANCES = 3
+BCF_SAFE_PCT = 80.0
+BCF_SHAKY_PCT = 40.0
+
+
+def big_chance_finishers(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Ziccer-befejezők: KI ÉRTÉKESÍTI a nagy helyzeteket.
+
+    A pazarló lövők (wasteful_shooters) minden lövést néznek — ez
+    csak a ziccereket: játékosonként számoljuk a BIG_CHANCE_XG
+    feletti helyzet-értékű lövéseket és a belőlük szerzett gólokat.
+
+    Edzőileg: a ziccer-biztos befejező ellen a helyzetet már a
+    kialakulása ELŐTT kell megelőzni — korábbi besegítés, mert amit ő
+    megkap a hatoson, az gól; a ziccer-bizonytalan lövőnél viszont a
+    fal vállalhatja, hogy inkább őt engedi helyzetbe a veszélyesebb
+    társak helyett.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "chances",
+    "goals"}], "safe", "shaky"} — a safe/shaky a legalább
+    BCF_MIN_CHANCES ziccerrel rendelkező, BCF_SAFE_PCT feletti,
+    illetve BCF_SHAKY_PCT alatti értékesítésű játékos (vagy None).
+    """
+    xg = match_xg(match, config)
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        rec = tally[sh["team"]].setdefault(
+            pid, {"player_id": pid, "chances": 0, "goals": 0})
+        rec["chances"] += 1
+        if sh["outcome"] == "goal":
+            rec["goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = sorted(tally[side].values(),
+                      key=lambda r: -r["chances"])
+        safe = None
+        shaky = None
+        for r in rows:
+            if r["chances"] < BCF_MIN_CHANCES:
+                continue
+            pct = 100.0 * r["goals"] / r["chances"]
+            if pct >= BCF_SAFE_PCT and safe is None:
+                safe = r
+            elif pct <= BCF_SHAKY_PCT and shaky is None:
+                shaky = r
+        out[side] = {"players": rows, "safe": safe, "shaky": shaky}
+    return out
