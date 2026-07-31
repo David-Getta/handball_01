@@ -3387,3 +3387,82 @@ def break_sources(match: Match,
                 rec["verdict"] = ("a kontráik főleg ebből indulnak: "
                                   + src)
     return out
+
+
+# Fal-magasság elleni játék: e feletti átlagos fal-magasság számít
+# felfutó falnak, vödrönként ennyi támadás kell az ítélethez, és
+# ekkora (százalékpontos) gólarány-különbség dönt.
+AVW_HIGH_M = 8.0
+AVW_MIN_ATTACKS = 5
+AVW_GAP_PP = 20.0
+
+
+def attack_vs_wall_height(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Fal-magasság elleni játék: MEGBÜNTETIK-E A FELFUTÓ FALAT.
+
+    A vonal-magasság (defensive_line_height) a falat írja le — ez a
+    támadó válaszát: minden támadás-szakasznál megmérjük az ellenfél
+    falának átlagos magasságát, és külön gólarányt számolunk a
+    felfutó (AVW_HIGH_M feletti) és a mély fal ellen vívott
+    támadásokra.
+
+    Edzőileg: akit a felfutó fal megfog, az ellen bátran ki lehet
+    lépni és magasan védekezni — nincs válaszuk a nyomásra; aki a
+    felfutó falat megbünteti (mögé betör, átemeli), az ellen a mély,
+    kompakt fal a biztonságos terv.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"high": {"attacks",
+    "goals", "goal_pct"}, "deep": {...}, "verdict"} — a pct-k/verdict
+    None a vödrönkénti AVW_MIN_ATTACKS alatt; a verdict "a felfutó
+    fal megfogja őket" / "a felfutó falat megbüntetik" / None.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+    from .tactics import COURT_LENGTH_M
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    half = COURT_LENGTH_M / 2.0
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out = {side: {"high": {"attacks": 0, "goals": 0, "goal_pct": None},
+                  "deep": {"attacks": 0, "goals": 0, "goal_pct": None},
+                  "verdict": None} for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        deff = Team.AWAY if seq.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        depths = []
+        for f in seq.frames:
+            ds = [abs(p.x - own_x) for p in f.players
+                  if p.team == deff and p.role != "kapus"
+                  and abs(p.x - own_x) <= half]
+            if ds:
+                depths.append(sum(ds) / len(ds))
+        if not depths:
+            continue
+        bucket = ("high" if sum(depths) / len(depths) >= AVW_HIGH_M
+                  else "deep")
+        rec = out[side][bucket]
+        rec["attacks"] += 1
+        if any(tm == side and seq.start_t <= t <= seq.end_t + tail
+               for (t, tm) in goals):
+            rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        h, d = rec["high"], rec["deep"]
+        if (h["attacks"] >= AVW_MIN_ATTACKS
+                and d["attacks"] >= AVW_MIN_ATTACKS):
+            h["goal_pct"] = round(100.0 * h["goals"] / h["attacks"], 1)
+            d["goal_pct"] = round(100.0 * d["goals"] / d["attacks"], 1)
+            gap = h["goal_pct"] - d["goal_pct"]
+            if gap <= -AVW_GAP_PP:
+                rec["verdict"] = "a felfutó fal megfogja őket"
+            elif gap >= AVW_GAP_PP:
+                rec["verdict"] = "a felfutó falat megbüntetik"
+    return out

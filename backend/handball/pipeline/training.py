@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 204) Fal-magasság elleni játék: ha a felfutó fal megfog minket,
+    # a prés elleni megoldások a téma.
+    try:
+        from .attack_types import attack_vs_wall_height
+        avw204 = attack_vs_wall_height(match, config)
+        for side in ("home", "away"):
+            rec204 = avw204[side]
+            if rec204["verdict"] != "a felfutó fal megfogja őket":
+                continue
+            add(side, "tamadas", "Prés elleni játék",
+                f"felfutó fal ellen {rec204['high']['goal_pct']:.0f}%, "
+                f"mély fal ellen {rec204['deep']['goal_pct']:.0f}% a "
+                "gólarányunk — a kilépő, agresszív védekezésre nincs "
+                "begyakorolt válaszunk, és az ellenfelek ezt előbb-"
+                "utóbb észreveszik",
+                "prés elleni játék: 3-2-1 elleni támadás-gyakorlat, "
+                "ahol a kilépő védő MÖGÉ kötelező a folytatás — "
+                "beállós-lecsúszás a kilépő helyére, egyérintős "
+                "passz a felszabaduló emberre, és átemelés-gyakorlat "
+                "a kapus fölött; a menet gólja csak a kilépő mögötti "
+                "térből érvényes")
+    except Exception:
+        pass
+
     # 203) Kontra-forrás: ha a kapott kontrák egy forrásból jönnek, a
     # forrás-specifikus visszarendeződés a téma.
     try:

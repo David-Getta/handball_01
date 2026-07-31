@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Fal-magasság elleni játék: megbüntetik-e a felfutó falat.
+    try:
+        from .attack_types import attack_vs_wall_height
+        avw = attack_vs_wall_height(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_avw = avw[side]
+            if rec_avw["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ellen kiderült: "
+                     f"{rec_avw['verdict']} (felfutó fal ellen "
+                     f"{rec_avw['high']['goal_pct']:.0f}%, mély ellen "
+                     f"{rec_avw['deep']['goal_pct']:.0f}% a "
+                     "gólarányuk).")
+    except Exception:
+        pass
     # Kontra-forrás: miből indul a lerohanásuk.
     try:
         from .attack_types import break_sources

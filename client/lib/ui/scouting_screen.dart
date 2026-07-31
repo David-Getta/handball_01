@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Fal-magasság elleni játék: megbüntetik-e a felfutó falat
+  // (vödrönként 5+ támadás, 20 százalékpont — a backend-kulccsal
+  // azonos küszöbök).
+  String? _attackVsWallHeight(Map<String, dynamic> r) {
+    final hA = ((r["avw_high_attacks"] as num?) ?? 0).toInt();
+    final dA = ((r["avw_deep_attacks"] as num?) ?? 0).toInt();
+    if (hA < 5 || dA < 5) return null;
+    final h = 100.0 * ((r["avw_high_goals"] as num?) ?? 0).toInt() / hA;
+    final d = 100.0 * ((r["avw_deep_goals"] as num?) ?? 0).toInt() / dA;
+    if (h - d <= -20.0) {
+      return "a felfutó fal megfogja őket (magas fal ellen "
+          "${h.toStringAsFixed(0)}%, mély ellen "
+          "${d.toStringAsFixed(0)}%) · bátran lépjetek ki, nincs "
+          "válaszuk a nyomásra";
+    }
+    if (h - d >= 20.0) {
+      return "a felfutó falat megbüntetik (${h.toStringAsFixed(0)}% "
+          "vs ${d.toStringAsFixed(0)}%) · ellenük a mély, kompakt "
+          "fal a biztonságos terv";
+    }
+    return null;
+  }
+
   // Kontra-forrás: miből indul a lerohanásuk (4+ lerohanás, 50%
   // részarány — a backend-kulccsal azonos küszöbök).
   String? _breakSources(Map<String, dynamic> r) {
@@ -4883,6 +4906,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-gól veszély", _gkGoalThreat(r)!],
       if (_breakSources(r) != null)
         ["Kontra-forrás", _breakSources(r)!],
+      if (_attackVsWallHeight(r) != null)
+        ["Fal-magasság ellen", _attackVsWallHeight(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

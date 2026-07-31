@@ -2441,3 +2441,75 @@ def test_break_sources_needs_enough_breaks():
 
     rec = break_sources(_bsrc_match(2, with_save=True))["home"]
     assert rec["breaks"] == 2 and rec["verdict"] is None
+
+
+# ---- Fal-magasság elleni játék (megbüntetik-e a felfutó falat) --------------
+
+def _avw_attack(t0, def_depth, score, fps=25.0):
+    """Hazai támadás a +x kapura; a vendég fal def_depth m-re áll a
+    kapujától; score esetén a végén gól."""
+    frames = []
+    n = int(4.0 * fps)
+    for i in range(n):
+        x = 24.0 + 8.0 * i / max(1, n - 1)
+        frames.append(Frame(t=t0 + i, players=[
+            _pl(1, Team.HOME, x, 10.0),
+            _pl(21, Team.AWAY, 40.0 - def_depth, 7.0),
+            _pl(22, Team.AWAY, 40.0 - def_depth, 13.0),
+            _pl(29, Team.AWAY, 39.5, 10.0, role="kapus"),
+        ], ball=Ball(x=x, y=10.0, confidence=1.0)))
+    t = t0 + n
+    if score:
+        for i in range(7):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 32.0, 10.0)],
+                ball=Ball(x=min(33.0 + i * 1.4, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+    return frames
+
+
+def _avw_match(high_scores, deep_scores, fps=25.0):
+    """Felfutó (10 m-es) és mély (5 m-es) fal elleni támadás-sorozat a
+    megadott gól-kimenetelekkel."""
+    frames = []
+    t = 0
+    for depth, results in ((10.0, high_scores), (5.0, deep_scores)):
+        for score in results:
+            block = _avw_attack(t, depth, score, fps)
+            frames.extend(block)
+            t = frames[-1].t + 1
+            for _ in range(int(5 * fps)):    # szünet
+                frames.append(Frame(t=t, players=[], ball=None))
+                t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_attack_vs_wall_height_flags_the_press_victim():
+    """Felfutó fal ellen 0/5, mély ellen 4/5 gól → a felfutó fal
+    megfogja őket."""
+    from handball.pipeline.attack_types import attack_vs_wall_height
+
+    rec = attack_vs_wall_height(_avw_match(
+        [False] * 5, [True] * 4 + [False]))["home"]
+    assert rec["high"]["attacks"] == 5 and rec["deep"]["attacks"] == 5
+    assert rec["verdict"] == "a felfutó fal megfogja őket"
+
+
+def test_attack_vs_wall_height_flags_the_press_breaker():
+    """Fordítva (felfutó ellen terem, mély ellen nem) → a felfutó
+    falat megbüntetik."""
+    from handball.pipeline.attack_types import attack_vs_wall_height
+
+    rec = attack_vs_wall_height(_avw_match(
+        [True] * 4 + [False], [False] * 5))["home"]
+    assert rec["verdict"] == "a felfutó falat megbüntetik"
+
+
+def test_attack_vs_wall_height_needs_both_buckets():
+    """Ha valamelyik vödörben kevés a támadás, nincs ítélet."""
+    from handball.pipeline.attack_types import attack_vs_wall_height
+
+    rec = attack_vs_wall_height(_avw_match(
+        [False] * 2, [True] * 5))["home"]
+    assert rec["verdict"] is None

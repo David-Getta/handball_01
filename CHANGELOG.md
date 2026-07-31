@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Fal-magasság elleni játék**: MEGBÜNTETIK-E A FELFUTÓ FALAT. A
+  vonal-magasság a falat írja le — ez a támadó válaszát: minden
+  támadásnál megmérjük az ellenfél falának átlagos magasságát, és
+  külön gólarányt számolunk a felfutó (8 m feletti) és a mély fal
+  ellen vívott támadásokra (vödrönként 5+ támadás, 20 százalékpont az
+  ítélethez). Akit a felfutó fal megfog, az ellen bátran ki lehet
+  lépni; aki megbünteti, az ellen a mély, kompakt fal a biztonságos
+  terv. Egy réteg, sok felület: `attack_vs_wall_height` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (vödrönkénti támadás- és gól-darabszámok, két edzői kulcs +
+  csempe), 183. meccsterv-szabály (az ő prés-gyengeségük × a ti
+  szoros védekezésetek), 204. edzés-szabály (prés elleni játék:
+  kötelező folytatás a kilépő mögé).
+
 - **Kontra-forrás**: MIBŐL INDUL a lerohanásuk. A
   lerohanás-hatékonyság azt méri, mennyi lesz gól a kontrákból — ez
   azt, honnan jönnek: minden lerohanás előtti pillanatot

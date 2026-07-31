@@ -609,6 +609,13 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Fal-magasság elleni játékuk: felfutó és mély fal ellen vívott
+    # támadásaik + góljaik — darabszámok, meccsek közt pontosan
+    # összegződnek.
+    avw_high_attacks: int = 0
+    avw_high_goals: int = 0
+    avw_deep_attacks: int = 0
+    avw_deep_goals: int = 0
     # Kontra-forrásaik: lerohanásaik forrás szerinti darabszámai
     # ({"védés"/"kihagyott lövés"/"labdaszerzés": darab}) — meccsek
     # közt kulcs szerint összegződnek.
@@ -2074,6 +2081,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Fal-magasság elleni játék: milyen magas fallal védekezzetek.
+    if (rep.avw_high_attacks >= 5 and rep.avw_deep_attacks >= 5):
+        _avw_h = 100.0 * rep.avw_high_goals / rep.avw_high_attacks
+        _avw_d = 100.0 * rep.avw_deep_goals / rep.avw_deep_attacks
+        if _avw_h - _avw_d <= -20.0:
+            keys.append(
+                f"A felfutó fal megfogja őket (magas fal ellen "
+                f"{_avw_h:.0f}%, mély ellen {_avw_d:.0f}% a "
+                "gólarányuk) — bátran lépjetek ki és védekezzetek "
+                "magasan: nincs válaszuk a nyomásra.")
+        elif _avw_h - _avw_d >= 20.0:
+            keys.append(
+                f"A felfutó falat megbüntetik (magas fal ellen "
+                f"{_avw_h:.0f}%, mély ellen {_avw_d:.0f}% a "
+                "gólarányuk) — ellenük a mély, kompakt fal a "
+                "biztonságos terv: a kilépések mögé azonnal "
+                "betörnek vagy átemelik.")
 
     # Kontra-forrás: melyik pillanatban kell megölni a kontrájukat.
     _bsrc_total = sum((rep.bsrc_sources or {}).values())
@@ -5582,6 +5607,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import attack_vs_wall_height as _avw
+        avwrec = _avw(match, config)[team.value]
+        rep.avw_high_attacks = avwrec["high"]["attacks"]
+        rep.avw_high_goals = avwrec["high"]["goals"]
+        rep.avw_deep_attacks = avwrec["deep"]["attacks"]
+        rep.avw_deep_goals = avwrec["deep"]["goals"]
         from .attack_types import break_sources as _bsrc
         rep.bsrc_sources = dict(
             _bsrc(match, config)[team.value]["sources"])
@@ -7924,6 +7955,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 183) Az ő présre nincs válaszuk × a ti magas falatok: kilépős
+    # védekezéssel kell fojtogatni őket.
+    if (opp.avw_high_attacks >= 5 and opp.avw_deep_attacks >= 5
+            and own.defensive_pressure_m > 0):
+        _avw183_h = 100.0 * opp.avw_high_goals / opp.avw_high_attacks
+        _avw183_d = 100.0 * opp.avw_deep_goals / opp.avw_deep_attacks
+        if (_avw183_h - _avw183_d <= -20.0
+                and own.defensive_pressure_m <= 2.5):
+            plan.append(
+                f"A felfutó fal megfogja őket (magas fal ellen "
+                f"{_avw183_h:.0f}%, mély ellen {_avw183_d:.0f}% a "
+                f"gólarányuk), ti pedig amúgy is szorosan védekeztek "
+                f"(átlag {own.defensive_pressure_m:.1f} m-re a "
+                "labdástól) — játsszatok végig kilépős, magas falat: "
+                "ez az ő rémálmuk, és a ti alapjátékotok.")
 
     # 182) Az ő védésből induló kontráik × a ti lövés-választásotok: a
     # rossz lövés náluk azonnal visszaüt.
@@ -10702,6 +10749,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        avw_high_attacks=sum(r.avw_high_attacks for r in reports),
+        avw_high_goals=sum(r.avw_high_goals for r in reports),
+        avw_deep_attacks=sum(r.avw_deep_attacks for r in reports),
+        avw_deep_goals=sum(r.avw_deep_goals for r in reports),
         bsrc_sources=_merge_role_counts(
             [r.bsrc_sources for r in reports]),
         gkg_attempts=sum(r.gkg_attempts for r in reports),
