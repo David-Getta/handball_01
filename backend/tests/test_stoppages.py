@@ -470,3 +470,79 @@ def test_timeout_first_defense_needs_enough_timeouts():
 
     rec = timeout_first_defense(_tfd_match([True, True]))["home"]
     assert rec["timeouts"] == 2 and rec["verdict"] is None
+
+
+# ---- Időkérés-csomag (az időkérés cserével jár-e) ---------------------------
+
+def _tsc_match(with_sub_flags, fps=25.0):
+    """Hazai időkérés-sorozat; a `with_sub_flags` szerinti körökben az
+    időkérés után egy-ki-egy-be hazai csere is történik."""
+    frames = []
+    t = 0
+    for k, with_sub in enumerate(with_sub_flags):
+        out_tid, in_tid = 50 + 2 * k, 51 + 2 * k
+        for i in range(int(20 * fps)):        # játék (hazai labda)
+            players = _players(t, moving=True)
+            hp = players[0]
+            if with_sub:                       # a lecserélendő ember fent
+                players = players + [PlayerPosition(
+                    track_id=out_tid, team=Team.HOME, x=25.0, y=8.0,
+                    source=PositionSource.MEASURED, confidence=1.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(int(25 * fps)):        # időkérés: állás
+            players = _players(0, moving=False)
+            if with_sub:
+                players = players + [PlayerPosition(
+                    track_id=out_tid, team=Team.HOME, x=25.0, y=8.0,
+                    source=PositionSource.MEASURED, confidence=1.0)]
+            frames.append(Frame(t=t, players=players, ball=None))
+            t += 1
+        for i in range(int(20 * fps)):        # játék újra + csere
+            players = _players(t, moving=True)
+            if with_sub:
+                if i < int(4 * fps):           # a régi a cserezóna felé
+                    frac = i / float(int(4 * fps))
+                    players = players + [PlayerPosition(
+                        track_id=out_tid, team=Team.HOME,
+                        x=25.0 - 5.0 * frac, y=8.0 - 7.0 * frac,
+                        source=PositionSource.MEASURED, confidence=1.0)]
+                if i >= int(4 * fps):          # az új a zónából befelé
+                    frac = min(1.0, (i - int(4 * fps)) / float(int(4 * fps)))
+                    players = players + [PlayerPosition(
+                        track_id=in_tid, team=Team.HOME,
+                        x=20.0 + 5.0 * frac, y=1.0 + 7.0 * frac,
+                        source=PositionSource.MEASURED, confidence=1.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_timeout_sub_combo_flags_the_swapping_bench():
+    """Mindkét időkéréshez csere társul → az időkérésük cserével jár."""
+    from handball.pipeline.stoppages import timeout_sub_combo
+
+    rec = timeout_sub_combo(_tsc_match([True, True]))["home"]
+    assert rec["timeouts"] == 2 and rec["with_subs"] == 2
+    assert rec["verdict"] == "az időkérésük cserével jár"
+
+
+def test_timeout_sub_combo_flags_the_pure_tactics_bench():
+    """Csere nélküli időkérések → tiszta taktika."""
+    from handball.pipeline.stoppages import timeout_sub_combo
+
+    rec = timeout_sub_combo(_tsc_match([False, False]))["home"]
+    assert rec["timeouts"] == 2 and rec["with_subs"] == 0
+    assert rec["verdict"] == "az időkérésük tiszta taktika"
+
+
+def test_timeout_sub_combo_needs_enough_timeouts():
+    """Egyetlen időkérésnél nincs ítélet."""
+    from handball.pipeline.stoppages import timeout_sub_combo
+
+    rec = timeout_sub_combo(_tsc_match([True]))["home"]
+    assert rec["timeouts"] == 1 and rec["verdict"] is None

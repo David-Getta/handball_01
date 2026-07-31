@@ -1318,6 +1318,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Időkérés-csomag: az időkérés cserével jár-e (2+ időkérés, 70%
+  // arány — a backend-kulccsal azonos küszöbök).
+  String? _timeoutSubCombo(Map<String, dynamic> r) {
+    final touts = ((r["tsc_timeouts"] as num?) ?? 0).toInt();
+    final withSubs = ((r["tsc_with_subs"] as num?) ?? 0).toInt();
+    if (touts < 2) return null;
+    final pct = 100.0 * withSubs / touts;
+    if (pct >= 70.0) {
+      return "az időkérésük cserével jár ($withSubs/$touts) · utána "
+          "frissítsétek a párosítást, friss lábú ember érkezik";
+    }
+    if (pct <= 30.0) {
+      return "az időkérésük tiszta taktika ($touts időkérés, szinte "
+          "csere nélkül) · az utána jövő első támadásnál a fal "
+          "extra figyelmet kapjon";
+    }
+    return null;
+  }
+
   // Lövés-választás állás szerint: hátrányban elkapkodják-e
   // (állapotonként 5+ lövés, 0,08 xG-különbség — a backend-kulccsal
   // azonos küszöbök).
@@ -4711,6 +4730,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus állás szerint", _gkSavesByScore(r)!],
       if (_shotQualityByScore(r) != null)
         ["Lövés-választás", _shotQualityByScore(r)!],
+      if (_timeoutSubCombo(r) != null)
+        ["Időkérés-csomag", _timeoutSubCombo(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

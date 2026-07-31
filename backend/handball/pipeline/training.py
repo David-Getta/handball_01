@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 197) Időkérés-csomag: ha az időkérésünk sosem jár cserével, a
+    # kispad-eszköztár bővítése a téma.
+    try:
+        from .stoppages import timeout_sub_combo
+        tsc197 = timeout_sub_combo(match, config)
+        for side in ("home", "away"):
+            rec197 = tsc197[side]
+            if rec197["verdict"] != "az időkérésük tiszta taktika":
+                continue
+            add(side, "taktika", "Időkérés-eszköztár",
+                f"az időkéréseink ({rec197['timeouts']}) szinte soha "
+                "nem járnak cserével — a szünet csak szóbeli "
+                "utasítás, pedig a friss láb és az új párosítás "
+                "legalább akkora fegyver, mint az új figura",
+                "időkérés-eszköztár: az edzésmeccseken minden "
+                "időkéréshez kötelező döntés-lista jár (kit "
+                "cserélünk, kire megy az új kettőzés, mi az első "
+                "figura) — a kispad 30 másodperc alatt mondja ki "
+                "mindhármat, és az időkérés utáni első támadás/"
+                "védekezés párosát külön visszanézzük")
+    except Exception:
+        pass
+
     # 196) Lövés-választás állás szerint: ha hátrányban elkapkodjuk a
     # lövéseket, a nyomás alatti helyzet-válogatás a téma.
     try:

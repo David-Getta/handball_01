@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Időkérés-csomagjuk: mért időkéréseik és ebből a cserével járók
+    # — darabszámok, meccsek közt pontosan összegződnek.
+    tsc_timeouts: int = 0
+    tsc_with_subs: int = 0
     # Lövés-választásuk állás szerint: hátrányban és egyébként leadott
     # lövések + helyzetérték-összegek — darabszám/összeg, meccsek közt
     # pontosan összegződnek (átlag = sqs_*_sum_xg / sqs_*_shots).
@@ -2040,6 +2044,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Időkérés-csomag: mire számíts az időkérésük után.
+    if rep.tsc_timeouts >= 2:
+        _tsc_pct = 100.0 * rep.tsc_with_subs / rep.tsc_timeouts
+        if _tsc_pct >= 70.0:
+            keys.append(
+                f"Az időkérésük cserével jár ({rep.tsc_with_subs}/"
+                f"{rep.tsc_timeouts} időkérésnél új ember jött) — az "
+                "időkérésük után frissítsétek a párosítást: az első "
+                "támadásukban friss lábú ember érkezik, a kettőzés "
+                "és az őrzés az új emberre menjen.")
+        elif _tsc_pct <= 30.0:
+            keys.append(
+                f"Az időkérésük tiszta taktika ({rep.tsc_timeouts} "
+                "időkérésből szinte egyik sem járt cserével) — "
+                "ugyanazok jönnek vissza, de új figurával: az "
+                "időkérésük utáni első támadásnál a fal extra "
+                "figyelmet kapjon, és hangosan menjen az egyeztetés.")
 
     # Lövés-választás állás szerint: önmagát védi-e a vezetésetek.
     if rep.sqs_trail_shots >= 5 and rep.sqs_other_shots >= 5:
@@ -5438,6 +5460,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .stoppages import timeout_sub_combo as _tsc
+        tscrec = _tsc(match, config)[team.value]
+        rep.tsc_timeouts = tscrec["timeouts"]
+        rep.tsc_with_subs = tscrec["with_subs"]
         from .xg import shot_quality_by_score as _sqs
         sqsrec = _sqs(match, config)[team.value]
         rep.sqs_trail_shots = sqsrec["trail_shots"]
@@ -7749,6 +7775,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 176) Az ő cserélő időkérésük × a ti kiszámítható emberfogásotok:
+    # az időkérésük után azonnal frissítendő a párosítás.
+    if (opp.tsc_timeouts >= 2
+            and 100.0 * opp.tsc_with_subs / opp.tsc_timeouts >= 70.0
+            and (opp.swp_swaps >= 4 and opp.swp_pairs)):
+        _swp176 = max(opp.swp_pairs, key=lambda pr: pr["count"])
+        if _swp176["count"] >= 3:
+            plan.append(
+                f"Az időkérésük cserével jár ({opp.tsc_with_subs}/"
+                f"{opp.tsc_timeouts}), és a váltópárjuk is "
+                f"kiszámítható (a(z) {_swp176['out_id']} helyére "
+                f"rendre a(z) {_swp176['in_id']} azonosítójú jön) — "
+                "az időkérésük alatt ti is beszéljétek le előre az "
+                "új párosítást: mire a játék újraindul, a beálló "
+                "emberüknek már neve és őrzője legyen.")
 
     # 175) Az ő hátrányban kapkodó lövéseik × a ti lepattanó-uralmatok:
     # vezetésnél a rossz lövéseikből ti indultok.
@@ -10395,6 +10437,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        tsc_timeouts=sum(r.tsc_timeouts for r in reports),
+        tsc_with_subs=sum(r.tsc_with_subs for r in reports),
         sqs_trail_shots=sum(r.sqs_trail_shots for r in reports),
         sqs_trail_sum_xg=sum(r.sqs_trail_sum_xg for r in reports),
         sqs_other_shots=sum(r.sqs_other_shots for r in reports),

@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Időkérés-csomag: az időkérés cserével jár-e.
+    try:
+        from .stoppages import timeout_sub_combo
+        tsc = timeout_sub_combo(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tsc = tsc[side]
+            if rec_tsc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} csapatánál {rec_tsc['verdict']} "
+                     f"({rec_tsc['with_subs']}/{rec_tsc['timeouts']} "
+                     "időkérés járt cserével).")
+    except Exception:
+        pass
     # Lövés-választás állás szerint: hátrányban elkapkodják-e.
     try:
         from .xg import shot_quality_by_score

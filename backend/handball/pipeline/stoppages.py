@@ -423,3 +423,64 @@ def timeout_first_defense(match: Match,
             elif share <= TFD_TIGHT_PCT:
                 rec["verdict"] = "időkérés után friss fal"
     return out
+
+
+# Időkérés-csomag: ekkora ablakban keresünk cserét az időkérés körül,
+# ennyi mért időkérés kell az ítélethez, és e feletti arány jelenti a
+# cserével járó időkérést.
+TSC_WINDOW_S = 60.0
+TSC_MIN_TIMEOUTS = 2
+TSC_COMBO_PCT = 70.0
+
+
+def timeout_sub_combo(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés-csomag: AZ IDŐKÉRÉSÜK CSERÉVEL JÁR-E.
+
+    Az időkérés-hatás (timeout_effects) azt méri, mit hoz az időkérés
+    — ez azt, MI VAN BENNE: az időkérés körüli TSC_WINDOW_S
+    másodpercben keresünk azonos-csapatbeli cserehullámot. Akinél az
+    időkérés rendre cserével jár, ott a szünet nem csak taktika,
+    hanem személycsere is — az edző új emberekkel indítja újra a
+    meccset.
+
+    Edzőileg: a cserélő időkérés után frissíteni kell a párosítást —
+    az első támadásukban friss lábú ember jön, a kettőzés és az őrzés
+    az ÚJ emberre menjen; aki csere nélkül kér időt, annál a szünet
+    tiszta taktika: ugyanazok jönnek vissza, de új figurával — a
+    fal az első támadásnál extra figyelmet kap.
+
+    Visszatérés csapatonként: {"timeouts", "with_subs", "verdict"} —
+    a verdict None TSC_MIN_TIMEOUTS alatt; a verdict "az időkérésük
+    cserével jár" / "az időkérésük tiszta taktika" / None.
+    """
+    from .substitutions import detect_substitutions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(TSC_WINDOW_S * fps)
+    subs = detect_substitutions(match, config)
+
+    out = {side: {"timeouts": 0, "with_subs": 0, "verdict": None}
+           for side in ("home", "away")}
+    for st in detect_stoppages(match, config):
+        if st["kind"] != "időkérés" or st["likely_team"] is None:
+            continue
+        side = st["likely_team"]
+        rec = out[side]
+        rec["timeouts"] += 1
+        if any(ev["team"] == side
+               and st["start_frame"] - win <= ev["t"]
+               <= st["end_frame"] + win
+               for ev in subs):
+            rec["with_subs"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["timeouts"] >= TSC_MIN_TIMEOUTS:
+            pct = 100.0 * rec["with_subs"] / rec["timeouts"]
+            if pct >= TSC_COMBO_PCT:
+                rec["verdict"] = "az időkérésük cserével jár"
+            elif pct <= 100.0 - TSC_COMBO_PCT:
+                rec["verdict"] = "az időkérésük tiszta taktika"
+    return out

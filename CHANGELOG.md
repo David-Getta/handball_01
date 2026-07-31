@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Időkérés-csomag**: AZ IDŐKÉRÉSÜK CSERÉVEL JÁR-E. Az
+  időkérés-hatás azt méri, mit hoz az időkérés — ez azt, mi van
+  benne: az időkérés körüli percben keresünk azonos-csapatbeli
+  cserehullámot (2+ időkérés, 70% arány az ítélethez). A cserélő
+  időkérés után frissíteni kell a párosítást — friss lábú ember jön;
+  a csere nélküli időkérés tiszta taktika: ugyanazok jönnek vissza új
+  figurával, a fal extra figyelmet kapjon. Egy réteg, sok felület:
+  `timeout_sub_combo` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (időkérés- és csere-darabszámok,
+  két edzői kulcs + csempe), 176. meccsterv-szabály (az ő cserélő
+  időkérésük × a kiszámítható váltópárjuk), 197. edzés-szabály
+  (időkérés-eszköztár: kötelező döntés-lista minden időkéréshez).
+
 - **Lövés-választás állás szerint**: HÁTRÁNYBAN ELKAPKODJÁK-E. Az
   előny-kezelés a támadás-hosszot méri állás szerint — ez a
   lövés-minőséget: a leadott lövések átlagos helyzet-értékét (xG)
