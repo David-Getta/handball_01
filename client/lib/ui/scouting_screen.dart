@@ -1318,6 +1318,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Váltópárok: ki kit vált a cseréknél (4+ mért csere, 3+ ismétlődés
+  // — a backend-kulccsal azonos küszöbök).
+  String? _swapPairs(Map<String, dynamic> r) {
+    final swaps = ((r["swp_swaps"] as num?) ?? 0).toInt();
+    final pairs = r["swp_pairs"];
+    if (swaps < 4 || pairs is! List || pairs.isEmpty) return null;
+    Map<String, dynamic>? top;
+    for (final pr in pairs) {
+      if (pr is Map<String, dynamic> &&
+          (top == null ||
+              ((pr["count"] as num?) ?? 0) >
+                  ((top["count"] as num?) ?? 0))) {
+        top = pr;
+      }
+    }
+    if (top == null || ((top["count"] as num?) ?? 0).toInt() < 3) {
+      return null;
+    }
+    return "kiszámítható a váltópárjuk (a(z) ${top["out_id"]} "
+        "azonosítójút rendre a(z) ${top["in_id"]} váltja, "
+        "${top["count"]} alkalommal) · a beállóra kész B-terv "
+        "legyen, már a csere előtt";
+  }
+
   // Visszahozott támadások: lezárják vagy újrajáratják a betörést (6+
   // betörés; 45% felett türelmes, 15% alatt direkt — a
   // backend-kulccsal azonos küszöbök).
@@ -4410,6 +4434,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szerzés utáni indítás", _stealLaunch(r)!],
       if (_pullbackRate(r) != null)
         ["Visszahozott támadások", _pullbackRate(r)!],
+      if (_swapPairs(r) != null)
+        ["Váltópárok", _swapPairs(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 185) Váltópárok: ha a cserénk kiszámítható, a csere-variálás a
+    # téma.
+    try:
+        from .substitutions import swap_pairs
+        swp185 = swap_pairs(match, config)
+        for side in ("home", "away"):
+            top185 = swp185[side]["top"]
+            if top185 is None:
+                continue
+            add(side, "taktika", "Csere-variálás",
+                f"a cserénk kiszámítható: a(z) {top185['out_id']} "
+                f"azonosítójút {top185['count']} alkalommal is "
+                f"ugyanaz váltotta — a felkészült ellenfél előre "
+                "tudja, ki jön, és kész tervvel várja a beállót",
+                "csere-variálás: az edzésmeccseken a kulcsposztokra "
+                "két különböző váltó készül (más profillal: egy "
+                "lövő és egy játékszervező), és a meccsterv "
+                "helyzethez köti, melyik jön — előnyben a szervező, "
+                "hajrában vagy hátrányban a lövő; a beálló első "
+                "labdájára kötelező előre megbeszélt figura, hogy ne "
+                "az ellenfél terve érvényesüljön")
+    except Exception:
+        pass
+
     # 184) Visszahozott támadások: ha minden betörésünket visszahozzuk,
     # a lezárás-bátorság a téma.
     try:

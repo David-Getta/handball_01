@@ -246,3 +246,65 @@ def test_substitution_triggers_needs_enough_subs():
 
     rec = substitution_triggers(_trigger_match(n_waves=2))["home"]
     assert rec["share_pct"] is None and rec["verdict"] is None
+
+
+# ---- Váltópárok (ki kit vált) ----------------------------------------------
+
+def _swp_pl(track_id, team, x, y, jersey=None):
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0,
+                          jersey_number=jersey)
+
+
+def _swap_pairs_match(waves, fps=25.0):
+    """Egy-ki-egy-be hullámok: a `waves` elemei (ki-mezszám,
+    be-mezszám) párok; minden hullám saját track-eket kap."""
+    total = 1000 * (len(waves) + 1)
+    frames = []
+    for t in range(total):
+        players = [_swp_pl(1, Team.HOME, 25.0, 10.0)]   # állandó ember
+        for k, (out_j, in_j) in enumerate(waves):
+            t_mid = 800 + 1000 * k
+            out_tid, in_tid = 50 + 2 * k, 51 + 2 * k
+            if t_mid - 300 <= t <= t_mid:
+                frac = (t - (t_mid - 300)) / 300.0
+                players.append(_swp_pl(
+                    out_tid, Team.HOME, 28.0 - 8.0 * frac,
+                    8.0 - 7.0 * frac, jersey=out_j))
+            if t_mid + 10 <= t <= t_mid + 300:
+                frac = min(1.0, (t - t_mid - 10) / 100.0)
+                players.append(_swp_pl(
+                    in_tid, Team.HOME, 20.0 + 10.0 * frac,
+                    1.0 + 11.0 * frac, jersey=in_j))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=22.0, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_swap_pairs_finds_the_recurring_pair():
+    """A 7-est háromszor is a 12-es váltja → kiszámítható váltópár."""
+    from handball.pipeline.substitutions import swap_pairs
+
+    rec = swap_pairs(_swap_pairs_match(
+        [(7, 12), (7, 12), (7, 12), (8, 13)]))["home"]
+    assert rec["swaps"] == 4
+    assert rec["top"] == {"out_id": 7, "in_id": 12, "count": 3}
+    assert rec["verdict"] == "kiszámítható váltópár"
+
+
+def test_swap_pairs_without_repetition_has_no_verdict():
+    """Négy különböző páros → nincs kiszámítható váltópár."""
+    from handball.pipeline.substitutions import swap_pairs
+
+    rec = swap_pairs(_swap_pairs_match(
+        [(7, 12), (8, 13), (9, 14), (10, 15)]))["home"]
+    assert rec["swaps"] == 4 and rec["top"] is None
+    assert rec["verdict"] is None
+
+
+def test_swap_pairs_needs_enough_swaps():
+    """Kevés (4-nél kevesebb) mért cserénél nincs ítélet."""
+    from handball.pipeline.substitutions import swap_pairs
+
+    rec = swap_pairs(_swap_pairs_match([(7, 12), (7, 12)]))["home"]
+    assert rec["swaps"] == 2 and rec["verdict"] is None

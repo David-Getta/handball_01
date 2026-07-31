@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Váltópárok: ki kit vált a cseréknél.
+    try:
+        from .substitutions import swap_pairs
+        swp = swap_pairs(match)
+        for side, name in (("home", home), ("away", away)):
+            top_swp = swp[side]["top"]
+            if top_swp is None:
+                continue
+            body += (f" A(z) {name} cseréje kiszámítható: a(z) "
+                     f"{top_swp['out_id']} azonosítójút "
+                     f"{top_swp['count']} alkalommal is a(z) "
+                     f"{top_swp['in_id']} azonosítójú váltotta.")
+    except Exception:
+        pass
     # Visszahozott támadások: lezárják vagy újrajáratják a betörést.
     try:
         from .attack_types import pullback_rate

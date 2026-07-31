@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Váltópárok**: KI KIT VÁLT a cseréknél. A csere-blokkok azt
+  mondják meg, egységekben vagy egyesével cserélnek — ez azt, ki kit:
+  az egy-ki-egy-be hullámokból párokat képzünk (mezszám szerint, ha
+  az OCR kiolvasta), és megnézzük, van-e ismétlődő páros (4+ mért
+  csere, 3+ ismétlődés). A kiszámítható váltópár kettőt is ér: a
+  beálló emberre kész B-terv készíthető, és amikor a kulcsemberük
+  fárad, előre tudni, ki jön. Egy réteg, sok felület: `swap_pairs`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (csere-darabszám + páros-lista összegzéssel,
+  edzői kulcs + csempe), 164. meccsterv-szabály (az ő kiszámítható
+  váltópárjuk × a ti mély rotációtok), 185. edzés-szabály
+  (csere-variálás: két különböző profilú váltó, helyzethez kötve).
+
 - **Visszahozott támadások**: LEZÁRJÁK vagy ÚJRAJÁRATJÁK a betörést.
   A betörés-folyosók azt mondják meg, hol lép be a labda a 9 méteren
   belülre — ez azt, mi lesz belőle: lövéssel zárul-e az epizód, vagy

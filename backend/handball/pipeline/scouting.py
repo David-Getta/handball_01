@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Váltópárjaik: az egy-ki-egy-be cseréik száma és a párosok
+    # [{"out_id", "in_id", "count"}] — darabszámok, meccsek közt
+    # pontosan összegződnek (a párosok kulcs szerint összeadva).
+    swp_swaps: int = 0
+    swp_pairs: list = field(default_factory=list)
     # Visszahozott támadásaik: a betörés-epizódjaik és ebből a lövés
     # nélküli visszahozások száma — darabszámok, meccsek közt pontosan
     # összegződnek (arány = pb_pullbacks / pb_entries).
@@ -1975,6 +1980,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Váltópárok: olvasható-e előre a cseréjük.
+    if rep.swp_swaps >= 4 and rep.swp_pairs:
+        _swp_top = max(rep.swp_pairs, key=lambda pr: pr["count"])
+        if _swp_top["count"] >= 3:
+            keys.append(
+                f"Kiszámítható a váltópárjuk (a(z) "
+                f"{_swp_top['out_id']} azonosítójút rendre a(z) "
+                f"{_swp_top['in_id']} azonosítójú váltja, "
+                f"{_swp_top['count']} alkalommal) — a beálló emberre "
+                "kész B-terv legyen: amikor a kulcsemberük fárad, "
+                "tudni lehet, ki jön, és már a csere előtt át lehet "
+                "állni az ő gyengéjére.")
 
     # Visszahozott támadások: rámozduljon-e a fal az első betörésre.
     if rep.pb_entries >= 6:
@@ -5182,6 +5200,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .substitutions import swap_pairs as _swp
+        swprec = _swp(match, config)[team.value]
+        rep.swp_swaps = swprec["swaps"]
+        rep.swp_pairs = [dict(pr) for pr in swprec["pairs"]]
         from .attack_types import pullback_rate as _pb
         pbrec = _pb(match, config)[team.value]
         rep.pb_entries = pbrec["entries"]
@@ -7432,6 +7454,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 164) Az ő kiszámítható váltópárjuk × a ti mély rotációtok: a
+    # csere pillanatában friss védő menjen a beállóra.
+    if (opp.swp_swaps >= 4 and opp.swp_pairs
+            and own.rotation_matches >= 1):
+        _swp164 = max(opp.swp_pairs, key=lambda pr: pr["count"])
+        _rot164 = own.rotation_used_sum / max(1, own.rotation_matches)
+        if _swp164["count"] >= 3 and _rot164 >= 9.0:
+            plan.append(
+                f"Kiszámítható a váltópárjuk (a(z) "
+                f"{_swp164['out_id']} azonosítójút rendre a(z) "
+                f"{_swp164['in_id']} azonosítójú váltja), ti pedig "
+                f"mélyen rotáltok (átlag {_rot164:.0f} ember kap "
+                "érdemi szerepet) — a csere pillanatában küldjetek "
+                "friss védőt a beállóra: az első támadásában "
+                "döntsétek el a párharcot, mielőtt felvenné a "
+                "ritmust.")
+
     # 163) Az ő türelmes visszahozásaik × a ti fegyelmezett falatok:
     # kivárásra lehet játszani, a passzív jel nektek dolgozik.
     if (opp.pb_entries >= 6 and own.def_shots_against >= 10):
@@ -9491,6 +9530,18 @@ def _merge_shooter_overperf(reports) -> list:
             for pid, d in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_swap_pairs(reports) -> list:
+    """Váltópárok összegzése: (ki, be) kulcs szerint összeadott
+    darabszámok, csökkenő sorrendben."""
+    acc: dict = {}
+    for r in reports:
+        for pr in (r.swp_pairs or []):
+            key = (pr["out_id"], pr["in_id"])
+            acc[key] = acc.get(key, 0) + pr["count"]
+    return [{"out_id": o, "in_id": i, "count": n}
+            for (o, i), n in sorted(acc.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_assist_pairs(reports) -> list:
     """(gólpasszoló, lövő) párok gólszámainak pontos összegzése."""
     tally: dict = {}
@@ -9785,6 +9836,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        swp_swaps=sum(r.swp_swaps for r in reports),
+        swp_pairs=_merge_swap_pairs(reports),
         pb_entries=sum(r.pb_entries for r in reports),
         pb_pullbacks=sum(r.pb_pullbacks for r in reports),
         stl_steals=sum(r.stl_steals for r in reports),

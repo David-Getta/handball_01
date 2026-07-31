@@ -267,3 +267,65 @@ def substitution_triggers(match: Match,
             elif share <= SUBTRIG_LOW_PCT:
                 rec["verdict"] = "tervezett csere-rend"
     return out
+
+
+# Váltópárok: ennyi egy-az-egyben csere kell az ítélethez, és ennyi
+# ismétlődés tesz egy párost kiszámíthatóvá.
+SWP_MIN_SWAPS = 4
+SWP_MIN_REPEAT = 3
+
+
+def swap_pairs(match: Match,
+               config: Optional[TacticsConfig] = None) -> dict:
+    """Váltópárok: KI KIT VÁLT a cseréknél.
+
+    A csere-blokkok (substitution_blocks) azt mondják meg, egységekben
+    vagy egyesével cserélnek — ez azt, KI KIT: az egy-ki-egy-be
+    hullámokból párokat képzünk (mezszám szerint, ha az OCR kiolvasta,
+    különben track szerint), és megnézzük, van-e ismétlődő páros.
+
+    Edzőileg: a kiszámítható váltópár kettőt is ér — előre lehet
+    készülni a beálló emberre (a cserére nem új terv kell, hanem a
+    kész B-terv), és az óra is olvasható: ha a kulcsemberük fáradni
+    kezd, tudni lehet, ki jön, és az ő gyengéjére már a csere előtt
+    át lehet állítani a támadást.
+
+    Visszatérés csapatonként: {"swaps", "pairs": [{"out_id", "in_id",
+    "count"}], "top", "verdict"} — a pairs count szerint csökkenő; a
+    top/verdict None SWP_MIN_SWAPS mért csere alatt vagy SWP_MIN_REPEAT
+    alatti ismétlődésnél; a verdict "kiszámítható váltópár" / None.
+    """
+    config = config or TacticsConfig()
+    jersey: dict[int, int] = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None and p.track_id not in jersey:
+                jersey[p.track_id] = p.jersey_number
+
+    def _label(tid: int):
+        return jersey.get(tid, tid)
+
+    tally: dict = {"home": {}, "away": {}}
+    swaps = {"home": 0, "away": 0}
+    for ev in detect_substitutions(match, config):
+        if len(ev["out_ids"]) != 1 or len(ev["in_ids"]) != 1:
+            continue   # a blokk-cserét a csere-blokk réteg kezeli
+        side = ev["team"]
+        swaps[side] += 1
+        key = (_label(ev["out_ids"][0]), _label(ev["in_ids"][0]))
+        tally[side][key] = tally[side].get(key, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        pairs = [{"out_id": o, "in_id": i, "count": n}
+                 for (o, i), n in sorted(tally[side].items(),
+                                         key=lambda kv: -kv[1])]
+        top = None
+        verdict = None
+        if swaps[side] >= SWP_MIN_SWAPS and pairs \
+                and pairs[0]["count"] >= SWP_MIN_REPEAT:
+            top = pairs[0]
+            verdict = "kiszámítható váltópár"
+        out[side] = {"swaps": swaps[side], "pairs": pairs,
+                     "top": top, "verdict": verdict}
+    return out

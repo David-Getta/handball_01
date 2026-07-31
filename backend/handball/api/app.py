@@ -3210,6 +3210,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.substitutions import swap_pairs
+            res["swap_pairs"] = swap_pairs(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3972,6 +3977,8 @@ def create_app():
                 _layer("steal_launch", lambda: steal_launch(match))
                 from ..pipeline.attack_types import pullback_rate
                 _layer("pullback_rate", lambda: pullback_rate(match))
+                from ..pipeline.substitutions import swap_pairs
+                _layer("swap_pairs", lambda: swap_pairs(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
