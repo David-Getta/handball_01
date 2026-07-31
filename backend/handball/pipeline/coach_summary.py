@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Sprint-veszély: ki viszi a kontrát.
+    try:
+        from .stats import sprint_threats
+        spt = sprint_threats(match)
+        for side, name in (("home", home), ("away", away)):
+            top_spt = spt[side]["top"]
+            if top_spt is None:
+                continue
+            body += (f" A(z) {name} kontráit a(z) "
+                     f"{top_spt['player_id']} azonosítójú viszi: a "
+                     f"csapat {spt[side]['team_sprints']} sprintjéből "
+                     f"{top_spt['sprints']} az övé.")
+    except Exception:
+        pass
     # Hetesre cserélt kapus: hoznak-e specialistát a büntetőkre.
     try:
         from .goalkeeper import seven_keeper_swaps

@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 189) Sprint-veszély: ha a kontra-teher egy emberen van, a
+    # második hullám bekapcsolása a téma.
+    try:
+        from .stats import sprint_threats
+        spt189 = sprint_threats(match, config)
+        for side in ("home", "away"):
+            rec189 = spt189[side]
+            if rec189["verdict"] != "kijelölt kontra-emberük van":
+                continue
+            top189 = rec189["top"]
+            add(side, "tamadas", "Kontra második hulláma",
+                f"a csapat {rec189['team_sprints']} sprintjéből "
+                f"{top189['sprints']} egy emberé (a(z) "
+                f"{top189['player_id']} azonosítójú) — ha őt lezárják "
+                "vagy elfárad, a gyors ellentámadásunk megszűnik, "
+                "mert nincs, aki átvegye",
+                "kontra második hulláma: indítás-gyakorlat, ahol az "
+                "első kifutót a gyakorlatvezető rendre LEZÁRJA — a "
+                "labda kötelezően a második hullámra megy (belső "
+                "emberek felfutása), és minden szélső megtanulja a "
+                "kifutó szerepet; a sprint-terhet félidőnként "
+                "számoljuk, és a kispad tudatosan váltja a kifutókat")
+    except Exception:
+        pass
+
     # 188) Hetesre cserélt kapus: ha specialistát hozunk a büntetőkre,
     # a beugró kapus bemelegítése és a visszaállás a téma.
     try:

@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Sprint-veszélyük: játékosonként a sprintek száma és a sprint-táv
+    # [{"player_id", "jersey", "sprints", "sprint_m"}] — darabszám/
+    # összeg, meccsek közt pontosan összegződnek (játékos szerint).
+    spt_players: list = field(default_factory=list)
     # Hetesre cserélt kapusuk: az ellenük ítélt hetesek és ebből a
     # frissen beállt kapusra jutók száma — darabszámok, meccsek közt
     # pontosan összegződnek.
@@ -1995,6 +1999,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Sprint-veszély: kire kell a névre szóló fékező-feladat.
+    _spt_rows = rep.spt_players or []
+    _spt_total = sum(r["sprints"] for r in _spt_rows)
+    if _spt_total >= 10 and _spt_rows:
+        _spt_top = max(_spt_rows, key=lambda r: r["sprints"])
+        if 100.0 * _spt_top["sprints"] / _spt_total >= 30.0:
+            keys.append(
+                f"Kijelölt kontra-emberük van (a(z) "
+                f"{_spt_top['player_id']} azonosítójú futotta a "
+                f"csapat {_spt_total} sprintjéből "
+                f"{_spt_top['sprints']}-t) — labdavesztésnél az első "
+                "dolog az Ő útjának lezárása: névre szóló fékező-"
+                "feladat, és tilos őt a fal mögé engedni.")
 
     # Hetesre cserélt kapus: kire készüljön a hetes-lövőnk.
     if rep.svk_swaps >= 2:
@@ -5257,6 +5275,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .stats import sprint_threats as _spt
+        sptrec = _spt(match, config)[team.value]
+        rep.spt_players = [dict(pr) for pr in sptrec["players"]]
         from .goalkeeper import seven_keeper_swaps as _svk
         svkrec = _svk(match, config)[team.value]
         rep.svk_sevens = svkrec["sevens_against"]
@@ -7526,6 +7547,25 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 168) Az ő kijelölt kontra-emberük × a ti lassú felhozatalotok: a
+    # fékező-feladat nálatok nem választás, hanem kényszer.
+    _spt168 = opp.spt_players or []
+    _spt168_total = sum(r["sprints"] for r in _spt168)
+    if (_spt168_total >= 10 and _spt168
+            and own.but_cases >= 5):
+        _spt168_top = max(_spt168, key=lambda r: r["sprints"])
+        _but168 = own.but_sum_s / own.but_cases
+        if (100.0 * _spt168_top["sprints"] / _spt168_total >= 30.0
+                and _but168 >= 7.0):
+            plan.append(
+                f"Kijelölt kontra-emberük van (a(z) "
+                f"{_spt168_top['player_id']} azonosítójú viszi a "
+                f"sprintjeik nagy részét), ti pedig lassan hozzátok "
+                f"fel a labdát (átlag {_but168:.1f} mp) — a lassú "
+                "felhozatal alatt hátul mindig maradjon egy ember, "
+                "akinek egyetlen dolga az ő útjának lezárása: nála "
+                "egy eladott labda azonnal gól.")
+
     # 167) Az ő hetes-kapuscseréjük × a ti biztos hetes-szerzésetek: a
     # beugró kapusról is legyen jelentés.
     _svk167_earned = sum((own.seven_earner_roles or {}).values())
@@ -9654,6 +9694,24 @@ def _merge_shooter_overperf(reports) -> list:
             for pid, d in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_sprint_threats(reports) -> list:
+    """Sprint-veszély összegzése: játékos szerint összeadott sprintek
+    és sprint-táv."""
+    acc: dict = {}
+    jersey: dict = {}
+    for r in reports:
+        for pr in (r.spt_players or []):
+            pid = pr["player_id"]
+            n, m = acc.get(pid, (0, 0.0))
+            acc[pid] = (n + pr["sprints"], m + pr["sprint_m"])
+            if pr.get("jersey") is not None:
+                jersey.setdefault(pid, pr["jersey"])
+    return [{"player_id": pid, "jersey": jersey.get(pid),
+             "sprints": n, "sprint_m": round(m, 1)}
+            for pid, (n, m) in sorted(acc.items(),
+                                      key=lambda kv: -kv[1][0])]
+
+
 def _merge_adv_players(reports) -> list:
     """Kilépő-védő jelöltek összegzése: játékos szerint összeadott
     kockák és mélység-összegek."""
@@ -9993,6 +10051,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        spt_players=_merge_sprint_threats(reports),
         svk_sevens=sum(r.svk_sevens for r in reports),
         svk_swaps=sum(r.svk_swaps for r in reports),
         adv_players=_merge_adv_players(reports),

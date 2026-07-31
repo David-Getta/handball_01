@@ -336,3 +336,63 @@ def test_pair_plus_minus_ranks_partnerships():
         meta=MatchMeta(match_id="pr", home_team="H", away_team="A",
                        fps=25.0), frames=frames[:400]))
     assert few["home"]["best"] is None and few["home"]["worst"] is None
+
+
+# ---- Sprint-veszély (ki viszi a kontrát) -----------------------------------
+
+def _sprint_threat_match(sprints_by_player, fps=25.0):
+    """Vendég játékosok adott számú sprintet futnak (0,28 m/kocka, 30
+    kockán át), köztük állnak; a hazai 1-es végig áll."""
+    max_sprints = max(sprints_by_player.values())
+    frames = []
+    t = 0
+    xs = {tid: 5.0 for tid in sprints_by_player}
+    direction = {tid: 1.0 for tid in sprints_by_player}
+    for k in range(max_sprints):
+        for phase in ("run", "rest"):
+            for i in range(30 if phase == "run" else 15):
+                players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                          x=2.0, y=2.0)]
+                for j, (tid, n) in enumerate(sprints_by_player.items()):
+                    if phase == "run" and k < n:
+                        xs[tid] += 0.28 * direction[tid]
+                    players.append(PlayerPosition(
+                        track_id=tid, team=Team.AWAY,
+                        x=xs[tid], y=6.0 + 3.0 * j))
+                frames.append(Frame(t=t, players=players))
+                t += 1
+        for tid in sprints_by_player:      # forduló a pálya széle előtt
+            direction[tid] *= -1.0
+    return Match(
+        meta=MatchMeta(match_id="t", home_team="H", away_team="A", fps=fps),
+        frames=frames)
+
+
+def test_sprint_threats_finds_the_break_runner():
+    """A 21-es nyolcszor sprintel a társak 2-2 sprintje mellett → ő a
+    kijelölt kontra-ember."""
+    from handball.pipeline.stats import sprint_threats
+
+    rec = sprint_threats(_sprint_threat_match(
+        {21: 8, 22: 2, 23: 2}))["away"]
+    assert rec["team_sprints"] == 12
+    assert rec["top"] is not None and rec["top"]["player_id"] == 21
+    assert rec["verdict"] == "kijelölt kontra-emberük van"
+
+
+def test_sprint_threats_even_load_has_no_verdict():
+    """Egyenletes sprint-teher mellett nincs kiemelt kontra-ember."""
+    from handball.pipeline.stats import sprint_threats
+
+    rec = sprint_threats(_sprint_threat_match(
+        {21: 4, 22: 4, 23: 4, 24: 4}))["away"]
+    assert rec["team_sprints"] == 16 and rec["top"] is None
+    assert rec["verdict"] is None
+
+
+def test_sprint_threats_needs_enough_sprints():
+    """Kevés (10-nél kevesebb) csapat-sprintnél nincs ítélet."""
+    from handball.pipeline.stats import sprint_threats
+
+    rec = sprint_threats(_sprint_threat_match({21: 4, 22: 1}))["away"]
+    assert rec["team_sprints"] == 5 and rec["verdict"] is None

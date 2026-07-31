@@ -691,3 +691,63 @@ def pair_plus_minus(match, config=None) -> dict:
         out[side] = {"team_per_min": team_per_min, "pairs": pairs,
                      "best": best, "worst": worst}
     return out
+
+
+# Sprint-veszély: ennyi csapat-sprint kell az ítélethez, és a legtöbbet
+# sprintelő ember legalább ekkora részesedéssel számít kontra-motornak.
+SPT_MIN_TEAM_SPRINTS = 10
+SPT_TOP_SHARE_PCT = 30.0
+
+
+def sprint_threats(match: Match, config=None) -> dict:
+    """Sprint-veszély: KI VISZI A KONTRÁT — a legtöbbet sprintelő ember.
+
+    A sprint-statisztika (compute_player_stats) terhelés-monitornak
+    készült — ez az ellenfél-olvasata: csapatonként kigyűjtjük, ki
+    hányszor sprintel, és van-e egy ember, akire a csapat
+    sprintjeinek nagy része jut. A kézilabdában a sprint szinte mindig
+    átmenet: aki a legtöbbet sprintel, az a lerohanások motorja.
+
+    Edzőileg: a kontra-motor ellen névre szóló fékező-feladat kell —
+    labdavesztésnél az első dolog az Ő útjának a lezárása, és tilos
+    őt a fal mögé engedni; a saját csapatban pedig a sprint-teher
+    eloszlása a rotáció-tervezés bemenete.
+
+    Visszatérés csapatonként: {"team_sprints", "players":
+    [{"player_id", "jersey", "sprints", "sprint_m"}], "top",
+    "verdict"} — a top/verdict None SPT_MIN_TEAM_SPRINTS alatt vagy
+    SPT_TOP_SHARE_PCT alatti részesedésnél; a verdict "kijelölt
+    kontra-emberük van" / None.
+    """
+    team_of: dict[int, str] = {}
+    jersey: dict[int, int] = {}
+    keeper: set = set()
+    for f in match.frames:
+        for p in f.players:
+            team_of.setdefault(p.track_id, p.team.value)
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+            if p.role == "kapus":
+                keeper.add(p.track_id)
+
+    stats = compute_player_stats(match)
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "sprints": s.sprint_count,
+                 "sprint_m": round(s.sprint_distance_m, 1)}
+                for tid, s in stats.items()
+                if team_of.get(tid) == side and tid not in keeper
+                and s.sprint_count > 0]
+        rows.sort(key=lambda r: -r["sprints"])
+        total = sum(r["sprints"] for r in rows)
+        top = None
+        verdict = None
+        if total >= SPT_MIN_TEAM_SPRINTS and rows:
+            share = 100.0 * rows[0]["sprints"] / total
+            if share >= SPT_TOP_SHARE_PCT:
+                top = rows[0]
+                verdict = "kijelölt kontra-emberük van"
+        out[side] = {"team_sprints": total, "players": rows,
+                     "top": top, "verdict": verdict}
+    return out

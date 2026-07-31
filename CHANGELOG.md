@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Sprint-veszély**: KI VISZI A KONTRÁT. A sprint-statisztika
+  terhelés-monitornak készült — ez az ellenfél-olvasata: csapatonként
+  kigyűjtjük, ki hányszor sprintel, és van-e ember, akire a csapat
+  sprintjeinek nagy része jut (10+ csapat-sprint, 30% részesedés). A
+  kézilabdában a sprint szinte mindig átmenet: aki a legtöbbet
+  sprintel, az a lerohanások motorja — ellene névre szóló
+  fékező-feladat kell, és tilos őt a fal mögé engedni. Egy réteg, sok
+  felület: `sprint_threats` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (játékosonkénti sprint-darabszámok
+  és -távok összegzéssel, edzői kulcs + csempe), 168.
+  meccsterv-szabály (az ő kontra-emberük × a ti lassú
+  felhozatalotok), 189. edzés-szabály (kontra második hulláma:
+  lezárt első kifutó, kötelező második hullám).
+
 - **Hetesre cserélt kapus**: HOZNAK-E SPECIALISTÁT a büntetőkre. A
   kapus-csere hatása az általános váltást méri — ez a célzottat: az
   ellenük megítélt heteseknél megnézzük, hogy a védő kapus szolgálata

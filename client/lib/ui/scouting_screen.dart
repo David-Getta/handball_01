@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Sprint-veszély: ki viszi a kontrát (10+ csapat-sprint, 30%
+  // részesedés — a backend-kulccsal azonos küszöbök).
+  String? _sprintThreats(Map<String, dynamic> r) {
+    final rows = r["spt_players"];
+    if (rows is! List || rows.isEmpty) return null;
+    var total = 0;
+    Map<String, dynamic>? top;
+    for (final pr in rows) {
+      if (pr is! Map<String, dynamic>) continue;
+      final n = ((pr["sprints"] as num?) ?? 0).toInt();
+      total += n;
+      if (top == null || n > ((top["sprints"] as num?) ?? 0).toInt()) {
+        top = pr;
+      }
+    }
+    if (total < 10 || top == null) return null;
+    final topN = ((top["sprints"] as num?) ?? 0).toInt();
+    if (100.0 * topN / total < 30.0) return null;
+    return "kijelölt kontra-emberük van (a(z) ${top["player_id"]} "
+        "azonosítójú futotta a $total sprintből $topN-t) · névre "
+        "szóló fékező-feladat, tilos őt a fal mögé engedni";
+  }
+
   // Hetesre cserélt kapus: hoznak-e specialistát a büntetőkre (2+
   // célzott csere — a backend-kulccsal azonos küszöb).
   String? _sevenKeeperSwaps(Map<String, dynamic> r) {
@@ -4513,6 +4536,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kilépő védő", _advancedDefender(r)!],
       if (_sevenKeeperSwaps(r) != null)
         ["Hetes-kapuscsere", _sevenKeeperSwaps(r)!],
+      if (_sprintThreats(r) != null)
+        ["Sprint-veszély", _sprintThreats(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
