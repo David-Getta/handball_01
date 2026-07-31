@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 188) Hetesre cserélt kapus: ha specialistát hozunk a büntetőkre,
+    # a beugró kapus bemelegítése és a visszaállás a téma.
+    try:
+        from .goalkeeper import seven_keeper_swaps
+        svk188 = seven_keeper_swaps(match, config)
+        for side in ("home", "away"):
+            rec188 = svk188[side]
+            if rec188["verdict"] != "hetesre kapust cserélnek":
+                continue
+            add(side, "kapus", "Hetes-kapus rutin",
+                f"az ellenünk ítélt {rec188['sevens_against']} "
+                f"hetesből {rec188['swaps']}-nál cseréltünk kapust — "
+                "a fegyver csak akkor él, ha a beugró hidegen is "
+                "hozza a formáját, és a visszacsere nem hagy üres "
+                "kaput az újraindításnál",
+                "hetes-kapus rutin: a beugró kapus edzésen is "
+                "hidegről érkezik a hetes-sorozatokra (kerékpár vagy "
+                "várakozás után azonnal a kapuba), a csere-ütemet "
+                "pedig órával gyakoroljuk — beállás, védés, "
+                "visszaállás úgy, hogy a gyors középkezdésnél már a "
+                "mezőnykapus áll bent")
+    except Exception:
+        pass
+
     # 187) Kilépő védő: ha előretolt emberrel védekezünk, a mögötte
     # lévő tér biztosítása a téma.
     try:

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hetesre cserélt kapus**: HOZNAK-E SPECIALISTÁT a büntetőkre. A
+  kapus-csere hatása az általános váltást méri — ez a célzottat: az
+  ellenük megítélt heteseknél megnézzük, hogy a védő kapus szolgálata
+  épp a hetes előtt (45 mp-en belül) kezdődött-e (2+ célzott csere az
+  ítélethez). A specialista ellen a hetes-lövő a BEUGRÓ kapus
+  szokásaira készüljön, és várja ki a lövést; a saját csapatban a
+  beugró hideg-rutinja és a visszacsere üteme az edzés-téma. Egy
+  réteg, sok felület: `seven_keeper_swaps` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (hetes- és
+  csere-darabszámok, edzői kulcs + csempe), 167. meccsterv-szabály
+  (az ő hetes-kapuscseréjük × a ti kiharcolt heteseitek), 188.
+  edzés-szabály (hetes-kapus rutin: hidegről érkező beugró, órával
+  gyakorolt csere-ütem).
+
 - **Kilépő védő**: VAN-E ELŐRETOLT EMBERÜK a falban, és ki az. A
   vonal-magasság a fal átlagos helyét adja — ez a fal alakját:
   felállt védekezésben játékosonként mérjük a saját kaputól vett

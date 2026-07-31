@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Hetesre cserélt kapus: hoznak-e specialistát a büntetőkre.
+    try:
+        from .goalkeeper import seven_keeper_swaps
+        svk = seven_keeper_swaps(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svk = svk[side]
+            if rec_svk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_svk['verdict']}: az ellenük "
+                     f"ítélt {rec_svk['sevens_against']} hetesből "
+                     f"{rec_svk['swaps']}-t frissen beállt kapus "
+                     "várt.")
+    except Exception:
+        pass
     # Kilépő védő: van-e előretolt ember a falban.
     try:
         from .defense import advanced_defender

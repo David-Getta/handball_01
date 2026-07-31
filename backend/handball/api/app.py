@@ -3225,6 +3225,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import seven_keeper_swaps
+            res["seven_keeper_swaps"] = seven_keeper_swaps(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -3995,6 +4000,9 @@ def create_app():
                 from ..pipeline.defense import advanced_defender
                 _layer("advanced_defender",
                        lambda: advanced_defender(match))
+                from ..pipeline.goalkeeper import seven_keeper_swaps
+                _layer("seven_keeper_swaps",
+                       lambda: seven_keeper_swaps(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

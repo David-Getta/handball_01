@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Hetesre cserélt kapusuk: az ellenük ítélt hetesek és ebből a
+    # frissen beállt kapusra jutók száma — darabszámok, meccsek közt
+    # pontosan összegződnek.
+    svk_sevens: int = 0
+    svk_swaps: int = 0
     # Kilépő védőjük: védőnként a felállt védekezésben mért kockák és
     # a kaputávolság-összeg [{"player_id", "jersey", "frames",
     # "depth_sum_m"}] — darabszám/összeg, meccsek közt pontosan
@@ -1990,6 +1995,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Hetesre cserélt kapus: kire készüljön a hetes-lövőnk.
+    if rep.svk_swaps >= 2:
+        keys.append(
+            f"Hetesre kapust cserélnek (az ellenük ítélt "
+            f"{rep.svk_sevens} hetesből {rep.svk_swaps}-t frissen "
+            "beállt kapus várt) — a hetes-lövőtök a BEUGRÓ kapus "
+            "szokásaira készüljön, ne a kezdőére, és a lövést ki "
+            "lehet várni: hadd álljon vissza előbb a specialista.")
 
     # Kilépő védő: hol nyílik a tér a faluk mögött.
     _adv_rows = [r for r in (rep.adv_players or [])
@@ -5243,6 +5257,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .goalkeeper import seven_keeper_swaps as _svk
+        svkrec = _svk(match, config)[team.value]
+        rep.svk_sevens = svkrec["sevens_against"]
+        rep.svk_swaps = svkrec["swaps"]
         from .defense import advanced_defender as _adv
         advrec = _adv(match, config)[team.value]
         rep.adv_players = [
@@ -7507,6 +7525,18 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 167) Az ő hetes-kapuscseréjük × a ti biztos hetes-szerzésetek: a
+    # beugró kapusról is legyen jelentés.
+    _svk167_earned = sum((own.seven_earner_roles or {}).values())
+    if opp.svk_swaps >= 2 and _svk167_earned >= 3:
+        plan.append(
+            f"Hetesre kapust cserélnek ({opp.svk_swaps} büntetőnél "
+            f"frissen beállt kapus várt), ti pedig rendre "
+            f"kiharcoljátok a hetest ({_svk167_earned} kiharcolt "
+            "büntető) — a beugró kapusról is készüljön "
+            "irány-jelentés, és a lövő a hetes előtt lassítson: a "
+            "specialista a gyors, rutinból jövő lövést szereti.")
 
     # 166) Az ő kilépő védőjük × a ti elzárás-használatotok: az
     # elzárás a kilépőn ér a legtöbbet.
@@ -9963,6 +9993,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        svk_sevens=sum(r.svk_sevens for r in reports),
+        svk_swaps=sum(r.svk_swaps for r in reports),
         adv_players=_merge_adv_players(reports),
         rst_restarts=sum(r.rst_restarts for r in reports),
         rst_players=_merge_restart_targets(reports),

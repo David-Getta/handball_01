@@ -1318,6 +1318,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hetesre cserélt kapus: hoznak-e specialistát a büntetőkre (2+
+  // célzott csere — a backend-kulccsal azonos küszöb).
+  String? _sevenKeeperSwaps(Map<String, dynamic> r) {
+    final sevens = ((r["svk_sevens"] as num?) ?? 0).toInt();
+    final swaps = ((r["svk_swaps"] as num?) ?? 0).toInt();
+    if (swaps < 2) return null;
+    return "hetesre kapust cserélnek ($sevens büntetőből $swaps-t "
+        "frissen beállt kapus várt) · a hetes-lövő a beugró kapus "
+        "szokásaira készüljön, és várja ki a lövést";
+  }
+
   // Kilépő védő: van-e előretolt ember a falban (3+ mért védő, 2,5 m
   // előny — a backend-kulccsal azonos küszöbök).
   String? _advancedDefender(Map<String, dynamic> r) {
@@ -4500,6 +4511,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Középkezdés-átvevő", _restartTargets(r)!],
       if (_advancedDefender(r) != null)
         ["Kilépő védő", _advancedDefender(r)!],
+      if (_sevenKeeperSwaps(r) != null)
+        ["Hetes-kapuscsere", _sevenKeeperSwaps(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

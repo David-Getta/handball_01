@@ -1316,3 +1316,70 @@ def test_keeper_involvement_needs_enough_attacks():
     rec = keeper_involvement(_keeper_involvement_match(
         [True, False]))["home"]
     assert rec["share_pct"] is None and rec["verdict"] is None
+
+
+# ---- Hetesre cserélt kapus (specialista a büntetőkre) ----------------------
+
+from handball.models.tracking import Ball
+
+
+def _svk_pl(tid, team, x, y, role=None):
+    return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0,
+                          role=role)
+
+
+def _svk_match(swap, sevens=2, fps=25.0):
+    """Vendég kapus véd a +x kapunál; hazai hetesek. Ha swap igaz, a
+    hetes előtt pár másodperccel a 291-es (beugró) kapus áll be."""
+    frames = []
+    t = 0
+
+    def _block(seconds, keeper_tid, seven=False):
+        nonlocal t
+        n = int(seconds * fps)
+        for i in range(n):
+            ball_x, ball_y = (33.0, 10.0) if (seven and i < 30) else (20.0, 6.0)
+            frames.append(Frame(t=t, players=[
+                _svk_pl(keeper_tid, Team.AWAY, 39.5, 10.0, role="kapus"),
+                _svk_pl(1, Team.HOME, 25.0, 10.0)],
+                ball=Ball(x=ball_x, y=ball_y, confidence=1.0)))
+            t += 1
+
+    for _ in range(sevens):
+        _block(50.0, 290)                     # alap-kapus
+        if swap:
+            _block(5.0, 291)                  # beugró érkezik
+            _block(15.0, 291, seven=True)     # hetes a beugróra
+            _block(15.0, 291)
+        else:
+            _block(35.0, 290, seven=True)     # hetes az alap-kapusra
+    _block(30.0, 290)
+    return _match(frames, fps)
+
+
+def test_seven_keeper_swaps_flags_the_specialist():
+    """Két hetes, mindkettő frissen beállt kapusra → hetesre kapust
+    cserélnek."""
+    from handball.pipeline.goalkeeper import seven_keeper_swaps
+
+    rec = seven_keeper_swaps(_svk_match(swap=True))["away"]
+    assert rec["sevens_against"] == 2 and rec["swaps"] == 2
+    assert rec["verdict"] == "hetesre kapust cserélnek"
+
+
+def test_seven_keeper_swaps_no_swap_no_verdict():
+    """Ha a kezdő kapus védi a heteseket, nincs jelzés."""
+    from handball.pipeline.goalkeeper import seven_keeper_swaps
+
+    rec = seven_keeper_swaps(_svk_match(swap=False))["away"]
+    assert rec["sevens_against"] == 2 and rec["swaps"] == 0
+    assert rec["verdict"] is None
+
+
+def test_seven_keeper_swaps_needs_two_swaps():
+    """Egyetlen célzott cserénél még nincs ítélet."""
+    from handball.pipeline.goalkeeper import seven_keeper_swaps
+
+    rec = seven_keeper_swaps(_svk_match(swap=True, sevens=1))["away"]
+    assert rec["swaps"] == 1 and rec["verdict"] is None

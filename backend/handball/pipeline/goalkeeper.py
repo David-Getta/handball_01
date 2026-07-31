@@ -1536,3 +1536,57 @@ def keeper_involvement(match: Match, config=None) -> dict:
             elif share <= KIV_LOW_PCT:
                 rec["verdict"] = "nem játszanak vissza"
     return out
+
+
+# Hetesre cserélt kapus: a hetes előtt legfeljebb ennyivel kezdődő
+# kapus-szolgálat számít célzott cserének, és ennyi ilyen csere kell az
+# ítélethez.
+SVK_WINDOW_S = 45.0
+SVK_MIN_SWAPS = 2
+
+
+def seven_keeper_swaps(match: Match, config=None) -> dict:
+    """Hetesre cserélt kapus: HOZNAK-E SPECIALISTÁT a büntetőkre.
+
+    A kapus-csere hatása (gk_change_effect) az általános váltást méri
+    — ez a célzottat: az ellenük megítélt heteseknél megnézzük, hogy a
+    védő kapus szolgálata épp a hetes előtt (SVK_WINDOW_S-en belül)
+    kezdődött-e, vagyis a büntetőre külön kapust küldtek-e be.
+
+    Edzőileg: a hetes-specialista kapus ellen a lövőnek az Ő
+    statisztikáját kell fejben tartania, nem a kezdő kapusét — a
+    kapus-jelentés a beugró emberről is készüljön el; a saját
+    csapatban pedig, ha az ellenfél így cserél, a hetest érdemes
+    kivárni, amíg a specialista visszaáll.
+
+    Visszatérés csapatonként (a hetest VÉDŐ oldal): {"sevens_against",
+    "swaps", "verdict"} — a verdict "hetesre kapust cserélnek", ha
+    legalább SVK_MIN_SWAPS célzott csere volt, különben None.
+    """
+    from .rules import detect_seven_meters
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    tl = goalkeeper_timeline(match, config)
+    out = {side: {"sevens_against": 0, "swaps": 0, "verdict": None}
+           for side in ("home", "away")}
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+
+    for ev in detect_seven_meters(match, config):
+        conceder = "away" if ev["team"] == "home" else "home"
+        rec = out[conceder]
+        rec["sevens_against"] += 1
+        t_s = ev["t"] / fps
+        stints = tl.get(conceder, {}).get("stints", [])
+        for k, st in enumerate(stints):
+            if st["from_s"] <= t_s <= st["to_s"]:
+                # Célzott csere: nem az első szolgálat, és épp a
+                # hetes előtt állt be.
+                if k > 0 and t_s - st["from_s"] <= SVK_WINDOW_S:
+                    rec["swaps"] += 1
+                break
+
+    for side in ("home", "away"):
+        if out[side]["swaps"] >= SVK_MIN_SWAPS:
+            out[side]["verdict"] = "hetesre kapust cserélnek"
+    return out
