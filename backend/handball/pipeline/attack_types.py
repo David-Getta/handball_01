@@ -3234,3 +3234,82 @@ def pullback_rate(match: Match,
             elif pct <= PB_DIRECT_PCT:
                 rec["verdict"] = "az első betörésből lezárnak"
     return out
+
+
+# Szorult játék: állapotonként ennyi mérhető kocka kell az átlaghoz, és
+# ekkora szélesség-különbség jelenti a hátrányban beszűkülő, illetve
+# kinyíló támadást.
+WBS_MIN_FRAMES = 100
+WBS_GAP_M = 2.0
+
+
+def width_by_score(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Szorult játék: HÁTRÁNYBAN mennyire húzzák szét a pályát.
+
+    A támadás-szélesség (attack_width) a teljes meccs átlagát adja —
+    ez állás szerint bontja: külön mérjük a támadók oldalirányú
+    terjedelmét, amikor a csapat hátrányban van, és amikor nem. A
+    szorult helyzet megmutatja a csapat reflexét: van, aki hátrányban
+    egy csatornába szűkül (erőltetett egyéni megoldások), és van, aki
+    pont ilyenkor nyitja szélesre a játékot.
+
+    Edzőileg: a hátrányban beszűkülő csapat ellen vezetésnél
+    tömöríteni kell a falat — a szélsőik kikapcsolódnak maguktól; a
+    hátrányban kinyíló ellen vezetésnél éppen a szélső-védelem és a
+    kifutás dönt, mert onnan jön a visszakapaszkodásuk.
+
+    Visszatérés csapatonként: {"trail_frames", "trail_avg_m",
+    "other_frames", "other_avg_m", "verdict"} — az átlagok None
+    WBS_MIN_FRAMES alatt; a verdict "hátrányban beszűkülnek" /
+    "hátrányban kinyílnak" / None.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .tactics import possession_team
+
+    config = config or TacticsConfig()
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    acc = {side: {"trail": [0, 0.0], "other": [0, 0.0]}
+           for side in ("home", "away")}
+    gi = 0
+    score = {"home": 0, "away": 0}
+    for fr in match.frames:
+        while gi < len(goals) and goals[gi][0] <= fr.t:
+            score[goals[gi][1]] += 1
+            gi += 1
+        poss = possession_team(fr, config)
+        if poss is None:
+            continue
+        goal_x = config.attacks_toward_x(poss)
+        ys = [p.y for p in fr.players
+              if p.team == poss and p.role != "kapus"
+              and abs(p.x - goal_x) <= 15.0]
+        if len(ys) < 3:
+            continue
+        side = poss.value
+        other = "away" if side == "home" else "home"
+        bucket = "trail" if score[side] < score[other] else "other"
+        rec = acc[side][bucket]
+        rec[0] += 1
+        rec[1] += max(ys) - min(ys)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        t_n, t_sum = acc[side]["trail"]
+        o_n, o_sum = acc[side]["other"]
+        rec = {"trail_frames": t_n, "trail_avg_m": None,
+               "other_frames": o_n, "other_avg_m": None,
+               "verdict": None}
+        if t_n >= WBS_MIN_FRAMES and o_n >= WBS_MIN_FRAMES:
+            t_avg, o_avg = t_sum / t_n, o_sum / o_n
+            rec["trail_avg_m"] = round(t_avg, 1)
+            rec["other_avg_m"] = round(o_avg, 1)
+            if o_avg - t_avg >= WBS_GAP_M:
+                rec["verdict"] = "hátrányban beszűkülnek"
+            elif t_avg - o_avg >= WBS_GAP_M:
+                rec["verdict"] = "hátrányban kinyílnak"
+        out[side] = rec
+    return out

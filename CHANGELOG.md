@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Szorult játék**: HÁTRÁNYBAN mennyire húzzák szét a pályát. A
+  támadás-szélesség a teljes meccs átlagát adja — ez állás szerint
+  bontja: külön mérjük a támadók oldalirányú terjedelmét hátrányban
+  és egyébként (állapotonként 100+ kocka, 2 m különbség az
+  ítélethez). A hátrányban beszűkülő csapat ellen vezetésnél
+  tömöríteni kell a falat — a szélsőik maguktól kikapcsolódnak; a
+  kinyíló ellen a szélső-védelem és a kifutás dönt. Egy réteg, sok
+  felület: `width_by_score` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (állapotonkénti kocka- és
+  szélesség-összegek, két edzői kulcs + csempe), 173.
+  meccsterv-szabály (az ő beszűkülő támadásuk × a ti blokkjaitok),
+  194. edzés-szabály (szélesség nyomás alatt: hátrányból induló
+  meccs, kötelező kétszélsős támadás).
+
 - **Visszaállás**: MI TÖRTÉNIK, AMIKOR VISSZAÉR a kiállított ember.
   Az emberelőny-hatékonyság a kiállítás alatti játékot méri — ez az
   utánit: a kiállítás letelte utáni perc gólmérlege a visszaálló

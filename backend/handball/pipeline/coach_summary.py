@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Szorult játék: hátrányban mennyire húzzák szét a pályát.
+    try:
+        from .attack_types import width_by_score
+        wbs = width_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wbs = wbs[side]
+            if rec_wbs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_wbs['verdict']}: a támadásuk "
+                     f"terjedelme {rec_wbs['other_avg_m']:.0f} m-ről "
+                     f"{rec_wbs['trail_avg_m']:.0f} m-re változott "
+                     "hátrányban.")
+    except Exception:
+        pass
     # Visszaállás: mi történik a kiállítás letelte után.
     try:
         from .rules import post_powerplay

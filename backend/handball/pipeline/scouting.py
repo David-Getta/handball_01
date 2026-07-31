@@ -609,6 +609,13 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Szorult játékuk: hátrányban és egyébként mért támadó-kockák és
+    # szélesség-összegek — darabszám/összeg, meccsek közt pontosan
+    # összegződnek (átlag = wbs_*_sum_m / wbs_*_frames).
+    wbs_trail_frames: int = 0
+    wbs_trail_sum_m: float = 0.0
+    wbs_other_frames: int = 0
+    wbs_other_sum_m: float = 0.0
     # Visszaállásuk: a mért kiállítás-lejáratok és az utánuk lévő perc
     # gólmérlege — darabszámok, meccsek közt pontosan összegződnek.
     ppp_returns: int = 0
@@ -2019,6 +2026,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Szorult játék: mi történik velük, ha vezettek ellenük.
+    if rep.wbs_trail_frames >= 100 and rep.wbs_other_frames >= 100:
+        _wbs_t = rep.wbs_trail_sum_m / rep.wbs_trail_frames
+        _wbs_o = rep.wbs_other_sum_m / rep.wbs_other_frames
+        if _wbs_o - _wbs_t >= 2.0:
+            keys.append(
+                f"Hátrányban beszűkül a támadásuk ({_wbs_o:.0f} m-ről "
+                f"{_wbs_t:.0f} m-re esik a terjedelme) — ha vezettek, "
+                "tömörítsétek a falat: a szélsőik maguktól "
+                "kikapcsolódnak, és az erőltetett középső megoldásaik "
+                "a blokkotokba futnak.")
+        elif _wbs_t - _wbs_o >= 2.0:
+            keys.append(
+                f"Hátrányban kinyílik a támadásuk ({_wbs_o:.0f} m-ről "
+                f"{_wbs_t:.0f} m-re nő a terjedelme) — ha vezettek, a "
+                "szélső-védelem és a kifutás dönt: a "
+                "visszakapaszkodásuk a szélekről jön.")
 
     # Visszaállás: mit kezdjünk a kiállításaik leteltével.
     if rep.ppp_returns >= 2:
@@ -5362,6 +5387,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import width_by_score as _wbs
+        wbsrec = _wbs(match, config)[team.value]
+        rep.wbs_trail_frames = wbsrec["trail_frames"]
+        rep.wbs_trail_sum_m = ((wbsrec["trail_avg_m"] or 0.0)
+                               * wbsrec["trail_frames"])
+        rep.wbs_other_frames = wbsrec["other_frames"]
+        rep.wbs_other_sum_m = ((wbsrec["other_avg_m"] or 0.0)
+                               * wbsrec["other_frames"])
         from .rules import post_powerplay as _ppp
         ppprec = _ppp(match, config)[team.value]
         rep.ppp_returns = ppprec["returns"]
@@ -7651,6 +7684,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 173) Az ő hátrányban beszűkülő támadásuk × a ti blokkjaitok: ha
+    # vezettek, a közép bebetonozása mindent visz.
+    if (opp.wbs_trail_frames >= 100 and opp.wbs_other_frames >= 100
+            and own.blk_attempts >= 4):
+        _wbs173_t = opp.wbs_trail_sum_m / opp.wbs_trail_frames
+        _wbs173_o = opp.wbs_other_sum_m / opp.wbs_other_frames
+        _blk173 = 100.0 * own.blk_for / max(1, own.blk_attempts)
+        if _wbs173_o - _wbs173_t >= 2.0 and _blk173 >= 20.0:
+            plan.append(
+                f"Hátrányban beszűkül a támadásuk ({_wbs173_o:.0f} "
+                f"m-ről {_wbs173_t:.0f} m-re), a ti blokkotok pedig "
+                f"él (a kísérleteitek {_blk173:.0f}%-a fog) — ha "
+                "vezettek, betonozzátok be a közepet: a szélsőiket "
+                "hagyhatjátok, az erőltetett átlövéseik a kinyújtott "
+                "kezekbe futnak.")
 
     # 172) Az ő zavaros visszaállásuk × a ti figura-kincsetek: a
     # lejáró kiállításra időzített, előre lebeszélt támadás.
@@ -10250,6 +10299,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        wbs_trail_frames=sum(r.wbs_trail_frames for r in reports),
+        wbs_trail_sum_m=sum(r.wbs_trail_sum_m for r in reports),
+        wbs_other_frames=sum(r.wbs_other_frames for r in reports),
+        wbs_other_sum_m=sum(r.wbs_other_sum_m for r in reports),
         ppp_returns=sum(r.ppp_returns for r in reports),
         ppp_for=sum(r.ppp_for for r in reports),
         ppp_against=sum(r.ppp_against for r in reports),

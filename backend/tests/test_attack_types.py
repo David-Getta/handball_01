@@ -2323,3 +2323,61 @@ def test_pullback_rate_needs_enough_entries():
     rec = pullback_rate(_pullback_match(["pull"] * 3))["home"]
     assert rec["entries"] == 3 and rec["pull_pct"] is None
     assert rec["verdict"] is None
+
+
+# ---- Szorult játék (hátrányban mennyire húzzák szét a pályát) --------------
+
+def _wbs_attack(t0, width, n=150):
+    """Hazai támadás-szakasz a +x térfélen, adott terjedelemmel."""
+    frames = []
+    half = width / 2.0
+    for i in range(n):
+        players = [
+            _pl(1, Team.HOME, 30.0, 10.0),
+            _pl(2, Team.HOME, 32.0, 10.0 - half),
+            _pl(3, Team.HOME, 32.0, 10.0 + half),
+            _pl(21, Team.AWAY, 38.0, 10.0),
+        ]
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+    return frames
+
+
+def _wbs_match(width_even, width_trail, fps=25.0):
+    """Egál-állásban width_even, aztán kapott gól utáni hátrányban
+    width_trail terjedelmű hazai támadások."""
+    frames = _wbs_attack(0, width_even)
+    t = len(frames)
+    for i in range(8):        # vendég gól a 0-s kapuba → hazai hátrány
+        frames.append(Frame(
+            t=t, players=[_pl(21, Team.AWAY, 7.0, 10.0)],
+            ball=Ball(x=max(6.0 - i, 0.0), y=10.0, confidence=1.0)))
+        t += 1
+    frames += _wbs_attack(t, width_trail)
+    return Match(_meta(fps), frames)
+
+
+def test_width_by_score_flags_the_narrowing_team():
+    """Egálban 16, hátrányban 8 m széles támadás → hátrányban
+    beszűkülnek."""
+    from handball.pipeline.attack_types import width_by_score
+
+    rec = width_by_score(_wbs_match(16.0, 8.0))["home"]
+    assert rec["other_avg_m"] == 16.0 and rec["trail_avg_m"] == 8.0
+    assert rec["verdict"] == "hátrányban beszűkülnek"
+
+
+def test_width_by_score_flags_the_widening_team():
+    """Fordítva (hátrányban szélesebb) → hátrányban kinyílnak."""
+    from handball.pipeline.attack_types import width_by_score
+
+    rec = width_by_score(_wbs_match(8.0, 16.0))["home"]
+    assert rec["verdict"] == "hátrányban kinyílnak"
+
+
+def test_width_by_score_needs_frames_in_both_states():
+    """Ha nincs mért hátrány-szakasz, nincs ítélet."""
+    from handball.pipeline.attack_types import width_by_score
+
+    rec = width_by_score(Match(_meta(), _wbs_attack(0, 16.0)))["home"]
+    assert rec["trail_frames"] == 0 and rec["verdict"] is None

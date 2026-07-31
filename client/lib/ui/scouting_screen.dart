@@ -1318,6 +1318,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szorult játék: hátrányban mennyire húzzák szét a pályát (100+
+  // kocka mindkét állapotban, 2 m különbség — a backend-kulccsal
+  // azonos küszöbök).
+  String? _widthByScore(Map<String, dynamic> r) {
+    final tN = ((r["wbs_trail_frames"] as num?) ?? 0).toInt();
+    final oN = ((r["wbs_other_frames"] as num?) ?? 0).toInt();
+    if (tN < 100 || oN < 100) return null;
+    final t = ((r["wbs_trail_sum_m"] as num?) ?? 0).toDouble() / tN;
+    final o = ((r["wbs_other_sum_m"] as num?) ?? 0).toDouble() / oN;
+    if (o - t >= 2.0) {
+      return "hátrányban beszűkülnek (${o.toStringAsFixed(0)} → "
+          "${t.toStringAsFixed(0)} m) · vezetésnél tömörítsétek a "
+          "falat, a szélsőik kikapcsolódnak";
+    }
+    if (t - o >= 2.0) {
+      return "hátrányban kinyílnak (${o.toStringAsFixed(0)} → "
+          "${t.toStringAsFixed(0)} m) · vezetésnél a szélső-védelem "
+          "és a kifutás dönt";
+    }
+    return null;
+  }
+
   // Visszaállás: mi történik a kiállítás letelte után (2+ mért
   // visszaállás, 2 gólos különbség — a backend-kulccsal azonos
   // küszöbök).
@@ -4637,6 +4659,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Poszt-hibák", _turnoversByRole(r)!],
       if (_postPowerplay(r) != null)
         ["Visszaállás", _postPowerplay(r)!],
+      if (_widthByScore(r) != null)
+        ["Szorult játék", _widthByScore(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

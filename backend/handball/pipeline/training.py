@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 194) Szorult játék: ha hátrányban beszűkülünk, a nyomás alatti
+    # szélesség-tartás a téma.
+    try:
+        from .attack_types import width_by_score
+        wbs194 = width_by_score(match, config)
+        for side in ("home", "away"):
+            rec194 = wbs194[side]
+            if rec194["verdict"] != "hátrányban beszűkülnek":
+                continue
+            add(side, "tamadas", "Szélesség nyomás alatt",
+                f"hátrányban {rec194['other_avg_m']:.0f} m-ről "
+                f"{rec194['trail_avg_m']:.0f} m-re szűkül a "
+                "támadásunk — pont akkor játszunk egy csatornába, "
+                "amikor a legnagyobb szükség lenne a fal "
+                "széthúzására",
+                "szélesség nyomás alatt: eredményhátrányból induló "
+                "edzésmeccs (0-2-ről), ahol gól csak akkor ér, ha a "
+                "támadásban a labda mindkét szélsőt megjárta — a "
+                "szélső-sávok elhagyása azonnali labdavesztés, és a "
+                "kispad hangosan számolja a szélesség-métert")
+    except Exception:
+        pass
+
     # 193) Visszaállás: ha a kiállításunk leteltekor megzavarodunk, a
     # visszaérkezés koreográfiája a téma.
     try:
