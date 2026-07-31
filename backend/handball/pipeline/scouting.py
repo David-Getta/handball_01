@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Szerzés utáni indításuk: a mért szerzéseik és ebből az azonnal
+    # előre vitt labdák száma — darabszámok, meccsek közt pontosan
+    # összegződnek (arány = stl_fwd / stl_steals).
+    stl_steals: int = 0
+    stl_fwd: int = 0
     # Hetes-fáradásuk: az adott heteseik száma félidőnként —
     # darabszámok, meccsek közt pontosan összegződnek.
     s7f_fh: int = 0
@@ -1965,6 +1970,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Szerzés utáni indítás: mi történik, ha eladjuk a labdát.
+    if rep.stl_steals >= 6:
+        _stl_pct = 100.0 * rep.stl_fwd / rep.stl_steals
+        if _stl_pct >= 60.0:
+            keys.append(
+                f"Szerzés után azonnal indítanak (a {rep.stl_steals} "
+                f"szerzésükből {rep.stl_fwd} után ment rögtön előre a "
+                "labda) — a labdavesztés pillanatára kész terv kell: "
+                "kijelölt fékező ember, a többiek sprintben hátra, és "
+                "senki nem áll meg reklamálni.")
+        elif _stl_pct <= 25.0:
+            keys.append(
+                f"Szerzés után biztosítanak (a {rep.stl_steals} "
+                f"szerzésükből csak {rep.stl_fwd} után ment előre a "
+                "labda) — labdavesztés után van idő rendezni a "
+                "letámadást: az első hátrapasszukra rá lehet lépni, "
+                "és a szerzett labdát nyugodtan vissza lehet nyerni.")
 
     # Hetes-fáradás: mikor jön az ajándék a testre vitt labdáért.
     if rep.s7f_fh + rep.s7f_sh >= 4:
@@ -5136,6 +5159,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .defense import steal_launch as _stl
+        stlrec = _stl(match, config)[team.value]
+        rep.stl_steals = stlrec["steals"]
+        rep.stl_fwd = stlrec["forward"]
         from .rules import sevens_fade as _s7f
         s7frec = _s7f(match, config)[team.value]
         rep.s7f_fh = s7frec["fh"]
@@ -7377,6 +7404,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 162) Az ő szerzés utáni biztosításuk × a ti visszatámadásotok:
+    # az eladott labdátok visszanyerhető, mielőtt ellenetek fordulna.
+    if opp.stl_steals >= 6 and own.cpr_turnovers >= 8:
+        _stl162 = 100.0 * opp.stl_fwd / opp.stl_steals
+        _cpr162 = 100.0 * own.cpr_regained / max(1, own.cpr_turnovers)
+        if _stl162 <= 25.0 and _cpr162 >= 30.0:
+            plan.append(
+                f"Szerzés után biztosítanak (a szerzéseik csak "
+                f"{_stl162:.0f}%-a megy azonnal előre), ti pedig jól "
+                f"támadtok vissza (az eladott labdáitok "
+                f"{_cpr162:.0f}%-át visszaszerzitek) — az eladott "
+                "labda ellenük nem tragédia: azonnali rátámadással "
+                "még a felállásuk előtt visszavehető, mert nem "
+                "menekítik előre.")
 
     # 161) Az ő fáradva adott heteseik × a ti beállós játékotok: a
     # második félidőben a testre vitt labda ingyen hetest ér.
@@ -9700,6 +9742,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        stl_steals=sum(r.stl_steals for r in reports),
+        stl_fwd=sum(r.stl_fwd for r in reports),
         s7f_fh=sum(r.s7f_fh for r in reports),
         s7f_sh=sum(r.s7f_sh for r in reports),
         wf_fh_shots=sum(r.wf_fh_shots for r in reports),

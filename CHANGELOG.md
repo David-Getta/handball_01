@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Szerzés utáni indítás**: AZONNAL ELŐRE megy-e a szerzett labda. A
+  labdaszerzők azt mondják meg, ki szerez, a labdaszerzés-típus azt,
+  hogyan — ez azt, mi történik utána: a szerzés utáni 4 másodpercben
+  legalább 6 métert halad-e előre a labda a támadási irányban (6+
+  szerzés; 60% felett azonnali, 25% alatt biztosító indítás). Az
+  azonnal induló ellen a labdavesztés pillanatára kész terv kell —
+  fékező ember, sprint hátra, semmi reklamálás; a biztosító ellen
+  labdavesztés után van idő rendezni a letámadást. Egy réteg, sok
+  felület: `steal_launch` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (szerzés- és előre-darabszámok, két
+  edzői kulcs + csempe), 162. meccsterv-szabály (az ő biztosításuk ×
+  a ti visszatámadásotok), 183. edzés-szabály (szerzésből indítás:
+  3 másodperces előre-szabály, sprintelő szélsőkkel).
+
 - **Hetes-fáradás**: MIKOR ADJÁK a heteseket. A hetes-adók azt
   mondják meg, ki ellen ítélik, a szabálytalanság-fáradás a
   kiállítások idejét — ez a hetesekét: a csapat által adott heteseket

@@ -1896,3 +1896,61 @@ def test_steal_types_needs_enough_steals():
     rec = steal_types(_steal_types_match(["int"] * 3))["away"]
     assert rec["steals"] == 3 and rec["int_pct"] is None
     assert rec["verdict"] is None
+
+
+# ---- Szerzés utáni indítás (azonnal előre megy-e a szerzett labda) ----------
+
+def _steal_launch_match(kinds, fps=25.0):
+    """Vendég szerzés-sorozat: a `kinds` elemei "fast" (a labda azonnal
+    a kapu felé indul) vagy "safe" (biztosító járatás helyben).
+    A vendég a -x kapu felé támad."""
+    frames = []
+    t = 0
+
+    def _emit(players, bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    home = lambda: _pl(1, Team.HOME, 20.0, 10.0)
+    for kind in kinds:
+        for _ in range(10):                      # hazai birtoklás
+            _emit([home(), _pl(21, Team.AWAY, 28.0, 16.0)], 20.0, 10.0)
+        if kind == "fast":                       # szerzés + azonnali indítás
+            for i in range(50):
+                x = 28.0 - 14.0 * i / 49.0
+                _emit([home(), _pl(21, Team.AWAY, x, 16.0)], x, 16.0)
+            for _ in range(50):
+                _emit([home(), _pl(21, Team.AWAY, 14.0, 16.0)], 14.0, 16.0)
+        else:                                    # szerzés + helyben járatás
+            for _ in range(100):
+                _emit([home(), _pl(21, Team.AWAY, 28.0, 16.0)], 28.0, 16.0)
+    return Match(_meta(fps), frames)
+
+
+def test_steal_launch_flags_the_instant_launchers():
+    """Hat szerzésből öt azonnali előre-indítás → szerzés után azonnal
+    indítanak."""
+    from handball.pipeline.defense import steal_launch
+
+    rec = steal_launch(_steal_launch_match(["fast"] * 5 + ["safe"]))["away"]
+    assert rec["steals"] == 6 and rec["forward"] == 5
+    assert rec["verdict"] == "szerzés után azonnal indítanak"
+
+
+def test_steal_launch_flags_the_securers():
+    """Hat szerzésből öt helyben járatás → szerzés után biztosítanak."""
+    from handball.pipeline.defense import steal_launch
+
+    rec = steal_launch(_steal_launch_match(["safe"] * 5 + ["fast"]))["away"]
+    assert rec["forward"] == 1 and rec["verdict"] == "szerzés után biztosítanak"
+
+
+def test_steal_launch_needs_enough_steals():
+    """Kevés (6-nál kevesebb) szerzésnél nincs ítélet."""
+    from handball.pipeline.defense import steal_launch
+
+    rec = steal_launch(_steal_launch_match(["fast"] * 3))["away"]
+    assert rec["steals"] == 3 and rec["fwd_pct"] is None
+    assert rec["verdict"] is None

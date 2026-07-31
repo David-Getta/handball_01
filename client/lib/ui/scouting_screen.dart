@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szerzés utáni indítás: azonnal előre megy-e a szerzett labda (6+
+  // szerzés; 60% felett azonnali, 25% alatt biztosító — a
+  // backend-kulccsal azonos küszöbök).
+  String? _stealLaunch(Map<String, dynamic> r) {
+    final steals = ((r["stl_steals"] as num?) ?? 0).toInt();
+    final fwd = ((r["stl_fwd"] as num?) ?? 0).toInt();
+    if (steals < 6) return null;
+    final pct = 100.0 * fwd / steals;
+    if (pct >= 60.0) {
+      return "szerzés után azonnal indítanak ($steals szerzésből "
+          "$fwd megy rögtön előre) · labdavesztéskor kész terv kell: "
+          "fékező ember, sprint hátra, semmi reklamálás";
+    }
+    if (pct <= 25.0) {
+      return "szerzés után biztosítanak ($steals szerzésből csak "
+          "$fwd megy előre) · labdavesztés után van idő rendezni a "
+          "letámadást";
+    }
+    return null;
+  }
+
   // Hetes-fáradás: mikor adják a heteseket (4+ adott hetes, 2-es
   // félidők közti többlet — a backend-kulccsal azonos küszöbök).
   String? _sevensFade(Map<String, dynamic> r) {
@@ -4364,6 +4385,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fal-fáradás", _wallFade(r)!],
       if (_sevensFade(r) != null)
         ["Hetes-fáradás", _sevensFade(r)!],
+      if (_stealLaunch(r) != null)
+        ["Szerzés utáni indítás", _stealLaunch(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

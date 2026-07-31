@@ -2681,3 +2681,80 @@ def steal_types(match, config=None) -> dict:
             elif pct <= STT_TACKLE_PCT:
                 rec["verdict"] = "testre mennek"
     return out
+
+
+# Szerzés utáni indítás: ekkora ablakban nézzük a labda útját a szerzés
+# után, legalább ennyi métert kell előre haladnia az "előre indítás"
+# ítélethez, ennyi mért szerzés kell, és e feletti / alatti arány az
+# azonnal induló, illetve a biztosító csapat jele.
+STL_WINDOW_S = 4.0
+STL_FWD_M = 6.0
+STL_MIN_STEALS = 6
+STL_FAST_PCT = 60.0
+STL_SAFE_PCT = 25.0
+
+
+def steal_launch(match, config=None) -> dict:
+    """Szerzés utáni indítás: AZONNAL ELŐRE megy-e a szerzett labda.
+
+    A labdaszerzők (ball_winners) azt mondják meg, ki szerez, a
+    labdaszerzés-típus (steal_types) azt, hogyan — ez azt, MI TÖRTÉNIK
+    UTÁNA: a szerzés utáni STL_WINDOW_S másodpercben legalább
+    STL_FWD_M métert halad-e előre a labda a támadási irányban.
+
+    Edzőileg: az azonnal induló csapat ellen a labdavesztés
+    pillanatában kész tervnek kell lennie — kijelölt fékező ember, a
+    többiek sprintben hátra, és senki nem reklamál a bírónál; a
+    biztosító csapat ellen a labdavesztés után van idő rendezni a
+    letámadást, az első hátrapasszukra rá lehet lépni.
+
+    Visszatérés csapatonként (a SZERZŐ oldal): {"steals", "forward",
+    "fwd_pct", "verdict"} — az fwd_pct/verdict None STL_MIN_STEALS
+    alatt; a verdict "szerzés után azonnal indítanak" / "szerzés után
+    biztosítanak" / None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(STL_WINDOW_S * fps)
+    frames = match.frames
+
+    out = {side: {"steals": 0, "forward": 0, "fwd_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    prev = None
+    for i, f in enumerate(frames):
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        if (prev is not None and holder.team != prev.team
+                and holder.role != "kapus"):
+            goal_x = config.attacks_toward_x(holder.team)
+            start_d = abs((f.ball.x if f.ball else holder.x) - goal_x)
+            best = 0.0
+            for j in range(i + 1, min(len(frames), i + 1 + win)):
+                b = frames[j].ball
+                if b is None:
+                    continue
+                # Ha közben elveszik a labda, az ablak lezárul.
+                h2 = ball_holder(frames[j], config)
+                if h2 is not None and h2.team != holder.team:
+                    break
+                best = max(best, start_d - abs(b.x - goal_x))
+            rec = out[holder.team.value]
+            rec["steals"] += 1
+            if best >= STL_FWD_M:
+                rec["forward"] += 1
+        prev = holder
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["steals"] >= STL_MIN_STEALS:
+            pct = 100.0 * rec["forward"] / rec["steals"]
+            rec["fwd_pct"] = round(pct, 1)
+            if pct >= STL_FAST_PCT:
+                rec["verdict"] = "szerzés után azonnal indítanak"
+            elif pct <= STL_SAFE_PCT:
+                rec["verdict"] = "szerzés után biztosítanak"
+    return out

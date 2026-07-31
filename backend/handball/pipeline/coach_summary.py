@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Szerzés utáni indítás: azonnal előre megy-e a szerzett labda.
+    try:
+        from .defense import steal_launch
+        stl = steal_launch(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_stl = stl[side]
+            if rec_stl["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_stl['verdict']}: "
+                     f"{rec_stl['steals']} szerzésükből "
+                     f"{rec_stl['forward']} után ment azonnal előre a "
+                     "labda.")
+    except Exception:
+        pass
     # Hetes-fáradás: mikor adják a heteseket.
     try:
         from .rules import sevens_fade

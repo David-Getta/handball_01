@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 183) Szerzés utáni indítás: ha a szerzett labda helyben ragad, az
+    # átmenet-gyorsaság a téma.
+    try:
+        from .defense import steal_launch
+        stl183 = steal_launch(match, config)
+        for side in ("home", "away"):
+            rec183 = stl183[side]
+            if rec183["verdict"] != "szerzés után biztosítanak":
+                continue
+            add(side, "tamadas", "Szerzésből indítás",
+                f"a {rec183['steals']} szerzésünkből csak "
+                f"{rec183['forward']} után ment azonnal előre a labda "
+                "— a megszerzett labda helyben ragad, mire felnézünk, "
+                "az ellenfél visszaér, és kezdődik az állóháború",
+                "szerzésből indítás: labdaszerzés-játék, ahol a "
+                "szerzés utáni 3 másodpercben kötelező az előre "
+                "passz vagy a labdavezetés a felezőn túlra — ha nem "
+                "sikerül, a labda visszajár; a szerző NEM passzolhat "
+                "hátra, és a két szélső a szerzés pillanatában "
+                "sprintet indít, hogy legyen kinek előre adni")
+    except Exception:
+        pass
+
     # 182) Hetes-fáradás: ha fáradtan adjuk a heteseket, a kéz nélküli
     # test-védekezés a téma.
     try:
