@@ -1318,6 +1318,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Visszaállás: mi történik a kiállítás letelte után (2+ mért
+  // visszaállás, 2 gólos különbség — a backend-kulccsal azonos
+  // küszöbök).
+  String? _postPowerplay(Map<String, dynamic> r) {
+    final returns = ((r["ppp_returns"] as num?) ?? 0).toInt();
+    final gf = ((r["ppp_for"] as num?) ?? 0).toInt();
+    final ga = ((r["ppp_against"] as num?) ?? 0).toInt();
+    if (returns < 2) return null;
+    if (gf - ga <= -2) {
+      return "a visszaállásnál megzavarodnak (a kiállítás utáni perc "
+          "mérlege $gf-$ga) · a lejáró kiállításuk a ti "
+          "támadás-jelzésetek";
+    }
+    if (gf - ga >= 2) {
+      return "a visszaálló emberrel feltámadnak ($gf-$ga) · a "
+          "visszaérés utáni első támadásukat kell megfogni";
+    }
+    return null;
+  }
+
   // Poszt-hibák: melyik poszt veszíti el a labdát (6+ eladás, 40%
   // részarány, holtverseny nélkül — a backend-kulccsal azonos
   // küszöbök).
@@ -4615,6 +4635,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Futás-mérleg", _distanceBattle(r)!],
       if (_turnoversByRole(r) != null)
         ["Poszt-hibák", _turnoversByRole(r)!],
+      if (_postPowerplay(r) != null)
+        ["Visszaállás", _postPowerplay(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

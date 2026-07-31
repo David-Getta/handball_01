@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Visszaállás**: MI TÖRTÉNIK, AMIKOR VISSZAÉR a kiállított ember.
+  Az emberelőny-hatékonyság a kiállítás alatti játékot méri — ez az
+  utánit: a kiállítás letelte utáni perc gólmérlege a visszaálló
+  csapat szemszögéből (2+ mért visszaállás, 2 gólos különbség az
+  ítélethez). Aki a visszaállásnál megzavarodik, annál a lejáró
+  kiállítás az ellenfél támadás-jelzése; aki feltámad, annál a
+  visszaérés utáni első támadást kell megfogni. Egy réteg, sok
+  felület: `post_powerplay` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (visszaállás- és gól-darabszámok,
+  két edzői kulcs + csempe), 172. meccsterv-szabály (az ő zavaros
+  visszaállásuk × a ti figura-kincsetek), 193. edzés-szabály
+  (visszaállás-rend: koreografált visszaérkezés, biztonsági első
+  labda).
+
 - **Poszt-hibák**: MELYIK POSZTJUK veszíti el a labdát. A labdaeladók
   a hibázó embert nevezik meg, a hiba-zónák a helyet — ez a posztot:
   a labdaeladásokat a vesztes becsült posztjához kötjük (6+ eladás,

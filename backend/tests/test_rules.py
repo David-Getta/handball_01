@@ -1044,3 +1044,68 @@ def test_sevens_fade_needs_enough_sevens():
 
     rec = sevens_fade(_sevens_fade_match(1, 2))["away"]
     assert rec["fh"] + rec["sh"] == 3 and rec["verdict"] is None
+
+
+# ---- Visszaállás (mi történik a kiállítás letelte után) ---------------------
+
+def _post_pp_match(scorer_side, cycles=2, fps=25.0):
+    """Hazai emberhátrány-szakaszok; a visszaállás után a
+    `scorer_side` csapata szerez gólt."""
+    frames = []
+    t = 0
+
+    def _add(block):
+        nonlocal t
+        for f in block:
+            frames.append(Frame(t=t, players=f.players, ball=f.ball))
+            t += 1
+
+    def _goal(side):
+        nonlocal t
+        for i in range(8):
+            if side == "home":     # hazai gól a +x kapuba
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                              confidence=1.0)))
+            else:                  # vendég gól a 0-s kapuba
+                frames.append(Frame(t=t, players=[
+                    _pl(21, Team.AWAY, 7.0, 10.0)],
+                    ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                              confidence=1.0)))
+            t += 1
+
+    for _ in range(cycles):
+        _add(_roster_frames(0, 30, 6, 6, fps))    # normál létszám
+        _add(_roster_frames(0, 60, 5, 6, fps))    # hazai emberhátrány
+        _add(_roster_frames(0, 10, 6, 6, fps))    # visszaállás
+        _goal(scorer_side)                        # gól az ablakban
+        _add(_roster_frames(0, 30, 6, 6, fps))
+    return Match(_meta(), frames)
+
+
+def test_post_powerplay_flags_the_shaky_return():
+    """Két visszaállás után is az ellenfél talál be → a visszaállásnál
+    megzavarodnak."""
+    from handball.pipeline.rules import post_powerplay
+
+    rec = post_powerplay(_post_pp_match("away"))["home"]
+    assert rec["returns"] == 2 and rec["goals_against"] == 2
+    assert rec["verdict"] == "a visszaállásnál megzavarodnak"
+
+
+def test_post_powerplay_flags_the_surging_return():
+    """Ha a visszaálló csapat talál be kétszer, feltámadnak."""
+    from handball.pipeline.rules import post_powerplay
+
+    rec = post_powerplay(_post_pp_match("home"))["home"]
+    assert rec["goals_for"] == 2
+    assert rec["verdict"] == "a visszaálló emberrel feltámadnak"
+
+
+def test_post_powerplay_needs_enough_returns():
+    """Egyetlen mért visszaállásnál nincs ítélet."""
+    from handball.pipeline.rules import post_powerplay
+
+    rec = post_powerplay(_post_pp_match("away", cycles=1))["home"]
+    assert rec["returns"] == 1 and rec["verdict"] is None

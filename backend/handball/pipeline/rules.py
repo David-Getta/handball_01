@@ -1273,3 +1273,67 @@ def sevens_fade(match: Match,
             elif rec["fh"] - rec["sh"] >= S7F_GAP:
                 rec["verdict"] = "az elején adják a heteseket"
     return out
+
+
+# Visszaállás-ablak: ennyi másodpercet nézünk a kiállítás letelte után,
+# ennyi mért visszaállás kell az ítélethez, és ekkora gólkülönbség
+# jelenti a megzavarodó, illetve a feltámadó visszaállást.
+PPP_WINDOW_S = 60.0
+PPP_MIN_RETURNS = 2
+PPP_DIFF = 2
+
+
+def post_powerplay(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Visszaállás: MI TÖRTÉNIK, AMIKOR VISSZAÉR a kiállított ember.
+
+    Az emberelőny-hatékonyság a kiállítás ALATTI játékot méri — ez az
+    UTÁNIT: a kiállítás letelte utáni PPP_WINDOW_S másodperc
+    gólmérlegét a visszaálló (addig emberhátrányos) csapat
+    szemszögéből. A visszaérő ember hidegen jön, a felállás egy
+    percig rendezetlen — van, aki ilyenkor esik szét, és van, aki
+    pont ilyenkor lendül meg.
+
+    Edzőileg: aki a visszaállásnál megzavarodik, annál a kiállítás
+    végére időzített figyelem kell — a lejáró kiállítás a ti
+    támadás-jelzésetek; aki feltámad, annál a visszaérés utáni első
+    támadást kell mindenáron megfogni, mert lendületet vesznek
+    belőle.
+
+    Visszatérés csapatonként (a VISSZAÁLLÓ oldal): {"returns",
+    "goals_for", "goals_against", "verdict"} — a verdict None
+    PPP_MIN_RETURNS alatt; a verdict "a visszaállásnál megzavarodnak"
+    / "a visszaálló emberrel feltámadnak" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(PPP_WINDOW_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out = {side: {"returns": 0, "goals_for": 0, "goals_against": 0,
+                  "verdict": None} for side in ("home", "away")}
+    for w in detect_powerplay(match):
+        side = w["team_down"]
+        rec = out[side]
+        rec["returns"] += 1
+        t0 = w["end_frame"]
+        for (t, tm) in goals:
+            if t0 < t <= t0 + win:
+                if tm == side:
+                    rec["goals_for"] += 1
+                else:
+                    rec["goals_against"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["returns"] >= PPP_MIN_RETURNS:
+            diff = rec["goals_for"] - rec["goals_against"]
+            if diff <= -PPP_DIFF:
+                rec["verdict"] = "a visszaállásnál megzavarodnak"
+            elif diff >= PPP_DIFF:
+                rec["verdict"] = "a visszaálló emberrel feltámadnak"
+    return out

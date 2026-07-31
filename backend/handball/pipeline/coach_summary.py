@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Visszaállás: mi történik a kiállítás letelte után.
+    try:
+        from .rules import post_powerplay
+        ppp = post_powerplay(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppp = ppp[side]
+            if rec_ppp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_ppp['verdict']}: a "
+                     "kiállítás letelte utáni perc mérlege "
+                     f"{rec_ppp['goals_for']}-"
+                     f"{rec_ppp['goals_against']}.")
+    except Exception:
+        pass
     # Poszt-hibák: melyik poszt veszíti el a labdát.
     try:
         from .roles import turnovers_by_role

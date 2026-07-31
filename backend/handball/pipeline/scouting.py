@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Visszaállásuk: a mért kiállítás-lejáratok és az utánuk lévő perc
+    # gólmérlege — darabszámok, meccsek közt pontosan összegződnek.
+    ppp_returns: int = 0
+    ppp_for: int = 0
+    ppp_against: int = 0
     # Poszt-hibáik: labdaeladásaik poszt szerinti darabszámai
     # ({poszt: eladások}) — darabszámok, meccsek közt pontosan
     # összegződnek (kulcs szerint összeadva).
@@ -2014,6 +2019,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Visszaállás: mit kezdjünk a kiállításaik leteltével.
+    if rep.ppp_returns >= 2:
+        _ppp_diff = rep.ppp_for - rep.ppp_against
+        if _ppp_diff <= -2:
+            keys.append(
+                f"A visszaállásnál megzavarodnak (a kiállításaik "
+                f"letelte utáni perc mérlege {rep.ppp_for}-"
+                f"{rep.ppp_against}) — a lejáró kiállításuk a ti "
+                "támadás-jelzésetek: időzítsétek úgy, hogy a "
+                "visszaérő, hideg emberük zónájába menjen az első "
+                "támadás.")
+        elif _ppp_diff >= 2:
+            keys.append(
+                f"A visszaálló emberrel feltámadnak (a kiállításaik "
+                f"letelte utáni perc mérlege {rep.ppp_for}-"
+                f"{rep.ppp_against}) — a visszaérés utáni első "
+                "támadásukat kell megfogni: ott dől el, lendületet "
+                "vesznek-e, ezért oda időkérést is megér.")
 
     # Poszt-hibák: melyik passzsávban érdemes zavarni.
     _tbr_total = sum((rep.tbr_roles or {}).values())
@@ -5338,6 +5362,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .rules import post_powerplay as _ppp
+        ppprec = _ppp(match, config)[team.value]
+        rep.ppp_returns = ppprec["returns"]
+        rep.ppp_for = ppprec["goals_for"]
+        rep.ppp_against = ppprec["goals_against"]
         from .roles import turnovers_by_role as _tbr
         rep.tbr_roles = dict(_tbr(match, config)[team.value]["roles"])
         from .stats import distance_battle as _dbt
@@ -7622,6 +7651,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 172) Az ő zavaros visszaállásuk × a ti figura-kincsetek: a
+    # lejáró kiállításra időzített, előre lebeszélt támadás.
+    if (opp.ppp_returns >= 2 and opp.ppp_for - opp.ppp_against <= -2
+            and own.num_figures >= 3):
+        plan.append(
+            f"A visszaállásnál megzavarodnak (a kiállításaik letelte "
+            f"utáni perc mérlege {opp.ppp_for}-{opp.ppp_against}), "
+            f"nektek pedig van begyakorolt figurátok "
+            f"({own.num_figures} felismert figura) — a lejáró "
+            "kiállításra időzítsetek előre lebeszélt figurát: a "
+            "visszaérő ember hidegen jön, az ő zónájára menjen a "
+            "kezdés.")
 
     # 171) Az ő hibázó posztjuk × a ti passzsáv-zárásotok: a sávot az
     # ő leggyengébb posztjára kell tenni.
@@ -10208,6 +10250,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        ppp_returns=sum(r.ppp_returns for r in reports),
+        ppp_for=sum(r.ppp_for for r in reports),
+        ppp_against=sum(r.ppp_against for r in reports),
         tbr_roles=_merge_role_counts([r.tbr_roles for r in reports]),
         dbt_m=sum(r.dbt_m for r in reports),
         dbt_opp_m=sum(r.dbt_opp_m for r in reports),

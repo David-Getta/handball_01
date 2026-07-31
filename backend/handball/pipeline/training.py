@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 193) Visszaállás: ha a kiállításunk leteltekor megzavarodunk, a
+    # visszaérkezés koreográfiája a téma.
+    try:
+        from .rules import post_powerplay
+        ppp193 = post_powerplay(match, config)
+        for side in ("home", "away"):
+            rec193 = ppp193[side]
+            if rec193["verdict"] != "a visszaállásnál megzavarodnak":
+                continue
+            add(side, "taktika", "Visszaállás-rend",
+                f"a kiállításaink letelte utáni perc mérlege "
+                f"{rec193['goals_for']}-{rec193['goals_against']} — "
+                "a visszaérő ember hidegen jön, a felállás egy "
+                "percig rendezetlen, és az ellenfél pont ide időzíti "
+                "a támadását",
+                "visszaállás-rend: emberhátrány-gyakorlat, amelyben a "
+                "visszaérkezés is koreografált — a visszaérő ember "
+                "MINDIG ugyanoda áll be (szélre), a fal belülről "
+                "tömörít kifelé, és az első védekezésben tilos a "
+                "kilépés; támadásban a visszaérés utáni első labda "
+                "kötelezően biztonsági, begyakorolt figurába megy")
+    except Exception:
+        pass
+
     # 192) Poszt-hibák: ha egy posztunk szórja a labdát, a poszt-
     # specifikus labdabiztonság a téma.
     try:
