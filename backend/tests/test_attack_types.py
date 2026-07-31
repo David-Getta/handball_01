@@ -2262,3 +2262,64 @@ def test_fast_break_conversion_needs_enough_breaks():
 
     rec = fast_break_conversion(_fbc_match([True, False]))["home"]
     assert rec["share_pct"] is None and rec["verdict"] is None
+
+
+# ---- Visszahozott támadások (lezárják vagy újrajáratják a betörést) ---------
+
+def _pullback_match(kinds, fps=25.0):
+    """Hazai betörés-epizódok: a `kinds` elemei "shot" (a belépést
+    lövés zárja) vagy "pull" (lövés nélkül visszahozzák)."""
+    frames = []
+    t = 0
+
+    def _carry(x_from, x_to, n):
+        nonlocal t
+        for i in range(n):
+            x = x_from + (x_to - x_from) * i / max(1, n - 1)
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x, 10.0)],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+
+    for kind in kinds:
+        _carry(24.0, 32.0, 40)          # behúzás a 9-esen belülre (d=8)
+        if kind == "shot":
+            for i in range(7):          # lövés a +x kapura
+                frames.append(Frame(
+                    t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                    ball=Ball(x=min(33.0 + i * 1.4, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+            _carry(24.0, 24.0, 20)      # a labda újra kint (d=16)
+        else:
+            _carry(32.0, 26.0, 40)      # visszahozzák (d=14, lövés nélkül)
+        _carry(24.0, 24.0, 20)          # szünet kint
+    return Match(_meta(fps), frames)
+
+
+def test_pullback_rate_flags_the_patient_team():
+    """Hat betörésből négy visszahozás → behúzzák, aztán
+    visszahozzák."""
+    from handball.pipeline.attack_types import pullback_rate
+
+    rec = pullback_rate(_pullback_match(
+        ["pull"] * 4 + ["shot"] * 2))["home"]
+    assert rec["entries"] == 6 and rec["pullbacks"] == 4
+    assert rec["verdict"] == "behúzzák, aztán visszahozzák"
+
+
+def test_pullback_rate_flags_the_direct_team():
+    """Hat betörésből hat lövés → az első betörésből lezárnak."""
+    from handball.pipeline.attack_types import pullback_rate
+
+    rec = pullback_rate(_pullback_match(["shot"] * 6))["home"]
+    assert rec["shots"] == 6 and rec["pullbacks"] == 0
+    assert rec["verdict"] == "az első betörésből lezárnak"
+
+
+def test_pullback_rate_needs_enough_entries():
+    """Kevés (6-nál kevesebb) betörésnél nincs ítélet."""
+    from handball.pipeline.attack_types import pullback_rate
+
+    rec = pullback_rate(_pullback_match(["pull"] * 3))["home"]
+    assert rec["entries"] == 3 and rec["pull_pct"] is None
+    assert rec["verdict"] is None

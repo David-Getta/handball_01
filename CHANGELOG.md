@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Visszahozott támadások**: LEZÁRJÁK vagy ÚJRAJÁRATJÁK a betörést.
+  A betörés-folyosók azt mondják meg, hol lép be a labda a 9 méteren
+  belülre — ez azt, mi lesz belőle: lövéssel zárul-e az epizód, vagy
+  a csapat lövés nélkül visszahozza a labdát (6+ betörés; 45% felett
+  türelmes, 15% alatt direkt lezárás; a labdavesztéses epizódok nem
+  számítanak). A visszahozó csapat ellen a fal kivárhat — jön a
+  passzív jel; a direkt lezáró ellen az első belépést kell
+  megállítani, korai besegítéssel. Egy réteg, sok felület:
+  `pullback_rate` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (betörés- és visszahozás-darabszámok, két edzői
+  kulcs + csempe), 163. meccsterv-szabály (az ő türelmes
+  visszahozásaik × a ti fegyelmezett falatok), 184. edzés-szabály
+  (betörés-lezárás: kötelező lezárás a 9-esen belül, tiltott
+  visszapassz).
+
 - **Szerzés utáni indítás**: AZONNAL ELŐRE megy-e a szerzett labda. A
   labdaszerzők azt mondják meg, ki szerez, a labdaszerzés-típus azt,
   hogyan — ez azt, mi történik utána: a szerzés utáni 4 másodpercben

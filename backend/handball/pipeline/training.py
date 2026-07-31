@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 184) Visszahozott támadások: ha minden betörésünket visszahozzuk,
+    # a lezárás-bátorság a téma.
+    try:
+        from .attack_types import pullback_rate
+        pb184 = pullback_rate(match, config)
+        for side in ("home", "away"):
+            rec184 = pb184[side]
+            if rec184["verdict"] != "behúzzák, aztán visszahozzák":
+                continue
+            add(side, "tamadas", "Betörés-lezárás",
+                f"a {rec184['entries']} betörésünkből "
+                f"{rec184['pullbacks']} lövés nélküli visszahozás — "
+                "bejutunk a 9-esen belülre, de nem merjük lezárni, "
+                "így a fal újra összeáll, és jön a passzív jel",
+                "betörés-lezárás: 9-esen belüli döntés-gyakorlat — a "
+                "betörő KÖTELEZŐEN lezár (lövés vagy beállós-passz), "
+                "visszapassz a 9-esen belülről tilos; kapus és fal "
+                "ellen megy, és minden visszahozott labda az "
+                "ellenfélnek jár, hogy a visszafordulás árát a "
+                "gyakorlat is megmutassa")
+    except Exception:
+        pass
+
     # 183) Szerzés utáni indítás: ha a szerzett labda helyben ragad, az
     # átmenet-gyorsaság a téma.
     try:

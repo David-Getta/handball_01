@@ -3144,3 +3144,93 @@ def fast_break_conversion(match: Match,
             elif share <= FBC_WASTE_PCT:
                 rec["verdict"] = "elpuskázzák a kontrát"
     return out
+
+
+# Visszahozott támadások: a kapu-középponttól ennyire belépve számít
+# betörésnek, ennyire kijőve zárul az epizód, ennyi belépés kell az
+# ítélethez, és e feletti / alatti visszahozás-arány a türelmes,
+# illetve az első betörésből lezáró csapat jele.
+PB_ENTRY_R_M = 9.0
+PB_OUT_R_M = 11.0
+PB_MIN_ENTRIES = 6
+PB_PATIENT_PCT = 45.0
+PB_DIRECT_PCT = 15.0
+
+
+def pullback_rate(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Visszahozott támadások: LEZÁRJÁK vagy ÚJRAJÁRATJÁK a betörést.
+
+    A betörés-folyosók (breakthrough_lanes) azt mondják meg, hol lép
+    be a labda a 9 méteren belülre — ez azt, MI LESZ BELŐLE: minden
+    belépés-epizódnál megnézzük, lövéssel zárul-e, vagy a csapat
+    lövés nélkül visszahozza a labdát a 11 méteren kívülre
+    (türelmes újrajáratás). A labdavesztéssel záruló epizódok egyik
+    oldalra sem számítanak.
+
+    Edzőileg: a sokat visszahozó csapat ellen a fal kivárhat — nem
+    kell az első betörésre rámozdulni, jön a passzív jel; az első
+    betörésből lezáró csapat ellen viszont pont az első belépést kell
+    megállítani — korai besegítés, akár korai szabálytalanság a
+    9-esen.
+
+    Visszatérés csapatonként: {"entries", "pullbacks", "shots",
+    "pull_pct", "verdict"} — a pull_pct/verdict None PB_MIN_ENTRIES
+    alatt; a verdict "behúzzák, aztán visszahozzák" / "az első
+    betörésből lezárnak" / None.
+    """
+    import math
+
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    cy = COURT_WIDTH_M / 2.0
+    shots = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out = {side: {"entries": 0, "pullbacks": 0, "shots": 0,
+                  "pull_pct": None, "verdict": None}
+           for side in ("home", "away")}
+
+    holder_team = None
+    entry_team = None   # folyamatban lévő belépés-epizód csapata
+    entry_t = None
+    for f in match.frames:
+        h = ball_holder(f, config)
+        if h is not None:
+            holder_team = h.team
+        b = f.ball
+        if b is None or holder_team is None:
+            continue
+        goal_x = config.attacks_toward_x(holder_team)
+        d = math.hypot(b.x - goal_x, b.y - cy)
+        if entry_team is None:
+            if d <= PB_ENTRY_R_M:
+                entry_team = holder_team
+                entry_t = f.t
+        else:
+            if holder_team != entry_team:
+                entry_team = None      # labdavesztés bent: nem számít
+                continue
+            if d >= PB_OUT_R_M:
+                rec = out[entry_team.value]
+                rec["entries"] += 1
+                if any(entry_t <= t <= f.t and tm == entry_team.value
+                       for (t, tm) in shots):
+                    rec["shots"] += 1
+                else:
+                    rec["pullbacks"] += 1
+                entry_team = None
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["entries"] >= PB_MIN_ENTRIES:
+            pct = 100.0 * rec["pullbacks"] / rec["entries"]
+            rec["pull_pct"] = round(pct, 1)
+            if pct >= PB_PATIENT_PCT:
+                rec["verdict"] = "behúzzák, aztán visszahozzák"
+            elif pct <= PB_DIRECT_PCT:
+                rec["verdict"] = "az első betörésből lezárnak"
+    return out

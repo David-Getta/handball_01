@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Visszahozott támadásaik: a betörés-epizódjaik és ebből a lövés
+    # nélküli visszahozások száma — darabszámok, meccsek közt pontosan
+    # összegződnek (arány = pb_pullbacks / pb_entries).
+    pb_entries: int = 0
+    pb_pullbacks: int = 0
     # Szerzés utáni indításuk: a mért szerzéseik és ebből az azonnal
     # előre vitt labdák száma — darabszámok, meccsek közt pontosan
     # összegződnek (arány = stl_fwd / stl_steals).
@@ -1970,6 +1975,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Visszahozott támadások: rámozduljon-e a fal az első betörésre.
+    if rep.pb_entries >= 6:
+        _pb_pct = 100.0 * rep.pb_pullbacks / rep.pb_entries
+        if _pb_pct >= 45.0:
+            keys.append(
+                f"Behúzzák, aztán visszahozzák a labdát (a "
+                f"{rep.pb_entries} betörésükből {rep.pb_pullbacks} "
+                "lövés nélküli visszahozás) — a fal kivárhat: nem "
+                "kell az első betörésre rámozdulni, a türelmes zárás "
+                "kihozza belőlük a passzív jelet.")
+        elif _pb_pct <= 15.0:
+            keys.append(
+                f"Az első betörésből lezárnak (a {rep.pb_entries} "
+                f"betörésükből csak {rep.pb_pullbacks} visszahozás) — "
+                "az első belépést kell megállítani: korai besegítés, "
+                "és ha kell, korai szabálytalanság a 9-esen, mielőtt "
+                "lendületbe jönnének.")
 
     # Szerzés utáni indítás: mi történik, ha eladjuk a labdát.
     if rep.stl_steals >= 6:
@@ -5159,6 +5182,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import pullback_rate as _pb
+        pbrec = _pb(match, config)[team.value]
+        rep.pb_entries = pbrec["entries"]
+        rep.pb_pullbacks = pbrec["pullbacks"]
         from .defense import steal_launch as _stl
         stlrec = _stl(match, config)[team.value]
         rep.stl_steals = stlrec["steals"]
@@ -7404,6 +7431,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 163) Az ő türelmes visszahozásaik × a ti fegyelmezett falatok:
+    # kivárásra lehet játszani, a passzív jel nektek dolgozik.
+    if (opp.pb_entries >= 6 and own.def_shots_against >= 10):
+        _pb163 = 100.0 * opp.pb_pullbacks / opp.pb_entries
+        _free163 = (100.0 * own.def_free_shots
+                    / max(1, own.def_shots_against))
+        if _pb163 >= 45.0 and _free163 <= 35.0:
+            plan.append(
+                f"Behúzzák, aztán visszahozzák a labdát (a betöréseik "
+                f"{_pb163:.0f}%-a lövés nélkül fordul vissza), a ti "
+                f"falatok pedig fegyelmezett (a rátok jövő lövések "
+                f"csak {_free163:.0f}%-a fedezetlen) — játsszatok "
+                "kivárásra: nem kell rámozdulni az első betörésre, a "
+                "türelmes zárás és a passzív jel elveszi a "
+                "legjobb megoldásaikat.")
 
     # 162) Az ő szerzés utáni biztosításuk × a ti visszatámadásotok:
     # az eladott labdátok visszanyerhető, mielőtt ellenetek fordulna.
@@ -9742,6 +9785,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pb_entries=sum(r.pb_entries for r in reports),
+        pb_pullbacks=sum(r.pb_pullbacks for r in reports),
         stl_steals=sum(r.stl_steals for r in reports),
         stl_fwd=sum(r.stl_fwd for r in reports),
         s7f_fh=sum(r.s7f_fh for r in reports),

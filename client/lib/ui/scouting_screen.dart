@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Visszahozott támadások: lezárják vagy újrajáratják a betörést (6+
+  // betörés; 45% felett türelmes, 15% alatt direkt — a
+  // backend-kulccsal azonos küszöbök).
+  String? _pullbackRate(Map<String, dynamic> r) {
+    final entries = ((r["pb_entries"] as num?) ?? 0).toInt();
+    final pulls = ((r["pb_pullbacks"] as num?) ?? 0).toInt();
+    if (entries < 6) return null;
+    final pct = 100.0 * pulls / entries;
+    if (pct >= 45.0) {
+      return "behúzzák, aztán visszahozzák ($entries betörésből "
+          "$pulls visszahozás) · a fal kivárhat, a türelmes zárás "
+          "passzív jelet ér";
+    }
+    if (pct <= 15.0) {
+      return "az első betörésből lezárnak ($entries betörésből csak "
+          "$pulls visszahozás) · az első belépést kell megállítani, "
+          "korai besegítéssel";
+    }
+    return null;
+  }
+
   // Szerzés utáni indítás: azonnal előre megy-e a szerzett labda (6+
   // szerzés; 60% felett azonnali, 25% alatt biztosító — a
   // backend-kulccsal azonos küszöbök).
@@ -4387,6 +4408,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes-fáradás", _sevensFade(r)!],
       if (_stealLaunch(r) != null)
         ["Szerzés utáni indítás", _stealLaunch(r)!],
+      if (_pullbackRate(r) != null)
+        ["Visszahozott támadások", _pullbackRate(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

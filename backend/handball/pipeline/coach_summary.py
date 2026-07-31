@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Visszahozott támadások: lezárják vagy újrajáratják a betörést.
+    try:
+        from .attack_types import pullback_rate
+        pb = pullback_rate(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pb = pb[side]
+            if rec_pb["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadásban {rec_pb['verdict']}: "
+                     f"{rec_pb['entries']} betörésükből "
+                     f"{rec_pb['pullbacks']} végződött lövés nélküli "
+                     "visszahozással.")
+    except Exception:
+        pass
     # Szerzés utáni indítás: azonnal előre megy-e a szerzett labda.
     try:
         from .defense import steal_launch
