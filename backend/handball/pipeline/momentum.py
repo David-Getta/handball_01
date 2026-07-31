@@ -1636,3 +1636,89 @@ def bench_scoring(match: Match, config=None) -> dict:
             elif pct <= BEN_THIN_PCT:
                 rec["verdict"] = "csak a kezdők termelnek"
     return out
+
+
+# Középkezdés-átvevő: ekkora ablakban és a felezőtől ekkora sávban
+# keressük a kapott gól utáni első birtokost, ennyi mért újraindítás
+# kell az ítélethez, és e feletti arány jelenti a fix átvevőt.
+RST_WINDOW_S = 15.0
+RST_CENTER_M = 8.0
+RST_MIN_RESTARTS = 4
+RST_TOP_PCT = 50.0
+
+
+def restart_targets(match: Match, config=None) -> dict:
+    """Középkezdés-átvevő: KINÉL indul újra a játék a kapott gól után.
+
+    A középkezdés-tempó (restart_speed) azt méri, MILYEN GYORSAN ér át
+    a labda — ez azt, KINÉL: a kapott gól utáni RST_WINDOW_S
+    másodpercben megkeressük a gólt kapó csapat első, felező-környéki
+    labdabirtokosát (a kapus nélkül). A legtöbb csapatnál ez
+    begyakorolt szerep — ha egy emberre jár a labda, a középkezdésük
+    olvasható.
+
+    Edzőileg: a fix átvevőjű csapat ellen a gól utáni letámadásnak
+    névre szóló célpontja van — az átvevőt kell fogni, és a
+    középkezdésük megáll; a saját csapatban pedig a kiszámítható
+    átvevő variálandó, mert a felkészült ellenfél pont őt fogja le.
+
+    Visszatérés csapatonként (a gólt KAPÓ oldal): {"restarts",
+    "players": [{"player_id", "jersey", "takes"}], "top", "verdict"}
+    — a top/verdict None RST_MIN_RESTARTS alatt vagy RST_TOP_PCT
+    alatti részesedésnél; a verdict "fix középkezdés-emberük van" /
+    None.
+    """
+    from .calibration import COURT_LENGTH_M
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(RST_WINDOW_S * fps)
+    mid = COURT_LENGTH_M / 2.0
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+
+    goals = [(e.t, e.team) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    restarts = {"home": 0, "away": 0}
+    for (gt, gteam) in goals:
+        i0 = idx_of.get(gt)
+        if i0 is None:
+            continue
+        conceder = "away" if gteam.value == "home" else "home"
+        for j in range(i0 + 1, min(len(frames), i0 + 1 + win)):
+            h = ball_holder(frames[j], config)
+            if h is None or h.team.value != conceder:
+                continue
+            if h.role == "kapus":
+                continue
+            if abs(h.x - mid) > RST_CENTER_M:
+                continue
+            if h.jersey_number is not None:
+                jersey.setdefault(h.track_id, h.jersey_number)
+            restarts[conceder] += 1
+            tally[conceder][h.track_id] = (
+                tally[conceder].get(h.track_id, 0) + 1)
+            break
+
+    out: dict = {}
+    for side in ("home", "away"):
+        players = [{"player_id": tid, "jersey": jersey.get(tid),
+                    "takes": n}
+                   for tid, n in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1])]
+        top = None
+        verdict = None
+        if restarts[side] >= RST_MIN_RESTARTS and players:
+            share = 100.0 * players[0]["takes"] / restarts[side]
+            if share >= RST_TOP_PCT:
+                top = players[0]
+                verdict = "fix középkezdés-emberük van"
+        out[side] = {"restarts": restarts[side], "players": players,
+                     "top": top, "verdict": verdict}
+    return out

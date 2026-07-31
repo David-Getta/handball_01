@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Középkezdés-átvevőik: a mért újraindításaik száma és az átvevők
+    # [{"player_id", "jersey", "takes"}] — darabszámok, meccsek közt
+    # pontosan összegződnek (játékos szerint összeadva).
+    rst_restarts: int = 0
+    rst_players: list = field(default_factory=list)
     # Váltópárjaik: az egy-ki-egy-be cseréik száma és a párosok
     # [{"out_id", "in_id", "count"}] — darabszámok, meccsek közt
     # pontosan összegződnek (a párosok kulcs szerint összeadva).
@@ -1980,6 +1985,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Középkezdés-átvevő: van-e névre szóló célpontja a gól utáni
+    # letámadásnak.
+    if rep.rst_restarts >= 4 and rep.rst_players:
+        _rst_top = max(rep.rst_players, key=lambda pr: pr["takes"])
+        if 100.0 * _rst_top["takes"] / rep.rst_restarts >= 50.0:
+            keys.append(
+                f"Fix középkezdés-emberük van (a kapott gól után "
+                f"{_rst_top['takes']}/{rep.rst_restarts} újraindítást "
+                f"a(z) {_rst_top['player_id']} azonosítójú vett át) — "
+                "a gól utáni letámadásnak névre szóló célpontja van: "
+                "őt kell lefogni a felezőnél, és a középkezdésük "
+                "megáll.")
 
     # Váltópárok: olvasható-e előre a cseréjük.
     if rep.swp_swaps >= 4 and rep.swp_pairs:
@@ -5200,6 +5218,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .momentum import restart_targets as _rst
+        rstrec = _rst(match, config)[team.value]
+        rep.rst_restarts = rstrec["restarts"]
+        rep.rst_players = [dict(pr) for pr in rstrec["players"]]
         from .substitutions import swap_pairs as _swp
         swprec = _swp(match, config)[team.value]
         rep.swp_swaps = swprec["swaps"]
@@ -7454,6 +7476,24 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 165) Az ő fix középkezdés-emberük × a ti gól utáni
+    # letámadásotok: névre szóló célpont a felezőnél.
+    if (opp.rst_restarts >= 4 and opp.rst_players
+            and own.pag_after_frames >= 60 and own.pag_base_frames >= 60):
+        _rst165 = max(opp.rst_players, key=lambda pr: pr["takes"])
+        _pag165 = (own.pag_after_sum_m / own.pag_after_frames
+                   - own.pag_base_sum_m / own.pag_base_frames)
+        if (100.0 * _rst165["takes"] / opp.rst_restarts >= 50.0
+                and _pag165 >= 1.5):
+            plan.append(
+                f"Fix középkezdés-emberük van (a(z) "
+                f"{_rst165['player_id']} azonosítójú veszi át a "
+                f"kapott gól utáni labdát), ti pedig gól után amúgy "
+                f"is letámadtok (a falatok {_pag165:.1f} méterrel "
+                "megy feljebb ilyenkor) — a letámadásnak legyen névre "
+                "szóló célpontja: a gól pillanatában egy ember "
+                "azonnal az átvevőre lép, és a középkezdésük megáll.")
+
     # 164) Az ő kiszámítható váltópárjuk × a ti mély rotációtok: a
     # csere pillanatában friss védő menjen a beállóra.
     if (opp.swp_swaps >= 4 and opp.swp_pairs
@@ -9530,6 +9570,21 @@ def _merge_shooter_overperf(reports) -> list:
             for pid, d in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+def _merge_restart_targets(reports) -> list:
+    """Középkezdés-átvevők összegzése: játékos szerint összeadott
+    átvétel-darabszámok, csökkenő sorrendben."""
+    acc: dict = {}
+    jersey: dict = {}
+    for r in reports:
+        for pr in (r.rst_players or []):
+            pid = pr["player_id"]
+            acc[pid] = acc.get(pid, 0) + pr["takes"]
+            if pr.get("jersey") is not None:
+                jersey.setdefault(pid, pr["jersey"])
+    return [{"player_id": pid, "jersey": jersey.get(pid), "takes": n}
+            for pid, n in sorted(acc.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_swap_pairs(reports) -> list:
     """Váltópárok összegzése: (ki, be) kulcs szerint összeadott
     darabszámok, csökkenő sorrendben."""
@@ -9836,6 +9891,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        rst_restarts=sum(r.rst_restarts for r in reports),
+        rst_players=_merge_restart_targets(reports),
         swp_swaps=sum(r.swp_swaps for r in reports),
         swp_pairs=_merge_swap_pairs(reports),
         pb_entries=sum(r.pb_entries for r in reports),

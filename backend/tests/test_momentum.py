@@ -1092,3 +1092,58 @@ def test_bench_scoring_needs_enough_goals():
     rec = bench_scoring(_bench_match([1, 1, 1]))["home"]
     assert rec["goals"] == 3 and rec["bench_pct"] is None
     assert rec["verdict"] is None
+
+
+# ---- Középkezdés-átvevő (kinél indul újra a játék) --------------------------
+
+def _restart_match(receivers, fps=25.0):
+    """Hazai gólok sorozata; a kapott gól után a vendég `receivers`
+    szerinti játékosa veszi át a labdát a felezőnél."""
+    frames = []
+    t = 0
+    for pid in receivers:
+        for i in range(7):        # hazai gól a +x kapuba
+            frames.append(Frame(t=t, players=[
+                _clo_pl(1, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(20):       # a labda középen, az átvevőnél
+            frames.append(Frame(t=t, players=[
+                _clo_pl(1, Team.HOME, 33.0, 10.0),
+                _clo_pl(pid, Team.AWAY, 20.0, 10.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(120):      # szünet: üres középpálya
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=8.0, y=4.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_restart_targets_finds_the_fixed_taker():
+    """Négy kapott gól után mindig a 21-es veszi át → fix
+    középkezdés-ember."""
+    from handball.pipeline.momentum import restart_targets
+
+    rec = restart_targets(_restart_match([21] * 4))["away"]
+    assert rec["restarts"] == 4
+    assert rec["top"] is not None and rec["top"]["player_id"] == 21
+    assert rec["verdict"] == "fix középkezdés-emberük van"
+
+
+def test_restart_targets_spread_takers_no_verdict():
+    """Ha négy átvevő négyfelé oszlik, nincs fix ember."""
+    from handball.pipeline.momentum import restart_targets
+
+    rec = restart_targets(_restart_match([21, 22, 23, 24]))["away"]
+    assert rec["restarts"] == 4 and rec["top"] is None
+    assert rec["verdict"] is None
+
+
+def test_restart_targets_needs_enough_restarts():
+    """Kevés (4-nél kevesebb) mért újraindításnál nincs ítélet."""
+    from handball.pipeline.momentum import restart_targets
+
+    rec = restart_targets(_restart_match([21, 21]))["away"]
+    assert rec["restarts"] == 2 and rec["verdict"] is None

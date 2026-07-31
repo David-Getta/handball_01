@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 186) Középkezdés-átvevő: ha a saját újraindításunk egy emberre
+    # jár, a középkezdés-variálás a téma.
+    try:
+        from .momentum import restart_targets
+        rst186 = restart_targets(match, config)
+        for side in ("home", "away"):
+            top186 = rst186[side]["top"]
+            if top186 is None:
+                continue
+            add(side, "taktika", "Középkezdés-variálás",
+                f"a kapott gól utáni újraindításaink egy emberre "
+                f"járnak (a(z) {top186['player_id']} azonosítójú "
+                f"vette át {top186['takes']} alkalommal) — a "
+                "felkészült ellenfél pont őt fogja le a felezőnél, "
+                "és a gyors középkezdésünk megáll",
+                "középkezdés-variálás: újraindítás-gyakorlat két "
+                "bejáratott átvevővel és egy harmadik, üresen "
+                "kifutó emberrel — a kezdő játékos a letámadás "
+                "képére dönt (fogott átvevő = azonnali hosszú a "
+                "kifutóra), és minden ismétlésben más veszi át a "
+                "labdát, hogy ne legyen olvasható minta")
+    except Exception:
+        pass
+
     # 185) Váltópárok: ha a cserénk kiszámítható, a csere-variálás a
     # téma.
     try:

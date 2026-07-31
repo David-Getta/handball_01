@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Középkezdés-átvevő**: KINÉL indul újra a játék a kapott gól után.
+  A középkezdés-tempó azt méri, milyen gyorsan ér át a labda — ez
+  azt, kinél: a kapott gól utáni ablakban megkeressük a gólt kapó
+  csapat első, felező-környéki labdabirtokosát (4+ mért újraindítás,
+  50% részesedés a fix átvevőhöz). A fix átvevőjű csapat ellen a gól
+  utáni letámadásnak névre szóló célpontja van — az átvevőt kell
+  lefogni, és a középkezdésük megáll; a saját csapatban a
+  kiszámítható átvevő variálandó. Egy réteg, sok felület:
+  `restart_targets` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (újraindítás-darabszám +
+  átvevő-lista összegzéssel, edzői kulcs + csempe), 165.
+  meccsterv-szabály (az ő fix átvevőjük × a ti gól utáni
+  letámadásotok), 186. edzés-szabály (középkezdés-variálás: két
+  bejáratott átvevő + üresen kifutó harmadik).
+
 - **Váltópárok**: KI KIT VÁLT a cseréknél. A csere-blokkok azt
   mondják meg, egységekben vagy egyesével cserélnek — ez azt, ki kit:
   az egy-ki-egy-be hullámokból párokat képzünk (mezszám szerint, ha

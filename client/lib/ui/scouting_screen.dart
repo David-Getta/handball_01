@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Középkezdés-átvevő: kinél indul újra a játék (4+ újraindítás, 50%
+  // részesedés — a backend-kulccsal azonos küszöbök).
+  String? _restartTargets(Map<String, dynamic> r) {
+    final restarts = ((r["rst_restarts"] as num?) ?? 0).toInt();
+    final players = r["rst_players"];
+    if (restarts < 4 || players is! List || players.isEmpty) return null;
+    Map<String, dynamic>? top;
+    for (final pr in players) {
+      if (pr is Map<String, dynamic> &&
+          (top == null ||
+              ((pr["takes"] as num?) ?? 0) >
+                  ((top["takes"] as num?) ?? 0))) {
+        top = pr;
+      }
+    }
+    if (top == null) return null;
+    final takes = ((top["takes"] as num?) ?? 0).toInt();
+    if (100.0 * takes / restarts < 50.0) return null;
+    return "fix középkezdés-emberük van (a(z) ${top["player_id"]} "
+        "azonosítójú vett át $takes/$restarts újraindítást) · a gól "
+        "utáni letámadás névre szóló célpontja";
+  }
+
   // Váltópárok: ki kit vált a cseréknél (4+ mért csere, 3+ ismétlődés
   // — a backend-kulccsal azonos küszöbök).
   String? _swapPairs(Map<String, dynamic> r) {
@@ -4436,6 +4459,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszahozott támadások", _pullbackRate(r)!],
       if (_swapPairs(r) != null)
         ["Váltópárok", _swapPairs(r)!],
+      if (_restartTargets(r) != null)
+        ["Középkezdés-átvevő", _restartTargets(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

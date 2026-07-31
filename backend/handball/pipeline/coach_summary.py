@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Középkezdés-átvevő: kinél indul újra a játék a kapott gól után.
+    try:
+        from .momentum import restart_targets
+        rst = restart_targets(match)
+        for side, name in (("home", home), ("away", away)):
+            top_rst = rst[side]["top"]
+            if top_rst is None:
+                continue
+            body += (f" A(z) {name} középkezdése olvasható: a kapott "
+                     f"gól után a(z) {top_rst['player_id']} "
+                     f"azonosítójú vette át a labdát "
+                     f"({top_rst['takes']}/{rst[side]['restarts']} "
+                     "újraindítás).")
+    except Exception:
+        pass
     # Váltópárok: ki kit vált a cseréknél.
     try:
         from .substitutions import swap_pairs
