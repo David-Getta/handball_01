@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Beálló-őr**: KI ŐRZI az ellenfél beállóját. A beálló-védekezés
+  azt mondja meg, mennyire bírja a fal a beállót — ez azt, ki a
+  felelőse: felállt védekezésben megkeressük a becsült beállóhoz
+  legközelebbi védőt (3 m-en belül; 300+ őrzés-kocka, 60% részesedés
+  az ítélethez). Ha az őrzés egy emberen áll, az elzárást rá kell
+  vinni — ha őt kihúzzák, a beálló felszabadul, és a besegítés rendje
+  is borul. Egy réteg, sok felület: `pivot_guards` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (védőnkénti őrzés-kockák játékos szerinti összegzéssel, edzői kulcs
+  + csempe), 177. meccsterv-szabály (az ő egy-emberes beálló-őrzésük
+  × a ti elzárásaitok), 198. edzés-szabály (beálló-őrzés váltásban:
+  kötelező elöl-mögött csere hangos jelzéssel).
+
 - **Időkérés-csomag**: AZ IDŐKÉRÉSÜK CSERÉVEL JÁR-E. Az
   időkérés-hatás azt méri, mit hoz az időkérés — ez azt, mi van
   benne: az időkérés körüli percben keresünk azonos-csapatbeli

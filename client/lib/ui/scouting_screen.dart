@@ -1318,6 +1318,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Beálló-őr: ki őrzi a beállót (300+ őrzés-kocka, 60% részesedés —
+  // a backend-kulccsal azonos küszöbök).
+  String? _pivotGuards(Map<String, dynamic> r) {
+    final frames = ((r["pvg_frames"] as num?) ?? 0).toInt();
+    final rows = r["pvg_guards"];
+    if (frames < 300 || rows is! List || rows.isEmpty) return null;
+    Map<String, dynamic>? top;
+    for (final pr in rows) {
+      if (pr is Map<String, dynamic> &&
+          (top == null ||
+              ((pr["frames"] as num?) ?? 0) >
+                  ((top["frames"] as num?) ?? 0))) {
+        top = pr;
+      }
+    }
+    if (top == null) return null;
+    final topF = ((top["frames"] as num?) ?? 0).toInt();
+    if (100.0 * topF / frames < 60.0) return null;
+    return "egy ember őrzi a beállót (a(z) ${top["player_id"]} "
+        "azonosítójú) · az elzárást rá kell vinni, mögötte "
+        "felszabadul a beálló";
+  }
+
   // Időkérés-csomag: az időkérés cserével jár-e (2+ időkérés, 70%
   // arány — a backend-kulccsal azonos küszöbök).
   String? _timeoutSubCombo(Map<String, dynamic> r) {
@@ -4732,6 +4755,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lövés-választás", _shotQualityByScore(r)!],
       if (_timeoutSubCombo(r) != null)
         ["Időkérés-csomag", _timeoutSubCombo(r)!],
+      if (_pivotGuards(r) != null)
+        ["Beálló-őr", _pivotGuards(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

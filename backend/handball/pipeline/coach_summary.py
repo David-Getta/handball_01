@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Beálló-őr: ki őrzi az ellenfél beállóját.
+    try:
+        from .defense import pivot_guards
+        pvg = pivot_guards(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pvg = pvg[side]["top"]
+            if top_pvg is None:
+                continue
+            body += (f" A(z) {name} beálló-őrzése egy emberen áll: "
+                     f"a(z) {top_pvg['player_id']} azonosítójú vitte "
+                     f"az őrzés-idő nagy részét "
+                     f"({top_pvg['frames']}/{pvg[side]['frames']} "
+                     "kocka).")
+    except Exception:
+        pass
     # Időkérés-csomag: az időkérés cserével jár-e.
     try:
         from .stoppages import timeout_sub_combo

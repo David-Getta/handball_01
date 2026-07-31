@@ -2837,3 +2837,93 @@ def advanced_defender(match, config=None) -> dict:
         out[side] = {"players": rows, "top": top, "gap_m": gap,
                      "verdict": verdict}
     return out
+
+
+# Beálló-őr: ekkora sugáron belüli legközelebbi védő számít őrzőnek,
+# ennyi mért őrzés-kocka kell az ítélethez, és e feletti részesedés
+# jelenti az egy emberre bízott beálló-őrzést.
+PVG_RADIUS_M = 3.0
+PVG_MIN_FRAMES = 300
+PVG_TOP_PCT = 60.0
+
+
+def pivot_guards(match, config=None) -> dict:
+    """Beálló-őr: KI ŐRZI az ellenfél beállóját.
+
+    A beálló-védekezés (pivot_defense) azt mondja meg, mennyire bírja
+    a fal a beállót — ez azt, KI a felelőse: felállt védekezésben
+    megkeressük az ellenfél becsült beállójához legközelebbi védőt
+    (PVG_RADIUS_M-en belül), és kockánként neki írjuk az őrzést.
+
+    Edzőileg: ha a beálló-őrzés egy emberen áll, az elzárást rá kell
+    vinni — ha őt kihúzzák, a beálló felszabadul, és a besegítés
+    rendje is borul; a saját csapatban pedig látszik, kire épül a
+    belső védekezés, és kinek kell a beálló-őrzés edzés-blokkja.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"frames", "guards":
+    [{"player_id", "jersey", "frames"}], "top", "verdict"} — a
+    top/verdict None PVG_MIN_FRAMES mért kocka alatt vagy PVG_TOP_PCT
+    alatti részesedésnél; a verdict "egy ember őrzi a beállót" /
+    None.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    posts = estimate_positions(match, config)
+    pivots = {side: {tid for tid, r in posts.get(side, {}).items()
+                     if r["poszt"] == "beálló"}
+              for side in ("home", "away")}
+
+    jersey: dict = {}
+    acc: dict = {"home": {}, "away": {}}
+    counted = {"home": 0, "away": 0}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        if abs(holder.x - own_x) > half:
+            continue   # csak felállt védekezés
+        atk_side = holder.team.value
+        piv = [p for p in f.players
+               if p.team == holder.team and p.track_id in pivots[atk_side]]
+        if not piv:
+            continue
+        pv = piv[0]
+        defenders = [p for p in f.players
+                     if p.team == deff and p.role != "kapus"]
+        if not defenders:
+            continue
+        guard = min(defenders,
+                    key=lambda p: math.hypot(p.x - pv.x, p.y - pv.y))
+        if math.hypot(guard.x - pv.x, guard.y - pv.y) > PVG_RADIUS_M:
+            continue
+        if guard.jersey_number is not None:
+            jersey.setdefault(guard.track_id, guard.jersey_number)
+        counted[deff.value] += 1
+        acc[deff.value][guard.track_id] = (
+            acc[deff.value].get(guard.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "frames": n}
+                for tid, n in sorted(acc[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = None
+        verdict = None
+        if counted[side] >= PVG_MIN_FRAMES and rows:
+            share = 100.0 * rows[0]["frames"] / counted[side]
+            if share >= PVG_TOP_PCT:
+                top = rows[0]
+                verdict = "egy ember őrzi a beállót"
+        out[side] = {"frames": counted[side], "guards": rows,
+                     "top": top, "verdict": verdict}
+    return out

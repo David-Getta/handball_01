@@ -2000,3 +2000,48 @@ def test_advanced_defender_needs_enough_frames():
 
     rec = advanced_defender(_advanced_defender_match(10.0, n_frames=50))["home"]
     assert rec["players"] == [] and rec["verdict"] is None
+
+
+# ---- Beálló-őr (ki őrzi az ellenfél beállóját) ------------------------------
+
+def _pivot_guard_match(split_guard=False, n=400):
+    """A vendég a hazai (0-s) kapura támad, beállója a hatoson; a
+    hazai 10-es (vagy felváltva a 10-es és 11-es) őrzi."""
+    frames = []
+    for t in range(n):
+        guard_near = 10 if (not split_guard or t % 2 == 0) else 11
+        players = [
+            _pl(20, Team.AWAY, 8.0, 16.0),    # labdás vendég (hazai térfél)
+            _pl(25, Team.AWAY, 5.0, 10.0),    # vendég beálló
+            _pl(10, Team.HOME, 4.5 if guard_near == 10 else 9.0, 10.0),
+            _pl(11, Team.HOME, 4.5 if guard_near == 11 else 9.0, 10.5),
+            _pl(9, Team.HOME, 0.5, 10.0, role="kapus"),
+        ]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=8.0, y=16.0, confidence=1.0)))
+    return Match(_meta(), frames)
+
+
+def test_pivot_guards_finds_the_dedicated_guard():
+    """A 10-es végig a beállón → egy ember őrzi a beállót."""
+    from handball.pipeline.defense import pivot_guards
+
+    rec = pivot_guards(_pivot_guard_match())["home"]
+    assert rec["top"] is not None and rec["top"]["player_id"] == 10
+    assert rec["verdict"] == "egy ember őrzi a beállót"
+
+
+def test_pivot_guards_split_duty_has_no_verdict():
+    """Ha ketten felváltva őrzik, nincs kiemelt őr."""
+    from handball.pipeline.defense import pivot_guards
+
+    rec = pivot_guards(_pivot_guard_match(split_guard=True))["home"]
+    assert rec["top"] is None and rec["verdict"] is None
+
+
+def test_pivot_guards_needs_enough_frames():
+    """Kevés (300-nál kevesebb) mért őrzés-kockánál nincs ítélet."""
+    from handball.pipeline.defense import pivot_guards
+
+    rec = pivot_guards(_pivot_guard_match(n=200))["home"]
+    assert rec["verdict"] is None

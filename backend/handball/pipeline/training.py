@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 198) Beálló-őr: ha a beálló-őrzésünk egy emberen áll, az
+    # őrzés-váltás a téma.
+    try:
+        from .defense import pivot_guards
+        pvg198 = pivot_guards(match, config)
+        for side in ("home", "away"):
+            top198 = pvg198[side]["top"]
+            if top198 is None:
+                continue
+            add(side, "vedekezes", "Beálló-őrzés váltásban",
+                f"a beálló-őrzésünk egy emberen áll (a(z) "
+                f"{top198['player_id']} azonosítójú viszi az őrzés-idő "
+                "nagy részét) — ha őt elzárással kihúzzák vagy "
+                "kipontozódik, a belső védekezésünk borul",
+                "beálló-őrzés váltásban: 6-0 elleni gyakorlat, ahol a "
+                "két belső védő KÖTELEZŐEN váltja a beállót minden "
+                "átjátszásnál (elöl-mögött csere hangos jelzéssel) — "
+                "a menet hibája, ha a beálló kettő másodpercnél "
+                "tovább marad ugyanannál az őrzőnél elzárás után, és "
+                "a gyakorlat végén a szélső védő is beáll egy "
+                "váltás-sorra")
+    except Exception:
+        pass
+
     # 197) Időkérés-csomag: ha az időkérésünk sosem jár cserével, a
     # kispad-eszköztár bővítése a téma.
     try:

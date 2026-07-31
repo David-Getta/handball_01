@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Beálló-őrük: védőnként a beálló-őrzés kockái [{"player_id",
+    # "jersey", "frames"}] + az összes mért őrzés-kocka — darabszámok,
+    # meccsek közt pontosan összegződnek (játékos szerint).
+    pvg_frames: int = 0
+    pvg_guards: list = field(default_factory=list)
     # Időkérés-csomagjuk: mért időkéréseik és ebből a cserével járók
     # — darabszámok, meccsek közt pontosan összegződnek.
     tsc_timeouts: int = 0
@@ -2044,6 +2049,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Beálló-őr: kire épül a belső védekezésük.
+    if rep.pvg_frames >= 300 and rep.pvg_guards:
+        _pvg_top = max(rep.pvg_guards, key=lambda r: r["frames"])
+        if 100.0 * _pvg_top["frames"] / rep.pvg_frames >= 60.0:
+            keys.append(
+                f"Egy ember őrzi a beállótokat: a(z) "
+                f"{_pvg_top['player_id']} azonosítójú viszi az "
+                "őrzés-idő nagy részét — az elzárást rá kell vinni: "
+                "ha őt kihúzzátok, a beálló felszabadul, és a "
+                "besegítés rendje is borul.")
 
     # Időkérés-csomag: mire számíts az időkérésük után.
     if rep.tsc_timeouts >= 2:
@@ -5460,6 +5476,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .defense import pivot_guards as _pvg
+        pvgrec = _pvg(match, config)[team.value]
+        rep.pvg_frames = pvgrec["frames"]
+        rep.pvg_guards = [dict(pr) for pr in pvgrec["guards"]]
         from .stoppages import timeout_sub_combo as _tsc
         tscrec = _tsc(match, config)[team.value]
         rep.tsc_timeouts = tscrec["timeouts"]
@@ -7776,6 +7796,23 @@ def matchup_plan(own: "ScoutingReport",
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
 
+    # 177) Az ő egy-emberes beálló-őrzésük × a ti elzárásaitok: az
+    # elzárás célpontja a beálló-őr legyen.
+    if (opp.pvg_frames >= 300 and opp.pvg_guards
+            and own.scu_shots >= 6):
+        _pvg177 = max(opp.pvg_guards, key=lambda r: r["frames"])
+        _scu177 = 100.0 * own.scu_screened / max(1, own.scu_shots)
+        if (100.0 * _pvg177["frames"] / opp.pvg_frames >= 60.0
+                and _scu177 >= 30.0):
+            plan.append(
+                f"A beálló-őrzésük egy emberen áll (a(z) "
+                f"{_pvg177['player_id']} azonosítójún), ti pedig jól "
+                f"használjátok az elzárást (az őrzött lövéseitek "
+                f"{_scu177:.0f}%-a elzárásból jön) — az elzárás "
+                "célpontja ő legyen: ha kihúzzátok a beállóról, "
+                "mögötte szabad a bejátszás, és a besegítésük is "
+                "borul.")
+
     # 176) Az ő cserélő időkérésük × a ti kiszámítható emberfogásotok:
     # az időkérésük után azonnal frissítendő a párosítás.
     if (opp.tsc_timeouts >= 2
@@ -10062,6 +10099,21 @@ def _merge_role_counts(dicts) -> dict:
     return dict(sorted(acc.items(), key=lambda kv: -kv[1]))
 
 
+def _merge_pivot_guards(reports) -> list:
+    """Beálló-őrök összegzése: játékos szerint összeadott
+    őrzés-kockák."""
+    acc: dict = {}
+    jersey: dict = {}
+    for r in reports:
+        for pr in (r.pvg_guards or []):
+            pid = pr["player_id"]
+            acc[pid] = acc.get(pid, 0) + pr["frames"]
+            if pr.get("jersey") is not None:
+                jersey.setdefault(pid, pr["jersey"])
+    return [{"player_id": pid, "jersey": jersey.get(pid), "frames": n}
+            for pid, n in sorted(acc.items(), key=lambda kv: -kv[1])]
+
+
 def _merge_phase_players(reports) -> list:
     """Egyirányú játékosok összegzése: játékos szerint összeadott
     fázis- és védekezés-kockák."""
@@ -10437,6 +10489,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        pvg_frames=sum(r.pvg_frames for r in reports),
+        pvg_guards=_merge_pivot_guards(reports),
         tsc_timeouts=sum(r.tsc_timeouts for r in reports),
         tsc_with_subs=sum(r.tsc_with_subs for r in reports),
         sqs_trail_shots=sum(r.sqs_trail_shots for r in reports),
