@@ -2381,3 +2381,63 @@ def test_width_by_score_needs_frames_in_both_states():
 
     rec = width_by_score(Match(_meta(), _wbs_attack(0, 16.0)))["home"]
     assert rec["trail_frames"] == 0 and rec["verdict"] is None
+
+
+# ---- Kontra-forrás (miből indul a lerohanásuk) ------------------------------
+
+def _bsrc_match(n_breaks, with_save, fps=25.0):
+    """Hazai lerohanások; ha with_save, mindegyiket a hazai kapus
+    védése előzi meg (vendég lövés a 0-s kapura)."""
+    frames = []
+    t = 0
+    for _ in range(n_breaks):
+        if with_save:
+            for _ in range(5):     # a vendég lövő birtokol
+                frames.append(Frame(t=t, players=[
+                    _pl(21, Team.AWAY, 7.0, 10.0),
+                    _pl(9, Team.HOME, 0.5, 10.0, role="kapus")],
+                    ball=Ball(x=7.0, y=10.0, confidence=1.0)))
+                t += 1
+            for i in range(8):     # lövés, a kapusnál megáll (védés)
+                frames.append(Frame(t=t, players=[
+                    _pl(21, Team.AWAY, 7.0, 10.0),
+                    _pl(9, Team.HOME, 0.5, 10.0, role="kapus")],
+                    ball=Ball(x=max(7.0 - i, 1.2), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        block = _attack_frames(t, 4.0, 22.0, 38.0, fps)
+        frames.extend(block)
+        t = frames[-1].t + 1
+        for _ in range(int(6 * fps)):   # szünet: nincs támadó fázis
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_break_sources_flags_the_save_launched_counters():
+    """Négy lerohanás, mind kapus-védés után → a kontráik védésből
+    indulnak."""
+    from handball.pipeline.attack_types import break_sources
+
+    rec = break_sources(_bsrc_match(4, with_save=True))["home"]
+    assert rec["breaks"] == 4
+    assert rec["sources"].get("védés") == 4
+    assert rec["verdict"] == "a kontráik főleg ebből indulnak: védés"
+
+
+def test_break_sources_default_is_steal():
+    """Előzmény-lövés nélkül a forrás labdaszerzés."""
+    from handball.pipeline.attack_types import break_sources
+
+    rec = break_sources(_bsrc_match(4, with_save=False))["home"]
+    assert rec["sources"].get("labdaszerzés") == 4
+    assert rec["verdict"] == (
+        "a kontráik főleg ebből indulnak: labdaszerzés")
+
+
+def test_break_sources_needs_enough_breaks():
+    """Kevés (4-nél kevesebb) lerohanásnál nincs ítélet."""
+    from handball.pipeline.attack_types import break_sources
+
+    rec = break_sources(_bsrc_match(2, with_save=True))["home"]
+    assert rec["breaks"] == 2 and rec["verdict"] is None

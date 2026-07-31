@@ -3313,3 +3313,77 @@ def width_by_score(match: Match,
                 rec["verdict"] = "hátrányban kinyílnak"
         out[side] = rec
     return out
+
+
+# Kontra-forrás: ekkora ablakban nézünk vissza a lerohanás indulása
+# előtt, ennyi mért lerohanás kell az ítélethez, és e feletti
+# részarány emeli ki a fő forrást.
+BSRC_LOOKBACK_S = 5.0
+BSRC_MIN_BREAKS = 4
+BSRC_TOP_PCT = 50.0
+
+
+def break_sources(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Kontra-forrás: MIBŐL INDUL a lerohanásuk.
+
+    A lerohanás-hatékonyság (fast_break_conversion) azt méri, mennyi
+    lesz gól a kontrákból — ez azt, honnan jönnek: minden lerohanás
+    indulása előtti BSRC_LOOKBACK_S másodpercben megnézzük, mi
+    történt — az ellenfél kapura lövését védte a kapus ("védés"), az
+    ellenfél mellé lőtt ("kihagyott lövés"), vagy mezőnyben szereztek
+    labdát ("labdaszerzés").
+
+    Edzőileg forrásonként más a recept: a védésből induló kontra
+    ellen a lövés pillanatában kell hátraindulni (a kapus-indítás
+    sávját zárva); a kihagyott lövésből induló ellen a lepattanó
+    fegyelme és a kapus-kidobás lassítása dönt; a labdaszerzésből
+    induló ellen a labdabiztonság — átmenetben tiltott a keresztpassz.
+
+    Visszatérés csapatonként: {"breaks", "sources": {"védés" /
+    "kihagyott lövés" / "labdaszerzés": darab}, "top", "verdict"} — a
+    top/verdict None BSRC_MIN_BREAKS alatt vagy BSRC_TOP_PCT alatti
+    részaránynál; a verdict "a kontráik főleg ebből indulnak:
+    <forrás>" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    look = round(BSRC_LOOKBACK_S * fps)
+    shots = [(e.t, e.team.value, e.type,
+              (e.detail or {}).get("outcome"))
+             for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out = {side: {"breaks": 0, "sources": {}, "top": None,
+                  "verdict": None} for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        other = "away" if side == "home" else "home"
+        rec = out[side]
+        rec["breaks"] += 1
+        source = "labdaszerzés"
+        for (t, tm, typ, outc) in shots:
+            if tm != other:
+                continue
+            if a["start_frame"] - look <= t <= a["start_frame"]:
+                source = ("védés" if outc == "save"
+                          else "kihagyott lövés")
+                break
+        rec["sources"][source] = rec["sources"].get(source, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["breaks"] >= BSRC_MIN_BREAKS and rec["sources"]:
+            items = sorted(rec["sources"].items(),
+                           key=lambda kv: -kv[1])
+            src, n = items[0]
+            tie = len(items) > 1 and items[1][1] == n
+            if 100.0 * n / rec["breaks"] >= BSRC_TOP_PCT and not tie:
+                rec["top"] = {"source": src, "breaks": n}
+                rec["verdict"] = ("a kontráik főleg ebből indulnak: "
+                                  + src)
+    return out

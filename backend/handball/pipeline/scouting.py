@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kontra-forrásaik: lerohanásaik forrás szerinti darabszámai
+    # ({"védés"/"kihagyott lövés"/"labdaszerzés": darab}) — meccsek
+    # közt kulcs szerint összegződnek.
+    bsrc_sources: dict = field(default_factory=dict)
     # Kapus-gól veszélyük: a kapusuk kapura dobásai és góljai —
     # darabszámok, meccsek közt pontosan összegződnek.
     gkg_attempts: int = 0
@@ -2070,6 +2074,30 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kontra-forrás: melyik pillanatban kell megölni a kontrájukat.
+    _bsrc_total = sum((rep.bsrc_sources or {}).values())
+    if _bsrc_total >= 4 and rep.bsrc_sources:
+        _bsrc_items = sorted(rep.bsrc_sources.items(),
+                             key=lambda kv: -kv[1])
+        _bsrc_src, _bsrc_n = _bsrc_items[0]
+        _bsrc_tie = (len(_bsrc_items) > 1
+                     and _bsrc_items[1][1] == _bsrc_n)
+        if 100.0 * _bsrc_n / _bsrc_total >= 50.0 and not _bsrc_tie:
+            _bsrc_advice = {
+                "védés": ("a lövésetek pillanatában induljon a "
+                          "visszarendeződés, és a kapus-indítás "
+                          "sávját zárjátok"),
+                "kihagyott lövés": ("a lepattanó-fegyelem dönt: "
+                                    "kimaradt lövés után senki nem "
+                                    "áll meg, és a kidobást lassítani "
+                                    "kell"),
+                "labdaszerzés": ("átmenetben tilos a keresztpassz, és "
+                                 "a labdabiztonság mindenek előtt"),
+            }[_bsrc_src]
+            keys.append(
+                f"A kontráik főleg ebből indulnak: {_bsrc_src} "
+                f"({_bsrc_n}/{_bsrc_total} lerohanás) — {_bsrc_advice}.")
 
     # Kapus-gól veszély: szabad-e üresen hagyni a kaputokat.
     if rep.gkg_attempts >= 1:
@@ -5554,6 +5582,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import break_sources as _bsrc
+        rep.bsrc_sources = dict(
+            _bsrc(match, config)[team.value]["sources"])
         from .goalkeeper import gk_goal_threat as _gkg
         gkgrec = _gkg(match, config)[team.value]
         rep.gkg_attempts = gkgrec["attempts"]
@@ -7893,6 +7924,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 182) Az ő védésből induló kontráik × a ti lövés-választásotok: a
+    # rossz lövés náluk azonnal visszaüt.
+    _bsrc182_total = sum((opp.bsrc_sources or {}).values())
+    if (_bsrc182_total >= 4
+            and opp.bsrc_sources.get("védés", 0) / _bsrc182_total >= 0.5
+            and own.shots >= 10 and own.goals is not None):
+        _acc182 = 100.0 * own.goals / max(1, own.shots)
+        if _acc182 <= 55.0:
+            plan.append(
+                f"A kontráik főleg védésből indulnak "
+                f"({opp.bsrc_sources.get('védés', 0)}/{_bsrc182_total} "
+                f"lerohanás), a ti lövés-hatékonyságotok pedig "
+                f"alacsony ({_acc182:.0f}%) — minden rossz lövésetek "
+                "az ő indításuk: lőjetek kevesebbet, de jobbat, és a "
+                "lövés pillanatában már fusson hátra a fékező ember.")
 
     # 181) Az ő gólveszélyes kapusuk × a ti 7 a 6-otok: üres kapunál
     # kötelező a kijelölt visszafutó.
@@ -10655,6 +10702,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        bsrc_sources=_merge_role_counts(
+            [r.bsrc_sources for r in reports]),
         gkg_attempts=sum(r.gkg_attempts for r in reports),
         gkg_goals=sum(r.gkg_goals for r in reports),
         lbr_breaks=sum(r.lbr_breaks for r in reports),

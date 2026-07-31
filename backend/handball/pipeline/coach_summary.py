@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kontra-forrás: miből indul a lerohanásuk.
+    try:
+        from .attack_types import break_sources
+        bsrc = break_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            top_bsrc = bsrc[side]["top"]
+            if top_bsrc is None:
+                continue
+            body += (f" A(z) {name} kontráinak fő forrása a(z) "
+                     f"{top_bsrc['source']} volt "
+                     f"({top_bsrc['breaks']}/{bsrc[side]['breaks']} "
+                     "lerohanás).")
+    except Exception:
+        pass
     # Kapus-gól veszély: rádob-e a kapusuk az üres kapura.
     try:
         from .goalkeeper import gk_goal_threat

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kontra-forrás**: MIBŐL INDUL a lerohanásuk. A
+  lerohanás-hatékonyság azt méri, mennyi lesz gól a kontrákból — ez
+  azt, honnan jönnek: minden lerohanás előtti pillanatot
+  megvizsgálunk — kapus-védés, kihagyott lövés vagy labdaszerzés a
+  forrás (4+ lerohanás, 50% részarány az ítélethez). Forrásonként más
+  a recept: védésnél a lövés pillanatában indul a visszarendeződés,
+  kihagyott lövésnél a lepattanó-fegyelem dönt, labdaszerzésnél az
+  átmeneti keresztpassz tilos. Egy réteg, sok felület:
+  `break_sources` motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (forrás szerinti darabszámok kulcs szerinti
+  összegzéssel, edzői kulcs + csempe), 182. meccsterv-szabály (az ő
+  védésből induló kontráik × a ti lövés-választásotok), 203.
+  edzés-szabály (kontra-forrás zárása: forrás-specifikus
+  átmenet-gyakorlat).
+
 - **Kapus-gól veszély**: RÁDOB-E A KAPUSUK az üres kapura. A modern
   kézilabdában a 7 a 6 ára az üres kapu — megszámoljuk a
   kapus-jelölésű játékoshoz köthető kapura tartó lövéseket és gólokat

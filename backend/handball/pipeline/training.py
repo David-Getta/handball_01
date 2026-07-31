@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 203) Kontra-forrás: ha a kapott kontrák egy forrásból jönnek, a
+    # forrás-specifikus visszarendeződés a téma.
+    try:
+        from .attack_types import break_sources
+        bsrc203 = break_sources(match, config)
+        for side in ("home", "away"):
+            other203 = bsrc203["away" if side == "home" else "home"]
+            top203 = other203["top"]
+            if top203 is None:
+                continue
+            add(side, "vedekezes", "Kontra-forrás zárása",
+                f"az ellenfél kontráinak fő forrása a(z) "
+                f"{top203['source']} volt ({top203['breaks']}/"
+                f"{other203['breaks']} lerohanás) — a visszarendeződés "
+                "általános gyakorlása helyett ezt az egy pillanatot "
+                "kell megölni",
+                "kontra-forrás zárása: forrás-specifikus átmenet-"
+                "gyakorlat — védés-indulásnál a lövő azonnal a "
+                "kapus-indítás sávjába zár vissza, kihagyott lövésnél "
+                "a lepattanó után mindenki kötelezően hármat sprintel "
+                "hátra, labdaszerzés-forrásnál pedig az átmeneti "
+                "keresztpassz az edzésen is tiltott")
+    except Exception:
+        pass
+
     # 202) Kapus-gól veszély: ha az ellenfél kapusa dobott már ránk,
     # az üres kapu védése a téma. (Saját oldalon: gyakorolható fegyver.)
     try:

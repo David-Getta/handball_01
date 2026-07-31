@@ -1318,6 +1318,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kontra-forrás: miből indul a lerohanásuk (4+ lerohanás, 50%
+  // részarány — a backend-kulccsal azonos küszöbök).
+  String? _breakSources(Map<String, dynamic> r) {
+    final src = r["bsrc_sources"];
+    if (src is! Map) return null;
+    var total = 0;
+    String? top;
+    var topN = 0;
+    var tie = false;
+    src.forEach((k, v) {
+      final n = ((v as num?) ?? 0).toInt();
+      total += n;
+      if (n > topN) {
+        top = k.toString();
+        topN = n;
+        tie = false;
+      } else if (n == topN && n > 0) {
+        tie = true;
+      }
+    });
+    if (total < 4 || top == null || tie) return null;
+    if (100.0 * topN / total < 50.0) return null;
+    return "a kontráik főleg ebből indulnak: $top ($topN/$total "
+        "lerohanás) · ezt az egy pillanatot kell megölni a "
+        "visszarendeződésben";
+  }
+
   // Kapus-gól veszély: rádob-e a kapusuk az üres kapura (1+ kísérlet
   // — a backend-kulccsal azonos küszöb).
   String? _gkGoalThreat(Map<String, dynamic> r) {
@@ -4854,6 +4881,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hosszú állások", _longBreakResponse(r)!],
       if (_gkGoalThreat(r) != null)
         ["Kapus-gól veszély", _gkGoalThreat(r)!],
+      if (_breakSources(r) != null)
+        ["Kontra-forrás", _breakSources(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
