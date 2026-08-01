@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 230) Szélső-mélység: ha messziről lőnek a szélsőink, a befutás
+    # begyakorlása a téma, nem a lövőerő.
+    try:
+        from .attack_types import wing_shot_depth
+        wsd230 = wing_shot_depth(match, config)
+        for side in ("home", "away"):
+            rec230 = wsd230[side]
+            if rec230["verdict"] != "messziről lövő szélsők":
+                continue
+            add(side, "tamadas", "Szélső-befutás",
+                f"a szélsőink átlag {rec230['avg_m']:.1f} m-ről "
+                "eresztik el a lövést — rossz szögből, kényszerből "
+                "lövünk, a kapus bátran jöhet ki ránk",
+                "szélső-befutás gyakorlat: a szélső a hatosig "
+                "kísért befutásból, elugrásból fejez be — az "
+                "edzésmeccsen a hatos vonaláról (6 m-en belülről) "
+                "leadott szélső-lövés dupla pontot ér, a 8 m-en "
+                "túli szélső-lövés visszajátszandó")
+    except Exception:
+        pass
     # 229) Kontra-esés: ha a második félidőre eláll a kontránk, a
     # láb és a kontra-döntés kondicionálása a téma.
     try:

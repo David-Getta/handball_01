@@ -3439,6 +3439,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import wing_shot_depth
+            res["wing_shot_depth"] = wing_shot_depth(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4334,6 +4339,9 @@ def create_app():
                 from ..pipeline.attack_types import break_share_fade
                 _layer("break_share_fade",
                        lambda: break_share_fade(match))
+                from ..pipeline.attack_types import wing_shot_depth
+                _layer("wing_shot_depth",
+                       lambda: wing_shot_depth(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

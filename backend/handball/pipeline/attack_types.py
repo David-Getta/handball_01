@@ -4165,3 +4165,65 @@ def break_share_fade(match: Match,
             elif rec["gap_pp"] >= BRF_GAP_PP:
                 rec["verdict"] = "a hajrára kontrázósabbak"
     return out
+
+
+# Szélső-mélység: a kapu vonalától mért ekkora lövő-távolság alatt
+# mélyre befutott, e felett messziről leadott a szélső-lövés; ennyi
+# szélső-lövés kell az ítélethez.
+WSD_MIN_SHOTS = 5
+WSD_DEEP_M = 6.5
+WSD_FAR_M = 8.5
+
+
+def wing_shot_depth(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Szélső-mélység: MILYEN MÉLYRŐL lőnek a szélsőik.
+
+    A szélső-befejezés a szélső-zóna hatékonyságát méri — ez a
+    befutás mélységét: a szélső-posztú játékosok lövéseinél a kapu
+    vonalától mért távolság átlagát. A mélyre befutó szélső a
+    hatosig viszi a labdát — jó szögből, közelről fejez be; a
+    messziről lövő szélső rossz szögből, kényszerből ereszti el.
+
+    Edzőileg: a mélyre befutó szélsők ellen a kapusnak várnia kell —
+    a korai kifutás öngól, a szöget a kifutó védő zárja le még a
+    befutás ELŐTT; a messziről lövő szélsőknél a szög ráengedhető,
+    a kapus bátran jöhet ki, a fal pedig nem szorul szét.
+
+    Visszatérés csapatonként: {"shots", "depth_sum_m", "avg_m",
+    "verdict"} — az avg_m/verdict None WSD_MIN_SHOTS alatt; a
+    verdict "mélyre befutó szélsők" / "messziről lövő szélsők" /
+    None.
+    """
+    from ..models.tracking import Team
+    from .roles import estimate_positions
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    posts = estimate_positions(match, config)
+    wings = {side: {tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] == "szélső"}
+             for side in ("home", "away")}
+
+    out = {side: {"shots": 0, "depth_sum_m": 0.0, "avg_m": None,
+                  "verdict": None} for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        side = sh["team"]
+        if sh.get("player_id") not in wings[side]:
+            continue
+        goal_x = config.attacks_toward_x(Team(side))
+        rec = out[side]
+        rec["shots"] += 1
+        rec["depth_sum_m"] += abs(sh["x"] - goal_x)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["depth_sum_m"] = round(rec["depth_sum_m"], 1)
+        if rec["shots"] >= WSD_MIN_SHOTS:
+            avg = rec["depth_sum_m"] / rec["shots"]
+            rec["avg_m"] = round(avg, 1)
+            if avg <= WSD_DEEP_M:
+                rec["verdict"] = "mélyre befutó szélsők"
+            elif avg >= WSD_FAR_M:
+                rec["verdict"] = "messziről lövő szélsők"
+    return out

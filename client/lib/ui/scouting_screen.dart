@@ -1547,6 +1547,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szélső-mélység: milyen mélyről lőnek a szélsők (5+ lövés;
+  // 6,5 m alatt mély, 8,5 m felett messzi — a backend-kulccsal
+  // azonos küszöbök).
+  String? _wingShotDepth(Map<String, dynamic> r) {
+    final shots = ((r["wsd_shots"] as num?) ?? 0).toInt();
+    final sum = ((r["wsd_depth_sum_m"] as num?) ?? 0).toDouble();
+    if (shots < 5) return null;
+    final avg = sum / shots;
+    if (avg <= 6.5) {
+      return "mélyre befutó szélsők (átlag "
+          "${avg.toStringAsFixed(1)} m-ről lőnek) · a kapus várjon, "
+          "a szöget a kifutó védő zárja a befutás előtt";
+    }
+    if (avg >= 8.5) {
+      return "messziről lövő szélsők (átlag "
+          "${avg.toStringAsFixed(1)} m) · a szög ráengedhető, a "
+          "kapus bátran jöhet ki";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5480,6 +5501,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Felhozatal-posztok", _outletTargetRoles(r)!],
       if (_breakShareFade(r) != null)
         ["Kontra-esés", _breakShareFade(r)!],
+      if (_wingShotDepth(r) != null)
+        ["Szélső-mélység", _wingShotDepth(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

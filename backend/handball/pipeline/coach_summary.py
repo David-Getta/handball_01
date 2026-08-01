@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Szélső-mélység: milyen mélyről lőnek a szélsők.
+    try:
+        from .attack_types import wing_shot_depth
+        wsd = wing_shot_depth(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wsd = wsd[side]
+            if rec_wsd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szélső-játékáról kiderült: "
+                     f"{rec_wsd['verdict']} (átlag "
+                     f"{rec_wsd['avg_m']:.1f} m-ről eresztik el).")
+    except Exception:
+        pass
     # Kontra-esés: melyik félidőben kontráznak.
     try:
         from .attack_types import break_share_fade

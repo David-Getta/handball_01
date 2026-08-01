@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Szélső-mélység**: MILYEN MÉLYRŐL lőnek a szélsőik. A
+  szélső-befejezés a zóna hatékonyságát méri — ez a befutás
+  mélységét: a szélső-posztú lövések kapu-vonaltól mért átlagos
+  távolsága (5+ lövés; 6,5 m alatt mélyre befutó, 8,5 m felett
+  messziről lövő). A mélyre befutó szélső ellen a kapus várjon — a
+  korai kifutás öngól, a szöget a kifutó védő zárja a befutás
+  előtt; a messziről lövőnél a szög ráengedhető, a kapus bátran
+  jöhet ki. Egy réteg, sok felület: `wing_shot_depth` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (lövés-darabszám + mélység-összeg, két edzői kulcs + csempe),
+  209. meccsterv-szabály (az ő messziről lövő szélsőik × a ti jól
+  védő kapusotok), 230. edzés-szabály (szélső-befutás: hatosról
+  lőtt gól dupla pont).
+
 - **Kontra-esés**: MELYIK FÉLIDŐBEN kontráznak. A fáradás-család
   kontra-tagja: a lerohanások részaránya az első és a második félidő
   támadásain belül (félidőnként 5+ támadás; 15 százalékpontos

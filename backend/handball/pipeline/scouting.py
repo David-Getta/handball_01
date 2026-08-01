@@ -637,6 +637,8 @@ class ScoutingReport:
     brf_fh_breaks: int = 0
     brf_sh_attacks: int = 0
     brf_sh_breaks: int = 0
+    wsd_shots: int = 0
+    wsd_depth_sum_m: float = 0.0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2337,6 +2339,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_brf_fh:.0f}%-ról {_brf_sh:.0f}%-ra nő) — a "
                 "második félidőben duplán szigorú visszafutás-"
                 "fegyelem és biztos labdakezelés kell ellenük.")
+
+    # Szélső-mélység: várjon vagy jöjjön a kapus a szélső-lövésnél.
+    if rep.wsd_shots >= 5:
+        _wsd_avg = rep.wsd_depth_sum_m / rep.wsd_shots
+        if _wsd_avg <= 6.5:
+            keys.append(
+                f"Mélyre befutó szélsőik vannak (átlag "
+                f"{_wsd_avg:.1f} m-ről lőnek) — a kapusnak várnia "
+                "kell: a korai kifutás öngól, a szöget a kifutó "
+                "védő zárja még a befutás előtt.")
+        elif _wsd_avg >= 8.5:
+            keys.append(
+                f"Messziről lövő szélsőik vannak (átlag "
+                f"{_wsd_avg:.1f} m-ről eresztik el) — a szög "
+                "ráengedhető: a kapus bátran jöhet ki, a falnak "
+                "nem kell szétszorulnia a szélre.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6139,6 +6157,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.brf_fh_breaks = brfrec["fh_breaks"]
         rep.brf_sh_attacks = brfrec["sh_attacks"]
         rep.brf_sh_breaks = brfrec["sh_breaks"]
+        from .attack_types import wing_shot_depth as _wsd
+        wsdrec = _wsd(match, config)[team.value]
+        rep.wsd_shots = wsdrec["shots"]
+        rep.wsd_depth_sum_m = wsdrec["depth_sum_m"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8540,6 +8562,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 209) Az ő messziről lövő szélsőik × a ti jól védő kapusotok: a
+    # szélső-szög ráengedhető, a kapus-párbaj a tiétek.
+    if (opp.wsd_shots >= 5 and own.gk_on_target >= 10):
+        _wsd209 = opp.wsd_depth_sum_m / opp.wsd_shots
+        _gk209 = 100.0 * own.gk_saves / max(1, own.gk_on_target)
+        if _wsd209 >= 8.5 and _gk209 >= 30.0:
+            plan.append(
+                f"Messziről lövő szélsőik vannak (átlag "
+                f"{_wsd209:.1f} m-ről eresztik el), a ti kapusotok "
+                f"pedig jól véd ({_gk209:.0f}% a kapura tartó "
+                "lövésekre) — a szélső-szöget engedjétek rá: a fal "
+                "maradjon szűken középen, a rossz szögű messzi "
+                "lövés a kapusotok kenyere.")
 
     # 208) Az ő hajrá-kontráik × a ti biztos labdakezelésetek: a
     # második félidőben éheztetitek a rohanásukat.
@@ -11827,6 +11863,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         brf_fh_breaks=sum(r.brf_fh_breaks for r in reports),
         brf_sh_attacks=sum(r.brf_sh_attacks for r in reports),
         brf_sh_breaks=sum(r.brf_sh_breaks for r in reports),
+        wsd_shots=sum(r.wsd_shots for r in reports),
+        wsd_depth_sum_m=round(sum(r.wsd_depth_sum_m
+                                  for r in reports), 1),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

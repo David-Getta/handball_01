@@ -3068,3 +3068,68 @@ def test_break_share_fade_needs_halftime():
 
     rec = break_share_fade(_brf_match(True, halftime=False))["home"]
     assert rec["verdict"] is None and rec["gap_pp"] is None
+
+
+# ---- Szélső-mélység (milyen mélyről lőnek a szélsők) ------------------------
+
+def _wsd_match(deep, n_shots=6, fps=25.0):
+    """Szélső-lövés sorozat: a 2-es szélső a `deep` szerint a hatosig
+    befutva (2,5 m) vagy messziről (9,5 m) ereszti el a lövést."""
+    frames = []
+    t = 0
+    sx = 37.5 if deep else 30.5
+
+    def _emit(bx, by, n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[
+                _pl(2, Team.HOME, 34.0, 3.0)],
+                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+
+    _emit(34.0, 3.0, 150)           # poszt-minta: a szélsőnél a labda
+    for _ in range(n_shots):
+        _emit(34.0, 3.0, 10)        # birtoklás a szélső sávban
+        for i in range(5):          # a szélső a lövő-helyre viszi
+            frames.append(Frame(t=t, players=[
+                _pl(2, Team.HOME, 34.0 + (sx - 34.0) * (i + 1) / 5.0,
+                    3.0)],
+                ball=Ball(x=34.0 + (sx - 34.0) * (i + 1) / 5.0,
+                          y=3.0, confidence=1.0)))
+            t += 1
+        steps = max(3, int(round(40.5 - sx)))
+        for i in range(1, steps + 1):   # lövés a kapura
+            f_ = i / steps
+            frames.append(Frame(t=t, players=[
+                _pl(2, Team.HOME, sx, 3.0)],
+                ball=Ball(x=sx + (40.5 - sx) * f_,
+                          y=3.0 + (10.0 - 3.0) * f_,
+                          confidence=1.0)))
+            t += 1
+        _emit(34.0, 3.0, 30)        # szünet a lövések közt
+    return Match(_meta(fps), frames)
+
+
+def test_wing_shot_depth_flags_the_deep_wing():
+    """A hatosig befutó szélső (2,5 m-ről lő) → mélyre befutó."""
+    from handball.pipeline.attack_types import wing_shot_depth
+
+    rec = wing_shot_depth(_wsd_match(True))["home"]
+    assert rec["shots"] >= 5
+    assert rec["verdict"] == "mélyre befutó szélsők"
+
+
+def test_wing_shot_depth_flags_the_distant_wing():
+    """A messziről (9,5 m) lövő szélső → messziről lövő."""
+    from handball.pipeline.attack_types import wing_shot_depth
+
+    rec = wing_shot_depth(_wsd_match(False))["home"]
+    assert rec["verdict"] == "messziről lövő szélsők"
+
+
+def test_wing_shot_depth_needs_enough_shots():
+    """Kevés (5-nél kevesebb) szélső-lövésnél nincs ítélet."""
+    from handball.pipeline.attack_types import wing_shot_depth
+
+    rec = wing_shot_depth(_wsd_match(True, n_shots=3))["home"]
+    assert rec["verdict"] is None
