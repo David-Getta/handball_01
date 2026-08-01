@@ -1165,3 +1165,56 @@ def test_post_seven_lapses_needs_enough_sevens():
 
     rec = post_seven_lapses(_psl_match(True, sevens=2))["away"]
     assert rec["sevens_against"] == 2 and rec["verdict"] is None
+
+
+# ---- Kiállítás-posztok (melyik poszt hozza a kétperceseket) -----------------
+
+def _sur_match(n_susp=3, fps=25.0):
+    """Kiállítás-sorozat: a vendég 205-ös a szélső sávban játszik
+    (poszt-minta), a betörései után a hazaiak emberhátrányba
+    kerülnek — ő a kiharcoló."""
+    frames = []
+    t = 0
+
+    def mk(deep=False, home_n=6, poss_away=False):
+        nonlocal t
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(home_n)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(5)]
+        players.append(_pl(205, Team.AWAY,
+                           2.0 if deep else 10.0, 3.0))
+        ball = (Ball(x=25.0, y=4.0, confidence=1.0) if poss_away
+                else Ball(x=20.0, y=10.0, confidence=1.0))
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+
+    for _ in range(150):        # poszt-minta: vendég birtoklás
+        mk(poss_away=True)
+    for _ in range(n_susp):
+        for _ in range(50):     # betörés a kapuig
+            mk(deep=True, poss_away=True)
+        for _ in range(1500):   # 60 mp emberhátrány (5 mezőnyhazai)
+            mk(home_n=5)
+        for _ in range(300):    # vissza 6-ra a szakaszok közt
+            mk()
+    return Match(_meta(fps), frames)
+
+
+def test_susp_earner_roles_points_to_the_wing():
+    """A szélső sávban dolgozó kiharcoló → a kétpercesek a szélsőről
+    jönnek."""
+    from handball.pipeline.rules import susp_earner_roles
+
+    rec = susp_earner_roles(_sur_match())["away"]
+    assert rec["suspensions"] >= 3
+    assert rec["top"] is not None and rec["top"]["poszt"] == "szélső"
+
+
+def test_susp_earner_roles_needs_enough_suspensions():
+    """Kevés (3-nál kevesebb) poszthoz kötött kiállításnál nincs
+    kiemelt poszt."""
+    from handball.pipeline.rules import susp_earner_roles
+
+    rec = susp_earner_roles(_sur_match(n_susp=2))["away"]
+    assert rec["top"] is None

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kiállítás-posztok**: MELYIK POSZTJUK hozza a kétperceseket. A
+  kiállítás-kiharcolók a nevet adják — ez a posztot: a kiharcolókat
+  a poszt-becsléshez kötjük, a hetes-posztok mintájára (3+ kiharcolt
+  kiállítás; 50%+ részarány, holtverseny nélkül). Az átlövő betörése
+  ellen korai, még lendület előtti lépés; a beálló elzárás-birkózása
+  testtel, fegyelmezetten; a szélső kifutásánál tilos a kéz — a
+  kései fogás emberelőnyt termel nekik. Egy réteg, sok felület:
+  `susp_earner_roles` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (poszt szerinti
+  kiállítás-darabszámok, edzői kulcs + csempe), 205.
+  meccsterv-szabály (az ő kiállítás-termelő posztjuk × a ti
+  fegyelmezett falatok), 226. edzés-szabály (kiharcolás-gyakorlat:
+  kontakt-vállalás pontért).
+
 - **Gólpassz-posztok**: MELYIK POSZTJUK készíti elő a góljaikat. A
   gólpassz-forrás a helyet nézi, a gólpassz-hálózat a neveket — ez a
   posztot: a gólokhoz rendelt gólpasszokat az előkészítő becsült

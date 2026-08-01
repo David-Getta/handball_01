@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kiállítás-posztok: melyik poszt hozza a kétperceseket.
+    try:
+        from .rules import susp_earner_roles
+        sur = susp_earner_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            top_sur = sur[side]["top"]
+            if top_sur is None:
+                continue
+            body += (f" A(z) {name} a kétperceseket jellemzően a(z) "
+                     f"{top_sur['poszt']} posztról hozza "
+                     f"({top_sur['count']}/{sur[side]['suspensions']} "
+                     "kiharcolt kiállítás).")
+    except Exception:
+        pass
     # Gólpassz-posztok: melyik poszt készíti elő a gólokat.
     try:
         from .roles import assists_by_role

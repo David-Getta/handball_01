@@ -1392,3 +1392,60 @@ def post_seven_lapses(match: Match,
                 and rec["extra_conceded"] >= PSL_MIN_EXTRA):
             rec["verdict"] = "a hetes utáni percben is büntetik őket"
     return out
+
+
+# Kiállítás-kiharcolás poszt szerint: ennyi poszthoz kötött kiállítás
+# kell az ítélethez, és e feletti részarány emeli ki a posztot.
+SUR_MIN_SUSP = 3
+SUR_SHARE = 50.0
+
+
+def susp_earner_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Kiállítás-kiharcolás poszt szerint: MELYIK POSZTJUK hozza a
+    kétperceseket.
+
+    A kiállítás-kiharcolók (suspension_earners) azt mondják meg, KI
+    ellen szabálytalankodnak kiállításig — ez azt, MILYEN POSZTON: a
+    kiharcolókat a poszt-becsléshez (estimate_positions) kötjük, a
+    hetes-posztok (seven_earner_roles) mintájára.
+
+    Edzőileg: ha a kétperceseket az átlövőjük hozza, a betörése ellen
+    korán, még a lendület előtt kell lépni — a kései fogás kiállítást
+    ér; ha a beállójuk, az elzárás-birkózást kell fegyelmezetten,
+    testtel kezelni; ha a szélsőjük, a kifutásnál tilos a kéz.
+
+    Visszatérés csapatonként: {"suspensions", "roles": {poszt:
+    darab}, "top": {"poszt", "count", "share_pct"} | None} — a "top"
+    akkor van kitöltve, ha legalább SUR_MIN_SUSP poszthoz kötött
+    kiállítás van, a vezető poszt részaránya eléri a SUR_SHARE-t, és
+    nincs holtverseny.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    out: dict = {side: {"suspensions": 0, "roles": {}, "top": None}
+                 for side in ("home", "away")}
+    earners = suspension_earners(match, config)
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in earners.get(side, []):
+            info = roles.get(side, {}).get(row["player_id"])
+            if info is None:
+                continue
+            rec["suspensions"] += row["earned"]
+            poszt = info["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["earned"])
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["roles"].items())
+        if rec["suspensions"] >= SUR_MIN_SUSP and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["suspensions"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= SUR_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "count": n,
+                              "share_pct": round(share, 1)}
+    return out

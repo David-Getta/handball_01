@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 226) Kiállítás-posztok: ha egy posztunk ellen sok a kiállításig
+    # menő fogás, a kiharcolás tudatosítása a téma — nekünk fegyver.
+    try:
+        from .rules import susp_earner_roles
+        sur226 = susp_earner_roles(match, config)
+        for side in ("home", "away"):
+            top226 = sur226[side]["top"]
+            if top226 is None:
+                continue
+            add(side, "tamadas", "Kiállítás-kiharcolás",
+                f"a kétperceseinket a(z) {top226['poszt']} poszt "
+                f"hozza ({top226['count']}/"
+                f"{sur226[side]['suspensions']} kiharcolt "
+                "kiállítás) — ez működő fegyver, tudatosítva még "
+                "többet ér",
+                "kiharcolás-gyakorlat: a kiemelt poszt bátor, "
+                "vonalra vitt megindulásai élő védő ellen — a "
+                "test-test kontaktot vállalni kell, a lövést az "
+                "érintkezés UTÁN is be kell fejezni; az "
+                "edzésmeccsen a kiharcolt szabálytalanság pontot "
+                "ér, a kontakt-kerülő megtorpanás mínuszt")
+    except Exception:
+        pass
     # 225) Gólpassz-posztok: ha egyetlen posztról készítjük elő a
     # gólokat, a második előkészítő-út beépítése a téma.
     try:
