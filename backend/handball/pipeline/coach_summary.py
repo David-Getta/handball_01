@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kontra-elszökés: előre szökött emberrel vagy együtt kontráznak.
+    try:
+        from .attack_types import fast_break_headstart
+        fbh = fast_break_headstart(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fbh = fbh[side]
+            if rec_fbh["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontra-felfutásáról kiderült: "
+                     f"{rec_fbh['verdict']} "
+                     f"({rec_fbh['ahead']}/{rec_fbh['breaks']} "
+                     "lerohanás indult elszökött emberrel).")
+    except Exception:
+        pass
     # Kontra-hullámok: az első ember vagy a befutó fejezi be.
     try:
         from .attack_types import fast_break_waves

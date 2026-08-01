@@ -3404,6 +3404,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import fast_break_headstart
+            res["fast_break_headstart"] = fast_break_headstart(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4278,6 +4283,9 @@ def create_app():
                 from ..pipeline.attack_types import fast_break_waves
                 _layer("fast_break_waves",
                        lambda: fast_break_waves(match))
+                from ..pipeline.attack_types import fast_break_headstart
+                _layer("fast_break_headstart",
+                       lambda: fast_break_headstart(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

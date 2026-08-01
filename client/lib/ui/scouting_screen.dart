@@ -1401,6 +1401,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kontra-elszökés: előre szökött emberrel vagy együtt futnak fel
+  // (5+ kontra; 40% felett elszökős, 10% alatt együttes — a
+  // backend-kulccsal azonos küszöbök).
+  String? _fastBreakHeadstart(Map<String, dynamic> r) {
+    final breaks = ((r["fbh_breaks"] as num?) ?? 0).toInt();
+    final ahead = ((r["fbh_ahead"] as num?) ?? 0).toInt();
+    if (breaks < 5) return null;
+    final pct = 100.0 * ahead / breaks;
+    if (pct >= 40.0) {
+      return "előre szökött emberrel kontráznak ($ahead/$breaks "
+          "lerohanás a labda előtt váró játékossal) · állandó "
+          "mélységbiztosítás + a hosszú indítás elvágása";
+    }
+    if (pct <= 10.0) {
+      return "együtt futnak fel a kontráik (csak $ahead/$breaks "
+          "elszökött emberrel) · az első két visszafutó lassítson, "
+          "a védelem beér";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5320,6 +5341,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Beálló-futtatás", _pivotService(r)!],
       if (_fastBreakWaves(r) != null)
         ["Kontra-hullámok", _fastBreakWaves(r)!],
+      if (_fastBreakHeadstart(r) != null)
+        ["Kontra-elszökés", _fastBreakHeadstart(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

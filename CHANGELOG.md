@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kontra-elszökés**: ELŐRE SZÖKÖTT emberrel kontráznak-e. A
+  kontra-forrás azt mondja meg, miből indul a lerohanásuk, a
+  kontra-hullámok azt, ki fejezi be — ez azt, hol állnak az
+  induláskor: van-e a labdánál legalább 6 méterrel előrébb váró
+  játékosuk (5+ kontra; 40% felett elszökős, 10% alatt együtt
+  felfutó). Az elszökős csapat ellen állandó mélységbiztosítás kell
+  és a hosszú indítás elvágása; az együtt felfutó ellen az első két
+  visszafutó lassít, és a védelem beér. Egy réteg, sok felület:
+  `fast_break_headstart` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (kontra-darabszámok, két edzői
+  kulcs + csempe), 202. meccsterv-szabály (az ő elszökős kontráik ×
+  a ti biztos labdakezelésetek), 223. edzés-szabály (elszökő-
+  gyakorlat: a lövésünk pillanatában forduló szélső).
+
 - **Kontra-hullámok**: az ELSŐ EMBER vagy a MÁSODIK HULLÁM fejezi-e
   be a lerohanásaikat. A kontra-befejezők a neveket adják, a
   kontra-hatásfok a végeredményt — ez a szerkezetet: a lövésig jutó

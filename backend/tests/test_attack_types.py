@@ -2955,3 +2955,53 @@ def test_fast_break_waves_needs_enough_breaks():
 
     rec = fast_break_waves(_fbw_match(True, n_breaks=3))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Kontra-elszökés (előre szökött ember vagy együtt felfutás) -------------
+
+def _fbh_match(ahead, n_breaks=6, fps=25.0):
+    """Lerohanás-sorozat: a 2-es viszi a labdát; az `ahead` szerint az
+    1-es már 10 méterrel a labda előtt várja az indítást, vagy a
+    labda mellett fut fel."""
+    frames = []
+    t = 0
+    for _ in range(n_breaks):
+        for i in range(int(4 * fps)):
+            bx = 4.0 + 0.2 * i
+            x1 = min(36.0, bx + 10.0) if ahead else bx + 1.0
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, x1, 10.0),
+                _pl(2, Team.HOME, bx, 6.0),
+                _pl(9, Team.HOME, 1.5, 10.0, role="kapus")],
+                ball=Ball(x=bx, y=6.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(4 * fps)):   # szünet a szakaszok közt
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_fast_break_headstart_flags_the_sneaking_team():
+    """A labda előtt 10 méterrel váró ember → elszökős kontra."""
+    from handball.pipeline.attack_types import fast_break_headstart
+
+    rec = fast_break_headstart(_fbh_match(True))["home"]
+    assert rec["breaks"] >= 5
+    assert rec["verdict"] == "előre szökött emberrel kontráznak"
+
+
+def test_fast_break_headstart_flags_the_collective_team():
+    """A labdával együtt felfutó emberek → együtt futnak fel."""
+    from handball.pipeline.attack_types import fast_break_headstart
+
+    rec = fast_break_headstart(_fbh_match(False))["home"]
+    assert rec["ahead"] == 0
+    assert rec["verdict"] == "együtt futnak fel"
+
+
+def test_fast_break_headstart_needs_enough_breaks():
+    """Kevés (5-nél kevesebb) lerohanásnál nincs ítélet."""
+    from handball.pipeline.attack_types import fast_break_headstart
+
+    rec = fast_break_headstart(_fbh_match(True, n_breaks=3))["home"]
+    assert rec["verdict"] is None

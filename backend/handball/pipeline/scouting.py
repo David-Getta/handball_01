@@ -621,6 +621,8 @@ class ScoutingReport:
     psv_running: int = 0
     fbw_breaks: int = 0
     fbw_second: int = 0
+    fbh_breaks: int = 0
+    fbh_ahead: int = 0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2220,6 +2222,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.fbw_second}/{rep.fbw_breaks} lerohanás a "
                 "befutóé) — az indítópassz elvágása és az első "
                 "ember azonnali felvétele megöli a kontrájukat.")
+
+    # Kontra-elszökés: kell-e állandó mélységbiztosítás ellenük.
+    if rep.fbh_breaks >= 5:
+        _fbh_pct = 100.0 * rep.fbh_ahead / rep.fbh_breaks
+        if _fbh_pct >= 40.0:
+            keys.append(
+                f"Előre szökött emberrel kontráznak "
+                f"({rep.fbh_ahead}/{rep.fbh_breaks} lerohanás indult "
+                "a labda előtt váró játékossal) — állandó "
+                "mélységbiztosítás kell: a fal mögött mindig "
+                "maradjon egy kijelölt védő, és a hosszú "
+                "indítópasszt kell elvágni.")
+        elif _fbh_pct <= 10.0:
+            keys.append(
+                f"Együtt futnak fel a kontráik (csak "
+                f"{rep.fbh_ahead}/{rep.fbh_breaks} lerohanás indult "
+                "elszökött emberrel) — az első két visszafutó a "
+                "labdás embert lassítsa: a védelem beér, mert "
+                "nincs, aki megelőzze.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -5987,6 +6008,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         fbwrec = _fbw(match, config)[team.value]
         rep.fbw_breaks = fbwrec["breaks"]
         rep.fbw_second = fbwrec["second"]
+        from .attack_types import fast_break_headstart as _fbh
+        fbhrec = _fbh(match, config)[team.value]
+        rep.fbh_breaks = fbhrec["breaks"]
+        rep.fbh_ahead = fbhrec["ahead"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8388,6 +8413,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 202) Az ő elszökős kontráik × a ti biztos labdakezelésetek: ha
+    # nincs labdavesztés, az elszökött emberük éhen marad.
+    if (opp.fbh_breaks >= 5
+            and 100.0 * opp.fbh_ahead / opp.fbh_breaks >= 40.0
+            and opp.matches >= 1):
+        _to202 = own.turnover_total / max(1, own.matches)
+        if _to202 <= 10.0:
+            plan.append(
+                f"Előre szökött emberrel kontráznak "
+                f"({opp.fbh_ahead}/{opp.fbh_breaks} lerohanás a "
+                f"labda előtt váró játékossal), ti pedig keveset "
+                f"hibáztok (meccsenként átlag {_to202:.0f} "
+                "labdaeladás) — türelmes, biztos labdakezeléssel az "
+                "elszökött emberük éhen marad; a lövéseitek "
+                "pillanatában pedig egy kijelölt védő már induljon "
+                "hátra mélységbiztosításba.")
 
     # 201) Az ő második hullámos kontráik × a ti erős átmenet-
     # védekezésetek: a visszafutásnál a középső sáv a tiétek.
@@ -11519,6 +11561,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         psv_running=sum(r.psv_running for r in reports),
         fbw_breaks=sum(r.fbw_breaks for r in reports),
         fbw_second=sum(r.fbw_second for r in reports),
+        fbh_breaks=sum(r.fbh_breaks for r in reports),
+        fbh_ahead=sum(r.fbh_ahead for r in reports),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

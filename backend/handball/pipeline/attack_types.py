@@ -4035,3 +4035,74 @@ def fast_break_waves(match: Match,
             elif pct <= FBW_FIRST_PCT:
                 rec["verdict"] = "az első ember fejezi be a kontrát"
     return out
+
+# Kontra-elszökés: a labdánál legalább ennyivel előrébb álló ember
+# számít elszököttnek a kontra indulásakor; ennyi lerohanás kell az
+# ítélethez, és e feletti / alatti elszökött arány a szökős, illetve
+# az együtt felfutó kontra jele.
+FBH_GAP_M = 6.0
+FBH_MIN_BREAKS = 5
+FBH_AHEAD_PCT = 40.0
+FBH_TOGETHER_PCT = 10.0
+
+
+def fast_break_headstart(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Kontra-elszökés: ELŐRE SZÖKÖTT emberrel kontráznak-e.
+
+    A kontra-forrás azt mondja meg, miből indul a lerohanásuk, a
+    kontra-hullámok azt, ki fejezi be — ez azt, HOL ÁLLNAK az
+    induláskor: minden lerohanásnál megnézzük, van-e a labdánál
+    legalább FBH_GAP_M méterrel előrébb váró mezőnyjátékosuk
+    (elszökött ember), vagy együtt fut fel a csapat a labdával.
+
+    Edzőileg: az elszökős csapat ellen mélységbiztosítás kell — a fal
+    mögött MINDIG maradjon egy visszarendeződésre kijelölt védő, és a
+    hosszú indítópasszt kell elvágni, mert mire a labda elmegy, késő;
+    az együtt felfutó kontra ellen az első két visszafutó a labdás
+    embert lassítja, és a védelem beér.
+
+    Visszatérés csapatonként: {"breaks", "ahead", "ahead_pct",
+    "verdict"} — az ahead_pct/verdict None FBH_MIN_BREAKS alatt; a
+    verdict "előre szökött emberrel kontráznak" / "együtt futnak
+    fel" / None.
+    """
+    from ..models.tracking import Team
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    out = {side: {"breaks": 0, "ahead": 0, "ahead_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        i0 = idx_of.get(a["start_frame"])
+        if i0 is None:
+            continue
+        fr = match.frames[i0]
+        if fr.ball is None:
+            continue
+        goal_x = config.attacks_toward_x(Team(side))
+        runners = [p for p in fr.players
+                   if p.team.value == side and p.role != "kapus"]
+        if not runners:
+            continue
+        ball_dist = abs(fr.ball.x - goal_x)
+        front_dist = min(abs(p.x - goal_x) for p in runners)
+        rec = out[side]
+        rec["breaks"] += 1
+        if ball_dist - front_dist >= FBH_GAP_M:
+            rec["ahead"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["breaks"] >= FBH_MIN_BREAKS:
+            pct = 100.0 * rec["ahead"] / rec["breaks"]
+            rec["ahead_pct"] = round(pct, 1)
+            if pct >= FBH_AHEAD_PCT:
+                rec["verdict"] = "előre szökött emberrel kontráznak"
+            elif pct <= FBH_TOGETHER_PCT:
+                rec["verdict"] = "együtt futnak fel"
+    return out

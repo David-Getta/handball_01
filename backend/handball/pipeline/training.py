@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 223) Kontra-elszökés: ha mindig együtt futunk fel, az elszökő
+    # ember beépítése a téma.
+    try:
+        from .attack_types import fast_break_headstart
+        fbh223 = fast_break_headstart(match, config)
+        for side in ("home", "away"):
+            rec223 = fbh223[side]
+            if rec223["verdict"] != "együtt futnak fel":
+                continue
+            add(side, "tamadas", "Elszökő ember",
+                f"a kontráink mindig együtt futnak fel (csak "
+                f"{rec223['ahead']}/{rec223['breaks']} lerohanás "
+                "indult a labda előtt váró emberrel) — a védelem "
+                "így mindig beér, mert nincs, aki megelőzze",
+                "elszökő-gyakorlat: a kijelölt szélső a saját "
+                "lövésünk pillanatában már fordul és indul — a "
+                "kapus/labdaszerző első dolga a hosszú indítás; az "
+                "edzésmeccsen az elszökött embernek adott gólt érő "
+                "indítás dupla pontot ér")
+    except Exception:
+        pass
     # 222) Kontra-hullámok: ha csak az első ember fejezi be a
     # kontránkat, a második hullám beépítése a téma.
     try:
