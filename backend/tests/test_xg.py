@@ -779,3 +779,81 @@ def test_big_chance_finishers_needs_enough_chances():
     rec = big_chance_finishers(_bcf_match(
         [(7, True), (7, True), (9, False)]))["home"]
     assert rec["safe"] is None and rec["shaky"] is None
+
+
+# ---- Előny-védekezés (leül-e a fal, amikor vezetnek) ------------------------
+
+def _dbs_match(soft=True, n=5, fps=25.0):
+    """Vendég-lövések a hazai fal ellen: döntetlennél messziről (vagy
+    közelről), majd egy hazai gól utáni vezetésnél közelről (vagy
+    messziről) — a hazai fal előny-viselkedése így mérhető."""
+    frames = []
+    t = 0
+
+    def _pause(sec=1.6):
+        nonlocal t
+        for _ in range(int(sec * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _away_shot(sx):
+        nonlocal t
+        for _ in range(10):     # a vendég lövő birtokol
+            frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, sx, 10.0)],
+                                ball=Ball(x=sx, y=10.0, confidence=1.0)))
+            t += 1
+        steps = max(3, int(round(sx - 0.8)))
+        for i in range(1, steps + 1):   # lövés a -x kapura (nem gól)
+            frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, sx, 10.0)],
+                                ball=Ball(x=sx - (sx - 0.8) * i / steps,
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _pause()
+
+    def _home_goal():
+        nonlocal t
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 34.0, 10.0)],
+                                ball=Ball(x=34.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 34.0, 10.0)],
+                                ball=Ball(x=min(34.0 + i, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _pause()
+
+    far, close = 12.0, 6.0
+    for _ in range(n):                  # döntetlennél
+        _away_shot(far if soft else close)
+    _home_goal()                        # a hazaiak vezetnek
+    for _ in range(n):                  # vezetés közben
+        _away_shot(close if soft else far)
+    return Match(_meta(fps), frames)
+
+
+def test_defense_by_score_flags_the_relaxing_wall():
+    """Vezetve közelről kapják a lövéseket → előnyben leül a faluk."""
+    from handball.pipeline.xg import defense_by_score
+
+    rec = defense_by_score(_dbs_match(True))["home"]
+    assert rec["leading"]["shots"] >= 5 and rec["rest"]["shots"] >= 5
+    assert rec["verdict"] == "előnyben leül a faluk"
+
+
+def test_defense_by_score_flags_the_tight_wall():
+    """Vezetve messzebbről kapják a lövéseket → előnyben is feszes."""
+    from handball.pipeline.xg import defense_by_score
+
+    rec = defense_by_score(_dbs_match(False))["home"]
+    assert rec["verdict"] == "előnyben is feszes a faluk"
+
+
+def test_defense_by_score_needs_enough_shots():
+    """Kevés (5-nél kevesebb) kapott lövésnél nincs ítélet."""
+    from handball.pipeline.xg import defense_by_score
+
+    rec = defense_by_score(_dbs_match(True, n=3))["home"]
+    assert rec["verdict"] is None

@@ -1612,6 +1612,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Előny-védekezés: leül-e a fal vezetve (vödrönként 5+ kapott
+  // lövés; +0,05 xG leülés, -0,02 feszes — a backend-kulccsal
+  // azonos küszöbök).
+  String? _defenseByScore(Map<String, dynamic> r) {
+    final ls = ((r["dbs_lead_shots"] as num?) ?? 0).toInt();
+    final lx = ((r["dbs_lead_xg"] as num?) ?? 0).toDouble();
+    final rs = ((r["dbs_rest_shots"] as num?) ?? 0).toInt();
+    final rx = ((r["dbs_rest_xg"] as num?) ?? 0).toDouble();
+    if (ls < 5 || rs < 5) return null;
+    final lead = lx / ls;
+    final rest = rx / rs;
+    if (lead - rest >= 0.05) {
+      return "előnyben leül a faluk (kapott átlag-xG "
+          "${rest.toStringAsFixed(2)} → ${lead.toStringAsFixed(2)} "
+          "vezetve) · hátrányban sincs pánik: türelmes, bevitt "
+          "támadásokkal visszajön a meccs";
+    }
+    if (lead - rest <= -0.02) {
+      return "előnyben is feszes a faluk (kapott átlag-xG "
+          "${lead.toStringAsFixed(2)} vezetve) · az elejét kell "
+          "megnyerni, vezetve sem nyílik ki";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5551,6 +5576,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kettőző emberek", _doublingDefenders(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
+      if (_defenseByScore(r) != null)
+        ["Előny-védekezés", _defenseByScore(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

@@ -825,3 +825,70 @@ def big_chance_finishers(match: Match,
                 shaky = r
         out[side] = {"players": rows, "safe": safe, "shaky": shaky}
     return out
+
+
+# Előny-védekezés: állás-vödrönként legalább ennyi kapott lövés kell,
+# és ekkora kapott átlag-xG többlet a leülés, ekkora hiány a feszesen
+# maradó fal jele vezetés közben.
+DBS_MIN_SHOTS = 5
+DBS_SOFT_XG = 0.05
+DBS_TIGHT_XG = -0.02
+
+
+def defense_by_score(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Előny-védekezés: LEÜL-E A FALUK, amikor vezetnek.
+
+    A kapott helyzetek minősége (conceded_chance_quality) a teljes
+    meccset nézi — ez állás szerint bontja: a csapat ellen leadott
+    lövések átlagos helyzet-értékét (xG) akkor, amikor VEZETNEK,
+    szemben az összes többi állapottal. Aki vezetve nagyobb
+    helyzeteket enged, annak a fala előnyben elkényelmesedik.
+
+    Edzőileg: az előnyben leülő csapat ellen hátrányban sincs ok
+    pánikra — a vezetésük puhább falat hoz, türelmes, bevitt
+    támadásokkal visszajön a meccs; az előnyben is feszes fal ellen
+    a korai hátrány valódi baj — az elejét kell megnyerni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"leading":
+    {"shots", "xg_sum", "avg_xg"}, "rest": {"shots", "xg_sum",
+    "avg_xg"}, "verdict"} — az avg_xg None DBS_MIN_SHOTS alatt; a
+    verdict "előnyben leül a faluk" / "előnyben is feszes a faluk" /
+    None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"leading": {"shots": 0, "xg_sum": 0.0,
+                                    "avg_xg": None},
+                        "rest": {"shots": 0, "xg_sum": 0.0,
+                                 "avg_xg": None},
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        deff = "away" if sh["team"] == "home" else "home"
+        own = sum(1 for (t, tm) in goals
+                  if t < sh["t"] and tm == deff)
+        opp = sum(1 for (t, tm) in goals
+                  if t < sh["t"] and tm != deff)
+        rec = out[deff]["leading" if own > opp else "rest"]
+        rec["shots"] += 1
+        rec["xg_sum"] += float(sh.get("xg", 0.0))
+
+    for side in ("home", "away"):
+        buckets = out[side]
+        for rec in (buckets["leading"], buckets["rest"]):
+            rec["xg_sum"] = round(rec["xg_sum"], 2)
+            if rec["shots"] >= DBS_MIN_SHOTS:
+                rec["avg_xg"] = round(rec["xg_sum"] / rec["shots"], 3)
+        lead, rest = buckets["leading"], buckets["rest"]
+        if lead["avg_xg"] is not None and rest["avg_xg"] is not None:
+            diff = lead["avg_xg"] - rest["avg_xg"]
+            if diff >= DBS_SOFT_XG:
+                buckets["verdict"] = "előnyben leül a faluk"
+            elif diff <= DBS_TIGHT_XG:
+                buckets["verdict"] = "előnyben is feszes a faluk"
+    return out

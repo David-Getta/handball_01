@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Előny-védekezés: leül-e a fal, amikor vezetnek.
+    try:
+        from .xg import defense_by_score
+        dbs = defense_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dbs = dbs[side]
+            if rec_dbs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} faláról kiderült: "
+                     f"{rec_dbs['verdict']} (kapott átlag-xG "
+                     f"vezetve {rec_dbs['leading']['avg_xg']:.2f}, "
+                     f"egyébként {rec_dbs['rest']['avg_xg']:.2f}).")
+    except Exception:
+        pass
     # Hiba-állás: hátrányban szórják-e a labdát.
     try:
         from .attack_types import turnovers_by_score

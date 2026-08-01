@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 233) Előny-védekezés: ha vezetve leül a falunk, az előny
+    # megtartása a téma — a fal nem pihenhet.
+    try:
+        from .xg import defense_by_score
+        dbs233 = defense_by_score(match, config)
+        for side in ("home", "away"):
+            rec233 = dbs233[side]
+            if rec233["verdict"] != "előnyben leül a faluk":
+                continue
+            add(side, "vedekezes", "Előny-védekezés",
+                f"vezetve leül a falunk: a kapott átlag-xG "
+                f"{rec233['rest']['avg_xg']:.2f}-ról "
+                f"{rec233['leading']['avg_xg']:.2f}-ra nő, amikor "
+                "előnyben vagyunk — a megnyert meccset is vissza "
+                "lehet így adni",
+                "előny-megtartó védekezés: edzésmeccs vezetésből "
+                "(2-0-ról indítva), ahol a vezető csapat fala "
+                "kapja a pontot minden kintről elrontatott "
+                "támadásért — a vezetés alatt beengedett ziccer "
+                "dupla mínusz, és a sor hangosan számolja, hány "
+                "támadás óta feszes a fal")
+    except Exception:
+        pass
     # 232) Hiba-állás: ha hátrányban kapkodunk, a nyomás alatti
     # rendezettség a téma.
     try:

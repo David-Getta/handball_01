@@ -645,6 +645,10 @@ class ScoutingReport:
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
     tbs_rest_tos: int = 0
+    dbs_lead_shots: int = 0
+    dbs_lead_xg: float = 0.0
+    dbs_rest_shots: int = 0
+    dbs_rest_xg: float = 0.0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2392,6 +2396,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_tbs_tr:.0f}%, egyébként {_tbs_rest:.0f}%) — a "
                 "prés ellenük nem térül meg: a fegyelmezett fal "
                 "többet ér, mint a kockázatos letámadás.")
+
+    # Előny-védekezés: mit ér a faluk, amikor vezetnek.
+    if rep.dbs_lead_shots >= 5 and rep.dbs_rest_shots >= 5:
+        _dbs_lead = rep.dbs_lead_xg / rep.dbs_lead_shots
+        _dbs_rest = rep.dbs_rest_xg / rep.dbs_rest_shots
+        if _dbs_lead - _dbs_rest >= 0.05:
+            keys.append(
+                f"Előnyben leül a faluk (kapott átlag-xG vezetve "
+                f"{_dbs_lead:.2f}, egyébként {_dbs_rest:.2f}) — ha "
+                "hátrányba kerültök, nincs ok pánikra: a vezetésük "
+                "puhább falat hoz, türelmes, bevitt támadásokkal "
+                "visszajön a meccs.")
+        elif _dbs_lead - _dbs_rest <= -0.02:
+            keys.append(
+                f"Előnyben is feszes a faluk (kapott átlag-xG "
+                f"vezetve {_dbs_lead:.2f}) — ellenük a korai "
+                "hátrány valódi baj: az elejét kell megnyerni, mert "
+                "vezetve sem nyílik ki a védekezésük.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6215,6 +6237,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                                 + tbsrec["level"]["attacks"])
         rep.tbs_rest_tos = (tbsrec["leading"]["turnovers"]
                             + tbsrec["level"]["turnovers"])
+        from .xg import defense_by_score as _dbs
+        dbsrec = _dbs(match, config)[team.value]
+        rep.dbs_lead_shots = dbsrec["leading"]["shots"]
+        rep.dbs_lead_xg = dbsrec["leading"]["xg_sum"]
+        rep.dbs_rest_shots = dbsrec["rest"]["shots"]
+        rep.dbs_rest_xg = dbsrec["rest"]["xg_sum"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8616,6 +8644,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 212) Az ő előnyben leülő faluk × a ti kitartó, lövésig vitt
+    # támadásaitok: hátrányból is visszajön a meccs.
+    if (opp.dbs_lead_shots >= 5 and opp.dbs_rest_shots >= 5
+            and own.lao_n >= 5):
+        _dbs_lead212 = opp.dbs_lead_xg / opp.dbs_lead_shots
+        _dbs_rest212 = opp.dbs_rest_xg / opp.dbs_rest_shots
+        _lao212 = 100.0 * own.lao_died / own.lao_n
+        if _dbs_lead212 - _dbs_rest212 >= 0.05 and _lao212 <= 35.0:
+            plan.append(
+                f"Előnyben leül a faluk (kapott átlag-xG vezetve "
+                f"{_dbs_lead212:.2f}, egyébként {_dbs_rest212:.2f}), "
+                f"a ti hosszú támadásaitok pedig lövésig érnek (csak "
+                f"{_lao212:.0f}% hal el) — ha vezetnek, ne "
+                "kapkodjatok: a türelmesen bevitt támadás pont az ő "
+                "elkényelmesedő falukat bünteti, a meccs hátrányból "
+                "is visszajön.")
 
     # 211) Az ő hátrány-kapkodásuk × a ti labdaszerző védekezésetek:
     # az első ellépés után a prés dönti el a meccset.
@@ -11964,6 +12009,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
         tbs_rest_tos=sum(r.tbs_rest_tos for r in reports),
+        dbs_lead_shots=sum(r.dbs_lead_shots for r in reports),
+        dbs_lead_xg=round(sum(r.dbs_lead_xg for r in reports), 2),
+        dbs_rest_shots=sum(r.dbs_rest_shots for r in reports),
+        dbs_rest_xg=round(sum(r.dbs_rest_xg for r in reports), 2),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

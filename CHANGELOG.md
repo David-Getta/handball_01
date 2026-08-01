@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Előny-védekezés**: LEÜL-E A FALUK, amikor vezetnek. A kapott
+  helyzetek minősége a teljes meccset nézi — ez állás szerint: a
+  csapat ellen leadott lövések átlagos xG-je vezetés közben, szemben
+  a többi állapottal (vödrönként 5+ lövés; +0,05 xG a leülés, −0,02
+  a feszesen maradó fal jele). Az előnyben leülő ellen hátrányban
+  sincs pánik — türelmes, bevitt támadásokkal visszajön a meccs; az
+  előnyben is feszes ellen az elejét kell megnyerni. Egy réteg, sok
+  felület: `defense_by_score` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (vödrönkénti lövés-darabszám +
+  xG-összeg, két edzői kulcs + csempe), 212. meccsterv-szabály (az
+  ő leülő faluk × a ti lövésig vitt hosszú támadásaitok), 233.
+  edzés-szabály (előny-megtartó védekezés vezetésből indított
+  edzésmeccsel).
+
 - **Hiba-állás**: HÁTRÁNYBAN SZÓRJÁK-E a labdát. A tempó-állás azt
   méri, gyorsítanak-e hátrányban — ez azt, mi lesz a labdával:
   állásonként (vezet / hátrányban / döntetlen) az eladással záruló
