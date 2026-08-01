@@ -3,7 +3,22 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.25 óta)
+## Kiadatlan (a v0.1.23 óta)
+
+(még semmi)
+
+## v0.1.23 — kiadva (2026-08-01)
+
+> Kiadás-jegyzet: a GitHub-kiadások a v0.1.22 után itt folytatódnak —
+> a korábbi v0.1.23–v0.1.25 changelog-körök címke nélkül maradtak,
+> így ez a kiadás azok MINDEN fejlesztését is tartalmazza, plusz az
+> azóta született ~82 új réteget és a néma hibák elleni őr-teszteket.
+> A vezérfonal kettős: egyrészt a poszt-lencse (gól, hiba, gólpassz,
+> hetes, kiállítás, falba lövés, felhozatal poszt szerint) és az
+> állás-lencse (tempó, lövés-minőség, kapus-védés, hiba, védekezés,
+> csere, indítás állás szerint) családok kiépülése, másrészt a
+> regisztry-füstteszt család: egyetlen réteg, kulcs vagy végpont sem
+> bukhat el többé némán.
 
 - **Indítás-állás**: VEZETVE LASSÍTJÁK-E a kapus-indítást. A
   kapus-indítás a teljes meccs átlagát méri — ez állás szerint: a
@@ -1662,7 +1677,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   csak felállt védekezésben él), 116. edzés-szabály (második
   védekezési változat betanítása, ha végig egy rendszert játszunk).
 
-## v0.1.25 — kiadva (2026-07-26)
+## v0.1.25-ös changelog-kör (2026-07-26) — címke és GitHub-kiadás nélkül maradt; először a v0.1.23 kiadás telepítőjében jelenik meg
 
 > Kiadás-jegyzet: huszonöt új elemzés-réteg — a kör vezérfonala az,
 > hogy a csapat-szintű képek NÉVRE szólóvá váltak. Eddig azt tudtuk,
@@ -2029,7 +2044,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   játékotok), 91. edzés-szabály (beálló-őrzés: elöl-mögött váltás,
   kettőzés-időzítés).
 
-## v0.1.24 — kiadva (2026-07-25)
+## v0.1.24-es changelog-kör (2026-07-25) — címke és GitHub-kiadás nélkül maradt; először a v0.1.23 kiadás telepítőjében jelenik meg
 
 > Kiadás-jegyzet: tíz új elemzés-réteg, ezúttal a MÁSIK OLDALRÓL. A
 > kör vezérfonala a tükrözés: több meglévő támadó-réteg mostantól
@@ -2166,7 +2181,7 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   áteresztő faluk × a ti lepattanó-harcotok), 81. edzés-szabály
   (lepattanó-zárás, box-out).
 
-## v0.1.23 — kiadva (2026-07-25)
+## v0.1.23-as changelog-kör (2026-07-25) — címke és GitHub-kiadás nélkül maradt; először a v0.1.23 kiadás telepítőjében jelenik meg
 
 > Kiadás-jegyzet: húsz új elemzés-réteg egyetlen körben — mind a
 > megszokott "egy réteg, sok felület" bekötéssel (motor, edzői
