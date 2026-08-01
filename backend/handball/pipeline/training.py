@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 236) Átvert védők: ha egy emberünk rendre elveszíti a párharcot
+    # a kapott góloknál, segítés-rend és párharc-edzés a téma.
+    try:
+        from .defense import beaten_defenders
+        btn236 = beaten_defenders(match, config)
+        for side in ("home", "away"):
+            top236 = btn236[side]["top"]
+            if top236 is None:
+                continue
+            mez236 = (f"{top236['jersey']} mezszámú"
+                      if top236["jersey"] is not None
+                      else f"{top236['player_id']} azonosítójú")
+            add(side, "vedekezes", "Párharc-segítés",
+                f"a kapott góljainknál rendre a(z) {mez236} "
+                f"játékosunk veszíti a párharcot ({top236['beaten']}/"
+                f"{btn236[side]['goals']}) — az ellenfél előbb-utóbb "
+                "tudatosan rá viszi majd a betöréseket",
+                "párharc-segítés: a kiemelt védő mellé kijelölt "
+                "besegítő (hangos jelre lépő váltás), plusz 1v1 "
+                "védő-lábmunka gyakorlat — az edzésmeccsen a mellette "
+                "esett gól a besegítő mínusza is, a megállított "
+                "betörés dupla pont a párnak")
+    except Exception:
+        pass
     # 235) Indítás-állás: ha vezetve mi is leülünk az indítással, az
     # előny-menedzsment tudatosítása a téma — de ne álljon le a láb.
     try:

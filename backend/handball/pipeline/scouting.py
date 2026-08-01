@@ -641,6 +641,9 @@ class ScoutingReport:
     wsd_depth_sum_m: float = 0.0
     dtp_frames: int = 0
     dtp_doublers: dict = field(default_factory=dict)
+    btn_goals: int = 0
+    btn_free: int = 0
+    btn_defenders: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2382,6 +2385,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{100.0 * _dtp_n / rep.dtp_frames:.0f}%-ában) — a "
                 "kettőzés pillanatában az Ő embere szabadul: oda "
                 "menjen az első passz, begyakorolt jelre.")
+
+    # Átvert védők: kire kell vinni az 1v1-et.
+    if rep.btn_goals >= 4 and rep.btn_defenders:
+        _btn_label, _btn_n = next(iter(rep.btn_defenders.items()))
+        _btn_vals = list(rep.btn_defenders.values())
+        _btn_tie = len(_btn_vals) > 1 and _btn_vals[1] == _btn_n
+        if 100.0 * _btn_n / rep.btn_goals >= 40.0 and not _btn_tie:
+            keys.append(
+                f"A kapott góljaiknál rendre a(z) {_btn_label} "
+                f"mezszámú védő veszíti a párharcot "
+                f"({_btn_n}/{rep.btn_goals}) — rá vigyétek az "
+                "1v1-et: elzárással hozzá tereljétek a lövőt, az ő "
+                "oldala a nyitott ajtó.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6255,6 +6271,16 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                        if _dtprow["jersey"] is not None
                        else "#" + str(_dtprow["player_id"]))
             rep.dtp_doublers[_dtpkey] = _dtprow["frames"]
+        from .defense import beaten_defenders as _btn
+        btnrec = _btn(match, config)[team.value]
+        rep.btn_goals = btnrec["goals"]
+        rep.btn_free = btnrec["free"]
+        rep.btn_defenders = {}
+        for _btnrow in btnrec["defenders"]:
+            _btnkey = (str(_btnrow["jersey"])
+                       if _btnrow["jersey"] is not None
+                       else "#" + str(_btnrow["player_id"]))
+            rep.btn_defenders[_btnkey] = _btnrow["beaten"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8674,6 +8700,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 215) Az ő sokat átvert védőjük × a ti betörő embereitek: az
+    # 1v1-et a nyitott ajtóra kell vinni.
+    if (opp.btn_goals >= 4 and opp.btn_defenders
+            and opp.matches >= 1):
+        _btn_label215, _btn_n215 = next(iter(opp.btn_defenders.items()))
+        _btn_vals215 = list(opp.btn_defenders.values())
+        _btn_tie215 = (len(_btn_vals215) > 1
+                       and _btn_vals215[1] == _btn_n215)
+        _own_entries215 = sum((r.get("entries", 0) or 0)
+                              for r in (own.breakthrough_players or []))
+        if (100.0 * _btn_n215 / opp.btn_goals >= 40.0
+                and not _btn_tie215 and _own_entries215 >= 10):
+            plan.append(
+                f"A kapott góljaiknál rendre a(z) {_btn_label215} "
+                f"mezszámú védő veszíti a párharcot ({_btn_n215}/"
+                f"{opp.btn_goals}), ti pedig betörős csapat vagytok "
+                f"({_own_entries215} bejutás a 9-esen belülre) — az "
+                "1v1-eket tudatosan az ő oldalára vigyétek: "
+                "elzárással oda tereljétek a betörőt, ott nyílik az "
+                "ajtó.")
 
     # 214) Az ő időhúzó kihozataluk × a ti gyors középkezdésetek: a
     # lassításuk ellen az azonnali újraindítás dolgozik.
@@ -12071,6 +12118,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         dtp_frames=sum(r.dtp_frames for r in reports),
         dtp_doublers=_merge_role_counts(
             [r.dtp_doublers for r in reports]),
+        btn_goals=sum(r.btn_goals for r in reports),
+        btn_free=sum(r.btn_free for r in reports),
+        btn_defenders=_merge_role_counts(
+            [r.btn_defenders for r in reports]),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

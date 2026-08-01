@@ -3289,3 +3289,85 @@ def doubling_defenders(match, config=None) -> dict:
         out[side] = {"doubled_frames": totals[side],
                      "doublers": rows, "top": top}
     return out
+
+
+# Átvert védők: a kapott gólnál a lövőhöz ennél közelebb álló védő
+# számít átvertnek; ennyi hozzárendelt gól kell az ítélethez, és e
+# feletti részarány emeli ki az egy embert.
+BTN_MAX_DIST_M = 3.5
+BTN_MIN_GOALS = 4
+BTN_TOP_SHARE = 40.0
+
+
+def beaten_defenders(match, config=None) -> dict:
+    """Átvert védők: KI MÖGÖTT esnek a kapott gólok.
+
+    Az őrzési párok (marking_pairs) azt mérik, ki kit fog — ez azt,
+    ki veszíti el a párharcot, amikor számít: minden kapott gólnál a
+    lövő helyéhez legközelebbi (BTN_MAX_DIST_M-en belüli) védő
+    mezőnyjátékost jegyezzük fel átvertként. A radiuson kívüli lövő
+    fedezetlen volt — az nem párharc-vereség, hanem szerkezeti hiba.
+
+    Edzőileg kétirányú: az ellenfél sokat átvert védője a megtámadható
+    ember — rá kell vinni az 1v1-et, elzárással hozzá terelni a
+    lövőt; a saját sokat átvert védőnk mellé pedig segítés kell
+    (besegítő váltás, kettőzés-készenlét), vagy párharc-edzés.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals" (védőhöz
+    rendelt kapott gólok), "free" (fedezetlen kapott gólok),
+    "defenders": [{"player_id", "jersey", "beaten"}], "top":
+    {"player_id", "jersey", "beaten", "share_pct"} | None} — a
+    defenders csökkenő; a "top" akkor van kitöltve, ha legalább
+    BTN_MIN_GOALS védőhöz rendelt gól van, a vezető részaránya
+    eléri a BTN_TOP_SHARE-t, és nincs holtverseny.
+    """
+    import math
+
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    jersey: dict[int, int] = {}
+    acc: dict = {"home": {}, "away": {}}
+    free = {"home": 0, "away": 0}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") != "goal":
+            continue
+        deff = "away" if sh["team"] == "home" else "home"
+        i0 = idx_of.get(sh["t"])
+        if i0 is None:
+            continue
+        best = None
+        for p in match.frames[i0].players:
+            if p.team.value != deff or p.role == "kapus":
+                continue
+            d = math.hypot(p.x - sh["x"], p.y - sh["y"])
+            if d <= BTN_MAX_DIST_M and (best is None or d < best[0]):
+                best = (d, p)
+        if best is None:
+            free[deff] += 1
+            continue
+        p = best[1]
+        if p.jersey_number is not None:
+            jersey.setdefault(p.track_id, p.jersey_number)
+        acc[deff][p.track_id] = acc[deff].get(p.track_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "beaten": n}
+                for tid, n in sorted(acc[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["beaten"] for r in rows)
+        top = None
+        if total >= BTN_MIN_GOALS and rows:
+            share = 100.0 * rows[0]["beaten"] / total
+            tie = (len(rows) > 1
+                   and rows[1]["beaten"] == rows[0]["beaten"])
+            if share >= BTN_TOP_SHARE and not tie:
+                top = {**rows[0], "share_pct": round(share, 1)}
+        out[side] = {"goals": total, "free": free[side],
+                     "defenders": rows, "top": top}
+    return out

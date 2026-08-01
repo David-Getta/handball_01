@@ -2259,3 +2259,62 @@ def test_doubling_defenders_needs_enough_frames():
 
     rec = doubling_defenders(_dtp_match(n_frames=30))["away"]
     assert rec["top"] is None
+
+
+# ---- Átvert védők (ki mögött esnek a kapott gólok) --------------------------
+
+def _btn_match(n_goals=5, with_defender=True, fps=25.0):
+    """Hazai gól-sorozat: a lövő mellett (vagy tőle távol) áll a
+    vendég 21-es védő — ő az átvert ember (vagy fedezetlen a lövés)."""
+    frames = []
+    t = 0
+    dx = 34.0 if with_defender else 37.0
+    dy = 10.0 if with_defender else 3.0
+    for _ in range(n_goals):
+        for _ in range(10):     # a lövő birtokol
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(21, Team.AWAY, dx, dy)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(8):      # gól a +x kapura
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(21, Team.AWAY, dx, dy)],
+                ball=Ball(x=min(33.0 + (i + 1), 40.5), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):     # szünet a gólok közt
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_beaten_defenders_names_the_beaten_man():
+    """A lövő mellett álló 21-es minden gólnál átvert → ő a kiemelt."""
+    from handball.pipeline.defense import beaten_defenders
+
+    rec = beaten_defenders(_btn_match())["away"]
+    assert rec["goals"] >= 4
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 21
+
+
+def test_beaten_defenders_counts_free_goals():
+    """A radiuson kívüli védő mellett esett gól fedezetlen, nem
+    párharc-vereség."""
+    from handball.pipeline.defense import beaten_defenders
+
+    rec = beaten_defenders(_btn_match(with_defender=False))["away"]
+    assert rec["goals"] == 0 and rec["free"] >= 4
+    assert rec["top"] is None
+
+
+def test_beaten_defenders_needs_enough_goals():
+    """Kevés (4-nél kevesebb) védőhöz rendelt gólnál nincs kiemelt."""
+    from handball.pipeline.defense import beaten_defenders
+
+    rec = beaten_defenders(_btn_match(n_goals=3))["away"]
+    assert rec["top"] is None

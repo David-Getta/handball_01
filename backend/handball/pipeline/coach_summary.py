@@ -883,6 +883,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Átvert védők: ki mögött esnek a kapott gólok.
+    try:
+        from .defense import beaten_defenders
+        btn = beaten_defenders(match)
+        for side, name in (("home", home), ("away", away)):
+            top_btn = btn[side]["top"]
+            if top_btn is None:
+                continue
+            mez_btn = (f"{top_btn['jersey']} mezszámú"
+                       if top_btn["jersey"] is not None
+                       else f"{top_btn['player_id']} azonosítójú")
+            body += (f" A(z) {name} kapott góljainál rendre a(z) "
+                     f"{mez_btn} védő veszítette a párharcot "
+                     f"({top_btn['beaten']}/{btn[side]['goals']}).")
+    except Exception:
+        pass
     # Kettőző emberek: ki jön másodiknak a labdásra.
     try:
         from .defense import doubling_defenders

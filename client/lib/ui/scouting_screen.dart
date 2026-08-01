@@ -1686,6 +1686,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Átvert védők: ki mögött esnek a kapott gólok (4+ védőhöz
+  // rendelt gól; 40%+ részarány, holtverseny nélkül — a
+  // backend-kulccsal azonos küszöbök).
+  String? _beatenDefenders(Map<String, dynamic> r) {
+    final goals = ((r["btn_goals"] as num?) ?? 0).toInt();
+    final defs = (r["btn_defenders"] as Map?) ?? {};
+    if (goals < 4 || defs.isEmpty) return null;
+    final entries = defs.entries.toList()
+      ..sort((a, b) =>
+          ((b.value as num?) ?? 0).compareTo((a.value as num?) ?? 0));
+    final top = entries.first;
+    final n = ((top.value as num?) ?? 0).toInt();
+    final tie = entries.length > 1 &&
+        ((entries[1].value as num?) ?? 0).toInt() == n;
+    if (tie || 100.0 * n / goals < 40.0) return null;
+    return "a kapott góljaiknál a(z) ${top.key} mezes védő veszíti "
+        "a párharcot ($n/$goals) · rá vidd az 1v1-et, az ő oldala "
+        "a nyitott ajtó";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5602,6 +5622,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szélső-mélység", _wingShotDepth(r)!],
       if (_doublingDefenders(r) != null)
         ["Kettőző emberek", _doublingDefenders(r)!],
+      if (_beatenDefenders(r) != null)
+        ["Átvert védők", _beatenDefenders(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

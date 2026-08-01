@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Átvert védők**: KI MÖGÖTT esnek a kapott gólok. Az őrzési párok
+  azt mérik, ki kit fog — ez azt, ki veszíti el a párharcot, amikor
+  számít: minden kapott gólnál a lövőhöz legközelebbi (3,5 m-en
+  belüli) védőt jegyezzük átvertként; a radiuson kívüli lövés
+  fedezetlen (szerkezeti hiba, nem párharc-vereség). Az ellenfél
+  sokat átvert védője a megtámadható ember — rá kell vinni az
+  1v1-et; a saját átvert védőnk mellé segítés-rend és párharc-edzés
+  kell. Egy réteg, sok felület: `beaten_defenders` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (mezszám
+  szerinti darabszámok + fedezetlen gólok, edzői kulcs + csempe),
+  215. meccsterv-szabály (az ő átvert védőjük × a ti betörő
+  embereitek), 236. edzés-szabály (párharc-segítés kijelölt
+  besegítővel).
+
 - **Türelmes meccs-könyvtár betöltés**: az app indulásakor a
   beépített motor még bootolhat (első indításnál a rendszer át is
   vizsgálja — akár egy perc), és ha a felhasználó közben nyitotta
