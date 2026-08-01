@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 222) Kontra-hullámok: ha csak az első ember fejezi be a
+    # kontránkat, a második hullám beépítése a téma.
+    try:
+        from .attack_types import fast_break_waves
+        fbw222 = fast_break_waves(match, config)
+        for side in ("home", "away"):
+            rec222 = fbw222[side]
+            if rec222["verdict"] != "az első ember fejezi be a kontrát":
+                continue
+            add(side, "tamadas", "Kontra második hulláma",
+                f"a lerohanásainkat szinte csak az első ember fejezi "
+                f"be ({rec222['second']}/{rec222['breaks']} kontra "
+                "zárult a befutó lövésével) — ha az első embert "
+                "felveszik, a kontránk elhal",
+                "kontra-hullám gyakorlat: 2-az-1 és 3-a-2 ellen "
+                "lerohanás, ahol az első ember KÖTELEZŐEN kihúzza a "
+                "védőt és visszatesz a befutónak — az edzésmeccsen "
+                "a második hullámból szerzett kontragól dupla "
+                "pontot ér")
+    except Exception:
+        pass
     # 221) Beálló-futtatás: ha állva kap a beállónk, a lefordulós
     # átvétel begyakorlása a téma.
     try:

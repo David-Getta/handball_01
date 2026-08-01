@@ -3958,3 +3958,80 @@ def pivot_service(match: Match,
             elif pct <= PSV_STATIC_PCT:
                 rec["verdict"] = "állva kapja a beálló"
     return out
+
+# Kontra-hullámok: ennyi lövésig jutó lerohanás kell az ítélethez, és
+# e feletti / alatti második-hullám arány jelenti, hogy a befutó,
+# illetve az első ember fejezi be a kontráikat.
+FBW_MIN_BREAKS = 5
+FBW_SECOND_PCT = 50.0
+FBW_FIRST_PCT = 20.0
+
+
+def fast_break_waves(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Kontra-hullámok: az ELSŐ EMBER vagy a MÁSODIK HULLÁM fejezi be
+    a lerohanásaikat.
+
+    A kontra-befejezők rétege a neveket adja, a kontra-hatásfok a
+    végeredményt — ez a szerkezetet: a lövésig jutó lerohanásoknál
+    megnézzük, a támadás indulásakor legelöl lévő játékos (az első
+    hullám) lő-e, vagy egy mögötte befutó (a második hullám).
+
+    Edzőileg ez dönti el, hogyan kell visszafutni: az első hullámra
+    építő csapat ellen az indítópassz elvágása és az első ember
+    azonnali felvétele öli meg a kontrát; a második hullámra építő
+    ellen az első ember felvétele NEM elég — a visszafutásnál a
+    középső sávot kell feltölteni, mert a gól a befutótól jön.
+
+    Visszatérés csapatonként: {"breaks", "second", "second_pct",
+    "verdict"} — a second_pct/verdict None FBW_MIN_BREAKS alatt; a
+    verdict "a második hullám fejezi be a kontrát" / "az első ember
+    fejezi be a kontrát" / None.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)
+             and e.player_id is not None]
+
+    out = {side: {"breaks": 0, "second": 0, "second_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        shot = next((e for e in shots if e.team.value == side
+                     and a["start_frame"] <= e.t
+                     <= a["end_frame"] + tail), None)
+        if shot is None:
+            continue
+        i0 = idx_of.get(a["start_frame"])
+        if i0 is None:
+            continue
+        goal_x = config.attacks_toward_x(Team(side))
+        runners = [p for p in match.frames[i0].players
+                   if p.team.value == side and p.role != "kapus"]
+        if len(runners) < 2:
+            continue
+        first_id = min(runners,
+                       key=lambda p: abs(p.x - goal_x)).track_id
+        rec = out[side]
+        rec["breaks"] += 1
+        if shot.player_id != first_id:
+            rec["second"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["breaks"] >= FBW_MIN_BREAKS:
+            pct = 100.0 * rec["second"] / rec["breaks"]
+            rec["second_pct"] = round(pct, 1)
+            if pct >= FBW_SECOND_PCT:
+                rec["verdict"] = "a második hullám fejezi be a kontrát"
+            elif pct <= FBW_FIRST_PCT:
+                rec["verdict"] = "az első ember fejezi be a kontrát"
+    return out

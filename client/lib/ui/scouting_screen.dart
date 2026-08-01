@@ -1380,6 +1380,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kontra-hullámok: az első ember vagy a befutó fejezi be (5+
+  // lövésig jutó kontra; 50% felett második hullám, 20% alatt első
+  // ember — a backend-kulccsal azonos küszöbök).
+  String? _fastBreakWaves(Map<String, dynamic> r) {
+    final breaks = ((r["fbw_breaks"] as num?) ?? 0).toInt();
+    final second = ((r["fbw_second"] as num?) ?? 0).toInt();
+    if (breaks < 5) return null;
+    final pct = 100.0 * second / breaks;
+    if (pct >= 50.0) {
+      return "a második hullám fejezi be a kontráikat ($second/"
+          "$breaks a befutó lövésével) · az első ember felvétele "
+          "nem elég: a középső sávot töltsétek fel visszafutásnál";
+    }
+    if (pct <= 20.0) {
+      return "az első ember fejezi be a kontráikat (csak $second/"
+          "$breaks a befutóé) · az indítópassz elvágása + az első "
+          "ember korai felvétele megöli a kontrát";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5297,6 +5318,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szélső-futtatás", _wingService(r)!],
       if (_pivotService(r) != null)
         ["Beálló-futtatás", _pivotService(r)!],
+      if (_fastBreakWaves(r) != null)
+        ["Kontra-hullámok", _fastBreakWaves(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

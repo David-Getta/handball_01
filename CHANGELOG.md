@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kontra-hullámok**: az ELSŐ EMBER vagy a MÁSODIK HULLÁM fejezi-e
+  be a lerohanásaikat. A kontra-befejezők a neveket adják, a
+  kontra-hatásfok a végeredményt — ez a szerkezetet: a lövésig jutó
+  kontráknál megnézzük, az induláskor legelöl lévő ember lő-e, vagy
+  egy mögötte befutó (5+ kontra; 50% felett második hullám, 20%
+  alatt első ember). A második hullámos csapat ellen az első ember
+  felvétele nem elég — a visszafutásnál a középső sávot kell
+  feltölteni; az első emberes ellen az indítópassz elvágása öli meg
+  a kontrát. Egy réteg, sok felület: `fast_break_waves` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (kontra-darabszámok, két edzői kulcs + csempe), 201.
+  meccsterv-szabály (az ő befutóik × a ti erős átmenet-védekezésetek),
+  222. edzés-szabály (kontra-hullám gyakorlat: a második hullámból
+  szerzett gól dupla pont).
+
 - **Beálló-futtatás**: MOZGÁSBÓL vagy ÁLLVA kapja-e a beálló a
   labdát. A beálló-terhelés azt méri, mennyit megy rá a labda, a
   kiszolgálói azt, kitől — ez azt, HOGYAN érkezik: a beálló-átvételek

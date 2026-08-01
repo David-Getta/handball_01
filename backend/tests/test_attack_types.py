@@ -2891,3 +2891,67 @@ def test_pivot_service_needs_enough_receptions():
 
     rec = pivot_service(_psv_match(True, n_passes=3))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Kontra-hullámok (az első ember vagy a befutó fejezi be) ----------------
+
+def _fbw_match(second_wave, n_breaks=6, fps=25.0):
+    """Lerohanás-sorozat: az 1-es fut elöl (első hullám), a 2-es fut
+    be mögötte; a lövést a `second_wave` szerint a befutó vagy az
+    első ember adja le. A nem-lövő a 6-os y-sávban fut, hogy a
+    lövés röppályája ne érjen a közelébe."""
+    frames = []
+    t = 0
+    y1 = 6.0 if second_wave else 10.0
+    y2 = 10.0 if second_wave else 6.0
+    for _ in range(n_breaks):
+        n = int(3 * fps)
+        for i in range(n):          # a kontra: mindkét ember fut előre
+            x1 = 22.0 + 0.2 * i
+            x2 = 16.0 + 0.2 * i
+            bx = x2 if second_wave else x1
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, x1, y1),
+                _pl(2, Team.HOME, x2, y2),
+                _pl(9, Team.HOME, 1.5, 10.0, role="kapus")],
+                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+        sx = (16.0 if second_wave else 22.0) + 0.2 * (n - 1)
+        for i in range(7):          # lövés a +x kapura a lövő helyéről
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 22.0 + 0.2 * (n - 1), y1),
+                _pl(2, Team.HOME, 16.0 + 0.2 * (n - 1), y2),
+                _pl(9, Team.HOME, 1.5, 10.0, role="kapus")],
+                ball=Ball(x=min(40.0, sx + 1.5 * (i + 1)), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(int(4 * fps)):   # szünet a szakaszok közt
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_fast_break_waves_flags_the_second_wave():
+    """A befutó (2-es) lő minden kontra végén → második hullám."""
+    from handball.pipeline.attack_types import fast_break_waves
+
+    rec = fast_break_waves(_fbw_match(True))["home"]
+    assert rec["breaks"] >= 5
+    assert rec["verdict"] == "a második hullám fejezi be a kontrát"
+
+
+def test_fast_break_waves_flags_the_first_man():
+    """Az elöl futó (1-es) lő minden kontra végén → első ember."""
+    from handball.pipeline.attack_types import fast_break_waves
+
+    rec = fast_break_waves(_fbw_match(False))["home"]
+    assert rec["second"] == 0
+    assert rec["verdict"] == "az első ember fejezi be a kontrát"
+
+
+def test_fast_break_waves_needs_enough_breaks():
+    """Kevés (5-nél kevesebb) lövésig jutó kontránál nincs ítélet."""
+    from handball.pipeline.attack_types import fast_break_waves
+
+    rec = fast_break_waves(_fbw_match(True, n_breaks=3))["home"]
+    assert rec["verdict"] is None
