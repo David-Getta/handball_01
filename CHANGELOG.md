@@ -233,9 +233,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   felderítés-mezőnek kell lennie (az elgépelt kulcs némán üres
   csempét adna), a meccsterv-/edzés-szabályok sorszámai nem
   ismétlődhetnek, a félidő-feltételes (_fh) kulcsok egy felismert
-  félidejű szimulált meccsen mind elkészülnek, és MINDEN GET végpont
-  — a paraméteres játékos-végpontokkal együtt — 5xx nélkül fut le
-  érvényes meccsen.
+  félidejű szimulált meccsen mind elkészülnek, MINDEN GET végpont —
+  a paraméteres játékos-végpontokkal együtt — 5xx nélkül fut le
+  érvényes meccsen, és minden végpont-oldali réteg-kulcsnak a
+  meccs-csomag regisztryjében is szerepelnie kell (a recept "KÉT
+  helyre" lépésének őre, az örökölt kivételek zárt listán).
 
 - **Keresztjáték**: MENNYIT KERESZTEZNEK a hátsó sorban. Az álló
   támadók rétege az egyéni mozgást méri — ez a szerkezetet: felállt

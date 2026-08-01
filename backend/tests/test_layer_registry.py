@@ -308,3 +308,29 @@ def test_minden_get_vegpont_tulel():
         if r.status_code >= 500:
             problems.append(f"{path}: HTTP {r.status_code}")
     assert not problems, f"összeomló végpontok: {problems}"
+
+
+# Örökölt, csak végpont-oldali kulcsok: a csomag-regisztryben más
+# néven (vagy összevontan) szereplő régi rétegek. Zárt lista — új
+# réteg ide NEM kerülhet: a recept szerint minden új réteg KÉT helyre
+# kötendő be (/analyze válasz ÉS meccs-csomag `_layer`).
+_LEGACY_RES_ONLY_KEYS = {
+    "pivot", "positioning", "pressure", "timeline", "transition",
+}
+
+
+def test_minden_res_kulcs_a_csomagban_is():
+    """A recept "KÉT helyre" lépésének őre: minden végpont-oldali
+    `res["..."]` réteg-kulcsnak a meccs-csomag `_layer`
+    regisztrációjában is szerepelnie kell — a félidő-feltételes
+    (_fh) bontások és az örökölt kivétel-lista kivételével. A csak
+    egy helyre bekötött új réteg a csomagból némán hiányozna."""
+    src = _APP_PY.read_text(encoding="utf-8")
+    res_keys = set(re.findall(r'res\["([a-z0-9_]+)"\]\s*=', src))
+    layer_keys = set(_registered_package_layers())
+    missing = sorted(
+        k for k in res_keys - layer_keys
+        if not k.endswith("_fh") and k not in _LEGACY_RES_ONLY_KEYS)
+    assert not missing, (
+        f"csak a végpontra bekötött rétegek (a csomagból hiányoznak): "
+        f"{missing}")
