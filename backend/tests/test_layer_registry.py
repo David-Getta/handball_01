@@ -350,3 +350,18 @@ def test_kliens_helper_nevek_egyediek():
     assert len(names) > 200, "a helper-olvasás elromlott"
     dupes = sorted({n for n in names if names.count(n) > 1})
     assert not dupes, f"duplán deklarált kliens-helperek: {dupes}"
+
+
+def test_kliens_csempe_cimkek_egyediek():
+    """Két azonos című csempe a felderítés-listában
+    megkülönböztethetetlen a felhasználónak — a címkéknek egyedieknek
+    kell lenniük (a v0.1.23 kiadásnál három ütközés is volt)."""
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    labels = re.findall(r'\["([^"]+)", _\w+\(r\)!\]',
+                        dart.read_text(encoding="utf-8"))
+    assert len(labels) > 200, "a címke-olvasás elromlott"
+    dupes = sorted({l for l in labels if labels.count(l) > 1})
+    assert not dupes, f"ismétlődő csempe-címkék: {dupes}"

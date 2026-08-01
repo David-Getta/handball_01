@@ -11,6 +11,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   bukott el a kiadáskor. A hossz-mérő átnevezve
   (`_gkOutletLength`, "Indítás-hossz" csempe-címkével), és új
   füstteszt őrzi, hogy kliens-helper név ne duplázódhasson többé.
+- **Csempe-címke rendrakás + őr**: három csempe-címke ütközött
+  ("Kapus-indítás" kétszer, "Félidő-zárás" kétszer, "Lövőerő-esés"
+  kétszer) — az utolsó labda csempéje saját címkét kapott ("Utolsó
+  labda"), a lövés-sebesség-esés duplikált csempéje (a
+  Lövőerő-eséssel azonos mérés) törölve, és új füstteszt követeli a
+  csempe-címkék egyediségét.
 
 ## v0.1.23 — kiadva (2026-08-01)
 
