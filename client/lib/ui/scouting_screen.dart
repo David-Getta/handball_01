@@ -1442,6 +1442,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "maradni éri meg, nem kifutni";
   }
 
+  // Gólpassz-posztok: melyik poszt készíti elő a gólokat (5+
+  // gólpassz; 45%+ részarány, holtverseny nélkül — a
+  // backend-kulccsal azonos küszöbök).
+  String? _assistsByRole(Map<String, dynamic> r) {
+    final assists = ((r["abr_assists"] as num?) ?? 0).toInt();
+    final roles = (r["abr_roles"] as Map?) ?? {};
+    if (assists < 5 || roles.isEmpty) return null;
+    final entries = roles.entries.toList()
+      ..sort((a, b) =>
+          ((b.value as num?) ?? 0).compareTo((a.value as num?) ?? 0));
+    final top = entries.first;
+    final n = ((top.value as num?) ?? 0).toInt();
+    final tie = entries.length > 1 &&
+        ((entries[1].value as num?) ?? 0).toInt() == n;
+    if (tie || 100.0 * n / assists < 45.0) return null;
+    return "a góljaikat a(z) ${top.key} posztról készítik elő "
+        "($n/$assists gólpassz) · az ő kezét fogd meg: kettőzés / "
+        "a gólpassz-sáv zárása";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5365,6 +5385,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontra-elszökés", _fastBreakHeadstart(r)!],
       if (_blockedShooters(r) != null)
         ["Lefogott lövők", _blockedShooters(r)!],
+      if (_assistsByRole(r) != null)
+        ["Gólpassz-posztok", _assistsByRole(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

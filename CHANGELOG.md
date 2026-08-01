@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Gólpassz-posztok**: MELYIK POSZTJUK készíti elő a góljaikat. A
+  gólpassz-forrás a helyet nézi, a gólpassz-hálózat a neveket — ez a
+  posztot: a gólokhoz rendelt gólpasszokat az előkészítő becsült
+  posztjához kötjük (5+ gólpassz; 45%+ részarány, holtverseny
+  nélkül), így akkor is látszik a minta, ha a nevek cserélődnek.
+  Irányító-előkészítés ellen felső kettőzés, szélső ellen a
+  visszatett labda zárása, beálló ellen elé állás a kiosztás ellen
+  is. Egy réteg, sok felület: `assists_by_role` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (poszt
+  szerinti gólpassz-darabszámok, edzői kulcs + csempe), 204.
+  meccsterv-szabály (az ő egy-posztos előkészítésük × a ti sáv-záró
+  védekezésetek), 225. edzés-szabály (második előkészítő-út: a nem
+  a fő posztról érkező gólpassz dupla pont).
+
 - **Lefogott lövők**: KINEK A LÖVÉSÉT viszi el rendre a fal. A falba
   lövés a csapat-tünetet méri — ez a személyt: minden blokknál
   visszakeressük a lövőt (a blokk előtti utolsó támadó

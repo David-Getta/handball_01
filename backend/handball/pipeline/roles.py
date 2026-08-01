@@ -257,3 +257,67 @@ def turnovers_by_role(match: Match,
                 rec["top"] = {"poszt": poszt, "turnovers": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Gólpassz-posztok: ennyi poszthoz kötött gólpassz kell az ítélethez,
+# és e feletti részarány jelenti, hogy egy posztról készítik elő a
+# góljaikat.
+ROLE_AS_MIN = 5
+ROLE_AS_SHARE = 45.0
+
+
+def assists_by_role(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-posztok: MELYIK POSZTJUK készíti elő a góljaikat.
+
+    A gólpassz-forrás (assist_sources) a HELYET nézi (hátsó sor vagy
+    közép), a gólpassz-hálózat a neveket — ez a posztot: a gólokhoz
+    rendelt gólpasszokat az előkészítő becsült posztjához kötjük, így
+    akkor is látszik a minta, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez mondja meg, melyik poszt kezét kell megfogni: ha az
+    irányítójuk osztja a gólpasszokat, a felső kettőzés vágja el a
+    játékukat; ha a szélsőjük, a szélről visszatett labdákra kell
+    zárni; ha a beállójuk, az elé állás a bejátszás UTÁN is
+    folytatódjon (kiosztás ellen).
+
+    Visszatérés csapatonként: {"assists" (poszthoz kötött gólpasszok),
+    "roles": {poszt: gólpasszok}, "top": {"poszt", "assists",
+    "share_pct"} | None} — a "top" akkor van kitöltve, ha legalább
+    ROLE_AS_MIN poszthoz kötött gólpassz van, a vezető poszt
+    részaránya eléri a ROLE_AS_SHARE-t, és nincs holtverseny.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    out: dict = {side: {"assists": 0, "roles": {}, "top": None}
+                 for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        aid = (e.detail or {}).get("assist_id")
+        if aid is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(aid)
+        if rec_role is None:
+            continue
+        rec = out[side]
+        rec["assists"] += 1
+        poszt = rec_role["poszt"]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["roles"].items())
+        if rec["assists"] >= ROLE_AS_MIN and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["assists"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= ROLE_AS_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "assists": n,
+                              "share_pct": round(share, 1)}
+    return out

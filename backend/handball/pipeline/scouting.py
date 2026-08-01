@@ -625,6 +625,8 @@ class ScoutingReport:
     fbh_ahead: int = 0
     bsh_blocked: int = 0
     bsh_shooters: dict = field(default_factory=dict)
+    abr_assists: int = 0
+    abr_roles: dict = field(default_factory=dict)
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2256,6 +2258,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"elviszi a fal ({_bsh_n}/{rep.bsh_blocked} lefogott "
                 "lövés az övé) — ellene érdemes falban maradni: nem "
                 "kell kifutni, a blokk dolgozik helyettetek.")
+
+    # Gólpassz-posztok: melyik poszt kezét kell megfogni.
+    if rep.abr_assists >= 5 and rep.abr_roles:
+        _abr_poszt, _abr_n = next(iter(rep.abr_roles.items()))
+        _abr_vals = list(rep.abr_roles.values())
+        _abr_tie = len(_abr_vals) > 1 and _abr_vals[1] == _abr_n
+        if 100.0 * _abr_n / rep.abr_assists >= 45.0 and not _abr_tie:
+            keys.append(
+                f"A góljaikat jellemzően a(z) {_abr_poszt} posztról "
+                f"készítik elő ({_abr_n}/{rep.abr_assists} gólpassz) "
+                "— az ő kezét kell megfogni: irányítónál felső "
+                "kettőzés, szélsőnél a visszatett labda zárása, "
+                "beállónál elé állás a kiosztás ellen is.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6036,6 +6051,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                        if _bshrow["jersey"] is not None
                        else "#" + str(_bshrow["player_id"]))
             rep.bsh_shooters[_bshkey] = _bshrow["blocked"]
+        from .roles import assists_by_role as _abr
+        abrrec = _abr(match, config)[team.value]
+        rep.abr_assists = abrrec["assists"]
+        rep.abr_roles = dict(abrrec["roles"])
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8437,6 +8456,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 204) Az ő egy-posztos előkészítésük × a ti sáv-záró
+    # védekezésetek: a fő gólpassz-sáv elvágása a terv.
+    if (opp.abr_assists >= 5 and opp.abr_roles
+            and own.stt_steals >= 6):
+        _abr_poszt204, _abr_n204 = next(iter(opp.abr_roles.items()))
+        _abr_vals204 = list(opp.abr_roles.values())
+        _abr_tie204 = (len(_abr_vals204) > 1
+                       and _abr_vals204[1] == _abr_n204)
+        _stt204 = 100.0 * own.stt_int / max(1, own.stt_steals)
+        if (100.0 * _abr_n204 / opp.abr_assists >= 45.0
+                and not _abr_tie204 and _stt204 >= 60.0):
+            plan.append(
+                f"A góljaikat jellemzően a(z) {_abr_poszt204} "
+                f"posztról készítik elő ({_abr_n204}/"
+                f"{opp.abr_assists} gólpassz), ti pedig a "
+                f"passzsávokat zárjátok (a szerzéseitek "
+                f"{_stt204:.0f}%-a elfogás) — a(z) {_abr_poszt204} "
+                "gólpassz-sávjára álljatok rá: az ő keze nélkül a "
+                "befejezőik éhen maradnak, az elfogás pedig "
+                "nálatok kontrát ér.")
 
     # 203) Az ő lefogott lövőjük × a ti termő blokkjaitok: ellene a
     # fal dolgozik, nem a kifutás.
@@ -11609,6 +11649,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         bsh_blocked=sum(r.bsh_blocked for r in reports),
         bsh_shooters=_merge_role_counts(
             [r.bsh_shooters for r in reports]),
+        abr_assists=sum(r.abr_assists for r in reports),
+        abr_roles=_merge_role_counts(
+            [r.abr_roles for r in reports]),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

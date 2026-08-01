@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 225) Gólpassz-posztok: ha egyetlen posztról készítjük elő a
+    # gólokat, a második előkészítő-út beépítése a téma.
+    try:
+        from .roles import assists_by_role
+        abr225 = assists_by_role(match, config)
+        for side in ("home", "away"):
+            rec225 = abr225[side]
+            top225 = rec225["top"]
+            if top225 is None or top225["share_pct"] < 60.0:
+                continue
+            add(side, "tamadas", "Második előkészítő-út",
+                f"a góljaink {top225['share_pct']:.0f}%-át a(z) "
+                f"{top225['poszt']} poszt készíti elő "
+                f"({top225['assists']}/{rec225['assists']} gólpassz) "
+                "— ha az ő kezét megfogják, a támadásunk megáll",
+                "második előkészítő-út: támadás-variációk, ahol a "
+                "befejezés előtti utolsó passzt KÖTELEZŐEN más "
+                "poszt adja (szélső-visszatét, beálló-kiosztás) — "
+                "az edzésmeccsen a nem a fő posztról érkező "
+                "gólpassz dupla pontot ér")
+    except Exception:
+        pass
     # 224) Lefogott lövők: ha egy emberünk lövését rendre elviszi a
     # fal, lövő-variáció kell neki, nem több ugyanolyan lövés.
     try:

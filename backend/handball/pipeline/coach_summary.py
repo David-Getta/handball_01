@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Gólpassz-posztok: melyik poszt készíti elő a gólokat.
+    try:
+        from .roles import assists_by_role
+        abr = assists_by_role(match)
+        for side, name in (("home", home), ("away", away)):
+            top_abr = abr[side]["top"]
+            if top_abr is None:
+                continue
+            body += (f" A(z) {name} góljait jellemzően a(z) "
+                     f"{top_abr['poszt']} posztról készítik elő "
+                     f"({top_abr['assists']}/{abr[side]['assists']} "
+                     "gólpassz).")
+    except Exception:
+        pass
     # Lefogott lövők: kinek a lövését viszi el rendre a fal.
     try:
         from .defense import blocked_shooters

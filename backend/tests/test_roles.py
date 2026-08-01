@@ -266,3 +266,26 @@ def test_turnovers_by_role_needs_enough_turnovers():
 
     rec = turnovers_by_role(_role_turnover_match([2, 2, 2]))["home"]
     assert rec["turnovers"] == 3 and rec["top"] is None
+
+
+# ---- Gólpassz-posztok (melyik poszt készíti elő a gólokat) ------------------
+
+def test_assists_by_role_finds_the_backcourt_feeder():
+    """A szélső-gólok utolsó átadója az átlövő (4-es, a labda útjába
+    esik) → hat gólpasszból négy az átlövőé, ő a kiemelt előkészítő."""
+    from handball.pipeline.roles import assists_by_role
+
+    rec = assists_by_role(_role_goal_match([2, 2, 2, 2, 1, 1]))["home"]
+    assert rec["assists"] == 6
+    assert rec["top"] is not None
+    assert rec["top"]["poszt"] == "átlövő"
+    assert rec["top"]["assists"] == 4
+
+
+def test_assists_by_role_needs_enough_assists():
+    """Kevés (5-nél kevesebb) poszthoz kötött gólpassznál nincs
+    kiemelt poszt."""
+    from handball.pipeline.roles import assists_by_role
+
+    rec = assists_by_role(_role_goal_match([2, 2, 1]))["home"]
+    assert rec["top"] is None
