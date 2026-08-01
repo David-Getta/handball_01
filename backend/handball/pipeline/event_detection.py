@@ -597,6 +597,12 @@ def shot_power_fade(match: Match,
                     config: Optional[TacticsConfig] = None) -> dict:
     """Lövőerő-esés: a lövés-sebesség az 1. vs 2. félidőben.
 
+    MEGJEGYZÉS: tartalmilag a shot_speed_fade (fentebb) duplikátuma —
+    ugyanazt az 1. vs 2. félidei átlag lövés-sebességet méri, csak
+    km/h-küszöbbel a százalékos helyett. Kompatibilitás miatt marad
+    (a spf_* felderítés-mezők és a kliens-csempe erre épülnek); új
+    felület NE erre, hanem a shot_speed_fade-re épüljön.
+
     A befejezés-esés (finish_fade) azt mutatja, mennyi megy be, a
     lövő-erő (shooter_power) azt, ki lő keményen — ez a kettő
     metszete időben: marad-e erő a karban a második félidőre. Ha az

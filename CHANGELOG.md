@@ -17,6 +17,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   labda"), a lövés-sebesség-esés duplikált csempéje (a
   Lövőerő-eséssel azonos mérés) törölve, és új füstteszt követeli a
   csempe-címkék egyediségét.
+- **Ismert redundancia dokumentálva**: a shot_power_fade motor a
+  shot_speed_fade tartalmi duplikátuma (mindkettő az 1. vs 2.
+  félidei átlag lövés-sebességet méri) — a motor docstringje
+  mostantól jelzi, hogy új felület ne erre épüljön; a kivezetés a
+  spf_* mezők és a csempe átkötésével későbbi rendrakás.
 
 ## v0.1.23 — kiadva (2026-08-01)
 
