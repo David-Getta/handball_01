@@ -2318,3 +2318,64 @@ def test_beaten_defenders_needs_enough_goals():
 
     rec = beaten_defenders(_btn_match(n_goals=3))["away"]
     assert rec["top"] is None
+
+
+# ---- Zavartalan előkészítők (hagyják-e dolgozni a gólpassz-adót) ------------
+
+def _upa_match(pressured, n_goals=5, fps=25.0):
+    """Gólpasszos hazai gól-sorozat: a kiadó (3-as) mellett vagy áll
+    vendég védő (nyomás), vagy nem — a lövő (1-es) a bejátszás után
+    a kapuba lő."""
+    frames = []
+    t = 0
+    dx, dy = (27.2, 11.5) if pressured else (24.0, 16.0)
+
+    def _emit(bx, by, n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0),
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(21, Team.AWAY, dx, dy)],
+                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+
+    for _ in range(n_goals):
+        _emit(28.0, 10.0, 10)       # a kiadónál a labda
+        for i in range(4):          # gólpassz a lövőnek
+            _emit(28.0 + (33.0 - 28.0) * (i + 1) / 4.0, 10.0, 1)
+        _emit(33.0, 10.0, 4)        # a lövőnél a labda
+        for i in range(8):          # gól a +x kapura
+            _emit(min(33.0 + (i + 1), 40.5), 10.0, 1)
+        for _ in range(40):         # szünet a gólok közt
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_unpressured_assists_flags_the_loose_defense():
+    """Nyomás nélküli kiadó minden gólnál → hagyják dolgozni."""
+    from handball.pipeline.defense import unpressured_assists
+
+    rec = unpressured_assists(_upa_match(False))["away"]
+    assert rec["assisted"] >= 5
+    assert rec["verdict"] == "az előkészítőt hagyják dolgozni"
+
+
+def test_unpressured_assists_flags_the_pressing_defense():
+    """A kiadó mellett álló védő minden gólnál → rálépnek."""
+    from handball.pipeline.defense import unpressured_assists
+
+    rec = unpressured_assists(_upa_match(True))["away"]
+    assert rec["unpressured"] == 0
+    assert rec["verdict"] == "az előkészítőre rálépnek"
+
+
+def test_unpressured_assists_needs_enough_goals():
+    """Kevés (5-nél kevesebb) gólpasszos kapott gólnál nincs ítélet."""
+    from handball.pipeline.defense import unpressured_assists
+
+    rec = unpressured_assists(_upa_match(False, n_goals=3))["away"]
+    assert rec["verdict"] is None

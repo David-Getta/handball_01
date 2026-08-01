@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Zavartalan előkészítők: hagyják-e dolgozni a gólpassz-adót.
+    try:
+        from .defense import unpressured_assists
+        upa = unpressured_assists(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_upa = upa[side]
+            if rec_upa["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védekezéséről kiderült: "
+                     f"{rec_upa['verdict']} "
+                     f"({rec_upa['unpressured']}/{rec_upa['assisted']}"
+                     " gólpassz jött zavartalan kiadásból).")
+    except Exception:
+        pass
     # Átvert védők: ki mögött esnek a kapott gólok.
     try:
         from .defense import beaten_defenders

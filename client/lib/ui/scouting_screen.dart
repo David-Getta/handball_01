@@ -1706,6 +1706,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "a nyitott ajtó";
   }
 
+  // Zavartalan előkészítők: hagyják-e dolgozni a gólpassz-adót (5+
+  // gólpasszos kapott gól; 60%+ laza, 25%- rálépős — a
+  // backend-kulccsal azonos küszöbök).
+  String? _unpressuredAssists(Map<String, dynamic> r) {
+    final assisted = ((r["upa_assisted"] as num?) ?? 0).toInt();
+    final loose = ((r["upa_unpressured"] as num?) ?? 0).toInt();
+    if (assisted < 5) return null;
+    final pct = 100.0 * loose / assisted;
+    if (pct >= 60.0) {
+      return "az előkészítőt hagyják dolgozni ($loose/$assisted "
+          "kapott gólpassz zavartalan kiadásból) · a kidolgozott "
+          "játékod szabadon futhat ellenük";
+    }
+    if (pct <= 25.0) {
+      return "az előkészítőre rálépnek (csak $loose/$assisted "
+          "zavartalan) · egy-ütemű, korai kiadások kellenek";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5624,6 +5644,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kettőző emberek", _doublingDefenders(r)!],
       if (_beatenDefenders(r) != null)
         ["Átvert védők", _beatenDefenders(r)!],
+      if (_unpressuredAssists(r) != null)
+        ["Zavartalan előkészítők", _unpressuredAssists(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

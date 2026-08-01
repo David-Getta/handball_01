@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 237) Zavartalan előkészítők: ha a gólpassz-adót hagyjuk
+    # dolgozni, a passzsáv-nyomás a téma.
+    try:
+        from .defense import unpressured_assists
+        upa237 = unpressured_assists(match, config)
+        for side in ("home", "away"):
+            rec237 = upa237[side]
+            if rec237["verdict"] != "az előkészítőt hagyják dolgozni":
+                continue
+            add(side, "vedekezes", "Nyomás a kiadóra",
+                f"a kapott gólpasszaink zöme zavartalan kiadásból jön "
+                f"({rec237['unpressured']}/{rec237['assisted']}) — a "
+                "gól már a passznál eldől, mi pedig csak a lövőnél "
+                "kezdünk védekezni",
+                "passzsáv-nyomás: a labdás ember védője a kiadás "
+                "pillanatában kézzel a passzsávban, testtel a "
+                "kiadón — az edzésmeccsen a zavart (megütött, "
+                "elhajló) kiadás pontot ér a védőnek, a zavartalan "
+                "gólpassz mínuszt")
+    except Exception:
+        pass
     # 236) Átvert védők: ha egy emberünk rendre elveszíti a párharcot
     # a kapott góloknál, segítés-rend és párharc-edzés a téma.
     try:

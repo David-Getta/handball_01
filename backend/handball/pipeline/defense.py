@@ -3371,3 +3371,86 @@ def beaten_defenders(match, config=None) -> dict:
         out[side] = {"goals": total, "free": free[side],
                      "defenders": rows, "top": top}
     return out
+
+
+# Zavartalan előkészítők: a gólpassz pillanatában ennél közelebbi védő
+# számít nyomásnak; ennyi gólpasszos kapott gól kell az ítélethez, és
+# e feletti zavartalan arány a laza, ez alatti a rálépős védekezés
+# jele.
+UPA_PRESS_M = 2.0
+UPA_MIN_ASSISTED = 5
+UPA_LOOSE_PCT = 60.0
+UPA_TIGHT_PCT = 25.0
+
+
+def unpressured_assists(match, config=None) -> dict:
+    """Zavartalan előkészítők: HAGYJÁK-E DOLGOZNI a gólpassz-adót.
+
+    Az átvert védők a lövő párharcát nézik — ez az eggyel korábbi
+    pillanatot: a kapott gólpasszos góloknál volt-e védő
+    (UPA_PRESS_M-en belül) a kiadó mellett a passz pillanatában. A
+    gól ritkán a lövésnél dől el: ha az előkészítő zavartalanul
+    mérhette ki a labdát, a hiba a passzsáv-nyomás hiánya.
+
+    Edzőileg: aki zavartalanul hagyja az előkészítőt, annál a
+    gólpassz-adóra kell lépni — a kiadás pillanatában kéz a
+    passzsávba, test a kiadóra; aki rálép, annál a lövő-oldali
+    párharcokon múlik a védekezés.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"assisted"
+    (gólpasszos kapott gólok), "unpressured", "loose_pct",
+    "verdict"} — a loose_pct/verdict None UPA_MIN_ASSISTED alatt; a
+    verdict "az előkészítőt hagyják dolgozni" / "az előkészítőre
+    rálépnek" / None.
+    """
+    import math
+
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    passes = detect_passes(match, config)
+
+    out = {side: {"assisted": 0, "unpressured": 0, "loose_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        aid = (e.detail or {}).get("assist_id")
+        if aid is None:
+            continue
+        pe = None
+        for cand in passes:
+            if (cand.team == e.team and cand.passer_id == aid
+                    and cand.receiver_id == e.player_id
+                    and cand.t <= e.t
+                    and (pe is None or cand.t > pe.t)):
+                pe = cand
+        if pe is None or pe.passer_pos is None:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None:
+            continue
+        deff = "away" if e.team.value == "home" else "home"
+        pressured = any(
+            p.team.value == deff and p.role != "kapus"
+            and math.hypot(p.x - pe.passer_pos.x,
+                           p.y - pe.passer_pos.y) <= UPA_PRESS_M
+            for p in match.frames[i0].players)
+        rec = out[deff]
+        rec["assisted"] += 1
+        if not pressured:
+            rec["unpressured"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["assisted"] >= UPA_MIN_ASSISTED:
+            pct = 100.0 * rec["unpressured"] / rec["assisted"]
+            rec["loose_pct"] = round(pct, 1)
+            if pct >= UPA_LOOSE_PCT:
+                rec["verdict"] = "az előkészítőt hagyják dolgozni"
+            elif pct <= UPA_TIGHT_PCT:
+                rec["verdict"] = "az előkészítőre rálépnek"
+    return out

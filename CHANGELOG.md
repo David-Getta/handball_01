@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Zavartalan előkészítők**: HAGYJÁK-E DOLGOZNI a gólpassz-adót.
+  Az átvert védők a lövő párharcát nézik — ez az eggyel korábbi
+  pillanatot: a kapott gólpasszos góloknál volt-e védő (2 m-en
+  belül) a kiadó mellett a passz pillanatában (5+ gólpasszos kapott
+  gól; 60%+ laza, 25% alatt rálépős). A gól ritkán a lövésnél dől
+  el: a laza védekezés ellen a kidolgozott játék szabadon fut, a
+  rálépős ellen egy-ütemű korai kiadás kell. Egy réteg, sok
+  felület: `unpressured_assists` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (darabszámok, két
+  edzői kulcs + csempe), 216. meccsterv-szabály (az ő laza
+  előkészítő-védekezésük × a ti gólpasszos játékotok), 237.
+  edzés-szabály (passzsáv-nyomás: kéz a sávban, test a kiadón).
+
 - **Átvert védők**: KI MÖGÖTT esnek a kapott gólok. Az őrzési párok
   azt mérik, ki kit fog — ez azt, ki veszíti el a párharcot, amikor
   számít: minden kapott gólnál a lövőhöz legközelebbi (3,5 m-en

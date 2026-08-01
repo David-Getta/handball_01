@@ -644,6 +644,8 @@ class ScoutingReport:
     btn_goals: int = 0
     btn_free: int = 0
     btn_defenders: dict = field(default_factory=dict)
+    upa_assisted: int = 0
+    upa_unpressured: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2398,6 +2400,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_btn_n}/{rep.btn_goals}) — rá vigyétek az "
                 "1v1-et: elzárással hozzá tereljétek a lövőt, az ő "
                 "oldala a nyitott ajtó.")
+
+    # Zavartalan előkészítők: futhat-e ellenük a kidolgozott játék.
+    if rep.upa_assisted >= 5:
+        _upa_pct = 100.0 * rep.upa_unpressured / rep.upa_assisted
+        if _upa_pct >= 60.0:
+            keys.append(
+                f"Az előkészítőt hagyják dolgozni ({rep.upa_unpressured}"
+                f"/{rep.upa_assisted} kapott gólpassz zavartalan "
+                "kiadásból) — a kidolgozott játékotok szabadon futhat: "
+                "türelmes járatás után a kiadó nyugodtan mérheti ki "
+                "az utolsó passzt.")
+        elif _upa_pct <= 25.0:
+            keys.append(
+                f"Az előkészítőre rálépnek (csak {rep.upa_unpressured}"
+                f"/{rep.upa_assisted} zavartalan kiadás) — az utolsó "
+                "passz eléjük nehéz: egy-ütemű, korai kiadások "
+                "kellenek, mielőtt a nyomás odaér.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6281,6 +6300,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                        if _btnrow["jersey"] is not None
                        else "#" + str(_btnrow["player_id"]))
             rep.btn_defenders[_btnkey] = _btnrow["beaten"]
+        from .defense import unpressured_assists as _upa
+        uparec = _upa(match, config)[team.value]
+        rep.upa_assisted = uparec["assisted"]
+        rep.upa_unpressured = uparec["unpressured"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8700,6 +8723,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 216) Az ő laza előkészítő-védekezésük × a ti gólpasszos
+    # játékotok: az utolsó passz szabadon futhat.
+    if (opp.upa_assisted >= 5 and own.asr_assisted >= 5):
+        _upa216 = 100.0 * opp.upa_unpressured / opp.upa_assisted
+        if _upa216 >= 60.0:
+            plan.append(
+                f"Az előkészítőt hagyják dolgozni ({opp.upa_unpressured}"
+                f"/{opp.upa_assisted} kapott gólpasszuk zavartalan "
+                f"kiadásból jött), ti pedig gólpasszos csapat vagytok "
+                f"({own.asr_assisted} gólpasszos gól) — a kidolgozott "
+                "játékotok az ő védekezésük ellen szabadon fut: "
+                "türelmes járatás, és az utolsó passzt nyugodtan ki "
+                "lehet mérni.")
 
     # 215) Az ő sokat átvert védőjük × a ti betörő embereitek: az
     # 1v1-et a nyitott ajtóra kell vinni.
@@ -12122,6 +12159,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         btn_free=sum(r.btn_free for r in reports),
         btn_defenders=_merge_role_counts(
             [r.btn_defenders for r in reports]),
+        upa_assisted=sum(r.upa_assisted for r in reports),
+        upa_unpressured=sum(r.upa_unpressured for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
