@@ -1359,6 +1359,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Beálló-futtatás: mozgásból vagy állva kapja-e a beálló (5+
+  // átvétel; 55% felett lefordulós, 25% alatt beragadt — a
+  // backend-kulccsal azonos küszöbök).
+  String? _pivotService(Map<String, dynamic> r) {
+    final rec = ((r["psv_receptions"] as num?) ?? 0).toInt();
+    final run = ((r["psv_running"] as num?) ?? 0).toInt();
+    if (rec < 5) return null;
+    final pct = 100.0 * run / rec;
+    if (pct >= 55.0) {
+      return "mozgásból kapja a beállójuk ($run/$rec átvétel "
+          "lefordulásból) · a bejátszás ELŐTT lépjetek elé, az "
+          "átvétel utáni birkózás késő";
+    }
+    if (pct <= 25.0) {
+      return "állva, beragadva kap a beállójuk (csak $run/$rec "
+          "mozgásból) · testes elé állás + bejátszás utáni azonnali "
+          "kettőzés";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5274,6 +5295,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Csere-lyukak", _subGaps(r)!],
       if (_wingService(r) != null)
         ["Szélső-futtatás", _wingService(r)!],
+      if (_pivotService(r) != null)
+        ["Beálló-futtatás", _pivotService(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

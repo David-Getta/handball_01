@@ -3394,6 +3394,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import pivot_service
+            res["pivot_service"] = pivot_service(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4262,6 +4267,9 @@ def create_app():
                 from ..pipeline.attack_types import crossing_runs
                 _layer("crossing_runs",
                        lambda: crossing_runs(match))
+                from ..pipeline.attack_types import pivot_service
+                _layer("pivot_service",
+                       lambda: pivot_service(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

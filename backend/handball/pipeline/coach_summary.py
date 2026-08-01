@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Beálló-futtatás: mozgásból vagy állva kapja-e a beálló.
+    try:
+        from .attack_types import pivot_service
+        psv = pivot_service(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_psv = psv[side]
+            if rec_psv["verdict"] is None:
+                continue
+            body += (f" A(z) {name} beállójáról kiderült: "
+                     f"{rec_psv['verdict']} "
+                     f"({rec_psv['running']}/{rec_psv['receptions']} "
+                     "átvétel mozgásból).")
+    except Exception:
+        pass
     # Keresztjáték: mennyit kereszteznek a hátsó sorban.
     try:
         from .attack_types import crossing_runs

@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 221) Beálló-futtatás: ha állva kap a beállónk, a lefordulós
+    # átvétel begyakorlása a téma.
+    try:
+        from .attack_types import pivot_service
+        psv221 = pivot_service(match, config)
+        for side in ("home", "away"):
+            rec221 = psv221[side]
+            if rec221["verdict"] != "állva kapja a beálló":
+                continue
+            add(side, "tamadas", "Lefordulós beálló",
+                f"a beállónk beragadva, állva kapja a labdát (csak "
+                f"{rec221['running']}/{rec221['receptions']} átvétel "
+                "mozgásból) — az álló beállót a védője lezárja, "
+                "mielőtt megfordulna",
+                "lefordulós átvétel: elzárás-leforduló párgyakorlat "
+                "(a beálló az elzárásból kifordulva, mozgás közben "
+                "kapja a bejátszást és egy ütemből fejez be) — az "
+                "edzésmeccsen csak a mozgásból átvett beálló-gól ér "
+                "pontot, az állva átvett labda visszajátszandó")
+    except Exception:
+        pass
     # 220) Keresztjáték: ha statikus a hátsó sorunk, a kereszt-
     # mozgások beépítése a téma.
     try:

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Beálló-futtatás**: MOZGÁSBÓL vagy ÁLLVA kapja-e a beálló a
+  labdát. A beálló-terhelés azt méri, mennyit megy rá a labda, a
+  kiszolgálói azt, kitől — ez azt, HOGYAN érkezik: a beálló-átvételek
+  fogadó-sebességéből (5+ átvétel; 55% felett lefordulós, 25% alatt
+  beragadt). A lefordulva kapó beálló ellen a bejátszás ELŐTT kell
+  elé lépni — az átvétel utáni birkózás késő; a beragadt beálló
+  testes elé állással és azonnali kettőzéssel lezárható. Egy réteg,
+  sok felület: `pivot_service` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (átvétel-darabszámok, két edzői
+  kulcs + csempe), 200. meccsterv-szabály (az ő lefordulós beállójuk
+  × a ti erős beálló-őrzésetek), 221. edzés-szabály (lefordulós
+  átvétel: elzárás-leforduló párgyakorlat).
+
 - **Réteg-regisztry füstteszt**: egyetlen elemzés-réteg sem bukhat
   el némán. A meccs-csomag `_layer` segédje és az /attacks végpont
   `try/except` blokkjai szándékosan lenyelik a hibát (egy réteg nem

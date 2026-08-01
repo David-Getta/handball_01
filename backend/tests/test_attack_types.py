@@ -2818,3 +2818,76 @@ def test_crossing_runs_needs_enough_attacks():
 
     rec = crossing_runs(_crx_match(True, n_attacks=4))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Beálló-futtatás (mozgásból vagy állva kapja a beálló) ------------------
+
+def _psv_match(moving, n_passes=6, fps=25.0):
+    """Az irányító (3-as) sorozatban a beállónak (4-es) passzol; a
+    beálló vagy elzárásból lefordulva mozog, vagy beragadva áll."""
+    frames = []
+    t = 0
+    px, pdir = 34.0, 1.0
+
+    def _pivot():
+        nonlocal px, pdir
+        if moving:
+            px += 0.1 * pdir
+            if not 32.5 <= px <= 37.5:
+                pdir *= -1.0
+                px += 0.2 * pdir
+        else:
+            px = 34.0
+        return _pl(4, Team.HOME, px, 10.0)
+
+    def _emit(bx, by, n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0), _pivot()],
+                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+
+    _emit(28.0, 10.0, 150)          # poszt-minta: a 3-asnál a labda
+    for _ in range(n_passes):
+        _emit(28.0, 10.0, 6)        # az irányító birtokol
+        for i in range(4):          # bejátszás a beállónak
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0), _pivot()],
+                ball=Ball(x=28.0 + (px - 28.0) * (i + 1) / 4.0,
+                          y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(6):          # a beállónál a labda
+            p = _pivot()
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0), p],
+                ball=Ball(x=p.x, y=10.0, confidence=1.0)))
+            t += 1
+        _emit(28.0, 10.0, 6)        # vissza az irányítóhoz
+    return Match(_meta(fps), frames)
+
+
+def test_pivot_service_flags_the_turning_pivot():
+    """Mozgásban átvevő beálló → mozgásból kapja a beálló."""
+    from handball.pipeline.attack_types import pivot_service
+
+    rec = pivot_service(_psv_match(True))["home"]
+    assert rec["receptions"] >= 5
+    assert rec["verdict"] == "mozgásból kapja a beálló"
+
+
+def test_pivot_service_flags_the_static_pivot():
+    """Állva átvevő beálló → állva kapja a beálló."""
+    from handball.pipeline.attack_types import pivot_service
+
+    rec = pivot_service(_psv_match(False))["home"]
+    assert rec["running"] == 0
+    assert rec["verdict"] == "állva kapja a beálló"
+
+
+def test_pivot_service_needs_enough_receptions():
+    """Kevés (5-nél kevesebb) beálló-átvételnél nincs ítélet."""
+    from handball.pipeline.attack_types import pivot_service
+
+    rec = pivot_service(_psv_match(True, n_passes=3))["home"]
+    assert rec["verdict"] is None

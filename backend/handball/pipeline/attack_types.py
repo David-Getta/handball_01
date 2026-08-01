@@ -3879,3 +3879,82 @@ def crossing_runs(match: Match,
             elif per <= CRX_LOW_PER_ATTACK:
                 rec["verdict"] = "statikus a hátsó soruk"
     return out
+
+# Beálló-futtatás: e feletti átvételi sebesség számít mozgásból
+# érkezésnek (a beálló az elzárásból leforduló, lassabb műfaj, ezért a
+# küszöb a szélsőnél alacsonyabb), ennyi beálló-átvétel kell az
+# ítélethez, és e feletti / alatti mozgásos arány a leforduló,
+# illetve a beragadt beálló jele.
+PSV_RUN_MS = 1.8
+PSV_MIN_RECEPTIONS = 5
+PSV_RUN_PCT = 55.0
+PSV_STATIC_PCT = 25.0
+
+
+def pivot_service(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Beálló-futtatás: MOZGÁSBÓL vagy ÁLLVA kapja-e a beálló a labdát.
+
+    A beálló-terhelés azt méri, mennyit megy a labda a beállóra, a
+    kiszolgálói azt, kitől — ez azt, HOGYAN érkezik: a beálló-posztú
+    játékosok átvételeinél megmérjük a fogadó sebességét. A mozgásból
+    (elzárásból lefordulva) kapó beálló a védője elé fordulva már
+    helyzetben van — ellene az utólagos elé lépés késik; az állva,
+    beragadva kapó beállót viszont a védője lezárhatja, mielőtt
+    megfordulna.
+
+    Edzőileg: a lefordulós beálló ellen a bejátszás ELŐTT kell elé
+    lépni (a passzsávot zárni, hangos váltással), nem az átvétel után
+    birkózni; a beragadt beálló ellen a testes elé állás és a
+    bejátszás utáni azonnali kettőzés a recept.
+
+    Visszatérés csapatonként: {"receptions", "running", "run_pct",
+    "verdict"} — a run_pct/verdict None PSV_MIN_RECEPTIONS alatt; a
+    verdict "mozgásból kapja a beálló" / "állva kapja a beálló" /
+    None.
+    """
+    import math
+
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    posts = estimate_positions(match, config)
+    pivots = {side: {tid for tid, r in posts.get(side, {}).items()
+                     if r["poszt"] == "beálló"}
+              for side in ("home", "away")}
+
+    out = {side: {"receptions": 0, "running": 0, "run_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for pe in detect_passes(match, config):
+        side = pe.team.value
+        if pe.receiver_id not in pivots[side]:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+            continue
+        p_before = next((p for p in match.frames[i0 - 2].players
+                         if p.track_id == pe.receiver_id), None)
+        p_after = next((p for p in match.frames[i0 + 2].players
+                        if p.track_id == pe.receiver_id), None)
+        if p_before is None or p_after is None:
+            continue
+        speed = (math.hypot(p_after.x - p_before.x,
+                            p_after.y - p_before.y) * fps / 4.0)
+        rec = out[side]
+        rec["receptions"] += 1
+        if speed >= PSV_RUN_MS:
+            rec["running"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["receptions"] >= PSV_MIN_RECEPTIONS:
+            pct = 100.0 * rec["running"] / rec["receptions"]
+            rec["run_pct"] = round(pct, 1)
+            if pct >= PSV_RUN_PCT:
+                rec["verdict"] = "mozgásból kapja a beálló"
+            elif pct <= PSV_STATIC_PCT:
+                rec["verdict"] = "állva kapja a beálló"
+    return out

@@ -617,6 +617,8 @@ class ScoutingReport:
     # darabszámok, meccsek közt pontosan összegződnek.
     wsv_receptions: int = 0
     wsv_running: int = 0
+    psv_receptions: int = 0
+    psv_running: int = 0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2181,6 +2183,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.wsv_running}/{rep.wsv_receptions} átvétel "
                 "mozgásból) — a bátor, korai kifutás a recept: az "
                 "álló szélső lezárható, mielőtt lendületet venne.")
+
+    # Beálló-futtatás: a bejátszás előtt vagy után lépj a beálló elé.
+    if rep.psv_receptions >= 5:
+        _psv_pct = 100.0 * rep.psv_running / rep.psv_receptions
+        if _psv_pct >= 55.0:
+            keys.append(
+                f"Mozgásból kapja a beállójuk a labdát "
+                f"({rep.psv_running}/{rep.psv_receptions} átvétel "
+                "lefordulásból) — az átvétel utáni birkózás késő: a "
+                "bejátszás ELŐTT kell elé lépni, hangos váltással a "
+                "passzsávot zárni.")
+        elif _psv_pct <= 25.0:
+            keys.append(
+                f"Állva, beragadva kap a beállójuk (csak "
+                f"{rep.psv_running}/{rep.psv_receptions} átvétel "
+                "mozgásból) — testes elé állással és a bejátszás "
+                "utáni azonnali kettőzéssel lezárható, mielőtt "
+                "megfordulna.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -5940,6 +5960,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         wsvrec = _wsv(match, config)[team.value]
         rep.wsv_receptions = wsvrec["receptions"]
         rep.wsv_running = wsvrec["running"]
+        from .attack_types import pivot_service as _psv
+        psvrec = _psv(match, config)[team.value]
+        rep.psv_receptions = psvrec["receptions"]
+        rep.psv_running = psvrec["running"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8341,6 +8365,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 200) Az ő lefordulós beállójuk × a ti erős beálló-őrzésetek: a
+    # bejátszás előtt kell elé lépni — a faletek bírja.
+    if (opp.psv_receptions >= 5
+            and 100.0 * opp.psv_running / opp.psv_receptions >= 55.0
+            and own.pd_pivot_attacks >= 6):
+        _pd200 = (100.0 * own.pd_pivot_goals
+                  / max(1, own.pd_pivot_attacks))
+        if _pd200 <= 40.0:
+            plan.append(
+                f"Mozgásból kapja a beállójuk a labdát "
+                f"({opp.psv_running}/{opp.psv_receptions} átvétel "
+                f"lefordulásból), a ti beálló-őrzésetek pedig bírja "
+                f"(az ellenetek vezetett beállós támadások csak "
+                f"{_pd200:.0f}%-a lett gól) — lépjetek elé már a "
+                "bejátszás ELŐTT: a lefordulót a passzsáv zárása "
+                "állítja meg, az átvétel utáni birkózás nem.")
 
     # 199) Az ő keresztjátékuk × a ti hangos falatok: a váltás-
     # fegyelem előre begyakorolva.
@@ -11433,6 +11474,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         crx_crosses=sum(r.crx_crosses for r in reports),
         wsv_receptions=sum(r.wsv_receptions for r in reports),
         wsv_running=sum(r.wsv_running for r in reports),
+        psv_receptions=sum(r.psv_receptions for r in reports),
+        psv_running=sum(r.psv_running for r in reports),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),
