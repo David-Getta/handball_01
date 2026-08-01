@@ -4539,7 +4539,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   // Kapus-indítás hossza: a 15 m feletti kapus-passzok aránya (6+
   // passznál; 50%+ = hosszú indítós, 15%- = rövid kihozós; a
   // backend-kulccsal azonos küszöbök).
-  String? _gkOutlet(Map<String, dynamic> r) {
+  String? _gkOutletLength(Map<String, dynamic> r) {
     final outlets = ((r["gko_outlets"] as num?) ?? 0).toInt();
     final long = ((r["gko_long"] as num?) ?? 0).toInt();
     if (outlets < 6) return null;
@@ -5344,8 +5344,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Asszist-függés", _assistReliance(r)!],
       if (_tiltFade(r) != null)
         ["Területi-fölény-esés", _tiltFade(r)!],
-      if (_gkOutlet(r) != null)
-        ["Kapus-indítás", _gkOutlet(r)!],
+      if (_gkOutletLength(r) != null)
+        ["Indítás-hossz", _gkOutletLength(r)!],
       if (_turnoverPunishment(r) != null)
         ["Eladás-büntetés", _turnoverPunishment(r)!],
       if (_concededSide(r) != null)

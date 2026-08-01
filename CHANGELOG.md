@@ -5,7 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
-(még semmi)
+- **Kiadás-javítás + kliens-helper őr**: a scouting-képernyőn két
+  különböző csempe-helper véletlenül ugyanazt a `_gkOutlet` nevet
+  kapta (indítás-sebesség és indítás-hossz) — a Flutter build ezen
+  bukott el a kiadáskor. A hossz-mérő átnevezve
+  (`_gkOutletLength`, "Indítás-hossz" csempe-címkével), és új
+  füstteszt őrzi, hogy kliens-helper név ne duplázódhasson többé.
 
 ## v0.1.23 — kiadva (2026-08-01)
 

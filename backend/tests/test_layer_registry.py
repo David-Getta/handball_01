@@ -334,3 +334,19 @@ def test_minden_res_kulcs_a_csomagban_is():
     assert not missing, (
         f"csak a végpontra bekötött rétegek (a csomagból hiányoznak): "
         f"{missing}")
+
+
+def test_kliens_helper_nevek_egyediek():
+    """Két azonos nevű Dart-helper az egész osztályban fordítási hibát
+    okoz — a zárójel-egyensúly ellenőrzés ezt nem látja, a kiadási
+    (Flutter build) csak ott bukik ki. Itt fogjuk meg előbb."""
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    names = re.findall(
+        r'^\s+(?:String\?|Widget|bool|int|double|List<[^>]+>\??)\s+'
+        r'(_\w+)\(', dart.read_text(encoding="utf-8"), flags=re.M)
+    assert len(names) > 200, "a helper-olvasás elromlott"
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    assert not dupes, f"duplán deklarált kliens-helperek: {dupes}"
