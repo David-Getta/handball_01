@@ -146,3 +146,33 @@ def test_vegpontok_minden_regisztralt_kulcs_elkeszul():
             problems.append(f"{path}: {unexpected}")
     assert not problems, \
         f"némán elbukott kulcsok a végpontokon: {problems}"
+
+
+# Örökölt, szándékosan nem összegzett felderítés-mezők: azonosító és
+# százalék jellegűek, amelyek meccsek közt nem adhatók össze. ÚJ réteg
+# mezője ide NEM kerülhet — darabszám/összeg alapú tárolással minden
+# új mező összegezhető (lásd CLAUDE.md).
+_LEGACY_UNMERGED_FIELDS = {
+    "top_assist_id", "top_assist_count", "playmaker_id",
+    "playmaker_involvement_pct", "playmaker_drop",
+    "playmaker_dependency",
+}
+
+
+def test_combine_reports_minden_mezot_kezel():
+    """A felderítési recept legkönnyebben felejthető lépése a
+    combine_reports-összegzés: a kimaradó mező több meccs
+    összefésülésekor NÉMÁN az alapértékére esne vissza. Minden
+    ScoutingReport-mezőnek szerepelnie kell a combine_reports
+    törzsében — az örökölt kivétel-lista bővítése tilos."""
+    import dataclasses
+    import inspect
+
+    from handball.pipeline import scouting
+
+    src = inspect.getsource(scouting.combine_reports)
+    unmentioned = [
+        f.name for f in dataclasses.fields(scouting.ScoutingReport)
+        if f.name not in src and f.name not in _LEGACY_UNMERGED_FIELDS]
+    assert not unmentioned, (
+        f"a combine_reports nem kezeli ezeket a mezőket: {unmentioned}")
