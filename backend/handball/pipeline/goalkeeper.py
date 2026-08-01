@@ -1777,3 +1777,89 @@ def gk_cold_streaks(match: Match, config=None) -> dict:
                 verdict = "hidegen is stabil a kapusuk"
         out[side] = {**bands, "verdict": verdict}
     return out
+
+
+# Kapus-kipattanó: ekkora ablakban keressük a védés utáni első stabil
+# birtokost, ennyi mért védés kell az ítélethez, és e feletti / alatti
+# megfogás-arány a fogó, illetve a kiütő kapus jele.
+GRC_WINDOW_S = 2.5
+GRC_MIN_SAVES = 4
+GRC_CATCH_PCT = 70.0
+GRC_PARRY_PCT = 40.0
+
+
+def gk_rebound_control(match: Match, config=None) -> dict:
+    """Kapus-kipattanó: FOGJA vagy KIÜTI a labdát a kapusuk.
+
+    A védés-számok azt mérik, hány lövést fog meg — ez azt, MI LESZ a
+    védett labdával: a védés utáni első stabil birtokost nézzük. A
+    fogott labda azonnali indítást ér; a kiütött kipattanó élő labda
+    a kapu előtt — a rárohanó támadó gólja a legolcsóbb gól a
+    kézilabdában.
+
+    Edzőileg: a kiütő kapus ellen minden lövést kísérni kell — a
+    kijelölt kipattanó-vadász a hatosnál marad a lövés után; a fogó
+    kapus ellen viszont a lövés pillanatában már hátra kell indulni,
+    mert a labda máris a levegőben lesz előre.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"saves", "caught",
+    "catch_pct", "verdict"} — a catch_pct/verdict None GRC_MIN_SAVES
+    mért védés alatt; a verdict "fogja a labdát a kapusuk" / "kiüti a
+    labdát a kapusuk" / None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(GRC_WINDOW_S * fps)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    keepers: set = set()
+    for f in match.frames:
+        for p in f.players:
+            if p.role == ROLE_GOALKEEPER:
+                keepers.add(p.track_id)
+
+    out: dict = {}
+    xg = match_xg(match, config)
+    for side in ("home", "away"):
+        measured = 0
+        caught = 0
+        for sh in xg["shots"]:
+            if sh["team"] == side or sh["outcome"] != "save":
+                continue
+            i0 = idx_of.get(sh["t"])
+            if i0 is None:
+                continue
+            for j in range(i0 + 1, min(len(match.frames) - 2,
+                                       i0 + 1 + win)):
+                fj, fj1 = match.frames[j], match.frames[j + 1]
+                if fj.ball is None or fj1.ball is None:
+                    continue
+                # Csak megült labda: röptében a mellette álló nem
+                # birtokos.
+                if abs(fj1.ball.x - fj.ball.x) > 0.3:
+                    continue
+                h = ball_holder(fj, config)
+                if h is None:
+                    continue
+                h2 = ball_holder(match.frames[j + 2], config)
+                if h2 is None or h2.track_id != h.track_id:
+                    continue
+                measured += 1
+                if h.track_id in keepers and h.team.value == side:
+                    caught += 1
+                break
+        rec = {"saves": measured, "caught": caught,
+               "catch_pct": None, "verdict": None}
+        if measured >= GRC_MIN_SAVES:
+            pct = 100.0 * caught / measured
+            rec["catch_pct"] = round(pct, 1)
+            if pct >= GRC_CATCH_PCT:
+                rec["verdict"] = "fogja a labdát a kapusuk"
+            elif pct <= GRC_PARRY_PCT:
+                rec["verdict"] = "kiüti a labdát a kapusuk"
+        out[side] = rec
+    return out

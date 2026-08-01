@@ -3369,6 +3369,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_rebound_control
+            res["gk_rebound_control"] = gk_rebound_control(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4224,6 +4229,9 @@ def create_app():
                     long_attack_outcomes)
                 _layer("long_attack_outcomes",
                        lambda: long_attack_outcomes(match))
+                from ..pipeline.goalkeeper import gk_rebound_control
+                _layer("gk_rebound_control",
+                       lambda: gk_rebound_control(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

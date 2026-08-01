@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kapus-kipattanó: fogja vagy kiüti a labdát.
+    try:
+        from .goalkeeper import gk_rebound_control
+        grc = gk_rebound_control(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_grc = grc[side]
+            if rec_grc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusáról kiderült: "
+                     f"{rec_grc['verdict'].replace(' a kapusuk', '')} "
+                     f"({rec_grc['caught']}/{rec_grc['saves']} védés "
+                     "maradt nála).")
+    except Exception:
+        pass
     # Kivárás-csapda: mi lesz a hosszú támadásaikból.
     try:
         from .attack_types import long_attack_outcomes

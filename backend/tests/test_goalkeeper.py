@@ -1556,3 +1556,64 @@ def test_gk_cold_streaks_needs_shots_in_both_bands():
 
     rec = gk_cold_streaks(_gcs_match([False] * 2, [True] * 4))["away"]
     assert rec["verdict"] is None
+
+
+# ---- Kapus-kipattanó (fogja vagy kiüti a labdát) ----------------------------
+
+def _grc_match(catch_flags, fps=25.0):
+    """A vendég kapus védései: a `catch_flags` szerint megfogja a
+    labdát, vagy kiüti a lövő elé."""
+    frames = []
+    t = 0
+    for caught in catch_flags:
+        shooter = _svk_pl(4, Team.HOME, 33.5, 10.0)
+        gk = _svk_pl(9, Team.AWAY, 39.0, 10.0, role="kapus")
+        for i, x in enumerate((33.6, 34.9, 36.2, 37.5, 38.8)):
+            frames.append(Frame(
+                t=t, players=[gk] + ([shooter] if i == 0 else []),
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        if caught:                 # a labda a kapusnál marad
+            for _ in range(15):
+                frames.append(Frame(t=t, players=[gk, shooter],
+                                    ball=Ball(x=39.0, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+        else:                      # kiütött labda a lövő elé pattan
+            for x in (37.0, 35.5, 34.0, 33.5, 33.5, 33.5, 33.5):
+                frames.append(Frame(t=t, players=[gk, shooter],
+                                    ball=Ball(x=x, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+        for _ in range(50):        # szünet
+            frames.append(Frame(t=t, players=[
+                _svk_pl(1, Team.HOME, 20.0, 6.0)],
+                ball=Ball(x=20.0, y=6.0, confidence=1.0)))
+            t += 1
+    return _match(frames, fps)
+
+
+def test_gk_rebound_control_flags_the_catching_keeper():
+    """Négy fogott védés → fogja a labdát a kapusuk."""
+    from handball.pipeline.goalkeeper import gk_rebound_control
+
+    rec = gk_rebound_control(_grc_match([True] * 4))["away"]
+    assert rec["saves"] == 4 and rec["caught"] == 4
+    assert rec["verdict"] == "fogja a labdát a kapusuk"
+
+
+def test_gk_rebound_control_flags_the_parrying_keeper():
+    """Ha a védett labda rendre a lövő elé pattan, kiüti a kapusuk."""
+    from handball.pipeline.goalkeeper import gk_rebound_control
+
+    rec = gk_rebound_control(_grc_match([False] * 4))["away"]
+    assert rec["caught"] == 0
+    assert rec["verdict"] == "kiüti a labdát a kapusuk"
+
+
+def test_gk_rebound_control_needs_enough_saves():
+    """Kevés (4-nél kevesebb) mért védésnél nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_rebound_control
+
+    rec = gk_rebound_control(_grc_match([True, True]))["away"]
+    assert rec["saves"] == 2 and rec["verdict"] is None

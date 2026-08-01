@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kapus-kipattanó**: FOGJA vagy KIÜTI a labdát a kapusuk. A
+  védés-számok azt mérik, hány lövést fog meg — ez azt, mi lesz a
+  védett labdával: a védés utáni első stabil, megült birtokost nézzük
+  (4+ mért védés; 70% felett fogó, 40% alatt kiütő kapus). A kiütő
+  kapus ellen minden lövést kísérni kell — a kipattanó-vadász a
+  hatosnál marad; a fogó kapus ellen a lövés pillanatában már hátra
+  kell indulni, mert azonnali indítás jön. Egy réteg, sok felület:
+  `gk_rebound_control` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (védés- és megfogás-darabszámok,
+  két edzői kulcs + csempe), 195. meccsterv-szabály (az ő kiütő
+  kapusuk × a ti lepattanó-vadászaitok), 216. edzés-szabály
+  (kipattanó-irányítás: szélre ütés, hangos enyém/tiéd).
+
 - **Kivárás-csapda**: MI LESZ A HOSSZÚ TÁMADÁSAIKBÓL. A
   passzív-kockázat réteg a hosszú, lövés nélküli szakaszokat listázza
   — ez ítéletet mond: a 25 másodpercnél hosszabb felállt

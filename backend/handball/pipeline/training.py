@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 216) Kapus-kipattanó: ha a kapusunk kiüti a labdát, a kipattanó-
+    # irányítás a téma.
+    try:
+        from .goalkeeper import gk_rebound_control
+        grc216 = gk_rebound_control(match, config)
+        for side in ("home", "away"):
+            rec216 = grc216[side]
+            if rec216["verdict"] != "kiüti a labdát a kapusuk":
+                continue
+            add(side, "kapus", "Kipattanó-irányítás",
+                f"csak {rec216['caught']}/{rec216['saves']} védés "
+                "maradt a kapusunknál — a kiütött labda élő labda a "
+                "kapunk előtt, és a rárohanó támadó a legolcsóbb "
+                "gólt kapja",
+                "kipattanó-irányítás: védés-technika blokk — a "
+                "kiütés iránya SOHA nem középre, hanem a szélek felé "
+                "vagy alapvonalon kívülre; a fal két szélső védője a "
+                "lövésnél automatikusan a kipattanó-zónába lép, és a "
+                "kapus hangosan jelzi (enyém/tiéd), kié a megült "
+                "labda")
+    except Exception:
+        pass
+
     # 215) Kivárás-csapda: ha a hosszú támadásaink elhalnak, a
     # figura-zárás időzítése a téma.
     try:

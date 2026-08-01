@@ -1318,6 +1318,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kapus-kipattanó: fogja vagy kiüti a labdát (4+ mért védés; 70%
+  // felett fogó, 40% alatt kiütő — a backend-kulccsal azonos
+  // küszöbök).
+  String? _gkReboundControl(Map<String, dynamic> r) {
+    final saves = ((r["grc_saves"] as num?) ?? 0).toInt();
+    final caught = ((r["grc_caught"] as num?) ?? 0).toInt();
+    if (saves < 4) return null;
+    final pct = 100.0 * caught / saves;
+    if (pct <= 40.0) {
+      return "kiüti a labdát a kapusuk (csak $caught/$saves védés "
+          "maradt nála) · kijelölt kipattanó-vadász maradjon a "
+          "hatosnál minden lövés után";
+    }
+    if (pct >= 70.0) {
+      return "fogja a labdát a kapusuk ($caught/$saves védés nála) · "
+          "a lövés pillanatában már indulni kell hátra";
+    }
+    return null;
+  }
+
   // Kivárás-csapda: mi lesz a hosszú támadásaikból (5+ hosszú
   // támadás; 40% felett elhaló, 15% alatt lövésig érő — a
   // backend-kulccsal azonos küszöbök).
@@ -5174,6 +5194,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Felfutási létszám", _attackHeadcount(r)!],
       if (_longAttackOutcomes(r) != null)
         ["Kivárás-csapda", _longAttackOutcomes(r)!],
+      if (_gkReboundControl(r) != null)
+        ["Kapus-kipattanó", _gkReboundControl(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

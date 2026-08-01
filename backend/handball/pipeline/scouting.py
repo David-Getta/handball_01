@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kapus-kipattanójuk: mért védéseik és a kapusnál maradó labdák —
+    # darabszámok, meccsek közt pontosan összegződnek.
+    grc_saves: int = 0
+    grc_caught: int = 0
     # Kivárás-csapdájuk: hosszú felállt támadásaik és a lövés nélkül
     # elhalók — darabszámok, meccsek közt pontosan összegződnek.
     lao_n: int = 0
@@ -2128,6 +2132,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kapus-kipattanó: kell-e kipattanó-vadász a lövéseitek mögé.
+    if rep.grc_saves >= 4:
+        _grc_pct = 100.0 * rep.grc_caught / rep.grc_saves
+        if _grc_pct <= 40.0:
+            keys.append(
+                f"Kiüti a labdát a kapusuk (csak {rep.grc_caught}/"
+                f"{rep.grc_saves} védés maradt nála) — minden "
+                "lövéseteket kísérjétek: a kijelölt kipattanó-vadász "
+                "a hatosnál marad a lövés után, mert a kiütött labda "
+                "a legolcsóbb gól.")
+        elif _grc_pct >= 70.0:
+            keys.append(
+                f"Fogja a labdát a kapusuk ({rep.grc_caught}/"
+                f"{rep.grc_saves} védés nála maradt) — a lövésetek "
+                "pillanatában már indulni kell hátra: a fogott labda "
+                "azonnali indítást ér, kipattanóra hiába vártok.")
 
     # Kivárás-csapda: véd-e ellenük a türelmes fal.
     if rep.lao_n >= 5:
@@ -5836,6 +5857,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .goalkeeper import gk_rebound_control as _grc
+        grcrec = _grc(match, config)[team.value]
+        rep.grc_saves = grcrec["saves"]
+        rep.grc_caught = grcrec["caught"]
         from .attack_types import long_attack_outcomes as _lao
         laorec = _lao(match, config)[team.value]
         rep.lao_n = laorec["long_attacks"]
@@ -8227,6 +8252,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 195) Az ő kiütő kapusuk × a ti lepattanó-vadászaitok: a hatosnál
+    # maradó ember gólt terem.
+    if (opp.grc_saves >= 4
+            and 100.0 * opp.grc_caught / opp.grc_saves <= 40.0):
+        _rbw195_rows = [pr for pr in (own.rebounders or [])
+                        if pr.get("rebounds", 0) >= 2]
+        if _rbw195_rows:
+            plan.append(
+                f"Kiüti a labdát a kapusuk (csak {opp.grc_caught}/"
+                f"{opp.grc_saves} védés maradt nála), nálatok pedig "
+                f"van lepattanó-vadász (a(z) "
+                f"{_rbw195_rows[0]['player_id']} azonosítójú) — ő a "
+                "lövések után a hatosnál marad: a kiütött labdára "
+                "rárohanva a legolcsóbb gólokat szedhetitek össze.")
 
     # 194) Az ő elhaló hosszú támadásaik × a ti fegyelmezett falatok:
     # kivárásra kell játszani ellenük.
@@ -11238,6 +11278,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        grc_saves=sum(r.grc_saves for r in reports),
+        grc_caught=sum(r.grc_caught for r in reports),
         lao_n=sum(r.lao_n for r in reports),
         lao_died=sum(r.lao_died for r in reports),
         ahc_frames=sum(r.ahc_frames for r in reports),
