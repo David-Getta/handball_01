@@ -223,3 +223,53 @@ def test_szabaly_sorszamok_egyediek():
         assert len(nums) > 50, f"a sorszám-olvasás elromlott ({mod})"
         dupes = sorted({n for n in nums if nums.count(n) > 1})
         assert not dupes, f"ismétlődő szabály-sorszámok ({mod}): {dupes}"
+
+
+def _client_with_halftime_match():
+    """Két 20 mp-es szimulált félidő 90 mp-es (üres) szünettel — a
+    félidő-felismerés (detect_halftime) megtalálja a szünetet, így a
+    félidő-feltételes (_fh) kulcsok is elkészülnek."""
+    from handball.models.tracking import Frame, Match
+
+    os.environ["HANDBALL_DATA_DIR"] = _tmp
+    m1 = simulate_ground_truth(duration_s=20, fps=25.0, seed=1)
+    m2 = simulate_ground_truth(duration_s=20, fps=25.0, seed=2)
+    frames = list(m1.frames)
+    t = frames[-1].t + 1
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for f in m2.frames:
+        f.t = t
+        frames.append(f)
+        t += 1
+    m = Match(m1.meta, frames)
+    matches_dir = Path(_tmp) / "data" / "matches"
+    matches_dir.mkdir(parents=True, exist_ok=True)
+    (matches_dir / f"{m.meta.match_id}.json").write_text(
+        json.dumps(m.to_dict()), encoding="utf-8")
+    return TestClient(create_app()), m.meta.match_id
+
+
+def test_felido_kulcsok_elkeszulnek_felidos_meccsen():
+    """A félidő-feltételes (_fh) kulcsok a sima füstteszten jogosan
+    hiányoznak — itt egy FELISMERT félidejű szimulált meccsen
+    követeljük mindet: egy elromló _fh-ág is némán tűnne el."""
+    registries = _endpoint_registries()
+    fh_by_path = {path: sorted(k for k in keys if k.endswith("_fh"))
+                  for path, keys in registries.items()}
+    fh_by_path = {p: ks for p, ks in fh_by_path.items() if ks}
+    assert fh_by_path, "nincs _fh kulcs a forrásban?"
+    client, mid = _client_with_halftime_match()
+    problems = []
+    for path, fh_keys in sorted(fh_by_path.items()):
+        r = client.get(path.replace("{match_id}", mid))
+        if r.status_code != 200:
+            problems.append(f"{path}: HTTP {r.status_code}")
+            continue
+        body = r.json()
+        missing = sorted(set(fh_keys) - set(body))
+        if missing:
+            problems.append(f"{path}: {missing}")
+    assert not problems, \
+        f"hiányzó félidő-kulcsok felismert félidő mellett: {problems}"

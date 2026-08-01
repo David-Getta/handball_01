@@ -134,8 +134,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   esne vissza (az örökölt, nem összegezhető mezők zárt listán) —, a
   kliens-csempék minden r["..."] kulcsának létező
   felderítés-mezőnek kell lennie (az elgépelt kulcs némán üres
-  csempét adna), és a meccsterv-/edzés-szabályok sorszámai nem
-  ismétlődhetnek.
+  csempét adna), a meccsterv-/edzés-szabályok sorszámai nem
+  ismétlődhetnek, és a félidő-feltételes (_fh) kulcsok egy felismert
+  félidejű szimulált meccsen mind elkészülnek.
 
 - **Keresztjáték**: MENNYIT KERESZTEZNEK a hátsó sorban. Az álló
   támadók rétege az egyéni mozgást méri — ez a szerkezetet: felállt
