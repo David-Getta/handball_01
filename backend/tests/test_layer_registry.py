@@ -1,12 +1,12 @@
 """
 Réteg-regisztry füstteszt: egyetlen réteg sem bukhat el némán.
 
-A meccs-csomag `_layer` segédje és az /attacks végpont `try/except`
+A meccs-csomag `_layer` segédje és a végpontok `try/except`
 blokkjai szándékosan hibatűrőek — egy réteg hibája nem viheti el a
 többit. Ennek az az ára, hogy egy elromló motor NÉMÁN tűnik el a
 kimenetből. Ez a teszt zárja a rést: a forrásból kiolvassa az összes
 regisztrált réteg nevét, lefuttat egy szimulált meccset a teljes
-csomagon és az /attacks végponton, és követeli, hogy minden
+csomagon és az összes elemzés-végponton, és követeli, hogy minden
 regisztrált réteg ott legyen a kimenetben.
 
 Önfrissülő: új réteg felvételekor semmit nem kell ide írni — a nevet
@@ -44,11 +44,11 @@ from handball.sim.match_simulator import simulate_ground_truth  # noqa: E402
 _APP_PY = (Path(__file__).resolve().parent.parent
            / "handball" / "api" / "app.py")
 
-# Feltételes kulcsok az /attacks válaszban: az első félidős (_fh)
+# Feltételes kulcsok a végpont-válaszokban: az első félidős (_fh)
 # bontások csak felismert félidei szünetnél kerülnek a válaszba, a
 # first_half_close pedig csak akkor, ha az első félidő szoros volt.
 # A rövid szimulált meccsen ezek jogosan hiányoznak.
-_CONDITIONAL_ATTACKS_KEYS = {"first_half_close"}
+_CONDITIONAL_KEYS = {"first_half_close"}
 
 
 def _client_with_match():
@@ -103,22 +103,46 @@ def test_package_reteg_nevek_egyediek():
     assert not dupes, f"duplán regisztrált réteg-nevek: {dupes}"
 
 
-def test_attacks_minden_regisztralt_kulcs_elkeszul():
-    """Az /attacks végpont válaszában minden `res["..."]`-ként bekötött
-    kulcs ott van — a félidő-feltételes (_fh és first_half_close)
-    kulcsok kivételével, amelyek a rövid szimulált meccsen jogosan
-    hiányoznak."""
+def _endpoint_registries() -> dict[str, set[str]]:
+    """Minden GET /matches/{match_id}/... végpont, amelyben
+    `res["..."]` kulcs-regisztráció van: {útvonal: kulcsok}."""
     src = _APP_PY.read_text(encoding="utf-8")
-    seg = src.split("def get_attacks(", 1)[1].split("@app.get(", 1)[0]
-    registered = set(re.findall(r'res\["([a-z0-9_]+)"\]\s*=', seg))
-    assert len(registered) > 150, "a kulcs-olvasás elromlott"
+    parts = re.split(r'@app\.get\("(/matches/\{match_id\}/[^"]+)"\)', src)
+    out: dict[str, set[str]] = {}
+    for i in range(1, len(parts), 2):
+        path, body = parts[i], parts[i + 1]
+        body = re.split(r'@app\.(get|post|delete|put)\(', body)[0]
+        if "{" in path.replace("{match_id}", ""):
+            continue  # további útvonal-paraméteres végpont kimarad
+        keys = set(re.findall(r'res\["([a-z0-9_]+)"\]\s*=', body))
+        if keys:
+            out[path] = keys
+    return out
+
+
+def test_vegpontok_minden_regisztralt_kulcs_elkeszul():
+    """Minden elemzés-végpont válaszában ott van minden
+    `res["..."]`-ként bekötött kulcs — a félidő-feltételes (_fh és
+    first_half_close) kulcsok kivételével, amelyek a rövid szimulált
+    meccsen jogosan hiányoznak."""
+    registries = _endpoint_registries()
+    assert len(registries) >= 4, "a végpont-olvasás elromlott"
+    assert sum(len(k) for k in registries.values()) > 200, \
+        "a kulcs-olvasás elromlott"
     client, mid = _client_with_match()
-    r = client.get(f"/matches/{mid}/attacks")
-    assert r.status_code == 200
-    body = r.json()
-    missing = set(registered) - set(body)
-    unexpected = sorted(
-        k for k in missing
-        if not k.endswith("_fh") and k not in _CONDITIONAL_ATTACKS_KEYS)
-    assert not unexpected, \
-        f"némán elbukott kulcsok az /attacks válaszban: {unexpected}"
+    problems = []
+    for path, registered in sorted(registries.items()):
+        r = client.get(path.replace("{match_id}", mid))
+        if r.status_code != 200:
+            problems.append(f"{path}: HTTP {r.status_code}")
+            continue
+        body = r.json()
+        missing = registered - set(body if isinstance(body, dict) else {})
+        unexpected = sorted(
+            k for k in missing
+            if not k.endswith("_fh")
+            and k not in _CONDITIONAL_KEYS)
+        if unexpected:
+            problems.append(f"{path}: {unexpected}")
+    assert not problems, \
+        f"némán elbukott kulcsok a végpontokon: {problems}"

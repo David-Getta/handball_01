@@ -40,8 +40,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   észrevétlenül tűnt el a kimenetből. Az új teszt a forrásból olvassa
   ki az összes regisztrált réteg nevét (önfrissülő: új rétegnél
   semmit nem kell hozzáírni), lefuttat egy szimulált meccset a teljes
-  csomag-exporton és az /attacks végponton, és követeli, hogy mind a
-  246 csomag-réteg és mind a ~190 /attacks-kulcs ott legyen — a
+  csomag-exporton és az ÖSSZES elemzés-végponton (attacks, defense,
+  goalkeepers, tactics, quality), és követeli, hogy mind a 246+
+  csomag-réteg és minden végpont-kulcs ott legyen — a
   félidő-feltételes kulcsok kivételével. Plusz: két azonos nevű
   regisztráció (néma felülírás) is tesztet buktat.
 
