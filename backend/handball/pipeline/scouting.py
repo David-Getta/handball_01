@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Keresztjátékuk: mért támadásaik és a hátsó sor oldalcseréi —
+    # darabszámok, meccsek közt pontosan összegződnek.
+    crx_attacks: int = 0
+    crx_crosses: int = 0
     # Szélső-futtatásuk: szélső-átvételeik és a mozgásból jövők —
     # darabszámok, meccsek közt pontosan összegződnek.
     wsv_receptions: int = 0
@@ -2144,6 +2148,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Keresztjáték: kell-e váltás-fegyelem a faladnak.
+    if rep.crx_attacks >= 8:
+        _crx_per = rep.crx_crosses / rep.crx_attacks
+        if _crx_per >= 1.0:
+            keys.append(
+                f"Sokat kereszteznek (támadásonként átlag "
+                f"{_crx_per:.1f} oldalcsere a hátsó sorban) — a "
+                "váltás-fegyelem dönt: hangos, korai átadás a védők "
+                "közt, különben a kereszt után ketten fogjátok "
+                "ugyanazt az embert.")
+        elif _crx_per <= 0.3:
+            keys.append(
+                f"Statikus a hátsó soruk (támadásonként csak "
+                f"{_crx_per:.1f} keresztezés) — ember-ember tartás is "
+                "vállalható ellenük: nincs váltás-helyzet, a védőid "
+                "végig a saját emberükön maradhatnak.")
 
     # Szélső-futtatás: kifutással vagy sávzárással védekezz a szélen.
     if rep.wsv_receptions >= 6:
@@ -5911,6 +5932,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import crossing_runs as _crx
+        crxrec = _crx(match, config)[team.value]
+        rep.crx_attacks = crxrec["attacks"]
+        rep.crx_crosses = crxrec["crosses"]
         from .attack_types import wing_service as _wsv
         wsvrec = _wsv(match, config)[team.value]
         rep.wsv_receptions = wsvrec["receptions"]
@@ -8316,6 +8341,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 199) Az ő keresztjátékuk × a ti hangos falatok: a váltás-
+    # fegyelem előre begyakorolva.
+    if (opp.crx_attacks >= 8
+            and opp.crx_crosses / opp.crx_attacks >= 1.0
+            and own.def_shots_against >= 10):
+        _free199 = (100.0 * own.def_free_shots
+                    / max(1, own.def_shots_against))
+        if _free199 <= 35.0:
+            plan.append(
+                f"Sokat kereszteznek (támadásonként "
+                f"{opp.crx_crosses / opp.crx_attacks:.1f} oldalcsere), "
+                f"a ti falatok pedig fegyelmezett (a rátok jövő "
+                f"lövések csak {_free199:.0f}%-a fedezetlen) — a "
+                "keresztjeikre előre begyakorolt váltás-szabállyal "
+                "feleljetek: az első kereszt váltás, a második már "
+                "kísérés, és hangos jelzés minden cserénél.")
 
     # 198) Az ő futtatott szélsőik × a ti sáv-záró védekezésetek: a
     # futópasszt kell elfogni, nem a lövést fogni.
@@ -11387,6 +11429,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        crx_attacks=sum(r.crx_attacks for r in reports),
+        crx_crosses=sum(r.crx_crosses for r in reports),
         wsv_receptions=sum(r.wsv_receptions for r in reports),
         wsv_running=sum(r.wsv_running for r in reports),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),

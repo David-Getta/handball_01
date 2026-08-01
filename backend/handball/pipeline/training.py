@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 220) Keresztjáték: ha statikus a hátsó sorunk, a kereszt-
+    # mozgások beépítése a téma.
+    try:
+        from .attack_types import crossing_runs
+        crx220 = crossing_runs(match, config)
+        for side in ("home", "away"):
+            rec220 = crx220[side]
+            if rec220["verdict"] != "statikus a hátsó soruk":
+                continue
+            add(side, "tamadas", "Keresztmozgások",
+                f"támadásonként csak {rec220['per_attack']:.1f} "
+                "keresztezést futunk a hátsó sorban — a védők végig "
+                "a saját emberükön maradhatnak, és soha nem kerülnek "
+                "váltás-döntés elé",
+                "keresztmozgások: alap-keresztek gyakorlása "
+                "(irányító-átlövő kereszt labdával és labda nélkül) — "
+                "az edzésmeccsen minden felállt támadásban kötelező "
+                "legalább egy kereszt a lövés előtt, és a kereszt "
+                "utáni második hullám (a visszainduló ember) kapja a "
+                "prémium-pontot")
+    except Exception:
+        pass
+
     # 219) Szélső-futtatás: ha a szélsőink állva kapják a labdát, a
     # futtatott széljáték a téma.
     try:

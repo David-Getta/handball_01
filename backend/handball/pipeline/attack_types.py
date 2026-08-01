@@ -3808,3 +3808,74 @@ def wing_service(match: Match,
             elif pct <= WSV_STATIC_PCT:
                 rec["verdict"] = "állva kapják a szélsők"
     return out
+
+
+# Keresztjáték: a hátsó sor két játékosának oldalcseréje számít
+# keresztnek, ennyi mért támadás kell az ítélethez, és e feletti /
+# alatti kereszt-átlag a mozgásos, illetve a statikus hátsó sor jele.
+CRX_MIN_ATTACKS = 8
+CRX_HIGH_PER_ATTACK = 1.0
+CRX_LOW_PER_ATTACK = 0.3
+
+
+def crossing_runs(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Keresztjáték: MENNYIT KERESZTEZNEK a hátsó sorban.
+
+    Az álló támadók rétege az egyéni mozgást méri — ez a szerkezetet:
+    felállt támadásonként megszámoljuk, hányszor cserél oldalt
+    (y-sorrendet) a hátsó sor két játékosa. A keresztjáték a
+    váltás-kényszer műfaja: minden kereszt egy védő-döntést
+    provokál.
+
+    Edzőileg: a sokat keresztező csapat ellen a váltás-fegyelem dönt
+    — hangos, korai átadás a védők közt, különben a kereszt után
+    ketten fogják ugyanazt az embert; a nem keresztező, statikus
+    hátsó sor ellen ember-ember tartás is vállalható, mert nincs
+    váltás-helyzet.
+
+    Visszatérés csapatonként: {"attacks", "crosses", "per_attack",
+    "verdict"} — a per_attack/verdict None CRX_MIN_ATTACKS alatt; a
+    verdict "sokat kereszteznek" / "statikus a hátsó soruk" / None.
+    """
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    posts = estimate_positions(match, config)
+    backs = {side: [tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] in ("irányító", "átlövő")]
+             for side in ("home", "away")}
+
+    out = {side: {"attacks": 0, "crosses": 0, "per_attack": None,
+                  "verdict": None} for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        ids = backs[side]
+        if len(ids) < 2:
+            continue
+        rec = out[side]
+        rec["attacks"] += 1
+        prev_order = None
+        for f in seq.frames:
+            ys = {}
+            for p in f.players:
+                if p.track_id in ids:
+                    ys[p.track_id] = p.y
+            if len(ys) < 2:
+                continue
+            order = tuple(sorted(ys, key=lambda k: ys[k]))
+            if prev_order is not None and order != prev_order:
+                rec["crosses"] += 1
+            prev_order = order
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attacks"] >= CRX_MIN_ATTACKS:
+            per = rec["crosses"] / rec["attacks"]
+            rec["per_attack"] = round(per, 2)
+            if per >= CRX_HIGH_PER_ATTACK:
+                rec["verdict"] = "sokat kereszteznek"
+            elif per <= CRX_LOW_PER_ATTACK:
+                rec["verdict"] = "statikus a hátsó soruk"
+    return out

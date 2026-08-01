@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Keresztjáték: mennyit kereszteznek a hátsó sorban (8+ támadás;
+  // 1,0 felett sok, 0,3 alatt statikus — a backend-kulccsal azonos
+  // küszöbök).
+  String? _crossingRuns(Map<String, dynamic> r) {
+    final attacks = ((r["crx_attacks"] as num?) ?? 0).toInt();
+    final crosses = ((r["crx_crosses"] as num?) ?? 0).toInt();
+    if (attacks < 8) return null;
+    final per = crosses / attacks;
+    if (per >= 1.0) {
+      return "sokat kereszteznek (támadásonként "
+          "${per.toStringAsFixed(1)} oldalcsere) · a váltás-fegyelem "
+          "dönt, hangos átadásokkal";
+    }
+    if (per <= 0.3) {
+      return "statikus a hátsó soruk (${per.toStringAsFixed(1)} "
+          "keresztezés támadásonként) · ember-ember tartás is "
+          "vállalható ellenük";
+    }
+    return null;
+  }
+
   // Szélső-futtatás: lendületből vagy állva kapják-e (6+ átvétel;
   // 55% felett futtatott, 25% alatt álló — a backend-kulccsal azonos
   // küszöbök).
@@ -5253,6 +5274,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Csere-lyukak", _subGaps(r)!],
       if (_wingService(r) != null)
         ["Szélső-futtatás", _wingService(r)!],
+      if (_crossingRuns(r) != null)
+        ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

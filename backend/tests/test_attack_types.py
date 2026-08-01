@@ -2764,3 +2764,57 @@ def test_wing_service_needs_enough_receptions():
 
     rec = wing_service(_wsv_match(True, n_passes=3))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Keresztjáték (mennyit kereszteznek a hátsó sorban) ---------------------
+
+def _crx_match(crossing, n_attacks=8, fps=25.0):
+    """Felállt hazai támadások két hátsó emberrel (3-as irányító,
+    4-es átlövő); keresztezésnél támadásonként kétszer y-sorrendet
+    cserélnek."""
+    frames = []
+    t = 0
+    for _ in range(n_attacks):
+        n = int(4.0 * fps)
+        for i in range(n):
+            if crossing:
+                phase = (i // (n // 4)) % 2      # negyedenként csere
+                y3, y4 = (7.0, 13.0) if phase == 0 else (13.0, 7.0)
+            else:
+                y3, y4 = 7.0, 13.0
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, y3),
+                _pl(4, Team.HOME, 30.0, y4),
+                _pl(21, Team.AWAY, 38.0, 10.0)],
+                ball=Ball(x=28.0, y=y3, confidence=1.0)))
+            t += 1
+        for _ in range(int(3 * fps)):            # szünet
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_crossing_runs_flags_the_crossing_backcourt():
+    """Támadásonként több oldalcsere → sokat kereszteznek."""
+    from handball.pipeline.attack_types import crossing_runs
+
+    rec = crossing_runs(_crx_match(True))["home"]
+    assert rec["attacks"] == 8 and rec["per_attack"] >= 1.0
+    assert rec["verdict"] == "sokat kereszteznek"
+
+
+def test_crossing_runs_flags_the_static_backcourt():
+    """Oldalcsere nélkül statikus a hátsó soruk."""
+    from handball.pipeline.attack_types import crossing_runs
+
+    rec = crossing_runs(_crx_match(False))["home"]
+    assert rec["crosses"] == 0
+    assert rec["verdict"] == "statikus a hátsó soruk"
+
+
+def test_crossing_runs_needs_enough_attacks():
+    """Kevés (8-nál kevesebb) mért támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import crossing_runs
+
+    rec = crossing_runs(_crx_match(True, n_attacks=4))["home"]
+    assert rec["verdict"] is None

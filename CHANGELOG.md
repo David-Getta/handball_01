@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Keresztjáték**: MENNYIT KERESZTEZNEK a hátsó sorban. Az álló
+  támadók rétege az egyéni mozgást méri — ez a szerkezetet: felállt
+  támadásonként számoljuk a hátsó sor oldalcseréit (8+ támadás; 1,0
+  felett sok, 0,3 alatt statikus). A sokat keresztező ellen a
+  váltás-fegyelem dönt — hangos, korai átadás a védők közt; a
+  statikus hátsó sor ellen ember-ember tartás is vállalható. Egy
+  réteg, sok felület: `crossing_runs` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (támadás- és
+  kereszt-darabszámok, két edzői kulcs + csempe), 199.
+  meccsterv-szabály (az ő keresztjeik × a ti fegyelmezett falatok),
+  220. edzés-szabály (keresztmozgások: kötelező kereszt a lövés
+  előtt).
+
 - **Szélső-futtatás**: LENDÜLETBŐL vagy ÁLLVA kapják-e a szélsők a
   labdát. A szél-bevonás azt méri, mennyit ér a szélső játék — ez
   azt, hogyan érkezik a labda: a szélső-átvételeknél a fogadó

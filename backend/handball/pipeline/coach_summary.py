@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Keresztjáték: mennyit kereszteznek a hátsó sorban.
+    try:
+        from .attack_types import crossing_runs
+        crx = crossing_runs(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_crx = crx[side]
+            if rec_crx["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hátsó soráról kiderült: "
+                     f"{rec_crx['verdict']} (támadásonként átlag "
+                     f"{rec_crx['per_attack']:.1f} keresztezés).")
+    except Exception:
+        pass
     # Szélső-futtatás: lendületből vagy állva kapják-e a szélsők.
     try:
         from .attack_types import wing_service
