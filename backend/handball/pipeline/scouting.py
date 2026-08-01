@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Blokk-lepattanóik: mért blokkjaik és a belőlük visszaszerzett
+    # labdák — darabszámok, meccsek közt pontosan összegződnek.
+    brc_blocks: int = 0
+    brc_recovered: int = 0
     # Ziccer-befejezőik: játékosonként a nagy helyzetek és góljaik
     # [{"player_id", "chances", "goals"}] — darabszámok, meccsek közt
     # játékos szerint összegződnek.
@@ -2115,6 +2119,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Blokk-lepattanó: mennyit ér a blokkolt lövésünk ellenük.
+    if rep.brc_blocks >= 4:
+        _brc_pct = 100.0 * rep.brc_recovered / rep.brc_blocks
+        if _brc_pct >= 60.0:
+            keys.append(
+                f"A blokk után a labdát is megszerzik "
+                f"({rep.brc_recovered}/{rep.brc_blocks} lepattanó az "
+                "övék) — a blokkjukba lőtt labda egyenlő a "
+                "labdavesztéssel: a blokk-kar mellett kell ellőni, "
+                "vagy be kell játszani, nem átlőni rajtuk.")
+        elif _brc_pct <= 30.0:
+            keys.append(
+                f"A blokkjaik visszahullanak (csak "
+                f"{rep.brc_recovered}/{rep.brc_blocks} lepattanót "
+                "szereztek meg) — a blokkolt lövés után azonnal "
+                "támadjatok újra: a lepattanó a tiétek, és a faluk "
+                "ilyenkor még rendezetlen.")
 
     # Ziccer-befejezők: kinél kell a helyzetet már előbb megelőzni.
     _bcf_acc: dict = {}
@@ -5773,6 +5795,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .defense import block_recoveries as _brc
+        brcrec = _brc(match, config)[team.value]
+        rep.brc_blocks = brcrec["blocks"]
+        rep.brc_recovered = brcrec["recovered"]
         from .xg import big_chance_finishers as _bcf
         rep.bcf_players = [dict(pr) for pr in
                            _bcf(match, config)[team.value]["players"]]
@@ -8151,6 +8177,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 192) Az ő visszahulló blokkjaik × a ti második hullámotok: a
+    # blokkolt lövésetek nem labdavesztés, hanem újrajátszás.
+    if (opp.brc_blocks >= 4
+            and 100.0 * opp.brc_recovered / opp.brc_blocks <= 30.0
+            and own.rn_made >= 2):
+        plan.append(
+            f"A blokkjaik visszahullanak (csak {opp.brc_recovered}/"
+            f"{opp.brc_blocks} lepattanót szereznek meg), ti pedig "
+            f"lendületből játszotok ({own.rn_made} gólsorozat) — a "
+            "blokkolt lövés nálatok nem labdavesztés: a lövő mögé "
+            "tervezett második hullám szedje a lepattanót, és "
+            "azonnal jöhet az újrajátszás a rendezetlen fal ellen.")
 
     # 191) Az ő ziccer-biztos befejezőjük × a ti korai besegítésetek:
     # nála a helyzet kialakulását kell megelőzni.
@@ -11116,6 +11155,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        brc_blocks=sum(r.brc_blocks for r in reports),
+        brc_recovered=sum(r.brc_recovered for r in reports),
         bcf_players=_merge_bcf_players(reports),
         psl_sevens=sum(r.psl_sevens for r in reports),
         psl_extra=sum(r.psl_extra for r in reports),

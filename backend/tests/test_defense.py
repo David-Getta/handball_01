@@ -2102,3 +2102,61 @@ def test_wing_closeouts_needs_enough_shots():
 
     rec = wing_closeouts(_wco_match(4.0, n_shots=2))["away"]
     assert rec["shots"] == 2 and rec["verdict"] is None
+
+
+# ---- Blokk-lepattanó (a blokk után ki szerzi meg a labdát) ------------------
+
+def _brc_match(recover_flags, fps=25.0):
+    """Vendég blokkok hazai lövéseken; a `recover_flags` szerint a
+    lepattanót a blokkoló (True) vagy a lövő (False) szerzi meg."""
+    frames = []
+    t = 0
+    shooter = _pl(1, Team.HOME, 28.0, 10.0)
+    blocker = _pl(20, Team.AWAY, 32.5, 10.0)
+    for recovered in recover_flags:
+        for x in (29.0, 30.2, 31.4, 32.4):     # lövés a blokkba
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        if recovered:                           # a lepattanó a blokkolóé
+            path = (32.2, 32.4, 32.5, 32.5, 32.5, 32.5)
+        else:                                   # visszahull a lövőhöz
+            path = (31.0, 29.5, 28.0, 28.0, 28.0, 28.0)
+        for x in path:
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):                     # szünet (debounce)
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_block_recoveries_flags_the_full_value_blocks():
+    """Négy blokkból négy lepattanó a blokkolóé → a labdát is
+    megszerzik."""
+    from handball.pipeline.defense import block_recoveries
+
+    rec = block_recoveries(_brc_match([True] * 4))["away"]
+    assert rec["blocks"] == 4 and rec["recovered"] == 4
+    assert rec["verdict"] == "a blokk után a labdát is megszerzik"
+
+
+def test_block_recoveries_flags_the_bouncing_blocks():
+    """Ha a lepattanó rendre a lövőhöz hull vissza, a blokk nem teljes
+    értékű."""
+    from handball.pipeline.defense import block_recoveries
+
+    rec = block_recoveries(_brc_match([False] * 4))["away"]
+    assert rec["recovered"] == 0
+    assert rec["verdict"] == "a blokkjaik visszahullanak"
+
+
+def test_block_recoveries_needs_enough_blocks():
+    """Kevés (4-nél kevesebb) mért blokknál nincs ítélet."""
+    from handball.pipeline.defense import block_recoveries
+
+    rec = block_recoveries(_brc_match([True, True]))["away"]
+    assert rec["blocks"] == 2 and rec["verdict"] is None

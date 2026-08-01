@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 213) Blokk-lepattanó: ha a blokkjaink visszahullanak, a blokk
+    # utáni második mozdulat a téma.
+    try:
+        from .defense import block_recoveries
+        brc213 = block_recoveries(match, config)
+        for side in ("home", "away"):
+            rec213 = brc213[side]
+            if rec213["verdict"] != "a blokkjaik visszahullanak":
+                continue
+            add(side, "vedekezes", "Blokk utáni lepattanó",
+                f"csak {rec213['recovered']}/{rec213['blocks']} "
+                "blokk-lepattanót szereztünk meg — a jó blokk után a "
+                "támadó második esélyt kap, sokszor még jobb "
+                "helyzetből",
+                "blokk utáni lepattanó: blokk-gyakorlat párban — a "
+                "blokkoló a blokk után NEM nézi a labdát, hanem "
+                "azonnal fordul és a lepattanó felé lép, a mögötte "
+                "álló társ hangosan irányítja (hol a labda); a menet "
+                "csak akkor pont, ha a blokk után a labda is a védőké")
+    except Exception:
+        pass
+
     # 212) Ziccer-befejezők: ha egy emberünk a nagy helyzeteket is
     # kihagyja, a ziccer-rutin a téma.
     try:

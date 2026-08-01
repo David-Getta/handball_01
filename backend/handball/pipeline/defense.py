@@ -3003,3 +3003,76 @@ def wing_closeouts(match, config=None) -> dict:
                 rec["verdict"] = "zárják a szélsőt"
         out[side] = rec
     return out
+
+
+# Blokk-lepattanó: ekkora ablakban keressük a blokk utáni első
+# birtokost, ennyi blokk kell az ítélethez, és e feletti / alatti
+# visszaszerzés-arány a teljes értékű, illetve a visszahulló blokk jele.
+BRC_WINDOW_S = 3.0
+BRC_MIN_BLOCKS = 4
+BRC_GOOD_PCT = 60.0
+BRC_POOR_PCT = 30.0
+
+
+def block_recoveries(match, config=None) -> dict:
+    """Blokk-lepattanó: A BLOKK UTÁN ki szerzi meg a labdát.
+
+    A blokk-arány (blocked_shot_rate) azt méri, mennyi lövést fognak
+    meg — ez azt, mit ér a blokk: a blokkolt labda lepattanóját a
+    blokk utáni másodpercekben az első azonosított birtokoshoz
+    kötjük. A blokk csak akkor teljes értékű, ha a labdát is a
+    blokkoló csapat szerzi meg — különben a támadó második esélyt
+    kap, sokszor még jobb helyzetből.
+
+    Edzőileg: akinek a blokkja visszahull, annál a blokkolt lövés
+    után azonnal újra kell támadni — a lepattanó az övék; aki a
+    blokk után a labdát is megszerzi, annál a blokkolt lövés
+    egyenlő a labdavesztéssel, és a kontrájuk indul belőle.
+
+    Visszatérés csapatonként (a BLOKKOLÓ oldal): {"blocks",
+    "recovered", "rec_pct", "verdict"} — a rec_pct/verdict None
+    BRC_MIN_BLOCKS mért blokk alatt; a verdict "a blokk után a labdát
+    is megszerzik" / "a blokkjaik visszahullanak" / None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(BRC_WINDOW_S * fps)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    blocks = detect_blocks(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        measured = 0
+        recovered = 0
+        for ev in blocks[side]["events"]:
+            i0 = idx_of.get(ev["t"])
+            if i0 is None:
+                continue
+            for j in range(i0 + 1, min(len(match.frames) - 2,
+                                       i0 + 1 + win)):
+                h = ball_holder(match.frames[j], config)
+                if h is None:
+                    continue
+                # Csak megült labda: a röptében elsuhanó lepattanó
+                # nem birtoklás — két kockával később is nála legyen.
+                h2 = ball_holder(match.frames[j + 2], config)
+                if h2 is None or h2.track_id != h.track_id:
+                    continue
+                measured += 1
+                if h.team.value == side:
+                    recovered += 1
+                break
+        rec = {"blocks": measured, "recovered": recovered,
+               "rec_pct": None, "verdict": None}
+        if measured >= BRC_MIN_BLOCKS:
+            pct = 100.0 * recovered / measured
+            rec["rec_pct"] = round(pct, 1)
+            if pct >= BRC_GOOD_PCT:
+                rec["verdict"] = "a blokk után a labdát is megszerzik"
+            elif pct <= BRC_POOR_PCT:
+                rec["verdict"] = "a blokkjaik visszahullanak"
+        out[side] = rec
+    return out

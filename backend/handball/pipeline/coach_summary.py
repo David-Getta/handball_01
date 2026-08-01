@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Blokk-lepattanó: a blokk után ki szerzi meg a labdát.
+    try:
+        from .defense import block_recoveries
+        brc = block_recoveries(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_brc = brc[side]
+            if rec_brc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} blokkjairól kiderült: "
+                     f"{rec_brc['verdict']} "
+                     f"({rec_brc['recovered']}/{rec_brc['blocks']} "
+                     "lepattanó lett az övék).")
+    except Exception:
+        pass
     # Ziccer-befejezők: ki értékesíti a nagy helyzeteket.
     try:
         from .xg import big_chance_finishers

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Blokk-lepattanó**: A BLOKK UTÁN ki szerzi meg a labdát. A
+  blokk-arány azt méri, mennyi lövést fognak meg — ez azt, mit ér a
+  blokk: a blokkolt labda lepattanóját a blokk utáni másodpercek első
+  stabil birtokosához kötjük (4+ blokk; 60% felett teljes értékű, 30%
+  alatt visszahulló). A visszahulló blokkú csapat ellen a blokkolt
+  lövés után azonnal újra kell támadni; a lepattanót is megszerző
+  ellen a blokkba lőtt labda labdavesztés. Egy réteg, sok felület:
+  `block_recoveries` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (blokk- és lepattanó-darabszámok,
+  két edzői kulcs + csempe), 192. meccsterv-szabály (az ő visszahulló
+  blokkjaik × a ti második hullámotok), 213. edzés-szabály (blokk
+  utáni lepattanó: fordulás és irányított felvétel).
+
 - **Ziccer-befejezők**: KI ÉRTÉKESÍTI a nagy helyzeteket. A pazarló
   lövők minden lövést néznek — ez csak a ziccereket: játékosonként
   számoljuk a 0,5 feletti helyzet-értékű lövéseket és góljaikat (3+

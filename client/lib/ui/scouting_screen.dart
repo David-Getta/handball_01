@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Blokk-lepattanó: a blokk után ki szerzi meg a labdát (4+ blokk;
+  // 60% felett teljes értékű, 30% alatt visszahulló — a
+  // backend-kulccsal azonos küszöbök).
+  String? _blockRecoveries(Map<String, dynamic> r) {
+    final blocks = ((r["brc_blocks"] as num?) ?? 0).toInt();
+    final rec = ((r["brc_recovered"] as num?) ?? 0).toInt();
+    if (blocks < 4) return null;
+    final pct = 100.0 * rec / blocks;
+    if (pct >= 60.0) {
+      return "a blokk után a labdát is megszerzik ($rec/$blocks "
+          "lepattanó) · a blokkjukba lőtt labda labdavesztés, "
+          "mellette kell ellőni";
+    }
+    if (pct <= 30.0) {
+      return "a blokkjaik visszahullanak (csak $rec/$blocks "
+          "lepattanó az övék) · blokkolt lövés után azonnal "
+          "támadjatok újra";
+    }
+    return null;
+  }
+
   // Ziccer-befejezők: ki értékesíti a nagy helyzeteket (3+ ziccer;
   // 80% felett biztos, 40% alatt bizonytalan — a backend-kulccsal
   // azonos küszöbök).
@@ -5108,6 +5129,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes utáni percek", _postSevenLapses(r)!],
       if (_bigChanceFinishers(r) != null)
         ["Ziccer-befejezők", _bigChanceFinishers(r)!],
+      if (_blockRecoveries(r) != null)
+        ["Blokk-lepattanó", _blockRecoveries(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)
