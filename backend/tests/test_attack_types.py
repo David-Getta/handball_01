@@ -3005,3 +3005,66 @@ def test_fast_break_headstart_needs_enough_breaks():
 
     rec = fast_break_headstart(_fbh_match(True, n_breaks=3))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Kontra-esés (melyik félidőben kontráznak) ------------------------------
+
+def _brf_match(breaks_first=True, halftime=True, fps=25.0):
+    """Egyik félidőben kontrázós, a másikban felállt játék; köztük 90
+    mp-es (üres) szünet, amit a félidő-felismerés megtalál."""
+    frames = []
+    t = 0
+
+    def _half(with_breaks):
+        nonlocal t, frames
+        for _ in range(6):
+            if with_breaks:
+                seg = _attack_frames(t, 4.0, 22.0, 38.0, fps=fps)
+            else:
+                seg = _attack_frames(t, 10.0, 30.0, 31.0, fps=fps)
+            frames += seg
+            t = frames[-1].t + 1
+            for _ in range(int(2 * fps)):   # szünet: állnak, nincs labda
+                players = [
+                    _pl(1, Team.HOME, 25.0, 10.0),
+                    _pl(2, Team.HOME, 22.0, 6.0),
+                    _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                    _pl(21, Team.AWAY, 37.0, 8.0),
+                    _pl(22, Team.AWAY, 37.0, 12.0),
+                ]
+                frames.append(Frame(t=t, players=players, ball=None))
+                t += 1
+
+    _half(with_breaks=breaks_first)
+    if halftime:
+        for _ in range(int(90 * fps)):      # félidei szünet: üres pálya
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    _half(with_breaks=not breaks_first)
+    return Match(_meta(fps), frames)
+
+
+def test_break_share_fade_flags_the_fading_break():
+    """Kontrázós első, felállt második félidő → eláll a kontrájuk."""
+    from handball.pipeline.attack_types import break_share_fade
+
+    rec = break_share_fade(_brf_match(True))["home"]
+    assert rec["fh_breaks"] >= 5 and rec["sh_breaks"] == 0
+    assert rec["verdict"] == "a második félidőben eláll a kontrájuk"
+
+
+def test_break_share_fade_flags_the_late_runner():
+    """Felállt első, kontrázós második félidő → a hajrára
+    kontrázósabbak."""
+    from handball.pipeline.attack_types import break_share_fade
+
+    rec = break_share_fade(_brf_match(False))["home"]
+    assert rec["verdict"] == "a hajrára kontrázósabbak"
+
+
+def test_break_share_fade_needs_halftime():
+    """Felismert félidei szünet nélkül nincs ítélet."""
+    from handball.pipeline.attack_types import break_share_fade
+
+    rec = break_share_fade(_brf_match(True, halftime=False))["home"]
+    assert rec["verdict"] is None and rec["gap_pp"] is None

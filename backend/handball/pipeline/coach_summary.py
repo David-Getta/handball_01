@@ -846,6 +846,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kontra-esés: melyik félidőben kontráznak.
+    try:
+        from .attack_types import break_share_fade
+        brf = break_share_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_brf = brf[side]
+            if rec_brf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontra-játékáról kiderült: "
+                     f"{rec_brf['verdict']} "
+                     f"({rec_brf['fh_breaks']}/{rec_brf['fh_attacks']}"
+                     f" lerohanás az elsőben, "
+                     f"{rec_brf['sh_breaks']}/{rec_brf['sh_attacks']}"
+                     " a másodikban).")
+    except Exception:
+        pass
     # Felhozatal-posztok: melyik posztra hozzák fel a labdát.
     try:
         from .goalkeeper import outlet_target_roles

@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 229) Kontra-esés: ha a második félidőre eláll a kontránk, a
+    # láb és a kontra-döntés kondicionálása a téma.
+    try:
+        from .attack_types import break_share_fade
+        brf229 = break_share_fade(match, config)
+        for side in ("home", "away"):
+            rec229 = brf229[side]
+            if rec229["verdict"] != \
+                    "a második félidőben eláll a kontrájuk":
+                continue
+            _fh229 = 100.0 * rec229["fh_breaks"] / rec229["fh_attacks"]
+            _sh229 = 100.0 * rec229["sh_breaks"] / rec229["sh_attacks"]
+            add(side, "tamadas", "Kontra a második félidőben is",
+                f"a lerohanás-arányunk {_fh229:.0f}%-ról "
+                f"{_sh229:.0f}%-ra esik a második félidőre — fáradva "
+                "már nem indulunk el, pedig a helyzet ugyanúgy ott "
+                "van",
+                "kontra-kondicionálás: fáradt lábbal (edzés végén) "
+                "futott 3-a-2 lerohanás-sorozatok, ahol az indulás "
+                "KÖTELEZŐ minden labdaszerzés után — az edzésmeccs "
+                "második felében a kihagyott indulás mínusz pont, a "
+                "végigvitt kontra dupla")
+    except Exception:
+        pass
     # 228) Felhozatal-posztok: ha egyetlen posztra épül a
     # felhozatalunk, a második felhozatal-út beépítése a téma.
     try:

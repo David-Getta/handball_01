@@ -633,6 +633,10 @@ class ScoutingReport:
     bbr_roles: dict = field(default_factory=dict)
     otr_outlets: int = 0
     otr_roles: dict = field(default_factory=dict)
+    brf_fh_attacks: int = 0
+    brf_fh_breaks: int = 0
+    brf_sh_attacks: int = 0
+    brf_sh_breaks: int = 0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2315,6 +2319,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_otr_n}/{rep.otr_outlets} indítás-célpont) — a "
                 "letámadásnál őt kell fogni: nála akad meg az egész "
                 "felhozatal, a kapus kényszer-hosszút dob.")
+
+    # Kontra-esés: melyik félidőre kell a visszafutást élezni.
+    if (rep.brf_fh_attacks >= 5 and rep.brf_sh_attacks >= 5):
+        _brf_fh = 100.0 * rep.brf_fh_breaks / rep.brf_fh_attacks
+        _brf_sh = 100.0 * rep.brf_sh_breaks / rep.brf_sh_attacks
+        if _brf_sh - _brf_fh <= -15.0:
+            keys.append(
+                f"A második félidőben eláll a kontrájuk (a "
+                f"lerohanás-arányuk {_brf_fh:.0f}%-ról "
+                f"{_brf_sh:.0f}%-ra esik) — az elejét kell túlélni: "
+                "a szünet után már a felállt védekezésetek dolgozik, "
+                "nem a visszafutás.")
+        elif _brf_sh - _brf_fh >= 15.0:
+            keys.append(
+                f"A hajrára kontrázósabbak (a lerohanás-arányuk "
+                f"{_brf_fh:.0f}%-ról {_brf_sh:.0f}%-ra nő) — a "
+                "második félidőben duplán szigorú visszafutás-"
+                "fegyelem és biztos labdakezelés kell ellenük.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6111,6 +6133,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         otrrec = _otr(match, config)[team.value]
         rep.otr_outlets = otrrec["outlets"]
         rep.otr_roles = dict(otrrec["roles"])
+        from .attack_types import break_share_fade as _brf
+        brfrec = _brf(match, config)[team.value]
+        rep.brf_fh_attacks = brfrec["fh_attacks"]
+        rep.brf_fh_breaks = brfrec["fh_breaks"]
+        rep.brf_sh_attacks = brfrec["sh_attacks"]
+        rep.brf_sh_breaks = brfrec["sh_breaks"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8512,6 +8540,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 208) Az ő hajrá-kontráik × a ti biztos labdakezelésetek: a
+    # második félidőben éheztetitek a rohanásukat.
+    if (opp.brf_fh_attacks >= 5 and opp.brf_sh_attacks >= 5
+            and opp.matches >= 1):
+        _brf_fh208 = (100.0 * opp.brf_fh_breaks
+                      / opp.brf_fh_attacks)
+        _brf_sh208 = (100.0 * opp.brf_sh_breaks
+                      / opp.brf_sh_attacks)
+        _to208 = own.turnover_total / max(1, own.matches)
+        if _brf_sh208 - _brf_fh208 >= 15.0 and _to208 <= 10.0:
+            plan.append(
+                f"A hajrára kontrázósabbak (a lerohanás-arányuk "
+                f"{_brf_fh208:.0f}%-ról {_brf_sh208:.0f}%-ra nő), "
+                f"ti pedig keveset hibáztok (meccsenként átlag "
+                f"{_to208:.0f} labdaeladás) — a második félidőben "
+                "türelmes, biztos labdakezeléssel éheztessétek a "
+                "rohanásukat: kontra labdavesztés nélkül nincs.")
 
     # 207) Az ő egy-posztos felhozataluk × a ti passzsáv-záró
     # védekezésetek: a letámadás a kulcs-embert fogja.
@@ -11777,6 +11823,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         otr_outlets=sum(r.otr_outlets for r in reports),
         otr_roles=_merge_role_counts(
             [r.otr_roles for r in reports]),
+        brf_fh_attacks=sum(r.brf_fh_attacks for r in reports),
+        brf_fh_breaks=sum(r.brf_fh_breaks for r in reports),
+        brf_sh_attacks=sum(r.brf_sh_attacks for r in reports),
+        brf_sh_breaks=sum(r.brf_sh_breaks for r in reports),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

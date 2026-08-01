@@ -1522,6 +1522,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "felhozatal";
   }
 
+  // Kontra-esés: melyik félidőben kontráznak (félidőnként 5+
+  // támadás; 15 százalékpontos váltás — a backend-kulccsal azonos
+  // küszöbök).
+  String? _breakShareFade(Map<String, dynamic> r) {
+    final fhA = ((r["brf_fh_attacks"] as num?) ?? 0).toInt();
+    final fhB = ((r["brf_fh_breaks"] as num?) ?? 0).toInt();
+    final shA = ((r["brf_sh_attacks"] as num?) ?? 0).toInt();
+    final shB = ((r["brf_sh_breaks"] as num?) ?? 0).toInt();
+    if (fhA < 5 || shA < 5) return null;
+    final fhPct = 100.0 * fhB / fhA;
+    final shPct = 100.0 * shB / shA;
+    if (shPct - fhPct <= -15.0) {
+      return "a második félidőben eláll a kontrájuk "
+          "(${fhPct.toStringAsFixed(0)}% → "
+          "${shPct.toStringAsFixed(0)}% lerohanás-arány) · az elejét "
+          "éld túl, a szünet után a felállt fal dolgozik";
+    }
+    if (shPct - fhPct >= 15.0) {
+      return "a hajrára kontrázósabbak (${fhPct.toStringAsFixed(0)}% "
+          "→ ${shPct.toStringAsFixed(0)}%) · a második félidőben "
+          "duplán szigorú visszafutás-fegyelem";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5453,6 +5478,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Falba lövő posztok", _blockedByRole(r)!],
       if (_outletTargetRoles(r) != null)
         ["Felhozatal-posztok", _outletTargetRoles(r)!],
+      if (_breakShareFade(r) != null)
+        ["Kontra-esés", _breakShareFade(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

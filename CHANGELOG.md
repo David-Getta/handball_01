@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kontra-esés**: MELYIK FÉLIDŐBEN kontráznak. A fáradás-család
+  kontra-tagja: a lerohanások részaránya az első és a második félidő
+  támadásain belül (félidőnként 5+ támadás; 15 százalékpontos
+  váltástól). Akinek a második félidőben eláll a kontrája, annál az
+  elejét kell túlélni — a szünet után már a felállt fal dolgozik;
+  aki a hajrára kontrázósabb, az ellen a második félidőben duplán
+  szigorú a visszafutás-fegyelem. Egy réteg, sok felület:
+  `break_share_fade` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (félidőnkénti támadás/kontra
+  darabszámok, két edzői kulcs + csempe), 208. meccsterv-szabály
+  (az ő hajrá-kontráik × a ti biztos labdakezelésetek), 229.
+  edzés-szabály (kontra-kondicionálás fáradt lábbal).
+
 - **Felhozatal-posztok**: MELYIK POSZTRA hozzák fel a labdát. A
   kapus-indítás célpontjai a nevet adják — ez a posztot: az
   indítás-célpontokat a poszt-becsléshez kötjük (4+ célpont; 50%+

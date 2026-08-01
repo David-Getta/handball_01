@@ -4106,3 +4106,62 @@ def fast_break_headstart(match: Match,
             elif pct <= FBH_TOGETHER_PCT:
                 rec["verdict"] = "együtt futnak fel"
     return out
+
+
+# Kontra-esés: félidőnként legalább ennyi támadás kell az ítélethez,
+# és ekkora (százalékpontos) kontra-arány változás számít érdeminek.
+BRF_MIN_ATTACKS_HALF = 5
+BRF_GAP_PP = 15.0
+
+
+def break_share_fade(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Kontra-esés: MELYIK FÉLIDŐBEN kontráznak.
+
+    A fáradás-család kontra-tagja: a tempó-esés a támadás-ütemüket
+    méri félidőnként, ez a támadás-SZERKEZETET — a lerohanások
+    részarányát az első és a második félidő támadásain belül. Van,
+    akinek a lába a második félidőre elviszi a kontráit, és van, aki
+    a hajrában kapcsol rohanó játékra.
+
+    Edzőileg: akinek a második félidőben eláll a kontrája, annál az
+    elejét kell túlélni — a szünet után már a felállt védekezés a
+    tananyag; aki a hajrára kontrázósabb, annál a második félidőben
+    duplán szigorú a visszafutás-fegyelem és a biztos labdakezelés.
+
+    Visszatérés csapatonként: {"fh_attacks", "fh_breaks",
+    "sh_attacks", "sh_breaks", "gap_pp", "verdict"} — a
+    gap_pp/verdict None felismert szünet nélkül vagy félidőnként
+    BRF_MIN_ATTACKS_HALF-nál kevesebb támadásnál; a verdict "a
+    második félidőben eláll a kontrájuk" / "a hajrára kontrázósabbak"
+    / None.
+    """
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    out = {side: {"fh_attacks": 0, "fh_breaks": 0, "sh_attacks": 0,
+                  "sh_breaks": 0, "gap_pp": None, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    for a in classify_attacks(match, config):
+        rec = out[a["team"]]
+        first = a["start_frame"] <= ht
+        rec["fh_attacks" if first else "sh_attacks"] += 1
+        if a["type"] == AttackType.FAST_BREAK.value:
+            rec["fh_breaks" if first else "sh_breaks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if (rec["fh_attacks"] >= BRF_MIN_ATTACKS_HALF
+                and rec["sh_attacks"] >= BRF_MIN_ATTACKS_HALF):
+            fh_pct = 100.0 * rec["fh_breaks"] / rec["fh_attacks"]
+            sh_pct = 100.0 * rec["sh_breaks"] / rec["sh_attacks"]
+            rec["gap_pp"] = round(sh_pct - fh_pct, 1)
+            if rec["gap_pp"] <= -BRF_GAP_PP:
+                rec["verdict"] = "a második félidőben eláll a kontrájuk"
+            elif rec["gap_pp"] >= BRF_GAP_PP:
+                rec["verdict"] = "a hajrára kontrázósabbak"
+    return out
