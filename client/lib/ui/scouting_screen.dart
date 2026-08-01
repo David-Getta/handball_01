@@ -1318,6 +1318,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Szélső-futtatás: lendületből vagy állva kapják-e (6+ átvétel;
+  // 55% felett futtatott, 25% alatt álló — a backend-kulccsal azonos
+  // küszöbök).
+  String? _wingService(Map<String, dynamic> r) {
+    final rec = ((r["wsv_receptions"] as num?) ?? 0).toInt();
+    final run = ((r["wsv_running"] as num?) ?? 0).toInt();
+    if (rec < 6) return null;
+    final pct = 100.0 * run / rec;
+    if (pct >= 55.0) {
+      return "futtatva kapják a szélsők ($run/$rec átvétel "
+          "mozgásból) · a futópassz sávját zárjátok, a kifutás "
+          "késni fog";
+    }
+    if (pct <= 25.0) {
+      return "állva kapják a szélsők (csak $run/$rec mozgásból) · "
+          "bátor, korai kifutással lezárhatók";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5231,6 +5251,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gólpassz-hossz", _assistRanges(r)!],
       if (_subGaps(r) != null)
         ["Csere-lyukak", _subGaps(r)!],
+      if (_wingService(r) != null)
+        ["Szélső-futtatás", _wingService(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Szélső-futtatás: lendületből vagy állva kapják-e a szélsők.
+    try:
+        from .attack_types import wing_service
+        wsv = wing_service(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wsv = wsv[side]
+            if rec_wsv["verdict"] is None:
+                continue
+            body += (f" A(z) {name} széljátékáról kiderült: "
+                     f"{rec_wsv['verdict']} "
+                     f"({rec_wsv['running']}/{rec_wsv['receptions']} "
+                     "átvétel jött mozgásból).")
+    except Exception:
+        pass
     # Csere-lyukak: mennyi ideig játszanak öten csere közben.
     try:
         from .substitutions import sub_gaps

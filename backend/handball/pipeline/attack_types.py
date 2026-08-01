@@ -3730,3 +3730,81 @@ def long_attack_outcomes(match: Match,
             elif pct <= LAO_FINISH_PCT:
                 rec["verdict"] = "a hosszú támadásaik is lövésig érnek"
     return out
+
+
+# Szélső-futtatás: e feletti átvételi sebesség számít futópassznak,
+# ennyi szélső-átvétel kell az ítélethez, és e feletti / alatti
+# futtatott arány a lendületbe hozott, illetve az álló szélső jele.
+WSV_RUN_MS = 3.0
+WSV_MIN_RECEPTIONS = 6
+WSV_RUN_PCT = 55.0
+WSV_STATIC_PCT = 25.0
+
+
+def wing_service(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Szélső-futtatás: LENDÜLETBŐL vagy ÁLLVA kapják-e a szélsők a
+    labdát.
+
+    A szél-bevonás azt méri, mennyit ér a szélső játék — ez azt,
+    HOGYAN érkezik a labda: a szélső-posztú játékosok átvételeinél
+    megmérjük a fogadó sebességét. A futtatott szélső a kifutó védő
+    előtt ér labdába — ellene a kifutás mindig késik; az állva
+    átvevő szélsőt viszont a kilépő védő lezárhatja, mielőtt
+    lendületet venne.
+
+    Edzőileg: a futtatva játszó szélsők ellen a kifutás helyett a
+    passzsáv-zárás véd — a futópasszt kell megakadályozni, nem a
+    lövést; az állva kapó szélsők ellen a bátor, korai kifutás
+    a recept.
+
+    Visszatérés csapatonként: {"receptions", "running", "run_pct",
+    "verdict"} — a run_pct/verdict None WSV_MIN_RECEPTIONS alatt; a
+    verdict "futtatva kapják a szélsők" / "állva kapják a szélsők" /
+    None.
+    """
+    import math
+
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    posts = estimate_positions(match, config)
+    wings = {side: {tid for tid, r in posts.get(side, {}).items()
+                    if r["poszt"] == "szélső"}
+             for side in ("home", "away")}
+
+    out = {side: {"receptions": 0, "running": 0, "run_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for pe in detect_passes(match, config):
+        side = pe.team.value
+        if pe.receiver_id not in wings[side]:
+            continue
+        i0 = idx_of.get(pe.t)
+        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+            continue
+        p_before = next((p for p in match.frames[i0 - 2].players
+                         if p.track_id == pe.receiver_id), None)
+        p_after = next((p for p in match.frames[i0 + 2].players
+                        if p.track_id == pe.receiver_id), None)
+        if p_before is None or p_after is None:
+            continue
+        speed = (math.hypot(p_after.x - p_before.x,
+                            p_after.y - p_before.y) * fps / 4.0)
+        rec = out[side]
+        rec["receptions"] += 1
+        if speed >= WSV_RUN_MS:
+            rec["running"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["receptions"] >= WSV_MIN_RECEPTIONS:
+            pct = 100.0 * rec["running"] / rec["receptions"]
+            rec["run_pct"] = round(pct, 1)
+            if pct >= WSV_RUN_PCT:
+                rec["verdict"] = "futtatva kapják a szélsők"
+            elif pct <= WSV_STATIC_PCT:
+                rec["verdict"] = "állva kapják a szélsők"
+    return out

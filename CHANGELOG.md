@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Szélső-futtatás**: LENDÜLETBŐL vagy ÁLLVA kapják-e a szélsők a
+  labdát. A szél-bevonás azt méri, mennyit ér a szélső játék — ez
+  azt, hogyan érkezik a labda: a szélső-átvételeknél a fogadó
+  sebességét mérjük (6+ átvétel; 55% felett futtatott, 25% alatt
+  álló). A futtatott szélsők ellen a futópassz sávját kell zárni — a
+  kifutás mindig késik; az álló szélsők ellen a bátor, korai kifutás
+  a recept. Egy réteg, sok felület: `wing_service` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (átvétel-
+  darabszámok, két edzői kulcs + csempe), 198. meccsterv-szabály (az
+  ő futtatott szélsőik × a ti sáv-záró védekezésetek), 219.
+  edzés-szabály (futtatott széljáték: belépés a passz indulásakor).
+
 - **Csere-lyukak**: MENNYI IDEIG JÁTSZANAK 5-EN csere közben. A
   kiállítás-felismerés a 45 másodpercnél hosszabb létszám-hiányt nézi
   — ez a rövidebbeket: azok a szakaszok, ahol a mezőnyjátékos-létszám

@@ -2690,3 +2690,77 @@ def test_long_attack_outcomes_needs_enough_attacks():
 
     rec = long_attack_outcomes(_lao_match([False] * 3))["home"]
     assert rec["long_attacks"] == 3 and rec["verdict"] is None
+
+
+# ---- Szélső-futtatás (lendületből vagy állva kapják-e) ----------------------
+
+def _wsv_match(moving, n_passes=7, fps=25.0):
+    """Az irányító (3-as) sorozatban a szélsőnek (2-es) passzol; a
+    szélső vagy folyamatos mozgásban van, vagy áll."""
+    frames = []
+    t = 0
+    wx, wdir = 34.0, 1.0
+
+    def _wing():
+        nonlocal wx, wdir
+        if moving:
+            wx += 0.2 * wdir
+            if not 33.0 <= wx <= 39.0:
+                wdir *= -1.0
+                wx += 0.4 * wdir
+        else:
+            wx = 36.0
+        return _pl(2, Team.HOME, wx, 2.0)
+
+    def _emit(bx, by, n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0), _wing()],
+                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+
+    _emit(28.0, 10.0, 150)          # poszt-minta: a 3-asnál a labda
+    for _ in range(n_passes):
+        _emit(28.0, 10.0, 6)        # az irányító birtokol
+        for i in range(4):          # passz a szélsőnek
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0), _wing()],
+                ball=Ball(x=28.0 + (wx - 28.0) * (i + 1) / 4.0,
+                          y=10.0 + (2.0 - 10.0) * (i + 1) / 4.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(6):          # a szélsőnél a labda
+            w = _wing()
+            frames.append(Frame(t=t, players=[
+                _pl(3, Team.HOME, 28.0, 10.0), w],
+                ball=Ball(x=w.x, y=2.0, confidence=1.0)))
+            t += 1
+        _emit(28.0, 10.0, 6)        # vissza az irányítóhoz
+    return Match(_meta(fps), frames)
+
+
+def test_wing_service_flags_the_running_wings():
+    """Mozgásban átvevő szélső → futtatva kapják a szélsők."""
+    from handball.pipeline.attack_types import wing_service
+
+    rec = wing_service(_wsv_match(True))["home"]
+    assert rec["receptions"] >= 6
+    assert rec["verdict"] == "futtatva kapják a szélsők"
+
+
+def test_wing_service_flags_the_static_wings():
+    """Állva átvevő szélső → állva kapják a szélsők."""
+    from handball.pipeline.attack_types import wing_service
+
+    rec = wing_service(_wsv_match(False))["home"]
+    assert rec["running"] == 0
+    assert rec["verdict"] == "állva kapják a szélsők"
+
+
+def test_wing_service_needs_enough_receptions():
+    """Kevés (6-nál kevesebb) szélső-átvételnél nincs ítélet."""
+    from handball.pipeline.attack_types import wing_service
+
+    rec = wing_service(_wsv_match(True, n_passes=3))["home"]
+    assert rec["verdict"] is None

@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Szélső-futtatásuk: szélső-átvételeik és a mozgásból jövők —
+    # darabszámok, meccsek közt pontosan összegződnek.
+    wsv_receptions: int = 0
+    wsv_running: int = 0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2140,6 +2144,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Szélső-futtatás: kifutással vagy sávzárással védekezz a szélen.
+    if rep.wsv_receptions >= 6:
+        _wsv_pct = 100.0 * rep.wsv_running / rep.wsv_receptions
+        if _wsv_pct >= 55.0:
+            keys.append(
+                f"Futtatva kapják a szélsőik a labdát "
+                f"({rep.wsv_running}/{rep.wsv_receptions} átvétel "
+                "mozgásból) — a kifutás mindig késni fog: a "
+                "futópassz sávját kell zárni, nem a lövést fogni.")
+        elif _wsv_pct <= 25.0:
+            keys.append(
+                f"Állva kapják a szélsőik a labdát (csak "
+                f"{rep.wsv_running}/{rep.wsv_receptions} átvétel "
+                "mozgásból) — a bátor, korai kifutás a recept: az "
+                "álló szélső lezárható, mielőtt lendületet venne.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -5891,6 +5911,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import wing_service as _wsv
+        wsvrec = _wsv(match, config)[team.value]
+        rep.wsv_receptions = wsvrec["receptions"]
+        rep.wsv_running = wsvrec["running"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8292,6 +8316,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 198) Az ő futtatott szélsőik × a ti sáv-záró védekezésetek: a
+    # futópasszt kell elfogni, nem a lövést fogni.
+    if (opp.wsv_receptions >= 6
+            and 100.0 * opp.wsv_running / opp.wsv_receptions >= 55.0
+            and own.stt_steals >= 6):
+        _stt198 = 100.0 * own.stt_int / max(1, own.stt_steals)
+        if _stt198 >= 60.0:
+            plan.append(
+                f"Futtatva kapják a szélsőik a labdát "
+                f"({opp.wsv_running}/{opp.wsv_receptions} átvétel "
+                f"mozgásból), ti pedig a passzsávakat zárjátok (a "
+                f"szerzéseitek {_stt198:.0f}%-a elfogás) — a "
+                "futópassz-sávra álljatok rá: az elfogott indítás "
+                "után a szélsőjük már kifelé fut, a pálya pedig "
+                "nyitva áll előttetek.")
 
     # 197) Az ő lyukas cseréik × a ti gyors újraindításotok: a csere
     # másodperceit kell büntetni.
@@ -11347,6 +11387,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        wsv_receptions=sum(r.wsv_receptions for r in reports),
+        wsv_running=sum(r.wsv_running for r in reports),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 219) Szélső-futtatás: ha a szélsőink állva kapják a labdát, a
+    # futtatott széljáték a téma.
+    try:
+        from .attack_types import wing_service
+        wsv219 = wing_service(match, config)
+        for side in ("home", "away"):
+            rec219 = wsv219[side]
+            if rec219["verdict"] != "állva kapják a szélsők":
+                continue
+            add(side, "tamadas", "Futtatott széljáték",
+                f"csak {rec219['running']}/{rec219['receptions']} "
+                "szélső-átvételünk jött mozgásból — az álló szélsőt "
+                "a kifutó védő lezárja, mielőtt lendületet venne, és "
+                "a szögünk is szűkebb",
+                "futtatott széljáték: időzítés-gyakorlat az átlövő "
+                "és a szélső között — a szélső a passz INDULÁSAKOR "
+                "lép be a sávba (nem előbb), a labda futtatva, a "
+                "lépéskényszer előtt érkezik; az edzésmeccsen az "
+                "állóhelyből átvett szélső-labda visszajár, hogy a "
+                "mozgásból érkezés beépüljön")
+    except Exception:
+        pass
+
     # 218) Csere-lyukak: ha csere közben öten maradunk, a csere-ütem
     # a téma.
     try:
