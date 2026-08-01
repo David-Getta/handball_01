@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 218) Csere-lyukak: ha csere közben öten maradunk, a csere-ütem
+    # a téma.
+    try:
+        from .substitutions import sub_gaps
+        sbg218 = sub_gaps(match, config)
+        for side in ("home", "away"):
+            rec218 = sbg218[side]
+            if rec218["verdict"] != "lyukas a cseréjük":
+                continue
+            add(side, "taktika", "Csere-ütem",
+                f"összesen {rec218['gap_s']:.0f} másodpercig "
+                "játszottunk öt mezőnyjátékossal csere közben — ez "
+                "ingyen emberelőny az ellenfélnek, pont a gyors "
+                "indításaik pillanatában",
+                "csere-ütem: a ki- és belépő játékos a cserezónában "
+                "kézjellel vált (a belépő már a zóna szélén áll, "
+                "amikor a kilépő odaér) — az edzésmeccsen minden "
+                "olyan másodperc, amíg öten vagyunk a pályán, "
+                "hangosan számolva megy, és a lyukas csere azonnali "
+                "labdavesztést ér")
+    except Exception:
+        pass
+
     # 217) Gólpassz-hossz: ha csak rövid kombinációkból élünk, a
     # hosszú indítás beépítése a téma.
     try:

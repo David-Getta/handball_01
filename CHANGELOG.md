@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Csere-lyukak**: MENNYI IDEIG JÁTSZANAK 5-EN csere közben. A
+  kiállítás-felismerés a 45 másodpercnél hosszabb létszám-hiányt nézi
+  — ez a rövidebbeket: azok a szakaszok, ahol a mezőnyjátékos-létszám
+  a cserék lassúsága miatt esik ötre (20+ másodperc összesen a
+  jelzéshez). A lyukas csere ingyen emberelőny — a cseréjük pillanata
+  támadási jel: gyors középkezdés, amíg öten vannak. Egy réteg, sok
+  felület: `sub_gaps` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (lyuk-másodperc összeg, edzői kulcs
+  + csempe), 197. meccsterv-szabály (az ő lyukas cseréik × a ti gyors
+  újraindításotok), 218. edzés-szabály (csere-ütem: kézjeles váltás,
+  hangosan számolt öt fős másodpercek).
+
 - **Gólpassz-hossz**: HOSSZÚ INDÍTÁSOKBÓL vagy RÖVID KOMBINÁCIÓKBÓL
   élnek. A gólpassz-hálózat azt mondja meg, ki kinek készít elő — ez
   azt, milyen messziről: minden gólpasszos gólnál megmérjük az

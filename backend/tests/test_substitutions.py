@@ -308,3 +308,61 @@ def test_swap_pairs_needs_enough_swaps():
 
     rec = swap_pairs(_swap_pairs_match([(7, 12), (7, 12)]))["home"]
     assert rec["swaps"] == 2 and rec["verdict"] is None
+
+
+# ---- Csere-lyukak (mennyi ideig játszanak 5-en csere közben) ----------------
+
+def _sbg_pl(tid, team, x, y):
+    return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED, confidence=1.0)
+
+
+def _sbg_match(gap_runs_s, fps=25.0):
+    """6-6 elleni játék; a `gap_runs_s` szerinti hosszú szakaszokban a
+    hazaiak csak öten vannak (lassú csere)."""
+    frames = []
+    t = 0
+
+    def _block(seconds, home_n):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            players = [_sbg_pl(100 + k, Team.HOME, 12.0 + k, 4.0 + k)
+                       for k in range(home_n)]
+            players += [_sbg_pl(200 + k, Team.AWAY, 24.0 + k, 4.0 + k)
+                        for k in range(6)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    _block(40, 6)
+    for gap_s in gap_runs_s:
+        _block(gap_s, 5)
+        _block(40, 6)
+    return Match(_meta(fps), frames)
+
+
+def test_sub_gaps_flags_the_leaky_bench():
+    """Két 25 mp-es öt fős szakasz → lyukas a cseréjük."""
+    from handball.pipeline.substitutions import sub_gaps
+
+    rec = sub_gaps(_sbg_match([25.0, 25.0]))["home"]
+    assert rec["gap_s"] >= 20.0
+    assert rec["verdict"] == "lyukas a cseréjük"
+
+
+def test_sub_gaps_flags_the_tight_bench():
+    """Létszám-hiány nélkül feszes a cseréjük."""
+    from handball.pipeline.substitutions import sub_gaps
+
+    rec = sub_gaps(_sbg_match([]))["home"]
+    assert rec["gap_s"] == 0.0
+    assert rec["verdict"] == "feszes a cseréjük"
+
+
+def test_sub_gaps_long_shortage_is_not_a_sub_gap():
+    """A 45 mp-nél hosszabb hiány kiállítás, nem csere-lyuk."""
+    from handball.pipeline.substitutions import sub_gaps
+
+    rec = sub_gaps(_sbg_match([60.0]))["home"]
+    assert rec["gap_s"] == 0.0

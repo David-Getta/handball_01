@@ -1318,6 +1318,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
+  // backend-kulccsal azonos küszöb).
+  String? _subGaps(Map<String, dynamic> r) {
+    final gapS = ((r["sbg_gap_s"] as num?) ?? 0).toDouble();
+    if (gapS < 20.0) return null;
+    return "lyukas a cseréjük (${gapS.toStringAsFixed(0)} mp öt fős "
+        "játék csere közben) · a cseréjük pillanata támadási jel: "
+        "gyors középkezdés, amíg öten vannak";
+  }
+
   // Gólpassz-hossz: hosszú indítás vagy rövid kombináció (5+
   // gólpasszos gól; 50% felett hosszú, 20% alatt rövid — a
   // backend-kulccsal azonos küszöbök).
@@ -5219,6 +5229,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-kipattanó", _gkReboundControl(r)!],
       if (_assistRanges(r) != null)
         ["Gólpassz-hossz", _assistRanges(r)!],
+      if (_subGaps(r) != null)
+        ["Csere-lyukak", _subGaps(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

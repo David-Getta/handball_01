@@ -329,3 +329,62 @@ def swap_pairs(match: Match,
         out[side] = {"swaps": swaps[side], "pairs": pairs,
                      "top": top, "verdict": verdict}
     return out
+
+
+# Csere-lyukak: ennél rövidebb létszám-hiány cserehiba (nem kiállítás),
+# ennél hosszabb összes lyuk-idő adja a jelzést, ez alatti a feszes
+# csere dicséretét.
+SBG_MIN_WINDOW_S = 5.0
+SBG_LEAKY_S = 20.0
+SBG_TIGHT_S = 5.0
+
+
+def sub_gaps(match: Match,
+             config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-lyukak: MENNYI IDEIG JÁTSZANAK 5-EN csere közben.
+
+    A kiállítás-felismerés a 45 másodpercnél hosszabb létszám-hiányt
+    nézi — ez a rövidebbeket: azok az ablakok, ahol a csapat
+    mezőnyjátékos-létszáma a cserék lassúsága miatt esik ötre. A
+    lyukas csere ingyen emberelőny az ellenfélnek — párszor egy
+    meccsben, de pont a gyors indításoknál.
+
+    Edzőileg: a lyukasan cserélő csapat ellen a csere pillanata a
+    jel — gyors középkezdés és azonnali támadás, amíg öten vannak; a
+    saját csapatban a csere-ütem (előbb be, aztán ki? soha — ki és
+    be egy ütemben, a zónán belül) külön gyakorlást kap.
+
+    Visszatérés csapatonként: {"gap_s", "verdict"} — a verdict
+    "lyukas a cseréjük" / "feszes a cseréjük" / None.
+    """
+    from .rules import PP_MIN_S, field_count_timeline
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tl = field_count_timeline(match)
+    if len(tl) < 2:
+        return {side: {"gap_s": 0.0, "verdict": None}
+                for side in ("home", "away")}
+    win_frames = tl[1]["start_frame"] - tl[0]["start_frame"]
+    win_s = win_frames / fps
+
+    out: dict = {}
+    for side, other in (("home", "away"), ("away", "home")):
+        run_s = 0.0
+        total = 0.0
+        for w in tl + [None]:
+            active = (w is not None and w[side] <= 4 + 1
+                      and w[side] < w[other])
+            if active:
+                run_s += win_s
+            else:
+                if SBG_MIN_WINDOW_S <= run_s < PP_MIN_S:
+                    total += run_s
+                run_s = 0.0
+        rec = {"gap_s": round(total, 1), "verdict": None}
+        if total >= SBG_LEAKY_S:
+            rec["verdict"] = "lyukas a cseréjük"
+        elif total <= SBG_TIGHT_S:
+            rec["verdict"] = "feszes a cseréjük"
+        out[side] = rec
+    return out

@@ -3379,6 +3379,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.substitutions import sub_gaps
+            res["sub_gaps"] = sub_gaps(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4240,6 +4245,8 @@ def create_app():
                 from ..pipeline.event_detection import assist_ranges
                 _layer("assist_ranges",
                        lambda: assist_ranges(match))
+                from ..pipeline.substitutions import sub_gaps
+                _layer("sub_gaps", lambda: sub_gaps(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

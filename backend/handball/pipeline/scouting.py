@@ -609,6 +609,9 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
+    # meccsek közt pontosan összegződik.
+    sbg_gap_s: float = 0.0
     # Gólpassz-hosszuk: gólpasszos góljaik és a hosszú (8+ m)
     # előkészítésből esők — darabszámok, meccsek közt pontosan
     # összegződnek.
@@ -2137,6 +2140,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Csere-lyukak: a cseréjük pillanata támadási jel-e.
+    if rep.sbg_gap_s >= 20.0:
+        keys.append(
+            f"Lyukas a cseréjük (meccsenként átlagosan "
+            f"{rep.sbg_gap_s / max(1, rep.matches):.0f} másodpercig "
+            "öten védekeznek csere közben) — a cseréjük pillanata "
+            "támadási jel: gyors középkezdés és azonnali befejezés, "
+            "amíg hiányzik az emberük.")
 
     # Gólpassz-hossz: a sávzárás vagy a kis terület védése dönt.
     if rep.asr_assisted >= 5:
@@ -5879,6 +5891,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .substitutions import sub_gaps as _sbg
+        rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
         asrrec = _asr(match, config)[team.value]
         rep.asr_assisted = asrrec["assisted"]
@@ -8278,6 +8292,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 197) Az ő lyukas cseréik × a ti gyors újraindításotok: a csere
+    # másodperceit kell büntetni.
+    if (opp.sbg_gap_s >= 20.0 and own.rs_restarts >= 4):
+        _rs197 = 100.0 * own.rs_fast / max(1, own.rs_restarts)
+        if _rs197 >= 40.0:
+            plan.append(
+                f"Lyukas a cseréjük ({opp.sbg_gap_s:.0f} másodperc öt "
+                f"fős játék), ti pedig gyorsan indítjátok újra a "
+                f"játékot (az újraindításaitok {_rs197:.0f}%-a "
+                "gyors) — a cseréjük pillanata a ti jelzésetek: "
+                "azonnali középkezdés és kapura vitt első támadás, "
+                "amíg öten vannak.")
 
     # 196) Az ő hosszú gólpasszaik × a ti sáv-záró védekezésetek: az
     # előkészítő labdáik a ti kontra-forrásotok.
@@ -11320,6 +11347,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),
         grc_saves=sum(r.grc_saves for r in reports),

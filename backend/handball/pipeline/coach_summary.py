@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Csere-lyukak: mennyi ideig játszanak öten csere közben.
+    try:
+        from .substitutions import sub_gaps
+        sbg = sub_gaps(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sbg = sbg[side]
+            if rec_sbg["verdict"] != "lyukas a cseréjük":
+                continue
+            body += (f" A(z) {name} cseréi lyukasak voltak: összesen "
+                     f"{rec_sbg['gap_s']:.0f} másodpercig játszottak "
+                     "öt mezőnyjátékossal csere közben.")
+    except Exception:
+        pass
     # Gólpassz-hossz: hosszú indításokból vagy rövid kombinációkból.
     try:
         from .event_detection import assist_ranges
