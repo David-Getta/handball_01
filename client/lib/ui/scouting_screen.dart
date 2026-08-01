@@ -1318,6 +1318,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Felfutási létszám: hány emberrel támadnak (100+ kocka; 5,5 felett
+  // mindenki fent, 4,5 alatt biztosítás — a backend-kulccsal azonos
+  // küszöbök).
+  String? _attackHeadcount(Map<String, dynamic> r) {
+    final frames = ((r["ahc_frames"] as num?) ?? 0).toInt();
+    final sum = ((r["ahc_sum_up"] as num?) ?? 0).toDouble();
+    if (frames < 100) return null;
+    final avg = sum / frames;
+    if (avg >= 5.5) {
+      return "mindenkit felküldenek (átlag ${avg.toStringAsFixed(1)} "
+          "mezőnyjátékos fent) · a hátuk mögött üres a pálya, minden "
+          "szerzés kontrát ér";
+    }
+    if (avg <= 4.5) {
+      return "biztosítva támadnak (átlag ${avg.toStringAsFixed(1)} "
+          "fent) · kontra nehéz, de a fal bátran kettőzhet ellenük";
+    }
+    return null;
+  }
+
   // Blokk-lepattanó: a blokk után ki szerzi meg a labdát (4+ blokk;
   // 60% felett teljes értékű, 30% alatt visszahulló — a
   // backend-kulccsal azonos küszöbök).
@@ -5131,6 +5151,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Ziccer-befejezők", _bigChanceFinishers(r)!],
       if (_blockRecoveries(r) != null)
         ["Blokk-lepattanó", _blockRecoveries(r)!],
+      if (_attackHeadcount(r) != null)
+        ["Felfutási létszám", _attackHeadcount(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

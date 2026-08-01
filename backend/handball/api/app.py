@@ -3358,6 +3358,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import attack_headcount
+            res["attack_headcount"] = attack_headcount(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4206,6 +4211,9 @@ def create_app():
                 from ..pipeline.defense import block_recoveries
                 _layer("block_recoveries",
                        lambda: block_recoveries(match))
+                from ..pipeline.attack_types import attack_headcount
+                _layer("attack_headcount",
+                       lambda: attack_headcount(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

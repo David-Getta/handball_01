@@ -3603,3 +3603,65 @@ def circulation_direction(match: Match,
             elif lp <= 100.0 - CIR_DOM_PCT:
                 rec["verdict"] = "jobbra forgatnak"
     return out
+
+
+# Felfutási létszám: ennyi mérhető támadó-kocka kell az átlaghoz, és e
+# feletti / alatti átlagos támadó-létszám a mindenkit felküldő,
+# illetve a biztosító támadás jele.
+AHC_MIN_FRAMES = 100
+AHC_ALL_IN = 5.5
+AHC_SAFE = 4.5
+
+
+def attack_headcount(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Felfutási létszám: HÁNY EMBERREL támadnak.
+
+    A támadás-szélesség a teret méri — ez a létszámot: saját
+    labdabirtoklású, támadó-térfeles kockánként megszámoljuk, hány
+    mezőnyjátékosuk van fent a támadó térfélen. Van, aki mindenkit
+    felküld, és van, aki hátrahagy egy biztosító embert.
+
+    Edzőileg: a mindenkit felküldő csapat háta mögött üres a pálya —
+    minden labdaszerzés kontrát ér ellenük, a hosszú kidobás is; a
+    biztosítva támadó ellen kontrát nehéz vezetni, viszont elöl
+    emberhátrányban vannak: a fal bátran kettőzhet, mert a
+    kimaradó támadó nem büntet.
+
+    Visszatérés csapatonként: {"frames", "avg_up", "verdict"} — az
+    avg_up/verdict None AHC_MIN_FRAMES alatt; a verdict "mindenkit
+    felküldenek" / "biztosítva támadnak" / None.
+    """
+    from .tactics import possession_team
+
+    config = config or TacticsConfig()
+    acc = {"home": [0, 0], "away": [0, 0]}
+    for fr in match.frames:
+        poss = possession_team(fr, config)
+        if poss is None:
+            continue
+        goal_x = config.attacks_toward_x(poss)
+        if fr.ball is None or abs(fr.ball.x - goal_x) > 20.0:
+            continue   # csak felállt, támadó-térfeles birtoklás
+        ups = sum(1 for p in fr.players
+                  if p.team == poss and p.role != "kapus"
+                  and abs(p.x - goal_x) <= 20.0)
+        if ups == 0:
+            continue
+        rec = acc[poss.value]
+        rec[0] += 1
+        rec[1] += ups
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n, total = acc[side]
+        rec = {"frames": n, "avg_up": None, "verdict": None}
+        if n >= AHC_MIN_FRAMES:
+            avg = total / n
+            rec["avg_up"] = round(avg, 2)
+            if avg >= AHC_ALL_IN:
+                rec["verdict"] = "mindenkit felküldenek"
+            elif avg <= AHC_SAFE:
+                rec["verdict"] = "biztosítva támadnak"
+        out[side] = rec
+    return out

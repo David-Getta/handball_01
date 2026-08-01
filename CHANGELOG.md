@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Felfutási létszám**: HÁNY EMBERREL támadnak. A támadás-szélesség
+  a teret méri — ez a létszámot: támadó-térfeles birtoklás-kockánként
+  megszámoljuk, hány mezőnyjátékosuk van fent (100+ kocka; 5,5 felett
+  mindenki fent, 4,5 alatt biztosítás). A mindenkit felküldő csapat
+  háta mögött üres a pálya — minden szerzés kontrát ér; a biztosítva
+  támadó ellen a fal bátran kettőzhet, mert elöl emberhátrányban
+  vannak. Egy réteg, sok felület: `attack_headcount` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (kocka- és
+  létszám-összegek, két edzői kulcs + csempe), 193. meccsterv-szabály
+  (az ő felküldött mindenki-jük × a ti gyors kapus-indításotok), 214.
+  edzés-szabály (biztosítás-rend: kijelölt hátramaradó, duplán
+  számító kontragól).
+
 - **Blokk-lepattanó**: A BLOKK UTÁN ki szerzi meg a labdát. A
   blokk-arány azt méri, mennyi lövést fognak meg — ez azt, mit ér a
   blokk: a blokkolt labda lepattanóját a blokk utáni másodpercek első

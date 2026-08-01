@@ -2599,3 +2599,42 @@ def test_circulation_direction_needs_enough_passes():
 
     rec = circulation_direction(_cir_match(8, 2))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Felfutási létszám (hány emberrel támadnak) -----------------------------
+
+def _ahc_match(n_up, frames=150, fps=25.0):
+    """Hazai felállt támadás a +x térfélen n_up mezőnyjátékossal."""
+    out = []
+    for t in range(frames):
+        players = [_pl(10 + k, Team.HOME, 26.0 + k, 4.0 + 2.0 * k)
+                   for k in range(n_up)]
+        players.append(_pl(30, Team.AWAY, 38.0, 10.0))
+        out.append(Frame(t=t, players=players,
+                         ball=Ball(x=26.0, y=4.0, confidence=1.0)))
+    return Match(_meta(fps), out)
+
+
+def test_attack_headcount_flags_the_all_in_team():
+    """Hat fenti támadó → mindenkit felküldenek."""
+    from handball.pipeline.attack_types import attack_headcount
+
+    rec = attack_headcount(_ahc_match(6))["home"]
+    assert rec["avg_up"] == 6.0
+    assert rec["verdict"] == "mindenkit felküldenek"
+
+
+def test_attack_headcount_flags_the_safe_team():
+    """Négy fenti támadó → biztosítva támadnak."""
+    from handball.pipeline.attack_types import attack_headcount
+
+    rec = attack_headcount(_ahc_match(4))["home"]
+    assert rec["verdict"] == "biztosítva támadnak"
+
+
+def test_attack_headcount_needs_enough_frames():
+    """Kevés (100-nál kevesebb) mért kockánál nincs ítélet."""
+    from handball.pipeline.attack_types import attack_headcount
+
+    rec = attack_headcount(_ahc_match(6, frames=50))["home"]
+    assert rec["verdict"] is None

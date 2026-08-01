@@ -609,6 +609,11 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Felfutási létszámuk: támadó-kockák és a fent lévő mezőny-
+    # játékosok összege — darabszám/összeg, meccsek közt pontosan
+    # összegződnek (átlag = ahc_sum_up / ahc_frames).
+    ahc_frames: int = 0
+    ahc_sum_up: int = 0
     # Blokk-lepattanóik: mért blokkjaik és a belőlük visszaszerzett
     # labdák — darabszámok, meccsek közt pontosan összegződnek.
     brc_blocks: int = 0
@@ -2119,6 +2124,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Felfutási létszám: kontrázhatók-e, és kettőzhető-e a faluk ellenük.
+    if rep.ahc_frames >= 100:
+        _ahc_avg = rep.ahc_sum_up / rep.ahc_frames
+        if _ahc_avg >= 5.5:
+            keys.append(
+                f"Mindenkit felküldenek (átlag {_ahc_avg:.1f} mezőny-"
+                "játékos fent) — a hátuk mögött üres a pálya: minden "
+                "labdaszerzésetek kontrát ér, és a hosszú kapus-"
+                "kidobás is fegyver ellenük.")
+        elif _ahc_avg <= 4.5:
+            keys.append(
+                f"Biztosítva támadnak (átlag csak {_ahc_avg:.1f} "
+                "mezőnyjátékos fent) — kontrát nehéz ellenük vezetni, "
+                "viszont elöl emberhátrányban vannak: a fal bátran "
+                "kettőzhet, a kimaradó támadójuk nem büntet.")
 
     # Blokk-lepattanó: mennyit ér a blokkolt lövésünk ellenük.
     if rep.brc_blocks >= 4:
@@ -5795,6 +5816,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import attack_headcount as _ahc
+        ahcrec = _ahc(match, config)[team.value]
+        rep.ahc_frames = ahcrec["frames"]
+        rep.ahc_sum_up = round((ahcrec["avg_up"] or 0.0)
+                               * ahcrec["frames"])
         from .defense import block_recoveries as _brc
         brcrec = _brc(match, config)[team.value]
         rep.brc_blocks = brcrec["blocks"]
@@ -8177,6 +8203,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 193) Az ő mindenkit felküldő támadásuk × a ti gyors kapus-
+    # indításotok: a hátuk mögötti üres pálya a tiétek.
+    if (opp.ahc_frames >= 100
+            and opp.ahc_sum_up / opp.ahc_frames >= 5.5
+            and own.gk_outlets >= 4):
+        _gk193 = 100.0 * own.gk_outlet_fast / max(1, own.gk_outlets)
+        if _gk193 >= 40.0:
+            plan.append(
+                f"Mindenkit felküldenek (átlag "
+                f"{opp.ahc_sum_up / opp.ahc_frames:.1f} mezőnyjátékos "
+                f"fent), a ti kapusotok pedig gyorsan indít (az "
+                f"indításaitok {_gk193:.0f}%-a gyors) — minden "
+                "védésetek és szerzésetek mögött üres pálya vár: a "
+                "kapus első gondolata a hosszú indítás legyen, a "
+                "szélsők pedig már a lövésük pillanatában forduljanak.")
 
     # 192) Az ő visszahulló blokkjaik × a ti második hullámotok: a
     # blokkolt lövésetek nem labdavesztés, hanem újrajátszás.
@@ -11155,6 +11197,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        ahc_frames=sum(r.ahc_frames for r in reports),
+        ahc_sum_up=sum(r.ahc_sum_up for r in reports),
         brc_blocks=sum(r.brc_blocks for r in reports),
         brc_recovered=sum(r.brc_recovered for r in reports),
         bcf_players=_merge_bcf_players(reports),

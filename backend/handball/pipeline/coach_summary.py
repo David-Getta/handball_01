@@ -846,6 +846,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Felfutási létszám: hány emberrel támadnak.
+    try:
+        from .attack_types import attack_headcount
+        ahc = attack_headcount(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ahc = ahc[side]
+            if rec_ahc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadásaiban {rec_ahc['verdict']}"
+                     f": átlag {rec_ahc['avg_up']:.1f} mezőnyjátékos "
+                     "volt fent a támadó térfélen.")
+    except Exception:
+        pass
     # Blokk-lepattanó: a blokk után ki szerzi meg a labdát.
     try:
         from .defense import block_recoveries

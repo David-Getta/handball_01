@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 214) Felfutási létszám: ha mindenkit felküldünk, a biztosítás-
+    # rend a téma.
+    try:
+        from .attack_types import attack_headcount
+        ahc214 = attack_headcount(match, config)
+        for side in ("home", "away"):
+            rec214 = ahc214[side]
+            if rec214["verdict"] != "mindenkit felküldenek":
+                continue
+            add(side, "taktika", "Biztosítás-rend",
+                f"átlag {rec214['avg_up']:.1f} mezőnyjátékosunk van "
+                "fent a támadásokban — a hátunk mögött üres a pálya, "
+                "minden eladott labda és hosszú kidobás kontrát ér "
+                "ellenünk",
+                "biztosítás-rend: felállt támadásban mindig kijelölt "
+                "biztosító ember marad a felező környékén (posztonként "
+                "rögzítve, ki az) — az edzésmeccsen minden kontragól, "
+                "amit üresen hagyott térfélről kapunk, duplán számít, "
+                "és a biztosító hiányát a videón névre szólóan "
+                "jelöljük")
+    except Exception:
+        pass
+
     # 213) Blokk-lepattanó: ha a blokkjaink visszahullanak, a blokk
     # utáni második mozdulat a téma.
     try:
