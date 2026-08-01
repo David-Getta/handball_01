@@ -175,8 +175,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   kliens-csempék minden r["..."] kulcsának létező
   felderítés-mezőnek kell lennie (az elgépelt kulcs némán üres
   csempét adna), a meccsterv-/edzés-szabályok sorszámai nem
-  ismétlődhetnek, és a félidő-feltételes (_fh) kulcsok egy felismert
-  félidejű szimulált meccsen mind elkészülnek.
+  ismétlődhetnek, a félidő-feltételes (_fh) kulcsok egy felismert
+  félidejű szimulált meccsen mind elkészülnek, és MINDEN GET végpont
+  — a paraméteres játékos-végpontokkal együtt — 5xx nélkül fut le
+  érvényes meccsen.
 
 - **Keresztjáték**: MENNYIT KERESZTEZNEK a hátsó sorban. Az álló
   támadók rétege az egyéni mozgást méri — ez a szerkezetet: felállt

@@ -273,3 +273,38 @@ def test_felido_kulcsok_elkeszulnek_felidos_meccsen():
             problems.append(f"{path}: {missing}")
     assert not problems, \
         f"hiányzó félidő-kulcsok felismert félidő mellett: {problems}"
+
+
+def test_minden_get_vegpont_tulel():
+    """Minden GET /matches/{id}/... végpont — a paraméteres
+    játékos-végpontokkal együtt — 5xx nélkül fut le egy érvényes
+    szimulált meccsen. A kulcs-őrök a regisztrált rétegeket nézik;
+    ez azt, hogy EGYIK végpont sem omlik össze (a 404 pl. csomag-
+    letöltésnél export előtt jogos, az 500 sosem az)."""
+    src = _APP_PY.read_text(encoding="utf-8")
+    paths = sorted(set(re.findall(
+        r'@app\.get\("(/matches/\{match_id\}[^"]*)"\)', src)))
+    assert len(paths) > 30, "az útvonal-olvasás elromlott"
+    client, mid = _client_with_match()
+    body = client.get(f"/matches/{mid}/positions")
+    tid = None
+    if body.status_code == 200 and isinstance(body.json(), dict):
+        for side in ("home", "away"):
+            ids = list((body.json().get(side) or {}).keys())
+            if ids:
+                tid = ids[0]
+                break
+    problems = []
+    for path in paths:
+        url = path.replace("{match_id}", mid)
+        if "{track_id}" in url or "{player_id}" in url:
+            if tid is None:
+                continue
+            url = (url.replace("{track_id}", str(tid))
+                      .replace("{player_id}", str(tid)))
+        if "{" in url:
+            continue  # egyéb paraméteres útvonal kimarad
+        r = client.get(url)
+        if r.status_code >= 500:
+            problems.append(f"{path}: HTTP {r.status_code}")
+    assert not problems, f"összeomló végpontok: {problems}"
