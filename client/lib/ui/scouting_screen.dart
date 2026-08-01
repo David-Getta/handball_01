@@ -1588,6 +1588,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "a kettőzés jelére az ő embere felé az első passz";
   }
 
+  // Hiba-állás: hátrányban szórják-e a labdát (vödrönként 5+
+  // támadás; +10 pp kapkodás, -5 pp rendezettség — a backend-
+  // kulccsal azonos küszöbök).
+  String? _turnoversByScore(Map<String, dynamic> r) {
+    final trA = ((r["tbs_tr_attacks"] as num?) ?? 0).toInt();
+    final trT = ((r["tbs_tr_tos"] as num?) ?? 0).toInt();
+    final reA = ((r["tbs_rest_attacks"] as num?) ?? 0).toInt();
+    final reT = ((r["tbs_rest_tos"] as num?) ?? 0).toInt();
+    if (trA < 5 || reA < 5) return null;
+    final trPct = 100.0 * trT / trA;
+    final rePct = 100.0 * reT / reA;
+    if (trPct - rePct >= 10.0) {
+      return "hátrányban kapkodnak (eladós támadás: "
+          "${rePct.toStringAsFixed(0)}% → ${trPct.toStringAsFixed(0)}"
+          "%) · az első ellépés után válts présre, ontják a labdát";
+    }
+    if (trPct - rePct <= -5.0) {
+      return "hátrányban is rendezettek (${trPct.toStringAsFixed(0)}"
+          "% eladós támadás) · a prés nem térül meg, fegyelmezett "
+          "fal kell";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5525,6 +5549,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szélső-mélység", _wingShotDepth(r)!],
       if (_doublingDefenders(r) != null)
         ["Kettőző emberek", _doublingDefenders(r)!],
+      if (_turnoversByScore(r) != null)
+        ["Hiba-állás", _turnoversByScore(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

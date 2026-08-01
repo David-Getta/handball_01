@@ -846,6 +846,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Hiba-állás: hátrányban szórják-e a labdát.
+    try:
+        from .attack_types import turnovers_by_score
+        tbs = turnovers_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tbs = tbs[side]
+            if rec_tbs["verdict"] is None:
+                continue
+            tr_tbs = rec_tbs["trailing"]
+            body += (f" A(z) {name} hátrány-viselkedéséről kiderült: "
+                     f"{rec_tbs['verdict']} "
+                     f"({tr_tbs['turnovers']}/{tr_tbs['attacks']} "
+                     "hátrányban futott támadás zárult eladással).")
+    except Exception:
+        pass
     # Kettőző emberek: ki jön másodiknak a labdásra.
     try:
         from .defense import doubling_defenders

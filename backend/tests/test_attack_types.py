@@ -3133,3 +3133,85 @@ def test_wing_shot_depth_needs_enough_shots():
 
     rec = wing_shot_depth(_wsd_match(True, n_shots=3))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Hiba-állás (hátrányban szórják-e a labdát) -----------------------------
+
+def _tbs_match(panic=True, n=6, fps=25.0):
+    """Döntetlennél tiszta (vagy eladós) hazai támadások, majd egy
+    vendég-gól után hátrányban eladós (vagy tiszta) támadások."""
+    frames = []
+    t = 0
+
+    def _pause(sec=1.6):
+        nonlocal t
+        for _ in range(int(sec * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    def _home_attack(turnover):
+        nonlocal t, frames
+        seg = _attack_frames(t, 4.0, 22.0, 33.0, fps=fps)
+        frames += seg
+        t = frames[-1].t + 1
+        if turnover:
+            # A rossz hazapassz HÁTRAFELÉ megy (nem kapu-irányba, hogy
+            # ne látsszon lövésnek), és a vendég 21-es csípi el.
+            for i in range(3):
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 33.0, 10.0),
+                    _pl(21, Team.AWAY, 29.0, 6.0)],
+                    ball=Ball(x=33.0 - (33.0 - 29.0) * (i + 1) / 3.0,
+                              y=10.0 - (10.0 - 6.0) * (i + 1) / 3.0,
+                              confidence=1.0)))
+                t += 1
+            for _ in range(8):      # a vendégnél a labda: eladás
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 33.0, 10.0),
+                    _pl(21, Team.AWAY, 29.0, 6.0)],
+                    ball=Ball(x=29.0, y=6.0, confidence=1.0)))
+                t += 1
+        _pause()
+
+    for _ in range(n):              # döntetlen állásnál
+        _home_attack(turnover=not panic)
+    for _ in range(10):             # vendég-gól: a 21-es a -x kapura lő
+        frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, 6.0, 10.0)],
+                            ball=Ball(x=6.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(7):
+        frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, 6.0, 10.0)],
+                            ball=Ball(x=max(6.0 - (i + 1) * 1.0, -0.5),
+                                      y=10.0, confidence=1.0)))
+        t += 1
+    _pause()
+    for _ in range(n):              # hazai hátrányban
+        _home_attack(turnover=panic)
+    return Match(_meta(fps), frames)
+
+
+def test_turnovers_by_score_flags_the_panicking_team():
+    """Hátrányban minden támadás eladással zárul → kapkodnak."""
+    from handball.pipeline.attack_types import turnovers_by_score
+
+    rec = turnovers_by_score(_tbs_match(True))["home"]
+    assert rec["trailing"]["attacks"] >= 5
+    assert rec["trailing"]["turnovers"] >= 5
+    assert rec["verdict"] == "hátrányban kapkodnak"
+
+
+def test_turnovers_by_score_flags_the_composed_team():
+    """Hátrányban tiszta, döntetlennél eladós → hátrányban is
+    rendezettek."""
+    from handball.pipeline.attack_types import turnovers_by_score
+
+    rec = turnovers_by_score(_tbs_match(False))["home"]
+    assert rec["verdict"] == "hátrányban is rendezettek"
+
+
+def test_turnovers_by_score_needs_enough_attacks():
+    """Kevés (5-nél kevesebb) támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import turnovers_by_score
+
+    rec = turnovers_by_score(_tbs_match(True, n=3))["home"]
+    assert rec["verdict"] is None

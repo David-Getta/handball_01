@@ -641,6 +641,10 @@ class ScoutingReport:
     wsd_depth_sum_m: float = 0.0
     dtp_frames: int = 0
     dtp_doublers: dict = field(default_factory=dict)
+    tbs_tr_attacks: int = 0
+    tbs_tr_tos: int = 0
+    tbs_rest_attacks: int = 0
+    tbs_rest_tos: int = 0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2370,6 +2374,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{100.0 * _dtp_n / rep.dtp_frames:.0f}%-ában) — a "
                 "kettőzés pillanatában az Ő embere szabadul: oda "
                 "menjen az első passz, begyakorolt jelre.")
+
+    # Hiba-állás: mikor éri meg présre váltani.
+    if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
+        _tbs_tr = 100.0 * rep.tbs_tr_tos / rep.tbs_tr_attacks
+        _tbs_rest = 100.0 * rep.tbs_rest_tos / rep.tbs_rest_attacks
+        if _tbs_tr - _tbs_rest >= 10.0:
+            keys.append(
+                f"Hátrányban kapkodnak (az eladós támadásaik aránya "
+                f"{_tbs_rest:.0f}%-ról {_tbs_tr:.0f}%-ra ugrik) — az "
+                "első ellépés után váltsatok présre: nyomás alatt "
+                "ontják a labdát, és minden szerzés a különbséget "
+                "hizlalja.")
+        elif _tbs_tr - _tbs_rest <= -5.0:
+            keys.append(
+                f"Hátrányban is rendezettek (eladós támadás: "
+                f"{_tbs_tr:.0f}%, egyébként {_tbs_rest:.0f}%) — a "
+                "prés ellenük nem térül meg: a fegyelmezett fal "
+                "többet ér, mint a kockázatos letámadás.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6185,6 +6207,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                        if _dtprow["jersey"] is not None
                        else "#" + str(_dtprow["player_id"]))
             rep.dtp_doublers[_dtpkey] = _dtprow["frames"]
+        from .attack_types import turnovers_by_score as _tbs
+        tbsrec = _tbs(match, config)[team.value]
+        rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
+        rep.tbs_tr_tos = tbsrec["trailing"]["turnovers"]
+        rep.tbs_rest_attacks = (tbsrec["leading"]["attacks"]
+                                + tbsrec["level"]["attacks"])
+        rep.tbs_rest_tos = (tbsrec["leading"]["turnovers"]
+                            + tbsrec["level"]["turnovers"])
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8586,6 +8616,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 211) Az ő hátrány-kapkodásuk × a ti labdaszerző védekezésetek:
+    # az első ellépés után a prés dönti el a meccset.
+    if (opp.tbs_tr_attacks >= 5 and opp.tbs_rest_attacks >= 5
+            and own.stt_steals >= 8):
+        _tbs_tr211 = 100.0 * opp.tbs_tr_tos / opp.tbs_tr_attacks
+        _tbs_rest211 = (100.0 * opp.tbs_rest_tos
+                        / opp.tbs_rest_attacks)
+        if _tbs_tr211 - _tbs_rest211 >= 10.0:
+            plan.append(
+                f"Hátrányban kapkodnak (az eladós támadásaik aránya "
+                f"{_tbs_rest211:.0f}%-ról {_tbs_tr211:.0f}%-ra "
+                f"ugrik), ti pedig labdaszerző védekezést játszotok "
+                f"({own.stt_steals} szerzés) — az első 2-3 gólos "
+                "ellépés után azonnal váltsatok présre: a nyomás "
+                "alatt ontott labdáik a különbséget hizlalják, és a "
+                "meccs korán eldönthető.")
 
     # 210) Az ő kiolvasható kettőzésük × a ti gyors elengedésetek: a
     # kettőzés pillanatában már el is ment a labda.
@@ -11913,6 +11960,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         dtp_frames=sum(r.dtp_frames for r in reports),
         dtp_doublers=_merge_role_counts(
             [r.dtp_doublers for r in reports]),
+        tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
+        tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
+        tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
+        tbs_rest_tos=sum(r.tbs_rest_tos for r in reports),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

@@ -4227,3 +4227,84 @@ def wing_shot_depth(match: Match,
             elif avg >= WSD_FAR_M:
                 rec["verdict"] = "messziről lövő szélsők"
     return out
+
+
+# Hiba-állás: állás-vödrönként legalább ennyi támadás kell az
+# összevetéshez, és ekkora (százalékpontos) eladás-arány többlet a
+# kapkodás, ekkora hiány a rendezettség jele hátrányban.
+TBS_MIN_ATTACKS = 5
+TBS_PANIC_PP = 10.0
+TBS_CALM_PP = -5.0
+
+
+def turnovers_by_score(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Hiba-állás: HÁTRÁNYBAN SZÓRJÁK-E a labdát.
+
+    A tempó-állás (pace_by_score) azt méri, gyorsítanak-e hátrányban
+    — ez azt, mi lesz a labdával: minden támadáshoz megnézzük a
+    kezdetekor az állást (vezet / hátrányban / döntetlen), és
+    állásonként a labdaeladással végződő támadások arányát. A
+    hátrányban megugró eladás-arány a kapkodás jele.
+
+    Edzőileg: a hátrányban kapkodó csapat ellen az első ellépés után
+    présre kell váltani — a nyomás alatt ontják a labdát, és minden
+    szerzés a különbséget hizlalja; a hátrányban is rendezett csapat
+    ellen a prés kockázata nem térül meg — a fegyelmezett fal többet
+    ér.
+
+    Visszatérés csapatonként: {"leading"/"trailing"/"level":
+    {"attacks", "turnovers", "pct"}, "verdict"} — a pct None
+    TBS_MIN_ATTACKS alatt; a verdict "hátrányban kapkodnak" /
+    "hátrányban is rendezettek" / None (ahhoz a hátrány-vödör ÉS a
+    többi együtt is elég mintás kell legyen).
+    """
+    from .event_detection import EventType, detect_events
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    events = detect_events(match, config)
+    goals = [(e.t, e.team.value) for e in events
+             if e.type == EventType.GOAL]
+    tos = [(e.t, e.team.value) for e in events
+           if e.type == EventType.TURNOVER]
+
+    out: dict = {side: {k: {"attacks": 0, "turnovers": 0, "pct": None}
+                        for k in ("leading", "trailing", "level")}
+                 for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        own = sum(1 for (t, tm) in goals
+                  if t < seq.start_t and tm == side)
+        opp = sum(1 for (t, tm) in goals
+                  if t < seq.start_t and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        rec = out[side][state]
+        rec["attacks"] += 1
+        if any(tm == side and seq.start_t <= t <= seq.end_t + 5
+               for (t, tm) in tos):
+            rec["turnovers"] += 1
+
+    for side in ("home", "away"):
+        buckets = out[side]
+        for rec in buckets.values():
+            if rec["attacks"] >= TBS_MIN_ATTACKS:
+                rec["pct"] = round(100.0 * rec["turnovers"]
+                                   / rec["attacks"], 1)
+        tr = buckets["trailing"]
+        rest_att = (buckets["leading"]["attacks"]
+                    + buckets["level"]["attacks"])
+        rest_to = (buckets["leading"]["turnovers"]
+                   + buckets["level"]["turnovers"])
+        verdict = None
+        if tr["attacks"] >= TBS_MIN_ATTACKS \
+                and rest_att >= TBS_MIN_ATTACKS:
+            diff = (100.0 * tr["turnovers"] / tr["attacks"]
+                    - 100.0 * rest_to / rest_att)
+            if diff >= TBS_PANIC_PP:
+                verdict = "hátrányban kapkodnak"
+            elif diff <= TBS_CALM_PP:
+                verdict = "hátrányban is rendezettek"
+        buckets["verdict"] = verdict
+    return out

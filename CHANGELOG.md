@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hiba-állás**: HÁTRÁNYBAN SZÓRJÁK-E a labdát. A tempó-állás azt
+  méri, gyorsítanak-e hátrányban — ez azt, mi lesz a labdával:
+  állásonként (vezet / hátrányban / döntetlen) az eladással záruló
+  támadások aránya (vödrönként 5+ támadás; +10 százalékpont
+  kapkodás, −5 rendezettség). A hátrányban kapkodó ellen az első
+  ellépés után présre kell váltani — a nyomás alatt ontott labda a
+  különbséget hizlalja; a hátrányban is rendezett ellen a prés nem
+  térül meg. Egy réteg, sok felület: `turnovers_by_score` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (állás-vödrönkénti támadás/eladás darabszámok, két edzői kulcs +
+  csempe), 211. meccsterv-szabály (az ő hátrány-kapkodásuk × a ti
+  labdaszerző védekezésetek), 232. edzés-szabály (nyomás alatti
+  rendezettség mesterséges hátrányból).
+
 - **Kettőző emberek**: KI JÖN MÁSODIKNAK a labdásra. A kettőzés-
   réteg azt méri, kettőznek-e — ez azt, ki: a kettőzött kockákon a
   labdáshoz második legközelebbi védőt jegyezzük (50+ kettőzött

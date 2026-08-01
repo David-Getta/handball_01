@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 232) Hiba-állás: ha hátrányban kapkodunk, a nyomás alatti
+    # rendezettség a téma.
+    try:
+        from .attack_types import turnovers_by_score
+        tbs232 = turnovers_by_score(match, config)
+        for side in ("home", "away"):
+            rec232 = tbs232[side]
+            if rec232["verdict"] != "hátrányban kapkodnak":
+                continue
+            tr232 = rec232["trailing"]
+            add(side, "tamadas", "Rendezettség hátrányban",
+                f"hátrányban kapkodunk: {tr232['turnovers']}/"
+                f"{tr232['attacks']} hátrányban futott támadásunk "
+                "zárult eladással — a sietség több labdát ad el, "
+                "mint amennyi gólt a gyorsítás hoz",
+                "nyomás alatti rendezettség: edzésmeccs mesterséges "
+                "hátrányból (0-2-ről indítva), ahol a cél a KÖTELEZŐ "
+                "befejezésig vitt támadás — az eladással záruló "
+                "támadás mínusz pont, a lövésig vitt (akár kihagyott) "
+                "támadás pont, és a gyors gól csak akkor dupla, ha "
+                "nem eladásból jött vissza az ellenfél")
+    except Exception:
+        pass
     # 231) Kettőző emberek: ha mindig ugyanaz az emberünk kettőz, a
     # kettőzés-forgatás a téma — ne legyen kiolvasható.
     try:
