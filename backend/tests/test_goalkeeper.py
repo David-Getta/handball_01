@@ -1681,3 +1681,93 @@ def test_outlet_target_roles_needs_enough_outlets():
 
     rec = outlet_target_roles(_otr_match(n_outlets=3))["away"]
     assert rec["top"] is None
+
+
+def _ops_match(slow_when_leading=True, n=5, fps=25.0):
+    """Vendég védés-indítás sorozatok: döntetlennél gyors (vagy lassú)
+    kihozatal, majd egy vendég-gól utáni vezetésnél lassú (vagy
+    gyors) — az indítás-tempó állás-függése így mérhető."""
+    from handball.models.tracking import Ball
+
+    def _pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    t = 0
+
+    def _pause(sec=1.6):
+        nonlocal t
+        for _ in range(int(sec * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=25.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _save_and_outlet(step):
+        nonlocal t
+        for i in range(8):      # hazai lövés, a vendég kapus fogja
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 37.0, 10.0),
+                              _pl(30, Team.AWAY, 39.0, 10.0,
+                                  role="kapus")],
+                ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        bx = 38.8
+        while bx >= 19.0:       # kihozatal a felezőn túlra
+            frames.append(Frame(
+                t=t, players=[_pl(30, Team.AWAY, 39.0, 10.0,
+                                  role="kapus")],
+                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            bx -= step
+            t += 1
+        _pause()
+
+    def _away_goal():
+        nonlocal t
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, 6.0, 10.0)],
+                                ball=Ball(x=6.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, 6.0, 10.0)],
+                                ball=Ball(x=max(6.0 - (i + 1) * 1.0, -0.5),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _pause()
+
+    fast, slow = 0.4, 0.1
+    for _ in range(n):          # döntetlennél
+        _save_and_outlet(slow if not slow_when_leading else fast)
+    _away_goal()                # a vendégek vezetnek
+    for _ in range(n):          # vezetés közben
+        _save_and_outlet(slow if slow_when_leading else fast)
+    return _match(frames)
+
+
+def test_outlet_pace_by_score_flags_the_time_waster():
+    """Vezetve lassú, egyébként gyors kihozatal → időhúzás."""
+    from handball.pipeline.goalkeeper import outlet_pace_by_score
+
+    rec = outlet_pace_by_score(_ops_match(True))["away"]
+    assert rec["lead"]["outlets"] >= 4 and rec["rest"]["outlets"] >= 4
+    assert rec["verdict"] == "vezetve lassítják az indítást"
+
+
+def test_outlet_pace_by_score_flags_the_relentless_team():
+    """Vezetve is gyors kihozatal → előnyben is pörgetik."""
+    from handball.pipeline.goalkeeper import outlet_pace_by_score
+
+    rec = outlet_pace_by_score(_ops_match(False))["away"]
+    assert rec["verdict"] == "előnyben is pörgetik"
+
+
+def test_outlet_pace_by_score_needs_enough_outlets():
+    """Kevés (4-nél kevesebb) mért indításnál nincs ítélet."""
+    from handball.pipeline.goalkeeper import outlet_pace_by_score
+
+    rec = outlet_pace_by_score(_ops_match(True, n=3))["away"]
+    assert rec["verdict"] is None

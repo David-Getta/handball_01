@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Indítás-állás: vezetve lassítják-e a kapus-indítást.
+    try:
+        from .goalkeeper import outlet_pace_by_score
+        ops = outlet_pace_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ops = ops[side]
+            if rec_ops["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kihozataláról kiderült: "
+                     f"{rec_ops['verdict']} (átlag "
+                     f"{rec_ops['lead']['avg_s']:.1f} mp vezetve, "
+                     f"{rec_ops['rest']['avg_s']:.1f} mp egyébként).")
+    except Exception:
+        pass
     # Csere-állás: vezetve forgatnak-e.
     try:
         from .substitutions import subs_by_score

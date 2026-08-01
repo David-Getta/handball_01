@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Indítás-állás**: VEZETVE LASSÍTJÁK-E a kapus-indítást. A
+  kapus-indítás a teljes meccs átlagát méri — ez állás szerint: a
+  védés utáni felező-átlépés ideje vezetés közben, szemben a többi
+  állapottal (vödrönként 4+ indítás; +2 mp az időhúzás, −1 mp a
+  pörgetés jele). Az időhúzós ellen hátrányban kapott gól után
+  azonnali középkezdés kell; az előnyben is pörgető ellen a védésük
+  utáni pillanat a legveszélyesebb. Egy réteg, sok felület:
+  `outlet_pace_by_score` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (vödrönkénti indítás-darabszám +
+  másodperc-összeg, két edzői kulcs + csempe), 214.
+  meccsterv-szabály (az ő időhúzó kihozataluk × a ti gyors
+  középkezdésetek), 235. edzés-szabály (indítás-kontroll: pörgetés/
+  kontroll jelre).
+
 - **Csere-állás**: VEZETVE FORGATNAK-E. A csere-kiváltók azt mérik,
   kapott gólra cserélnek-e — ez azt, mit tesznek az előnnyel: a
   cserehullámok ütemét (hullám/perc) vetjük össze a vezetésben és a

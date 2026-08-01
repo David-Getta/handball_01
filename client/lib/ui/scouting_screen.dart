@@ -1661,6 +1661,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Indítás-állás: vezetve lassítják-e a kihozatalt (vödrönként 4+
+  // indítás; +2 mp időhúzás, -1 mp pörgetés — a backend-kulccsal
+  // azonos küszöbök).
+  String? _outletPaceByScore(Map<String, dynamic> r) {
+    final lo = ((r["ops_lead_outlets"] as num?) ?? 0).toInt();
+    final ls = ((r["ops_lead_sum_s"] as num?) ?? 0).toDouble();
+    final ro = ((r["ops_rest_outlets"] as num?) ?? 0).toInt();
+    final rs = ((r["ops_rest_sum_s"] as num?) ?? 0).toDouble();
+    if (lo < 4 || ro < 4) return null;
+    final lead = ls / lo;
+    final rest = rs / ro;
+    if (lead - rest >= 2.0) {
+      return "vezetve lassítják az indítást "
+          "(${lead.toStringAsFixed(1)} mp kihozatal előnyben, "
+          "${rest.toStringAsFixed(1)} egyébként) · hátrányban "
+          "azonnali középkezdés, ne hagyd lassítani";
+    }
+    if (lead - rest <= -1.0) {
+      return "előnyben is pörgetik az indítást "
+          "(${lead.toStringAsFixed(1)} mp) · a védésük utáni "
+          "pillanatban azonnali visszarendeződés kell";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5604,6 +5629,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Előny-védekezés", _defenseByScore(r)!],
       if (_subsByScore(r) != null)
         ["Csere-állás", _subsByScore(r)!],
+      if (_outletPaceByScore(r) != null)
+        ["Indítás-állás", _outletPaceByScore(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

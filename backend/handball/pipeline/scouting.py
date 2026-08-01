@@ -653,6 +653,10 @@ class ScoutingReport:
     sbs_rest_subs: int = 0
     sbs_lead_s: float = 0.0
     sbs_rest_s: float = 0.0
+    ops_lead_outlets: int = 0
+    ops_lead_sum_s: float = 0.0
+    ops_rest_outlets: int = 0
+    ops_rest_sum_s: float = 0.0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2438,6 +2442,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.sbs_lead_subs} cserehullám előnyben) — a "
                 "fáradó kulcsemberük végig fent marad: a meccs "
                 "végén őt kell megtámadni.")
+
+    # Indítás-állás: húzzák-e az időt a kihozatallal.
+    if rep.ops_lead_outlets >= 4 and rep.ops_rest_outlets >= 4:
+        _ops_lead = rep.ops_lead_sum_s / rep.ops_lead_outlets
+        _ops_rest = rep.ops_rest_sum_s / rep.ops_rest_outlets
+        if _ops_lead - _ops_rest >= 2.0:
+            keys.append(
+                f"Vezetve lassítják az indítást (átlag "
+                f"{_ops_lead:.1f} mp kihozatal előnyben, "
+                f"{_ops_rest:.1f} mp egyébként) — ha hátrányban "
+                "vagytok, minden másodperc drága: kapott gól után "
+                "azonnali középkezdés, és a lassítást a "
+                "játékvezetőnél is jelezzétek.")
+        elif _ops_lead - _ops_rest <= -1.0:
+            keys.append(
+                f"Előnyben is pörgetik az indítást (átlag "
+                f"{_ops_lead:.1f} mp) — a védésük utáni pillanat a "
+                "legveszélyesebb: a lövést azonnali visszarendeződés "
+                "kövesse, nem reklamálás.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6273,6 +6296,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sbs_rest_subs = sbsrec["rest_subs"]
         rep.sbs_lead_s = sbsrec["lead_s"]
         rep.sbs_rest_s = sbsrec["rest_s"]
+        from .goalkeeper import outlet_pace_by_score as _ops
+        opsrec = _ops(match, config)[team.value]
+        rep.ops_lead_outlets = opsrec["lead"]["outlets"]
+        rep.ops_lead_sum_s = opsrec["lead"]["sum_s"]
+        rep.ops_rest_outlets = opsrec["rest"]["outlets"]
+        rep.ops_rest_sum_s = opsrec["rest"]["sum_s"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8674,6 +8703,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 214) Az ő időhúzó kihozataluk × a ti gyors középkezdésetek: a
+    # lassításuk ellen az azonnali újraindítás dolgozik.
+    if (opp.ops_lead_outlets >= 4 and opp.ops_rest_outlets >= 4
+            and own.rs_restarts >= 4):
+        _ops_lead214 = opp.ops_lead_sum_s / opp.ops_lead_outlets
+        _ops_rest214 = opp.ops_rest_sum_s / opp.ops_rest_outlets
+        _rs214 = 100.0 * own.rs_fast / max(1, own.rs_restarts)
+        if _ops_lead214 - _ops_rest214 >= 2.0 and _rs214 >= 40.0:
+            plan.append(
+                f"Vezetve lassítják az indítást (átlag "
+                f"{_ops_lead214:.1f} mp kihozatal előnyben, "
+                f"{_ops_rest214:.1f} egyébként), ti pedig gyorsan "
+                f"indítjátok újra a játékot (a középkezdéseitek "
+                f"{_rs214:.0f}%-a gyors) — hátrányban ne hagyjátok "
+                "lassítani: kapott gól után azonnali középkezdés, "
+                "és minden megnyert másodperc a tiétek.")
 
     # 213) Az ő csak-előnyben-forgató padjuk × a ti szoros-meccs
     # rutinotok: tartsd szorosan, és a kezdősoruk elfárad.
@@ -12066,6 +12112,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sbs_rest_subs=sum(r.sbs_rest_subs for r in reports),
         sbs_lead_s=round(sum(r.sbs_lead_s for r in reports), 1),
         sbs_rest_s=round(sum(r.sbs_rest_s for r in reports), 1),
+        ops_lead_outlets=sum(r.ops_lead_outlets for r in reports),
+        ops_lead_sum_s=round(sum(r.ops_lead_sum_s
+                                 for r in reports), 1),
+        ops_rest_outlets=sum(r.ops_rest_outlets for r in reports),
+        ops_rest_sum_s=round(sum(r.ops_rest_sum_s
+                                 for r in reports), 1),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

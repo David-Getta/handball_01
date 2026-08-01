@@ -1920,3 +1920,93 @@ def outlet_target_roles(match: Match, config=None) -> dict:
                 rec["top"] = {"poszt": poszt, "count": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Indítás-állás: mindkét állás-vödörben legalább ennyi mért indítás
+# kell, és ekkora (másodperces) lassulás vezetés közben az időhúzó,
+# ekkora gyorsulás a végig pörgető indítás jele.
+OPS_MIN_OUTLETS = 4
+OPS_SLOW_GAP_S = 2.0
+OPS_FAST_GAP_S = -1.0
+
+
+def outlet_pace_by_score(match: Match, config=None) -> dict:
+    """Indítás-állás: VEZETVE LASSÍTJÁK-E a kapus-indítást.
+
+    A kapus-indítás (outlet_speed) a teljes meccs átlagát méri — ez
+    állás szerint bontja: a védés utáni felező-átlépés ideje akkor,
+    amikor a védő csapat VEZET, szemben a többi állapottal. A
+    vezetve lelassuló indítás tudatos időhúzás; aki előnyben is
+    pörgeti, az a különbséget akarja hizlalni.
+
+    Edzőileg: az időhúzós csapat ellen hátrányban minden másodperc
+    drága — a kapott gól után azonnali középkezdés kell, a lassítást
+    a játékvezetőnél is jelezni érdemes; a végig pörgető ellen a
+    védés utáni pillanat a legveszélyesebb — a lövést azonnal
+    visszarendeződés követi, nem reklamálás.
+
+    Visszatérés csapatonként (az INDÍTÓ, védő oldal): {"lead":
+    {"outlets", "sum_s", "avg_s"}, "rest": {"outlets", "sum_s",
+    "avg_s"}, "verdict"} — az avg_s None OPS_MIN_OUTLETS alatt; a
+    verdict "vezetve lassítják az indítást" / "előnyben is pörgetik"
+    / None.
+    """
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    shots = match_xg(match, config).get("shots", [])
+    goals = sorted((sh["t"], sh["team"]) for sh in shots
+                   if sh.get("outcome") == "goal")
+
+    def _leading(side, t):
+        own = sum(1 for (gt, tm) in goals if gt < t and tm == side)
+        opp = sum(1 for (gt, tm) in goals if gt < t and tm != side)
+        return own > opp
+
+    out: dict = {side: {"lead": {"outlets": 0, "sum_s": 0.0,
+                                 "avg_s": None},
+                        "rest": {"outlets": 0, "sum_s": 0.0,
+                                 "avg_s": None},
+                        "verdict": None}
+                 for side in ("home", "away")}
+    frames = match.frames
+    for sh in shots:
+        if sh.get("outcome") != "save":
+            continue
+        def_side = "away" if sh["team"] == "home" else "home"
+        t0 = sh["t"]
+        crossed = None
+        for fr in frames:
+            if fr.t <= t0 or fr.ball is None:
+                continue
+            if (fr.t - t0) / fps > OUTLET_MAX_S:
+                break
+            if sh["team"] == "home" and fr.ball.x < 20.0:
+                crossed = fr.t
+                break
+            if sh["team"] == "away" and fr.ball.x > 20.0:
+                crossed = fr.t
+                break
+        if crossed is None:
+            continue
+        bucket = ("lead" if _leading(def_side, t0) else "rest")
+        rec = out[def_side][bucket]
+        rec["outlets"] += 1
+        rec["sum_s"] += (crossed - t0) / fps
+
+    for side in ("home", "away"):
+        buckets = out[side]
+        for rec in (buckets["lead"], buckets["rest"]):
+            rec["sum_s"] = round(rec["sum_s"], 1)
+            if rec["outlets"] >= OPS_MIN_OUTLETS:
+                rec["avg_s"] = round(rec["sum_s"] / rec["outlets"], 1)
+        lead, rest = buckets["lead"], buckets["rest"]
+        if lead["avg_s"] is not None and rest["avg_s"] is not None:
+            gap = lead["avg_s"] - rest["avg_s"]
+            if gap >= OPS_SLOW_GAP_S:
+                buckets["verdict"] = "vezetve lassítják az indítást"
+            elif gap <= OPS_FAST_GAP_S:
+                buckets["verdict"] = "előnyben is pörgetik"
+    return out

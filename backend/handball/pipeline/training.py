@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 235) Indítás-állás: ha vezetve mi is leülünk az indítással, az
+    # előny-menedzsment tudatosítása a téma — de ne álljon le a láb.
+    try:
+        from .goalkeeper import outlet_pace_by_score
+        ops235 = outlet_pace_by_score(match, config)
+        for side in ("home", "away"):
+            rec235 = ops235[side]
+            if rec235["verdict"] != "előnyben is pörgetik":
+                continue
+            add(side, "vedekezes", "Indítás-kontroll előnyben",
+                f"előnyben is pörgetjük az indítást (átlag "
+                f"{rec235['lead']['avg_s']:.1f} mp kihozatal "
+                "vezetve) — ez fegyver, de kétélű: a gyors indítás "
+                "előnyben kockázatot is visz a játékunkba",
+                "indítás-kontroll: a kapus két jelet tanul — "
+                "PÖRGETÉS (azonnali hosszú) és KONTROLL (biztos "
+                "rövid, felállt támadás) —, és az edzésmeccsen a "
+                "pad jelzi, melyik jön; az előnyben eladott gyors "
+                "indítás dupla mínusz, a jelre hozott jó döntés "
+                "pont")
+    except Exception:
+        pass
     # 234) Csere-állás: ha vezetve sem pihentetünk, a pad bizalma a
     # téma — a kulcsember nem bírja végig a szezont.
     try:
