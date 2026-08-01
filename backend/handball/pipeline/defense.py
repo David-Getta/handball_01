@@ -3213,3 +3213,79 @@ def blocked_by_role(match, config=None) -> dict:
                 rec["top"] = {"poszt": poszt, "blocked": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Kettőző emberek: ennyi kettőzött kocka kell egy csapathoz, és e
+# feletti részarány emeli ki az egy kettőző embert.
+DTP_MIN_FRAMES = 50
+DTP_TOP_SHARE = 40.0
+
+
+def doubling_defenders(match, config=None) -> dict:
+    """Kettőző emberek: KI JÖN MÁSODIKNAK a labdásra.
+
+    A kettőzés-réteg (double_teams) azt méri, kettőznek-e — ez azt,
+    KI: a kettőzött kockákon a labdáshoz második legközelebbi védőt
+    jegyezzük fel. Ha a kettőzés mindig ugyanattól az embertől jön,
+    a minta kiszámítható — és a kettőző ŐRZÖTTJE az, aki üresen
+    marad.
+
+    Edzőileg: az ellenfél kiemelt kettőzője ellen előre kijelölhető
+    a kijátszás — a kettőzés pillanatában az ő embere felé megy az
+    első passz, mert ő szabadult fel; a saját kettőzésünket pedig
+    forgatni kell, hogy ne legyen kiolvasható.
+
+    Visszatérés csapatonként (a KETTŐZŐ, védekező oldal):
+    {"doubled_frames", "doublers": [{"player_id", "jersey",
+    "frames"}], "top": {"player_id", "jersey", "frames",
+    "share_pct"} | None} — a doublers csökkenő; a "top" akkor van
+    kitöltve, ha legalább DTP_MIN_FRAMES kettőzött kocka van, a
+    vezető részaránya eléri a DTP_TOP_SHARE-t, és nincs holtverseny.
+    """
+    import math
+
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    jersey: dict[int, int] = {}
+    acc: dict = {"home": {}, "away": {}}
+    totals = {"home": 0, "away": 0}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        defender = "away" if holder.team.value == "home" else "home"
+        near = sorted(
+            ((math.hypot(p.x - holder.x, p.y - holder.y), p)
+             for p in f.players
+             if p.team is not None and p.team != holder.team
+             and p.role != "kapus"
+             and math.hypot(p.x - holder.x, p.y - holder.y)
+             <= DOUBLE_TEAM_M),
+            key=lambda dp: dp[0])
+        if len(near) < 2:
+            continue
+        second = near[1][1]
+        if second.jersey_number is not None:
+            jersey.setdefault(second.track_id, second.jersey_number)
+        totals[defender] += 1
+        acc[defender][second.track_id] = (
+            acc[defender].get(second.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "frames": n}
+                for tid, n in sorted(acc[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = None
+        if totals[side] >= DTP_MIN_FRAMES and rows:
+            share = 100.0 * rows[0]["frames"] / totals[side]
+            tie = (len(rows) > 1
+                   and rows[1]["frames"] == rows[0]["frames"])
+            if share >= DTP_TOP_SHARE and not tie:
+                top = {**rows[0], "share_pct": round(share, 1)}
+        out[side] = {"doubled_frames": totals[side],
+                     "doublers": rows, "top": top}
+    return out

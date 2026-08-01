@@ -1568,6 +1568,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kettőző emberek: ki jön másodiknak a labdásra (50+ kettőzött
+  // kocka; 40%+ részarány, holtverseny nélkül — a backend-kulccsal
+  // azonos küszöbök).
+  String? _doublingDefenders(Map<String, dynamic> r) {
+    final frames = ((r["dtp_frames"] as num?) ?? 0).toInt();
+    final doublers = (r["dtp_doublers"] as Map?) ?? {};
+    if (frames < 50 || doublers.isEmpty) return null;
+    final entries = doublers.entries.toList()
+      ..sort((a, b) =>
+          ((b.value as num?) ?? 0).compareTo((a.value as num?) ?? 0));
+    final top = entries.first;
+    final n = ((top.value as num?) ?? 0).toInt();
+    final tie = entries.length > 1 &&
+        ((entries[1].value as num?) ?? 0).toInt() == n;
+    if (tie || 100.0 * n / frames < 40.0) return null;
+    return "kiszámítható a kettőzésük: a(z) ${top.key} mezes jön "
+        "másodiknak (${(100.0 * n / frames).toStringAsFixed(0)}%) · "
+        "a kettőzés jelére az ő embere felé az első passz";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5503,6 +5523,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontra-esés", _breakShareFade(r)!],
       if (_wingShotDepth(r) != null)
         ["Szélső-mélység", _wingShotDepth(r)!],
+      if (_doublingDefenders(r) != null)
+        ["Kettőző emberek", _doublingDefenders(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

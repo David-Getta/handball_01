@@ -2225,3 +2225,37 @@ def test_blocked_by_role_needs_enough_blocks():
 
     rec = blocked_by_role(_bsh_match([1, 1, 1]))["home"]
     assert rec["top"] is None
+
+
+# ---- Kettőző emberek (ki jön másodiknak a labdásra) -------------------------
+
+def _dtp_match(n_frames=60, fps=25.0):
+    """Kettőzött kockák: a hazai labdásra a 21-es lép rá elsőnek, a
+    22-es jön másodiknak — ő a kettőző ember."""
+    frames = []
+    for t in range(n_frames):
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 30.0, 10.0),
+            _pl(21, Team.AWAY, 31.0, 10.0),
+            _pl(22, Team.AWAY, 30.0, 12.0),
+            _pl(23, Team.AWAY, 36.0, 10.0)],
+            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+    return Match(_meta(fps), frames)
+
+
+def test_doubling_defenders_names_the_second_man():
+    """A mindig másodiknak érkező 22-es a kiemelt kettőző ember."""
+    from handball.pipeline.defense import doubling_defenders
+
+    rec = doubling_defenders(_dtp_match())["away"]
+    assert rec["doubled_frames"] >= 50
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 22
+
+
+def test_doubling_defenders_needs_enough_frames():
+    """Kevés (50-nél kevesebb) kettőzött kockánál nincs kiemelt."""
+    from handball.pipeline.defense import doubling_defenders
+
+    rec = doubling_defenders(_dtp_match(n_frames=30))["away"]
+    assert rec["top"] is None

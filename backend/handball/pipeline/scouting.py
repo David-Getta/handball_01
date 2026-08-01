@@ -639,6 +639,8 @@ class ScoutingReport:
     brf_sh_breaks: int = 0
     wsd_shots: int = 0
     wsd_depth_sum_m: float = 0.0
+    dtp_frames: int = 0
+    dtp_doublers: dict = field(default_factory=dict)
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2355,6 +2357,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_wsd_avg:.1f} m-ről eresztik el) — a szög "
                 "ráengedhető: a kapus bátran jöhet ki, a falnak "
                 "nem kell szétszorulnia a szélre.")
+
+    # Kettőző emberek: kiolvasható-e, honnan jön a kettőzésük.
+    if rep.dtp_frames >= 50 and rep.dtp_doublers:
+        _dtp_label, _dtp_n = next(iter(rep.dtp_doublers.items()))
+        _dtp_vals = list(rep.dtp_doublers.values())
+        _dtp_tie = len(_dtp_vals) > 1 and _dtp_vals[1] == _dtp_n
+        if 100.0 * _dtp_n / rep.dtp_frames >= 40.0 and not _dtp_tie:
+            keys.append(
+                f"Kiszámítható a kettőzésük: a(z) {_dtp_label} "
+                f"mezszámú jön másodiknak (a kettőzött idő "
+                f"{100.0 * _dtp_n / rep.dtp_frames:.0f}%-ában) — a "
+                "kettőzés pillanatában az Ő embere szabadul: oda "
+                "menjen az első passz, begyakorolt jelre.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6161,6 +6176,15 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         wsdrec = _wsd(match, config)[team.value]
         rep.wsd_shots = wsdrec["shots"]
         rep.wsd_depth_sum_m = wsdrec["depth_sum_m"]
+        from .defense import doubling_defenders as _dtp
+        dtprec = _dtp(match, config)[team.value]
+        rep.dtp_frames = dtprec["doubled_frames"]
+        rep.dtp_doublers = {}
+        for _dtprow in dtprec["doublers"]:
+            _dtpkey = (str(_dtprow["jersey"])
+                       if _dtprow["jersey"] is not None
+                       else "#" + str(_dtprow["player_id"]))
+            rep.dtp_doublers[_dtpkey] = _dtprow["frames"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8562,6 +8586,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 210) Az ő kiolvasható kettőzésük × a ti gyors elengedésetek: a
+    # kettőzés pillanatában már el is ment a labda.
+    if (opp.dtp_frames >= 50 and opp.dtp_doublers
+            and own.sr_shots >= 10):
+        _dtp_label210, _dtp_n210 = next(iter(opp.dtp_doublers.items()))
+        _dtp_vals210 = list(opp.dtp_doublers.values())
+        _dtp_tie210 = (len(_dtp_vals210) > 1
+                       and _dtp_vals210[1] == _dtp_n210)
+        _sr210 = 100.0 * own.sr_quick / max(1, own.sr_shots)
+        if (100.0 * _dtp_n210 / opp.dtp_frames >= 40.0
+                and not _dtp_tie210 and _sr210 >= 50.0):
+            plan.append(
+                f"Kiszámítható a kettőzésük (a(z) {_dtp_label210} "
+                f"mezszámú jön másodiknak), ti pedig gyorsan "
+                f"engeditek el a labdát (a lövéseitek "
+                f"{_sr210:.0f}%-a gyors elengedés) — a kettőzés "
+                "jelére az ő őrzöttje felé menjen az egy-érintéses "
+                "passz: mire a kettőzés odaér, a labda már túl van "
+                "rajta.")
 
     # 209) Az ő messziről lövő szélsőik × a ti jól védő kapusotok: a
     # szélső-szög ráengedhető, a kapus-párbaj a tiétek.
@@ -11866,6 +11910,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         wsd_shots=sum(r.wsd_shots for r in reports),
         wsd_depth_sum_m=round(sum(r.wsd_depth_sum_m
                                   for r in reports), 1),
+        dtp_frames=sum(r.dtp_frames for r in reports),
+        dtp_doublers=_merge_role_counts(
+            [r.dtp_doublers for r in reports]),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kettőző emberek**: KI JÖN MÁSODIKNAK a labdásra. A kettőzés-
+  réteg azt méri, kettőznek-e — ez azt, ki: a kettőzött kockákon a
+  labdáshoz második legközelebbi védőt jegyezzük (50+ kettőzött
+  kocka; 40%+ részarány, holtverseny nélkül). A mindig ugyanattól
+  az embertől jövő kettőzés kiolvasható — a kettőző őrzöttje
+  szabadul, oda megy az első passz begyakorolt jelre; a saját
+  kettőzésünket forgatni kell. Egy réteg, sok felület:
+  `doubling_defenders` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (mezszám szerinti kettőzés-
+  darabszámok, edzői kulcs + csempe), 210. meccsterv-szabály (az ő
+  kiolvasható kettőzésük × a ti gyors elengedésetek), 231.
+  edzés-szabály (kettőzés-forgatás hangos jelre).
+
 - **Szélső-mélység**: MILYEN MÉLYRŐL lőnek a szélsőik. A
   szélső-befejezés a zóna hatékonyságát méri — ez a befutás
   mélységét: a szélső-posztú lövések kapu-vonaltól mért átlagos

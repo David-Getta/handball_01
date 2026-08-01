@@ -1343,6 +1343,31 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 231) Kettőző emberek: ha mindig ugyanaz az emberünk kettőz, a
+    # kettőzés-forgatás a téma — ne legyen kiolvasható.
+    try:
+        from .defense import doubling_defenders
+        dtp231 = doubling_defenders(match, config)
+        for side in ("home", "away"):
+            top231 = dtp231[side]["top"]
+            if top231 is None:
+                continue
+            mez231 = (f"{top231['jersey']} mezszámú"
+                      if top231["jersey"] is not None
+                      else f"{top231['player_id']} azonosítójú")
+            add(side, "vedekezes", "Kettőzés-forgatás",
+                f"a kettőzésünk kiszámítható: a kettőzött idő "
+                f"{top231['share_pct']:.0f}%-ában a(z) {mez231} "
+                "játékosunk a második ember — az ellenfél előre "
+                "tudja, kinek az őrzöttje szabadul",
+                "kettőzés-forgatás: a kettőző ember posztonként "
+                "forogjon (a fal mindkét széléről és középről is "
+                "jöjjön második) — az edzésmeccsen a védő sor "
+                "hangos jelre váltja, ki lép rá, és a kiszámítható "
+                "(harmadszor is ugyanonnan jövő) kettőzés mínusz "
+                "pont")
+    except Exception:
+        pass
     # 230) Szélső-mélység: ha messziről lőnek a szélsőink, a befutás
     # begyakorlása a téma, nem a lövőerő.
     try:

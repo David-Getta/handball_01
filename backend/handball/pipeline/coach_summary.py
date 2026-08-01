@@ -846,6 +846,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kettőző emberek: ki jön másodiknak a labdásra.
+    try:
+        from .defense import doubling_defenders
+        dtp = doubling_defenders(match)
+        for side, name in (("home", home), ("away", away)):
+            top_dtp = dtp[side]["top"]
+            if top_dtp is None:
+                continue
+            mez_dtp = (f"{top_dtp['jersey']} mezszámú"
+                       if top_dtp["jersey"] is not None
+                       else f"{top_dtp['player_id']} azonosítójú")
+            body += (f" A(z) {name} kettőzése kiszámítható: a "
+                     f"kettőzött kockák {top_dtp['share_pct']:.0f}"
+                     f"%-ában a(z) {mez_dtp} játékos a második "
+                     "ember.")
+    except Exception:
+        pass
     # Szélső-mélység: milyen mélyről lőnek a szélsők.
     try:
         from .attack_types import wing_shot_depth
