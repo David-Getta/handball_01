@@ -176,3 +176,50 @@ def test_combine_reports_minden_mezot_kezel():
         if f.name not in src and f.name not in _LEGACY_UNMERGED_FIELDS]
     assert not unmentioned, (
         f"a combine_reports nem kezeli ezeket a mezőket: {unmentioned}")
+
+
+# A kliens-csempék beágyazott sor-kulcsai: ezek nem ScoutingReport-
+# mezők, hanem lista-elemek belső kulcsai (player_id, frames, ...)
+# vagy más térképből olvasott értékek. Zárt lista — új felső szintű
+# kulcs ide nem kerülhet.
+_DART_ROW_KEYS = {
+    "breaks", "chances", "count", "def_frames", "depth_sum_m",
+    "frames", "jersey", "narrative", "player_id", "setter_id",
+    "shooter_id", "sprints", "takes",
+}
+
+
+def test_kliens_kulcsok_letezo_mezok():
+    """A kliens minden csempe-helperje r["..."] kulcsokkal olvassa a
+    felderítés-profilt — egy elgépelt kulcs némán üres csempét adna.
+    Minden Dart-oldali kulcsnak létező ScoutingReport-mezőnek kell
+    lennie (a beágyazott sor-kulcsok zárt listája kivétel)."""
+    import dataclasses
+
+    from handball.pipeline import scouting
+
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    keys = set(re.findall(r'r\["([a-z0-9_]+)"\]',
+                          dart.read_text(encoding="utf-8")))
+    assert len(keys) > 400, "a kulcs-olvasás elromlott"
+    fields = {f.name for f in dataclasses.fields(scouting.ScoutingReport)}
+    unknown = sorted(keys - fields - _DART_ROW_KEYS)
+    assert not unknown, (
+        f"a kliens nem létező felderítés-mezőket olvas: {unknown}")
+
+
+def test_szabaly_sorszamok_egyediek():
+    """A meccsterv- és edzés-szabályok sorszámozott kommentjei ("# NNN)")
+    nem ismétlődhetnek — a duplikált szám a recept számláló-frissítés
+    lépésének kihagyását jelzi."""
+    for mod in ("scouting", "training"):
+        src = (Path(__file__).resolve().parent.parent
+               / "handball" / "pipeline" / f"{mod}.py").read_text(
+                   encoding="utf-8")
+        nums = re.findall(r'^\s*# (\d+)\)', src, flags=re.M)
+        assert len(nums) > 50, f"a sorszám-olvasás elromlott ({mod})"
+        dupes = sorted({n for n in nums if nums.count(n) > 1})
+        assert not dupes, f"ismétlődő szabály-sorszámok ({mod}): {dupes}"

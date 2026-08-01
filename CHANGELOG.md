@@ -128,10 +128,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   goalkeepers, tactics, quality), és követeli, hogy mind a 246+
   csomag-réteg és minden végpont-kulcs ott legyen — a
   félidő-feltételes kulcsok kivételével. Plusz: két azonos nevű
-  regisztráció (néma felülírás) is tesztet buktat, és a
+  regisztráció (néma felülírás) is tesztet buktat, a
   combine_reports-nak a ScoutingReport MINDEN mezőjét kezelnie kell —
   a kimaradó mező több meccs összefésülésekor némán az alapértékére
-  esne vissza (az örökölt, nem összegezhető mezők zárt listán).
+  esne vissza (az örökölt, nem összegezhető mezők zárt listán) —, a
+  kliens-csempék minden r["..."] kulcsának létező
+  felderítés-mezőnek kell lennie (az elgépelt kulcs némán üres
+  csempét adna), és a meccsterv-/edzés-szabályok sorszámai nem
+  ismétlődhetnek.
 
 - **Keresztjáték**: MENNYIT KERESZTEZNEK a hátsó sorban. Az álló
   támadók rétege az egyéni mozgást méri — ez a szerkezetet: felállt
