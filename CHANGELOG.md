@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Falba lövő posztok**: MELYIK POSZTJUK lő rendre a falba. A
+  lefogott lövők a nevet adják — ez a posztot: a lefogott lövőket a
+  poszt-becsléshez kötjük (4+ lefogott lövés; 50%+ részarány,
+  holtverseny nélkül), így akkor is látszik a minta, ha a nevek
+  cserélődnek. Ahol a falba lövés posztra jellemző, ott a fal
+  tartása maga a védekezés — nem kell kilépni, a blokk magától
+  termel; a saját falba lövő posztunknak lövés-előkészítés kell
+  (elzárás, egy-ütemű csel), nem több erő. Egy réteg, sok felület:
+  `blocked_by_role` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (poszt szerinti darabszámok,
+  edzői kulcs + csempe), 206. meccsterv-szabály (az ő falba lövő
+  posztjuk × a ti termő blokkjaitok), 227. edzés-szabály
+  (lövés-előkészítés: előkészített gól dupla pont).
+
 - **Kiállítás-posztok**: MELYIK POSZTJUK hozza a kétperceseket. A
   kiállítás-kiharcolók a nevet adják — ez a posztot: a kiharcolókat
   a poszt-becsléshez kötjük, a hetes-posztok mintájára (3+ kiharcolt

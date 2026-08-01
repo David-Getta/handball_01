@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 227) Falba lövő posztok: ha egy posztunk rendre a falba lő, a
+    # lövés-előkészítés a téma, nem a lövő ereje.
+    try:
+        from .defense import blocked_by_role
+        bbr227 = blocked_by_role(match, config)
+        for side in ("home", "away"):
+            top227 = bbr227[side]["top"]
+            if top227 is None:
+                continue
+            add(side, "tamadas", "Lövés-előkészítés",
+                f"a falba lőtt lövéseink a(z) {top227['poszt']} "
+                f"posztról jönnek ({top227['blocked']}/"
+                f"{bbr227[side]['blocked']} lefogott lövés) — a "
+                "poszt lövései előkészítés nélkül, álló falba "
+                "mennek",
+                "lövés-előkészítés a kiemelt posztnak: elzárás "
+                "utáni lövés, egy-ütemű lövőcsel és helycsere a "
+                "lövés előtt — az edzésmeccsen az előkészítés "
+                "(elzárás vagy csel) utáni gól dupla pont, az álló "
+                "falba lőtt blokkolt lövés mínusz")
+    except Exception:
+        pass
     # 226) Kiállítás-posztok: ha egy posztunk ellen sok a kiállításig
     # menő fogás, a kiharcolás tudatosítása a téma — nekünk fegyver.
     try:

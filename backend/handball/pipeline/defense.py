@@ -3157,3 +3157,59 @@ def blocked_shooters(match, config=None) -> dict:
                 top = {**rows[0], "share_pct": round(share, 1)}
         out[side] = {"blocked": total, "shooters": rows, "top": top}
     return out
+
+
+# Falba lövő posztok: ennyi poszthoz kötött lefogott lövés kell az
+# ítélethez, és e feletti részarány emeli ki a posztot.
+BBR_MIN_BLOCKED = 4
+BBR_SHARE = 50.0
+
+
+def blocked_by_role(match, config=None) -> dict:
+    """Falba lövő posztok: MELYIK POSZTJUK lő rendre a falba.
+
+    A lefogott lövők (blocked_shooters) a nevet adják — ez a posztot:
+    a lefogott lövőket a poszt-becsléshez kötjük, így akkor is
+    látszik a minta, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg: ha az átlövőik akadnak el a falban, a fal magasan
+    tartása többet ér, mint a kilépés; ha a beállójuk, az elé állás
+    után a lövő-kar zárása is jár; ha a szélsőjük lő falba, a szög
+    már zárva van — elég tartani.
+
+    Visszatérés csapatonként (a TÁMADÓ csapaté): {"blocked"
+    (poszthoz kötött lefogott lövések), "roles": {poszt: darab},
+    "top": {"poszt", "blocked", "share_pct"} | None} — a "top" akkor
+    van kitöltve, ha legalább BBR_MIN_BLOCKED poszthoz kötött
+    lefogott lövés van, a vezető poszt részaránya eléri a
+    BBR_SHARE-t, és nincs holtverseny.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    shooters = blocked_shooters(match, config)
+    out: dict = {side: {"blocked": 0, "roles": {}, "top": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in shooters[side]["shooters"]:
+            info = roles.get(side, {}).get(row["player_id"])
+            if info is None:
+                continue
+            rec["blocked"] += row["blocked"]
+            poszt = info["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["blocked"])
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["roles"].items())
+        if rec["blocked"] >= BBR_MIN_BLOCKED and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["blocked"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= BBR_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "blocked": n,
+                              "share_pct": round(share, 1)}
+    return out

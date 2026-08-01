@@ -2176,11 +2176,11 @@ def _bsh_match(shooter_ids, fps=25.0):
             frames.append(Frame(t=t, players=[shooter, blocker],
                                 ball=Ball(x=x, y=10.0, confidence=1.0)))
             t += 1
-        for _i in range(40):  # szünet (blokk-cooldown)
+        for _i in range(40):  # szünet (blokk-cooldown), a lövőnél a
             frames.append(Frame(t=t, players=[shooter, blocker],
-                                ball=Ball(x=20.0, y=10.0,
+                                ball=Ball(x=28.0, y=10.0,
                                           confidence=1.0)))
-            t += 1
+            t += 1  # labda — így poszt-minta is gyűlik
     return Match(_meta(fps), frames)
 
 
@@ -2202,3 +2202,26 @@ def test_blocked_shooters_needs_enough_blocks():
 
     rec = blocked_shooters(_bsh_match([1, 1, 2]))["home"]
     assert rec["blocked"] == 3 and rec["top"] is None
+
+
+# ---- Falba lövő posztok (melyik poszt lő a falba) ---------------------------
+
+def test_blocked_by_role_points_to_the_backcourt():
+    """A 12 méterről (irányító-poszt) falba lőtt négy lövés → a hátsó
+    sor lő a falba."""
+    from handball.pipeline.defense import blocked_by_role
+
+    rec = blocked_by_role(_bsh_match([1, 1, 1, 1]))["home"]
+    assert rec["blocked"] == 4
+    assert rec["top"] is not None
+    assert rec["top"]["poszt"] == "irányító"
+    assert rec["top"]["share_pct"] == 100.0
+
+
+def test_blocked_by_role_needs_enough_blocks():
+    """Kevés (4-nél kevesebb) poszthoz kötött lefogott lövésnél nincs
+    kiemelt poszt."""
+    from handball.pipeline.defense import blocked_by_role
+
+    rec = blocked_by_role(_bsh_match([1, 1, 1]))["home"]
+    assert rec["top"] is None

@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Falba lövő posztok: melyik poszt lő rendre a falba.
+    try:
+        from .defense import blocked_by_role
+        bbr = blocked_by_role(match)
+        for side, name in (("home", home), ("away", away)):
+            top_bbr = bbr[side]["top"]
+            if top_bbr is None:
+                continue
+            body += (f" A(z) {name} falba lőtt lövései jellemzően "
+                     f"a(z) {top_bbr['poszt']} posztról jönnek "
+                     f"({top_bbr['blocked']}/{bbr[side]['blocked']} "
+                     "lefogott lövés).")
+    except Exception:
+        pass
     # Kiállítás-posztok: melyik poszt hozza a kétperceseket.
     try:
         from .rules import susp_earner_roles
