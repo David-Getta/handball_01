@@ -587,61 +587,6 @@ def shooter_power(match: Match,
     return out
 
 
-# Lövőerő-esés: félidőnként ennyi mért lövés kell az ítélethez, és
-# ennyi km/h átlagsebesség-esés számít érdeminek.
-POWER_FADE_MIN_SHOTS = 4
-POWER_FADE_DROP_KMH = 6.0
-
-
-def shot_power_fade(match: Match,
-                    config: Optional[TacticsConfig] = None) -> dict:
-    """Lövőerő-esés: a lövés-sebesség az 1. vs 2. félidőben.
-
-    MEGJEGYZÉS: tartalmilag a shot_speed_fade (fentebb) duplikátuma —
-    ugyanazt az 1. vs 2. félidei átlag lövés-sebességet méri, csak
-    km/h-küszöbbel a százalékos helyett. Kompatibilitás miatt marad
-    (a spf_* felderítés-mezők és a kliens-csempe erre épülnek); új
-    felület NE erre, hanem a shot_speed_fade-re épüljön.
-
-    A befejezés-esés (finish_fade) azt mutatja, mennyi megy be, a
-    lövő-erő (shooter_power) azt, ki lő keményen — ez a kettő
-    metszete időben: marad-e erő a karban a második félidőre. Ha az
-    átlagsebesség érdemben esik, a hajrában a távoli lövés már nem
-    fegyver (kidolgozott helyzet kell, és a kapus előrébb jöhet); ha
-    tartja, a bombázójuk a hajrában is élő veszély.
-
-    Visszatérés csapatonként: {"fh_shots", "fh_avg_kmh", "sh_shots",
-    "sh_avg_kmh", "drop_kmh"} — drop_kmh a sebesség esése (pozitív =
-    lassul), None, ha nincs félidő-jel vagy kevés (félidőnként
-    POWER_FADE_MIN_SHOTS alatti) a mért lövés.
-    """
-    from .halftime import detect_halftime
-
-    empty = {"fh_shots": 0, "fh_avg_kmh": None, "sh_shots": 0,
-             "sh_avg_kmh": None, "drop_kmh": None}
-    out = {"home": dict(empty), "away": dict(empty)}
-    ht = detect_halftime(match)
-    if ht is None:
-        return out
-    shots = shot_speeds(match, config or TacticsConfig())["shots"]
-    for side in ("home", "away"):
-        rec = out[side]
-        fh = [s_["speed_kmh"] for s_ in shots
-              if s_["team"] == side and s_["t"] <= ht]
-        sh = [s_["speed_kmh"] for s_ in shots
-              if s_["team"] == side and s_["t"] > ht]
-        rec["fh_shots"] = len(fh)
-        rec["sh_shots"] = len(sh)
-        if len(fh) >= POWER_FADE_MIN_SHOTS \
-                and len(sh) >= POWER_FADE_MIN_SHOTS:
-            fh_avg = sum(fh) / len(fh)
-            sh_avg = sum(sh) / len(sh)
-            rec["fh_avg_kmh"] = round(fh_avg, 1)
-            rec["sh_avg_kmh"] = round(sh_avg, 1)
-            rec["drop_kmh"] = round(fh_avg - sh_avg, 1)
-    return out
-
-
 # Gólpassz-zónák: ennyi zónázott gólpassztól ítélünk, és e feletti
 # részarány jelenti, hogy egy vonalról jönnek az előkészítések.
 ASSIST_ZONE_MIN = 4

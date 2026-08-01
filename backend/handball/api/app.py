@@ -2873,11 +2873,6 @@ def create_app():
         except Exception:
             pass
         try:
-            from ..pipeline.event_detection import shot_power_fade
-            res["shot_power_fade"] = shot_power_fade(match)
-        except Exception:
-            pass
-        try:
             from ..pipeline.substitutions import substitution_blocks
             res["substitution_blocks"] = substitution_blocks(match)
         except Exception:
@@ -4051,9 +4046,6 @@ def create_app():
                 from ..pipeline.decisions import hold_time_players
                 _layer("hold_time_players",
                        lambda: hold_time_players(match))
-                from ..pipeline.event_detection import shot_power_fade
-                _layer("shot_power_fade",
-                       lambda: shot_power_fade(match))
                 from ..pipeline.substitutions import substitution_blocks
                 _layer("substitution_blocks",
                        lambda: substitution_blocks(match))

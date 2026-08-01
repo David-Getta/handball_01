@@ -1274,20 +1274,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   // Lövőerő-esés: marad-e erő a karjukban a 2. félidőre (félidőnként
-  // 4+ mért lövés, 6 km/h eltérés; a backend-kulccsal azonos
-  // küszöbök).
+  // 5+ mért lövés, 8% eltérés; a backend-kulccsal azonos küszöbök).
   String? _shotPowerFade(Map<String, dynamic> r) {
-    final fhN = ((r["spf_fh_shots"] as num?) ?? 0).toInt();
-    final shN = ((r["spf_sh_shots"] as num?) ?? 0).toInt();
-    if (fhN < 4 || shN < 4) return null;
-    final fh = ((r["spf_fh_sum_kmh"] as num?) ?? 0).toDouble() / fhN;
-    final sh = ((r["spf_sh_sum_kmh"] as num?) ?? 0).toDouble() / shN;
-    if (fh - sh >= 6.0) {
+    final fhN = ((r["ssf_fh_n"] as num?) ?? 0).toInt();
+    final shN = ((r["ssf_sh_n"] as num?) ?? 0).toInt();
+    if (fhN < 5 || shN < 5) return null;
+    final fh = ((r["ssf_fh_sum_kmh"] as num?) ?? 0).toDouble() / fhN;
+    final sh = ((r["ssf_sh_sum_kmh"] as num?) ?? 0).toDouble() / shN;
+    if (fh <= 0) return null;
+    if (100.0 * (fh - sh) / fh >= 8.0) {
       return "a 2. félidőre esik a lövéserejük: "
           "${fh.toStringAsFixed(0)} → ${sh.toStringAsFixed(0)} km/h · "
           "a hajrában kintebb jöhet a fal";
     }
-    if (sh - fh >= 6.0) {
+    if (100.0 * (sh - fh) / fh >= 8.0) {
       return "a 2. félidőre erősödik a lövésük: "
           "${fh.toStringAsFixed(0)} → ${sh.toStringAsFixed(0)} km/h · "
           "a kapusnak korábban kell indulnia, a fal a szöget zárja";

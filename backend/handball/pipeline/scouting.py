@@ -1139,10 +1139,6 @@ class ScoutingReport:
     sbl_waves: int = 0
     sbl_players: int = 0
     sbl_block_waves: int = 0
-    spf_fh_shots: int = 0
-    spf_fh_sum_kmh: float = 0.0
-    spf_sh_shots: int = 0
-    spf_sh_sum_kmh: float = 0.0
     fsw_labels: dict = field(default_factory=dict)
     fsw_attacks: int = 0
     fsw_pairs: int = 0
@@ -4240,23 +4236,6 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "védekező egységük: a célzott fárasztás működik, "
                 "vigyétek rá a játékot a kulcsembereikre.")
 
-    # Lövőerő-esés: marad-e erő a karjukban a második félidőre.
-    if rep.spf_fh_shots >= 4 and rep.spf_sh_shots >= 4:
-        _spf_fh = rep.spf_fh_sum_kmh / rep.spf_fh_shots
-        _spf_sh = rep.spf_sh_sum_kmh / rep.spf_sh_shots
-        if _spf_fh - _spf_sh >= 6.0:
-            keys.append(
-                f"A 2. félidőre esik a lövéserejük "
-                f"({_spf_fh:.0f} → {_spf_sh:.0f} km/h) — a hajrában "
-                "nyugodtan kintebb védekezhettek: az átlövésük már "
-                "nem üt át, a ziccerig kell kényszeríteni őket.")
-        elif _spf_sh - _spf_fh >= 6.0:
-            keys.append(
-                f"A 2. félidőre erősödik a lövésük "
-                f"({_spf_fh:.0f} → {_spf_sh:.0f} km/h) — a hajrában "
-                "a kapusnak korábban kell indulnia, a falnak pedig "
-                "a szöget kell zárnia, nem vakon blokkolnia.")
-
     # Labdatartás-idő: kinél áll meg náluk a labda.
     _htp_rows = [p for p in (rep.hold_players or []) if p["holds"] >= 5]
     _htp_holds = sum(p["holds"] for p in (rep.hold_players or []))
@@ -6761,14 +6740,6 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sbl_waves = sblrec["waves"]
         rep.sbl_players = sblrec["players"]
         rep.sbl_block_waves = sblrec["block_waves"]
-        from .event_detection import shot_power_fade as _spf
-        spfrec = _spf(match, config)[team.value]
-        rep.spf_fh_shots = spfrec["fh_shots"]
-        rep.spf_sh_shots = spfrec["sh_shots"]
-        rep.spf_fh_sum_kmh = round(
-            (spfrec["fh_avg_kmh"] or 0.0) * spfrec["fh_shots"], 1)
-        rep.spf_sh_sum_kmh = round(
-            (spfrec["sh_avg_kmh"] or 0.0) * spfrec["sh_shots"], 1)
         from .decisions import hold_time_players as _htp
         _hfps = match.meta.fps if match.meta.fps > 0 else 25.0
         rep.hold_fps = _hfps
@@ -10784,10 +10755,10 @@ def matchup_plan(own: "ScoutingReport",
 
     # 97) Az ő lövőerő-esésük × a ti mély falatok: a hajrában kintebb
     # lehet jönni.
-    if opp.spf_fh_shots >= 4 and opp.spf_sh_shots >= 4 \
+    if opp.ssf_fh_n >= 5 and opp.ssf_sh_n >= 5 \
             and own.defline_frames >= 100:
-        _fh97 = opp.spf_fh_sum_kmh / opp.spf_fh_shots
-        _sh97 = opp.spf_sh_sum_kmh / opp.spf_sh_shots
+        _fh97 = opp.ssf_fh_sum_kmh / opp.ssf_fh_n
+        _sh97 = opp.ssf_sh_sum_kmh / opp.ssf_sh_n
         _line97 = own.defline_sum_m / own.defline_frames
         if _fh97 - _sh97 >= 6.0 and _line97 <= 6.5:
             plan.append(
@@ -12323,10 +12294,6 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sbl_waves=sum(r.sbl_waves for r in reports),
         sbl_players=sum(r.sbl_players for r in reports),
         sbl_block_waves=sum(r.sbl_block_waves for r in reports),
-        spf_fh_shots=sum(r.spf_fh_shots for r in reports),
-        spf_fh_sum_kmh=round(sum(r.spf_fh_sum_kmh for r in reports), 1),
-        spf_sh_shots=sum(r.spf_sh_shots for r in reports),
-        spf_sh_sum_kmh=round(sum(r.spf_sh_sum_kmh for r in reports), 1),
         hold_players=_merge_hold_players(reports),
         hold_fps=(reports[0].hold_fps if reports else 25.0),
         fsw_labels=_merge_fsw_labels(reports),
