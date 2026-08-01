@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Csere-állás: vezetve forgatnak-e.
+    try:
+        from .substitutions import subs_by_score
+        sbs = subs_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sbs = sbs[side]
+            if rec_sbs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} csere-rendjéről kiderült: "
+                     f"{rec_sbs['verdict']} "
+                     f"({rec_sbs['lead_subs']} cserehullám vezetve, "
+                     f"{rec_sbs['rest_subs']} egyébként).")
+    except Exception:
+        pass
     # Előny-védekezés: leül-e a fal, amikor vezetnek.
     try:
         from .xg import defense_by_score

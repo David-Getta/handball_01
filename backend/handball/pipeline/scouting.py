@@ -649,6 +649,10 @@ class ScoutingReport:
     dbs_lead_xg: float = 0.0
     dbs_rest_shots: int = 0
     dbs_rest_xg: float = 0.0
+    sbs_lead_subs: int = 0
+    sbs_rest_subs: int = 0
+    sbs_lead_s: float = 0.0
+    sbs_rest_s: float = 0.0
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2414,6 +2418,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"vezetve {_dbs_lead:.2f}) — ellenük a korai "
                 "hátrány valódi baj: az elejét kell megnyerni, mert "
                 "vezetve sem nyílik ki a védekezésük.")
+
+    # Csere-állás: mit tesznek az előnnyel a padon.
+    if (rep.sbs_lead_s >= 120.0 and rep.sbs_rest_s >= 120.0
+            and rep.sbs_lead_subs + rep.sbs_rest_subs >= 4):
+        _sbs_lead = rep.sbs_lead_subs / rep.sbs_lead_s
+        _sbs_rest = rep.sbs_rest_subs / rep.sbs_rest_s
+        if _sbs_lead >= 1.5 * _sbs_rest and rep.sbs_lead_subs >= 3:
+            keys.append(
+                f"Vezetve forgatnak ({rep.sbs_lead_subs} cserehullám "
+                f"előnyben, {rep.sbs_rest_subs} egyébként) — a "
+                "szoros meccs a fegyver ellenük: amíg nincs meg az "
+                "előnyük, nem mernek pihentetni, és a kezdősoruk a "
+                "hajrára elfárad.")
+        elif (_sbs_lead <= 0.5 * _sbs_rest
+              and rep.sbs_rest_subs >= 3):
+            keys.append(
+                f"Vezetve sem nyúlnak a sorhoz (csak "
+                f"{rep.sbs_lead_subs} cserehullám előnyben) — a "
+                "fáradó kulcsemberük végig fent marad: a meccs "
+                "végén őt kell megtámadni.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6243,6 +6267,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.dbs_lead_xg = dbsrec["leading"]["xg_sum"]
         rep.dbs_rest_shots = dbsrec["rest"]["shots"]
         rep.dbs_rest_xg = dbsrec["rest"]["xg_sum"]
+        from .substitutions import subs_by_score as _sbs
+        sbsrec = _sbs(match, config)[team.value]
+        rep.sbs_lead_subs = sbsrec["lead_subs"]
+        rep.sbs_rest_subs = sbsrec["rest_subs"]
+        rep.sbs_lead_s = sbsrec["lead_s"]
+        rep.sbs_rest_s = sbsrec["rest_s"]
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8644,6 +8674,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 213) Az ő csak-előnyben-forgató padjuk × a ti szoros-meccs
+    # rutinotok: tartsd szorosan, és a kezdősoruk elfárad.
+    if (opp.sbs_lead_s >= 120.0 and opp.sbs_rest_s >= 120.0
+            and opp.sbs_lead_subs + opp.sbs_rest_subs >= 4
+            and own.cg_wins + own.cg_losses >= 2):
+        _sbs_lead213 = opp.sbs_lead_subs / opp.sbs_lead_s
+        _sbs_rest213 = opp.sbs_rest_subs / opp.sbs_rest_s
+        if (_sbs_lead213 >= 1.5 * _sbs_rest213
+                and opp.sbs_lead_subs >= 3
+                and own.cg_wins > own.cg_losses):
+            plan.append(
+                f"Vezetve forgatnak ({opp.sbs_lead_subs} cserehullám "
+                f"előnyben, {opp.sbs_rest_subs} egyébként), ti pedig "
+                f"jók vagytok a szoros meccsekben ({own.cg_wins} "
+                f"szoros győzelem, {own.cg_losses} vereség) — "
+                "tartsátok egy-két gólon belül a meccset: amíg "
+                "szoros, nem mernek pihentetni, a kezdősoruk a "
+                "hajrára elfárad, és az a ti terepetek.")
 
     # 212) Az ő előnyben leülő faluk × a ti kitartó, lövésig vitt
     # támadásaitok: hátrányból is visszajön a meccs.
@@ -12013,6 +12062,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         dbs_lead_xg=round(sum(r.dbs_lead_xg for r in reports), 2),
         dbs_rest_shots=sum(r.dbs_rest_shots for r in reports),
         dbs_rest_xg=round(sum(r.dbs_rest_xg for r in reports), 2),
+        sbs_lead_subs=sum(r.sbs_lead_subs for r in reports),
+        sbs_rest_subs=sum(r.sbs_rest_subs for r in reports),
+        sbs_lead_s=round(sum(r.sbs_lead_s for r in reports), 1),
+        sbs_rest_s=round(sum(r.sbs_rest_s for r in reports), 1),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),

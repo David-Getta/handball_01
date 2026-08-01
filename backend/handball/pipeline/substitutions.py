@@ -388,3 +388,87 @@ def sub_gaps(match: Match,
             rec["verdict"] = "feszes a cseréjük"
         out[side] = rec
     return out
+
+
+# Csere-állás: mindkét állás-vödörben legalább ennyi másodperc és
+# összesen ennyi cserehullám kell az ítélethez; a vezetés közbeni
+# csere-ütem ekkora szorzója a forgatás, ekkora hányada a nem nyúlnak
+# hozzá jele.
+SBS_MIN_STATE_S = 120.0
+SBS_MIN_SUBS = 4
+SBS_ROTATE_RATIO = 1.5
+SBS_HOLD_RATIO = 0.5
+
+
+def subs_by_score(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-állás: VEZETVE FORGATNAK-E.
+
+    A csere-kiváltók azt mérik, kapott gólra cserélnek-e — ez azt,
+    mit tesznek az előnnyel: a cserehullámok ütemét (hullám/perc)
+    hasonlítjuk össze a vezetésben és az összes többi állapotban
+    töltött idő között. Van, aki vezetve pihentet és a padot
+    járatja, és van, aki előnyben sem nyúl a kezdősorhoz.
+
+    Edzőileg: a vezetve forgató csapat ellen a szoros meccs a
+    fegyver — amíg nincs meg az előnyük, nem mernek pihentetni, és a
+    kezdősoruk a hajrára elfárad; aki előnyben sem cserél, annál a
+    fáradó kulcsember végig fent van — a meccs végén őt kell
+    megtámadni.
+
+    Visszatérés csapatonként: {"lead_subs", "rest_subs", "lead_s",
+    "rest_s", "verdict"} — a verdict None, ha bármelyik állapotban
+    SBS_MIN_STATE_S-nél kevesebb idő telt, vagy SBS_MIN_SUBS-nál
+    kevesebb a cserehullám; a verdict "vezetve forgatnak" /
+    "vezetve sem nyúlnak a sorhoz" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    goals = sorted((e.t, e.team.value)
+                   for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    def _state(side, t):
+        own = sum(1 for (gt, tm) in goals if gt < t and tm == side)
+        opp = sum(1 for (gt, tm) in goals if gt < t and tm != side)
+        return "lead" if own > opp else "rest"
+
+    out: dict = {}
+    durs = {side: {"lead": 0.0, "rest": 0.0}
+            for side in ("home", "away")}
+    if match.frames:
+        # A gól-események közti szakaszokon az állás állandó — elég a
+        # szakasz-határokon számolni.
+        t0, t1 = match.frames[0].t, match.frames[-1].t
+        marks = [t0] + [gt for (gt, _) in goals
+                        if t0 < gt < t1] + [t1]
+        for a, b in zip(marks, marks[1:]):
+            span_s = (b - a) / fps
+            for side in ("home", "away"):
+                durs[side][_state(side, a + 1)] += span_s
+
+    waves = detect_substitutions(match, config)
+    for side in ("home", "away"):
+        lead_subs = sum(1 for w in waves if w["team"] == side
+                        and _state(side, w["t"]) == "lead")
+        rest_subs = sum(1 for w in waves if w["team"] == side
+                        and _state(side, w["t"]) == "rest")
+        rec = {"lead_subs": lead_subs, "rest_subs": rest_subs,
+               "lead_s": round(durs[side]["lead"], 1),
+               "rest_s": round(durs[side]["rest"], 1),
+               "verdict": None}
+        if (rec["lead_s"] >= SBS_MIN_STATE_S
+                and rec["rest_s"] >= SBS_MIN_STATE_S
+                and lead_subs + rest_subs >= SBS_MIN_SUBS):
+            lead_rate = lead_subs / rec["lead_s"]
+            rest_rate = rest_subs / rec["rest_s"]
+            if lead_rate >= SBS_ROTATE_RATIO * rest_rate \
+                    and lead_subs >= 3:
+                rec["verdict"] = "vezetve forgatnak"
+            elif lead_rate <= SBS_HOLD_RATIO * rest_rate \
+                    and rest_subs >= 3:
+                rec["verdict"] = "vezetve sem nyúlnak a sorhoz"
+        out[side] = rec
+    return out

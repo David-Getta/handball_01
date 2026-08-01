@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Csere-állás**: VEZETVE FORGATNAK-E. A csere-kiváltók azt mérik,
+  kapott gólra cserélnek-e — ez azt, mit tesznek az előnnyel: a
+  cserehullámok ütemét (hullám/perc) vetjük össze a vezetésben és a
+  többi állapotban töltött idő között (vödrönként 120+ mp, 4+
+  hullám; 1,5-szeres ütem a forgatás, fele annyi a befagyott sor
+  jele). A vezetve forgató ellen a szoros meccs a fegyver — amíg
+  nincs meg az előnyük, nem mernek pihentetni; aki előnyben sem
+  cserél, annál a fáradó kulcsembert kell a végén megtámadni. Egy
+  réteg, sok felület: `subs_by_score` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (vödrönkénti
+  hullám-darabszám + másodperc-összeg, két edzői kulcs + csempe),
+  213. meccsterv-szabály (az ő csak-előnyben-forgató padjuk × a ti
+  szoros-meccs rutinotok), 234. edzés-szabály (a pad bizalma:
+  kihirdetett csere-rend, a pad külön pontversenye).
+
 - **Előny-védekezés**: LEÜL-E A FALUK, amikor vezetnek. A kapott
   helyzetek minősége a teljes meccset nézi — ez állás szerint: a
   csapat ellen leadott lövések átlagos xG-je vezetés közben, szemben

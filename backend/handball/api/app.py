@@ -3459,6 +3459,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.substitutions import subs_by_score
+            res["subs_by_score"] = subs_by_score(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import defensive_line_height
             res["defensive_line_height"] = defensive_line_height(match)
         except Exception:
@@ -4366,6 +4371,9 @@ def create_app():
                 from ..pipeline.xg import defense_by_score
                 _layer("defense_by_score",
                        lambda: defense_by_score(match))
+                from ..pipeline.substitutions import subs_by_score
+                _layer("subs_by_score",
+                       lambda: subs_by_score(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners

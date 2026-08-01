@@ -366,3 +366,72 @@ def test_sub_gaps_long_shortage_is_not_a_sub_gap():
 
     rec = sub_gaps(_sbg_match([60.0]))["home"]
     assert rec["gap_s"] == 0.0
+
+
+# ---- Csere-állás (vezetve forgatnak-e) --------------------------------------
+
+def _sbs_match(rotate=True, n_lead=5, n_rest=1, fps=25.0):
+    """Hazai gól után vezetésben `n_lead`, előtte (döntetlennél)
+    `n_rest` hazai cserehullám — a vezetés közbeni csere-ütem így
+    összevethető a többivel."""
+    goal_t = 3000
+    rest_ts = [600 + k * 1200 for k in range(n_rest)]
+    lead_ts = [goal_t + 400 + k * 500 for k in range(n_lead)]
+    if not rotate:
+        rest_ts = [600 + k * 500 for k in range(n_lead)]
+        lead_ts = [goal_t + 800 + k * 1200 for k in range(n_rest)]
+    plan = []
+    tid = 300
+    for t_wave in rest_ts + lead_ts:
+        plan.append((t_wave, tid, tid + 1))
+        tid += 2
+    total = 6100
+
+    frames = []
+    for t in range(total):
+        players = [_pl(1, Team.HOME, 25.0, 10.0)]
+        for (t_wave, out_id, in_id) in plan:
+            if t_wave - 150 <= t <= t_wave:
+                frac = (t - (t_wave - 150)) / 150.0
+                players.append(_pl(out_id, Team.HOME,
+                                   28.0 + (20.0 - 28.0) * frac,
+                                   8.0 + (1.0 - 8.0) * frac))
+            if t_wave + 10 <= t <= t_wave + 150:
+                frac = (t - (t_wave + 10)) / 140.0
+                players.append(_pl(in_id, Team.HOME,
+                                   20.0 + 10.0 * frac,
+                                   1.0 + 11.0 * frac))
+        # Hazai gól: a labda a +x kapuba száguld.
+        if goal_t <= t <= goal_t + 6:
+            ball = Ball(x=min(40.0, 33.6 + (t - goal_t)), y=10.0,
+                        confidence=1.0)
+        else:
+            ball = Ball(x=22.0, y=10.0, confidence=1.0)
+        frames.append(Frame(t=t, players=players, ball=ball))
+    return Match(_meta(fps), frames)
+
+
+def test_subs_by_score_flags_the_rotating_leader():
+    """Vezetésben sűrű, döntetlennél ritka csere → vezetve forgatnak."""
+    from handball.pipeline.substitutions import subs_by_score
+
+    rec = subs_by_score(_sbs_match(True))["home"]
+    assert rec["lead_subs"] >= 3
+    assert rec["verdict"] == "vezetve forgatnak"
+
+
+def test_subs_by_score_flags_the_frozen_lineup():
+    """Döntetlennél sűrű, vezetve ritka csere → vezetve sem nyúlnak a
+    sorhoz."""
+    from handball.pipeline.substitutions import subs_by_score
+
+    rec = subs_by_score(_sbs_match(False))["home"]
+    assert rec["verdict"] == "vezetve sem nyúlnak a sorhoz"
+
+
+def test_subs_by_score_needs_enough_subs():
+    """Kevés (4-nél kevesebb) cserehullámnál nincs ítélet."""
+    from handball.pipeline.substitutions import subs_by_score
+
+    rec = subs_by_score(_sbs_match(True, n_lead=2, n_rest=1))["home"]
+    assert rec["verdict"] is None

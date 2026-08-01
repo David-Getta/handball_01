@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 234) Csere-állás: ha vezetve sem pihentetünk, a pad bizalma a
+    # téma — a kulcsember nem bírja végig a szezont.
+    try:
+        from .substitutions import subs_by_score
+        sbs234 = subs_by_score(match, config)
+        for side in ("home", "away"):
+            rec234 = sbs234[side]
+            if rec234["verdict"] != "vezetve sem nyúlnak a sorhoz":
+                continue
+            add(side, "vedekezes", "A pad bizalma",
+                f"vezetve sem cserélünk (csak {rec234['lead_subs']} "
+                f"cserehullám előnyben, {rec234['rest_subs']} "
+                "egyébként) — a kulcsembereink előnyben is végig "
+                "fent vannak, a hajrára és a szezonra elfogynak",
+                "pad-bizalom építése: az edzésmeccsen előre "
+                "kihirdetett csere-rend (minden 2 gólos előnynél "
+                "KÖTELEZŐ hullám), és a becserélt sor külön "
+                "pontversenye — a pihentetés alatt hozott gólok "
+                "dupla pontot érnek a padnak")
+    except Exception:
+        pass
     # 233) Előny-védekezés: ha vezetve leül a falunk, az előny
     # megtartása a téma — a fal nem pihenhet.
     try:

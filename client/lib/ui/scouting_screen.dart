@@ -1637,6 +1637,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Csere-állás: vezetve forgatnak-e (vödrönként 120+ mp és 4+
+  // hullám; 1,5x ütem forgatás, 0,5x alatt befagyott sor — a
+  // backend-kulccsal azonos küszöbök).
+  String? _subsByScore(Map<String, dynamic> r) {
+    final ls = ((r["sbs_lead_subs"] as num?) ?? 0).toInt();
+    final rs = ((r["sbs_rest_subs"] as num?) ?? 0).toInt();
+    final lSec = ((r["sbs_lead_s"] as num?) ?? 0).toDouble();
+    final rSec = ((r["sbs_rest_s"] as num?) ?? 0).toDouble();
+    if (lSec < 120.0 || rSec < 120.0 || ls + rs < 4) return null;
+    final leadRate = ls / lSec;
+    final restRate = rs / rSec;
+    if (leadRate >= 1.5 * restRate && ls >= 3) {
+      return "vezetve forgatnak ($ls cserehullám előnyben, $rs "
+          "egyébként) · tartsd szorosan a meccset: addig nem mernek "
+          "pihentetni, a kezdősoruk elfárad";
+    }
+    if (leadRate <= 0.5 * restRate && rs >= 3) {
+      return "vezetve sem nyúlnak a sorhoz (csak $ls hullám "
+          "előnyben) · a fáradó kulcsemberük végig fent van — a "
+          "végén őt támadd";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5578,6 +5602,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
         ["Előny-védekezés", _defenseByScore(r)!],
+      if (_subsByScore(r) != null)
+        ["Csere-állás", _subsByScore(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
