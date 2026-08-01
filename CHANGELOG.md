@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Réteg-regisztry füstteszt**: egyetlen elemzés-réteg sem bukhat
+  el némán. A meccs-csomag `_layer` segédje és az /attacks végpont
+  `try/except` blokkjai szándékosan lenyelik a hibát (egy réteg nem
+  viheti el a többit) — az ára eddig az volt, hogy egy elromló motor
+  észrevétlenül tűnt el a kimenetből. Az új teszt a forrásból olvassa
+  ki az összes regisztrált réteg nevét (önfrissülő: új rétegnél
+  semmit nem kell hozzáírni), lefuttat egy szimulált meccset a teljes
+  csomag-exporton és az /attacks végponton, és követeli, hogy mind a
+  246 csomag-réteg és mind a ~190 /attacks-kulcs ott legyen — a
+  félidő-feltételes kulcsok kivételével. Plusz: két azonos nevű
+  regisztráció (néma felülírás) is tesztet buktat.
+
 - **Keresztjáték**: MENNYIT KERESZTEZNEK a hátsó sorban. Az álló
   támadók rétege az egyéni mozgást méri — ez a szerkezetet: felállt
   támadásonként számoljuk a hátsó sor oldalcseréit (8+ támadás; 1,0
