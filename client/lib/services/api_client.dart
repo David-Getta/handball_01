@@ -620,13 +620,42 @@ class ApiClient {
   /// A tárolt meccsek listája (könyvtár/áttekintő nézethez). Minden elem összegző
   /// szótár: match_id, home_team, away_team, num_frames, fps, duration_s.
   Future<List<Map<String, dynamic>>> listMatches() async {
-    final resp = await http.get(Uri.parse("$baseUrl/matches"))
-        .timeout(const Duration(seconds: 4));
-    if (resp.statusCode != 200) {
-      throw Exception("Nem sikerült lekérni a meccslistát: HTTP ${resp.statusCode}");
+    // Türelmes betöltés: az app indulásakor a beépített motor még
+    // bootolhat (első indításnál a rendszer át is vizsgálja — akár egy
+    // perc). Kapcsolat-hibánál ezért nem azonnal hibázunk, hanem
+    // másodpercenként újrapróbáljuk, és közben a motor-indító által
+    // frissített alapértelmezett címet is figyeljük (tartalék port).
+    final deadline = DateTime.now().add(const Duration(seconds: 75));
+    Object? lastError;
+    while (true) {
+      for (final base in {baseUrl, ApiClient.defaultBaseUrl}) {
+        try {
+          final resp = await http.get(Uri.parse("$base/matches"))
+              .timeout(const Duration(seconds: 4));
+          if (resp.statusCode != 200) {
+            throw Exception(
+                "Nem sikerült lekérni a meccslistát: HTTP ${resp.statusCode}");
+          }
+          final json =
+              jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
+          return (json["matches"] as List).cast<Map<String, dynamic>>();
+        } on SocketException catch (e) {
+          lastError = e;
+        } on http.ClientException catch (e) {
+          lastError = e;
+        }
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        throw Exception(
+            "A motor (elemző szolgáltatás) nem válaszol. Ha az app most "
+            "indult, várj egy percet és próbáld újra — első indításkor a "
+            "rendszer átvizsgálja a motort. Ha nem jön helyre, nézd meg a "
+            "naplót: Library/Application Support/SportMachine/"
+            "engine-app.log (Windowson: AppData/Local/SportMachine). "
+            "Részlet: $lastError");
+      }
+      await Future.delayed(const Duration(seconds: 1));
     }
-    final json = jsonDecode(utf8.decode(resp.bodyBytes)) as Map<String, dynamic>;
-    return (json["matches"] as List).cast<Map<String, dynamic>>();
   }
 
   /// ÚJRA-feldolgozás a mentett beállításokkal

@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Türelmes meccs-könyvtár betöltés**: az app indulásakor a
+  beépített motor még bootolhat (első indításnál a rendszer át is
+  vizsgálja — akár egy perc), és ha a felhasználó közben nyitotta
+  meg pl. az Ellenfél-felderítést, nyers "Connection refused" hibát
+  kapott. A meccs-lista lekérése mostantól kapcsolat-hibánál 75
+  másodpercig másodpercenként újrapróbálkozik (közben a tartalék
+  portra költöző motort is követi), és ha végleg nem megy, emberi
+  nyelvű hibaüzenetet ad a motor-napló pontos helyével. Mind az öt
+  könyvtár-olvasó képernyő (kezdőlap, felderítés, élő, fejlődés,
+  figura-tervező) egyszerre gyógyult.
+
 - **Kiadás-javítás + kliens-helper őr**: a scouting-képernyőn két
   különböző csempe-helper véletlenül ugyanazt a `_gkOutlet` nevet
   kapta (indítás-sebesség és indítás-hossz) — a Flutter build ezen
