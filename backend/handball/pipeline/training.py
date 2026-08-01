@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 228) Felhozatal-posztok: ha egyetlen posztra épül a
+    # felhozatalunk, a második felhozatal-út beépítése a téma.
+    try:
+        from .goalkeeper import outlet_target_roles
+        otr228 = outlet_target_roles(match, config)
+        for side in ("home", "away"):
+            rec228 = otr228[side]
+            top228 = rec228["top"]
+            if top228 is None or top228["share_pct"] < 60.0:
+                continue
+            add(side, "tamadas", "Második felhozatal-út",
+                f"a felhozatalunk {top228['share_pct']:.0f}%-a a(z) "
+                f"{top228['poszt']} posztra megy ({top228['count']}/"
+                f"{rec228['outlets']} indítás-célpont) — ha őt "
+                "letámadják, az egész felhozatalunk megakad",
+                "második felhozatal-út: kidobás-variációk edzése "
+                "letámadó védők ellen — a kapus két kötelező "
+                "célpontot kap, és a nyomás alatt a MÁSIK oldalra "
+                "indít; az edzésmeccsen a letámadás alatt is tiszta "
+                "felhozatal pontot ér, az eladott indítás mínuszt")
+    except Exception:
+        pass
     # 227) Falba lövő posztok: ha egy posztunk rendre a falba lő, a
     # lövés-előkészítés a téma, nem a lövő ereje.
     try:

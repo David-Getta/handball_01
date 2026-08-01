@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Felhozatal-posztok: melyik posztra hozzák fel a labdát.
+    try:
+        from .goalkeeper import outlet_target_roles
+        otr = outlet_target_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            top_otr = otr[side]["top"]
+            if top_otr is None:
+                continue
+            body += (f" A(z) {name} felhozatala jellemzően a(z) "
+                     f"{top_otr['poszt']} posztra épül "
+                     f"({top_otr['count']}/{otr[side]['outlets']} "
+                     "indítás-célpont).")
+    except Exception:
+        pass
     # Falba lövő posztok: melyik poszt lő rendre a falba.
     try:
         from .defense import blocked_by_role

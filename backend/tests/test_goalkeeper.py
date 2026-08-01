@@ -1617,3 +1617,67 @@ def test_gk_rebound_control_needs_enough_saves():
 
     rec = gk_rebound_control(_grc_match([True, True]))["away"]
     assert rec["saves"] == 2 and rec["verdict"] is None
+
+
+def _otr_match(n_outlets=4):
+    """Felhozatal-sorozat: a 12-es away szélső (poszt-minta a szélső
+    sávban) várja a kapus-indításokat a felezőnél."""
+    from handball.models.tracking import Ball
+
+    def _pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    t = 0
+    for _ in range(150):    # poszt-minta: a 12-es a szélső sávban
+        frames.append(Frame(
+            t=t, players=[_pl(12, Team.AWAY, 10.0, 3.0),
+                          _pl(30, Team.AWAY, 39.0, 10.0, role="kapus")],
+            ball=Ball(x=10.0, y=3.0, confidence=1.0)))
+        t += 1
+    for _ in range(20):     # labda nélküli átvezetés (nincs ál-lövés)
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(n_outlets):
+        for i in range(8):  # hazai lövés, a kapus fogja
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 37.0, 10.0),
+                              _pl(30, Team.AWAY, 39.0, 10.0,
+                                  role="kapus")],
+                ball=Ball(x=min(37.4 + 0.6 * i, 38.8), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for j in range(60):  # az indítás átér a felezőn a 12-eshez
+            frames.append(Frame(
+                t=t, players=[_pl(30, Team.AWAY, 39.0, 10.0,
+                                  role="kapus"),
+                              _pl(12, Team.AWAY, 18.0, 10.0)],
+                ball=Ball(x=max(38.8 - 0.4 * j, 16.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):  # szünet a szakaszok közt
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return _match(frames)
+
+
+def test_outlet_target_roles_points_to_the_wing():
+    """A szélső-posztú célpontra menő indítások → a felhozatal a
+    szélsőre épül."""
+    from handball.pipeline.goalkeeper import outlet_target_roles
+
+    rec = outlet_target_roles(_otr_match())["away"]
+    assert rec["outlets"] >= 4
+    assert rec["top"] is not None and rec["top"]["poszt"] == "szélső"
+
+
+def test_outlet_target_roles_needs_enough_outlets():
+    """Kevés (4-nél kevesebb) poszthoz kötött célpontnál nincs
+    kiemelt poszt."""
+    from handball.pipeline.goalkeeper import outlet_target_roles
+
+    rec = outlet_target_roles(_otr_match(n_outlets=3))["away"]
+    assert rec["top"] is None

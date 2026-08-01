@@ -1502,6 +1502,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "nem kell kilépni";
   }
 
+  // Felhozatal-posztok: melyik posztra hozzák fel a labdát (4+
+  // indítás-célpont; 50%+ részarány, holtverseny nélkül — a
+  // backend-kulccsal azonos küszöbök).
+  String? _outletTargetRoles(Map<String, dynamic> r) {
+    final outlets = ((r["otr_outlets"] as num?) ?? 0).toInt();
+    final roles = (r["otr_roles"] as Map?) ?? {};
+    if (outlets < 4 || roles.isEmpty) return null;
+    final entries = roles.entries.toList()
+      ..sort((a, b) =>
+          ((b.value as num?) ?? 0).compareTo((a.value as num?) ?? 0));
+    final top = entries.first;
+    final n = ((top.value as num?) ?? 0).toInt();
+    final tie = entries.length > 1 &&
+        ((entries[1].value as num?) ?? 0).toInt() == n;
+    if (tie || 100.0 * n / outlets < 50.0) return null;
+    return "a felhozataluk a(z) ${top.key} posztra épül ($n/$outlets "
+        "indítás-célpont) · a letámadásnál őt fogd: nála akad meg a "
+        "felhozatal";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5431,6 +5451,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kiállítás-posztok", _suspEarnerRoles(r)!],
       if (_blockedByRole(r) != null)
         ["Falba lövő posztok", _blockedByRole(r)!],
+      if (_outletTargetRoles(r) != null)
+        ["Felhozatal-posztok", _outletTargetRoles(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

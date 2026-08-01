@@ -1863,3 +1863,60 @@ def gk_rebound_control(match: Match, config=None) -> dict:
                 rec["verdict"] = "kiüti a labdát a kapusuk"
         out[side] = rec
     return out
+
+
+# Felhozatal-posztok: ennyi poszthoz kötött indítás-célpont kell az
+# ítélethez, és e feletti részarány emeli ki a posztot.
+OTR_MIN_OUTLETS = 4
+OTR_SHARE = 50.0
+
+
+def outlet_target_roles(match: Match, config=None) -> dict:
+    """Felhozatal-posztok: MELYIK POSZTRA hozzák fel a labdát.
+
+    A kapus-indítás célpontjai (outlet_speed targets) a nevet adják —
+    ez a posztot: az indítás-célpontokat a poszt-becsléshez kötjük,
+    így akkor is látszik, kire épül a felhozataluk, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg: ha a felhozataluk az irányítón megy át, a letámadásnál
+    őt kell fogni — nála akad meg az egész felhozatal; ha a
+    szélsőjükre megy a hosszú indítás, a hosszú sáv elvágása és a
+    szélső korai felvétele a recept.
+
+    Visszatérés csapatonként (az INDÍTÓ csapaté): {"outlets"
+    (poszthoz kötött célpont-átvételek), "roles": {poszt: darab},
+    "top": {"poszt", "count", "share_pct"} | None} — a "top" akkor
+    van kitöltve, ha legalább OTR_MIN_OUTLETS poszthoz kötött
+    célpont-átvétel van, a vezető poszt részaránya eléri az
+    OTR_SHARE-t, és nincs holtverseny.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    speed = outlet_speed(match, config)
+    out: dict = {side: {"outlets": 0, "roles": {}, "top": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in speed[side]["targets"]:
+            info = roles.get(side, {}).get(row["player_id"])
+            if info is None:
+                continue
+            rec["outlets"] += row["n"]
+            poszt = info["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["n"])
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        items = list(rec["roles"].items())
+        if rec["outlets"] >= OTR_MIN_OUTLETS and items:
+            poszt, n = items[0]
+            share = 100.0 * n / rec["outlets"]
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= OTR_SHARE and not tie:
+                rec["top"] = {"poszt": poszt, "count": n,
+                              "share_pct": round(share, 1)}
+    return out

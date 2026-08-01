@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Felhozatal-posztok**: MELYIK POSZTRA hozzák fel a labdát. A
+  kapus-indítás célpontjai a nevet adják — ez a posztot: az
+  indítás-célpontokat a poszt-becsléshez kötjük (4+ célpont; 50%+
+  részarány, holtverseny nélkül), így akkor is látszik, kire épül a
+  felhozataluk, ha a nevek cserélődnek. A letámadásnál a kulcs-poszt
+  fogása az egész felhozatalt megakasztja — a kapus
+  kényszer-hosszúja elfogható; a saját egy-utas felhozatalunknak
+  második út kell. Egy réteg, sok felület: `outlet_target_roles`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (poszt szerinti célpont-darabszámok, edzői
+  kulcs + csempe), 207. meccsterv-szabály (az ő egy-posztos
+  felhozataluk × a ti passzsáv-záró védekezésetek), 228.
+  edzés-szabály (második felhozatal-út letámadás ellen).
+
 - **Falba lövő posztok**: MELYIK POSZTJUK lő rendre a falba. A
   lefogott lövők a nevet adják — ez a posztot: a lefogott lövőket a
   poszt-becsléshez kötjük (4+ lefogott lövés; 50%+ részarány,

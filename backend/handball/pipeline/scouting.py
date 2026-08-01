@@ -631,6 +631,8 @@ class ScoutingReport:
     sur_roles: dict = field(default_factory=dict)
     bbr_blocked: int = 0
     bbr_roles: dict = field(default_factory=dict)
+    otr_outlets: int = 0
+    otr_roles: dict = field(default_factory=dict)
     # Csere-lyukaik: csere közbeni öt fős játék másodpercei — összeg,
     # meccsek közt pontosan összegződik.
     sbg_gap_s: float = 0.0
@@ -2301,6 +2303,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"jönnek ({_bbr_n}/{rep.bbr_blocked} lefogott lövés) "
                 "— ott a fal tartása elég: nem kell kilépni, a "
                 "blokk magától termel.")
+
+    # Felhozatal-posztok: kit kell fogni a letámadásnál.
+    if rep.otr_outlets >= 4 and rep.otr_roles:
+        _otr_poszt, _otr_n = next(iter(rep.otr_roles.items()))
+        _otr_vals = list(rep.otr_roles.values())
+        _otr_tie = len(_otr_vals) > 1 and _otr_vals[1] == _otr_n
+        if 100.0 * _otr_n / rep.otr_outlets >= 50.0 and not _otr_tie:
+            keys.append(
+                f"A felhozataluk a(z) {_otr_poszt} posztra épül "
+                f"({_otr_n}/{rep.otr_outlets} indítás-célpont) — a "
+                "letámadásnál őt kell fogni: nála akad meg az egész "
+                "felhozatal, a kapus kényszer-hosszút dob.")
 
     # Csere-lyukak: a cseréjük pillanata támadási jel-e.
     if rep.sbg_gap_s >= 20.0:
@@ -6093,6 +6107,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         bbrrec = _bbr(match, config)[team.value]
         rep.bbr_blocked = bbrrec["blocked"]
         rep.bbr_roles = dict(bbrrec["roles"])
+        from .goalkeeper import outlet_target_roles as _otr
+        otrrec = _otr(match, config)[team.value]
+        rep.otr_outlets = otrrec["outlets"]
+        rep.otr_roles = dict(otrrec["roles"])
         from .substitutions import sub_gaps as _sbg
         rep.sbg_gap_s = _sbg(match, config)[team.value]["gap_s"]
         from .event_detection import assist_ranges as _asr
@@ -8494,6 +8512,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 207) Az ő egy-posztos felhozataluk × a ti passzsáv-záró
+    # védekezésetek: a letámadás a kulcs-embert fogja.
+    if (opp.otr_outlets >= 4 and opp.otr_roles
+            and own.stt_steals >= 6):
+        _otr_poszt207, _otr_n207 = next(iter(opp.otr_roles.items()))
+        _otr_vals207 = list(opp.otr_roles.values())
+        _otr_tie207 = (len(_otr_vals207) > 1
+                       and _otr_vals207[1] == _otr_n207)
+        _stt207 = 100.0 * own.stt_int / max(1, own.stt_steals)
+        if (100.0 * _otr_n207 / opp.otr_outlets >= 50.0
+                and not _otr_tie207 and _stt207 >= 60.0):
+            plan.append(
+                f"A felhozataluk a(z) {_otr_poszt207} posztra épül "
+                f"({_otr_n207}/{opp.otr_outlets} indítás-célpont), "
+                f"ti pedig a passzsávokat zárjátok (a szerzéseitek "
+                f"{_stt207:.0f}%-a elfogás) — a letámadásnál a(z) "
+                f"{_otr_poszt207} sávját vágjátok el: a kapus "
+                "kényszer-hosszúja a tiétek, és onnan kontra jár.")
 
     # 206) Az ő falba lövő posztjuk × a ti termő blokkjaitok: ott a
     # fal tartása maga a védekezés.
@@ -11737,6 +11774,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         bbr_blocked=sum(r.bbr_blocked for r in reports),
         bbr_roles=_merge_role_counts(
             [r.bbr_roles for r in reports]),
+        otr_outlets=sum(r.otr_outlets for r in reports),
+        otr_roles=_merge_role_counts(
+            [r.otr_roles for r in reports]),
         sbg_gap_s=sum(r.sbg_gap_s for r in reports),
         asr_assisted=sum(r.asr_assisted for r in reports),
         asr_long=sum(r.asr_long for r in reports),
