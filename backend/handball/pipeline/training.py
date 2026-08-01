@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 224) Lefogott lövők: ha egy emberünk lövését rendre elviszi a
+    # fal, lövő-variáció kell neki, nem több ugyanolyan lövés.
+    try:
+        from .defense import blocked_shooters
+        bsh224 = blocked_shooters(match, config)
+        for side in ("home", "away"):
+            top224 = bsh224[side]["top"]
+            if top224 is None:
+                continue
+            mez224 = (f"{top224['jersey']} mezszámú"
+                      if top224["jersey"] is not None
+                      else f"{top224['player_id']} azonosítójú")
+            add(side, "tamadas", "Lövő-variációk",
+                f"a(z) {mez224} játékosunk lövését rendre elviszi a "
+                f"fal ({top224['blocked']}/{bsh224[side]['blocked']} "
+                "lefogott lövés az övé) — a védők már olvassák az "
+                "egyetlen lövő-mozdulatát",
+                "lövő-variáció gyakorlat a kiemelt lövőnek: "
+                "lövőcsel után áttolt lövés, elhajlás és bevetődés "
+                "váltogatva élő fal ellen — az edzésmeccsen a "
+                "blokkolt lövése mínusz pont, a csel utáni "
+                "gólja dupla pont")
+    except Exception:
+        pass
     # 223) Kontra-elszökés: ha mindig együtt futunk fel, az elszökő
     # ember beépítése a téma.
     try:

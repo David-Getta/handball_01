@@ -3076,3 +3076,84 @@ def block_recoveries(match, config=None) -> dict:
                 rec["verdict"] = "a blokkjaik visszahullanak"
         out[side] = rec
     return out
+
+
+# Lefogott lövők: a blokk előtt legfeljebb ennyi másodperccel korábbi
+# labdabirtokos számít a lefogott lövőnek; ennyi lefogott lövés kell
+# az ítélethez, és e feletti részarány emeli ki az egy embert.
+BSH_LOOKBACK_S = 1.0
+BSH_MIN_BLOCKED = 4
+BSH_TOP_SHARE = 50.0
+
+
+def blocked_shooters(match, config=None) -> dict:
+    """Lefogott lövők: KINEK A LÖVÉSÉT viszi el rendre a fal.
+
+    A falba lövés (blocked_shot_rate) a csapat-tünetet méri — ez a
+    személyt: minden blokk-eseménynél visszakeressük, ki volt a lövő
+    (a blokk előtti utolsó támadó labdabirtokos), és játékosonként
+    számoljuk, kinek a lövése akadt el.
+
+    Edzőileg kétirányú: az ellenfél kiemelt lefogott lövője ellen
+    MEGÉRI falban maradni — az ő lövését a fal elviszi, nem kell rá
+    kifutni; a saját sokat lefogott lövőnknek pedig lövő-variáció
+    kell (lövőcsel, elhajlás, áttolt lövés), nem több ugyanolyan
+    lövés.
+
+    Visszatérés csapatonként (a TÁMADÓ csapaté): {"blocked",
+    "shooters": [{"player_id", "jersey", "blocked"}], "top":
+    {"player_id", "jersey", "blocked", "share_pct"} | None} — a
+    shooters csökkenő; a "top" akkor van kitöltve, ha legalább
+    BSH_MIN_BLOCKED lefogott lövés kötődik játékoshoz, a vezető
+    részaránya eléri a BSH_TOP_SHARE-t, és nincs holtverseny.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    lookback = max(1, round(BSH_LOOKBACK_S * fps))
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    blocks = detect_blocks(match, config)
+
+    jersey: dict[int, int] = {}
+    acc: dict = {"home": {}, "away": {}}
+    for side in ("home", "away"):
+        atk = "away" if side == "home" else "home"
+        for ev in blocks[side]["events"]:
+            i0 = idx_of.get(ev["t"])
+            if i0 is None:
+                continue
+            shooter = None
+            for j in range(i0, max(-1, i0 - lookback - 1), -1):
+                holder = ball_holder(match.frames[j], config)
+                # A röptében lévő labda a blokkoló mellett is
+                # "birtokosnak" látszhat — a védő-kockákat átlépjük.
+                if holder is None or holder.team.value != atk:
+                    continue
+                shooter = holder
+                break
+            if shooter is None:
+                continue
+            if shooter.jersey_number is not None:
+                jersey.setdefault(shooter.track_id,
+                                  shooter.jersey_number)
+            acc[atk][shooter.track_id] = (
+                acc[atk].get(shooter.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": tid, "jersey": jersey.get(tid),
+                 "blocked": n}
+                for tid, n in sorted(acc[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["blocked"] for r in rows)
+        top = None
+        if total >= BSH_MIN_BLOCKED and rows:
+            share = 100.0 * rows[0]["blocked"] / total
+            tie = (len(rows) > 1
+                   and rows[1]["blocked"] == rows[0]["blocked"])
+            if share >= BSH_TOP_SHARE and not tie:
+                top = {**rows[0], "share_pct": round(share, 1)}
+        out[side] = {"blocked": total, "shooters": rows, "top": top}
+    return out

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Lefogott lövők**: KINEK A LÖVÉSÉT viszi el rendre a fal. A falba
+  lövés a csapat-tünetet méri — ez a személyt: minden blokknál
+  visszakeressük a lövőt (a blokk előtti utolsó támadó
+  labdabirtokos), és játékosonként számoljuk (4+ lefogott lövés,
+  50%+ részarány, holtverseny nélkül). Az ellenfél kiemelt lefogott
+  lövője ellen megéri falban maradni — a blokk dolgozik a védelem
+  helyett; a saját sokat lefogott lövőnknek lövő-variáció kell.
+  Egy réteg, sok felület: `blocked_shooters` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (mezszám szerinti lefogás-darabszámok, edzői kulcs + csempe),
+  203. meccsterv-szabály (az ő lefogott lövőjük × a ti termő
+  blokkjaitok), 224. edzés-szabály (lövő-variáció gyakorlat élő
+  fal ellen).
+
 - **Kontra-elszökés**: ELŐRE SZÖKÖTT emberrel kontráznak-e. A
   kontra-forrás azt mondja meg, miből indul a lerohanásuk, a
   kontra-hullámok azt, ki fejezi be — ez azt, hol állnak az

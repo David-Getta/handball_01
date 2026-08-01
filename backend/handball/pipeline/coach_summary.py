@@ -846,6 +846,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Lefogott lövők: kinek a lövését viszi el rendre a fal.
+    try:
+        from .defense import blocked_shooters
+        bsh = blocked_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_bsh = bsh[side]["top"]
+            if top_bsh is None:
+                continue
+            mez_bsh = (f"{top_bsh['jersey']} mezszámú"
+                       if top_bsh["jersey"] is not None
+                       else f"{top_bsh['player_id']} azonosítójú")
+            body += (f" A(z) {name} lövéseit rendre a fal vitte el: "
+                     f"a lefogott lövések {top_bsh['share_pct']:.0f}"
+                     f"%-a a(z) {mez_bsh} játékosé "
+                     f"({top_bsh['blocked']}/{bsh[side]['blocked']}).")
+    except Exception:
+        pass
     # Kontra-elszökés: előre szökött emberrel vagy együtt kontráznak.
     try:
         from .attack_types import fast_break_headstart

@@ -1422,6 +1422,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Lefogott lövők: kinek a lövését viszi el a fal (4+ lefogott
+  // lövés; 50%+ részarány, holtverseny nélkül — a backend-kulccsal
+  // azonos küszöbök).
+  String? _blockedShooters(Map<String, dynamic> r) {
+    final blocked = ((r["bsh_blocked"] as num?) ?? 0).toInt();
+    final shooters = (r["bsh_shooters"] as Map?) ?? {};
+    if (blocked < 4 || shooters.isEmpty) return null;
+    final entries = shooters.entries.toList()
+      ..sort((a, b) =>
+          ((b.value as num?) ?? 0).compareTo((a.value as num?) ?? 0));
+    final top = entries.first;
+    final n = ((top.value as num?) ?? 0).toInt();
+    final tie = entries.length > 1 &&
+        ((entries[1].value as num?) ?? 0).toInt() == n;
+    if (tie || 100.0 * n / blocked < 50.0) return null;
+    return "a(z) ${top.key} mezes lövőjük lövését rendre elviszi a "
+        "fal ($n/$blocked lefogott lövés az övé) · ellene falban "
+        "maradni éri meg, nem kifutni";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5343,6 +5363,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontra-hullámok", _fastBreakWaves(r)!],
       if (_fastBreakHeadstart(r) != null)
         ["Kontra-elszökés", _fastBreakHeadstart(r)!],
+      if (_blockedShooters(r) != null)
+        ["Lefogott lövők", _blockedShooters(r)!],
       if (_crossingRuns(r) != null)
         ["Keresztjáték", _crossingRuns(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],

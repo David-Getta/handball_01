@@ -2160,3 +2160,45 @@ def test_block_recoveries_needs_enough_blocks():
 
     rec = block_recoveries(_brc_match([True, True]))["away"]
     assert rec["blocks"] == 2 and rec["verdict"] is None
+
+
+# ---- Lefogott lövők (kinek a lövését viszi el a fal) ------------------------
+
+def _bsh_match(shooter_ids, fps=25.0):
+    """Blokkolt lövés-sorozat: a `shooter_ids` sorrendjében mindig a
+    megadott hazai játékos lövését fogja le a vendég védő."""
+    frames = []
+    t = 0
+    blocker = _pl(20, Team.AWAY, 32.5, 10.0)
+    for sid in shooter_ids:
+        shooter = _pl(sid, Team.HOME, 28.0, 10.0)
+        for x in (29.0, 30.2, 31.4, 32.4, 31.0, 29.5, 28.0):
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _i in range(40):  # szünet (blokk-cooldown)
+            frames.append(Frame(t=t, players=[shooter, blocker],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_blocked_shooters_names_the_blocked_shooter():
+    """Négy blokkból három az 1-es lövését éri → ő a lefogott lövő."""
+    from handball.pipeline.defense import blocked_shooters
+
+    rec = blocked_shooters(_bsh_match([1, 1, 1, 2]))["home"]
+    assert rec["blocked"] == 4
+    assert rec["shooters"][0]["player_id"] == 1
+    assert rec["top"] is not None
+    assert rec["top"]["player_id"] == 1
+    assert rec["top"]["share_pct"] == 75.0
+
+
+def test_blocked_shooters_needs_enough_blocks():
+    """Kevés (4-nél kevesebb) lefogott lövésnél nincs kiemelt lövő."""
+    from handball.pipeline.defense import blocked_shooters
+
+    rec = blocked_shooters(_bsh_match([1, 1, 2]))["home"]
+    assert rec["blocked"] == 3 and rec["top"] is None
