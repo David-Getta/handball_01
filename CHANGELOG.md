@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kivárás-csapda**: MI LESZ A HOSSZÚ TÁMADÁSAIKBÓL. A
+  passzív-kockázat réteg a hosszú, lövés nélküli szakaszokat listázza
+  — ez ítéletet mond: a 25 másodpercnél hosszabb felállt
+  támadásaikból mennyi hal el lövés nélkül (5+ hosszú támadás; 40%
+  felett elhaló, 15% alatt lövésig érő). Akinek a hosszú támadásai
+  elhalnak, annak a kivárás csapda — fegyelmezett, kivárós fal
+  ellenük a recept; akinek lövésig érnek, az ellen korai megzavarás
+  kell. Egy réteg, sok felület: `long_attack_outcomes` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil (támadás-
+  és elhalás-darabszámok, két edzői kulcs + csempe), 194.
+  meccsterv-szabály (az ő elhaló támadásaik × a ti fegyelmezett
+  falatok), 215. edzés-szabály (figura-zárás időben: 25 másodperces
+  óra, kötelező B-zárás).
+
 - **Felfutási létszám**: HÁNY EMBERREL támadnak. A támadás-szélesség
   a teret méri — ez a létszámot: támadó-térfeles birtoklás-kockánként
   megszámoljuk, hány mezőnyjátékosuk van fent (100+ kocka; 5,5 felett

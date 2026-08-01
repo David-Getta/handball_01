@@ -609,6 +609,10 @@ class ScoutingReport:
     # pontosan összegződnek (arány = kiv_with / kiv_spells).
     kiv_spells: int = 0
     kiv_with: int = 0
+    # Kivárás-csapdájuk: hosszú felállt támadásaik és a lövés nélkül
+    # elhalók — darabszámok, meccsek közt pontosan összegződnek.
+    lao_n: int = 0
+    lao_died: int = 0
     # Felfutási létszámuk: támadó-kockák és a fent lévő mezőny-
     # játékosok összege — darabszám/összeg, meccsek közt pontosan
     # összegződnek (átlag = ahc_sum_up / ahc_frames).
@@ -2124,6 +2128,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"csak {_kiv_pct:.0f}%-ában érinti a labdát) — a "
                 "kihozataluk szűk, mezőnyben zajlik: a passzsávokat "
                 "kell zárni, a kapusra menni fölösleges.")
+
+    # Kivárás-csapda: véd-e ellenük a türelmes fal.
+    if rep.lao_n >= 5:
+        _lao_pct = 100.0 * rep.lao_died / rep.lao_n
+        if _lao_pct >= 40.0:
+            keys.append(
+                f"A hosszú támadásaik elhalnak ({rep.lao_died}/"
+                f"{rep.lao_n} lövés nélkül) — a kivárás nekik csapda: "
+                "fegyelmezett, kivárós fal ellenük a recept, a "
+                "passzív jel felétek dolgozik.")
+        elif _lao_pct <= 15.0:
+            keys.append(
+                f"A hosszú támadásaik is lövésig érnek (csak "
+                f"{rep.lao_died}/{rep.lao_n} halt el) — a kivárás nem "
+                "véd ellenük: korai megzavarás kell, kilépés és "
+                "kettőzés, mielőtt a figurájuk kibomlana.")
 
     # Felfutási létszám: kontrázhatók-e, és kettőzhető-e a faluk ellenük.
     if rep.ahc_frames >= 100:
@@ -5816,6 +5836,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         kivrec = _kiv(match, config)[team.value]
         rep.kiv_spells = kivrec["attacks"]
         rep.kiv_with = kivrec["with_keeper"]
+        from .attack_types import long_attack_outcomes as _lao
+        laorec = _lao(match, config)[team.value]
+        rep.lao_n = laorec["long_attacks"]
+        rep.lao_died = laorec["died"]
         from .attack_types import attack_headcount as _ahc
         ahcrec = _ahc(match, config)[team.value]
         rep.ahc_frames = ahcrec["frames"]
@@ -8203,6 +8227,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 194) Az ő elhaló hosszú támadásaik × a ti fegyelmezett falatok:
+    # kivárásra kell játszani ellenük.
+    if (opp.lao_n >= 5
+            and 100.0 * opp.lao_died / opp.lao_n >= 40.0
+            and own.def_shots_against >= 10):
+        _free194 = (100.0 * own.def_free_shots
+                    / max(1, own.def_shots_against))
+        if _free194 <= 35.0:
+            plan.append(
+                f"A hosszú támadásaik elhalnak ({opp.lao_died}/"
+                f"{opp.lao_n} lövés nélkül), a ti falatok pedig "
+                f"fegyelmezett (a rátok jövő lövések csak "
+                f"{_free194:.0f}%-a fedezetlen) — játsszatok "
+                "kivárásra: semmi kapkodó kilépés, hadd járassák — a "
+                "passzív jel és a saját türelmetlenségük nektek "
+                "dolgozik.")
 
     # 193) Az ő mindenkit felküldő támadásuk × a ti gyors kapus-
     # indításotok: a hátuk mögötti üres pálya a tiétek.
@@ -11197,6 +11238,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         targeted_defenders=_merge_targeted_defenders(reports),
         tdf_shots=sum(r.tdf_shots for r in reports),
         tdf_goals=sum(r.tdf_goals for r in reports),
+        lao_n=sum(r.lao_n for r in reports),
+        lao_died=sum(r.lao_died for r in reports),
         ahc_frames=sum(r.ahc_frames for r in reports),
         ahc_sum_up=sum(r.ahc_sum_up for r in reports),
         brc_blocks=sum(r.brc_blocks for r in reports),

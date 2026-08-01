@@ -1318,6 +1318,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kivárás-csapda: mi lesz a hosszú támadásaikból (5+ hosszú
+  // támadás; 40% felett elhaló, 15% alatt lövésig érő — a
+  // backend-kulccsal azonos küszöbök).
+  String? _longAttackOutcomes(Map<String, dynamic> r) {
+    final n = ((r["lao_n"] as num?) ?? 0).toInt();
+    final died = ((r["lao_died"] as num?) ?? 0).toInt();
+    if (n < 5) return null;
+    final pct = 100.0 * died / n;
+    if (pct >= 40.0) {
+      return "a hosszú támadásaik elhalnak ($died/$n lövés nélkül) · "
+          "a kivárás nekik csapda, a passzív jel felétek dolgozik";
+    }
+    if (pct <= 15.0) {
+      return "a hosszú támadásaik is lövésig érnek (csak $died/$n "
+          "halt el) · korai megzavarás kell, a kivárás nem véd";
+    }
+    return null;
+  }
+
   // Felfutási létszám: hány emberrel támadnak (100+ kocka; 5,5 felett
   // mindenki fent, 4,5 alatt biztosítás — a backend-kulccsal azonos
   // küszöbök).
@@ -5153,6 +5172,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Blokk-lepattanó", _blockRecoveries(r)!],
       if (_attackHeadcount(r) != null)
         ["Felfutási létszám", _attackHeadcount(r)!],
+      if (_longAttackOutcomes(r) != null)
+        ["Kivárás-csapda", _longAttackOutcomes(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

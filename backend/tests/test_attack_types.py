@@ -2638,3 +2638,55 @@ def test_attack_headcount_needs_enough_frames():
 
     rec = attack_headcount(_ahc_match(6, frames=50))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Kivárás-csapda (mi lesz a hosszú támadásaikból) ------------------------
+
+def _lao_match(shot_flags, fps=25.0):
+    """Hosszú (26 mp-es) felállt hazai támadások; a `shot_flags`
+    szerint lövéssel vagy lövés nélkül érnek véget."""
+    frames = []
+    t = 0
+    for with_shot in shot_flags:
+        block = _attack_frames(t, 26.0, 30.0, 31.0, fps)
+        frames.extend(block)
+        t = frames[-1].t + 1
+        if with_shot:
+            for i in range(7):
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 31.0, 10.0)],
+                    ball=Ball(x=min(32.0 + i * 1.4, 40.0), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(int(5 * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_long_attack_outcomes_flags_the_dying_patience():
+    """Öt hosszú támadásból négy lövés nélkül hal el → kivárás-csapda."""
+    from handball.pipeline.attack_types import long_attack_outcomes
+
+    rec = long_attack_outcomes(_lao_match(
+        [False] * 4 + [True]))["home"]
+    assert rec["long_attacks"] == 5 and rec["died"] == 4
+    assert rec["verdict"] == "a hosszú támadásaik elhalnak"
+
+
+def test_long_attack_outcomes_flags_the_patient_finishers():
+    """Ha minden hosszú támadás lövésig ér, a kivárás nem véd
+    ellenük."""
+    from handball.pipeline.attack_types import long_attack_outcomes
+
+    rec = long_attack_outcomes(_lao_match([True] * 5))["home"]
+    assert rec["died"] == 0
+    assert rec["verdict"] == "a hosszú támadásaik is lövésig érnek"
+
+
+def test_long_attack_outcomes_needs_enough_attacks():
+    """Kevés (5-nél kevesebb) hosszú támadásnál nincs ítélet."""
+    from handball.pipeline.attack_types import long_attack_outcomes
+
+    rec = long_attack_outcomes(_lao_match([False] * 3))["home"]
+    assert rec["long_attacks"] == 3 and rec["verdict"] is None

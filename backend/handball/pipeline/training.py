@@ -1343,6 +1343,29 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 215) Kivárás-csapda: ha a hosszú támadásaink elhalnak, a
+    # figura-zárás időzítése a téma.
+    try:
+        from .attack_types import long_attack_outcomes
+        lao215 = long_attack_outcomes(match, config)
+        for side in ("home", "away"):
+            rec215 = lao215[side]
+            if rec215["verdict"] != "a hosszú támadásaik elhalnak":
+                continue
+            add(side, "tamadas", "Figura-zárás időben",
+                f"{rec215['died']}/{rec215['long_attacks']} hosszú "
+                "támadásunk lövés nélkül halt el — a kivárásunk nem "
+                "türelem, hanem terv-hiány: a passzív jel előtt nem "
+                "jut el a labda lövő-helyzetig",
+                "figura-zárás időben: 25 másodperces órával vívott "
+                "támadás-gyakorlat — a figurának a 20. másodpercig "
+                "kötelezően lövésig kell érnie, különben a labda az "
+                "ellenfélé; minden figurához előre kimondott B-zárás "
+                "tartozik (hetes-kényszerítő betörés vagy beállós), "
+                "és az elhalt támadásokat a videón külön nézzük")
+    except Exception:
+        pass
+
     # 214) Felfutási létszám: ha mindenkit felküldünk, a biztosítás-
     # rend a téma.
     try:

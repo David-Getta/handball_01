@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Kivárás-csapda: mi lesz a hosszú támadásaikból.
+    try:
+        from .attack_types import long_attack_outcomes
+        lao = long_attack_outcomes(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lao = lao[side]
+            if rec_lao["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hosszú támadásairól kiderült: "
+                     f"{rec_lao['verdict']} "
+                     f"({rec_lao['died']}/{rec_lao['long_attacks']} "
+                     "halt el lövés nélkül).")
+    except Exception:
+        pass
     # Felfutási létszám: hány emberrel támadnak.
     try:
         from .attack_types import attack_headcount

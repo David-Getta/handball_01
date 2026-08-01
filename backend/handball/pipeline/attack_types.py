@@ -3665,3 +3665,68 @@ def attack_headcount(match: Match,
                 rec["verdict"] = "biztosítva támadnak"
         out[side] = rec
     return out
+
+
+# Kivárás-csapda: ennyi másodperc feletti felállt támadás számít
+# hosszúnak, ennyi kell az ítélethez, és e feletti / alatti elhalás-
+# arány a csapdába futó, illetve a lövésig érő kivárás jele.
+LAO_MIN_S = 25.0
+LAO_MIN_ATTACKS = 5
+LAO_DIE_PCT = 40.0
+LAO_FINISH_PCT = 15.0
+
+
+def long_attack_outcomes(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Kivárás-csapda: MI LESZ A HOSSZÚ TÁMADÁSAIKBÓL.
+
+    A passzív-kockázat réteg a hosszú, lövés nélküli szakaszokat
+    listázza — ez ítéletet mond: a LAO_MIN_S-nél hosszabb felállt
+    támadásaikból mennyi hal el lövés nélkül (eladás, lefújás), és
+    mennyi ér el legalább a lövésig.
+
+    Edzőileg: akinek a hosszú támadásai elhalnak, annak a kivárás
+    csapda — ellene a fegyelmezett, kivárós fal a recept, mert a
+    passzív jel feléjük dolgozik; akinek a hosszú támadásai is
+    lövésig érnek, az a kivárásból is helyzetet csinál — ellene nem
+    a kivárás, hanem a korai megzavarás (kilépés, kettőzés) kell.
+
+    Visszatérés csapatonként: {"long_attacks", "died", "die_pct",
+    "verdict"} — a die_pct/verdict None LAO_MIN_ATTACKS alatt; a
+    verdict "a hosszú támadásaik elhalnak" / "a hosszú támadásaik is
+    lövésig érnek" / None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    shot_ts = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        if e.type in (EventType.SHOT, EventType.GOAL):
+            shot_ts[e.team.value].append(e.t)
+
+    out = {side: {"long_attacks": 0, "died": 0, "die_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.POSITIONAL.value:
+            continue
+        if a["duration_s"] < LAO_MIN_S:
+            continue
+        side = a["team"]
+        rec = out[side]
+        rec["long_attacks"] += 1
+        if not any(a["start_frame"] <= t <= a["end_frame"] + tail
+                   for t in shot_ts[side]):
+            rec["died"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["long_attacks"] >= LAO_MIN_ATTACKS:
+            pct = 100.0 * rec["died"] / rec["long_attacks"]
+            rec["die_pct"] = round(pct, 1)
+            if pct >= LAO_DIE_PCT:
+                rec["verdict"] = "a hosszú támadásaik elhalnak"
+            elif pct <= LAO_FINISH_PCT:
+                rec["verdict"] = "a hosszú támadásaik is lövésig érnek"
+    return out
