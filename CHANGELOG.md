@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Gólpassz-hossz**: HOSSZÚ INDÍTÁSOKBÓL vagy RÖVID KOMBINÁCIÓKBÓL
+  élnek. A gólpassz-hálózat azt mondja meg, ki kinek készít elő — ez
+  azt, milyen messziről: minden gólpasszos gólnál megmérjük az
+  előkészítő és a lövő távolságát (5+ gólpasszos gól; 50% felett
+  hosszú, 20% alatt rövid). A hosszú gólpasszokból élő ellen a
+  passzsávakat kell zárni — a hosszú labda elfogható; a rövid
+  kombinációkból élő ellen a kis terület védése dönt. Egy réteg, sok
+  felület: `assist_ranges` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (gólpassz-darabszámok, két edzői
+  kulcs + csempe), 196. meccsterv-szabály (az ő hosszú gólpasszaik ×
+  a ti sáv-záró védekezésetek), 217. edzés-szabály (hosszú
+  előkészítés: átemelés- és bejátszás-blokk, duplán érő távoli
+  előkészítés).
+
 - **Kapus-kipattanó**: FOGJA vagy KIÜTI a labdát a kapusuk. A
   védés-számok azt mérik, hány lövést fog meg — ez azt, mi lesz a
   védett labdával: a védés utáni első stabil, megült birtokost nézzük

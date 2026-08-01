@@ -690,3 +690,73 @@ def assist_zones(match: Match,
                               "share_pct": round(share, 1)}
         out[side] = rec
     return out
+
+
+# Gólpassz-hossz: ennél hosszabb előkészítés számít hosszú indításnak,
+# ennyi gólpasszos gól kell az ítélethez, és e feletti / alatti hosszú-
+# arány a hosszú indításos, illetve a rövid kombinációs gólgyártás jele.
+ASR_LONG_M = 8.0
+ASR_MIN_ASSISTED = 5
+ASR_LONG_PCT = 50.0
+ASR_SHORT_PCT = 20.0
+
+
+def assist_ranges(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-hossz: HOSSZÚ INDÍTÁSOKBÓL vagy RÖVID KOMBINÁCIÓKBÓL
+    élnek.
+
+    A gólpassz-hálózat azt mondja meg, ki kinek készít elő — ez azt,
+    MILYEN MESSZIRŐL: minden gólpasszos gólnál megmérjük az előkészítő
+    és a lövő távolságát a gól pillanatában.
+
+    Edzőileg: a hosszú gólpasszokból élő csapat ellen a passzsávakat
+    kell zárni — a hosszú labda elfogható, és minden elfogás kontrát
+    ér; a rövid kombinációkból élő ellen a kis terület védése dönt —
+    hangos váltások és testes besegítés a hatos előtt.
+
+    Visszatérés csapatonként: {"assisted", "long", "long_pct",
+    "verdict"} — a long_pct/verdict None ASR_MIN_ASSISTED alatt; a
+    verdict "hosszú gólpasszokból élnek" / "rövid kombinációkból
+    élnek" / None.
+    """
+    import math
+
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    by_t = {f.t: f for f in match.frames}
+    events = annotate_assists(match, detect_events(match, config), config)
+
+    out = {side: {"assisted": 0, "long": 0, "long_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for g in events:
+        if g.type != EventType.GOAL:
+            continue
+        aid = (g.detail or {}).get("assist_id")
+        if aid is None or g.player_id is None:
+            continue
+        f = by_t.get(g.t)
+        if f is None:
+            continue
+        passer = next((p for p in f.players if p.track_id == aid), None)
+        scorer = next((p for p in f.players
+                       if p.track_id == g.player_id), None)
+        if passer is None or scorer is None:
+            continue
+        rec = out[g.team.value]
+        rec["assisted"] += 1
+        if math.hypot(passer.x - scorer.x,
+                      passer.y - scorer.y) >= ASR_LONG_M:
+            rec["long"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["assisted"] >= ASR_MIN_ASSISTED:
+            pct = 100.0 * rec["long"] / rec["assisted"]
+            rec["long_pct"] = round(pct, 1)
+            if pct >= ASR_LONG_PCT:
+                rec["verdict"] = "hosszú gólpasszokból élnek"
+            elif pct <= ASR_SHORT_PCT:
+                rec["verdict"] = "rövid kombinációkból élnek"
+    return out

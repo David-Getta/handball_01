@@ -1318,6 +1318,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Gólpassz-hossz: hosszú indítás vagy rövid kombináció (5+
+  // gólpasszos gól; 50% felett hosszú, 20% alatt rövid — a
+  // backend-kulccsal azonos küszöbök).
+  String? _assistRanges(Map<String, dynamic> r) {
+    final assisted = ((r["asr_assisted"] as num?) ?? 0).toInt();
+    final long = ((r["asr_long"] as num?) ?? 0).toInt();
+    if (assisted < 5) return null;
+    final pct = 100.0 * long / assisted;
+    if (pct >= 50.0) {
+      return "hosszú gólpasszokból élnek ($long/$assisted "
+          "előkészítés 8 m-en túlról) · a passzsávakat zárjátok, a "
+          "hosszú labda elfogható";
+    }
+    if (pct <= 20.0) {
+      return "rövid kombinációkból élnek (csak $long/$assisted "
+          "hosszú előkészítés) · a kis terület védése dönt, hangos "
+          "váltásokkal";
+    }
+    return null;
+  }
+
   // Kapus-kipattanó: fogja vagy kiüti a labdát (4+ mért védés; 70%
   // felett fogó, 40% alatt kiütő — a backend-kulccsal azonos
   // küszöbök).
@@ -5196,6 +5217,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kivárás-csapda", _longAttackOutcomes(r)!],
       if (_gkReboundControl(r) != null)
         ["Kapus-kipattanó", _gkReboundControl(r)!],
+      if (_assistRanges(r) != null)
+        ["Gólpassz-hossz", _assistRanges(r)!],
       if (_rotation(r) != null) ["Rotáció", _rotation(r)!],
       if (_ballWinner(r) != null) ["Labdaszerző", _ballWinner(r)!],
       if (_turnoverPlayer(r) != null)

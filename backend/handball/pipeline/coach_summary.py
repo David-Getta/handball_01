@@ -846,6 +846,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megjárta a labda a kapust.")
     except Exception:
         pass
+    # Gólpassz-hossz: hosszú indításokból vagy rövid kombinációkból.
+    try:
+        from .event_detection import assist_ranges
+        asr = assist_ranges(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_asr = asr[side]
+            if rec_asr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} góljairól kiderült: "
+                     f"{rec_asr['verdict']} "
+                     f"({rec_asr['long']}/{rec_asr['assisted']} "
+                     "gólpassz jött 8 méteren túlról).")
+    except Exception:
+        pass
     # Kapus-kipattanó: fogja vagy kiüti a labdát.
     try:
         from .goalkeeper import gk_rebound_control

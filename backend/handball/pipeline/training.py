@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 217) Gólpassz-hossz: ha csak rövid kombinációkból élünk, a
+    # hosszú indítás beépítése a téma.
+    try:
+        from .event_detection import assist_ranges
+        asr217 = assist_ranges(match, config)
+        for side in ("home", "away"):
+            rec217 = asr217[side]
+            if rec217["verdict"] != "rövid kombinációkból élnek":
+                continue
+            add(side, "tamadas", "Hosszú előkészítés",
+                f"csak {rec217['long']}/{rec217['assisted']} "
+                "gólpasszunk jött 8 méteren túlról — minden gólunk "
+                "kis területen születik, és egy jól tömörítő fal az "
+                "egész gólgyártásunkat megfojtja",
+                "hosszú előkészítés: átemelés- és bejátszás-blokk — "
+                "szélső-váltás hosszú kereszttel, beálló-etetés a "
+                "9-esről, és kifutó-indítás a szélsőnek; az "
+                "edzésmeccsen a 8 méteren túlról előkészített gól "
+                "duplán számít, hogy a hosszú megoldás beépüljön")
+    except Exception:
+        pass
+
     # 216) Kapus-kipattanó: ha a kapusunk kiüti a labdát, a kipattanó-
     # irányítás a téma.
     try:

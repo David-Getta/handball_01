@@ -586,3 +586,37 @@ def test_assist_zones_needs_enough_assists():
 
     rec = assist_zones(_assist_match([(30.0, 2.0), (30.0, 2.0)]))["home"]
     assert rec["assists"] == 2 and rec["top"] is None
+
+
+# ---- Gólpassz-hossz (hosszú indítás vagy rövid kombináció) ------------------
+
+def test_assist_ranges_flags_the_long_ball_team():
+    """Öt gólpasszból négy 8+ méteres → hosszú gólpasszokból élnek."""
+    from handball.pipeline.event_detection import assist_ranges
+
+    rec = assist_ranges(_assist_match(
+        [(22.0, 10.0), (24.0, 10.0), (22.0, 16.0), (23.0, 4.0),
+         (31.0, 10.0)]))["home"]
+    assert rec["assisted"] == 5 and rec["long"] == 4
+    assert rec["verdict"] == "hosszú gólpasszokból élnek"
+
+
+def test_assist_ranges_flags_the_short_combo_team():
+    """Öt gólpasszból mind rövid (8 m alatti) → rövid kombinációkból
+    élnek."""
+    from handball.pipeline.event_detection import assist_ranges
+
+    rec = assist_ranges(_assist_match(
+        [(30.0, 10.0), (31.0, 12.0), (29.0, 8.0), (30.0, 13.0),
+         (31.5, 10.0)]))["home"]
+    assert rec["long"] == 0
+    assert rec["verdict"] == "rövid kombinációkból élnek"
+
+
+def test_assist_ranges_needs_enough_assisted_goals():
+    """Kevés (5-nél kevesebb) gólpasszos gólnál nincs ítélet."""
+    from handball.pipeline.event_detection import assist_ranges
+
+    rec = assist_ranges(_assist_match(
+        [(22.0, 10.0), (24.0, 10.0)]))["home"]
+    assert rec["assisted"] == 2 and rec["verdict"] is None
