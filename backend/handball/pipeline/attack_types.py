@@ -1215,6 +1215,97 @@ SHTIM_EARLY_PCT = 45.0
 SHTIM_LATE_AVG_S = 22.0
 
 
+# Passz-irány-állás: a passz-irányok az eredményjelző szerint.
+PDS_MIN_PASSES = 10   # az összevetett állapotokban ennyi-ennyi passz kell
+PDS_GAP_PP = 12.0     # ekkora részarány-többlet számít mintázatnak
+
+
+def pass_direction_by_score(match: Match,
+                            config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-irány-állás: MERRE jár a labda előnyben és hátrányban.
+
+    A passz-irány (pass_direction) a meccs egészét nézi — ez az
+    eredményjelzőn: minden passznál a passzoló csapat pillanatnyi
+    gólkülönbségét vesszük, és állásonként mérjük az előre-, illetve
+    hátra-passzok részarányát. Az előnyben megugró hátrajáratás a
+    tudatos időölés (és egyben letámadható minta); a hátrányban
+    erőltetett előre-passz a kapkodás — elfogható labdákkal.
+
+    Edzőileg: aki előnyben hátrafelé járat, arra vezetésénél magas
+    letámadással kell rámenni — az első hátrapassz a jel; aki
+    hátrányban előre erőltet, annál ilyenkor a passzsávokra ültetett
+    védő termel. A saját oldalon a vezetés-játék tudatosítása a téma.
+
+    Visszatérés csapatonként: {"leading"/"trailing"/"level":
+    {"passes", "forward", "back"}, "verdict"} — a verdict "előnyben
+    hátrafelé járatják a labdát" / "hátrányban erőltetik az
+    előre-passzt" / None (állapotonként PDS_MIN_PASSES-nél kevesebb
+    passznál).
+    """
+    from .event_detection import (EventType, detect_possession_changes,
+                                  detect_shots)
+
+    config = config or TacticsConfig()
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    by_t = {f.t: f for f in match.frames}
+    out = {side: {k: {"passes": 0, "forward": 0, "back": 0}
+                  for k in ("leading", "trailing", "level")}
+           for side in ("home", "away")}
+    for e in detect_possession_changes(match, config):
+        if e.type != EventType.PASS:
+            continue
+        rid = (e.detail or {}).get("receiver_id")
+        f = by_t.get(e.t)
+        if rid is None or f is None:
+            continue
+        px = rx = None
+        for p in f.players:
+            if p.track_id == e.player_id:
+                px = p.x
+            elif p.track_id == rid:
+                rx = p.x
+        if px is None or rx is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        prog = abs(px - goal_x) - abs(rx - goal_x)  # > 0 = előre
+        side = e.team.value
+        own = sum(1 for (t, tm) in goals if t < e.t and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < e.t and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        rec = out[side][state]
+        rec["passes"] += 1
+        if prog >= PASS_FORWARD_MIN_M:
+            rec["forward"] += 1
+        elif prog <= -PASS_FORWARD_MIN_M:
+            rec["back"] += 1
+
+    for side in ("home", "away"):
+        buckets = out[side]
+        verdict = None
+        lead = buckets["leading"]
+        tr = buckets["trailing"]
+        rest_ld = {k: tr[k] + buckets["level"][k]
+                   for k in ("passes", "back")}
+        if lead["passes"] >= PDS_MIN_PASSES \
+                and rest_ld["passes"] >= PDS_MIN_PASSES:
+            diff = (100.0 * lead["back"] / lead["passes"]
+                    - 100.0 * rest_ld["back"] / rest_ld["passes"])
+            if diff >= PDS_GAP_PP:
+                verdict = "előnyben hátrafelé járatják a labdát"
+        rest_tr = {k: lead[k] + buckets["level"][k]
+                   for k in ("passes", "forward")}
+        if verdict is None and tr["passes"] >= PDS_MIN_PASSES \
+                and rest_tr["passes"] >= PDS_MIN_PASSES:
+            diff = (100.0 * tr["forward"] / tr["passes"]
+                    - 100.0 * rest_tr["forward"] / rest_tr["passes"])
+            if diff >= PDS_GAP_PP:
+                verdict = "hátrányban erőltetik az előre-passzt"
+        buckets["verdict"] = verdict
+    return out
+
+
 # Szünet-váltás: a támadás-mix átrendeződése a két félidő között.
 AMS_MIN_ATTACKS_HALF = 6   # félidőnként ennyi támadás kell az ítélethez
 AMS_SHIFT_PP = 30.0        # ekkora össz-átrendeződés = tudatos váltás

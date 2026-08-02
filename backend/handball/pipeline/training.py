@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 258) Passz-irány-állás: ha az ellenfél előnyben hátrajáratott
+    # ellenünk, a vezetés elleni letámadás a téma.
+    try:
+        from .attack_types import pass_direction_by_score
+        pds258 = pass_direction_by_score(match, config)
+        for side, other in (("home", "away"), ("away", "home")):
+            rec258 = pds258[other]
+            if rec258["verdict"] != \
+                    "előnyben hátrafelé járatják a labdát":
+                continue
+            add(side, "vedekezes", "Letámadás a hátrajáratás ellen",
+                "az ellenfél előnyben hátrafelé járatta a labdát, és "
+                "hagytuk: az időölésük ellen nem léptünk fel",
+                "letámadás-gyakorlat vezető ellenfél ellen: az első "
+                "hátrapassz a kollektív jel — a két szélső azonnal "
+                "felugrik a fogadóra, a belsők a visszajátszás sávját "
+                "zárják; cél a szerzés vagy a passzív-óra "
+                "újraindítása")
+    except Exception:
+        pass
     # 257) Szünet-váltás: ha félidőn át ugyanazt játsszuk, a B-terv a
     # téma — a kiszámítható mixre az ellenfél ráállhat.
     try:

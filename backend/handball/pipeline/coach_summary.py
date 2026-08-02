@@ -883,6 +883,18 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Passz-irány-állás: merre jár a labda az állás szerint.
+    try:
+        from .attack_types import pass_direction_by_score
+        pds = pass_direction_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pds = pds[side]
+            if rec_pds["verdict"] is None:
+                continue
+            body += (f" A(z) {name} labdajáratása az állást követi: "
+                     f"{rec_pds['verdict']}.")
+    except Exception:
+        pass
     # Szünet-váltás: átrendezik-e a támadójátékot a szünet után.
     try:
         from .attack_types import attack_mix_shift

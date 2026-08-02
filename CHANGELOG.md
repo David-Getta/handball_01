@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Passz-irány-állás** (`pass_direction_by_score`): a passz-irányok
+  az eredményjelző szerint — az előnyben megugró hátrajáratás tudatos
+  időölés (és letámadható minta), a hátrányban erőltetett előre-passz
+  kapkodás. Edzői olvasat: a vezető, hátrajáratós csapatra magas
+  letámadás (az első hátrapassz a jel); a saját oldalon a
+  vezetés-játék tudatosítása. Felületek: `/analyze` + meccs-csomag
+  (`pass_direction_by_score`), edzői összefoglaló, felderítés (edzői
+  kulcs + 237-es meccsterv-szabály), edzés-fókusz (258-as szabály),
+  kliens-csempe.
 - **Szünet-váltás** (`attack_mix_shift`): a támadás-mix átrendeződése
   a két félidő között (össz-eltolódás százalékpontban). A nagy váltás
   alkalmazkodó, jól vezetett csapat jele; a mozdulatlan mix a

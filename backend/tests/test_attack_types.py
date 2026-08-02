@@ -3589,3 +3589,76 @@ def test_attack_mix_shift_flags_the_static_team():
     nob, t2 = _ams_half_frames(0, 6, fast=False)
     ams2 = attack_mix_shift(Match(meta, nob))
     assert ams2["home"]["verdict"] is None
+
+
+def _pds_pass_frames(t0, x_from, x_to, n):
+    """n hazai passz az x_from → x_to álló játékosok közt, minden
+    passz után szabad-labdás megszakítással (új birtoklás-lánc)."""
+    frames = []
+    t = t0
+    for _ in range(n):
+        def both():
+            return [_pl(11, Team.HOME, x_from, 10.0),
+                    _pl(12, Team.HOME, x_to, 10.0)]
+        # A passzoló tartja a labdát.
+        for _ in range(15):
+            frames.append(Frame(t=t, players=both(),
+                                ball=Ball(x=x_from, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # A labda 0,3/kocka lépéssel (7,5 m/s — lövésnek lassú) átér.
+        x = x_from
+        step = 0.3 if x_to > x_from else -0.3
+        while (x < x_to) if x_to > x_from else (x > x_to):
+            x += step
+            frames.append(Frame(t=t, players=both(),
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        # A fogadó megtartja.
+        for _ in range(15):
+            frames.append(Frame(t=t, players=both(),
+                                ball=Ball(x=x_to, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # Megszakítás: vendég-érintés a 18-asnál — így a következő
+        # hazai birtoklás nem "hátra-passzként" kapcsolódik össze.
+        for _ in range(15):
+            frames.append(Frame(t=t,
+                                players=[_pl(21, Team.AWAY, 18.0, 10.0)],
+                                ball=Ball(x=18.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return frames, t
+
+
+def test_pass_direction_by_score_flags_clock_killing():
+    """Döntetlennél előre-passzok, 3 gól után (előnyben) csupa
+    hátra-passz → előnyben hátrafelé járatják a labdát."""
+    from handball.pipeline.attack_types import pass_direction_by_score
+
+    meta = MatchMeta(match_id="pds", home_team="H", away_team="A", fps=25.0)
+    frames, t = _pds_pass_frames(0, 24.0, 30.0, 11)  # döntetlen: előre
+    for _ in range(3):
+        gf, t = _asf_goal_frames(t, assisted=False)
+        frames += gf
+    lead, t = _pds_pass_frames(t, 30.0, 24.0, 11)    # előnyben: hátra
+    frames += lead
+
+    pds = pass_direction_by_score(Match(meta, frames))
+    h = pds["home"]
+    assert h["level"]["passes"] >= 10
+    assert h["level"]["forward"] >= 10
+    assert h["leading"]["passes"] >= 10
+    assert h["leading"]["back"] >= 10
+    assert h["verdict"] == "előnyben hátrafelé járatják a labdát"
+    assert pds["away"]["verdict"] is None
+
+
+def test_pass_direction_by_score_few_passes_none():
+    """Kevés (10-nél kevesebb) passz állapotonként → nincs ítélet."""
+    from handball.pipeline.attack_types import pass_direction_by_score
+
+    meta = MatchMeta(match_id="pds2", home_team="H", away_team="A", fps=25.0)
+    frames, t = _pds_pass_frames(0, 24.0, 30.0, 5)
+    pds = pass_direction_by_score(Match(meta, frames))
+    assert pds["home"]["verdict"] is None

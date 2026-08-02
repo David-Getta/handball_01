@@ -1896,6 +1896,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Passz-irány-állás: előnyben hátrajáratás (állapotonként 10+
+  // passz, 12 pp többlet — a backenddel azonos küszöbök).
+  String? _passDirectionByScore(Map<String, dynamic> r) {
+    final leadP = ((r["pds_lead_passes"] as num?) ?? 0).toInt();
+    final leadB = ((r["pds_lead_back"] as num?) ?? 0).toInt();
+    final restP = ((r["pds_rest_passes"] as num?) ?? 0).toInt();
+    final restB = ((r["pds_rest_back"] as num?) ?? 0).toInt();
+    if (leadP < 10 || restP < 10) return null;
+    final diff = 100.0 * leadB / leadP - 100.0 * restB / restP;
+    if (diff < 12.0) return null;
+    return "előnyben hátrafelé járatják a labdát "
+        "(+${diff.toStringAsFixed(0)} pp hátra-passz vezetésnél) · "
+        "ha ők vezetnek: magas letámadás, az első hátrapassz a jel";
+  }
+
   // Szünet-váltás: a támadás-mix átrendeződése (félidőnként 6+
   // támadás, 30/10 pp küszöb — a backenddel azonos, a mix a
   // lerohanás+gyors indítás részarányából becsülve).
@@ -6023,6 +6038,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lepattanó-esés", _secondChanceFade(r)!],
       if (_attackMixShift(r) != null)
         ["Szünet-váltás", _attackMixShift(r)!],
+      if (_passDirectionByScore(r) != null)
+        ["Passz-irány-állás", _passDirectionByScore(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
