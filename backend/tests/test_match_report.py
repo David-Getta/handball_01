@@ -1267,3 +1267,37 @@ def test_player_report_shows_turnovers():
     m = Match(MatchMeta(match_id="pc", home_team="H", away_team="A",
                         fps=25.0), frames)
     assert "Labdaeladás" in player_report_html(m, 1)
+
+
+def test_report_allas_lencse_section_lists_verdicts():
+    """Ha egy állás-réteg ítéletet mond, az Állás-lencse szekció
+    megjelenik a jelentésben az ítélet szövegével."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+
+    meta = MatchMeta(match_id="rep-ens", home_team="Hazai",
+                     away_team="Vendég", fps=25.0)
+
+    def pl(tid, team, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y, role=role)
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        # 4 mp üres-kapus (7a6) hazai szakasz döntetlen állásnál.
+        for _ in range(int(4 * 25)):
+            frames.append(Frame(t=t, players=[
+                pl(1, Team.HOME, 30.0, 10.0),
+                pl(2, Team.HOME, 25.0, 10.0, role="kapus"),
+            ], ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(3 * 25)):
+            frames.append(Frame(t=t, players=[
+                pl(2, Team.HOME, 1.0, 10.0, role="kapus"),
+            ], ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+            t += 1
+    m = Match(meta, frames)
+
+    html = match_report_html(m, {}, [], None)
+    assert "Állás-lencse (az eredményjelző szerint)" in html
+    assert "állástól függetlenül lehozzák a kapust" in html

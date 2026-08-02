@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Meccs-jelentés: Állás-lencse szekció** — a HTML-jelentésben új
+  táblázat gyűjti egy helyre az eredményjelző szerinti rétegek
+  megszólaló ítéleteit (hiba-, kontra-, fegyelem-, hetes-, 7a6-,
+  passz-irány- és passz-hossz-állás), csapatonként.
 - **Passz-hossz-állás** (`pass_length_by_score`): a hosszú (10 m
   feletti) passzok részaránya az eredményjelző szerint — a hátrányban
   megugró hosszú-passz arány kapkodó átdobálás, elfogható labdákkal.
