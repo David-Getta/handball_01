@@ -1386,6 +1386,40 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         except Exception:
             pass
 
+        # Ember-lencse: a néven nevezett játékos-minták ítéletei egy
+        # helyen — csak a megszólaló (nem None) ítéletek jelennek meg.
+        try:
+            from .defense import fading_defenders
+            from .momentum import (clutch_ball_hogs, comeback_carriers,
+                                   drought_breakers, fading_scorers,
+                                   hot_hands)
+            prows = []
+            for label, fn in (
+                    ("Tüzes kéz", hot_hands),
+                    ("Aszály-törő", drought_breakers),
+                    ("Hajrá-birtokló", clutch_ball_hogs),
+                    ("Eltűnő ember", fading_scorers),
+                    ("Eltűnő védő", fading_defenders),
+                    ("Felzárkózás-húzó", comeback_carriers)):
+                try:
+                    res_p = fn(match)
+                except Exception:
+                    continue
+                for key, name in (("home", home), ("away", away)):
+                    v = (res_p.get(key) or {}).get("verdict")
+                    if v:
+                        prows.append(f"<tr><td>{escape(name)}</td>"
+                                     f"<td>{escape(label)}</td>"
+                                     f"<td>{escape(str(v))}</td></tr>")
+            if prows:
+                parts_html.append(
+                    "<h2>Ember-lencse (néven nevezett minták)</h2>"
+                    "<table><tr><th>Csapat</th><th>Réteg</th>"
+                    "<th>Ítélet</th></tr>" + "".join(prows)
+                    + "</table>")
+        except Exception:
+            pass
+
         rules_html = "".join(parts_html)
     except Exception:
         pass

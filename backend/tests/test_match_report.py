@@ -1468,3 +1468,55 @@ def test_report_szunet_lencse_section_lists_verdicts():
     html = match_report_html(m, {}, [], None)
     assert "Szünet-lencse (mi változik a 2. félidőre)" in html
     assert "a szünet után falat váltanak (6-0 → 5-1)" in html
+
+
+def test_report_ember_lencse_section_lists_verdicts():
+    """Ha egy játékos-réteg ítéletet mond, az Ember-lencse szekció
+    megjelenik a jelentésben az ítélet szövegével."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+
+    meta = MatchMeta(match_id="rep-cbc", home_team="Hazai",
+                     away_team="Vendég", fps=25.0)
+
+    def goal(frames, t, team, shooter, hold_x, goal_x):
+        step = 0.5 if goal_x > hold_x else -0.5
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=shooter, team=team,
+                               x=hold_x, y=10.0)],
+                ball=Ball(x=hold_x, y=10.0, confidence=1.0)))
+            t += 1
+        x = hold_x
+        while (x < goal_x) if step > 0 else (x > goal_x):
+            x += step
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=shooter, team=team,
+                               x=hold_x, y=10.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # Ellen-érintés a fantom passzok ellen.
+        other = Team.AWAY if team == Team.HOME else Team.HOME
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=99, team=other, x=20.0, y=10.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        t = goal(frames, t, Team.HOME, 1, 33.0, 40.5)
+    for _ in range(3):
+        t = goal(frames, t, Team.AWAY, 9, 10.0, -0.5)
+    m = Match(meta, frames)
+
+    html = match_report_html(m, {}, [], None)
+    assert "Ember-lencse (néven nevezett minták)" in html
+    assert "hozza őket vissza" in html

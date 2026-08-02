@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Meccs-jelentés: Ember-lencse szekció** — a HTML-jelentésben új
+  táblázat gyűjti egy helyre a néven nevezett játékos-minták
+  megszólaló ítéleteit (tüzes kéz, aszály-törő, hajrá-birtokló,
+  eltűnő ember, eltűnő védő, felzárkózás-húzó), csapatonként.
 - **Felzárkózás-húzó** (`comeback_carriers`): játékosonkénti
   gól-részvétel aszerint, hogy a csapat épp hátrányban volt-e — kin
   keresztül jönnek vissza. Edzői olvasat: vezetésnél a mentőember
