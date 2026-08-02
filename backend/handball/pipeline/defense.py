@@ -3536,3 +3536,66 @@ def corridor_goals(match, config=None) -> dict:
             elif pct <= CRG_CLOSED_PCT:
                 rec["verdict"] = "zárt fal mögött is bekapják"
     return out
+
+
+# Bontó tempó: a kapott gól előtti ennyi másodperc passzait számoljuk;
+# ennyi kapott gól kell az ítélethez, és e feletti / alatti
+# passz-átlag a járatással szétszedett, illetve az egyéni akciókból
+# kapott gólok jele.
+CTM_WINDOW_S = 8.0
+CTM_MIN_GOALS = 5
+CTM_FAST_AVG = 3.0
+CTM_SLOW_AVG = 1.5
+
+
+def conceded_tempo(match, config=None) -> dict:
+    """Bontó tempó: A JÁRATÁS SZEDI-E SZÉT a védekezésüket.
+
+    A passz-lánc a támadó oldal türelmét méri — ez a kapott gólok
+    előzményét: az utolsó CTM_WINDOW_S másodperc passzainak átlagos
+    számát a kapott gólok előtt. Akit a pörgő járatás bont meg, annál
+    a fal a váltásoknál nyílik szét; akit egyéni akciókból lőnek
+    szét, ott a párharc-védekezés az igazi gond.
+
+    Edzőileg: a járatással szétszedhető csapat ellen tempót KELL
+    emelni — minél több oldalváltás és passz, annál előbb nyílik a
+    rés; az egyéni akciókból bekapó ellen az 1v1-ben erős embereket
+    kell rájuk engedni, a hosszú járatás csak időt ad nekik
+    rendeződni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals",
+    "passes_sum", "avg_passes", "verdict"} — az avg_passes/verdict
+    None CTM_MIN_GOALS alatt; a verdict "a járatás szedi szét őket" /
+    "egyéni akciókból kapják a gólokat" / None.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(CTM_WINDOW_S * fps)
+    passes = detect_passes(match, config)
+
+    out = {side: {"goals": 0, "passes_sum": 0, "avg_passes": None,
+                  "verdict": None} for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        deff = "away" if e.team.value == "home" else "home"
+        n = sum(1 for pe in passes
+                if pe.team == e.team and e.t - win <= pe.t <= e.t)
+        rec = out[deff]
+        rec["goals"] += 1
+        rec["passes_sum"] += n
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["goals"] >= CTM_MIN_GOALS:
+            avg = rec["passes_sum"] / rec["goals"]
+            rec["avg_passes"] = round(avg, 1)
+            if avg >= CTM_FAST_AVG:
+                rec["verdict"] = "a járatás szedi szét őket"
+            elif avg <= CTM_SLOW_AVG:
+                rec["verdict"] = "egyéni akciókból kapják a gólokat"
+    return out

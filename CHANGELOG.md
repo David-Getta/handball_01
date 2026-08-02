@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Bontó tempó**: A JÁRATÁS SZEDI-E SZÉT a védekezésüket. A
+  gól-pillanati család negyedik tagja: a kapott gólok előtti 8
+  másodperc passzainak átlaga (5+ kapott gól; 3+ passz a járatásos,
+  1,5 alatti az egyéni-akciós gólok jele). Akit a pörgés bont meg,
+  az ellen tempót kell emelni — a fal a váltásoknál nyílik; akit
+  egyéni akciókból lőnek szét, arra az 1v1-ben erős embereket kell
+  engedni. Egy réteg, sok felület: `conceded_tempo` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (darabszámok, két edzői kulcs + csempe), 219. meccsterv-szabály
+  (az ő járatással bontható faluk × a ti oldalváltós járatásotok),
+  240. edzés-szabály (váltás tempó alatt).
+
 - **Folyosó-gólok**: NYITOTT FOLYOSÓN kapják-e a gólokat. Az
   átvert védők a lövő melletti párharcot nézik — ez a lövés útját:
   a kapott góloknál volt-e bárki a lövő és a kapu-közép közti

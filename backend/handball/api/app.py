@@ -3464,6 +3464,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import conceded_tempo
+            res["conceded_tempo"] = conceded_tempo(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4394,6 +4399,9 @@ def create_app():
                 from ..pipeline.defense import corridor_goals
                 _layer("corridor_goals",
                        lambda: corridor_goals(match))
+                from ..pipeline.defense import conceded_tempo
+                _layer("conceded_tempo",
+                       lambda: conceded_tempo(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

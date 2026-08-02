@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 240) Bontó tempó: ha a járatás szed szét minket, a váltás-
+    # fegyelem tempó alatt a téma.
+    try:
+        from .defense import conceded_tempo
+        ctm240 = conceded_tempo(match, config)
+        for side in ("home", "away"):
+            rec240 = ctm240[side]
+            if rec240["verdict"] != "a járatás szedi szét őket":
+                continue
+            add(side, "vedekezes", "Váltás tempó alatt",
+                f"a kapott góljaink előtt átlag "
+                f"{rec240['avg_passes']:.1f} passz megy 8 mp-en "
+                "belül — a pörgő járatásnál a váltásaink késnek, és "
+                "a fal szétnyílik",
+                "váltás tempó alatt: a fal 6v6 ellen kap pörgő "
+                "járatást (kötelező minimum passz-szám a támadónak), "
+                "és hangos, korai váltással tart — az edzésmeccsen "
+                "a harmadik passz utáni kapott gól dupla mínusz, a "
+                "tempó alatt is zárt fal pont")
+    except Exception:
+        pass
     # 239) Folyosó-gólok: ha nyitott folyosókon kapjuk a gólokat, a
     # visszazárás és a fal-zárás a téma.
     try:

@@ -2435,3 +2435,62 @@ def test_corridor_goals_needs_enough_goals():
 
     rec = corridor_goals(_crg_match(False, n_goals=3))["away"]
     assert rec["verdict"] is None
+
+
+# ---- Bontó tempó (a járatás szedi-e szét a védekezést) ----------------------
+
+def _ctm_match(with_passes, n_goals=5, fps=25.0):
+    """Hazai gól-sorozat: a gól előtt négyszeri gyors átadás (vagy
+    csak a lövő birtoklása) — a bontó tempó így mérhető."""
+    frames = []
+    t = 0
+    spots = [(28.0, 6.0), (28.0, 14.0), (32.0, 6.0), (32.0, 14.0)]
+
+    def _emit(bx, by, n):
+        nonlocal t
+        for _ in range(n):
+            players = [_pl(k + 1, Team.HOME, x, y)
+                       for k, (x, y) in enumerate(spots)]
+            players.append(_pl(9, Team.HOME, 33.0, 10.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=by, confidence=1.0)))
+            t += 1
+
+    for _ in range(n_goals):
+        if with_passes:
+            for (x, y) in spots:        # gyors körbejáratás
+                _emit(x, y, 6)
+        _emit(33.0, 10.0, 10)           # a lövőnél (9-es) a labda
+        for i in range(8):              # gól a +x kapura
+            _emit(min(33.0 + (i + 1), 40.5), 10.0, 1)
+        for _ in range(40):             # szünet a gólok közt
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_conceded_tempo_flags_the_circulation_victim():
+    """Gyors járatás után esett gólok → a járatás szedi szét őket."""
+    from handball.pipeline.defense import conceded_tempo
+
+    rec = conceded_tempo(_ctm_match(True))["away"]
+    assert rec["goals"] >= 5
+    assert rec["verdict"] == "a járatás szedi szét őket"
+
+
+def test_conceded_tempo_flags_the_duel_victim():
+    """Járatás nélküli gólok → egyéni akciókból kapják."""
+    from handball.pipeline.defense import conceded_tempo
+
+    rec = conceded_tempo(_ctm_match(False))["away"]
+    assert rec["verdict"] == "egyéni akciókból kapják a gólokat"
+
+
+def test_conceded_tempo_needs_enough_goals():
+    """Kevés (5-nél kevesebb) kapott gólnál nincs ítélet."""
+    from handball.pipeline.defense import conceded_tempo
+
+    rec = conceded_tempo(_ctm_match(True, n_goals=3))["away"]
+    assert rec["verdict"] is None

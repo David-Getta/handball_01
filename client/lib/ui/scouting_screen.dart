@@ -1759,6 +1759,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Bontó tempó: a járatás szedi-e szét a védekezésüket (5+ kapott
+  // gól; 3+ passz-átlag járatásos, 1,5- egyéni — a backend-kulccsal
+  // azonos küszöbök).
+  String? _concededTempo(Map<String, dynamic> r) {
+    final goals = ((r["ctm_goals"] as num?) ?? 0).toInt();
+    final sum = ((r["ctm_passes_sum"] as num?) ?? 0).toInt();
+    if (goals < 5) return null;
+    final avg = sum / goals;
+    if (avg >= 3.0) {
+      return "a járatás szedi szét őket (átlag "
+          "${avg.toStringAsFixed(1)} passz a kapott góljaik előtt) · "
+          "tempót emelj: oldalváltásoknál nyílik a faluk";
+    }
+    if (avg <= 1.5) {
+      return "egyéni akciókból kapják a gólokat (átlag "
+          "${avg.toStringAsFixed(1)} passz) · az 1v1-ben erős "
+          "embereidet engedd rájuk";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5683,6 +5704,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Csere-büntetés", _gapPunishment(r)!],
       if (_corridorGoals(r) != null)
         ["Folyosó-gólok", _corridorGoals(r)!],
+      if (_concededTempo(r) != null)
+        ["Bontó tempó", _concededTempo(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

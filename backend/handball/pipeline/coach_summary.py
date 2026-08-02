@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Bontó tempó: a járatás szedi-e szét a védekezésüket.
+    try:
+        from .defense import conceded_tempo
+        ctm = conceded_tempo(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ctm = ctm[side]
+            if rec_ctm["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védekezéséről kiderült: "
+                     f"{rec_ctm['verdict']} (a kapott gólok előtt "
+                     f"átlag {rec_ctm['avg_passes']:.1f} passz ment "
+                     "8 másodpercen belül).")
+    except Exception:
+        pass
     # Folyosó-gólok: nyitott folyosón kapják-e a gólokat.
     try:
         from .defense import corridor_goals
