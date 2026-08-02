@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kontra-állás: mikor futják a lerohanásaikat.
+    try:
+        from .attack_types import breaks_by_score
+        bks = breaks_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bks = bks[side]
+            if rec_bks["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontra-képe az állást követi: "
+                     f"{rec_bks['verdict']} "
+                     f"({rec_bks['trailing']['breaks']} lerohanás "
+                     f"hátrányban, {rec_bks['leading']['breaks']} "
+                     "vezetésnél).")
+    except Exception:
+        pass
     # Hetes-állás: mikor harcolják ki a heteseket.
     try:
         from .rules import sevens_by_score

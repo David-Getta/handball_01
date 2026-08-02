@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 252) Kontra-állás: ha hátrányban kontrába menekülünk, a
+    # szervezett visszajövetel a téma — a kapkodó futás labdát ad el.
+    try:
+        from .attack_types import breaks_by_score
+        bks252 = breaks_by_score(match, config)
+        for side in ("home", "away"):
+            rec252 = bks252[side]
+            if rec252["verdict"] != "hátrányban kontrába menekülnek":
+                continue
+            add(side, "tamadas", "Szervezett visszajövetel",
+                f"hátrányban kontrába menekülünk (hátrányban "
+                f"{rec252['trailing']['breaks']} lerohanás "
+                f"{rec252['trailing']['attacks']} támadásból) — a "
+                "kapkodó futás kockázatos labdákkal jár",
+                "szervezett visszajövetel: hátrány-szituációs játék, "
+                "ahol a kontra CSAK tiszta szerzés után indulhat — "
+                "minden más labdánál kötelező a felállt támadás; a "
+                "cél, hogy a hátrány ne kapcsolja ki a döntéshozatalt")
+    except Exception:
+        pass
     # 251) Hetes-állás: ha vezetésnél sorra adjuk az olcsó heteseket a
     # hátrányban lévőnek, a vezetés-őrző lábmunka a téma.
     try:

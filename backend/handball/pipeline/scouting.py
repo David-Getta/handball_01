@@ -676,6 +676,10 @@ class ScoutingReport:
     svs_tr: int = 0
     svs_lead: int = 0
     svs_level: int = 0
+    bks_tr_attacks: int = 0
+    bks_tr_breaks: int = 0
+    bks_rest_attacks: int = 0
+    bks_rest_breaks: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2627,6 +2631,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"{_svs_n} kiharcolt hetesük hátrányban jött) — ha "
             "vezettek, a fal lábbal védekezzen és ne üssön: a "
             "betörőjük a kezet keresi, a kapusnál hetes-készenlét.")
+
+    # Kontra-állás: hátrányban futni fognak.
+    if rep.bks_tr_attacks >= 5 and rep.bks_rest_attacks >= 5:
+        _bks_tr = 100.0 * rep.bks_tr_breaks / rep.bks_tr_attacks
+        _bks_rest = 100.0 * rep.bks_rest_breaks / rep.bks_rest_attacks
+        if _bks_tr - _bks_rest >= 12.0:
+            keys.append(
+                f"Hátrányban kontrába menekülnek (hátrányban a "
+                f"támadásaik {_bks_tr:.0f}%-a lerohanás, egyébként "
+                f"{_bks_rest:.0f}%) — ha vezettek, a visszafutás-"
+                "fegyelem dönt: fáradt lábbal is vissza kell érni, "
+                "mert futni fognak.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6571,6 +6587,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.svs_tr = svsrec["trailing"]
         rep.svs_lead = svsrec["leading"]
         rep.svs_level = svsrec["level"]
+        from .attack_types import breaks_by_score as _bks
+        bksrec = _bks(match, config)[team.value]
+        rep.bks_tr_attacks = bksrec["trailing"]["attacks"]
+        rep.bks_tr_breaks = bksrec["trailing"]["breaks"]
+        rep.bks_rest_attacks = (bksrec["leading"]["attacks"]
+                                + bksrec["level"]["attacks"])
+        rep.bks_rest_breaks = (bksrec["leading"]["breaks"]
+                               + bksrec["level"]["breaks"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8990,6 +9014,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 231) Az ő kényszer-kontráik × a ti visszazárásotok: vezetésnél
+    # futni fognak, és ti ezt elbírjátok.
+    if (opp.bks_tr_attacks >= 5 and opp.bks_rest_attacks >= 5
+            and own.transition_turnovers >= 5):
+        _bks231 = (100.0 * opp.bks_tr_breaks / opp.bks_tr_attacks
+                   - 100.0 * opp.bks_rest_breaks
+                   / opp.bks_rest_attacks)
+        _own_ga231 = (100.0 * own.transition_goals_against
+                      / own.transition_turnovers)
+        if _bks231 >= 12.0 and _own_ga231 <= 20.0:
+            plan.append(
+                f"Hátrányban kontrába menekülnek (a hátrány-"
+                f"támadásaik lerohanás-többlete {_bks231:.0f} "
+                f"százalékpont), a ti visszazárásotok pedig bírja "
+                f"(a labdavesztéseitek után csak {_own_ga231:.0f}% "
+                "a gyors kapott gól) — ha vezettek, hagyjátok őket "
+                "futni: a kapkodó kontra a ti rendezett "
+                "visszaérésetekkel szemben eladott labda.")
 
     # 230) Az ő hátrány-heteseik × a ti lábbal védekező faltok: a
     # menekülő-fegyverük elvehető.
@@ -12659,6 +12702,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         svs_tr=sum(r.svs_tr for r in reports),
         svs_lead=sum(r.svs_lead for r in reports),
         svs_level=sum(r.svs_level for r in reports),
+        bks_tr_attacks=sum(r.bks_tr_attacks for r in reports),
+        bks_tr_breaks=sum(r.bks_tr_breaks for r in reports),
+        bks_rest_attacks=sum(r.bks_rest_attacks for r in reports),
+        bks_rest_breaks=sum(r.bks_rest_breaks for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

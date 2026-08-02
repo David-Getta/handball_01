@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kontra-állás** (`breaks_by_score`): a lerohanás-részarány az
+  eredményjelző szerint — hátrányban megugró kontra-arány =
+  kényszer-kontra, vezetésnél is futó csapat = ölő ösztön. Edzői
+  olvasat: a kényszer-kontrás ellen vezetésnél a visszafutás-fegyelem
+  dönt; a saját oldalon a hátrányban is szervezett visszajövetel a
+  téma. Felületek: `/analyze` + meccs-csomag (`breaks_by_score`),
+  edzői összefoglaló, felderítés (edzői kulcs + 231-es
+  meccsterv-szabály), edzés-fókusz (252-es szabály), kliens-csempe.
 - **Hetes-állás** (`sevens_by_score`): a kiharcolt hetesek az
   eredményjelző szerint — hátrányban sűrűsödő hetes = a betörés és a
   kontakt a menekülő-fegyver. Edzői olvasat: az ilyen csapat ellen

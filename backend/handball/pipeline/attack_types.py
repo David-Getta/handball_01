@@ -4310,6 +4310,78 @@ def turnovers_by_score(match: Match,
     return out
 
 
+# Kontra-állás: a lerohanás-részarány az eredményjelző szerint.
+BKS_MIN_ATTACKS = 5   # az összevetett állapotokban ennyi-ennyi támadás kell
+BKS_GAP_PP = 12.0     # ekkora részarány-különbség számít mintázatnak
+
+
+def breaks_by_score(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Kontra-állás: MIKOR futják a lerohanásaikat — állás szerint.
+
+    A kontra-esés (break_share_fade) az időtengelyen nézi a
+    lerohanás-részarányt — ez az eredményjelzőn: a támadás kezdetén
+    vezetett, állt vagy hátrányban volt-e a támadó csapat, és
+    állásonként mekkora a lerohanások részaránya. A hátrányban
+    megugró kontra-arány a kényszer-kontra: a lemaradó csapat
+    kapkodva futással próbál visszajönni — kockázatos labdákkal; a
+    vezetésnél is futó csapat az ölő ösztön: nem ül rá az előnyre.
+
+    Edzőileg: a kényszer-kontrás csapat ellen vezetésnél a
+    visszafutás-fegyelem dönt — futni fognak; a vezetésnél is futó
+    ellen sosincs "kockázatmentes" perc. A saját oldalon a hátrányban
+    is szervezett (nem kapkodó) visszajövetel az edzés-téma.
+
+    Visszatérés csapatonként: {"leading"/"trailing"/"level":
+    {"attacks", "breaks"}, "verdict"} — a verdict "hátrányban
+    kontrába menekülnek" / "vezetésnél is futják a kontráikat" /
+    None (állapotonként BKS_MIN_ATTACKS-nál kevesebb támadásnál).
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    out = {side: {k: {"attacks": 0, "breaks": 0}
+                  for k in ("leading", "trailing", "level")}
+           for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        t0 = a["start_frame"]
+        own = sum(1 for (t, tm) in goals if t < t0 and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < t0 and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        rec = out[side][state]
+        rec["attacks"] += 1
+        if a["type"] == AttackType.FAST_BREAK.value:
+            rec["breaks"] += 1
+
+    for side in ("home", "away"):
+        buckets = out[side]
+        verdict = None
+        tr = buckets["trailing"]
+        lead = buckets["leading"]
+        rest_tr_att = lead["attacks"] + buckets["level"]["attacks"]
+        rest_tr_brk = lead["breaks"] + buckets["level"]["breaks"]
+        if tr["attacks"] >= BKS_MIN_ATTACKS \
+                and rest_tr_att >= BKS_MIN_ATTACKS:
+            diff = (100.0 * tr["breaks"] / tr["attacks"]
+                    - 100.0 * rest_tr_brk / rest_tr_att)
+            if diff >= BKS_GAP_PP:
+                verdict = "hátrányban kontrába menekülnek"
+        rest_ld_att = tr["attacks"] + buckets["level"]["attacks"]
+        rest_ld_brk = tr["breaks"] + buckets["level"]["breaks"]
+        if verdict is None and lead["attacks"] >= BKS_MIN_ATTACKS \
+                and rest_ld_att >= BKS_MIN_ATTACKS:
+            diff = (100.0 * lead["breaks"] / lead["attacks"]
+                    - 100.0 * rest_ld_brk / rest_ld_att)
+            if diff >= BKS_GAP_PP:
+                verdict = "vezetésnél is futják a kontráikat"
+        buckets["verdict"] = verdict
+    return out
+
+
 # Kidobott labda: az oldalvonalon kimenő labda — a legolcsóbb eladás.
 OBT_BASELINE_GUARD_M = 3.0  # az alapvonal közelében kimenőt nem számoljuk
 OBT_DEBOUNCE_S = 3.0        # két kimenés között legalább ennyi idő

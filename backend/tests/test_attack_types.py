@@ -3265,3 +3265,88 @@ def test_balls_out_few_samples_no_verdict():
     ob = balls_out(_obt_match(1))
     assert ob["home"]["out"] == 1
     assert ob["home"]["verdict"] is None
+
+
+def _bks_match():
+    """5 döntetlennél futott felállt hazai támadás, majd 3 vendég-gól,
+    utána 5 hátrányban futott hazai lerohanás."""
+    meta = MatchMeta(match_id="bks", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+
+    def neutral(n=10):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    # 5 hazai felállt támadás döntetlennél (8 mp állás x=30-nál).
+    for _ in range(5):
+        for _ in range(int(8 * 25)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        neutral()
+
+    # 3 vendég-gól: a lövő (10,10)-ről az x=0 kapuba lő.
+    for _ in range(3):
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[_pl(9, Team.AWAY, 10.0, 10.0)],
+                                ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+            t += 1
+        x = 10.0
+        while x > -0.5:
+            x -= 0.5
+            frames.append(Frame(t=t, players=[_pl(9, Team.AWAY, 10.0, 10.0)],
+                                ball=Ball(x=max(x, -0.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # Zóna-reset: a labda a felező közelében pihen.
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    # 5 hazai lerohanás hátrányban: 3 mp alatt x=21 → 33 (4 m/s).
+    for _ in range(5):
+        for k in range(int(3 * 25)):
+            x = 21.0 + 12.0 * (k + 1) / (3 * 25)
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x, 10.0)],
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        neutral()
+    return Match(meta, frames)
+
+
+def test_breaks_by_score_flags_forced_breaks():
+    """Döntetlennél felállt, hátrányban csupa lerohanás → kényszer-kontra."""
+    from handball.pipeline.attack_types import breaks_by_score
+
+    bks = breaks_by_score(_bks_match())
+    h = bks["home"]
+    assert h["level"]["attacks"] >= 5 and h["level"]["breaks"] == 0
+    assert h["trailing"]["attacks"] >= 5
+    assert h["trailing"]["breaks"] >= 5
+    assert h["verdict"] == "hátrányban kontrába menekülnek"
+    assert bks["away"]["verdict"] is None
+
+
+def test_breaks_by_score_few_samples_none():
+    """Kevés (5-nél kevesebb) támadás állapotonként → nincs ítélet."""
+    from handball.pipeline.attack_types import breaks_by_score
+
+    meta = MatchMeta(match_id="bks2", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(3):
+        for _ in range(int(8 * 25)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+            t += 1
+    bks = breaks_by_score(Match(meta, frames))
+    assert bks["home"]["verdict"] is None

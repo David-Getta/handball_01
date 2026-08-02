@@ -1896,6 +1896,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Kontra-állás: hátrányban megugró lerohanás-arány (5+ támadás
+  // állapotonként, 12 pp többlet — a backenddel azonos küszöbök).
+  String? _breaksByScore(Map<String, dynamic> r) {
+    final trA = ((r["bks_tr_attacks"] as num?) ?? 0).toInt();
+    final trB = ((r["bks_tr_breaks"] as num?) ?? 0).toInt();
+    final restA = ((r["bks_rest_attacks"] as num?) ?? 0).toInt();
+    final restB = ((r["bks_rest_breaks"] as num?) ?? 0).toInt();
+    if (trA < 5 || restA < 5) return null;
+    final diff = 100.0 * trB / trA - 100.0 * restB / restA;
+    if (diff < 12.0) return null;
+    return "hátrányban kontrába menekülnek (+${diff.toStringAsFixed(0)} "
+        "pp lerohanás-többlet hátrányban) · ha vezetsz, a "
+        "visszafutás-fegyelem dönt: futni fognak";
+  }
+
   // Hetes-állás: mikor harcolják ki a heteseket (3+ hetes, 2-es
   // hátrány-többlet — a backenddel azonos küszöbök).
   String? _sevensByScore(Map<String, dynamic> r) {
@@ -5906,6 +5921,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fegyelem-állás", _suspensionsByScore(r)!],
       if (_sevensByScore(r) != null)
         ["Hetes-állás", _sevensByScore(r)!],
+      if (_breaksByScore(r) != null)
+        ["Kontra-állás", _breaksByScore(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
