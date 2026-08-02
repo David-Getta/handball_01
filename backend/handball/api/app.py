@@ -3604,6 +3604,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.summary_en import match_card_en
+            res["match_card_en"] = match_card_en(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4615,6 +4620,8 @@ def create_app():
                 from ..pipeline.momentum import comeback_carriers
                 _layer("comeback_carriers",
                        lambda: comeback_carriers(match))
+                from ..pipeline.summary_en import match_card_en
+                _layer("match_card_en", lambda: match_card_en(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

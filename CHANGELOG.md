@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Angol meccs-kártya** (`match_card_en`, új `pipeline/summary_en`
+  modul): tömör, ítélet-mentes angol összefoglaló a meccsről
+  (eredmény, félidő, gólfelelősök, hatékonyság, leghosszabb sorozat,
+  hetesek, kiállítások) — a nemzetközi felület első lépése (EU-s
+  pilotok, bemutatók, EIC-értékelők); ami nem állapítható meg, azt a
+  kártya kihagyja, nem találgatja. Felület: `/analyze` + meccs-csomag.
 - **Meccs-jelentés: Ember-lencse szekció** — a HTML-jelentésben új
   táblázat gyűjti egy helyre a néven nevezett játékos-minták
   megszólaló ítéleteit (tüzes kéz, aszály-törő, hajrá-birtokló,
