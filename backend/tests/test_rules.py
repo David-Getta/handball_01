@@ -1218,3 +1218,80 @@ def test_susp_earner_roles_needs_enough_suspensions():
 
     rec = susp_earner_roles(_sur_match(n_susp=2))["away"]
     assert rec["top"] is None
+
+
+def _sps_away_goal_frames(t0, fps=25.0):
+    """Egy vendég-gól: 6v6 létszám mellett a vendég lövő (6,10)-ről a
+    x=0 kapuba lő, majd a labda lassú visszavitel helyett a felezőre
+    kerül (zóna-reset szünettel)."""
+    def crowd(shooter_ball_x, shooter_x=6.0):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 3.0 + 2 * k)
+                   for k in range(6)]
+        players += [_pl(201 + k, Team.AWAY, 16.0 + k, 4.0 + 2 * k)
+                    for k in range(5)]
+        players.append(_pl(200, Team.AWAY, shooter_x, 10.0))
+        return players
+
+    frames = []
+    t = t0
+    # 40 kocka: a vendég lövő tartja a labdát (6,10)-nél.
+    for _ in range(40):
+        frames.append(Frame(t=t, players=crowd(6.0),
+                            ball=Ball(x=6.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Lövés: a labda 0,5/kocka lépésben a kapuba (x=0 alá) repül.
+    x = 6.0
+    while x > -0.5:
+        x -= 0.5
+        frames.append(Frame(t=t, players=crowd(x),
+                            ball=Ball(x=max(x, -0.5), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    # Zóna-reset: a labda a felezőn pihen 40 kockát.
+    for _ in range(40):
+        frames.append(Frame(t=t, players=crowd(20.0),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_suspensions_by_score_frustration_verdict():
+    """3 korai vendég-gól után 3 hazai kiállítás (hátrányban) →
+    'hátrányban elszáll a fegyelmük'."""
+    from handball.pipeline.rules import suspensions_by_score
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        gf, t = _sps_away_goal_frames(t)
+        frames += gf
+    # 3 hazai kiállítás külön 60 mp-es szakaszban, köztük visszaállás.
+    for _ in range(3):
+        frames += _roster_frames(t, 60, 5, 6)
+        t = frames[-1].t + 1
+        frames += _roster_frames(t, 30, 6, 6)
+        t = frames[-1].t + 1
+
+    sps = suspensions_by_score(Match(_meta(), frames))
+    h = sps["home"]
+    assert h["trailing"] == 3
+    assert h["leading"] == 0 and h["level"] == 0
+    assert h["verdict"] == "hátrányban elszáll a fegyelmük"
+    assert sps["away"]["verdict"] is None
+
+
+def test_suspensions_by_score_few_samples_none():
+    """2 kiállítás (döntetlennél) → kevés minta, nincs ítélet."""
+    from handball.pipeline.rules import suspensions_by_score
+
+    frames = []
+    t = 0
+    for _ in range(2):
+        frames += _roster_frames(t, 60, 5, 6)
+        t = frames[-1].t + 1
+        frames += _roster_frames(t, 30, 6, 6)
+        t = frames[-1].t + 1
+    sps = suspensions_by_score(Match(_meta(), frames))
+    assert sps["home"]["trailing"] + sps["home"]["leading"] \
+        + sps["home"]["level"] == 2
+    assert sps["home"]["verdict"] is None

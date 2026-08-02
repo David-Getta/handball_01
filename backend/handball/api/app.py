@@ -3514,6 +3514,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import suspensions_by_score
+            res["suspensions_by_score"] = suspensions_by_score(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4473,6 +4478,9 @@ def create_app():
                        lambda: slow_attack_cost(match))
                 from ..pipeline.attack_types import balls_out
                 _layer("balls_out", lambda: balls_out(match))
+                from ..pipeline.rules import suspensions_by_score
+                _layer("suspensions_by_score",
+                       lambda: suspensions_by_score(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

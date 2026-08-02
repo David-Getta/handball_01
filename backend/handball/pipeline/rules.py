@@ -124,6 +124,58 @@ def suspensions_from_powerplay(match: Match) -> list[Suspension]:
             for w in detect_powerplay(match)]
 
 
+# Fegyelem-állás: kiállítások az eredményjelző szerint.
+SPS_MIN_TOTAL = 3   # ennyi kiállítás alatt nincs ítélet
+SPS_DIFF = 2        # ekkora többlet számít mintázatnak
+
+
+def suspensions_by_score(match: Match, config=None) -> dict:
+    """Fegyelem-állás: MIKOR jönnek a kiállítások — állás szerint.
+
+    A fegyelem-esés (discipline_fade) az időtengelyen nézi a
+    kiállításokat — ez az eredményjelzőn: a kiállítás pillanatában
+    vezetett, állt vagy hátrányban volt-e a kiállított csapat. A
+    hátrányban sűrűsödő kiállítás a frusztrációs szabálytalanság
+    jele: aki az eredmény után fut, késve érkezik és üt. Az előnyben
+    sűrűsödő a vezetés-őrző (hideg) keménység.
+
+    Edzőileg: a frusztrációs csapat ellen a vezetés maga a fegyver —
+    vállalt kontakt és türelmes játék kiállítást terem; a saját
+    oldalon a hátrányban is hideg fej az edzés-téma, mert a
+    frusztrációs kiállítás dupla ár: ember is, gól is.
+
+    Visszatérés csapatonként: {"trailing", "leading", "level",
+    "verdict"} — a verdict "hátrányban elszáll a fegyelmük" /
+    "előnyben szabálytalankodnak" / None (kevés kiállítás vagy
+    egyenletes kép).
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    out = {side: {"trailing": 0, "leading": 0, "level": 0,
+                  "verdict": None} for side in ("home", "away")}
+    for w in detect_powerplay(match):
+        side = w["team_down"]
+        t0 = w["start_frame"]
+        own = sum(1 for (t, tm) in goals if t < t0 and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < t0 and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        out[side][state] += 1
+    for rec in out.values():
+        total = rec["trailing"] + rec["leading"] + rec["level"]
+        if total < SPS_MIN_TOTAL:
+            continue
+        if rec["trailing"] - (rec["leading"] + rec["level"]) >= SPS_DIFF:
+            rec["verdict"] = "hátrányban elszáll a fegyelmük"
+        elif rec["leading"] - (rec["trailing"] + rec["level"]) >= SPS_DIFF:
+            rec["verdict"] = "előnyben szabálytalankodnak"
+    return out
+
+
 # Fegyelem-esés: ennyi kiállítástól ítélünk, és ekkora félidők közti
 # többlet számít mintázatnak (nem egyszeri balszerencsének).
 DISC_FADE_MIN_TOTAL = 3

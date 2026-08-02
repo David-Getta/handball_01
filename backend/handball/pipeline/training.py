@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 250) Fegyelem-állás: ha a kiállításaink hátrányban sűrűsödnek,
+    # a hideg fej a téma — a frusztrációs kiállítás dupla ár.
+    try:
+        from .rules import suspensions_by_score
+        sps250 = suspensions_by_score(match, config)
+        for side in ("home", "away"):
+            rec250 = sps250[side]
+            if rec250["verdict"] != "hátrányban elszáll a fegyelmük":
+                continue
+            add(side, "taktika", "Hideg fej hátrányban",
+                f"a kiállításaink az eredményt követik "
+                f"({rec250['trailing']} kiállítás hátrányban) — "
+                "frusztrációból ütünk, és az dupla ár: ember is, "
+                "emberhátrányban kapott gól is",
+                "hideg fej-protokoll: hátrány-szituációs edzésmeccs "
+                "(mínusz kettőről indul a csapat), ahol a "
+                "szabálytalanság azonnali cserét ér — a cél a "
+                "hátrányban is szabályos, lábbal dolgozó védekezés")
+    except Exception:
+        pass
     # 249) Kidobott labda: ha sok labdát dobunk ki magunktól, a
     # szélső-passz pontossága és az indítás-hossz kontrollja a téma.
     try:

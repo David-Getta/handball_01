@@ -1896,6 +1896,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Fegyelem-állás: kiállítások az állás szerint (3+ kiállítás, 2-es
+  // többlet — a backenddel azonos küszöbök).
+  String? _suspensionsByScore(Map<String, dynamic> r) {
+    final tr = ((r["sps_tr"] as num?) ?? 0).toInt();
+    final lead = ((r["sps_lead"] as num?) ?? 0).toInt();
+    final level = ((r["sps_level"] as num?) ?? 0).toInt();
+    final total = tr + lead + level;
+    if (total < 3) return null;
+    if (tr - (lead + level) >= 2) {
+      return "hátrányban elszáll a fegyelmük ($tr/$total kiállítás "
+          "hátrányban) · ha vezettek, vállald a kontaktot: a "
+          "frusztrációjuk kiállítást terem";
+    }
+    if (lead - (tr + level) >= 2) {
+      return "előnyben szabálytalankodnak ($lead/$total kiállítás "
+          "vezetésnél) · ha ők vezetnek, védd a betörőt: jön az ütés";
+    }
+    return null;
+  }
+
   // Kidobott labda: oldalvonalon elhagyott labdák (3+ — a backenddel
   // azonos küszöb).
   String? _ballsOut(Map<String, dynamic> r) {
@@ -5869,6 +5889,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elhúzódó támadás ára", _slowAttackCost(r)!],
       if (_ballsOut(r) != null)
         ["Kidobott labda", _ballsOut(r)!],
+      if (_suspensionsByScore(r) != null)
+        ["Fegyelem-állás", _suspensionsByScore(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

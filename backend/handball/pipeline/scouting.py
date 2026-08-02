@@ -670,6 +670,9 @@ class ScoutingReport:
     sac_slow: int = 0
     sac_scored: int = 0
     obt_out: int = 0
+    sps_tr: int = 0
+    sps_lead: int = 0
+    sps_level: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2598,6 +2601,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"({rep.obt_out} kidobott labda) — szorítsátok a "
             "labdásukat az oldalvonalra: a szélső sávban pontatlanok, "
             "és a hibához ellenfél sem kell.")
+
+    # Fegyelem-állás: a frusztrációs kiállítás ellenük fegyver.
+    _sps_n = rep.sps_tr + rep.sps_lead + rep.sps_level
+    if _sps_n >= 3 and rep.sps_tr - (rep.sps_lead + rep.sps_level) >= 2:
+        keys.append(
+            f"Hátrányban elszáll a fegyelmük ({rep.sps_tr}/{_sps_n} "
+            "kiállításuk hátrányban jött) — ha vezettek, vállaljátok "
+            "a kontaktot és játsszatok türelmesen: a frusztrációjuk "
+            "kiállítást terem nektek.")
+    elif _sps_n >= 3 and rep.sps_lead - (rep.sps_tr + rep.sps_level) >= 2:
+        keys.append(
+            f"Előnyben szabálytalankodnak ({rep.sps_lead}/{_sps_n} "
+            "kiállításuk vezetésnél jött) — vezetés-őrző keménység: "
+            "ha ők vezetnek, a betörőt védeni kell, jön az ütés.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6532,6 +6549,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sac_scored = sacrec["scored"]
         from .attack_types import balls_out as _obt
         rep.obt_out = _obt(match, config)[team.value]["out"]
+        from .rules import suspensions_by_score as _sps
+        spsrec = _sps(match, config)[team.value]
+        rep.sps_tr = spsrec["trailing"]
+        rep.sps_lead = spsrec["leading"]
+        rep.sps_level = spsrec["level"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8951,6 +8973,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 229) Az ő frusztrációs kiállításaik × a ti hideg fejetek: a
+    # vezetés kiállítást terem.
+    if (opp.sps_tr >= 3
+            and opp.sps_tr - (opp.sps_lead + opp.sps_level) >= 2
+            and own.suspensions <= 2):
+        plan.append(
+            f"Hátrányban elszáll a fegyelmük ({opp.sps_tr} kiállításuk "
+            f"hátrányban jött), ti pedig hidegek maradtok "
+            f"({own.suspensions} kiállítás) — ha megvan a vezetés, "
+            "vállalt kontakt és türelmes labdajáratás: az ő "
+            "frusztrációjuk emberelőnyt hoz nektek, a ti fegyelmetek "
+            "nem ad vissza semmit.")
 
     # 228) Az ő kidobott labdáik × a ti aktív kezetek: az oldalvonal
     # a legjobb védőtök.
@@ -12588,6 +12623,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sac_slow=sum(r.sac_slow for r in reports),
         sac_scored=sum(r.sac_scored for r in reports),
         obt_out=sum(r.obt_out for r in reports),
+        sps_tr=sum(r.sps_tr for r in reports),
+        sps_lead=sum(r.sps_lead for r in reports),
+        sps_level=sum(r.sps_level for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

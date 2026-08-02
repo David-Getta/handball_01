@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Fegyelem-állás: mikor jönnek a kiállítások az állás szerint.
+    try:
+        from .rules import suspensions_by_score
+        sps = suspensions_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sps = sps[side]
+            if rec_sps["verdict"] is None:
+                continue
+            _sps_n = (rec_sps["trailing"] + rec_sps["leading"]
+                      + rec_sps["level"])
+            body += (f" A(z) {name} fegyelem-képe az állást követi: "
+                     f"{rec_sps['verdict']} ({rec_sps['trailing']}/"
+                     f"{_sps_n} kiállításuk hátrányban jött).")
+    except Exception:
+        pass
     # Kidobott labda: oldalvonalon elajándékozott labdák.
     try:
         from .attack_types import balls_out

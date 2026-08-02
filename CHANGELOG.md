@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Fegyelem-állás** (`suspensions_by_score`): a kiállítások az
+  eredményjelző szerint — a kiállítás pillanatában vezetett, állt vagy
+  hátrányban volt-e a kiállított csapat. Edzői olvasat: a hátrányban
+  sűrűsödő kiállítás frusztrációs jel — ellene a vezetés maga a fegyver
+  (vállalt kontakt kiállítást terem); a saját oldalon a hátrányban is
+  hideg fej a téma. Felületek: `/analyze` + meccs-csomag
+  (`suspensions_by_score`), edzői összefoglaló, felderítés (edzői kulcs
+  + 229-es meccsterv-szabály), edzés-fókusz (250-es szabály),
+  kliens-csempe.
 - **Kidobott labda** (`balls_out`): az oldalvonalon kimenő labdák a
   kimenés előtti birtoklónak felírva (az alapvonal-közeli, elhajló
   lövéseket kihagyva). Edzői olvasat: a legolcsóbb eladás — ellenfél
