@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Passz-hossz-állás: mikor váltanak hosszú labdákra.
+    try:
+        from .event_detection import pass_length_by_score
+        pls = pass_length_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pls = pls[side]
+            if rec_pls["verdict"] is None:
+                continue
+            body += (f" A(z) {name} passz-képe az állást követi: "
+                     f"{rec_pls['verdict']} "
+                     f"({rec_pls['trailing']['long']} hosszú passz "
+                     f"{rec_pls['trailing']['passes']} hátrányban "
+                     "adottból) — ezek a labdák elfoghatók.")
+    except Exception:
+        pass
     # Kapus-gólpassz: a kapus keze gólt indít.
     try:
         from .goalkeeper import gk_assists

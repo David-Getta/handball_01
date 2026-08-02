@@ -1896,6 +1896,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Passz-hossz-állás: hátrányban hosszú labdázás (állapotonként 10+
+  // passz, 12 pp többlet — a backenddel azonos küszöbök).
+  String? _passLengthByScore(Map<String, dynamic> r) {
+    final trP = ((r["pls_tr_passes"] as num?) ?? 0).toInt();
+    final trL = ((r["pls_tr_long"] as num?) ?? 0).toInt();
+    final restP = ((r["pls_rest_passes"] as num?) ?? 0).toInt();
+    final restL = ((r["pls_rest_long"] as num?) ?? 0).toInt();
+    if (trP < 10 || restP < 10) return null;
+    final diff = 100.0 * trL / trP - 100.0 * restL / restP;
+    if (diff < 12.0) return null;
+    return "hátrányban hosszú labdákra váltanak "
+        "(+${diff.toStringAsFixed(0)} pp hosszú passz hátrányban) · "
+        "ha vezetsz, ülj a passzsávokra: az átdobált labda elfogható";
+  }
+
   // Kapus-gólpassz: a kapus keze gólt indít (2+ — a backenddel
   // azonos küszöb).
   String? _gkAssists(Map<String, dynamic> r) {
@@ -6052,6 +6067,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Passz-irány-állás", _passDirectionByScore(r)!],
       if (_gkAssists(r) != null)
         ["Kapus-gólpassz", _gkAssists(r)!],
+      if (_passLengthByScore(r) != null)
+        ["Passz-hossz-állás", _passLengthByScore(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

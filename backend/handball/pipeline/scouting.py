@@ -704,6 +704,10 @@ class ScoutingReport:
     pds_rest_passes: int = 0
     pds_rest_back: int = 0
     gka_assists: int = 0
+    pls_tr_passes: int = 0
+    pls_tr_long: int = 0
+    pls_rest_passes: int = 0
+    pls_rest_long: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2754,6 +2758,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "kapus-gólpassz) — a lövésetek pillanatában induljon a "
             "visszafutás: az első hazafutó dolga nem a labda, hanem "
             "a kapus-passz sávjának elvágása.")
+
+    # Passz-hossz-állás: a hátrány-hosszúlabda elfogható.
+    if rep.pls_tr_passes >= 10 and rep.pls_rest_passes >= 10:
+        _pls_tr = 100.0 * rep.pls_tr_long / rep.pls_tr_passes
+        _pls_rest = 100.0 * rep.pls_rest_long / rep.pls_rest_passes
+        if _pls_tr - _pls_rest >= 12.0:
+            keys.append(
+                f"Hátrányban hosszú labdákra váltanak (hosszú passz "
+                f"{_pls_tr:.0f}% hátrányban, egyébként "
+                f"{_pls_rest:.0f}%) — ha vezettek, üljetek a "
+                "passzsávokra: az átdobált labdáik elfogása kontrát "
+                "ér.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6746,6 +6762,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                              + pdsrec["level"]["back"])
         from .goalkeeper import gk_assists as _gka
         rep.gka_assists = _gka(match, config)[team.value]["assists"]
+        from .event_detection import pass_length_by_score as _pls
+        plsrec = _pls(match, config)[team.value]
+        rep.pls_tr_passes = plsrec["trailing"]["passes"]
+        rep.pls_tr_long = plsrec["trailing"]["long"]
+        rep.pls_rest_passes = (plsrec["leading"]["passes"]
+                               + plsrec["level"]["passes"])
+        rep.pls_rest_long = (plsrec["leading"]["long"]
+                             + plsrec["level"]["long"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9165,6 +9189,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 239) Az ő hátrány-hosszúlabdáik × a ti passzsáv-zárásotok: az
+    # átdobált labda a tiétek.
+    if (opp.pls_tr_passes >= 10 and opp.pls_rest_passes >= 10
+            and own.stt_steals >= 6):
+        _pls239_tr = 100.0 * opp.pls_tr_long / opp.pls_tr_passes
+        _pls239_rest = (100.0 * opp.pls_rest_long
+                        / opp.pls_rest_passes)
+        _stt239 = 100.0 * own.stt_int / max(1, own.stt_steals)
+        if _pls239_tr - _pls239_rest >= 12.0 and _stt239 >= 60.0:
+            plan.append(
+                f"Hátrányban hosszú labdákra váltanak (hosszú passz "
+                f"{_pls239_tr:.0f}% vs {_pls239_rest:.0f}%), ti pedig "
+                f"a passzsávokat zárjátok (a szerzéseitek "
+                f"{_stt239:.0f}%-a elfogás) — ha vezettek, a belsők "
+                "üljenek a hosszú sávokra: az átdobált labdájuk "
+                "levegőben a tiétek, és kontra a vége.")
 
     # 238) Az ő kapus-gólpasszaik × a ti visszazárásotok: a hosszú
     # kéz sávja elvágható.
@@ -12987,6 +13028,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pds_rest_passes=sum(r.pds_rest_passes for r in reports),
         pds_rest_back=sum(r.pds_rest_back for r in reports),
         gka_assists=sum(r.gka_assists for r in reports),
+        pls_tr_passes=sum(r.pls_tr_passes for r in reports),
+        pls_tr_long=sum(r.pls_tr_long for r in reports),
+        pls_rest_passes=sum(r.pls_rest_passes for r in reports),
+        pls_rest_long=sum(r.pls_rest_long for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

@@ -562,3 +562,90 @@ def test_assist_ranges_needs_enough_assisted_goals():
     rec = assist_ranges(_assist_match(
         [(22.0, 10.0), (24.0, 10.0)]))["home"]
     assert rec["assisted"] == 2 and rec["verdict"] is None
+
+
+def _pls_pass_frames(t0, x_from, x_to, n):
+    """n hazai passz az x_from → x_to álló játékosok közt; a ciklusok
+    közé vendég-érintés kerül, hogy ne álljon össze hamis passz."""
+    frames = []
+    t = t0
+    for _ in range(n):
+        def both():
+            return [_pl(11, Team.HOME, x_from, 10.0),
+                    _pl(12, Team.HOME, x_to, 10.0)]
+        for _ in range(15):
+            frames.append(Frame(t=t, players=both(),
+                                ball=Ball(x=x_from, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = x_from
+        step = 0.3 if x_to > x_from else -0.3
+        while (x < x_to) if x_to > x_from else (x > x_to):
+            x += step
+            frames.append(Frame(t=t, players=both(),
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(15):
+            frames.append(Frame(t=t, players=both(),
+                                ball=Ball(x=x_to, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(15):
+            frames.append(Frame(t=t,
+                                players=[_pl(21, Team.AWAY, 18.0, 10.0)],
+                                ball=Ball(x=18.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return frames, t
+
+
+def _pls_away_goal_frames(t0):
+    """Egy vendég-gól: a lövő (10,10)-ről az x=0 kapuba lő."""
+    frames = []
+    t = t0
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[_pl(9, Team.AWAY, 10.0, 10.0)],
+                            ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+        t += 1
+    x = 10.0
+    while x > -0.5:
+        x -= 0.5
+        frames.append(Frame(t=t, players=[_pl(9, Team.AWAY, 10.0, 10.0)],
+                            ball=Ball(x=max(x, -0.5), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_pass_length_by_score_flags_long_ball_panic():
+    """Döntetlennél rövid (6 m-es) passzok, 3 kapott gól után csupa
+    hosszú (12 m-es) → hátrányban hosszú labdákra váltanak."""
+    from handball.pipeline.event_detection import pass_length_by_score
+
+    frames, t = _pls_pass_frames(0, 24.0, 30.0, 11)   # rövid, döntetlen
+    for _ in range(3):
+        gf, t = _pls_away_goal_frames(t)
+        frames += gf
+    tr, t = _pls_pass_frames(t, 15.0, 27.0, 11)       # hosszú, hátrányban
+    frames += tr
+
+    pls = pass_length_by_score(Match(_meta(), frames))
+    h = pls["home"]
+    assert h["level"]["passes"] >= 10 and h["level"]["long"] == 0
+    assert h["trailing"]["passes"] >= 10
+    assert h["trailing"]["long"] >= 10
+    assert h["verdict"] == "hátrányban hosszú labdákra váltanak"
+    assert pls["away"]["verdict"] is None
+
+
+def test_pass_length_by_score_few_passes_none():
+    """Kevés (10-nél kevesebb) passz állapotonként → nincs ítélet."""
+    from handball.pipeline.event_detection import pass_length_by_score
+
+    frames, t = _pls_pass_frames(0, 15.0, 27.0, 5)
+    pls = pass_length_by_score(Match(_meta(), frames))
+    assert pls["home"]["verdict"] is None

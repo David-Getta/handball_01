@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 260) Passz-hossz-állás: ha hátrányban hosszú labdákra váltunk,
+    # a rövid kombináció hátrányban is a téma — az átdobálás elfogható.
+    try:
+        from .event_detection import pass_length_by_score
+        pls260 = pass_length_by_score(match, config)
+        for side in ("home", "away"):
+            rec260 = pls260[side]
+            if rec260["verdict"] != "hátrányban hosszú labdákra váltanak":
+                continue
+            add(side, "tamadas", "Rövid kombináció hátrányban",
+                f"hátrányban hosszú labdákra váltunk "
+                f"({rec260['trailing']['long']} hosszú passz "
+                f"{rec260['trailing']['passes']} hátrányban adottból) "
+                "— az átdobált labdáink elfoghatók",
+                "rövid kombináció hátrányban: hátrány-szituációs "
+                "kisjáték, ahol a 10 m-nél hosszabb passz azonnali "
+                "labdavesztésnek számít — a felzárkózás útja a gyors, "
+                "rövid átadás-sor, nem az átdobálás")
+    except Exception:
+        pass
     # 259) Kapus-gólpassz: ha az ellenfél kapusa gólpasszt ért
     # ellenünk, a lövés utáni azonnali hátraindulás a téma.
     try:

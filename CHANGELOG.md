@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Passz-hossz-állás** (`pass_length_by_score`): a hosszú (10 m
+  feletti) passzok részaránya az eredményjelző szerint — a hátrányban
+  megugró hosszú-passz arány kapkodó átdobálás, elfogható labdákkal.
+  Edzői olvasat: a vezető csapat üljön a passzsávokra; a saját oldalon
+  a hátrányban is rövid, biztos kombináció a téma. Felületek:
+  `/analyze` + meccs-csomag (`pass_length_by_score`), edzői
+  összefoglaló, felderítés (edzői kulcs + 239-es meccsterv-szabály),
+  edzés-fókusz (260-as szabály), kliens-csempe.
 - **Kapus-gólpassz** (`gk_assists`): hány gól indul közvetlenül a
   kapus kezéből (a gólhoz bekönyvelt assziszt a kapusé) — a
   leggyorsabb gól a kézilabdában. Edzői olvasat: ellene a lövés

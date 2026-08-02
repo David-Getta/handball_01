@@ -342,6 +342,79 @@ PLEN_LONG_M = 10.0
 PLEN_LONG_PCT = 30.0
 
 
+# Passz-hossz-állás: a hosszú passzok részaránya az eredményjelző szerint.
+PLS_MIN_PASSES = 10   # az összevetett állapotokban ennyi-ennyi passz kell
+PLS_GAP_PP = 12.0     # ekkora hosszú-passz többlet számít mintázatnak
+
+
+def pass_length_by_score(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Passz-hossz-állás: MIKOR váltanak hosszú labdákra.
+
+    A passz-hossz profil (pass_length) a meccs egészét nézi — ez az
+    eredményjelzőn: minden passznál a passzoló csapat pillanatnyi
+    gólkülönbségét vesszük, és állásonként mérjük a hosszú
+    (PLEN_LONG_M feletti) passzok részarányát. A hátrányban megugró
+    hosszú-passz arány a kapkodó direkt játék: a lemaradó csapat
+    átdobálná magát a védelmen — ezek a labdák a passzsávra ülve
+    elfoghatók.
+
+    Edzőileg: aki hátrányban hosszú labdázik, annál vezetésnél a
+    passzsávokra kell ülni — az elfogás kontrát ér; a saját oldalon
+    a hátrányban is rövid, biztos kombináció a téma.
+
+    Visszatérés csapatonként: {"leading"/"trailing"/"level":
+    {"passes", "long"}, "verdict"} — a verdict "hátrányban hosszú
+    labdákra váltanak" (PLS_GAP_PP többletnél), különben None
+    (állapotonként PLS_MIN_PASSES-nél kevesebb passznál is).
+    """
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    events = detect_events(match, config)
+    goals = [(e.t, e.team.value) for e in events
+             if e.type == EventType.GOAL]
+    out = {side: {k: {"passes": 0, "long": 0}
+                  for k in ("leading", "trailing", "level")}
+           for side in ("home", "away")}
+    for e in events:
+        if e.type != EventType.PASS or e.player_id is None:
+            continue
+        rid = (e.detail or {}).get("receiver_id")
+        f = by_t.get(e.t)
+        if rid is None or f is None:
+            continue
+        passer = next((p for p in f.players
+                       if p.track_id == e.player_id), None)
+        receiver = next((p for p in f.players if p.track_id == rid),
+                        None)
+        if passer is None or receiver is None:
+            continue
+        d = math.hypot(receiver.x - passer.x, receiver.y - passer.y)
+        side = e.team.value
+        own = sum(1 for (t, tm) in goals if t < e.t and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < e.t and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        rec = out[side][state]
+        rec["passes"] += 1
+        if d >= PLEN_LONG_M:
+            rec["long"] += 1
+    for side in ("home", "away"):
+        buckets = out[side]
+        verdict = None
+        tr = buckets["trailing"]
+        rest_p = (buckets["leading"]["passes"]
+                  + buckets["level"]["passes"])
+        rest_l = buckets["leading"]["long"] + buckets["level"]["long"]
+        if tr["passes"] >= PLS_MIN_PASSES and rest_p >= PLS_MIN_PASSES:
+            diff = (100.0 * tr["long"] / tr["passes"]
+                    - 100.0 * rest_l / rest_p)
+            if diff >= PLS_GAP_PP:
+                verdict = "hátrányban hosszú labdákra váltanak"
+        buckets["verdict"] = verdict
+    return out
+
+
 def pass_length(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """Passz-hossz profil: rövid kombinációs vagy hosszú, direkt passzjáték.
 
