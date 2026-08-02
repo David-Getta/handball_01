@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Gól-minta: ugyanazt a gólt lövik-e.
+    try:
+        from .xg import goal_patterns
+        gpt = goal_patterns(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gpt = gpt[side]
+            if rec_gpt["verdict"] is None:
+                continue
+            body += (f" A(z) {name} góljai egy képre járnak: "
+                     f"{rec_gpt['verdict']} — egy fal-igazítás a "
+                     "gólforrásuk nagyját elzárja.")
+    except Exception:
+        pass
     # Kettős emberhátrány: mit kezdenek négy mezőnyjátékossal.
     try:
         from .rules import double_shorthand

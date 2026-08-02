@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Gól-minta** (`goal_patterns`): a gólok tér-ujjlenyomata
+  (oldal-sáv × lövéstáv, pl. "bal-távoli") — ha a gólok nagy része
+  ugyanabból a mintából jön, egyetlen fal-igazítás elzárja a fő
+  forrást. Edzői olvasat: ne általában védekezz jobban, azt az egy
+  képet fogd meg; a saját oldalon a befejezés-szórás a téma.
+  Felületek: `/analyze` + meccs-csomag (`goal_patterns`), edzői
+  összefoglaló, felderítés (minta-szótár meccsek közt összegezve +
+  edzői kulcs + 249-es meccsterv-szabály), edzés-fókusz (270-es
+  szabály), kliens-csempe.
 - **Kettős emberhátrány** (`double_shorthand`): a legfeljebb négy
   mezőnyjátékossal játszott szakaszok mérlege (idő + kapott gólok),
   két iránnyal: "végzetes nekik" / "túlélik". Edzői olvasat: akinél

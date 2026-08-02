@@ -857,3 +857,86 @@ def test_defense_by_score_needs_enough_shots():
 
     rec = defense_by_score(_dbs_match(True, n=3))["home"]
     assert rec["verdict"] is None
+
+
+def test_goal_patterns_flags_repeated_fingerprint():
+    """3 bal-közeli hazai gól + 1 jobb-távoli → a minta kimondva."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.xg import goal_patterns
+
+    meta = MatchMeta(match_id="gpt", home_team="H", away_team="A",
+                     fps=25.0)
+
+    def goal(frames, t, sx, sy):
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=sy)],
+                ball=Ball(x=sx, y=sy, confidence=1.0)))
+            t += 1
+        x, y = sx, sy
+        n = max(1, int((40.5 - sx) / 0.5))
+        for k in range(1, n + 1):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=sy)],
+                ball=Ball(x=sx + (40.5 - sx) * k / n,
+                          y=sy + (10.0 - sy) * k / n, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        t = goal(frames, t, 34.0, 4.0)   # bal-közeli (6 m, alsó sáv)
+    t = goal(frames, t, 30.0, 16.0)      # jobb-távoli (10 m, felső sáv)
+
+    gpt = goal_patterns(Match(meta, frames))
+    h = gpt["home"]
+    assert h["goals"] == 4
+    assert h["patterns"].get("bal-közeli") == 3
+    assert h["top"] == "bal-közeli"
+    assert h["verdict"] == "a góljaik mintázata: bal-közeli (3/4)"
+    assert gpt["away"]["verdict"] is None
+
+
+def test_goal_patterns_spread_goals_no_verdict():
+    """Szórt minták (1-1 gól sávonként) → nincs kimondható minta."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.xg import goal_patterns
+
+    meta = MatchMeta(match_id="gpt2", home_team="H", away_team="A",
+                     fps=25.0)
+    frames = []
+    t = 0
+
+    def goal(frames, t, sx, sy):
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=sy)],
+                ball=Ball(x=sx, y=sy, confidence=1.0)))
+            t += 1
+        n = max(1, int((40.5 - sx) / 0.5))
+        for k in range(1, n + 1):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=sx, y=sy)],
+                ball=Ball(x=sx + (40.5 - sx) * k / n,
+                          y=sy + (10.0 - sy) * k / n, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    t = goal(frames, t, 34.0, 4.0)    # bal-közeli
+    t = goal(frames, t, 30.0, 16.0)   # jobb-távoli
+    t = goal(frames, t, 34.0, 10.0)   # közép-közeli
+    gpt = goal_patterns(Match(meta, frames))
+    assert gpt["home"]["verdict"] is None

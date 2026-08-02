@@ -729,6 +729,8 @@ class ScoutingReport:
     xsp_seconds: float = 0.0
     dsh_seconds: float = 0.0
     dsh_conceded: int = 0
+    gpt_goals: int = 0
+    gpt_patterns: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2907,6 +2909,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "négy mezőnyjátékossal, kapott gól nélkül) — az "
             "emberelőnyt ellenük végig kell játszani türelmesen: "
             "maguktól nem esnek szét.")
+
+    # Gól-minta: egy fal-igazítással elzárható forrás.
+    if rep.gpt_goals >= 3 and rep.gpt_patterns:
+        _gpt_top, _gpt_n = max(rep.gpt_patterns.items(),
+                               key=lambda kv: kv[1])
+        if _gpt_n >= 3 and 100.0 * _gpt_n / rep.gpt_goals >= 40.0:
+            keys.append(
+                f"A góljaik egy képre járnak: {_gpt_top} "
+                f"({_gpt_n}/{rep.gpt_goals}) — ne általában "
+                "védekezzetek jobban, hanem AZT az egy mintát "
+                "fogjátok meg: kilépő védő abba a sávba, blokk arra "
+                "a kézre.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6955,6 +6969,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         dshrec = _dsh(match, config)[team.value]
         rep.dsh_seconds = dshrec["seconds"]
         rep.dsh_conceded = dshrec["conceded"]
+        from .xg import goal_patterns as _gpt
+        gptrec = _gpt(match, config)[team.value]
+        rep.gpt_goals = gptrec["goals"]
+        rep.gpt_patterns = dict(gptrec["patterns"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9418,6 +9436,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 249) Az ő egy képre járó góljaik × a ti bejáratott faltok: egy
+    # igazítás elzárja a fő forrást.
+    if opp.gpt_goals >= 3 and opp.gpt_patterns \
+            and own.defense_main != "—":
+        _gpt249_top, _gpt249_n = max(opp.gpt_patterns.items(),
+                                     key=lambda kv: kv[1])
+        if (_gpt249_n >= 3
+                and 100.0 * _gpt249_n / opp.gpt_goals >= 40.0):
+            plan.append(
+                f"A góljaik egy képre járnak ({_gpt249_top}, "
+                f"{_gpt249_n}/{opp.gpt_goals}), nektek pedig "
+                f"bejáratott fő-falatok van ({own.defense_main}) — "
+                "ne rendszert váltsatok, hanem a falon belül "
+                "igazítsatok: kilépő védő a minta-sávba, blokk arra "
+                "a kézre, és a fő gólforrásuk elapad.")
 
     # 248) Az ő végzetes kettős hátrányuk × a ti hetes-kiharcolásotok:
     # a második kiállítás fegyver.
@@ -13459,6 +13493,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         xsp_seconds=round(sum(r.xsp_seconds for r in reports), 1),
         dsh_seconds=round(sum(r.dsh_seconds for r in reports), 1),
         dsh_conceded=sum(r.dsh_conceded for r in reports),
+        gpt_goals=sum(r.gpt_goals for r in reports),
+        gpt_patterns=_merge_count_dicts(
+            r.gpt_patterns for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

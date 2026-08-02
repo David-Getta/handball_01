@@ -251,6 +251,76 @@ CONC_MIN_SHOTS = 12
 CONC_TOP_SHARE = 0.35
 
 
+# Gól-minta: az ismétlődő gól-ujjlenyomat (sáv x táv) küszöbei.
+GPT_MIN_GOALS = 3     # ennyi azonos mintájú gól kell
+GPT_SHARE_PCT = 40.0  # ...és ekkora részarány az azonosított gólokból
+GPT_FAR_M = 9.0       # e fölött "távoli", alatta "közeli" a lövéshely
+
+
+def goal_patterns(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Gól-minta: UGYANAZT a gólt lövik-e újra és újra.
+
+    A lövő-koncentráció a SZEMÉLYT nézi, a gól-koncentráció a
+    befejezőt — ez a HELYET: minden azonosított lövőjű gólnál a lövő
+    helyéből képzett ujjlenyomatot (oldal-sáv x lövéstáv, pl.
+    "bal-távoli") számoljuk. Ha a gólok nagy része ugyanabból a
+    mintából jön, a támadásuk kiszámítható: egyetlen fal-igazítás
+    (kilépő védő abba a sávba, blokk arra a kézre) a gólforrásuk
+    nagyját elzárja.
+
+    Edzőileg: a minta ellen nem általában kell jobban védekezni,
+    hanem AZT az egy képet kell megfogni — és mérni, hogy a meccs
+    közben áttérnek-e másikra; a saját oldalon a befejezés-szórás
+    (több sáv, több táv) az edzés-téma.
+
+    Visszatérés csapatonként: {"goals", "patterns": {minta: darab},
+    "top", "verdict"} — a verdict "a góljaik mintázata: X (N/M)"
+    (GPT_MIN_GOALS darabtól és GPT_SHARE_PCT részaránytól), különben
+    None.
+    """
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+    out = {side: {"goals": 0, "patterns": {}, "top": None,
+                  "verdict": None} for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        f = by_t.get(e.t)
+        if f is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        goal_x = config.attacks_toward_x(e.team)
+        third = (0 if shooter.y < COURT_WIDTH_M / 3 else
+                 1 if shooter.y < 2 * COURT_WIDTH_M / 3 else 2)
+        if goal_x <= COURT_LENGTH_M / 2:
+            third = 2 - third
+        lane = ("bal", "közép", "jobb")[third]
+        band = ("távoli" if abs(shooter.x - goal_x) >= GPT_FAR_M
+                else "közeli")
+        label = f"{lane}-{band}"
+        rec = out[side]
+        rec["goals"] += 1
+        rec["patterns"][label] = rec["patterns"].get(label, 0) + 1
+    for rec in out.values():
+        if not rec["patterns"]:
+            continue
+        top, n = max(rec["patterns"].items(), key=lambda kv: kv[1])
+        rec["top"] = top
+        if n >= GPT_MIN_GOALS \
+                and 100.0 * n / rec["goals"] >= GPT_SHARE_PCT:
+            rec["verdict"] = (f"a góljaik mintázata: {top} "
+                              f"({n}/{rec['goals']})")
+    return out
+
+
 def shot_concentration(match: Match,
                        config: Optional[TacticsConfig] = None) -> dict:
     """Lövő-koncentráció: mennyire egy emberre épül a lövés-terhelés.

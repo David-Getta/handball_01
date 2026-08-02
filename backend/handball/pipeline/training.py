@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 270) Gól-minta: ha a góljaink egy képre járnak, a befejezés-
+    # szórás a téma — a kiszámítható minta egy igazítással elzárható.
+    try:
+        from .xg import GPT_MIN_GOALS, GPT_SHARE_PCT, goal_patterns
+        gpt270 = goal_patterns(match, config)
+        for side in ("home", "away"):
+            rec270 = gpt270[side]
+            if rec270["verdict"] is None:
+                continue
+            add(side, "tamadas", "Befejezés-szórás",
+                f"a góljaink egy képre járnak ({rec270['top']}, "
+                f"{rec270['patterns'][rec270['top']]}/"
+                f"{rec270['goals']}) — egy fal-igazítással "
+                "elzárhatóak vagyunk",
+                "befejezés-szórás: a figurasorba kötelező második és "
+                "harmadik befejezési pont (másik sáv, másik táv) — az "
+                "edzésmeccsen ugyanabból a mintából a második gól már "
+                "csak fél pontot ér")
+    except Exception:
+        pass
     # 269) Kettős emberhátrány: ha a négyfős játékunk gólesőt hoz, a
     # 4 fős fal és az időhúzó labdatartás a téma.
     try:

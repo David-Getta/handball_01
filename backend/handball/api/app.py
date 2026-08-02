@@ -3619,6 +3619,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import goal_patterns
+            res["goal_patterns"] = goal_patterns(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4638,6 +4643,8 @@ def create_app():
                 from ..pipeline.rules import double_shorthand
                 _layer("double_shorthand",
                        lambda: double_shorthand(match))
+                from ..pipeline.xg import goal_patterns
+                _layer("goal_patterns", lambda: goal_patterns(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

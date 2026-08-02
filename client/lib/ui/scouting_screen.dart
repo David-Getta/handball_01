@@ -1896,6 +1896,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Gól-minta: ismétlődő gól-ujjlenyomat (3+ azonos minta, 40%-os
+  // részarány — a backenddel azonos küszöbök).
+  String? _goalPatterns(Map<String, dynamic> r) {
+    final goals = ((r["gpt_goals"] as num?) ?? 0).toInt();
+    final patterns =
+        (r["gpt_patterns"] as Map?)?.cast<String, dynamic>();
+    if (goals < 3 || patterns == null || patterns.isEmpty) return null;
+    String? top;
+    int topN = 0;
+    patterns.forEach((k, v) {
+      final c = (v as num).toInt();
+      if (c > topN) {
+        topN = c;
+        top = k;
+      }
+    });
+    if (top == null || topN < 3 || 100.0 * topN / goals < 40.0) {
+      return null;
+    }
+    return "a góljaik egy képre járnak: $top ($topN/$goals) · azt az "
+        "egy mintát fogd meg: kilépő védő a sávba, blokk arra a kézre";
+  }
+
   // Kettős emberhátrány: négyfős játék mérlege (2+ kapott gól vagy
   // 20+ mp gól nélkül — a backenddel azonos küszöbök).
   String? _doubleShorthand(Map<String, dynamic> r) {
@@ -6273,6 +6296,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Létszám-hiba", _excessPlayers(r)!],
       if (_doubleShorthand(r) != null)
         ["Kettős emberhátrány", _doubleShorthand(r)!],
+      if (_goalPatterns(r) != null)
+        ["Gól-minta", _goalPatterns(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
