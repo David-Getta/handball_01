@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Felzárkózás-húzó** (`comeback_carriers`): játékosonkénti
+  gól-részvétel aszerint, hogy a csapat épp hátrányban volt-e — kin
+  keresztül jönnek vissza. Edzői olvasat: vezetésnél a mentőember
+  kivétele a játékból (szoros fogás, korai kettőzés) a hátrányukat
+  beragasztja; a saját oldalon a hátrány-teher szétosztása a téma.
+  Felületek: `/analyze` + meccs-csomag (`comeback_carriers`), edzői
+  összefoglaló, felderítés (játékosonkénti lista meccsek közt
+  összegezve + edzői kulcs + 246-os meccsterv-szabály), edzés-fókusz
+  (267-es szabály), kliens-csempe.
 - **Eltűnő védő** (`fading_defenders`): játékosonkénti védő-akciók
   (labdaszerzés + blokk) félidőnként — az eltűnő ember védő-oldali
   párja: kinek a zónája nyílik ki a hajrára. Edzői olvasat: a második

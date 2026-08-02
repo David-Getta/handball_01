@@ -3599,6 +3599,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import comeback_carriers
+            res["comeback_carriers"] = comeback_carriers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4607,6 +4612,9 @@ def create_app():
                 from ..pipeline.defense import fading_defenders
                 _layer("fading_defenders",
                        lambda: fading_defenders(match))
+                from ..pipeline.momentum import comeback_carriers
+                _layer("comeback_carriers",
+                       lambda: comeback_carriers(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

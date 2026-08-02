@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Felzárkózás-húzó: kin keresztül jönnek vissza hátrányból.
+    try:
+        from .momentum import comeback_carriers
+        cbc = comeback_carriers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cbc = cbc[side]
+            if rec_cbc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} mentőembere is megvan: "
+                     f"{rec_cbc['verdict']} — bajban rajta keresztül "
+                     "játszanak.")
+    except Exception:
+        pass
     # Eltűnő védő: kinek a zónája nyílik ki a hajrára.
     try:
         from .defense import fading_defenders

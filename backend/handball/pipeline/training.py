@@ -1343,6 +1343,24 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 267) Felzárkózás-húzó: ha egy emberen áll a mentésünk, a
+    # hátrány-teher szétosztása a téma.
+    try:
+        from .momentum import comeback_carriers
+        cbc267 = comeback_carriers(match, config)
+        for side in ("home", "away"):
+            rec267 = cbc267[side]
+            if rec267["verdict"] is None:
+                continue
+            add(side, "taktika", "Hátrány-teher szétosztása",
+                f"{rec267['verdict']} — ha őt megfogják, nincs "
+                "második mentőemberünk",
+                "hátrány-figurák két emberre: a hátrány-szituációs "
+                "edzésmeccsen a húzóember minden második támadásban "
+                "csali (rá kettőznek), és a kijelölt második ember "
+                "zárja a figurát — a mentés ne egy kézben legyen")
+    except Exception:
+        pass
     # 266) Eltűnő védő: ha a védő-motorunk a második félidőre leáll,
     # a védő-rotáció a téma.
     try:

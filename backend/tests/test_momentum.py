@@ -1521,3 +1521,66 @@ def test_fading_scorers_needs_halftime():
     fdr = fading_scorers(Match(_meta(), frames))
     assert fdr["away"]["verdict"] is None
     assert fdr["away"]["players"] == []
+
+
+def _cbc_home_goal(frames, t, shooter_id=1):
+    """Egy hazai gól: a lövő (33,10)-ről a +x kapuba lő."""
+    for _ in range(30):
+        frames.append(Frame(t=t,
+                            players=[_pl(shooter_id, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    x = 33.0
+    while x < 40.5:
+        x += 0.5
+        frames.append(Frame(t=t,
+                            players=[_pl(shooter_id, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=min(x, 40.5), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Vendég-érintés: a következő birtoklás ne kapcsolódjon össze
+    # fantom passzá.
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[_pl(21, Team.AWAY, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return t
+
+
+def test_comeback_carriers_flags_the_rescuer():
+    """3 hazai gól után a vendég 9-es hárompontnyi hátrányban szerzett
+    góljai → ő a felzárkózás-húzó; döntetlennél már a 8-as fejez be."""
+    from handball.pipeline.momentum import comeback_carriers
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        t = _cbc_home_goal(frames, t, 1)
+    for _ in range(3):
+        t = _fdr_away_goal(frames, t, 9)   # 0-3 → 3-3, végig hátrányban
+    t = _fdr_away_goal(frames, t, 8)       # 3-3-nál: rest
+
+    cbc = comeback_carriers(Match(_meta(), frames))
+    a = cbc["away"]
+    assert a["top"] == 9
+    assert a["verdict"] == ("a(z) 9. hozza őket vissza (3 gól-részvétel "
+                            "hátrányban, máskor 0)")
+    assert cbc["home"]["verdict"] is None  # a hazai gólok nem hátrányban
+
+
+def test_comeback_carriers_few_samples_none():
+    """Két hátrány-gól még kevés az ítélethez."""
+    from handball.pipeline.momentum import comeback_carriers
+
+    frames = []
+    t = 0
+    for _ in range(2):
+        t = _cbc_home_goal(frames, t, 1)
+    for _ in range(2):
+        t = _fdr_away_goal(frames, t, 9)
+    cbc = comeback_carriers(Match(_meta(), frames))
+    assert cbc["away"]["verdict"] is None

@@ -850,6 +850,70 @@ def goal_droughts(match: Match, config=None) -> dict:
     return out
 
 
+# Felzárkózás-húzó: gól-részvétel hátrányban, a többi álláshoz mérve.
+CBC_MIN_TR = 3   # ennyi hátrányban szerzett gól-részvétel kell
+CBC_RATIO = 2    # ennyiszerese legyen a nem-hátrány részvételnek
+
+
+def comeback_carriers(match: Match, config=None) -> dict:
+    """Felzárkózás-húzó: KIN keresztül jönnek vissza hátrányból.
+
+    A hajrá-emberek (clutch_scorers) az óra szerint nézik a végjátékot
+    — ez az eredményjelző szerint: játékosonként számoljuk a
+    gól-részvételt (gól vagy gólpassz) aszerint, hogy a csapat épp
+    hátrányban volt-e. Akinél a hátrány-termelés kiugró, az a
+    felzárkózás motorja: a csapat bajban rajta keresztül játszik.
+
+    Edzőileg: ha vezettek az ilyen csapat ellen, a húzóemberük
+    kivétele a játékból (szoros fogás, korai kettőzés) a hátrányukat
+    beragasztja — a többiek nincsenek hozzászokva a mentéshez; a
+    saját oldalon pedig tudatosítani kell, ki a valódi mentőember,
+    és a hátrány-figurákat rá építeni.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "trailing",
+    "rest"}] (trailing szerint csökkenő), "top", "verdict"} — a
+    verdict "a(z) N. hozza őket vissza (T gól-részvétel hátrányban,
+    máskor R)" (CBC_MIN_TR/CBC_RATIO szerint), különben None.
+    """
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    events = detect_events(match, config)
+    goals = [(e.t, getattr(e.team, "value", e.team)) for e in events
+             if e.type == EventType.GOAL]
+    out = {side: {"players": [], "top": None, "verdict": None}
+           for side in ("home", "away")}
+    tally: dict = {"home": {}, "away": {}}
+    for e in events:
+        if e.type != EventType.GOAL:
+            continue
+        side = getattr(e.team, "value", e.team)
+        own = sum(1 for (t, tm) in goals if t < e.t and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < e.t and tm != side)
+        key = "trailing" if own < opp else "rest"
+        for pid in (e.player_id, (e.detail or {}).get("assist_id")):
+            if pid is None:
+                continue
+            rec = tally[side].setdefault(pid, {"trailing": 0, "rest": 0})
+            rec[key] += 1
+    for side in ("home", "away"):
+        players = [{"player_id": pid, **rec}
+                   for pid, rec in tally[side].items()]
+        players.sort(key=lambda r: (-r["trailing"], r["rest"]))
+        out[side]["players"] = players
+        for r in players:
+            if r["trailing"] >= CBC_MIN_TR \
+                    and r["trailing"] >= CBC_RATIO * max(1, r["rest"]):
+                out[side]["top"] = r["player_id"]
+                out[side]["verdict"] = (
+                    f"a(z) {r['player_id']}. hozza őket vissza "
+                    f"({r['trailing']} gól-részvétel hátrányban, "
+                    f"máskor {r['rest']})")
+                break
+    return out
+
+
 # Eltűnő ember: első félidei gól-részvétel után a másodikban csend.
 FDR_MIN_FH = 3   # ennyi első félidei gól-részvétel (gól+gólpassz) kell
 FDR_MAX_SH = 1   # a második félidőben legfeljebb ennyi = eltűnt
