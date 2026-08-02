@@ -1420,3 +1420,51 @@ def test_report_lendulet_lencse_section_lists_verdicts():
     html = match_report_html(m, {}, [], None)
     assert "Lendület-lencse (sorozatok és hajrák)" in html
     assert "ha rákap, sorozatban véd a kapusuk" in html
+
+
+def test_report_szunet_lencse_section_lists_verdicts():
+    """Ha egy szünet-réteg ítéletet mond, a Szünet-lencse szekció
+    megjelenik a jelentésben az ítélet szövegével."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+
+    meta = MatchMeta(match_id="rep-dfs", home_team="Hazai",
+                     away_team="Vendég", fps=25.0)
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y)
+
+    def half(t0, advanced_one):
+        out = []
+        t = t0
+        for _ in range(5):
+            for _ in range(int(8 * 25)):
+                players = [pl(1, Team.HOME, 30.0, 10.0)]
+                for k in range(6):
+                    if advanced_one and k == 0:
+                        players.append(pl(200 + k, Team.AWAY, 31.0, 10.0))
+                    else:
+                        players.append(pl(200 + k, Team.AWAY, 34.5,
+                                          4.0 + 2.4 * k))
+                out.append(Frame(t=t, players=players,
+                                 ball=Ball(x=30.0, y=10.0,
+                                           confidence=1.0)))
+                t += 1
+            for _ in range(10):
+                out.append(Frame(t=t, players=[],
+                                 ball=Ball(x=18.0, y=10.0,
+                                           confidence=1.0)))
+                t += 1
+        return out, t
+
+    frames, t = half(0, False)          # 1. félidő: 6-0
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    sh, t = half(t, True)               # 2. félidő: 5-1
+    frames += sh
+    m = Match(meta, frames)
+
+    html = match_report_html(m, {}, [], None)
+    assert "Szünet-lencse (mi változik a 2. félidőre)" in html
+    assert "a szünet után falat váltanak (6-0 → 5-1)" in html

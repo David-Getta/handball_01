@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Meccs-jelentés: Szünet-lencse szekció** — a HTML-jelentésben új
+  táblázat mutatja, mi változik a két félidő között: a támadás-mix
+  átrendeződés (szünet-váltás) és a védekezési fal-váltás megszólaló
+  ítéletei, csapatonként.
 - **Fal-váltás a szünetre** (`defense_form_shift`): félidőnként a fő
   védekezési forma (a védekezett támadások uralkodó címkéje) — aki a
   szünet után falat vált (pl. 6-0 → 5-1), az ellen a támadó-tervet is

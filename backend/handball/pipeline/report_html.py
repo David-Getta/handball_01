@@ -1358,6 +1358,34 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         except Exception:
             pass
 
+        # Szünet-lencse: mi változik a két félidő között — a támadás-mix
+        # és a védekezési fal átrendeződésének ítéletei.
+        try:
+            from .attack_types import attack_mix_shift
+            from .tactics import defense_form_shift
+            hrows = []
+            for label, fn in (
+                    ("Szünet-váltás (támadás-mix)", attack_mix_shift),
+                    ("Fal-váltás a szünetre", defense_form_shift)):
+                try:
+                    res_h = fn(match)
+                except Exception:
+                    continue
+                for key, name in (("home", home), ("away", away)):
+                    v = (res_h.get(key) or {}).get("verdict")
+                    if v:
+                        hrows.append(f"<tr><td>{escape(name)}</td>"
+                                     f"<td>{escape(label)}</td>"
+                                     f"<td>{escape(str(v))}</td></tr>")
+            if hrows:
+                parts_html.append(
+                    "<h2>Szünet-lencse (mi változik a 2. félidőre)</h2>"
+                    "<table><tr><th>Csapat</th><th>Réteg</th>"
+                    "<th>Ítélet</th></tr>" + "".join(hrows)
+                    + "</table>")
+        except Exception:
+            pass
+
         rules_html = "".join(parts_html)
     except Exception:
         pass
