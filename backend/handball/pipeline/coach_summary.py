@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Fal-váltás a szünetre: más falat hoznak-e a 2. félidőre.
+    try:
+        from .tactics import defense_form_shift
+        dfs = defense_form_shift(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dfs = dfs[side]
+            if rec_dfs["verdict"] is None \
+                    or "falat váltanak" not in rec_dfs["verdict"]:
+                continue
+            body += (f" A(z) {name} védekezéséről kiderült: "
+                     f"{rec_dfs['verdict']} — ellene a támadó-tervet "
+                     "is váltani kell a szünetben.")
+    except Exception:
+        pass
     # Passz-hossz-állás: mikor váltanak hosszú labdákra.
     try:
         from .event_detection import pass_length_by_score

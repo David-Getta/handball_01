@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Fal-váltás a szünetre** (`defense_form_shift`): félidőnként a fő
+  védekezési forma (a védekezett támadások uralkodó címkéje) — aki a
+  szünet után falat vált (pl. 6-0 → 5-1), az ellen a támadó-tervet is
+  váltani kell. Edzői olvasat: két kész figurasorral kell érkezni, a
+  szünet utáni első támadásnál hangos forma-bemondás; a saját oldalon
+  a felismerés-rutin a téma. Felületek: `/analyze` + meccs-csomag
+  (`defense_form_shift`), edzői összefoglaló, felderítés (edzői kulcs
+  + 240-es meccsterv-szabály), edzés-fókusz (261-es szabály,
+  tükör-oldalra), kliens-csempe.
 - **Meccs-jelentés: Lendület-lencse szekció** — a HTML-jelentésben új
   táblázat gyűjti egy helyre a sorozat- és hajrá-rétegek megszólaló
   ítéleteit (vezetés-őrzés, szoros meccs, félidei fordítás, gól-aszály,

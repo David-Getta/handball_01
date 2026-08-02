@@ -550,3 +550,67 @@ def test_static_attackers_needs_enough_seconds():
 
     rec = static_attackers(_static_attacker_match(n=200))["home"]
     assert rec["static"] is None
+
+
+def _dfs_half_frames(t0, n, advanced_one: bool):
+    """n hazai támadás, ami alatt a vendég fal 6-0-t (advanced_one=False)
+    vagy 5-1-et (True) véd a saját (x=40) kapuja előtt."""
+    frames = []
+    t = t0
+    for _ in range(n):
+        for _ in range(int(8 * 25)):
+            players = [_pl(1, Team.HOME, 30.0, 10.0)]
+            for k in range(6):
+                if advanced_one and k == 0:
+                    players.append(_pl(200 + k, Team.AWAY, 31.0, 10.0))
+                else:
+                    players.append(_pl(200 + k, Team.AWAY, 34.5,
+                                       4.0 + 2.4 * k))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames, t
+
+
+def test_defense_form_shift_flags_halftime_wall_change():
+    """1. félidő 6-0, 2. félidő 5-1 → a vendég falat vált a szünetre."""
+    from handball.pipeline.tactics import defense_form_shift
+
+    meta = MatchMeta(match_id="dfs", home_team="H", away_team="A", fps=25.0)
+    frames, t = _dfs_half_frames(0, 5, advanced_one=False)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    sh, t = _dfs_half_frames(t, 5, advanced_one=True)
+    frames += sh
+
+    dfs = defense_form_shift(Match(meta, frames))
+    a = dfs["away"]
+    assert a["fh_main"] == "6-0"
+    assert a["sh_main"] == "5-1"
+    assert a["verdict"] == "a szünet után falat váltanak (6-0 → 5-1)"
+    assert dfs["home"]["verdict"] is None
+
+
+def test_defense_form_shift_stable_wall_and_no_halftime():
+    """Azonos fal mindkét félidőben → "ugyanaz a fal"; szünet-jel
+    nélkül nincs ítélet."""
+    from handball.pipeline.tactics import defense_form_shift
+
+    meta = MatchMeta(match_id="dfs2", home_team="H", away_team="A", fps=25.0)
+    frames, t = _dfs_half_frames(0, 5, advanced_one=False)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    sh, t = _dfs_half_frames(t, 5, advanced_one=False)
+    frames += sh
+    dfs = defense_form_shift(Match(meta, frames))
+    assert dfs["away"]["verdict"] == "a szünet után is ugyanaz a fal"
+
+    nob, _t2 = _dfs_half_frames(0, 5, advanced_one=False)
+    dfs2 = defense_form_shift(Match(meta, nob))
+    assert dfs2["away"]["verdict"] is None

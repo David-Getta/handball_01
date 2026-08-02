@@ -822,6 +822,81 @@ FSW_ONE_SYSTEM_PCT = 80.0
 FSW_MIN_FRAMES = 10
 
 
+# Fal-váltás a szünetre: a fő védekezési forma a két félidőben.
+DFS_MIN_ATTACKS_HALF = 5   # félidőnként ennyi címkézett védekezés kell
+DFS_MAIN_PCT = 60.0        # a fő forma részaránya ehhez a kimondáshoz
+
+
+def defense_form_shift(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Fal-váltás a szünetre: MÁS FALAT hoznak-e a második félidőre.
+
+    A védekezés-váltás (formation_switching) a támadásról támadásra
+    mért ingadozást nézi — ez a szünetet: félidőnként megkeressük a
+    csapat FŐ védekezési formáját (a védekezett támadások uralkodó
+    címkéjét), és összevetjük a kettőt. Aki a szünet után falat vált
+    (pl. 6-0 → 5-1), annak az első félidei képe a második félidőben
+    már nem igaz — a támadó-tervet is váltani kell ellene.
+
+    Edzőileg: a falat váltó csapat ellen két kész figurasorral kell
+    érkezni, és a szünet utáni első támadásnál hangosan bemondani a
+    felismerést; a stabil falú ellen egy jól begyakorolt sor végig
+    kitart. A saját oldalon: ha az ellenfél a szünetben átállt és mi
+    nem reagáltunk, a felismerés-rutin az edzés-téma.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"fh_attacks",
+    "sh_attacks", "fh_labels", "sh_labels", "fh_main", "sh_main",
+    "verdict"} — fh_main/sh_main None, ha kevés a címkézett védekezés
+    vagy nincs DFS_MAIN_PCT-s uralkodó forma; a verdict "a szünet
+    után falat váltanak (X → Y)" / "a szünet után is ugyanaz a fal" /
+    None.
+    """
+    from .halftime import detect_halftime
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    out = {side: {"fh_attacks": 0, "sh_attacks": 0,
+                  "fh_labels": {}, "sh_labels": {},
+                  "fh_main": None, "sh_main": None, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    for seq in segment_attacks(match, config):
+        defending = Team.AWAY if seq.team == Team.HOME else Team.HOME
+        tally: dict[str, int] = {}
+        for fr in seq.frames:
+            form = detect_formation(fr, defending, config)
+            if not form.label or form.label == "?" or form.defenders < 4:
+                continue
+            tally[form.label] = tally.get(form.label, 0) + 1
+        if not tally or sum(tally.values()) < FSW_MIN_FRAMES:
+            continue
+        label = max(tally.items(), key=lambda kv: kv[1])[0]
+        rec = out[defending.value]
+        half = "fh" if seq.start_t <= ht else "sh"
+        rec[half + "_attacks"] += 1
+        rec[half + "_labels"][label] = \
+            rec[half + "_labels"].get(label, 0) + 1
+    for rec in out.values():
+        for half in ("fh", "sh"):
+            n = rec[half + "_attacks"]
+            labels = rec[half + "_labels"]
+            if n < DFS_MIN_ATTACKS_HALF or not labels:
+                continue
+            main, cnt = max(labels.items(), key=lambda kv: kv[1])
+            if 100.0 * cnt / n >= DFS_MAIN_PCT:
+                rec[half + "_main"] = main
+        if rec["fh_main"] and rec["sh_main"]:
+            if rec["fh_main"] != rec["sh_main"]:
+                rec["verdict"] = (f"a szünet után falat váltanak "
+                                  f"({rec['fh_main']} → "
+                                  f"{rec['sh_main']})")
+            else:
+                rec["verdict"] = "a szünet után is ugyanaz a fal"
+    return out
+
+
 def formation_switching(match: Match,
                         config: Optional[TacticsConfig] = None) -> dict:
     """Védekezés-váltás: egy rendszert játszanak, vagy váltogatnak.

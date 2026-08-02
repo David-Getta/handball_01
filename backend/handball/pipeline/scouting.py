@@ -708,6 +708,10 @@ class ScoutingReport:
     pls_tr_long: int = 0
     pls_rest_passes: int = 0
     pls_rest_long: int = 0
+    dfs_fh_attacks: int = 0
+    dfs_sh_attacks: int = 0
+    dfs_fh_labels: dict = field(default_factory=dict)
+    dfs_sh_labels: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2770,6 +2774,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pls_rest:.0f}%) — ha vezettek, üljetek a "
                 "passzsávokra: az átdobált labdáik elfogása kontrát "
                 "ér.")
+
+    # Fal-váltás a szünetre: két támadó-tervvel kell érkezni.
+    def _dfs_main(labels, n):
+        if n < 5 or not labels:
+            return None
+        main, cnt = max(labels.items(), key=lambda kv: kv[1])
+        return main if 100.0 * cnt / n >= 60.0 else None
+    _dfs_fh = _dfs_main(rep.dfs_fh_labels, rep.dfs_fh_attacks)
+    _dfs_sh = _dfs_main(rep.dfs_sh_labels, rep.dfs_sh_attacks)
+    if _dfs_fh and _dfs_sh and _dfs_fh != _dfs_sh:
+        keys.append(
+            f"A szünet után falat váltanak ({_dfs_fh} → {_dfs_sh}) — "
+            "két kész figurasorral érkezzetek: az első félidei "
+            "támadó-terv a másodikban már nem ér semmit, a szünet "
+            "utáni első támadásnál hangosan mondjátok be a formát.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6770,6 +6789,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                                + plsrec["level"]["passes"])
         rep.pls_rest_long = (plsrec["leading"]["long"]
                              + plsrec["level"]["long"])
+        from .tactics import defense_form_shift as _dfs
+        dfsrec = _dfs(match, config)[team.value]
+        rep.dfs_fh_attacks = dfsrec["fh_attacks"]
+        rep.dfs_sh_attacks = dfsrec["sh_attacks"]
+        rep.dfs_fh_labels = dict(dfsrec["fh_labels"])
+        rep.dfs_sh_labels = dict(dfsrec["sh_labels"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9189,6 +9214,33 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 240) Az ő szünet utáni fal-váltásuk × a ti bizonyított
+    # játék-váltásotok: két figurasor, és nem ér meglepetés.
+    def _dfs240_main(labels, n):
+        if n < 5 or not labels:
+            return None
+        m240, c240 = max(labels.items(), key=lambda kv: kv[1])
+        return m240 if 100.0 * c240 / n >= 60.0 else None
+    _dfs240_fh = _dfs240_main(opp.dfs_fh_labels, opp.dfs_fh_attacks)
+    _dfs240_sh = _dfs240_main(opp.dfs_sh_labels, opp.dfs_sh_attacks)
+    if (_dfs240_fh and _dfs240_sh and _dfs240_fh != _dfs240_sh
+            and own.ams_fh_attacks >= 6 and own.ams_sh_attacks >= 6):
+        _ams240 = (abs(100.0 * own.ams_fh_break / own.ams_fh_attacks
+                       - 100.0 * own.ams_sh_break
+                       / own.ams_sh_attacks)
+                   + abs(100.0 * own.ams_fh_quick
+                         / own.ams_fh_attacks
+                         - 100.0 * own.ams_sh_quick
+                         / own.ams_sh_attacks)) / 2.0
+        if _ams240 >= 30.0:
+            plan.append(
+                f"A szünet után falat váltanak ({_dfs240_fh} → "
+                f"{_dfs240_sh}), ti pedig bizonyítottan tudtok "
+                "játékot váltani (a saját támadás-mixetek is "
+                "átrendeződik a szünetre) — két kész figurasorral "
+                "érkezzetek, és a szünet utáni első támadásnál "
+                "hangos forma-bemondás: nem érhet meglepetés.")
 
     # 239) Az ő hátrány-hosszúlabdáik × a ti passzsáv-zárásotok: az
     # átdobált labda a tiétek.
@@ -12666,6 +12718,15 @@ def _merge_shooter_zones(reports) -> list:
     return [{"player_id": pid, "zone": z, "shots": n}
             for (pid, z), n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
+def _merge_count_dicts(dicts) -> dict:
+    """Címke→darabszám szótárak összegzése kulcsonként."""
+    out: dict = {}
+    for d in dicts:
+        for k, v in (d or {}).items():
+            out[k] = out.get(k, 0) + v
+    return out
+
+
 def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
     """Több meccs jelentését egyesíti egy csapatról (több meccs = valós profil).
 
@@ -13032,6 +13093,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pls_tr_long=sum(r.pls_tr_long for r in reports),
         pls_rest_passes=sum(r.pls_rest_passes for r in reports),
         pls_rest_long=sum(r.pls_rest_long for r in reports),
+        dfs_fh_attacks=sum(r.dfs_fh_attacks for r in reports),
+        dfs_sh_attacks=sum(r.dfs_sh_attacks for r in reports),
+        dfs_fh_labels=_merge_count_dicts(
+            r.dfs_fh_labels for r in reports),
+        dfs_sh_labels=_merge_count_dicts(
+            r.dfs_sh_labels for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

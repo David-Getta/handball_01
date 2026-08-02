@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 261) Fal-váltás a szünetre: ha az ellenfél a szünetben falat
+    # váltott ellenünk, a felismerés-rutin a téma.
+    try:
+        from .tactics import defense_form_shift
+        dfs261 = defense_form_shift(match, config)
+        for side, other in (("home", "away"), ("away", "home")):
+            rec261 = dfs261[other]
+            if rec261["verdict"] is None \
+                    or "falat váltanak" not in rec261["verdict"]:
+                continue
+            add(side, "tamadas", "Fal-felismerés a szünet után",
+                f"az ellenfél a szünetben falat váltott ellenünk "
+                f"({rec261['fh_main']} → {rec261['sh_main']}) — az "
+                "első félidei támadó-tervünk a másodikban már nem "
+                "működött",
+                "fal-felismerés rutin: az edzésmeccsen a védő fal a "
+                "pad jelére formát vált, a támadó irányító dolga a "
+                "HANGOS bemondás és az azonnali figurasor-váltás — "
+                "két kész sorral megyünk minden meccsre")
+    except Exception:
+        pass
     # 260) Passz-hossz-állás: ha hátrányban hosszú labdákra váltunk,
     # a rövid kombináció hátrányban is a téma — az átdobálás elfogható.
     try:

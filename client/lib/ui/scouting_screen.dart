@@ -1896,6 +1896,37 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Fal-váltás a szünetre: más fő forma a két félidőben (félidőnként
+  // 5+ címkézett védekezés, 60%-os uralkodó forma — a backenddel
+  // azonos küszöbök).
+  String? _defenseFormShift(Map<String, dynamic> r) {
+    String? mainOf(Map<String, dynamic>? labels, int n) {
+      if (labels == null || labels.isEmpty || n < 5) return null;
+      String? best;
+      int bestN = 0;
+      labels.forEach((k, v) {
+        final c = (v as num).toInt();
+        if (c > bestN) {
+          bestN = c;
+          best = k;
+        }
+      });
+      if (best == null || 100.0 * bestN / n < 60.0) return null;
+      return best;
+    }
+
+    final fh = mainOf(
+        (r["dfs_fh_labels"] as Map?)?.cast<String, dynamic>(),
+        ((r["dfs_fh_attacks"] as num?) ?? 0).toInt());
+    final sh = mainOf(
+        (r["dfs_sh_labels"] as Map?)?.cast<String, dynamic>(),
+        ((r["dfs_sh_attacks"] as num?) ?? 0).toInt());
+    if (fh == null || sh == null || fh == sh) return null;
+    return "a szünet után falat váltanak ($fh → $sh) · két kész "
+        "figurasorral érkezz, a szünet utáni első támadásnál hangos "
+        "forma-bemondás";
+  }
+
   // Passz-hossz-állás: hátrányban hosszú labdázás (állapotonként 10+
   // passz, 12 pp többlet — a backenddel azonos küszöbök).
   String? _passLengthByScore(Map<String, dynamic> r) {
@@ -6069,6 +6100,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-gólpassz", _gkAssists(r)!],
       if (_passLengthByScore(r) != null)
         ["Passz-hossz-állás", _passLengthByScore(r)!],
+      if (_defenseFormShift(r) != null)
+        ["Fal-váltás a szünetre", _defenseFormShift(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
