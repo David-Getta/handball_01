@@ -5,6 +5,12 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Pályázati csomag: költségterv- és pitch deck-vázlat**: 24 hónapos,
+  500 k€ grantra (~714 k€ összköltségre) méretezett költségterv-vázlat
+  munkacsomag-bontással és önerő-forrásokkal
+  (`docs/KOLTSEGTERV_VAZLAT.md`), valamint 10 diás pitch deck-vázlat +
+  3 perces videó-forgatókönyv (`docs/PITCH_DECK_VAZLAT.md`); a README
+  pályázat-szakasza a teljes anyag-listára mutat.
 - **Pályázati csomag bővítése**: Part B angol vázlat munkacsomagokkal
   és KPI-kkal (`docs/PART_B_VAZLAT_EN.md`), kétnyelvű pilot
   LOI-sablon (`docs/LOI_SABLON.md`), annotációs útmutató a valós

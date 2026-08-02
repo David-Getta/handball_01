@@ -111,3 +111,10 @@ A projekt EU-forrásból való továbbfejlesztésének tervei:
   TRL 4→6): `docs/PALYAZAT_EIC_PRE_ACCELERATOR.md`
 - **EIC Accelerator** (a következő lépcső): `docs/PALYAZAT_EIC.md`
 - Angol projekt-összefoglaló a Part B-hez: `docs/EXECUTIVE_SUMMARY_EN.md`
+- Part B vázlat (EN): `docs/PART_B_VAZLAT_EN.md` · Költségterv-vázlat:
+  `docs/KOLTSEGTERV_VAZLAT.md` · Pitch deck-vázlat:
+  `docs/PITCH_DECK_VAZLAT.md`
+- Pilot LOI-sablon: `docs/LOI_SABLON.md` · Annotációs útmutató:
+  `docs/ANNOTACIOS_UTMUTATO.md` · Mérési jegyzőkönyv:
+  `docs/MERESI_JEGYZOKONYV.md`
+- Cél: beadás 2027. május 5-től (részletek a Pre-accelerator tervben)
