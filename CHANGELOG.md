@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Meccs-jelentés: Fáradás-kép szekció** — a HTML-jelentésben új
+  táblázat gyűjti egy helyre a félidők közti trend-rétegek megszólaló
+  ítéleteit (tempó-, lövőerő-, lövéstáv-, kontra-, gólpassz-,
+  lepattanó-, befejezés-esés, fal-fáradás, kapus-forma, fegyelem-,
+  hetes-, hiba-, nyomás- és térfél-esés), csapatonként.
 - **Meccs-jelentés: Állás-lencse szekció** — a HTML-jelentésben új
   táblázat gyűjti egy helyre az eredményjelző szerinti rétegek
   megszólaló ítéleteit (hiba-, kontra-, fegyelem-, hetes-, 7a6-,

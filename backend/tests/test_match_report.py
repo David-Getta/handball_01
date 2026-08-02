@@ -1301,3 +1301,48 @@ def test_report_allas_lencse_section_lists_verdicts():
     html = match_report_html(m, {}, [], None)
     assert "Állás-lencse (az eredményjelző szerint)" in html
     assert "állástól függetlenül lehozzák a kapust" in html
+
+
+def test_report_faradas_kep_section_lists_verdicts():
+    """Ha egy fáradás-réteg ítéletet mond, a Fáradás-kép szekció
+    megjelenik a jelentésben az ítélet szövegével."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+
+    meta = MatchMeta(match_id="rep-df", home_team="Hazai",
+                     away_team="Vendég", fps=25.0)
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y)
+
+    def roster(t0, seconds, home_n):
+        out = []
+        for i in range(int(seconds * 25)):
+            players = [pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(home_n)]
+            players += [pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(6)]
+            out.append(Frame(t=t0 + i, players=players,
+                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        return out
+
+    # 1. félidő: 1 hazai kiállítás; szünet; 2. félidő: 3 kiállítás →
+    # fegyelem-esés ("hajrában szabálytalankodnak").
+    frames = []
+    frames += roster(0, 60, 6)
+    frames += roster(frames[-1].t + 1, 60, 5)
+    frames += roster(frames[-1].t + 1, 60, 6)
+    t = frames[-1].t + 1
+    for i in range(int(120 * 25)):
+        frames.append(Frame(t=t + i, players=[], ball=None))
+    t = frames[-1].t + 1
+    for _ in range(3):
+        frames += roster(t, 60, 5)
+        t = frames[-1].t + 1
+        frames += roster(t, 30, 6)
+        t = frames[-1].t + 1
+    m = Match(meta, frames)
+
+    html = match_report_html(m, {}, [], None)
+    assert "Fáradás-kép (félidők közti trendek)" in html
+    assert "hajrában szabálytalankodnak" in html

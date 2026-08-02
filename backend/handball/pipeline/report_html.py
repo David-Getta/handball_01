@@ -1231,6 +1231,54 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         except Exception:
             pass
 
+        # Fáradás-kép: a félidők közti trend-rétegek ítéletei egy
+        # helyen — csak a megszólaló (nem None) ítéletek jelennek meg.
+        try:
+            from .attack_types import (assist_fade, break_share_fade,
+                                       second_chance_fade,
+                                       shot_distance_fade,
+                                       team_pace_fade)
+            from .defense import pressure_fade, turnover_fade
+            from .event_detection import shot_speed_fade
+            from .goalkeeper import gk_save_fade
+            from .rules import discipline_fade, sevens_fade
+            from .tactics import tilt_fade
+            from .xg import finish_fade, wall_fade
+            frows = []
+            for label, fn in (
+                    ("Tempó-esés", team_pace_fade),
+                    ("Lövőerő-esés", shot_speed_fade),
+                    ("Lövéstáv-esés", shot_distance_fade),
+                    ("Kontra-esés", break_share_fade),
+                    ("Gólpassz-esés", assist_fade),
+                    ("Lepattanó-esés", second_chance_fade),
+                    ("Befejezés-esés", finish_fade),
+                    ("Fal-fáradás", wall_fade),
+                    ("Kapus-forma", gk_save_fade),
+                    ("Fegyelem-esés", discipline_fade),
+                    ("Hetes-esés", sevens_fade),
+                    ("Hiba-esés", turnover_fade),
+                    ("Nyomás-esés", pressure_fade),
+                    ("Térfél-esés", tilt_fade)):
+                try:
+                    res_f = fn(match)
+                except Exception:
+                    continue
+                for key, name in (("home", home), ("away", away)):
+                    v = (res_f.get(key) or {}).get("verdict")
+                    if v:
+                        frows.append(f"<tr><td>{escape(name)}</td>"
+                                     f"<td>{escape(label)}</td>"
+                                     f"<td>{escape(str(v))}</td></tr>")
+            if frows:
+                parts_html.append(
+                    "<h2>Fáradás-kép (félidők közti trendek)</h2>"
+                    "<table><tr><th>Csapat</th><th>Réteg</th>"
+                    "<th>Ítélet</th></tr>" + "".join(frows)
+                    + "</table>")
+        except Exception:
+            pass
+
         rules_html = "".join(parts_html)
     except Exception:
         pass
