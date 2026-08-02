@@ -461,6 +461,66 @@ def outlet_speed(match: Match, config=None) -> dict:
 EMPTY_NET_GOAL_MARGIN_S = 5.0
 
 
+# Kapus-sorozat: egymás utáni védések — a "rákapó" kapus jele.
+GKS_STREAK_LEN = 3      # ennyi egymás utáni védés számít sorozatnak
+GKS_MIN_ON_TARGET = 6   # ennyi kapura tartó lövés alatt nincs ítélet
+GKS_MIN_STREAKS = 2     # ennyi sorozattól ítélet...
+GKS_LONG_STREAK = 5     # ...vagy egyetlen, ilyen hosszú szériától
+
+
+def gk_save_streaks(match: Match, config=None) -> dict:
+    """Kapus-sorozat: ha rákap, SOROZATBAN véd-e a kapus.
+
+    A kapura tartó lövéseket (gól vagy védés — a mellé/blokk nem a
+    kapus munkája) időrendben nézzük a védő oldal szerint, és a
+    megszakítás nélküli védés-sorozatokat számoljuk. A lövő-oldali
+    tüzes kéz (hot_hands) kapus-tükörképe: van kapus, aki két-három
+    védés után "rákap" — a lövők ugyanazt a képet lövik, ő pedig már
+    olvassa.
+
+    Edzőileg: a sorozat-kapus ellen a lövés-KÉPET kell váltani, nem a
+    lövőt: két védése után más zóna, más ritmus (pattintott/emelt),
+    időkérés — a sorozatot megtörni, mielőtt a meccset elviszi. A
+    saját sorozat-kapust pedig hagyni kell dolgozni: ilyenkor nem
+    cserélünk.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"on_target", "streaks",
+    "longest", "verdict"} — a verdict "ha rákap, sorozatban véd a
+    kapusuk" (GKS_MIN_STREAKS sorozattól vagy GKS_LONG_STREAK-es
+    szériától), kevés kapura lövésnél None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    seqs: dict = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        shooter = getattr(e.team, "value", e.team)
+        defender = "away" if shooter == "home" else "home"
+        if e.type == EventType.GOAL:
+            seqs[defender].append(False)
+        elif (e.detail or {}).get("outcome") == "save":
+            seqs[defender].append(True)
+    out = {}
+    for side, seq in seqs.items():
+        streaks = 0
+        longest = 0
+        run = 0
+        for saved in seq:
+            run = run + 1 if saved else 0
+            longest = max(longest, run)
+            if run == GKS_STREAK_LEN:
+                streaks += 1
+        verdict = None
+        if len(seq) >= GKS_MIN_ON_TARGET \
+                and (streaks >= GKS_MIN_STREAKS
+                     or longest >= GKS_LONG_STREAK):
+            verdict = "ha rákap, sorozatban véd a kapusuk"
+        out[side] = {"on_target": len(seq), "streaks": streaks,
+                     "longest": longest, "verdict": verdict}
+    return out
+
+
 # 7a6-állás: az üres-kapus szakaszok az eredményjelző szerint.
 ENS_MIN_TOTAL = 3   # ennyi üres-kapus szakasz alatt nincs ítélet
 ENS_DIFF = 2        # ekkora többlet számít mintázatnak

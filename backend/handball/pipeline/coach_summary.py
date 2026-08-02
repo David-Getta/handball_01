@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kapus-sorozat: rákapó, sorozatban védő kapus.
+    try:
+        from .goalkeeper import gk_save_streaks
+        gst = gk_save_streaks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gst = gst[side]
+            if rec_gst["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusáról kiderült: "
+                     f"{rec_gst['verdict']} ({rec_gst['streaks']} "
+                     f"hármas védés-sorozat, a leghosszabb "
+                     f"{rec_gst['longest']}) — ellene a lövés-képet "
+                     "kell váltani, nem a lövőt.")
+    except Exception:
+        pass
     # 7a6-állás: mikor vállalják az üres kaput.
     try:
         from .goalkeeper import empty_net_by_score

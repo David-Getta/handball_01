@@ -2026,3 +2026,64 @@ def test_empty_net_by_score_few_samples_none():
     ens = empty_net_by_score(_ens_match(2))
     assert ens["home"]["level"] == 2
     assert ens["home"]["verdict"] is None
+
+
+def _gkstreak_match(outcomes):
+    """Kapura tartó lövés-sor a hazai (x=0) kapura: outcomes elemei
+    "save" vagy "goal". A hazai kapus (role=kapus) a kapuban áll."""
+    meta = MatchMeta(match_id="gks", home_team="H", away_team="A", fps=25.0)
+
+    def gk():
+        return PlayerPosition(track_id=2, team=Team.HOME, x=0.5, y=10.0,
+                              role="kapus")
+
+    frames = []
+    t = 0
+    for oc in outcomes:
+        # Pihenő: a labda a kaputól távol (zóna-reset).
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Repülés a kapu felé 0,5/kocka lépéssel.
+        stop = 1.0 if oc == "save" else -0.5
+        x = 10.0
+        while x > stop:
+            x -= 0.5
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=max(x, stop), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # A labda röviden a végpontján marad (védésnél a kapusnál).
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=stop, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(meta, frames)
+
+
+def test_gk_save_streaks_flags_streak_keeper():
+    """3 védés, gól, 3 védés → két hármas sorozat, ítélet."""
+    from handball.pipeline.goalkeeper import gk_save_streaks
+
+    gks = gk_save_streaks(_gkstreak_match(
+        ["save", "save", "save", "goal", "save", "save", "save"]))
+    h = gks["home"]
+    assert h["on_target"] == 7
+    assert h["streaks"] == 2
+    assert h["longest"] == 3
+    assert h["verdict"] == "ha rákap, sorozatban véd a kapusuk"
+    assert gks["away"]["on_target"] == 0
+    assert gks["away"]["verdict"] is None
+
+
+def test_gk_save_streaks_no_streak_no_verdict():
+    """Váltakozó védés-gól (nincs hármas széria) → nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_save_streaks
+
+    gks = gk_save_streaks(_gkstreak_match(
+        ["save", "goal", "save", "goal", "save", "goal"]))
+    h = gks["home"]
+    assert h["on_target"] == 6
+    assert h["streaks"] == 0
+    assert h["verdict"] is None

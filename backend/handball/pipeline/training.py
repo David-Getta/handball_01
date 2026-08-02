@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 254) Kapus-sorozat: ha az ellenfél kapusa sorozatban védett
+    # ellenünk, a lövés-kép váltás a téma — ugyanazt lőttük neki.
+    try:
+        from .goalkeeper import gk_save_streaks
+        gst254 = gk_save_streaks(match, config)
+        for side, other in (("home", "away"), ("away", "home")):
+            rec254 = gst254[other]
+            if rec254["verdict"] is None:
+                continue
+            add(side, "tamadas", "Lövés-kép váltás",
+                f"az ellenfél kapusa sorozatban védett ellenünk "
+                f"({rec254['streaks']} hármas széria, leghosszabb: "
+                f"{rec254['longest']}) — hagytuk rákapni: ugyanazt "
+                "a képet lőttük",
+                "lövés-kép váltás: lövés-sorozat gyakorlat, ahol két "
+                "azonos befejezés után a harmadiknak KÖTELEZŐEN más "
+                "(zóna, ritmus, poszt) — a padról hangos jel megy, "
+                "ha a kapus sorozatban ér labdát")
+    except Exception:
+        pass
     # 253) 7a6-állás: ha az ellenfél rendszerszinten üres kapuval
     # játszik, az üres-kapus átkapcsolás a téma.
     try:

@@ -1896,6 +1896,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Kapus-sorozat: rákapó kapus (6+ kapura lövés, 2+ hármas széria —
+  // a backenddel azonos küszöbök).
+  String? _gkSaveStreaks(Map<String, dynamic> r) {
+    final onTarget = ((r["gst_on_target"] as num?) ?? 0).toInt();
+    final streaks = ((r["gst_streaks"] as num?) ?? 0).toInt();
+    if (onTarget < 6 || streaks < 2) return null;
+    return "ha rákap, sorozatban véd a kapusuk ($streaks hármas "
+        "védés-széria $onTarget kapura lövésből) · két védése után "
+        "válts lövés-képet: más zóna, más ritmus";
+  }
+
   // 7a6-állás: mikor vállalják az üres kaput (3+ szakasz, 2-es
   // többlet — a backenddel azonos küszöbök).
   String? _emptyNetByScore(Map<String, dynamic> r) {
@@ -5945,6 +5956,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontra-állás", _breaksByScore(r)!],
       if (_emptyNetByScore(r) != null)
         ["7a6-állás", _emptyNetByScore(r)!],
+      if (_gkSaveStreaks(r) != null)
+        ["Kapus-sorozat", _gkSaveStreaks(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kapus-sorozat** (`gk_save_streaks`): a megszakítás nélküli
+  védés-szériák a kapura tartó lövéseken (a tüzes kéz kapus-tükre).
+  Edzői olvasat: a rákapó kapus ellen a lövés-képet kell váltani, nem
+  a lövőt — más zóna, más ritmus, időkérés; a saját sorozat-kapust
+  hagyni kell dolgozni. Felületek: `/analyze` + meccs-csomag
+  (`gk_save_streaks`), edzői összefoglaló, felderítés (edzői kulcs +
+  233-as meccsterv-szabály), edzés-fókusz (254-es szabály),
+  kliens-csempe.
 - **7a6-állás** (`empty_net_by_score`): az üres-kapus (7 a 6)
   szakaszok az eredményjelző szerint — akinél nem csak hátrányban jön,
   ott a 7a6 rendszer, nem mentőöv. Edzői olvasat: rendszer-7a6 ellen

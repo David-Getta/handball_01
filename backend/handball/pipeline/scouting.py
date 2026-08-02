@@ -683,6 +683,8 @@ class ScoutingReport:
     ens_tr: int = 0
     ens_lead: int = 0
     ens_level: int = 0
+    gst_on_target: int = 0
+    gst_streaks: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2661,6 +2663,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"{_ens_n} üres-kapus szakasz hátrányban) — amint "
             "megvan a vezetésetek, kapcsoljatok üres-kapus fejre: "
             "jönni fog a 7 a 6.")
+
+    # Kapus-sorozat: a rákapó kapus ellen lövés-kép váltás.
+    if rep.gst_on_target >= 6 and rep.gst_streaks >= 2:
+        keys.append(
+            f"Ha rákap, sorozatban véd a kapusuk ({rep.gst_streaks} "
+            f"hármas védés-széria {rep.gst_on_target} kapura tartó "
+            "lövésből) — két védése után válts lövés-képet: más "
+            "zóna, más ritmus (pattintott/emelt), ha kell, időkérés.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6618,6 +6628,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.ens_tr = ensrec["trailing"]
         rep.ens_lead = ensrec["leading"]
         rep.ens_level = ensrec["level"]
+        from .goalkeeper import gk_save_streaks as _gst
+        gstrec = _gst(match, config)[team.value]
+        rep.gst_on_target = gstrec["on_target"]
+        rep.gst_streaks = gstrec["streaks"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9037,6 +9051,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 233) Az ő sorozat-kapusuk × a ti sok lábon álló támadásotok: a
+    # szériát képváltással kell törni.
+    if (opp.gst_on_target >= 6 and opp.gst_streaks >= 2
+            and len([_sc for _sc in (own.scorer_goals or [])
+                     if _sc.get("goals", 0) >= 2]) >= 4):
+        plan.append(
+            f"A kapusuk rákapós ({opp.gst_streaks} hármas "
+            f"védés-széria), a ti gólszerzésetek viszont sok lábon "
+            "áll — két védése után kötelező a lövés-kép váltás: más "
+            "poszt fejezzen be, más zónába, más ritmusban; a "
+            "sorozatát a változatosságotok töri meg, mielőtt "
+            "meccset venne el tőletek.")
 
     # 232) Az ő rendszer-7a6-uk × a ti aktív kezetek: a szerzés után
     # az üres kapu az első nézés.
@@ -12745,6 +12772,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ens_tr=sum(r.ens_tr for r in reports),
         ens_lead=sum(r.ens_lead for r in reports),
         ens_level=sum(r.ens_level for r in reports),
+        gst_on_target=sum(r.gst_on_target for r in reports),
+        gst_streaks=sum(r.gst_streaks for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
