@@ -1318,6 +1318,46 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         except Exception:
             pass
 
+        # Lendület-lencse: sorozatok, hajrák és válaszok ítéletei egy
+        # helyen — csak a megszólaló (nem None) ítéletek jelennek meg.
+        try:
+            from .defense import turnover_clusters
+            from .goalkeeper import gk_cold_streaks, gk_save_streaks
+            from .momentum import (clutch_shot_quality, clutch_turnovers,
+                                   close_game_record, goal_droughts,
+                                   half_openings, halftime_comeback,
+                                   lead_protection)
+            mrows = []
+            for label, fn in (
+                    ("Vezetés-őrzés", lead_protection),
+                    ("Szoros meccs", close_game_record),
+                    ("Félidei fordítás", halftime_comeback),
+                    ("Gól-aszály", goal_droughts),
+                    ("Hajrá-lövésminőség", clutch_shot_quality),
+                    ("Hajrá-hibák", clutch_turnovers),
+                    ("Félidő-rajt", half_openings),
+                    ("Kapus-sorozat", gk_save_streaks),
+                    ("Kapus-hullámvölgy", gk_cold_streaks),
+                    ("Hiba-sorozat", turnover_clusters)):
+                try:
+                    res_m = fn(match)
+                except Exception:
+                    continue
+                for key, name in (("home", home), ("away", away)):
+                    v = (res_m.get(key) or {}).get("verdict")
+                    if v:
+                        mrows.append(f"<tr><td>{escape(name)}</td>"
+                                     f"<td>{escape(label)}</td>"
+                                     f"<td>{escape(str(v))}</td></tr>")
+            if mrows:
+                parts_html.append(
+                    "<h2>Lendület-lencse (sorozatok és hajrák)</h2>"
+                    "<table><tr><th>Csapat</th><th>Réteg</th>"
+                    "<th>Ítélet</th></tr>" + "".join(mrows)
+                    + "</table>")
+        except Exception:
+            pass
+
         rules_html = "".join(parts_html)
     except Exception:
         pass

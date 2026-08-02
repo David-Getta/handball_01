@@ -1378,3 +1378,45 @@ def test_report_ar_lencse_section_lists_verdicts():
     html = match_report_html(m, {}, [], None)
     assert "Ár-lencse (mibe kerül a hiba)" in html
     assert "az elhúzódó támadásaik üresen zárulnak" in html
+
+
+def test_report_lendulet_lencse_section_lists_verdicts():
+    """Ha egy lendület-réteg ítéletet mond, a Lendület-lencse szekció
+    megjelenik a jelentésben az ítélet szövegével."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+    from handball.pipeline.goalkeeper import gk_save_streaks
+
+    meta = MatchMeta(match_id="rep-gst", home_team="Hazai",
+                     away_team="Vendég", fps=25.0)
+
+    def gk():
+        return PlayerPosition(track_id=2, team=Team.HOME, x=0.5, y=10.0,
+                              role="kapus")
+
+    # 3 védés + gól + 3 védés a hazai kapura → kapus-sorozat ítélet.
+    frames = []
+    t = 0
+    for oc in ["save", "save", "save", "goal", "save", "save", "save"]:
+        for _ in range(20):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+            t += 1
+        stop = 1.0 if oc == "save" else -0.5
+        x = 10.0
+        while x > stop:
+            x -= 0.5
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=max(x, stop), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[gk()],
+                                ball=Ball(x=stop, y=10.0, confidence=1.0)))
+            t += 1
+    m = Match(meta, frames)
+    assert gk_save_streaks(m)["home"]["verdict"] is not None
+
+    html = match_report_html(m, {}, [], None)
+    assert "Lendület-lencse (sorozatok és hajrák)" in html
+    assert "ha rákap, sorozatban véd a kapusuk" in html

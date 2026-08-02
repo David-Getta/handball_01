@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Meccs-jelentés: Lendület-lencse szekció** — a HTML-jelentésben új
+  táblázat gyűjti egy helyre a sorozat- és hajrá-rétegek megszólaló
+  ítéleteit (vezetés-őrzés, szoros meccs, félidei fordítás, gól-aszály,
+  hajrá-lövésminőség, hajrá-hibák, félidő-rajt, kapus-sorozat,
+  kapus-hullámvölgy, hiba-sorozat), csapatonként.
 - **Meccs-jelentés: Ár-lencse szekció** — a HTML-jelentésben új
   táblázat gyűjti egy helyre a "megfizetett ár" rétegek megszólaló
   ítéleteit (eladott labda, kihagyás, kihagyás-büntetés, csere-lyuk,
