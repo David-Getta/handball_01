@@ -3539,6 +3539,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import assist_fade
+            res["assist_fade"] = assist_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4513,6 +4518,8 @@ def create_app():
                 from ..pipeline.goalkeeper import gk_save_streaks
                 _layer("gk_save_streaks",
                        lambda: gk_save_streaks(match))
+                from ..pipeline.attack_types import assist_fade
+                _layer("assist_fade", lambda: assist_fade(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

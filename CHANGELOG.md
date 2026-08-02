@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Gólpassz-esés** (`assist_fade`): a gólpasszos gólok részaránya
+  félidőnként — ha a hajrára beesik, a csapatjáték fáradt el: megáll a
+  labda, jönnek az egyéni megoldások. Edzői olvasat: ellene a hajrában
+  a labdás ember dupla nyomást kaphat; a saját oldalon a fáradásos
+  hajra-csapatjáték az edzés-téma. Felületek: `/analyze` + meccs-csomag
+  (`assist_fade`), edzői összefoglaló, felderítés (edzői kulcs +
+  234-es meccsterv-szabály), edzés-fókusz (255-ös szabály),
+  kliens-csempe.
 - **Kapus-sorozat** (`gk_save_streaks`): a megszakítás nélküli
   védés-szériák a kapura tartó lövéseken (a tüzes kéz kapus-tükre).
   Edzői olvasat: a rákapó kapus ellen a lövés-képet kell váltani, nem

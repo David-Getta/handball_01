@@ -3350,3 +3350,90 @@ def test_breaks_by_score_few_samples_none():
             t += 1
     bks = breaks_by_score(Match(meta, frames))
     assert bks["home"]["verdict"] is None
+
+
+def _asf_goal_frames(t0, assisted: bool):
+    """Egy hazai gól a +x kapura. assisted=True esetén P1 passza előzi
+    meg (gólpassz), különben a lövő 4,5 mp-ig egyedül tartja a labdát."""
+    frames = []
+    t = t0
+    if assisted:
+        # P1 tartja (30,10)-nél 1,5 mp-ig.
+        for _ in range(38):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 30.0, 10.0), _pl(2, Team.HOME, 33.0, 10.0),
+            ], ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Passz P2-nek: 0,2/kocka (5 m/s — lövésnek lassú).
+        x = 30.0
+        while x < 33.0:
+            x += 0.2
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 30.0, 10.0), _pl(2, Team.HOME, 33.0, 10.0),
+            ], ball=Ball(x=min(x, 33.0), y=10.0, confidence=1.0)))
+            t += 1
+        # P2 rövid tartás (0,5 mp), a gólpassz-ablakon belül lő.
+        hold = 12
+    else:
+        # A lövő egyedül tartja 4,5 mp-ig — nincs gólpassz-ablak.
+        hold = int(4.5 * 25)
+    for _ in range(hold):
+        frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Lövés: 0,5/kocka a kapuba (x=40,5), a kapufák közt (y=10).
+    x = 33.0
+    while x < 40.5:
+        x += 0.5
+        frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=min(x, 40.5), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    # Zóna-reset: a labda a felezőn pihen.
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_assist_fade_flags_stalling_ball():
+    """1. félidő: 3 gólpasszos gól; 2. félidő: 3 egyéni gól →
+    a hajrában megáll a labda."""
+    from handball.pipeline.attack_types import assist_fade
+
+    meta = MatchMeta(match_id="asf", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(3):
+        gf, t = _asf_goal_frames(t, assisted=True)
+        frames += gf
+    # Szünet: 90 mp üres kocka.
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(3):
+        gf, t = _asf_goal_frames(t, assisted=False)
+        frames += gf
+
+    asf = assist_fade(Match(meta, frames))
+    h = asf["home"]
+    assert h["fh_goals"] == 3 and h["fh_assisted"] == 3
+    assert h["sh_goals"] == 3 and h["sh_assisted"] == 0
+    assert h["verdict"] == "a hajrában megáll a labda"
+    assert asf["away"]["verdict"] is None
+
+
+def test_assist_fade_needs_halftime_and_goals():
+    """Felismert szünet nélkül nincs ítélet."""
+    from handball.pipeline.attack_types import assist_fade
+
+    meta = MatchMeta(match_id="asf2", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(3):
+        gf, t = _asf_goal_frames(t, assisted=True)
+        frames += gf
+    asf = assist_fade(Match(meta, frames))
+    assert asf["home"]["verdict"] is None
+    assert asf["home"]["gap_pp"] is None

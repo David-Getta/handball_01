@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Gólpassz-esés: megáll-e a labda a hajrára.
+    try:
+        from .attack_types import assist_fade
+        asf = assist_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_asf = asf[side]
+            if rec_asf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} előkészítés-képe: "
+                     f"{rec_asf['verdict']} (gólpasszos gól az 1. "
+                     f"félidőben {rec_asf['fh_assisted']}/"
+                     f"{rec_asf['fh_goals']}, a másodikban "
+                     f"{rec_asf['sh_assisted']}/{rec_asf['sh_goals']}).")
+    except Exception:
+        pass
     # Kapus-sorozat: rákapó, sorozatban védő kapus.
     try:
         from .goalkeeper import gk_save_streaks

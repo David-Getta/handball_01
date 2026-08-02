@@ -685,6 +685,10 @@ class ScoutingReport:
     ens_level: int = 0
     gst_on_target: int = 0
     gst_streaks: int = 0
+    asf_fh_goals: int = 0
+    asf_fh_assisted: int = 0
+    asf_sh_goals: int = 0
+    asf_sh_assisted: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2671,6 +2675,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"hármas védés-széria {rep.gst_on_target} kapura tartó "
             "lövésből) — két védése után válts lövés-képet: más "
             "zóna, más ritmus (pattintott/emelt), ha kell, időkérés.")
+
+    # Gólpassz-esés: a hajrában megálló labda támadható.
+    if rep.asf_fh_goals >= 3 and rep.asf_sh_goals >= 3:
+        _asf_fh = 100.0 * rep.asf_fh_assisted / rep.asf_fh_goals
+        _asf_sh = 100.0 * rep.asf_sh_assisted / rep.asf_sh_goals
+        if _asf_fh - _asf_sh >= 25.0:
+            keys.append(
+                f"A hajrában megáll náluk a labda (gólpasszos gól "
+                f"{_asf_fh:.0f}% → {_asf_sh:.0f}%) — a második "
+                "félidőben a labdás emberük dupla nyomást kaphat: "
+                "a passz úgyis megállt, egyéni megoldásból élnek.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6632,6 +6647,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         gstrec = _gst(match, config)[team.value]
         rep.gst_on_target = gstrec["on_target"]
         rep.gst_streaks = gstrec["streaks"]
+        from .attack_types import assist_fade as _asf
+        asfrec = _asf(match, config)[team.value]
+        rep.asf_fh_goals = asfrec["fh_goals"]
+        rep.asf_fh_assisted = asfrec["fh_assisted"]
+        rep.asf_sh_goals = asfrec["sh_goals"]
+        rep.asf_sh_assisted = asfrec["sh_assisted"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9051,6 +9072,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 234) Az ő hajrában megálló labdájuk × a ti szabályos kezetek: a
+    # labdás emberük a hajrában dupla nyomást kaphat.
+    if (opp.asf_fh_goals >= 3 and opp.asf_sh_goals >= 3
+            and own.suspensions <= 2):
+        _asf234_fh = 100.0 * opp.asf_fh_assisted / opp.asf_fh_goals
+        _asf234_sh = 100.0 * opp.asf_sh_assisted / opp.asf_sh_goals
+        if _asf234_fh - _asf234_sh >= 25.0:
+            plan.append(
+                f"A hajrában megáll náluk a labda (gólpasszos gól "
+                f"{_asf234_fh:.0f}% → {_asf234_sh:.0f}%), ti pedig "
+                f"szabályosan tudtok keményen védekezni "
+                f"({own.suspensions} kiállítás) — a második félidőben "
+                "a labdás emberük kapjon dupla nyomást: a passz úgyis "
+                "megállt, az egyéni megoldást pedig a tiszta test "
+                "elviszi.")
 
     # 233) Az ő sorozat-kapusuk × a ti sok lábon álló támadásotok: a
     # szériát képváltással kell törni.
@@ -12774,6 +12811,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ens_level=sum(r.ens_level for r in reports),
         gst_on_target=sum(r.gst_on_target for r in reports),
         gst_streaks=sum(r.gst_streaks for r in reports),
+        asf_fh_goals=sum(r.asf_fh_goals for r in reports),
+        asf_fh_assisted=sum(r.asf_fh_assisted for r in reports),
+        asf_sh_goals=sum(r.asf_sh_goals for r in reports),
+        asf_sh_assisted=sum(r.asf_sh_assisted for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

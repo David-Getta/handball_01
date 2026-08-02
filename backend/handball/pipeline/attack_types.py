@@ -4310,6 +4310,65 @@ def turnovers_by_score(match: Match,
     return out
 
 
+# Gólpassz-esés: a gólpasszos gólok részaránya félidőnként.
+ASF_MIN_GOALS = 3    # félidőnként ennyi gól kell az ítélethez
+ASF_DROP_PP = 25.0   # ekkora részarány-változás számít mintázatnak
+
+
+def assist_fade(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-esés: MEGÁLL-E A LABDA a hajrára.
+
+    A fáradás-család előkészítés-tagja: a gólpasszból (bekönyvelt
+    assziszttal) született gólok részarányát mérjük félidőnként. Ha a
+    második félidőre a gólpasszos gólok aránya beesik, a csapatjáték
+    fáradt el: a labda megáll, és jönnek az egyéni megoldások — ez
+    védekezhetőbb, mint az első félidei mozgatás. A fordítottja is
+    jel: aki a hajrára áll össze, annak az elejét kell megnyomni.
+
+    Edzőileg: az egyéni megoldásokba fáradó csapat ellen a hajrában
+    a labdás ember dupla nyomást kaphat (a passz úgyis megállt); a
+    saját oldalon a hajra-csapatjáték edzendő — fáradt lábbal is
+    kötelező a második-harmadik átadás.
+
+    Visszatérés csapatonként: {"fh_goals", "fh_assisted", "sh_goals",
+    "sh_assisted", "gap_pp", "verdict"} — gap_pp/verdict None
+    felismert szünet nélkül vagy félidőnként ASF_MIN_GOALS-nál
+    kevesebb gólnál; a verdict "a hajrában megáll a labda" /
+    "a hajrára áll össze a csapatjátékuk" / None.
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    out = {side: {"fh_goals": 0, "fh_assisted": 0, "sh_goals": 0,
+                  "sh_assisted": 0, "gap_pp": None, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    for g in detect_events(match, config):
+        if g.type != EventType.GOAL:
+            continue
+        rec = out[g.team.value]
+        first = g.t <= ht
+        rec["fh_goals" if first else "sh_goals"] += 1
+        if (g.detail or {}).get("assist_id") is not None:
+            rec["fh_assisted" if first else "sh_assisted"] += 1
+    for rec in out.values():
+        if rec["fh_goals"] < ASF_MIN_GOALS \
+                or rec["sh_goals"] < ASF_MIN_GOALS:
+            continue
+        fh_pct = 100.0 * rec["fh_assisted"] / rec["fh_goals"]
+        sh_pct = 100.0 * rec["sh_assisted"] / rec["sh_goals"]
+        rec["gap_pp"] = round(sh_pct - fh_pct, 1)
+        if rec["gap_pp"] <= -ASF_DROP_PP:
+            rec["verdict"] = "a hajrában megáll a labda"
+        elif rec["gap_pp"] >= ASF_DROP_PP:
+            rec["verdict"] = "a hajrára áll össze a csapatjátékuk"
+    return out
+
+
 # Kontra-állás: a lerohanás-részarány az eredményjelző szerint.
 BKS_MIN_ATTACKS = 5   # az összevetett állapotokban ennyi-ennyi támadás kell
 BKS_GAP_PP = 12.0     # ekkora részarány-különbség számít mintázatnak

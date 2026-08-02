@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 255) Gólpassz-esés: ha a hajrában megáll nálunk a labda, a
+    # fáradt csapatjáték a téma — az egyéni megoldás védekezhetőbb.
+    try:
+        from .attack_types import assist_fade
+        asf255 = assist_fade(match, config)
+        for side in ("home", "away"):
+            rec255 = asf255[side]
+            if rec255["verdict"] != "a hajrában megáll a labda":
+                continue
+            add(side, "tamadas", "Hajra-csapatjáték",
+                f"a hajrában megáll nálunk a labda (gólpasszos gól "
+                f"{rec255['fh_assisted']}/{rec255['fh_goals']} → "
+                f"{rec255['sh_assisted']}/{rec255['sh_goals']}) — "
+                "fáradtan egyéni megoldásokba menekülünk",
+                "hajra-csapatjáték: fáradásos befejezés-gyakorlat "
+                "(sprint-sorozat UTÁN jön a támadás), ahol gól csak "
+                "gólpasszból érvényes — a fáradt láb mellé a második "
+                "és harmadik átadás is beépül")
+    except Exception:
+        pass
     # 254) Kapus-sorozat: ha az ellenfél kapusa sorozatban védett
     # ellenünk, a lövés-kép váltás a téma — ugyanazt lőttük neki.
     try:
