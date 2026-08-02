@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kihagyás-büntetés: megbüntetik-e a kihagyott ziccereiket.
+    try:
+        from .momentum import punished_misses
+        pmb = punished_misses(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pmb = pmb[side]
+            if rec_pmb["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kihagyásairól kiderült: "
+                     f"{rec_pmb['verdict']} ({rec_pmb['punished']}/"
+                     f"{rec_pmb['misses']} kihagyott ziccert követett"
+                     " fél percen belüli ellenfél-gól).")
+    except Exception:
+        pass
     # Kilépés-büntetés: a kilépésük mögé betalálnak-e.
     try:
         from .defense import stepout_punishment

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kihagyás-büntetés**: MEGBÜNTETIK-E a kihagyott ziccereiket. A
+  kihagyott nagy helyzetek a mennyiséget mérik — ez a következményt:
+  a kihagyás utáni fél percen belüli ellenfél-gólok aránya (4+
+  kihagyott ziccer; 40%+ büntetett = lélektanilag törékeny, 10%
+  alatti = jól emészti). A törékeny ellen a ziccer-kimaradása a jel:
+  azonnali tempó, amíg mentálisan lent vannak; a saját oldalon a
+  kihagyás utáni 30 mp kiemelt fókusz-idő. Egy réteg, sok felület:
+  `punished_misses` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (darabszámok, két edzői kulcs +
+  csempe), 225. meccsterv-szabály (az ő törékenységük × a ti gyors
+  újraindításotok), 246. edzés-szabály (kihagyás utáni fél perc:
+  előbb védekezni, aztán bánkódni).
+
 - **Kilépés-büntetés**: A KILÉPÉSÜK MÖGÉ betalálnak-e. A kiugró
   védő megmondja, ki játszik elöl — ez az árát: a kapott gólok
   hányadánál volt a fal-vonalból (a védők medián kapu-távolságából)

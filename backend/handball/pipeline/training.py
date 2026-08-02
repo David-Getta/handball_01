@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 246) Kihagyás-büntetés: ha a kihagyásaink után azonnal büntetnek,
+    # a kihagyás utáni fél perc a téma — előbb védekezni, aztán bánkódni.
+    try:
+        from .momentum import punished_misses
+        pmb246 = punished_misses(match, config)
+        for side in ("home", "away"):
+            rec246 = pmb246[side]
+            if rec246["verdict"] != \
+                    "a kihagyásaik után azonnal büntetik őket":
+                continue
+            add(side, "vedekezes", "Kihagyás utáni fél perc",
+                f"a kihagyott ziccereink után rendre azonnal gólt "
+                f"kapunk ({rec246['punished']}/{rec246['misses']}) — "
+                "a fejünk a kihagyásnál marad, a visszarendeződés "
+                "késik",
+                "kihagyás utáni fókusz: az edzésmeccsen minden "
+                "kihagyott ziccer után 30 mp kiemelt védekezés-idő "
+                "(hangosan számolva) — ha ez alatt gólt kapunk, "
+                "dupla mínusz; ha labdát szerzünk, dupla pont — a "
+                "szabály: előbb védekezni, aztán bánkódni")
+    except Exception:
+        pass
     # 245) Kilépés-büntetés: ha a kilépésünk mögé betalálnak, a mögé
     # csúszás a téma — a szomszéd zárja a rést.
     try:

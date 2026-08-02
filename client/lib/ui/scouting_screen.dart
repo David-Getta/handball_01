@@ -1863,6 +1863,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vagy betörés a helyére";
   }
 
+  // Kihagyás-büntetés: megbüntetik-e a kihagyott ziccereiket (4+
+  // kihagyás; 40%+ büntetett, 10%- emésztő — a backend-kulccsal
+  // azonos küszöbök).
+  String? _punishedMisses(Map<String, dynamic> r) {
+    final misses = ((r["pmb_misses"] as num?) ?? 0).toInt();
+    final punished = ((r["pmb_punished"] as num?) ?? 0).toInt();
+    if (misses < 4) return null;
+    final pct = 100.0 * punished / misses;
+    if (pct >= 40.0) {
+      return "a kihagyásaik után azonnal büntethetők ($punished/"
+          "$misses ziccer-kimaradást követett gyors gól) · a "
+          "kihagyásuk a te jeled: azonnali tempó, kapura vitt "
+          "támadás";
+    }
+    if (pct <= 10.0) {
+      return "jól emésztik a kihagyást (csak $punished/$misses után "
+          "jött gyors gól) · nincs ingyen lendület, vidd a "
+          "megszokott játékot";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5799,6 +5821,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kettőzés-büntetés", _doublePunishment(r)!],
       if (_stepoutPunishment(r) != null)
         ["Kilépés-büntetés", _stepoutPunishment(r)!],
+      if (_punishedMisses(r) != null)
+        ["Kihagyás-büntetés", _punishedMisses(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

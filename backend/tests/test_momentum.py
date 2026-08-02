@@ -1338,3 +1338,61 @@ def test_drought_breakers_dense_goals_no_droughts():
     rec = drought_breakers(_drb_match(
         [(1.0, 7), (2.0, 7), (3.0, 7)]))["home"]
     assert rec["droughts_broken"] == 0 and rec["verdict"] is None
+
+
+# ---- Kihagyás-büntetés (megbüntetik-e a kihagyott ziccert) ------------------
+
+def _pmb_match(punished, n_misses=5, fps=25.0):
+    """Hazai kihagyott ziccerek (közeli lövés kapu mellé), utána a
+    vendégek (nem) büntetnek azonnali góllal."""
+    frames = []
+    t = 0
+
+    def _emit(players, ball, n=1):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+
+    for _ in range(n_misses):
+        sh = _pl(1, Team.HOME, 35.5, 10.0)
+        _emit([sh], Ball(x=35.5, y=10.0, confidence=1.0), 10)
+        for i in range(5):          # nagy helyzet, de mellé
+            _emit([sh], Ball(x=35.5 + (i + 1),
+                             y=10.0 + 0.7 * (i + 1),
+                             confidence=1.0))
+        _emit([], Ball(x=20.0, y=10.0, confidence=1.0), 30)
+        if punished:                # azonnali vendég-válasz
+            aw = _pl(21, Team.AWAY, 6.0, 10.0)
+            _emit([aw], Ball(x=6.0, y=10.0, confidence=1.0), 10)
+            for i in range(7):
+                _emit([aw], Ball(x=max(6.0 - (i + 1), -0.5), y=10.0,
+                                 confidence=1.0))
+        _emit([], Ball(x=20.0, y=10.0, confidence=1.0), 40)
+    return Match(_meta(fps), frames)
+
+
+def test_punished_misses_flags_the_fragile_team():
+    """Minden kihagyás után azonnali ellenfél-gól → büntetik őket."""
+    from handball.pipeline.momentum import punished_misses
+
+    rec = punished_misses(_pmb_match(True))["home"]
+    assert rec["misses"] >= 4 and rec["punished"] >= 4
+    assert rec["verdict"] == "a kihagyásaik után azonnal büntetik őket"
+
+
+def test_punished_misses_flags_the_composed_team():
+    """Kihagyások válasz-gól nélkül → jól emésztik."""
+    from handball.pipeline.momentum import punished_misses
+
+    rec = punished_misses(_pmb_match(False))["home"]
+    assert rec["punished"] == 0
+    assert rec["verdict"] == "jól emésztik a kihagyást"
+
+
+def test_punished_misses_needs_enough_misses():
+    """Kevés (4-nél kevesebb) kihagyott ziccernél nincs ítélet."""
+    from handball.pipeline.momentum import punished_misses
+
+    rec = punished_misses(_pmb_match(True, n_misses=3))["home"]
+    assert rec["verdict"] is None

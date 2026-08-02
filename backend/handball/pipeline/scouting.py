@@ -663,6 +663,8 @@ class ScoutingReport:
     dbp_conceded_after: int = 0
     sop_goals: int = 0
     sop_behind: int = 0
+    pmb_misses: int = 0
+    pmb_punished: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2542,6 +2544,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.sop_goals} kapott gólnál volt kiugró védő) — "
                 "a kilépőt játsszátok meg: gyors átemelés vagy "
                 "betörés a helyére, a rés bizonyítottan ott van.")
+
+    # Kihagyás-büntetés: törékeny-e a fejük a kihagyás után.
+    if rep.pmb_misses >= 4:
+        _pmb_pct = 100.0 * rep.pmb_punished / rep.pmb_misses
+        if _pmb_pct >= 40.0:
+            keys.append(
+                f"A kihagyásaik után azonnal büntethetők "
+                f"({rep.pmb_punished}/{rep.pmb_misses} kihagyott "
+                "ziccerüket követte fél percen belüli gól) — a "
+                "ziccer-kimaradásuk a ti jeletek: azonnali tempó, "
+                "kapura vitt első támadás, amíg mentálisan lent "
+                "vannak.")
+        elif _pmb_pct <= 10.0:
+            keys.append(
+                f"Jól emésztik a kihagyást (csak {rep.pmb_punished}/"
+                f"{rep.pmb_misses} kihagyásukat követte gyors gól) — "
+                "a kimaradt ziccerük után nincs ingyen lendület: a "
+                "megszokott játékotokat vigyétek tovább.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6462,6 +6482,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         soprec = _sop(match, config)[team.value]
         rep.sop_goals = soprec["goals"]
         rep.sop_behind = soprec["behind_stepout"]
+        from .momentum import punished_misses as _pmb
+        pmbrec = _pmb(match, config)[team.value]
+        rep.pmb_misses = pmbrec["misses"]
+        rep.pmb_punished = pmbrec["punished"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8881,6 +8905,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 225) Az ő kihagyás utáni törékenységük × a ti gyors
+    # újraindításotok: a kimaradt ziccerük a ti jeletek.
+    if (opp.pmb_misses >= 4 and own.rs_restarts >= 4):
+        _pmb225 = 100.0 * opp.pmb_punished / opp.pmb_misses
+        _rs225 = 100.0 * own.rs_fast / max(1, own.rs_restarts)
+        if _pmb225 >= 40.0 and _rs225 >= 40.0:
+            plan.append(
+                f"A kihagyásaik után azonnal büntethetők "
+                f"({opp.pmb_punished}/{opp.pmb_misses} kihagyott "
+                f"ziccerüket követte fél percen belüli gól), ti "
+                f"pedig gyorsan indultok (az újraindításaitok "
+                f"{_rs225:.0f}%-a gyors) — minden kihagyott "
+                "ziccerük után azonnali tempó: kapura vitt első "
+                "támadás, amíg a fejük még a kihagyásnál jár.")
 
     # 224) Az ő gólba kerülő kilépéseik × a ti beálló-játékotok: a
     # kilépő helyére a beálló fordul be.
@@ -12458,6 +12497,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
                                for r in reports),
         sop_goals=sum(r.sop_goals for r in reports),
         sop_behind=sum(r.sop_behind for r in reports),
+        pmb_misses=sum(r.pmb_misses for r in reports),
+        pmb_punished=sum(r.pmb_punished for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

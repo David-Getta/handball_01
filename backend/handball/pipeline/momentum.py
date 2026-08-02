@@ -1984,3 +1984,70 @@ def drought_breakers(match: Match, config=None) -> dict:
         out[side] = {"droughts_broken": broken, "players": players,
                      "top": top, "verdict": verdict}
     return out
+
+
+# Kihagyás-büntetés: a kihagyott nagy helyzet utáni ennyi másodpercen
+# belüli ellenfél-gól számít azonnali büntetésnek; ennyi kihagyott
+# ziccer kell az ítélethez, és e feletti arány a törékeny, ez alatti
+# a jól emésztő csapat jele.
+PMB_WINDOW_S = 30.0
+PMB_MIN_MISSES = 4
+PMB_PUNISHED_PCT = 40.0
+PMB_DIGEST_PCT = 10.0
+
+
+def punished_misses(match: Match, config=None) -> dict:
+    """Kihagyás-büntetés: MEGBÜNTETIK-E a kihagyott ziccereiket.
+
+    A kihagyott nagy helyzetek (missed_big_chances) a mennyiséget
+    mérik — ez a következményt: a kihagyott ziccerek után
+    PMB_WINDOW_S másodpercen belül hányszor jött azonnali
+    ellenfél-gól. A kihagyás után összeroskadó csapat a
+    lélektanilag törékeny; aki jól emészti, annál a kihagyás nem
+    fordul át hátrányba.
+
+    Edzőileg: a törékeny csapat ellen a ziccer-kimaradásuk után
+    azonnal tempót kell váltani — gyors középkezdés helyett kapura
+    vitt első támadás, mert ilyenkor mentálisan lent vannak; a
+    saját oldalon a kihagyás utáni 30 másodperc kiemelt fókusz-idő:
+    először védekezni, aztán bánkódni.
+
+    Visszatérés csapatonként (a KIHAGYÓ oldal): {"misses"
+    (kihagyott nagy helyzetek), "punished", "punished_pct",
+    "verdict"} — a punished_pct/verdict None PMB_MIN_MISSES alatt;
+    a verdict "a kihagyásaik után azonnal büntetik őket" / "jól
+    emésztik a kihagyást" / None.
+    """
+    from .tactics import TacticsConfig
+    from .xg import BIG_CHANCE_XG, match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(PMB_WINDOW_S * fps)
+    shots = match_xg(match, config).get("shots", [])
+    goals = [(sh["t"], sh["team"]) for sh in shots
+             if sh.get("outcome") == "goal"]
+
+    out = {side: {"misses": 0, "punished": 0, "punished_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for sh in shots:
+        if sh.get("xg", 0.0) < BIG_CHANCE_XG \
+                or sh.get("outcome") == "goal":
+            continue
+        side = sh["team"]
+        rec = out[side]
+        rec["misses"] += 1
+        if any(tm != side and 0 < gt - sh["t"] <= win
+               for (gt, tm) in goals):
+            rec["punished"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["misses"] >= PMB_MIN_MISSES:
+            pct = 100.0 * rec["punished"] / rec["misses"]
+            rec["punished_pct"] = round(pct, 1)
+            if pct >= PMB_PUNISHED_PCT:
+                rec["verdict"] = "a kihagyásaik után azonnal büntetik őket"
+            elif pct <= PMB_DIGEST_PCT:
+                rec["verdict"] = "jól emésztik a kihagyást"
+    return out
