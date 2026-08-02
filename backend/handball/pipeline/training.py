@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 243) Olvasó kapus: ha a kapusunk csak reflexből véd, az
+    # olvasás-készség a téma — a lövő teste elárulja a sarkot.
+    try:
+        from .goalkeeper import reading_keeper
+        rdk243 = reading_keeper(match, config)
+        for side in ("home", "away"):
+            rec243 = rdk243[side]
+            if rec243["verdict"] != "reflexből véd":
+                continue
+            add(side, "vedekezes", "Kapus-olvasás",
+                f"a kapusunk reflexből véd (csak {rec243['read']}/"
+                f"{rec243['saves']} védésnél indult előre) — a "
+                "reflex a közeli ziccernél kevés, az olvasott "
+                "indulás hozná a plusz védéseket",
+                "olvasás-gyakorlat a kapusnak: a lövő elkötelező "
+                "jeleinek (csípő, váll, elugró láb) tanulása lassított "
+                "majd éles sorozatokkal — az edzésen a lövés ELŐTT "
+                "bemondott helyes sarok pontot ér, és a jól olvasott "
+                "védés duplát")
+    except Exception:
+        pass
     # 242) Becsapott kapus: ha a kapusunk elmozdítható, a csel-állás
     # a téma — kivárás, nem korai vetődés.
     try:

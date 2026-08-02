@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Olvasó kapus**: ELŐRE OLVASSA-E a lövéseket a kapusuk. A
+  becsapott kapus a gólokat nézi — ez a védéseket: a kapus a védett
+  lövéseknél már a labda érkezési oldala felé mozgott-e (5+ mért
+  védés; 50%+ olvasó, 15% alatti reflex). Az olvasó kapus ellen
+  ütem-váltás és csel — a korai elköteleződését kell büntetni; a
+  reflex-kapus ellen a kitartott, pontos sarok-lövés visz be. Egy
+  réteg, sok felület: `reading_keeper` motor, edzői összefoglaló,
+  /analyze + meccs-csomag, felderítés-profil (darabszámok, két
+  edzői kulcs + csempe), 222. meccsterv-szabály (az ő
+  reflex-kapusuk × a ti sarokra lőtt góljaitok), 243. edzés-szabály
+  (kapus-olvasás: a lövő elkötelező jeleinek tanulása).
+
 - **Becsapott kapus**: ELMOZDÍTJÁK-E a kapusukat a gólok előtt. A
   gól-pillanati család kapus-tagja: a kapott góloknál a kapus
   oldalirányú mozgását vetjük össze a labda érkezési oldalával (5+

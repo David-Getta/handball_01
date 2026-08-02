@@ -1822,6 +1822,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Olvasó kapus: előre olvassa-e a lövéseket (5+ mért védés; 50%+
+  // olvasó, 15%- reflex — a backend-kulccsal azonos küszöbök).
+  String? _readingKeeper(Map<String, dynamic> r) {
+    final saves = ((r["rdk_saves"] as num?) ?? 0).toInt();
+    final read = ((r["rdk_read"] as num?) ?? 0).toInt();
+    if (saves < 5) return null;
+    final pct = 100.0 * read / saves;
+    if (pct >= 50.0) {
+      return "olvassa a lövéseket ($read/$saves védésnél indult "
+          "előre) · ütem-váltással és csellel büntesd a korai "
+          "elköteleződését";
+    }
+    if (pct <= 15.0) {
+      return "reflexből véd (csak $read/$saves olvasott védés) · "
+          "kitartott, pontos sarok-lövés visz be";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5752,6 +5771,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lendület-gólok", _concededMomentum(r)!],
       if (_wrongfootedKeeper(r) != null)
         ["Becsapott kapus", _wrongfootedKeeper(r)!],
+      if (_readingKeeper(r) != null)
+        ["Olvasó kapus", _readingKeeper(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

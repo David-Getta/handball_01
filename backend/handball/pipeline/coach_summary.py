@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Olvasó kapus: előre olvassa-e a lövéseket a kapus.
+    try:
+        from .goalkeeper import reading_keeper
+        rdk = reading_keeper(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rdk = rdk[side]
+            if rec_rdk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusáról kiderült: "
+                     f"{rec_rdk['verdict']} ({rec_rdk['read']}/"
+                     f"{rec_rdk['saves']} védésnél indult előre a "
+                     "labda oldalára).")
+    except Exception:
+        pass
     # Becsapott kapus: elmozdítják-e a kapust a gólok előtt.
     try:
         from .goalkeeper import wrongfooted_keeper

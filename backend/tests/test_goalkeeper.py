@@ -1834,3 +1834,72 @@ def test_wrongfooted_keeper_needs_enough_goals():
 
     rec = wrongfooted_keeper(_wfk_match(True, n_goals=3))["away"]
     assert rec["verdict"] is None
+
+
+def _rdk_match(reading, n_saves=5, fps=25.0):
+    """Hazai lövés-sorozat, a vendég kapus fogja: a labda a kapu széle
+    (y=8,8) felé tart, a kapus előre mozdul rá (vagy áll)."""
+    from handball.models.tracking import Ball
+
+    def _pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    t = 0
+    for _ in range(n_saves):
+        for _ in range(10):     # a lövő birtokol
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(30, Team.AWAY, 39.2, 10.0, role="kapus")],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):      # lövés, a kapusnál megáll (védés)
+            gy = 10.0 - (0.08 * (i + 1) if reading else 0.0)
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(30, Team.AWAY, 39.2, gy, role="kapus")],
+                ball=Ball(x=min(33.0 + (i + 1), 39.2),
+                          y=10.0 - 1.2 * min(1.0, (i + 1) / 6.0),
+                          confidence=1.0)))
+            t += 1
+        for i in range(5):      # a védett labda visszapattan
+            frames.append(Frame(t=t, players=[
+                _pl(30, Team.AWAY, 39.2, 10.0, role="kapus")],
+                ball=Ball(x=39.2 - (i + 1) * 1.5, y=8.8,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return _match(frames)
+
+
+def test_reading_keeper_flags_the_anticipating_keeper():
+    """A labda oldala felé induló kapus → olvassa a lövéseket."""
+    from handball.pipeline.goalkeeper import reading_keeper
+
+    rec = reading_keeper(_rdk_match(True))["away"]
+    assert rec["saves"] >= 5
+    assert rec["verdict"] == "olvassa a lövéseket"
+
+
+def test_reading_keeper_flags_the_reflex_keeper():
+    """A helyben álló kapus védései → reflexből véd."""
+    from handball.pipeline.goalkeeper import reading_keeper
+
+    rec = reading_keeper(_rdk_match(False))["away"]
+    assert rec["read"] == 0
+    assert rec["verdict"] == "reflexből véd"
+
+
+def test_reading_keeper_needs_enough_saves():
+    """Kevés (5-nél kevesebb) mért védésnél nincs ítélet."""
+    from handball.pipeline.goalkeeper import reading_keeper
+
+    rec = reading_keeper(_rdk_match(True, n_saves=3))["away"]
+    assert rec["verdict"] is None

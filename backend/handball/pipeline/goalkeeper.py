@@ -2096,3 +2096,89 @@ def wrongfooted_keeper(match: Match, config=None) -> dict:
             elif pct <= WFK_STEADY_PCT:
                 rec["verdict"] = "a kapusuk állja a cseleket"
     return out
+
+
+# Olvasó kapus: a védésnél e feletti oldalsebességgel a labda oldala
+# FELÉ mozgó kapus számít olvasónak; ennyi mért védés kell az
+# ítélethez, és e feletti / alatti arány az olvasó, illetve a
+# reflex-kapus jele.
+RDK_MOVE_MS = 0.5
+RDK_MIN_SAVES = 5
+RDK_READ_PCT = 50.0
+RDK_REFLEX_PCT = 15.0
+
+
+def reading_keeper(match: Match, config=None) -> dict:
+    """Olvasó kapus: ELŐRE OLVASSA-E a lövéseket a kapusuk.
+
+    A becsapott kapus a gólokat nézi — ez a védéseket: a kapus a
+    védett lövéseknél már a labda érkezési oldala felé mozgott-e a
+    lövés pillanatában. Aki olvas, az a lövő csípőjéből/karjából
+    előre indul — ellene a sarok-lövés a kapus kezére megy; aki
+    reflexből véd, az az utolsó pillanatig áll.
+
+    Edzőileg: az olvasó kapus ellen ütem-váltás és csel kell — a
+    korai elköteleződését kell büntetni, nem a saroktalálatot
+    keresni; a reflex-kapus ellen a kitartott, pontos sarok-lövés
+    visz be — ott nincs mit becsapni.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"saves" (mért
+    védések), "read", "read_pct", "verdict"} — a read_pct/verdict
+    None RDK_MIN_SAVES alatt; a verdict "olvassa a lövéseket" /
+    "reflexből véd" / None.
+    """
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+
+    out = {side: {"saves": 0, "read": 0, "read_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") != "save":
+            continue
+        deff = "away" if sh["team"] == "home" else "home"
+        goal_x = config.attacks_toward_x(Team(sh["team"]))
+        i0 = idx_of.get(sh["t"])
+        if i0 is None or i0 < 2:
+            continue
+        # Az érkezési oldal: a kapuhoz legközelebbi mért labda-kocka y-a.
+        target_y = None
+        best = 2.5
+        for j in range(i0, min(i0 + round(1.5 * fps), len(frames))):
+            b = frames[j].ball
+            if b is None:
+                break
+            d = abs(b.x - goal_x)
+            if d <= best:
+                best = d
+                target_y = b.y
+        if target_y is None:
+            continue
+        gk0 = next((p for p in frames[i0 - 2].players
+                    if p.team.value == deff and p.role == "kapus"), None)
+        gk1 = next((p for p in frames[min(i0 + 2, len(frames) - 1)].players
+                    if p.team.value == deff and p.role == "kapus"), None)
+        if gk0 is None or gk1 is None:
+            continue
+        vy = (gk1.y - gk0.y) * fps / 4.0
+        side_dir = target_y - gk0.y
+        rec = out[deff]
+        rec["saves"] += 1
+        if abs(vy) >= RDK_MOVE_MS and vy * side_dir > 0:
+            rec["read"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["saves"] >= RDK_MIN_SAVES:
+            pct = 100.0 * rec["read"] / rec["saves"]
+            rec["read_pct"] = round(pct, 1)
+            if pct >= RDK_READ_PCT:
+                rec["verdict"] = "olvassa a lövéseket"
+            elif pct <= RDK_REFLEX_PCT:
+                rec["verdict"] = "reflexből véd"
+    return out

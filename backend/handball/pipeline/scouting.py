@@ -657,6 +657,8 @@ class ScoutingReport:
     cgm_running: int = 0
     wfk_goals: int = 0
     wfk_fooled: int = 0
+    rdk_saves: int = 0
+    rdk_read: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2503,6 +2505,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.wfk_goals} gólnál mozdult rosszul) — a csel "
                 "ellene időpocsékolás: első ütemből, pontosan a "
                 "sarokba kell lőni.")
+
+    # Olvasó kapus: ütem-váltással vagy kitartott sarokkal kell lőni.
+    if rep.rdk_saves >= 5:
+        _rdk_pct = 100.0 * rep.rdk_read / rep.rdk_saves
+        if _rdk_pct >= 50.0:
+            keys.append(
+                f"A kapusuk olvassa a lövéseket ({rep.rdk_read}/"
+                f"{rep.rdk_saves} védésnél indult előre a labda "
+                "oldalára) — a korai elköteleződését büntessétek: "
+                "ütem-váltás és csel, ne a megszokott sarok.")
+        elif _rdk_pct <= 15.0:
+            keys.append(
+                f"Reflexből véd a kapusuk (csak {rep.rdk_read}/"
+                f"{rep.rdk_saves} olvasott védés) — nincs mit "
+                "becsapni: a kitartott, pontos sarok-lövés visz be.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6411,6 +6428,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         wfkrec = _wfk(match, config)[team.value]
         rep.wfk_goals = wfkrec["goals"]
         rep.wfk_fooled = wfkrec["fooled"]
+        from .goalkeeper import reading_keeper as _rdk
+        rdkrec = _rdk(match, config)[team.value]
+        rep.rdk_saves = rdkrec["saves"]
+        rep.rdk_read = rdkrec["read"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8830,6 +8851,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 222) Az ő reflex-kapusuk × a ti sarokra lőtt góljaitok: első
+    # ütemből, kitartott sarok.
+    if opp.rdk_saves >= 5:
+        _rdk222 = 100.0 * opp.rdk_read / opp.rdk_saves
+        _own_total222 = (own.place_bal + own.place_kozep
+                         + own.place_jobb)
+        _own_corner222 = (100.0 * (own.place_bal + own.place_jobb)
+                          / max(1, _own_total222))
+        if (_rdk222 <= 15.0 and _own_total222 >= 8
+                and _own_corner222 >= 70.0):
+            plan.append(
+                f"Reflexből véd a kapusuk (csak {opp.rdk_read}/"
+                f"{opp.rdk_saves} olvasott védés), ti pedig sarokra "
+                f"lövő csapat vagytok (a góljaitok "
+                f"{_own_corner222:.0f}%-a oldalra ment) — első "
+                "ütemből, kitartott sarok-lövésekkel dolgozzatok: "
+                "nincs mit becsapni rajta, a pontosság dönt.")
 
     # 221) Az ő elmozdítható kapusuk × a ti betörőitek: közelről a
     # csel veri meg.
@@ -12352,6 +12391,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         cgm_running=sum(r.cgm_running for r in reports),
         wfk_goals=sum(r.wfk_goals for r in reports),
         wfk_fooled=sum(r.wfk_fooled for r in reports),
+        rdk_saves=sum(r.rdk_saves for r in reports),
+        rdk_read=sum(r.rdk_read for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
