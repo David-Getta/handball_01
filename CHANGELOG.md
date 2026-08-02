@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Indítás-hiba ára**: GÓLBA KERÜLNEK-E az elszórt kapus-indítások.
+  Az indítás-biztonság azt méri, hány kihozatal vész el — ez az árát:
+  az elveszett indítás utáni 10 másodpercen belüli ellenfél-gólok
+  (2+ büntetett hiba = gólba kerül; 4+ elveszett indítás gól nélkül
+  = megússzák). Akinél a hiba gólba kerül, ott a magas letámadás
+  bizonyítottan termel — a kapus-indításokat kell vadászni; a saját
+  oldalon a biztos első passz a téma. Egy réteg, sok felület:
+  `outlet_punishment` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (darabszámok, edzői kulcs +
+  csempe), 226. meccsterv-szabály (az ő gólba kerülő indítás-hibáik
+  × a ti sáv-záró védekezésetek), 247. edzés-szabály
+  (indítás-biztonság: két biztos rövid célpont, tilos a vak hosszú).
+
 - **Kihagyás-büntetés**: MEGBÜNTETIK-E a kihagyott ziccereiket. A
   kihagyott nagy helyzetek a mennyiséget mérik — ez a következményt:
   a kihagyás utáni fél percen belüli ellenfél-gólok aránya (4+

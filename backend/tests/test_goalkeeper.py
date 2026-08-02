@@ -1903,3 +1903,76 @@ def test_reading_keeper_needs_enough_saves():
 
     rec = reading_keeper(_rdk_match(True, n_saves=3))["away"]
     assert rec["verdict"] is None
+
+
+def _olp_match(with_goals, n_losses=3, fps=25.0):
+    """A vendég kapus indításait a hazaiak elcsípik; utána (nem) jön
+    az azonnali büntető gól."""
+    from handball.models.tracking import Ball
+
+    def _pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    t = 0
+    for _ in range(n_losses):
+        for _ in range(8):      # a kapusnál a labda
+            frames.append(Frame(t=t, players=[
+                _pl(30, Team.AWAY, 39.0, 10.0, role="kapus"),
+                _pl(1, Team.HOME, 36.0, 10.0)],
+                ball=Ball(x=39.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(6):      # az indítást a hazai 1-es csípi el
+            frames.append(Frame(t=t, players=[
+                _pl(30, Team.AWAY, 39.0, 10.0, role="kapus"),
+                _pl(1, Team.HOME, 36.0, 10.0)],
+                ball=Ball(x=36.0, y=10.0, confidence=1.0)))
+            t += 1
+        if with_goals:
+            for i in range(24):  # a hazai kihozza a zónából (lassan)
+                x = 36.0 - 0.3 * (i + 1)
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, x, 10.0)],
+                    ball=Ball(x=x, y=10.0, confidence=1.0)))
+                t += 1
+            for i in range(12):  # azonnali gól a +x kapura
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 28.8, 10.0)],
+                    ball=Ball(x=min(28.8 + (i + 1), 40.5), y=9.5,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return _match(frames)
+
+
+def test_outlet_punishment_flags_the_punished_losses():
+    """Az elcsípett indítások után rendre gól esik → gólba kerülnek."""
+    from handball.pipeline.goalkeeper import outlet_punishment
+
+    rec = outlet_punishment(_olp_match(True))["away"]
+    assert rec["lost"] >= 3 and rec["punished"] >= 2
+    assert rec["verdict"] == "az elszórt indításaik gólba kerülnek"
+
+
+def test_outlet_punishment_flags_the_lucky_losses():
+    """Elveszett indítások gyors gól nélkül → megússzák."""
+    from handball.pipeline.goalkeeper import outlet_punishment
+
+    rec = outlet_punishment(_olp_match(False, n_losses=4))["away"]
+    assert rec["lost"] >= 4 and rec["punished"] == 0
+    assert rec["verdict"] == "az indítás-hibáikat megússzák"
+
+
+def test_outlet_punishment_needs_signal():
+    """Kevés elveszett indítás, gól nélkül → nincs ítélet."""
+    from handball.pipeline.goalkeeper import outlet_punishment
+
+    rec = outlet_punishment(_olp_match(False, n_losses=2))["away"]
+    assert rec["verdict"] is None

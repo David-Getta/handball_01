@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Indítás-hiba ára: gólba kerülnek-e az elszórt indítások.
+    try:
+        from .goalkeeper import outlet_punishment
+        olp = outlet_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_olp = olp[side]
+            if rec_olp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kihozataláról kiderült: "
+                     f"{rec_olp['verdict']} ({rec_olp['punished']}/"
+                     f"{rec_olp['lost']} elveszett indítást követett"
+                     " gyors ellenfél-gól).")
+    except Exception:
+        pass
     # Kihagyás-büntetés: megbüntetik-e a kihagyott ziccereiket.
     try:
         from .momentum import punished_misses

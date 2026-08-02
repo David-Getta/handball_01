@@ -1885,6 +1885,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Indítás-hiba ára: gólba kerülnek-e az elszórt indítások (2+
+  // büntetett hiba — a backend-kulccsal azonos küszöb).
+  String? _outletPunishment(Map<String, dynamic> r) {
+    final punished = ((r["olp_punished"] as num?) ?? 0).toInt();
+    final lost = ((r["olp_lost"] as num?) ?? 0).toInt();
+    if (punished < 2) return null;
+    return "az elszórt indításaik gólba kerülnek ($punished/$lost "
+        "elveszett kihozatal után gyors gól) · magas letámadással "
+        "vadászd a kapus-indításaikat";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5823,6 +5834,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kilépés-büntetés", _stepoutPunishment(r)!],
       if (_punishedMisses(r) != null)
         ["Kihagyás-büntetés", _punishedMisses(r)!],
+      if (_outletPunishment(r) != null)
+        ["Indítás-hiba ára", _outletPunishment(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

@@ -2182,3 +2182,88 @@ def reading_keeper(match: Match, config=None) -> dict:
             elif pct <= RDK_REFLEX_PCT:
                 rec["verdict"] = "reflexből véd"
     return out
+
+
+# Indítás-hiba ára: az elveszett kapus-indítás utáni ennyi másodpercen
+# belüli ellenfél-gól a hiba számlájára megy; ennyi ilyen gól kell a
+# büntetett, és ennyi elveszett indítás a megúszott ítélethez.
+OLP_TAIL_S = 10.0
+OLP_MIN_GOALS = 2
+OLP_MIN_LOST = 4
+
+
+def outlet_punishment(match: Match, config=None) -> dict:
+    """Indítás-hiba ára: GÓLBA KERÜLNEK-E az elszórt indításaik.
+
+    Az indítás-biztonság (gk_outlet_security) azt méri, hány
+    kihozatal vész el — ez az árát: az elveszett indítás utáni
+    OLP_TAIL_S másodpercen belül kapott gólokat. Van, akinél az
+    elszórt indítást az ellenfél rendre bünteti, és van, aki a
+    hibái ellenére is megússza.
+
+    Edzőileg: akinél az indítás-hiba gólba kerül, ott a magas
+    letámadás bizonyítottan termel — a kapus-indításokat kell
+    vadászni; a saját, gólba kerülő indítás-hibáknál a biztos első
+    passz (és a rossz indítás utáni azonnali visszatámadás) a téma.
+
+    Visszatérés csapatonként (az INDÍTÓ oldal): {"lost"
+    (elveszett indítások), "punished" (ebből gólba torkolló),
+    "verdict"} — a verdict "az elszórt indításaik gólba kerülnek"
+    (OLP_MIN_GOALS-tól), "az indítás-hibáikat megússzák"
+    (OLP_MIN_LOST elveszett indítás, gól nélkül), különben None.
+    """
+    import math as _math
+
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    detect_goalkeepers(match)
+    follow = round(GK_OUTLET_FOLLOW_S * fps)
+    tail = round(OLP_TAIL_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    def _holder(frame):
+        if frame.ball is None:
+            return None
+        best, best_d = None, GK_HOLD_RADIUS_M
+        for p in frame.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            d = _math.hypot(p.x - frame.ball.x, p.y - frame.ball.y)
+            if d < best_d:
+                best, best_d = p, d
+        return best
+
+    lost_ts = {"home": [], "away": []}
+    pending = None
+    for i, f in enumerate(match.frames):
+        h = _holder(f)
+        if h is not None and h.role == ROLE_GOALKEEPER:
+            pending = (h.team.value, i)
+            continue
+        if pending is None or h is None:
+            continue
+        side, i0 = pending
+        pending = None
+        if i - i0 > follow:
+            continue
+        if h.team.value != side:
+            lost_ts[side].append(f.t)
+
+    out: dict = {}
+    for side, other in (("home", "away"), ("away", "home")):
+        punished = sum(
+            1 for t in lost_ts[side]
+            if any(tm == other and 0 <= gt - t <= tail
+                   for (gt, tm) in goals))
+        rec = {"lost": len(lost_ts[side]), "punished": punished,
+               "verdict": None}
+        if punished >= OLP_MIN_GOALS:
+            rec["verdict"] = "az elszórt indításaik gólba kerülnek"
+        elif rec["lost"] >= OLP_MIN_LOST and punished == 0:
+            rec["verdict"] = "az indítás-hibáikat megússzák"
+        out[side] = rec
+    return out

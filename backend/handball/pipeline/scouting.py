@@ -665,6 +665,8 @@ class ScoutingReport:
     sop_behind: int = 0
     pmb_misses: int = 0
     pmb_punished: int = 0
+    olp_lost: int = 0
+    olp_punished: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2562,6 +2564,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.pmb_misses} kihagyásukat követte gyors gól) — "
                 "a kimaradt ziccerük után nincs ingyen lendület: a "
                 "megszokott játékotokat vigyétek tovább.")
+
+    # Indítás-hiba ára: bizonyítottan termel-e a letámadás.
+    if rep.olp_punished >= 2:
+        keys.append(
+            f"Az elszórt indításaik gólba kerülnek ({rep.olp_punished}"
+            f"/{rep.olp_lost} elveszett kihozatal után jött gyors "
+            "gól) — a magas letámadás bizonyítottan termel ellenük: "
+            "a kapus-indításokat vadásszátok.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6486,6 +6496,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         pmbrec = _pmb(match, config)[team.value]
         rep.pmb_misses = pmbrec["misses"]
         rep.pmb_punished = pmbrec["punished"]
+        from .goalkeeper import outlet_punishment as _olp
+        olprec = _olp(match, config)[team.value]
+        rep.olp_lost = olprec["lost"]
+        rep.olp_punished = olprec["punished"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8905,6 +8919,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 226) Az ő gólba kerülő indítás-hibáik × a ti sáv-záró
+    # védekezésetek: a kihozatal-vadászat bizonyítottan termel.
+    if (opp.olp_punished >= 2 and own.stt_steals >= 6):
+        _stt226 = 100.0 * own.stt_int / max(1, own.stt_steals)
+        if _stt226 >= 60.0:
+            plan.append(
+                f"Az elszórt indításaik gólba kerülnek "
+                f"({opp.olp_punished}/{opp.olp_lost} elveszett "
+                f"kihozatal után jött gyors gól), ti pedig a "
+                f"passzsávokat zárjátok (a szerzéseitek "
+                f"{_stt226:.0f}%-a elfogás) — magas letámadással "
+                "vadásszátok a kapus-indításaikat: náluk ez "
+                "bizonyítottan azonnali gólt ér.")
 
     # 225) Az ő kihagyás utáni törékenységük × a ti gyors
     # újraindításotok: a kimaradt ziccerük a ti jeletek.
@@ -12499,6 +12527,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sop_behind=sum(r.sop_behind for r in reports),
         pmb_misses=sum(r.pmb_misses for r in reports),
         pmb_punished=sum(r.pmb_punished for r in reports),
+        olp_lost=sum(r.olp_lost for r in reports),
+        olp_punished=sum(r.olp_punished for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

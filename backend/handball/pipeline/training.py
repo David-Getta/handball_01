@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 247) Indítás-hiba ára: ha az elszórt indításaink gólba kerülnek,
+    # az indítás-biztonság sürgős — az ár már bizonyított.
+    try:
+        from .goalkeeper import outlet_punishment
+        olp247 = outlet_punishment(match, config)
+        for side in ("home", "away"):
+            rec247 = olp247[side]
+            if rec247["verdict"] != \
+                    "az elszórt indításaik gólba kerülnek":
+                continue
+            add(side, "vedekezes", "Indítás-biztonság",
+                f"az elszórt indításaink gólba kerülnek "
+                f"({rec247['punished']}/{rec247['lost']} elveszett "
+                "kihozatal után jött gyors gól) — a rossz első "
+                "passz nálunk azonnali büntetést hoz",
+                "indítás-biztonság: a kapus két biztos rövid "
+                "célpontot kap (a szélső mindig felkínál), nyomás "
+                "alatt TILOS a vak hosszú — az edzésmeccsen az "
+                "elveszett indítás mínusz, az elveszett indítás "
+                "utáni 10 mp-en belül kapott gól dupla mínusz")
+    except Exception:
+        pass
     # 246) Kihagyás-büntetés: ha a kihagyásaink után azonnal büntetnek,
     # a kihagyás utáni fél perc a téma — előbb védekezni, aztán bánkódni.
     try:
