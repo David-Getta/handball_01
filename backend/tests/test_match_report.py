@@ -1346,3 +1346,35 @@ def test_report_faradas_kep_section_lists_verdicts():
     html = match_report_html(m, {}, [], None)
     assert "Fáradás-kép (félidők közti trendek)" in html
     assert "hajrában szabálytalankodnak" in html
+
+
+def test_report_ar_lencse_section_lists_verdicts():
+    """Ha egy ár-réteg ítéletet mond, az Ár-lencse szekció megjelenik
+    a jelentésben az ítélet szövegével."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+
+    meta = MatchMeta(match_id="rep-sac", home_team="Hazai",
+                     away_team="Vendég", fps=25.0)
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y)
+
+    # 3 elhúzódó (36 mp-es) hazai támadás gól nélkül → az elhúzódó
+    # támadás ára réteg "üresen zárulnak" ítéletet mond.
+    frames = []
+    t = 0
+    for _ in range(3):
+        for _ in range(int(36 * 25)):
+            frames.append(Frame(t=t, players=[pl(1, Team.HOME, 30.0, 10.0)],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    m = Match(meta, frames)
+
+    html = match_report_html(m, {}, [], None)
+    assert "Ár-lencse (mibe kerül a hiba)" in html
+    assert "az elhúzódó támadásaik üresen zárulnak" in html

@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Meccs-jelentés: Ár-lencse szekció** — a HTML-jelentésben új
+  táblázat gyűjti egy helyre a "megfizetett ár" rétegek megszólaló
+  ítéleteit (eladott labda, kihagyás, kihagyás-büntetés, csere-lyuk,
+  kettőzés, kilépés, indítás-hiba és elhúzódó támadás ára),
+  csapatonként.
 - **Meccs-jelentés: Fáradás-kép szekció** — a HTML-jelentésben új
   táblázat gyűjti egy helyre a félidők közti trend-rétegek megszólaló
   ítéleteit (tempó-, lövőerő-, lövéstáv-, kontra-, gólpassz-,

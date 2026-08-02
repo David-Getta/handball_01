@@ -1279,6 +1279,45 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
         except Exception:
             pass
 
+        # Ár-lencse: a "megfizetett ár" rétegek ítéletei egy helyen —
+        # csak a megszólaló (nem None) ítéletek jelennek meg.
+        try:
+            from .defense import (double_punishment, stepout_punishment,
+                                  turnover_punishment)
+            from .goalkeeper import outlet_punishment
+            from .momentum import punished_misses
+            from .substitutions import gap_punishment
+            from .tactics import slow_attack_cost
+            from .xg import miss_punishment
+            arows = []
+            for label, fn in (
+                    ("Eladott labda ára", turnover_punishment),
+                    ("Kihagyás ára", miss_punishment),
+                    ("Kihagyás-büntetés", punished_misses),
+                    ("Csere-lyuk ára", gap_punishment),
+                    ("Kettőzés ára", double_punishment),
+                    ("Kilépés ára", stepout_punishment),
+                    ("Indítás-hiba ára", outlet_punishment),
+                    ("Elhúzódó támadás ára", slow_attack_cost)):
+                try:
+                    res_a = fn(match)
+                except Exception:
+                    continue
+                for key, name in (("home", home), ("away", away)):
+                    v = (res_a.get(key) or {}).get("verdict")
+                    if v:
+                        arows.append(f"<tr><td>{escape(name)}</td>"
+                                     f"<td>{escape(label)}</td>"
+                                     f"<td>{escape(str(v))}</td></tr>")
+            if arows:
+                parts_html.append(
+                    "<h2>Ár-lencse (mibe kerül a hiba)</h2>"
+                    "<table><tr><th>Csapat</th><th>Réteg</th>"
+                    "<th>Ítélet</th></tr>" + "".join(arows)
+                    + "</table>")
+        except Exception:
+            pass
+
         rules_html = "".join(parts_html)
     except Exception:
         pass
