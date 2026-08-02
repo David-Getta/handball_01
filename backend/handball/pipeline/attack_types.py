@@ -4308,3 +4308,71 @@ def turnovers_by_score(match: Match,
                 verdict = "hátrányban is rendezettek"
         buckets["verdict"] = verdict
     return out
+
+
+# Kidobott labda: az oldalvonalon kimenő labda — a legolcsóbb eladás.
+OBT_BASELINE_GUARD_M = 3.0  # az alapvonal közelében kimenőt nem számoljuk
+OBT_DEBOUNCE_S = 3.0        # két kimenés között legalább ennyi idő
+OBT_LOOKBACK_S = 1.0        # a birtoklót ennyivel a kimenés előtt keressük
+OBT_MIN = 3                 # ennyi kidobott labdától van ítélet
+
+
+def balls_out(match: Match,
+              config: Optional[TacticsConfig] = None) -> dict:
+    """Kidobott labda: hányszor hagyja el a labda a pályát az OLDALVONALON.
+
+    A legolcsóbb eladott labda az, amelyikhez ellenfél sem kellett:
+    a túl hosszú szélső-passz, a túlfutott indítás, a kicsúszó labda.
+    A pálya oldalvonalán kimenő labdát a kimenés előtti birtokló
+    csapatnak írjuk fel; az alapvonal közelében (OBT_BASELINE_GUARD_M)
+    kimenőt nem számoljuk, mert az jellemzően elhajló lövés — azt a
+    lövés-rétegek már mérik.
+
+    Edzőileg: a kidobott labda tiszta ajándék — állóhelyzeti bedobás
+    az ellenfélnek, kontra-veszély nélkül, de a saját támadás odavan.
+    Aki sokat dob ki, azt érdemes az oldalvonalra szorítani: a szélső
+    sávban pontatlan. A saját oldalon a szélső-passz pontossága és az
+    indítások hossz-kontrollja az edzés-téma.
+
+    Visszatérés csapatonként: {"out", "verdict"} — a verdict "sok
+    kidobott labda" (OBT_MIN-től), különben None.
+    """
+    from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+    from .tactics import possession_team
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out = {side: {"out": 0, "verdict": None} for side in ("home", "away")}
+
+    lookback = max(1, round(OBT_LOOKBACK_S * fps))
+    debounce = round(OBT_DEBOUNCE_S * fps)
+    last_out = -10 ** 9
+    frames = match.frames
+    for i in range(1, len(frames)):
+        prev_b = frames[i - 1].ball
+        cur_b = frames[i].ball
+        if prev_b is None or cur_b is None:
+            continue
+        prev_in = 0.0 <= prev_b.y <= COURT_WIDTH_M
+        cur_in = 0.0 <= cur_b.y <= COURT_WIDTH_M
+        if not (prev_in and not cur_in):
+            continue  # csak a bent → kint átmenet számít
+        if frames[i].t - last_out < debounce:
+            continue
+        if not (OBT_BASELINE_GUARD_M <= cur_b.x
+                <= COURT_LENGTH_M - OBT_BASELINE_GUARD_M):
+            continue  # alapvonal-közeli kimenés: elhajló lövés
+        # A birtokló a kimenés előtti pillanatokból.
+        holder = None
+        for j in range(i - 1, max(-1, i - 1 - lookback), -1):
+            holder = possession_team(frames[j], config)
+            if holder is not None:
+                break
+        if holder is None:
+            continue
+        out[holder.value]["out"] += 1
+        last_out = frames[i].t
+    for rec in out.values():
+        if rec["out"] >= OBT_MIN:
+            rec["verdict"] = "sok kidobott labda"
+    return out

@@ -1343,6 +1343,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 249) Kidobott labda: ha sok labdát dobunk ki magunktól, a
+    # szélső-passz pontossága és az indítás-hossz kontrollja a téma.
+    try:
+        from .attack_types import OBT_MIN, balls_out
+        obt249 = balls_out(match, config)
+        for side in ("home", "away"):
+            rec249 = obt249[side]
+            if rec249["out"] < OBT_MIN:
+                continue
+            add(side, "tamadas", "Oldalvonal-fegyelem",
+                f"{rec249['out']} labdát dobtunk ki az oldalvonalon — "
+                "a legolcsóbb eladás: ehhez ellenfél sem kellett",
+                "szélső-passz pontosság: átadások a szélső sávban "
+                "oldalvonal-szalaggal (a szalagon túlra tett labda "
+                "mínusz), hosszú indítás csak megadott jelre — a "
+                "kidobott labda az edzésmeccsen azonnali labdavesztés "
+                "ÉS büntetőkör")
+    except Exception:
+        pass
     # 248) Elhúzódó támadás ára: ha a hosszú akcióink üresen zárulnak,
     # a támadás-lezárás időre a téma — a türelem most nem terem gólt.
     try:

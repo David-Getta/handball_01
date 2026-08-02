@@ -3215,3 +3215,53 @@ def test_turnovers_by_score_needs_enough_attacks():
 
     rec = turnovers_by_score(_tbs_match(True, n=3))["home"]
     assert rec["verdict"] is None
+
+
+def _obt_match(n_out: int):
+    """n_out kidobott labda: hazai birtoklás (20,10), majd a labda
+    kirepül az oldalvonalon (y > 20), aztán vissza a birtoklóhoz."""
+    meta = MatchMeta(match_id="obt", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(n_out):
+        # 2 mp nyugodt hazai birtoklás a pálya közepén.
+        for _ in range(50):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        # A labda kirepül az oldalvonalon (a játékos a helyén marad).
+        for k in range(6):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0 + 2.0 * (k + 1),
+                                          confidence=1.0)))
+            t += 1
+        # 2 mp kint, majd a bedobás után újra bent.
+        for _ in range(50):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                                ball=Ball(x=20.0, y=22.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(meta, frames)
+
+
+def test_balls_out_counts_sideline_exits():
+    """3 kidobott labda a hazaiaknál → ítélet; a vendégnél semmi."""
+    from handball.pipeline.attack_types import balls_out
+
+    ob = balls_out(_obt_match(3))
+    assert ob["home"]["out"] == 3
+    assert ob["home"]["verdict"] == "sok kidobott labda"
+    assert ob["away"]["out"] == 0
+    assert ob["away"]["verdict"] is None
+
+
+def test_balls_out_few_samples_no_verdict():
+    """Egyetlen kimenő labda → számoljuk, de nincs ítélet."""
+    from handball.pipeline.attack_types import balls_out
+
+    ob = balls_out(_obt_match(1))
+    assert ob["home"]["out"] == 1
+    assert ob["home"]["verdict"] is None

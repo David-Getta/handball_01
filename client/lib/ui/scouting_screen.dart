@@ -1896,6 +1896,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Kidobott labda: oldalvonalon elhagyott labdák (3+ — a backenddel
+  // azonos küszöb).
+  String? _ballsOut(Map<String, dynamic> r) {
+    final out = ((r["obt_out"] as num?) ?? 0).toInt();
+    if (out < 3) return null;
+    return "sok kidobott labda ($out oldalvonalon elhagyott labda) · "
+        "szorítsd a labdásukat az oldalvonalra: a szélső sávban "
+        "pontatlanok";
+  }
+
   // Elhúzódó támadás ára: üresen zárulnak-e a hosszú akcióik (3+
   // hosszú akció, 25% alatti gól-arány — a backenddel azonos küszöb).
   String? _slowAttackCost(Map<String, dynamic> r) {
@@ -5857,6 +5867,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Indítás-hiba ára", _outletPunishment(r)!],
       if (_slowAttackCost(r) != null)
         ["Elhúzódó támadás ára", _slowAttackCost(r)!],
+      if (_ballsOut(r) != null)
+        ["Kidobott labda", _ballsOut(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

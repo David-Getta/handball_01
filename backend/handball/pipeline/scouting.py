@@ -669,6 +669,7 @@ class ScoutingReport:
     olp_punished: int = 0
     sac_slow: int = 0
     sac_scored: int = 0
+    obt_out: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2589,6 +2590,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A hosszú akcióikat is gólra váltják ({rep.sac_scored}"
                 f"/{rep.sac_slow}) — a 35. másodpercben is teljes "
                 "koncentráció: a falban senki nem kapcsolhat ki.")
+
+    # Kidobott labda: olcsó eladások — oldalvonalra szorítás.
+    if rep.obt_out >= 3:
+        keys.append(
+            f"Sok labdát dobnak ki maguktól az oldalvonalon "
+            f"({rep.obt_out} kidobott labda) — szorítsátok a "
+            "labdásukat az oldalvonalra: a szélső sávban pontatlanok, "
+            "és a hibához ellenfél sem kell.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6521,6 +6530,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         sacrec = _sac(match, config)[team.value]
         rep.sac_slow = sacrec["slow"]
         rep.sac_scored = sacrec["scored"]
+        from .attack_types import balls_out as _obt
+        rep.obt_out = _obt(match, config)[team.value]["out"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8940,6 +8951,16 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 228) Az ő kidobott labdáik × a ti aktív kezetek: az oldalvonal
+    # a legjobb védőtök.
+    if (opp.obt_out >= 3 and own.stt_steals >= 6):
+        plan.append(
+            f"Maguktól is kidobják a labdát ({opp.obt_out} oldalvonalon "
+            f"elhagyott labda), a ti védelmetek pedig aktív "
+            f"({own.stt_steals} labdaszerzés) — tereljétek a labdásukat "
+            "az oldalvonal felé, és zárjátok a visszafelé vezető "
+            "passzsávot: a szélső sávban a hibájuk magától jön.")
 
     # 227) Az ő üresjáratos hosszú támadásaik × a ti fegyelmezett
     # faltok: a passzív jel nektek dolgozik.
@@ -12566,6 +12587,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         olp_punished=sum(r.olp_punished for r in reports),
         sac_slow=sum(r.sac_slow for r in reports),
         sac_scored=sum(r.sac_scored for r in reports),
+        obt_out=sum(r.obt_out for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

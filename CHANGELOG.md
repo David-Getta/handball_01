@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kidobott labda** (`balls_out`): az oldalvonalon kimenő labdák a
+  kimenés előtti birtoklónak felírva (az alapvonal-közeli, elhajló
+  lövéseket kihagyva). Edzői olvasat: a legolcsóbb eladás — ellenfél
+  sem kell hozzá; aki sokat dob ki, azt az oldalvonalra kell szorítani,
+  a saját oldalon a szélső-passz pontossága a téma. Felületek:
+  `/analyze` + meccs-csomag (`balls_out`), edzői összefoglaló,
+  felderítés (edzői kulcs + 228-as meccsterv-szabály), edzés-fókusz
+  (249-es szabály), kliens-csempe.
 - **Elhúzódó támadás ára** (`slow_attack_cost`): a passzív-veszélyes,
   35 mp-nél hosszabb támadó-akciók megtérülése — hány zárul góllal a
   szakasz alatt vagy közvetlenül utána. Edzői olvasat: az üresjáratos

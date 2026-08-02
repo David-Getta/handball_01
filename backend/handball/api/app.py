@@ -3509,6 +3509,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import balls_out
+            res["balls_out"] = balls_out(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4466,6 +4471,8 @@ def create_app():
                 from ..pipeline.tactics import slow_attack_cost
                 _layer("slow_attack_cost",
                        lambda: slow_attack_cost(match))
+                from ..pipeline.attack_types import balls_out
+                _layer("balls_out", lambda: balls_out(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))
