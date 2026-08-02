@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Befejező-váltás** (`finisher_rotation`): hányszor lő ugyanaz az
+  ember kétszer egymás után (a kimenetel mindegy — a védekezés a lövő
+  személyére áll rá). Hat mezőnyjátékosnál a véletlen ismétlődés ~17%,
+  ezért a 35% feletti már tudatos minta, a 10% alatti jó rotáció.
+  Edzői olvasat: a sorozat-befejezőjükre a következő támadásban is
+  számítani kell (korai kilépés, kettőzés); a saját oldalon a
+  befejezés-rotáció a téma. Felületek: `/analyze` + meccs-csomag
+  (`finisher_rotation`), edzői összefoglaló, felderítés (edzői kulcs
+  két iránnyal + 250-es meccsterv-szabály), edzés-fókusz (271-es
+  szabály), kliens-csempe.
 - **Generált tény-lap** (`docs/SZAMOK.md`) + `scripts/project_facts`:
   a hivatkozható projekt-számok (elemző rétegek, automata tesztek,
   meccsterv- és edzés-szabályok, kliens-csempék, pipeline-modulok) a

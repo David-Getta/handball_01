@@ -1896,6 +1896,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Befejező-váltás: egymás utáni befejezések ugyanattól (8+ lövés,
+  // 35/10%-os ismétlés — a backenddel azonos küszöbök).
+  String? _finisherRotation(Map<String, dynamic> r) {
+    final shots = ((r["frt_shots"] as num?) ?? 0).toInt();
+    final repeats = ((r["frt_repeats"] as num?) ?? 0).toInt();
+    if (shots < 8) return null;
+    final pct = 100.0 * repeats / (shots - 1);
+    if (pct >= 35.0) {
+      return "ugyanaz fejez be sorozatban "
+          "(${pct.toStringAsFixed(0)}% ismétlés $shots lövésből) · a "
+          "lövőjükre a következő támadásban is számíts: korai "
+          "kilépés, kettőzés";
+    }
+    if (pct <= 10.0) {
+      return "jól rotálják a befejezést "
+          "(${pct.toStringAsFixed(0)}% ismétlés) · emberfogás ellenük "
+          "nem működik: sáv- és falmunka kell";
+    }
+    return null;
+  }
+
   // Gól-minta: ismétlődő gól-ujjlenyomat (3+ azonos minta, 40%-os
   // részarány — a backenddel azonos küszöbök).
   String? _goalPatterns(Map<String, dynamic> r) {
@@ -6298,6 +6319,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kettős emberhátrány", _doubleShorthand(r)!],
       if (_goalPatterns(r) != null)
         ["Gól-minta", _goalPatterns(r)!],
+      if (_finisherRotation(r) != null)
+        ["Befejező-váltás", _finisherRotation(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

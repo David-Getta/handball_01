@@ -940,3 +940,74 @@ def test_goal_patterns_spread_goals_no_verdict():
     t = goal(frames, t, 34.0, 10.0)   # közép-közeli
     gpt = goal_patterns(Match(meta, frames))
     assert gpt["home"]["verdict"] is None
+
+
+def _frt_shot(frames, t, shooter, sx=33.0, sy=10.0, goal=True):
+    """Egy hazai lövés a +x kapura a megadott lövővel; goal=False
+    esetén szélesre megy (mellé)."""
+    from handball.models.tracking import Ball, Frame, PlayerPosition, Team
+
+    end_y = 10.0 if goal else 4.0
+    for _ in range(30):
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=shooter, team=Team.HOME, x=sx, y=sy)],
+            ball=Ball(x=sx, y=sy, confidence=1.0)))
+        t += 1
+    n = max(1, int((40.5 - sx) / 0.5))
+    for k in range(1, n + 1):
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=shooter, team=Team.HOME, x=sx, y=sy)],
+            ball=Ball(x=sx + (40.5 - sx) * k / n,
+                      y=sy + (end_y - sy) * k / n, confidence=1.0)))
+        t += 1
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return t
+
+
+def test_finisher_rotation_flags_repeated_finisher():
+    """Ugyanaz a lövő 10 egymás utáni befejezésnél → sorozat-befejező."""
+    from handball.models.tracking import Match, MatchMeta
+    from handball.pipeline.xg import finisher_rotation
+
+    meta = MatchMeta(match_id="frt", home_team="H", away_team="A",
+                     fps=25.0)
+    frames = []
+    t = 0
+    for i in range(10):
+        t = _frt_shot(frames, t, 7, goal=(i % 2 == 0))
+
+    frt = finisher_rotation(Match(meta, frames))
+    h = frt["home"]
+    assert h["shots"] == 10
+    assert h["repeats"] == 9
+    assert h["repeat_pct"] == 100.0
+    assert h["top"] == 7
+    assert h["verdict"] == "ugyanaz fejez be sorozatban"
+    assert frt["away"]["verdict"] is None
+
+
+def test_finisher_rotation_flags_good_rotation_and_few_shots():
+    """Körbeforgó befejezők → jó rotáció; kevés lövésnél nincs ítélet."""
+    from handball.models.tracking import Match, MatchMeta
+    from handball.pipeline.xg import finisher_rotation
+
+    meta = MatchMeta(match_id="frt2", home_team="H", away_team="A",
+                     fps=25.0)
+    frames = []
+    t = 0
+    for i in range(10):
+        t = _frt_shot(frames, t, 4 + (i % 5), goal=(i % 3 == 0))
+    frt = finisher_rotation(Match(meta, frames))
+    assert frt["home"]["repeats"] == 0
+    assert frt["home"]["verdict"] == "jól rotálják a befejezést"
+
+    frames2 = []
+    t = 0
+    for i in range(3):
+        t = _frt_shot(frames2, t, 7)
+    frt2 = finisher_rotation(Match(meta, frames2))
+    assert frt2["home"]["repeat_pct"] is None
+    assert frt2["home"]["verdict"] is None

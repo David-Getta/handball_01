@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Befejező-váltás: ugyanaz fejez-e be sorozatban.
+    try:
+        from .xg import finisher_rotation
+        frt = finisher_rotation(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_frt = frt[side]
+            if rec_frt["verdict"] is None:
+                continue
+            body += (f" A(z) {name} befejezés-sorrendje: "
+                     f"{rec_frt['verdict']} "
+                     f"({rec_frt['repeat_pct']:.0f}% ismétlés "
+                     f"{rec_frt['shots']} lövésből).")
+    except Exception:
+        pass
     # Gól-minta: ugyanazt a gólt lövik-e.
     try:
         from .xg import goal_patterns

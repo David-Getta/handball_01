@@ -3624,6 +3624,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import finisher_rotation
+            res["finisher_rotation"] = finisher_rotation(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4645,6 +4650,9 @@ def create_app():
                        lambda: double_shorthand(match))
                 from ..pipeline.xg import goal_patterns
                 _layer("goal_patterns", lambda: goal_patterns(match))
+                from ..pipeline.xg import finisher_rotation
+                _layer("finisher_rotation",
+                       lambda: finisher_rotation(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

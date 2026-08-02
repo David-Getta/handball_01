@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 271) Befejező-váltás: ha ugyanaz fejez be sorozatban, a
+    # befejezés-rotáció a téma — a védekezés ráállhat a lövőnkre.
+    try:
+        from .xg import finisher_rotation
+        frt271 = finisher_rotation(match, config)
+        for side in ("home", "away"):
+            rec271 = frt271[side]
+            if rec271["verdict"] != "ugyanaz fejez be sorozatban":
+                continue
+            add(side, "tamadas", "Befejezés-rotáció",
+                f"ugyanaz fejez be sorozatban nálunk "
+                f"({rec271['repeat_pct']:.0f}% ismétlés "
+                f"{rec271['shots']} lövésből) — a védekezés a "
+                "második támadásban már rákészül a lövőnkre",
+                "befejezés-rotáció: a figurasorban a második támadás "
+                "KÖTELEZŐEN másik emberre fut ki (a pad hangosan "
+                "jelöli a befejezőt) — az edzésmeccsen ugyanattól a "
+                "lövőtől a második egymás utáni befejezés fél pontot "
+                "ér")
+    except Exception:
+        pass
     # 270) Gól-minta: ha a góljaink egy képre járnak, a befejezés-
     # szórás a téma — a kiszámítható minta egy igazítással elzárható.
     try:

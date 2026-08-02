@@ -251,6 +251,72 @@ CONC_MIN_SHOTS = 12
 CONC_TOP_SHARE = 0.35
 
 
+# Befejező-váltás: egymást követő befejezések ugyanattól az embertől.
+# Viszonyítás: hat mezőnyjátékosnál a véletlen ismétlődés ~17%, ezért
+# a 35% már tudatos (kiszámítható) minta, a 10% alatti jó rotáció.
+FRT_MIN_SHOTS = 8
+FRT_HIGH_PCT = 35.0
+FRT_LOW_PCT = 10.0
+
+
+def finisher_rotation(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Befejező-váltás: UGYANAZ fejez-e be a következő támadásban is.
+
+    A forró kéz (hot_hands) a GÓLOKAT nézi sorozatban, a
+    lövő-koncentráció (shot_concentration) a teljes meccs eloszlását
+    — ez a BEFEJEZÉS-SORRENDET: a csapat lövéseit időrendben
+    végigolvasva megszámoljuk, hányszor lő ugyanaz az ember kétszer
+    egymás után (a kimenetel mindegy: a védekezés a lövő SZEMÉLYÉRE
+    áll rá, nem az eredményre).
+
+    Hat mezőnyjátékosnál a véletlen ismétlődés ~17% — a fölötti érték
+    tudatos vagy megszokásból jövő minta: a védekezés a második
+    támadásban már rákészülhet, és a lövő rossz szögből is elereszti.
+
+    Edzőileg: a sorozat-befejezős csapat ellen a lövőjükre a KÖVETKEZŐ
+    támadásban is számítani kell (korai kilépés, kettőzés); a saját
+    oldalon a befejezés-rotáció (a figura a második támadásban másra
+    fusson ki) az edzés-téma.
+
+    Visszatérés csapatonként: {"shots", "repeats", "repeat_pct",
+    "top", "verdict"} — repeat_pct/verdict None FRT_MIN_SHOTS alatt;
+    a verdict "ugyanaz fejez be sorozatban" / "jól rotálják a
+    befejezést" / None; a top a legtöbb ismétlést hozó lövő.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    seqs: dict = {"home": [], "away": []}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL) \
+                or e.player_id is None:
+            continue
+        seqs[getattr(e.team, "value", e.team)].append(e.player_id)
+
+    out = {}
+    for side, seq in seqs.items():
+        repeats = 0
+        by_player: dict = {}
+        for a, b in zip(seq, seq[1:]):
+            if a == b:
+                repeats += 1
+                by_player[a] = by_player.get(a, 0) + 1
+        rec = {"shots": len(seq), "repeats": repeats,
+               "repeat_pct": None, "top": None, "verdict": None}
+        if by_player:
+            rec["top"] = max(by_player.items(), key=lambda kv: kv[1])[0]
+        if len(seq) >= FRT_MIN_SHOTS:
+            pct = 100.0 * repeats / (len(seq) - 1)
+            rec["repeat_pct"] = round(pct, 1)
+            if pct >= FRT_HIGH_PCT:
+                rec["verdict"] = "ugyanaz fejez be sorozatban"
+            elif pct <= FRT_LOW_PCT:
+                rec["verdict"] = "jól rotálják a befejezést"
+        out[side] = rec
+    return out
+
+
 # Gól-minta: az ismétlődő gól-ujjlenyomat (sáv x táv) küszöbei.
 GPT_MIN_GOALS = 3     # ennyi azonos mintájú gól kell
 GPT_SHARE_PCT = 40.0  # ...és ekkora részarány az azonosított gólokból

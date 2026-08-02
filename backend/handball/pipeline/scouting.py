@@ -731,6 +731,8 @@ class ScoutingReport:
     dsh_conceded: int = 0
     gpt_goals: int = 0
     gpt_patterns: dict = field(default_factory=dict)
+    frt_shots: int = 0
+    frt_repeats: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2921,6 +2923,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "védekezzetek jobban, hanem AZT az egy mintát "
                 "fogjátok meg: kilépő védő abba a sávba, blokk arra "
                 "a kézre.")
+
+    # Befejező-váltás: a sorozat-befejezőjükre előre készülni lehet.
+    if rep.frt_shots >= 8:
+        _frt_pct = 100.0 * rep.frt_repeats / max(1, rep.frt_shots - 1)
+        if _frt_pct >= 35.0:
+            keys.append(
+                f"Ugyanaz fejez be sorozatban ({_frt_pct:.0f}% "
+                f"ismétlés {rep.frt_shots} lövésből) — a lövőjükre a "
+                "KÖVETKEZŐ támadásban is számítsatok: korai kilépés "
+                "és kettőzés, mielőtt másodszor is elereszti.")
+        elif _frt_pct <= 10.0:
+            keys.append(
+                f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
+                "ismétlés) — személyre szabott védekezés ellenük nem "
+                "működik: sáv- és falmunka kell, nem emberfogás.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6973,6 +6990,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         gptrec = _gpt(match, config)[team.value]
         rep.gpt_goals = gptrec["goals"]
         rep.gpt_patterns = dict(gptrec["patterns"])
+        from .xg import finisher_rotation as _frt
+        frtrec = _frt(match, config)[team.value]
+        rep.frt_shots = frtrec["shots"]
+        rep.frt_repeats = frtrec["repeats"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9436,6 +9457,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 250) Az ő sorozat-befejezőjük × a ti kettőző védekezésetek: a
+    # második lövése előtt el lehet kapni.
+    if opp.frt_shots >= 8 and own.dbl_doubled_frames >= 50:
+        _frt250 = 100.0 * opp.frt_repeats / max(1, opp.frt_shots - 1)
+        if _frt250 >= 35.0:
+            plan.append(
+                f"Ugyanaz fejez be náluk sorozatban ({_frt250:.0f}% "
+                f"ismétlés), ti pedig tudtok kettőzni (a labdásra "
+                "mért kettőzésetek bejáratott) — az első lövése UTÁN "
+                "azonnal készüljetek rá: a következő támadásban is ő "
+                "jön, ott már korai kilépéssel és kettőzéssel "
+                "várjátok.")
 
     # 249) Az ő egy képre járó góljaik × a ti bejáratott faltok: egy
     # igazítás elzárja a fő forrást.
@@ -13496,6 +13530,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gpt_goals=sum(r.gpt_goals for r in reports),
         gpt_patterns=_merge_count_dicts(
             r.gpt_patterns for r in reports),
+        frt_shots=sum(r.frt_shots for r in reports),
+        frt_repeats=sum(r.frt_repeats for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
