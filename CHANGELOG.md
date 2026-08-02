@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Sprint-állás** (`sprints_by_score`): a sprint-ütem (sprint/perc)
+  az eredményjelző szerint — a hátrányban megugró ütem a menekülő
+  futás: a hajrára elfogyó energia leggyorsabb útja, a fáradás-rétegek
+  korai előjele. Edzői olvasat: ellene a vezetés járatása duplán
+  kifizetődő; a saját oldalon az ütemtartó felzárkózás a téma.
+  Felületek: `/analyze` + meccs-csomag (`sprints_by_score`), edzői
+  összefoglaló, felderítés (edzői kulcs + 244-es meccsterv-szabály:
+  menekülő sprintjeik × vezetés-járatásotok), edzés-fókusz (265-ös
+  szabály), kliens-csempe.
 - **Réteg-katalógus** (`docs/RETEG_KATALOGUS.md`, generált): a
   meccs-csomag mind a 289 regisztrált rétege modulonként, a
   réteg-függvény docstringjének első sorával (az álnevek a lambda

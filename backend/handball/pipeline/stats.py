@@ -284,6 +284,130 @@ def intensity_trend(match: Match, config=None,
 FATIGUE_MIN_S = 30.0
 
 
+# Sprint-állás: sprint-ütem az eredményjelző szerint.
+SPB_MIN_STATE_S = 60.0   # ennyi játékidő kell egy összevetett állapotban
+SPB_MIN_SPRINTS = 8      # ennyi hátrány-sprint kell az ítélethez
+SPB_RATIO = 1.5          # ekkora ütem-többlet hátrányban = menekülés
+
+
+def sprints_by_score(match: Match, config=None) -> dict:
+    """Sprint-állás: MIKOR sprintel a csapat — vezetésnél vagy hátrányban.
+
+    A sprint-számok (compute_player_stats) a meccs egészét nézik — ez
+    az eredményjelzőn: csapatonként és állásonként (vezet / döntetlen /
+    hátrányban) mérjük a sprint-ütemet (sprint/perc). A hátrányban
+    megugró sprint-ütem a menekülő futás: a lemaradó csapat lábbal
+    próbálja visszahozni a meccset — ez a hajrára elfogyó energia
+    leggyorsabb útja, és a fáradás-rétegek (tempó-esés, kontra-esés)
+    korai előjele.
+
+    Edzőileg: az ilyen csapat ellen a vezetés megtartása duplán
+    kifizetődő — minden vezetéses perc az ő lábukat fogyasztja; a
+    saját oldalon a hátrányban is ütemtartó (nem pánik-) futás a téma.
+
+    Visszatérés csapatonként: {"leading"/"trailing"/"level":
+    {"seconds", "sprints", "per_min"}, "verdict"} — per_min None
+    SPB_MIN_STATE_S-nél kevesebb játékidőnél; a verdict "hátrányban
+    sprintbe menekülnek" (SPB_RATIO-s ütem-többletnél és legalább
+    SPB_MIN_SPRINTS hátrány-sprintnél), különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    dt = 1.0 / fps
+    goals = sorted((e.t, getattr(e.team, "value", e.team))
+                   for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    out = {side: {k: {"seconds": 0.0, "sprints": 0, "per_min": None}
+                  for k in ("leading", "trailing", "level")}
+           for side in ("home", "away")}
+
+    # 1. menet: kockánkénti gólkülönbség (hazai szemmel) + állapot-idő.
+    diff_at: dict = {}
+    gi = 0
+    h = a = 0
+    for f in match.frames:
+        while gi < len(goals) and goals[gi][0] <= f.t:
+            if goals[gi][1] == "home":
+                h += 1
+            else:
+                a += 1
+            gi += 1
+        d = h - a
+        diff_at[f.t] = d
+        for side, dd in (("home", d), ("away", -d)):
+            state = ("leading" if dd > 0
+                     else "trailing" if dd < 0 else "level")
+            out[side][state]["seconds"] += dt
+
+    # 2. menet: sprint-futamok, a futam KEZDETÉNEK állapotára írva.
+    prev_pos: dict = {}
+    runs: dict = {}
+    def close_run(tid):
+        run = runs.pop(tid, None)
+        if run is None or run["s"] < SPRINT_MIN_S:
+            return
+        side = run["team"]
+        d = diff_at.get(run["t0"], 0)
+        dd = d if side == "home" else -d
+        state = ("leading" if dd > 0
+                 else "trailing" if dd < 0 else "level")
+        out[side][state]["sprints"] += 1
+
+    for f in match.frames:
+        seen = set()
+        for pl in f.players:
+            if pl.source != PositionSource.MEASURED:
+                continue
+            seen.add(pl.track_id)
+            prev = prev_pos.get(pl.track_id)
+            prev_pos[pl.track_id] = (f.t, pl.x, pl.y,
+                                     getattr(pl.team, "value", pl.team))
+            if prev is None or f.t - prev[0] != 1:
+                close_run(pl.track_id)
+                continue
+            speed = math.hypot(pl.x - prev[1], pl.y - prev[2]) * fps
+            if SPRINT_SPEED_MS <= speed <= MAX_PLAUSIBLE_MS:
+                run = runs.get(pl.track_id)
+                if run is None:
+                    runs[pl.track_id] = {"t0": prev[0], "s": dt,
+                                         "team": prev[3]}
+                else:
+                    run["s"] += dt
+            else:
+                close_run(pl.track_id)
+        for tid in [t for t in runs if t not in seen]:
+            close_run(tid)
+    for tid in list(runs):
+        close_run(tid)
+
+    for side in ("home", "away"):
+        buckets = out[side]
+        for rec in buckets.values():
+            rec["seconds"] = round(rec["seconds"], 1)
+            if rec["seconds"] >= SPB_MIN_STATE_S:
+                rec["per_min"] = round(
+                    60.0 * rec["sprints"] / rec["seconds"], 2)
+        tr = buckets["trailing"]
+        rest_s = (buckets["leading"]["seconds"]
+                  + buckets["level"]["seconds"])
+        rest_n = (buckets["leading"]["sprints"]
+                  + buckets["level"]["sprints"])
+        verdict = None
+        if tr["seconds"] >= SPB_MIN_STATE_S \
+                and rest_s >= SPB_MIN_STATE_S \
+                and tr["sprints"] >= SPB_MIN_SPRINTS:
+            tr_rate = 60.0 * tr["sprints"] / tr["seconds"]
+            rest_rate = 60.0 * rest_n / rest_s
+            if tr_rate >= SPB_RATIO * max(rest_rate, 1e-9) \
+                    or (rest_rate == 0 and tr_rate > 0):
+                verdict = "hátrányban sprintbe menekülnek"
+        buckets["verdict"] = verdict
+    return out
+
+
 def player_fatigue(match: Match, config=None,
                    half_t: int | None = None) -> list[dict]:
     """Játékosonkénti tempó-visszaesés: első vs második félidő átlag-

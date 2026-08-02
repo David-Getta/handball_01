@@ -1896,6 +1896,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Sprint-állás: hátrányban megugró sprint-ütem (60+ mp mindkét
+  // oldalon, 8+ sprint, 1,5x ütem — a backenddel azonos küszöbök).
+  String? _sprintsByScore(Map<String, dynamic> r) {
+    final trS = ((r["spb_tr_seconds"] as num?) ?? 0).toDouble();
+    final trN = ((r["spb_tr_sprints"] as num?) ?? 0).toInt();
+    final restS = ((r["spb_rest_seconds"] as num?) ?? 0).toDouble();
+    final restN = ((r["spb_rest_sprints"] as num?) ?? 0).toInt();
+    if (trS < 60.0 || restS < 60.0 || trN < 8) return null;
+    final trRate = 60.0 * trN / trS;
+    final restRate = 60.0 * restN / restS;
+    if (trRate < 1.5 * (restRate > 0 ? restRate : 1e-9)) return null;
+    return "hátrányban sprintbe menekülnek "
+        "(${trRate.toStringAsFixed(1)} sprint/perc a szokásos "
+        "${restRate.toStringAsFixed(1)} helyett) · ha vezetsz, "
+        "járasd: minden perc az ő lábukat fogyasztja";
+  }
+
   // Eltűnő ember: első félidei gól-részvétel, második félidei csend
   // (3+ részvétel, 3x-os arány — a backenddel azonos küszöbök).
   String? _fadingScorers(Map<String, dynamic> r) {
@@ -6183,6 +6200,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fekete ötperc", _blackWindow(r)!],
       if (_fadingScorers(r) != null)
         ["Eltűnő ember", _fadingScorers(r)!],
+      if (_sprintsByScore(r) != null)
+        ["Sprint-állás", _sprintsByScore(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

@@ -3589,6 +3589,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stats import sprints_by_score
+            res["sprints_by_score"] = sprints_by_score(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4591,6 +4596,9 @@ def create_app():
                 from ..pipeline.momentum import fading_scorers
                 _layer("fading_scorers",
                        lambda: fading_scorers(match))
+                from ..pipeline.stats import sprints_by_score
+                _layer("sprints_by_score",
+                       lambda: sprints_by_score(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

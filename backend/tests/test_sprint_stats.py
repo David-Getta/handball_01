@@ -453,3 +453,99 @@ def test_distance_battle_needs_enough_minutes():
 
     res = distance_battle(_distance_battle_match(0.2, 0.1, minutes=5.0))
     assert res["home"]["verdict"] is None
+
+
+def test_sprints_by_score_flags_panic_running():
+    """Döntetlennél kocogás, 3 kapott gól után sprint-sorozat →
+    hátrányban sprintbe menekülnek."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.stats import sprints_by_score
+
+    frames = []
+    t = 0
+
+    def jog(seconds, speed_per_frame):
+        nonlocal t, frames
+        x, direction = 15.0, 1
+        for _ in range(int(seconds * 25)):
+            x += direction * speed_per_frame
+            if x > 25.0 or x < 10.0:
+                direction *= -1
+                x += 2 * direction * speed_per_frame
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=5, team=Team.HOME, x=x, y=5.0),
+            ], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def bursts(n):
+        nonlocal t, frames
+        x, direction = 15.0, 1
+        for _ in range(n):
+            for _ in range(20):     # 0,8 mp 6 m/s-mal: sprint
+                x += direction * 0.24
+                frames.append(Frame(t=t, players=[
+                    PlayerPosition(track_id=5, team=Team.HOME,
+                                   x=x, y=5.0),
+                ], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+                t += 1
+            for _ in range(30):     # megállás
+                frames.append(Frame(t=t, players=[
+                    PlayerPosition(track_id=5, team=Team.HOME,
+                                   x=x, y=5.0),
+                ], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+                t += 1
+            direction *= -1
+
+    def away_goal():
+        nonlocal t, frames
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=9, team=Team.AWAY, x=10.0, y=10.0),
+            ], ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+            t += 1
+        x = 10.0
+        while x > -0.5:
+            x -= 0.5
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=9, team=Team.AWAY, x=10.0, y=10.0),
+            ], ball=Ball(x=max(x, -0.5), y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    jog(90, 0.08)          # döntetlen: 2 m/s, nincs sprint
+    for _ in range(3):
+        away_goal()
+    bursts(45)             # hátrányban: 45 sprint-löket
+
+    m = Match(meta=MatchMeta(match_id="spb", home_team="H",
+                             away_team="A", fps=25.0), frames=frames)
+    spb = sprints_by_score(m)
+    h = spb["home"]
+    assert h["level"]["seconds"] >= 60.0
+    assert h["level"]["sprints"] == 0
+    assert h["trailing"]["seconds"] >= 60.0
+    assert h["trailing"]["sprints"] >= 40
+    assert h["verdict"] == "hátrányban sprintbe menekülnek"
+    assert spb["away"]["verdict"] is None
+
+
+def test_sprints_by_score_needs_state_time():
+    """Hátrány (kapott gól) nélkül nincs ítélet."""
+    from handball.models.tracking import Ball
+    from handball.pipeline.stats import sprints_by_score
+
+    frames = []
+    x = 10.0
+    for t in range(int(90 * 25)):
+        x += 0.24 if (t // 20) % 3 == 0 and x < 30 else 0.0
+        frames.append(Frame(t=t, players=[
+            PlayerPosition(track_id=5, team=Team.HOME, x=x, y=5.0),
+        ], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    m = Match(meta=MatchMeta(match_id="spb2", home_team="H",
+                             away_team="A", fps=25.0), frames=frames)
+    spb = sprints_by_score(m)
+    assert spb["home"]["trailing"]["seconds"] == 0.0
+    assert spb["home"]["verdict"] is None

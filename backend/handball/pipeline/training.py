@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 265) Sprint-állás: ha hátrányban sprintbe menekülünk, az
+    # ütemtartó felzárkózás a téma — a pánik-futás a hajrát viszi el.
+    try:
+        from .stats import sprints_by_score
+        spb265 = sprints_by_score(match, config)
+        for side in ("home", "away"):
+            rec265 = spb265[side]
+            if rec265["verdict"] != "hátrányban sprintbe menekülnek":
+                continue
+            add(side, "taktika", "Ütemtartó felzárkózás",
+                f"hátrányban sprintbe menekülünk "
+                f"({rec265['trailing']['sprints']} sprint hátrányban) "
+                "— a pánik-futás a hajrára elviszi a lábunkat",
+                "ütemtartó felzárkózás: hátrány-szituációs játék, ahol "
+                "a felzárkózás KIZÁRÓLAG szervezett támadásból "
+                "történhet — sprint csak tiszta labdaszerzés után "
+                "engedélyezett, minden más pánik-futás mínusz pont; "
+                "a pulzus-zónát az erőnléti stáb köti be")
+    except Exception:
+        pass
     # 264) Eltűnő ember: ha a kulcsemberünk a második félidőre elhal,
     # a terhelés-menedzsment a téma.
     try:

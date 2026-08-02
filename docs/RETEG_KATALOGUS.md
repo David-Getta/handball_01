@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **289 réteg**, modulonként csoportosítva; a
+Összesen **290 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (68)
@@ -311,7 +311,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `setplay_efficiency` | Melyik figura működik: klaszterenként támadás / lövés / gól. |
 
-## stats (8)
+## stats (9)
 
 | Réteg | Mit mér |
 |---|---|
@@ -323,6 +323,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `possession` | Labdabirtoklás-arány csapatonként. |
 | `rotation` | Rotáció-mélység: hány emberrel játssza a csapat a meccset. |
 | `sprint_threats` | Sprint-veszély: KI VISZI A KONTRÁT — a legtöbbet sprintelő ember. |
+| `sprints_by_score` | Sprint-állás: MIKOR sprintel a csapat — vezetésnél vagy hátrányban. |
 
 ## stoppages (8)
 

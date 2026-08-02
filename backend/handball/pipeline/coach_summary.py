@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Sprint-állás: hátrányban sprintbe menekülés.
+    try:
+        from .stats import sprints_by_score
+        spb = sprints_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spb = spb[side]
+            if rec_spb["verdict"] is None:
+                continue
+            body += (f" A(z) {name} futás-képe árulkodó: "
+                     f"{rec_spb['verdict']} "
+                     f"({rec_spb['trailing']['sprints']} sprint "
+                     "hátrányban) — ez a hajrára elfogyó láb "
+                     "leggyorsabb útja.")
+    except Exception:
+        pass
     # Eltűnő ember: aki az első félidőben él, a másodikra elhal.
     try:
         from .momentum import fading_scorers

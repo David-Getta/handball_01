@@ -719,6 +719,10 @@ class ScoutingReport:
     blw_scored: dict = field(default_factory=dict)
     blw_conceded: dict = field(default_factory=dict)
     fdr_players: list = field(default_factory=list)
+    spb_tr_seconds: float = 0.0
+    spb_tr_sprints: int = 0
+    spb_rest_seconds: float = 0.0
+    spb_rest_sprints: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2839,6 +2843,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "percben duplán fogjátok (friss őrzővel), a második "
                 "félidő ellene magától megoldódik.")
             break
+
+    # Sprint-állás: a vezetés az ő lábukat fogyasztja.
+    if (rep.spb_tr_seconds >= 60.0 and rep.spb_rest_seconds >= 60.0
+            and rep.spb_tr_sprints >= 8):
+        _spb_tr = 60.0 * rep.spb_tr_sprints / rep.spb_tr_seconds
+        _spb_rest = 60.0 * rep.spb_rest_sprints / rep.spb_rest_seconds
+        if _spb_tr >= 1.5 * max(_spb_rest, 1e-9):
+            keys.append(
+                f"Hátrányban sprintbe menekülnek ({_spb_tr:.1f} "
+                f"sprint/perc hátrányban, egyébként {_spb_rest:.1f}) "
+                "— ha vezettek, türelmes játékkal minden perc az ő "
+                "lábukat fogyasztja: a hajrára maguktól fogynak el.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6863,6 +6879,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.fdr_players = [
             dict(p) for p in _fdr(match, config)[team.value]["players"]
             if p["fh"] or p["sh"]]
+        from .stats import sprints_by_score as _spb
+        spbrec = _spb(match, config)[team.value]
+        rep.spb_tr_seconds = spbrec["trailing"]["seconds"]
+        rep.spb_tr_sprints = spbrec["trailing"]["sprints"]
+        rep.spb_rest_seconds = (spbrec["leading"]["seconds"]
+                                + spbrec["level"]["seconds"])
+        rep.spb_rest_sprints = (spbrec["leading"]["sprints"]
+                                + spbrec["level"]["sprints"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9295,6 +9319,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 244) Az ő menekülő sprintjeik × a ti vezetés-járatásotok: minden
+    # vezetéses perc az ő lábukat fogyasztja.
+    if (opp.spb_tr_seconds >= 60.0 and opp.spb_rest_seconds >= 60.0
+            and opp.spb_tr_sprints >= 8
+            and own.pds_lead_passes >= 10):
+        _spb244_tr = 60.0 * opp.spb_tr_sprints / opp.spb_tr_seconds
+        _spb244_rest = (60.0 * opp.spb_rest_sprints
+                        / opp.spb_rest_seconds)
+        if _spb244_tr >= 1.5 * max(_spb244_rest, 1e-9):
+            plan.append(
+                f"Hátrányban sprintbe menekülnek ({_spb244_tr:.1f} "
+                f"sprint/perc a szokásos {_spb244_rest:.1f} helyett), "
+                "ti pedig tudjátok járatni a labdát vezetésnél — ha "
+                "megvan az előny, ne siessetek: minden türelmes perc "
+                "az ő lábukat fogyasztja, és a hajrában a friss "
+                "lábatok dönt.")
 
     # 243) Az ő eltűnő kulcsemberük × a ti fegyelmezett kezdésetek: az
     # első 30 perc a meccs ellene.
@@ -13253,6 +13294,11 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         blw_conceded=_merge_count_dicts(
             r.blw_conceded for r in reports),
         fdr_players=_merge_fdr_players(reports),
+        spb_tr_seconds=round(sum(r.spb_tr_seconds for r in reports), 1),
+        spb_tr_sprints=sum(r.spb_tr_sprints for r in reports),
+        spb_rest_seconds=round(sum(r.spb_rest_seconds
+                                   for r in reports), 1),
+        spb_rest_sprints=sum(r.spb_rest_sprints for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
