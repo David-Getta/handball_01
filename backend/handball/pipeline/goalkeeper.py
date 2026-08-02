@@ -2010,3 +2010,89 @@ def outlet_pace_by_score(match: Match, config=None) -> dict:
             elif gap <= OPS_FAST_GAP_S:
                 buckets["verdict"] = "előnyben is pörgetik"
     return out
+
+
+# Becsapott kapus: a gól pillanatában e feletti oldalsebességgel az
+# érkezési oldallal ELLENTÉTES irányba mozgó kapus számít
+# becsapottnak; ennyi mért kapott gól kell az ítélethez, és e
+# feletti / alatti arány az elmozdítható, illetve a cseleket álló
+# kapus jele.
+WFK_MOVE_MS = 0.5
+WFK_MIN_GOALS = 5
+WFK_FOOLED_PCT = 40.0
+WFK_STEADY_PCT = 10.0
+
+
+def wrongfooted_keeper(match: Match, config=None) -> dict:
+    """Becsapott kapus: ELMOZDÍTJÁK-E a kapusukat a gólok előtt.
+
+    A gól-pillanati család kapus-tagja: a kapott góloknál a kapus
+    oldalirányú mozgását vetjük össze a labda érkezési oldalával. A
+    rossz irányba mozduló kapus gólja a lövéscsel (vagy a korai
+    vetődés) számlájára megy — az ilyen kapus ellen a csel a
+    fegyver; aki a cselekre nem mozdul, azt csak a pontos sarok
+    veri meg.
+
+    Edzőileg: az elmozdítható kapus ellen minden lövő KÖTELEZŐ
+    lövőcselt hozzon — a kapus elindul, a labda a másik oldalra
+    megy; a cseleket álló kapus ellen a csel időpocsékolás — ott az
+    első ütemből, pontosan a sarokba kell lőni.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals" (mért
+    kapott gólok), "fooled", "fooled_pct", "verdict"} — a
+    fooled_pct/verdict None WFK_MIN_GOALS alatt; a verdict
+    "elmozdítható a kapusuk" / "a kapusuk állja a cseleket" / None.
+    """
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    idx_of = {f.t: i for i, f in enumerate(frames)}
+
+    out = {side: {"goals": 0, "fooled": 0, "fooled_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") != "goal":
+            continue
+        deff = "away" if sh["team"] == "home" else "home"
+        goal_x = config.attacks_toward_x(Team(sh["team"]))
+        i0 = idx_of.get(sh["t"])
+        if i0 is None or i0 < 2:
+            continue
+        # A labda érkezési oldala: az utolsó kapu előtti kockán mért y.
+        target_y = None
+        for j in range(i0, min(i0 + round(1.5 * fps), len(frames))):
+            b = frames[j].ball
+            if b is None:
+                break
+            if abs(b.x - goal_x) <= 1.5:
+                target_y = b.y
+                break
+        if target_y is None:
+            continue
+        gk0 = next((p for p in frames[i0 - 2].players
+                    if p.team.value == deff and p.role == "kapus"), None)
+        gk1 = next((p for p in frames[min(i0 + 2, len(frames) - 1)].players
+                    if p.team.value == deff and p.role == "kapus"), None)
+        if gk0 is None or gk1 is None:
+            continue
+        vy = (gk1.y - gk0.y) * fps / 4.0
+        side_dir = target_y - gk0.y
+        rec = out[deff]
+        rec["goals"] += 1
+        if abs(vy) >= WFK_MOVE_MS and vy * side_dir < 0:
+            rec["fooled"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["goals"] >= WFK_MIN_GOALS:
+            pct = 100.0 * rec["fooled"] / rec["goals"]
+            rec["fooled_pct"] = round(pct, 1)
+            if pct >= WFK_FOOLED_PCT:
+                rec["verdict"] = "elmozdítható a kapusuk"
+            elif pct <= WFK_STEADY_PCT:
+                rec["verdict"] = "a kapusuk állja a cseleket"
+    return out

@@ -655,6 +655,8 @@ class ScoutingReport:
     ctm_passes_sum: int = 0
     cgm_goals: int = 0
     cgm_running: int = 0
+    wfk_goals: int = 0
+    wfk_fooled: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2485,6 +2487,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.cgm_goals} gól jött mozgásból) — a faluk "
                 "tiszta lövést enged: a nyugodt, kivárt átlövés is "
                 "termel ellenük.")
+
+    # Becsapott kapus: csellel vagy első ütemből kell-e lőni.
+    if rep.wfk_goals >= 5:
+        _wfk_pct = 100.0 * rep.wfk_fooled / rep.wfk_goals
+        if _wfk_pct >= 40.0:
+            keys.append(
+                f"Elmozdítható a kapusuk ({rep.wfk_fooled}/"
+                f"{rep.wfk_goals} kapott gólnál ellenirányba "
+                "mozdult) — minden lövő hozzon kötelező lövőcselt: "
+                "a kapus elindul, a labda a másik oldalé.")
+        elif _wfk_pct <= 10.0:
+            keys.append(
+                f"A kapusuk állja a cseleket (csak {rep.wfk_fooled}/"
+                f"{rep.wfk_goals} gólnál mozdult rosszul) — a csel "
+                "ellene időpocsékolás: első ütemből, pontosan a "
+                "sarokba kell lőni.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6389,6 +6407,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         cgmrec = _cgm(match, config)[team.value]
         rep.cgm_goals = cgmrec["goals"]
         rep.cgm_running = cgmrec["running"]
+        from .goalkeeper import wrongfooted_keeper as _wfk
+        wfkrec = _wfk(match, config)[team.value]
+        rep.wfk_goals = wfkrec["goals"]
+        rep.wfk_fooled = wfkrec["fooled"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8808,6 +8830,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 221) Az ő elmozdítható kapusuk × a ti betörőitek: közelről a
+    # csel veri meg.
+    if (opp.wfk_goals >= 5 and opp.wfk_fooled > 0
+            and opp.matches >= 1):
+        _wfk221 = 100.0 * opp.wfk_fooled / opp.wfk_goals
+        _own_entries221 = sum((r.get("entries", 0) or 0)
+                              for r in (own.breakthrough_players or []))
+        if _wfk221 >= 40.0 and _own_entries221 >= 10:
+            plan.append(
+                f"Elmozdítható a kapusuk ({opp.wfk_fooled}/"
+                f"{opp.wfk_goals} kapott gólnál ellenirányba "
+                f"mozdult), ti pedig betörős csapat vagytok "
+                f"({_own_entries221} bejutás a 9-esen belülre) — a "
+                "betöréseitek végén kötelező a lövőcsel: közelről a "
+                "kapus mindig elindul, a labda a másik oldalé.")
 
     # 220) Az ő késő bekísérésük × a ti befutóitok: a mozgásból
     # érkező embert nem tudják felvenni.
@@ -12312,6 +12350,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         ctm_passes_sum=sum(r.ctm_passes_sum for r in reports),
         cgm_goals=sum(r.cgm_goals for r in reports),
         cgm_running=sum(r.cgm_running for r in reports),
+        wfk_goals=sum(r.wfk_goals for r in reports),
+        wfk_fooled=sum(r.wfk_fooled for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

@@ -1801,6 +1801,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Becsapott kapus: elmozdítják-e a kapust a gólok előtt (5+ mért
+  // kapott gól; 40%+ becsapott, 10%- állja — a backend-kulccsal
+  // azonos küszöbök).
+  String? _wrongfootedKeeper(Map<String, dynamic> r) {
+    final goals = ((r["wfk_goals"] as num?) ?? 0).toInt();
+    final fooled = ((r["wfk_fooled"] as num?) ?? 0).toInt();
+    if (goals < 5) return null;
+    final pct = 100.0 * fooled / goals;
+    if (pct >= 40.0) {
+      return "elmozdítható a kapusuk ($fooled/$goals kapott gólnál "
+          "ellenirányba mozdult) · kötelező lövőcsel: a kapus "
+          "elindul, a labda a másik oldalé";
+    }
+    if (pct <= 10.0) {
+      return "a kapusuk állja a cseleket (csak $fooled/$goals "
+          "rosszul mozdulás) · első ütemből, pontosan a sarokba "
+          "kell lőni";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5729,6 +5750,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Bontó tempó", _concededTempo(r)!],
       if (_concededMomentum(r) != null)
         ["Lendület-gólok", _concededMomentum(r)!],
+      if (_wrongfootedKeeper(r) != null)
+        ["Becsapott kapus", _wrongfootedKeeper(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

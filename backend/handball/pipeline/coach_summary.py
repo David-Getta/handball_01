@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Becsapott kapus: elmozdítják-e a kapust a gólok előtt.
+    try:
+        from .goalkeeper import wrongfooted_keeper
+        wfk = wrongfooted_keeper(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wfk = wfk[side]
+            if rec_wfk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusáról kiderült: "
+                     f"{rec_wfk['verdict']} ({rec_wfk['fooled']}/"
+                     f"{rec_wfk['goals']} kapott gólnál mozdult "
+                     "ellenirányba).")
+    except Exception:
+        pass
     # Lendület-gólok: mozgásból érkező lövőktől kapják-e a gólokat.
     try:
         from .defense import conceded_momentum

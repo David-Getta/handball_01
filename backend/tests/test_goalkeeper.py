@@ -1771,3 +1771,66 @@ def test_outlet_pace_by_score_needs_enough_outlets():
 
     rec = outlet_pace_by_score(_ops_match(True, n=3))["away"]
     assert rec["verdict"] is None
+
+
+def _wfk_match(fooled, n_goals=5, fps=25.0):
+    """Hazai gól-sorozat a vendég kapu szélére (y=8,8); a vendég
+    kapus a lövésnél ellenirányba mozdul (vagy áll)."""
+    from handball.models.tracking import Ball
+
+    def _pl(tid, team, x, y, role=None):
+        p = PlayerPosition(track_id=tid, team=team, x=x, y=y)
+        if role:
+            p.role = role
+        return p
+
+    frames = []
+    t = 0
+    for _ in range(n_goals):
+        for _ in range(10):     # a lövő birtokol
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(30, Team.AWAY, 39.2, 10.0, role="kapus")],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(8):      # gól a sarokba, a kapus mozdul(hat)
+            gy = 10.0 + (0.08 * (i + 1) if fooled else 0.0)
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(30, Team.AWAY, 39.2, gy, role="kapus")],
+                ball=Ball(x=min(33.0 + (i + 1), 40.5),
+                          y=10.0 - 1.2 * min(1.0, (i + 1) / 7.0),
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return _match(frames)
+
+
+def test_wrongfooted_keeper_flags_the_fooled_keeper():
+    """A sarokkal ellenirányba mozduló kapus → elmozdítható."""
+    from handball.pipeline.goalkeeper import wrongfooted_keeper
+
+    rec = wrongfooted_keeper(_wfk_match(True))["away"]
+    assert rec["goals"] >= 5
+    assert rec["verdict"] == "elmozdítható a kapusuk"
+
+
+def test_wrongfooted_keeper_flags_the_steady_keeper():
+    """A helyben maradó kapus → állja a cseleket."""
+    from handball.pipeline.goalkeeper import wrongfooted_keeper
+
+    rec = wrongfooted_keeper(_wfk_match(False))["away"]
+    assert rec["fooled"] == 0
+    assert rec["verdict"] == "a kapusuk állja a cseleket"
+
+
+def test_wrongfooted_keeper_needs_enough_goals():
+    """Kevés (5-nél kevesebb) mért kapott gólnál nincs ítélet."""
+    from handball.pipeline.goalkeeper import wrongfooted_keeper
+
+    rec = wrongfooted_keeper(_wfk_match(True, n_goals=3))["away"]
+    assert rec["verdict"] is None

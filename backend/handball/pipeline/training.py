@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 242) Becsapott kapus: ha a kapusunk elmozdítható, a csel-állás
+    # a téma — kivárás, nem korai vetődés.
+    try:
+        from .goalkeeper import wrongfooted_keeper
+        wfk242 = wrongfooted_keeper(match, config)
+        for side in ("home", "away"):
+            rec242 = wfk242[side]
+            if rec242["verdict"] != "elmozdítható a kapusuk":
+                continue
+            add(side, "vedekezes", "Kapus csel-állás",
+                f"a kapusunk elmozdítható: {rec242['fooled']}/"
+                f"{rec242['goals']} kapott gólnál ellenirányba "
+                "mozdult — a lövéscsel rendre beviszi",
+                "csel-állás gyakorlat a kapusnak: cselező lövők "
+                "sorozata ellen a szabály az utolsó ütemig tartott "
+                "alaphelyzet (mozdulni csak a labda elszakadására "
+                "szabad) — a cselre indulás mínusz, az állva "
+                "kivédett csel-lövés dupla pont")
+    except Exception:
+        pass
     # 241) Lendület-gólok: ha mozgásból kapjuk a gólokat, a bekísérés
     # a téma — az érkező embert időben fel kell venni.
     try:

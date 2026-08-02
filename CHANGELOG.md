@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Becsapott kapus**: ELMOZDÍTJÁK-E a kapusukat a gólok előtt. A
+  gól-pillanati család kapus-tagja: a kapott góloknál a kapus
+  oldalirányú mozgását vetjük össze a labda érkezési oldalával (5+
+  mért kapott gól; 40%+ becsapott = a lövéscsel a fegyver, 10%
+  alatti = a csel időpocsékolás, első ütemből a sarokba). Egy
+  réteg, sok felület: `wrongfooted_keeper` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (darabszámok, két edzői kulcs + csempe), 221. meccsterv-szabály
+  (az ő elmozdítható kapusuk × a ti betörőitek), 242. edzés-szabály
+  (kapus csel-állás: az utolsó ütemig tartott alaphelyzet).
+
 - **Lendület-gólok**: MOZGÁSBÓL ÉRKEZŐ lövőktől kapják-e a
   gólokat. A gól-pillanati család sebesség-tagja: a kapott góloknál
   a lövő mozgás-sebessége a lövés pillanata körül (5+ mért kapott

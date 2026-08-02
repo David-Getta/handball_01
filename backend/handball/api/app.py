@@ -3474,6 +3474,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import wrongfooted_keeper
+            res["wrongfooted_keeper"] = wrongfooted_keeper(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4410,6 +4415,9 @@ def create_app():
                 from ..pipeline.defense import conceded_momentum
                 _layer("conceded_momentum",
                        lambda: conceded_momentum(match))
+                from ..pipeline.goalkeeper import wrongfooted_keeper
+                _layer("wrongfooted_keeper",
+                       lambda: wrongfooted_keeper(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))
