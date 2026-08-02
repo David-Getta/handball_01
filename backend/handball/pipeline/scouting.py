@@ -725,6 +725,8 @@ class ScoutingReport:
     spb_rest_sprints: int = 0
     fdd_players: list = field(default_factory=list)
     cbc_players: list = field(default_factory=list)
+    xsp_windows: int = 0
+    xsp_seconds: float = 0.0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2880,6 +2882,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "fogás, korai kettőzés): a többiek nincsenek "
                 "hozzászokva a mentéshez.")
             break
+
+    # Létszám-hiba: a csere-átfedésük támadható pillanat.
+    if rep.xsp_windows >= 2:
+        keys.append(
+            f"A cseréik átfednek ({rep.xsp_windows} ablakban volt "
+            "hetedik mezőnyjátékosuk a pályán) — a váltás-pillanatuk "
+            "kettős célpont: jelezhető a zsűrinek, és a "
+            "rendezetlenségbe azonnali gyors támadás mehet.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6920,6 +6930,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.cbc_players = [
             dict(p) for p in _cbc(match, config)[team.value]["players"]
             if p["trailing"] or p["rest"]]
+        from .rules import excess_players as _xsp
+        xsprec = _xsp(match, config)[team.value]
+        rep.xsp_windows = xsprec["windows"]
+        rep.xsp_seconds = xsprec["seconds"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9378,6 +9392,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 247) Az ő csere-átfedésük × a ti gyors újraindításotok: a
+    # váltás-pillanatuk kettős célpont.
+    if (opp.xsp_windows >= 2 and own.rs_restarts >= 4):
+        _rs247 = 100.0 * own.rs_fast / max(1, own.rs_restarts)
+        if _rs247 >= 40.0:
+            plan.append(
+                f"A cseréik átfednek ({opp.xsp_windows} ablakban "
+                f"hetedik ember a pályán), ti pedig gyorsan "
+                f"indítotok újra (a középkezdéseitek {_rs247:.0f}%-a "
+                "gyors) — a csere-pillanataikban ne hagyjátok "
+                "rendeződni őket: azonnali gyors labda a "
+                "rendezetlenségbe, és a zsűri felé is jelezhető a "
+                "létszám-hiba.")
 
     # 246) Az ő mentőemberük × a ti szabályos szoros fogásotok: a
     # hátrányuk beragasztható.
@@ -13391,6 +13419,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         spb_rest_sprints=sum(r.spb_rest_sprints for r in reports),
         fdd_players=_merge_fdd_players(reports),
         cbc_players=_merge_cbc_players(reports),
+        xsp_windows=sum(r.xsp_windows for r in reports),
+        xsp_seconds=round(sum(r.xsp_seconds for r in reports), 1),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

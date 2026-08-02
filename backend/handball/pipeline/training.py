@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 268) Létszám-hiba: ha a cseréink átfednek, a cserefolyosó-
+    # fegyelem a téma — a hetedik ember ingyen kiállítást ér.
+    try:
+        from .rules import excess_players
+        xsp268 = excess_players(match, config)
+        for side in ("home", "away"):
+            rec268 = xsp268[side]
+            if rec268["verdict"] is None:
+                continue
+            add(side, "taktika", "Cserefolyosó-fegyelem",
+                f"a cseréink átfednek ({rec268['windows']} ablakban "
+                "hetedik mezőnyjátékos a pályán) — ez büntethető, és "
+                "a váltás-pillanatunk rendezetlen",
+                "cserefolyosó-fegyelem: a csere CSAK a lejövő "
+                "térdmagasságú jelére indul (előbb le, aztán fel), a "
+                "cserezóna-szalag kötelező — az edzésmeccsen minden "
+                "átfedés azonnali 2 perces emberhátrányt ér, hogy az "
+                "ára beégjen")
+    except Exception:
+        pass
     # 267) Felzárkózás-húzó: ha egy emberen áll a mentésünk, a
     # hátrány-teher szétosztása a téma.
     try:

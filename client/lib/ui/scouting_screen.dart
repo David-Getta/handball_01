@@ -1896,6 +1896,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Létszám-hiba: csere-átfedés, hetedik ember a pályán (2+ ablak —
+  // a backenddel azonos küszöb).
+  String? _excessPlayers(Map<String, dynamic> r) {
+    final windows = ((r["xsp_windows"] as num?) ?? 0).toInt();
+    if (windows < 2) return null;
+    return "a cseréik átfednek ($windows ablakban hetedik "
+        "mezőnyjátékos a pályán) · a váltás-pillanatuk kettős "
+        "célpont: jelezd a zsűrinek, és gyors labda a "
+        "rendezetlenségbe";
+  }
+
   // Felzárkózás-húzó: kiugró hátrány-termelés (3+ részvétel, 2x-es
   // arány — a backenddel azonos küszöbök).
   String? _comebackCarriers(Map<String, dynamic> r) {
@@ -6240,6 +6251,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Eltűnő védő", _fadingDefenders(r)!],
       if (_comebackCarriers(r) != null)
         ["Felzárkózás-húzó", _comebackCarriers(r)!],
+      if (_excessPlayers(r) != null)
+        ["Létszám-hiba", _excessPlayers(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

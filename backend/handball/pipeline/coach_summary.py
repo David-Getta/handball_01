@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Létszám-hiba: csere-átfedésben hetedik ember a pályán.
+    try:
+        from .rules import excess_players
+        xsp = excess_players(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_xsp = xsp[side]
+            if rec_xsp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} cseréi átfednek: "
+                     f"{rec_xsp['windows']} ablakban volt hetedik "
+                     "mezőnyjátékosuk a pályán — ez ingyen "
+                     "kiállítást érhet.")
+    except Exception:
+        pass
     # Felzárkózás-húzó: kin keresztül jönnek vissza hátrányból.
     try:
         from .momentum import comeback_carriers

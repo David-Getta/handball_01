@@ -1351,3 +1351,30 @@ def test_sevens_by_score_few_samples_none():
     svs = sevens_by_score(Match(_meta(), frames))
     assert svs["home"]["level"] == 2
     assert svs["home"]["verdict"] is None
+
+
+def test_excess_players_flags_overlapping_subs():
+    """Két 20 mp-es szakaszban 7 hazai mezőnyjátékos → létszám-hiba."""
+    from handball.pipeline.rules import excess_players
+
+    frames = _roster_frames(0, 30, 6, 6)
+    frames += _roster_frames(frames[-1].t + 1, 20, 7, 6)
+    frames += _roster_frames(frames[-1].t + 1, 30, 6, 6)
+    frames += _roster_frames(frames[-1].t + 1, 20, 7, 6)
+    frames += _roster_frames(frames[-1].t + 1, 30, 6, 6)
+
+    xsp = excess_players(Match(_meta(), frames))
+    assert xsp["home"]["windows"] >= 2
+    assert xsp["home"]["verdict"] == \
+        "csere-átfedésben hetedik ember a pályán"
+    assert xsp["away"]["windows"] == 0
+    assert xsp["away"]["verdict"] is None
+
+
+def test_excess_players_normal_roster_none():
+    """Végig 6v6 → nincs létszám-hiba."""
+    from handball.pipeline.rules import excess_players
+
+    xsp = excess_players(Match(_meta(), _roster_frames(0, 90, 6, 6)))
+    assert xsp["home"]["windows"] == 0
+    assert xsp["home"]["verdict"] is None

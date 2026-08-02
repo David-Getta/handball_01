@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **293 réteg**, modulonként csoportosítva; a
+Összesen **294 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (68)
@@ -276,11 +276,12 @@ leírás a réteg-függvény docstringjének első sora.
 | `positions` | Poszt-becslés a támadó-fázis átlag-pozícióiból. |
 | `turnovers_by_role` | Poszt-hibák: MELYIK POSZTJUK veszíti el a labdát. |
 
-## rules (20)
+## rules (21)
 
 | Réteg | Mit mér |
 |---|---|
 | `discipline_fade` | Fegyelem-esés: a kiállítások félidőnkénti eloszlása — a fáradás-kép |
+| `excess_players` | Létszám-hiba: mikor van HETEDIK mezőnyjátékos a pályán. |
 | `gk_seven_directions` | Kapus-hetesvédés irány szerint: MELYIK SAROKBA menő heteseket |
 | `post_powerplay` | Visszaállás: MI TÖRTÉNIK, AMIKOR VISSZAÉR a kiállított ember. |
 | `post_seven_lapses` | Hetes utáni percek: LERAGADNAK-E az adott hetes után. |

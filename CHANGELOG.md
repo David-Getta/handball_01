@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Létszám-hiba** (`excess_players`): a csere-átfedésből pályán lévő
+  hetedik mezőnyjátékos felismerése (a kiállítás-felismerés
+  többlet-oldali párja). Edzői olvasat: az átfedő cseréjű ellenfél
+  váltás-pillanata kettős célpont (zsűri-jelzés + gyors labda a
+  rendezetlenségbe); a saját oldalon a cserefolyosó-fegyelem a téma.
+  Felületek: `/analyze` + meccs-csomag (`excess_players`), edzői
+  összefoglaló, felderítés (edzői kulcs + 247-es meccsterv-szabály:
+  csere-átfedésük × gyors újraindításotok), edzés-fókusz (268-as
+  szabály), kliens-csempe.
 - **Meccs-jelentés: Match card (EN) szekció** — az angol meccs-kártya
   (eredménysor + tényszerű angol mondatok) megjelenik a
   HTML-jelentésben is, nemzetközi megosztáshoz.

@@ -3609,6 +3609,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import excess_players
+            res["excess_players"] = excess_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4622,6 +4627,9 @@ def create_app():
                        lambda: comeback_carriers(match))
                 from ..pipeline.summary_en import match_card_en
                 _layer("match_card_en", lambda: match_card_en(match))
+                from ..pipeline.rules import excess_players
+                _layer("excess_players",
+                       lambda: excess_players(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

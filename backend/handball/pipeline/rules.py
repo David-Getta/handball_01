@@ -124,6 +124,49 @@ def suspensions_from_powerplay(match: Match) -> list[Suspension]:
             for w in detect_powerplay(match)]
 
 
+# Létszám-hiba: csere-átfedésből hetedik mezőnyjátékos a pályán.
+XSP_MIN_WINDOWS = 2   # ennyi (PP_WINDOW_S-es) többlet-ablaktól ítélet
+
+
+def excess_players(match: Match, config=None) -> dict:
+    """Létszám-hiba: mikor van HETEDIK mezőnyjátékos a pályán.
+
+    A kiállítás-felismerés (detect_powerplay) a hiányt nézi — ez a
+    többletet: azokat az ablakokat, amikben egy csapatnak hétnél is
+    több mezőnyjátékos-track-je van a pályán. Ez tipikusan
+    csere-átfedés: a lejövő még a pályán, a felálló már beállt. A
+    szabály szerint ez büntetendő (kiállítás-kockázat), és a
+    váltás-pillanat rendezetlenségét is jelzi.
+
+    Edzőileg: az átfedően cserélő ellenfélnél a váltás-pillanat
+    kettős célpont — jelezhető a zsűrinek, és a rendezetlenségbe
+    gyors támadás mehet; a saját oldalon a cserefolyosó-fegyelem
+    (előbb le, aztán fel) az edzés-téma, mert ez ingyen kiállítást
+    ér.
+
+    Visszatérés csapatonként: {"windows", "seconds", "verdict"} — a
+    verdict "csere-átfedésben hetedik ember a pályán"
+    (XSP_MIN_WINDOWS ablaktól), különben None.
+    """
+    tl = field_count_timeline(match)
+    out = {side: {"windows": 0, "seconds": 0.0, "verdict": None}
+           for side in ("home", "away")}
+    if len(tl) < 2:
+        return out
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win_s = (tl[1]["start_frame"] - tl[0]["start_frame"]) / fps
+    for w in tl:
+        for side in ("home", "away"):
+            if w[side] >= 7:
+                out[side]["windows"] += 1
+                out[side]["seconds"] += win_s
+    for rec in out.values():
+        rec["seconds"] = round(rec["seconds"], 1)
+        if rec["windows"] >= XSP_MIN_WINDOWS:
+            rec["verdict"] = "csere-átfedésben hetedik ember a pályán"
+    return out
+
+
 # Fegyelem-állás: kiállítások az eredményjelző szerint.
 SPS_MIN_TOTAL = 3   # ennyi kiállítás alatt nincs ítélet
 SPS_DIFF = 2        # ekkora többlet számít mintázatnak
