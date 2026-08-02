@@ -365,3 +365,31 @@ def test_kliens_csempe_cimkek_egyediek():
     assert len(labels) > 200, "a címke-olvasás elromlott"
     dupes = sorted({l for l in labels if labels.count(l) > 1})
     assert not dupes, f"ismétlődő csempe-címkék: {dupes}"
+
+
+def test_claude_md_szamlalok_szinkronban():
+    """A CLAUDE.md recept-számlálóinak (következő meccsterv- és
+    edzés-szabály szám) egyeznie kell a kódban ténylegesen kiosztott
+    legnagyobb sorszám + 1 értékkel — a számláló-elcsúszás dupla
+    sorszámot vagy lyukat okozna a következő rétegnél."""
+    root = Path(__file__).resolve().parent.parent
+    claude_md = root.parent / "CLAUDE.md"
+    if not claude_md.exists():
+        pytest.skip("nincs CLAUDE.md a fában")
+    nexts = [int(m) for m in re.findall(
+        r"a KÖVETKEZŐ szám: (\d+)", claude_md.read_text(encoding="utf-8"))]
+    assert len(nexts) == 2, "a CLAUDE.md számláló-sorai elmozdultak"
+    next_matchup, next_training = nexts
+
+    scouting = (root / "handball" / "pipeline" / "scouting.py").read_text(
+        encoding="utf-8")
+    training = (root / "handball" / "pipeline" / "training.py").read_text(
+        encoding="utf-8")
+    max_matchup = max(int(m) for m in re.findall(r"# (\d+)\)", scouting))
+    max_training = max(int(m) for m in re.findall(r"# (\d+)\)", training))
+    assert next_matchup == max_matchup + 1, (
+        f"CLAUDE.md meccsterv-számláló {next_matchup}, de a legnagyobb "
+        f"kiosztott szabályszám {max_matchup}")
+    assert next_training == max_training + 1, (
+        f"CLAUDE.md edzés-számláló {next_training}, de a legnagyobb "
+        f"kiosztott szabályszám {max_training}")
