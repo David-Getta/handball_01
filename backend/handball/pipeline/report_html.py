@@ -1194,6 +1194,21 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 for e in sevens)
             parts_html.append("<h2>Hétméteresek</h2><ul>" + lis + "</ul>")
 
+        # Angol meccs-kártya: nemzetközi megosztáshoz egy tömör,
+        # tényszerű angol blokk a jelentés szabály-részének elején.
+        try:
+            from .summary_en import match_card_en
+            card = match_card_en(match)
+            if card.get("lines"):
+                lis = "".join(f"<li>{escape(l)}</li>"
+                              for l in card["lines"])
+                parts_html.append(
+                    "<h2>Match card (EN)</h2>"
+                    f"<p><b>{escape(card['headline'])}</b></p>"
+                    "<ul>" + lis + "</ul>")
+        except Exception:
+            pass
+
         # Állás-lencse: az eredményjelző szerinti rétegek ítéletei egy
         # helyen — csak a megszólaló (nem None) ítéletek jelennek meg.
         try:

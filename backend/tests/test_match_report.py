@@ -1520,3 +1520,40 @@ def test_report_ember_lencse_section_lists_verdicts():
     html = match_report_html(m, {}, [], None)
     assert "Ember-lencse (néven nevezett minták)" in html
     assert "hozza őket vissza" in html
+
+
+def test_report_match_card_en_section():
+    """Gólos meccsen a jelentésben megjelenik az angol meccs-kártya."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+
+    meta = MatchMeta(match_id="rep-en", home_team="Lions",
+                     away_team="Bears", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(2):
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=33.0,
+                               y=10.0)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        x = 33.0
+        while x < 40.5:
+            x += 0.5
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=33.0,
+                               y=10.0)],
+                ball=Ball(x=min(x, 40.5), y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(meta, frames)
+
+    html = match_report_html(m, {}, [], None)
+    assert "Match card (EN)" in html
+    assert "Lions 2–0 Bears" in html
+    assert "Top scorer for Lions: player #1 with 2 goals." in html

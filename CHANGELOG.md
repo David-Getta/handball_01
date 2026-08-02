@@ -5,6 +5,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Meccs-jelentés: Match card (EN) szekció** — az angol meccs-kártya
+  (eredménysor + tényszerű angol mondatok) megjelenik a
+  HTML-jelentésben is, nemzetközi megosztáshoz.
 - **Angol meccs-kártya** (`match_card_en`, új `pipeline/summary_en`
   modul): tömör, ítélet-mentes angol összefoglaló a meccsről
   (eredmény, félidő, gólfelelősök, hatékonyság, leghosszabb sorozat,
