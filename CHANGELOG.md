@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Mérési jegyzőkönyv (TRL-4 evidencia-napló)**: új
+  `docs/MERESI_JEGYZOKONYV.md` napló + `validation_ledger_row` a
+  validációs modulban + `--jegyzokonyv` kapcsoló a
+  `scripts/validate_match`-ben — minden valós meccsen futtatott
+  pontosság-mérés dátumozott, git-verziózott Markdown-sorként
+  gyűlik, verziók közt összevethetően. A pályázati felkészülés
+  (`docs/PALYAZAT_EIC_PRE_ACCELERATOR.md` 4. pont) kulcs-eszköze.
 - **EIC Pre-accelerator felkészülési csomag**: új pályázati terv
   (`docs/PALYAZAT_EIC_PRE_ACCELERATOR.md`) a widening-országos EIC
   Pre-accelerator programra (300–500 k€, 70% ráta, TRL 4→6) —

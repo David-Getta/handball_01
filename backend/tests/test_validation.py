@@ -187,3 +187,29 @@ def test_validate_match_cli(tmp_path, capsys):
 
     # Hiányzó fájl → 2-es hibakód.
     assert main([str(tmp_path / "nincs.json"), str(csv)]) == 2
+
+
+def test_validation_ledger_row_formats_markdown():
+    """A jegyzőkönyv-sor dátumot, verziót, meccset és P/R értékeket
+    tartalmaz Markdown-táblázatsorként."""
+    from handball.pipeline.validation import validation_ledger_row
+
+    res = {"by_type": {"goal": {"precision": 0.9, "recall": 1.0},
+                       "shot": {"precision": 0.8, "recall": 0.75}},
+           "overall": {"precision": 0.85, "recall": 0.9, "f1": 0.87}}
+    row = validation_ledger_row(res, match_id="m1", version="abc1234",
+                                when="2026-08-02")
+    assert row == ("| 2026-08-02 | abc1234 | m1 | 90%/100% | 80%/75% "
+                   "| 87% | MEGFELEL |")
+
+
+def test_validation_ledger_row_handles_missing_data():
+    """Üres mérésnél kötőjelek és kérdőjeles ítélet — a sor akkor is
+    érvényes Markdown marad."""
+    from handball.pipeline.validation import validation_ledger_row
+
+    res = {"by_type": {}, "overall": {"precision": None, "recall": None,
+                                      "f1": None}}
+    row = validation_ledger_row(res)
+    assert row.startswith("| ") and row.endswith("| ? |")
+    assert row.count("—/—") == 2

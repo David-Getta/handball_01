@@ -248,6 +248,39 @@ def validate_events(match: Match, truth: list,
     }
 
 
+def validation_ledger_row(res: dict, match_id: str = "",
+                          version: str = "", when: str = "") -> str:
+    """Egy sor a mérési jegyzőkönyvbe (docs/MERESI_JEGYZOKONYV.md).
+
+    A validálás eredményét (validate_events kimenete) dátumozott,
+    verziózott Markdown-táblázatsorrá alakítja — ez a TRL-4
+    bizonyíték-napló egysége: minden valós meccsen futtatott mérés
+    egy sor, verziók közt összevethetően. A pályázati felkészülés
+    (docs/PALYAZAT_EIC_PRE_ACCELERATOR.md) kulcs-eszköze.
+    """
+    from datetime import date
+
+    def _pct(x):
+        return "—" if x is None else f"{x * 100:.0f}%"
+
+    by = res.get("by_type", {})
+    goal = by.get("goal", {})
+    shot = by.get("shot", {})
+    overall = res.get("overall", {})
+    verdict = _verdict(overall)
+    status = ("?" if verdict["pass"] is None
+              else "MEGFELEL" if verdict["pass"] else "GYENGE")
+    return ("| " + " | ".join([
+        when or date.today().isoformat(),
+        version or "?",
+        match_id or "?",
+        f"{_pct(goal.get('precision'))}/{_pct(goal.get('recall'))}",
+        f"{_pct(shot.get('precision'))}/{_pct(shot.get('recall'))}",
+        _pct(overall.get("f1")),
+        status,
+    ]) + " |")
+
+
 def validation_report_html(res: dict, home_team: str = "",
                            away_team: str = "") -> str:
     """A validáció eredményéből megosztható, nyomtatható HTML-oldal — a

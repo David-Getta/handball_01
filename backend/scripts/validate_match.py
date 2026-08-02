@@ -33,7 +33,8 @@ if _BACKEND not in sys.path:
 
 from handball.models.tracking import Match  # noqa: E402
 from handball.pipeline.validation import (  # noqa: E402
-    parse_truth_csv, validate_events, validation_report_html)
+    parse_truth_csv, validate_events, validation_ledger_row,
+    validation_report_html)
 
 
 def _load_match(path: str) -> Match:
@@ -51,6 +52,11 @@ def main(argv=None) -> int:
                     help="Idő-tűrés másodpercben (alap: 3.0).")
     ap.add_argument("--out", default=None,
                     help="Ide írja a megosztható HTML-riportot (opcionális).")
+    ap.add_argument("--jegyzokonyv", nargs="?", default=None,
+                    const=str(Path(_BACKEND).parent / "docs"
+                              / "MERESI_JEGYZOKONYV.md"),
+                    help="A mérés sorát a mérési jegyzőkönyvhöz fűzi "
+                         "(alap: docs/MERESI_JEGYZOKONYV.md).")
     args = ap.parse_args(argv)
 
     if not os.path.exists(args.match_json):
@@ -90,6 +96,23 @@ def main(argv=None) -> int:
             res, match.meta.home_team, match.meta.away_team)
         Path(args.out).write_text(html, encoding="utf-8")
         print(f"\nHTML-riport: {args.out}")
+
+    if args.jegyzokonyv:
+        # Verzió: a repó rövid commit-hash-e (ha elérhető).
+        import subprocess
+        try:
+            version = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=_BACKEND, capture_output=True, text=True,
+                timeout=10).stdout.strip() or "?"
+        except Exception:
+            version = "?"
+        row = validation_ledger_row(
+            res, match_id=Path(args.match_json).stem, version=version)
+        ledger = Path(args.jegyzokonyv)
+        with ledger.open("a", encoding="utf-8") as f:
+            f.write(row + "\n")
+        print(f"\nJegyzőkönyv-sor hozzáfűzve: {ledger}")
 
     # A go/no-go-hoz hasznos kilépőkód: 0 = MEGFELEL, 1 = GYENGE/nincs adat.
     return 0 if res["verdict"]["pass"] else 1
