@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **7a6-állás** (`empty_net_by_score`): az üres-kapus (7 a 6)
+  szakaszok az eredményjelző szerint — akinél nem csak hátrányban jön,
+  ott a 7a6 rendszer, nem mentőöv. Edzői olvasat: rendszer-7a6 ellen
+  minden szerzés után az első nézés a túloldali üres kapu; a
+  csak-hátrányban 7a6-ozó ellen a vezetés után kell átkapcsolni.
+  Felületek: `/analyze` + meccs-csomag (`empty_net_by_score`), edzői
+  összefoglaló, felderítés (edzői kulcs két iránnyal + 232-es
+  meccsterv-szabály), edzés-fókusz (253-as szabály), kliens-csempe.
 - **Kontra-állás** (`breaks_by_score`): a lerohanás-részarány az
   eredményjelző szerint — hátrányban megugró kontra-arány =
   kényszer-kontra, vezetésnél is futó csapat = ölő ösztön. Edzői

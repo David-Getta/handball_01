@@ -1343,6 +1343,28 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 253) 7a6-állás: ha az ellenfél rendszerszinten üres kapuval
+    # játszik, az üres-kapus átkapcsolás a téma.
+    try:
+        from .goalkeeper import empty_net_by_score
+        ens253 = empty_net_by_score(match, config)
+        for side, other in (("home", "away"), ("away", "home")):
+            rec253 = ens253[other]
+            if rec253["verdict"] != \
+                    "állástól függetlenül lehozzák a kapust":
+                continue
+            _ens_n253 = (rec253["trailing"] + rec253["leading"]
+                         + rec253["level"])
+            add(side, "taktika", "Üres kapu-készenlét",
+                f"az ellenfél 7a6-ja rendszer ({_ens_n253} üres-kapus "
+                "szakasz, nem csak hátrányban) — a szerzéseink után "
+                "nem néztünk fel az üres kapura",
+                "üres-kapus átkapcsolás: szerzés-játék, ahol minden "
+                "labdaszerzés után az első kötelező mozdulat a "
+                "felnézés — az üres kapura dobott találat dupla "
+                "pont, a fel nem ismert helyzet mínusz")
+    except Exception:
+        pass
     # 252) Kontra-állás: ha hátrányban kontrába menekülünk, a
     # szervezett visszajövetel a téma — a kapkodó futás labdát ad el.
     try:

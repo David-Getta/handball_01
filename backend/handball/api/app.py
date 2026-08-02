@@ -3529,6 +3529,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import empty_net_by_score
+            res["empty_net_by_score"] = empty_net_by_score(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4497,6 +4502,9 @@ def create_app():
                 from ..pipeline.attack_types import breaks_by_score
                 _layer("breaks_by_score",
                        lambda: breaks_by_score(match))
+                from ..pipeline.goalkeeper import empty_net_by_score
+                _layer("empty_net_by_score",
+                       lambda: empty_net_by_score(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

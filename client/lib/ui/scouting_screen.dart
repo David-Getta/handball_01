@@ -1896,6 +1896,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // 7a6-állás: mikor vállalják az üres kaput (3+ szakasz, 2-es
+  // többlet — a backenddel azonos küszöbök).
+  String? _emptyNetByScore(Map<String, dynamic> r) {
+    final tr = ((r["ens_tr"] as num?) ?? 0).toInt();
+    final lead = ((r["ens_lead"] as num?) ?? 0).toInt();
+    final level = ((r["ens_level"] as num?) ?? 0).toInt();
+    final total = tr + lead + level;
+    if (total < 3) return null;
+    if ((lead + level) - tr >= 2) {
+      return "a 7 a 6 náluk rendszer, nem mentőöv ($total üres-kapus "
+          "szakaszból $tr hátrányban) · minden szerzés után az első "
+          "nézés a túloldali üres kapu";
+    }
+    if (tr - (lead + level) >= 2) {
+      return "csak hátrányban hozzák le a kapust ($tr/$total szakasz "
+          "hátrányban) · ha vezetsz, számíts a 7 a 6-ra";
+    }
+    return null;
+  }
+
   // Kontra-állás: hátrányban megugró lerohanás-arány (5+ támadás
   // állapotonként, 12 pp többlet — a backenddel azonos küszöbök).
   String? _breaksByScore(Map<String, dynamic> r) {
@@ -5923,6 +5943,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes-állás", _sevensByScore(r)!],
       if (_breaksByScore(r) != null)
         ["Kontra-állás", _breaksByScore(r)!],
+      if (_emptyNetByScore(r) != null)
+        ["7a6-állás", _emptyNetByScore(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

@@ -461,6 +461,58 @@ def outlet_speed(match: Match, config=None) -> dict:
 EMPTY_NET_GOAL_MARGIN_S = 5.0
 
 
+# 7a6-állás: az üres-kapus szakaszok az eredményjelző szerint.
+ENS_MIN_TOTAL = 3   # ennyi üres-kapus szakasz alatt nincs ítélet
+ENS_DIFF = 2        # ekkora többlet számít mintázatnak
+
+
+def empty_net_by_score(match: Match, config=None) -> dict:
+    """7a6-állás: MILYEN ÁLLÁSNÁL vállalják az üres kaput.
+
+    Az üres kapura kapott gólok (empty_net_goals) az árát mérik — ez
+    a szokásukat: az üres-kapus (7 a 6) szakaszok kezdetén vezetett,
+    állt vagy hátrányban volt-e a kapuját lehozó csapat. A klasszikus
+    minta a hátrány-7a6 (kényszer); aki döntetlennél vagy előnyben is
+    lehozza a kapust, annál a 7 a 6 nem mentőöv, hanem rendszer.
+
+    Edzőileg: a rendszer-7a6 ellen MINDIG kell az üres-kapus
+    készenlét — minden szerzés után az első nézés a túloldali üres
+    kapu, nem csak a hajrában; a csak-hátrányban 7a6-ozó ellen pedig
+    a vezetés megszerzése után kell átkapcsolni erre a fejre.
+
+    Visszatérés csapatonként: {"trailing", "leading", "level",
+    "verdict"} — a verdict "állástól függetlenül lehozzák a kapust"
+    (nem-hátrány többletnél), "csak hátrányban hozzák le a kapust"
+    (hátrány-többletnél), különben None (kevés mintánál is).
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    out = {side: {"trailing": 0, "leading": 0, "level": 0,
+                  "verdict": None} for side in ("home", "away")}
+    for w in detect_empty_net(match, config):
+        side = w["team"]
+        t0 = w["start_frame"]
+        own = sum(1 for (t, tm) in goals if t < t0 and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < t0 and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        out[side][state] += 1
+    for rec in out.values():
+        total = rec["trailing"] + rec["leading"] + rec["level"]
+        if total < ENS_MIN_TOTAL:
+            continue
+        not_tr = rec["leading"] + rec["level"]
+        if not_tr - rec["trailing"] >= ENS_DIFF:
+            rec["verdict"] = "állástól függetlenül lehozzák a kapust"
+        elif rec["trailing"] - not_tr >= ENS_DIFF:
+            rec["verdict"] = "csak hátrányban hozzák le a kapust"
+    return out
+
+
 def empty_net_goals(match: Match, config=None) -> dict:
     """Üres kapura kapott gólok: a 7 a 6 (lehozott kapus) ára.
 

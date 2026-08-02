@@ -680,6 +680,9 @@ class ScoutingReport:
     bks_tr_breaks: int = 0
     bks_rest_attacks: int = 0
     bks_rest_breaks: int = 0
+    ens_tr: int = 0
+    ens_lead: int = 0
+    ens_level: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2643,6 +2646,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_bks_rest:.0f}%) — ha vezettek, a visszafutás-"
                 "fegyelem dönt: fáradt lábbal is vissza kell érni, "
                 "mert futni fognak.")
+
+    # 7a6-állás: rendszer-7a6 ellen állandó üres-kapus készenlét.
+    _ens_n = rep.ens_tr + rep.ens_lead + rep.ens_level
+    if _ens_n >= 3 and (rep.ens_lead + rep.ens_level) - rep.ens_tr >= 2:
+        keys.append(
+            f"A 7 a 6 náluk nem mentőöv, hanem rendszer ({_ens_n} "
+            f"üres-kapus szakaszból csak {rep.ens_tr} jött "
+            "hátrányban) — minden szerzés után az első nézés a "
+            "túloldali üres kapu, nem csak a hajrában.")
+    elif _ens_n >= 3 and rep.ens_tr - (rep.ens_lead + rep.ens_level) >= 2:
+        keys.append(
+            f"Csak hátrányban hozzák le a kapust ({rep.ens_tr}/"
+            f"{_ens_n} üres-kapus szakasz hátrányban) — amint "
+            "megvan a vezetésetek, kapcsoljatok üres-kapus fejre: "
+            "jönni fog a 7 a 6.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6595,6 +6613,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                                 + bksrec["level"]["attacks"])
         rep.bks_rest_breaks = (bksrec["leading"]["breaks"]
                                + bksrec["level"]["breaks"])
+        from .goalkeeper import empty_net_by_score as _ens
+        ensrec = _ens(match, config)[team.value]
+        rep.ens_tr = ensrec["trailing"]
+        rep.ens_lead = ensrec["leading"]
+        rep.ens_level = ensrec["level"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9014,6 +9037,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 232) Az ő rendszer-7a6-uk × a ti aktív kezetek: a szerzés után
+    # az üres kapu az első nézés.
+    if (opp.ens_tr + opp.ens_lead + opp.ens_level >= 3
+            and (opp.ens_lead + opp.ens_level) - opp.ens_tr >= 2
+            and own.stt_steals >= 6):
+        plan.append(
+            f"A 7 a 6 náluk rendszer, nem mentőöv "
+            f"({opp.ens_lead + opp.ens_level} üres-kapus szakaszuk "
+            f"nem hátrányban jött), ti pedig sokat szereztek "
+            f"({own.stt_steals} labdaszerzés) — minden szerzésnél az "
+            "első nézés a túloldali üres kapu: a középről elengedett "
+            "dobás ellenük nem cirkusz, hanem a legolcsóbb gól.")
 
     # 231) Az ő kényszer-kontráik × a ti visszazárásotok: vezetésnél
     # futni fognak, és ti ezt elbírjátok.
@@ -12706,6 +12742,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         bks_tr_breaks=sum(r.bks_tr_breaks for r in reports),
         bks_rest_attacks=sum(r.bks_rest_attacks for r in reports),
         bks_rest_breaks=sum(r.bks_rest_breaks for r in reports),
+        ens_tr=sum(r.ens_tr for r in reports),
+        ens_lead=sum(r.ens_lead for r in reports),
+        ens_level=sum(r.ens_level for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

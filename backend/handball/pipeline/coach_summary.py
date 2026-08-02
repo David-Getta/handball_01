@@ -883,6 +883,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # 7a6-állás: mikor vállalják az üres kaput.
+    try:
+        from .goalkeeper import empty_net_by_score
+        ens = empty_net_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ens = ens[side]
+            if rec_ens["verdict"] is None:
+                continue
+            _ens_n = (rec_ens["trailing"] + rec_ens["leading"]
+                      + rec_ens["level"])
+            body += (f" A(z) {name} 7a6-szokása kirajzolódott: "
+                     f"{rec_ens['verdict']} ({_ens_n} üres-kapus "
+                     f"szakaszból {rec_ens['trailing']} jött "
+                     "hátrányban).")
+    except Exception:
+        pass
     # Kontra-állás: mikor futják a lerohanásaikat.
     try:
         from .attack_types import breaks_by_score

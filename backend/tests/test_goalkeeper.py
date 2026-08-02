@@ -1976,3 +1976,53 @@ def test_outlet_punishment_needs_signal():
 
     rec = outlet_punishment(_olp_match(False, n_losses=2))["away"]
     assert rec["verdict"] is None
+
+
+def _ens_match(n_windows: int):
+    """n_windows üres-kapus (7a6) hazai szakasz döntetlen állásnál:
+    a hazai kapus a felezőnél áll, a mezőnyjátékos a labdával támad."""
+    meta = MatchMeta(match_id="ens", home_team="H", away_team="A", fps=25.0)
+
+    def pl(tid, team, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y, role=role)
+
+    frames = []
+    t = 0
+    for _ in range(n_windows):
+        # 4 mp 7a6: a kapus (2-es) 25 m-re a saját (x=0) kaputól,
+        # a mezőnyjátékos (1-es) birtokol a támadó térfélen.
+        for _ in range(int(4 * 25)):
+            frames.append(Frame(t=t, players=[
+                pl(1, Team.HOME, 30.0, 10.0),
+                pl(2, Team.HOME, 25.0, 10.0, role="kapus"),
+            ], ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        # 3 mp szünet: nincs birtoklás (szabad labda), a kapus hátul.
+        for _ in range(int(3 * 25)):
+            frames.append(Frame(t=t, players=[
+                pl(2, Team.HOME, 1.0, 10.0, role="kapus"),
+            ], ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(meta, frames)
+
+
+def test_empty_net_by_score_system_seven_six():
+    """3 üres-kapus szakasz döntetlennél → állástól függetlenül
+    lehozzák a kapust."""
+    from handball.pipeline.goalkeeper import empty_net_by_score
+
+    ens = empty_net_by_score(_ens_match(3))
+    h = ens["home"]
+    assert h["level"] == 3
+    assert h["trailing"] == 0
+    assert h["verdict"] == "állástól függetlenül lehozzák a kapust"
+    assert ens["away"]["verdict"] is None
+
+
+def test_empty_net_by_score_few_samples_none():
+    """2 üres-kapus szakasz → kevés minta, nincs ítélet."""
+    from handball.pipeline.goalkeeper import empty_net_by_score
+
+    ens = empty_net_by_score(_ens_match(2))
+    assert ens["home"]["level"] == 2
+    assert ens["home"]["verdict"] is None
