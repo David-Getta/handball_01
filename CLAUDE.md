@@ -67,7 +67,13 @@ viheti el a többit. Tartsd ezt a stílust.
 ## Számláló-frissítés (recept végén)
 
 Réteg-commit után frissítsd ITT: meccsterv-szabály következő száma,
-edzés-szabály következő száma. A README "Hol tartunk" teszt-számát
+edzés-szabály következő száma. ÉS generáld újra a két generált
+dokumentumot (őr-teszt ellenőrzi mindkettőt):
+
+```bash
+cd backend && python3 -m scripts.layer_catalog   # docs/RETEG_KATALOGUS.md
+cd backend && python3 -m scripts.project_facts   # docs/SZAMOK.md
+``` A README "Hol tartunk" teszt-számát
 (jelenleg 1103) elég kiadáskor frissíteni.
 
 ## Commit-stílus

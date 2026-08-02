@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Generált tény-lap** (`docs/SZAMOK.md`) + `scripts/project_facts`:
+  a hivatkozható projekt-számok (elemző rétegek, automata tesztek,
+  meccsterv- és edzés-szabályok, kliens-csempék, pipeline-modulok) a
+  kódbázisból, statikusan számolva — a pályázati és bemutató anyagok
+  ide hivatkoznak az állításaikkal. Új őr-teszt nem engedi elavulni
+  (`--check` mód), és a recept (CLAUDE.md) is előírja a
+  regenerálást. A pályázati doksik elavult darabszámai frissítve.
 - **Őr-teszt: csempe-helper hivatkozás-teljesség** — minden
   felderítés-csempében hivatkozott Dart-helpernek deklarálva is kell
   lennie; a hiányzó helper eddig csak a Flutter-buildnél bukott volna

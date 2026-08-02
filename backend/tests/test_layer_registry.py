@@ -430,3 +430,19 @@ def test_kliens_csempe_helperek_leteznek():
     assert len(used) > 200, "a csempe-olvasás elromlott"
     missing = sorted(used - declared)
     assert not missing, f"csempéből hivatkozott, de hiányzó helperek: {missing}"
+
+
+def test_projekt_szamok_frissek():
+    """A docs/SZAMOK.md generált tény-lap — a pályázati és bemutató
+    anyagok ide hivatkoznak, ezért nem avulhat el észrevétlenül.
+    (Frissítés: python -m scripts.project_facts)"""
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    facts = root.parent / "docs" / "SZAMOK.md"
+    assert facts.exists(), "hiányzik a docs/SZAMOK.md — generáld"
+    res = subprocess.run(
+        [sys.executable, "-m", "scripts.project_facts", "--check"],
+        cwd=root, capture_output=True, text=True, timeout=120)
+    assert res.returncode == 0, (
+        "elavult tény-lap — futtasd: python -m scripts.project_facts\n"
+        + res.stderr)
