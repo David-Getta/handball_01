@@ -2558,3 +2558,62 @@ def test_conceded_momentum_needs_enough_goals():
 
     rec = conceded_momentum(_cgm_match(True, n_goals=3))["away"]
     assert rec["verdict"] is None
+
+
+# ---- Kettőzés-büntetés (mögé betalálnak-e a kettőzésnek) --------------------
+
+def _dbp_match(with_goals, doubled_frames=60, cycles=2, fps=25.0):
+    """A vendégek kettőznek a hazai labdásra; a kettőzés után a
+    hazaiak (nem) lövik be az üresen maradt helyzetet."""
+    frames = []
+    t = 0
+    for _ in range(cycles):
+        for _ in range(doubled_frames):     # kettőzött kockák
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 30.0, 10.0),
+                _pl(21, Team.AWAY, 31.0, 10.0),
+                _pl(22, Team.AWAY, 30.0, 12.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        if with_goals:
+            for i in range(11):             # azonnali gól a +x kapura
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 30.0, 10.0),
+                    _pl(21, Team.AWAY, 31.0, 10.0),
+                    _pl(22, Team.AWAY, 30.0, 12.0)],
+                    ball=Ball(x=min(30.0 + (i + 1), 40.5), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(40):                 # szünet
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_double_punishment_flags_the_punished_double():
+    """A kettőzés után rendre gól esik → a kettőzésük gólba kerül."""
+    from handball.pipeline.defense import double_punishment
+
+    rec = double_punishment(_dbp_match(True))["away"]
+    assert rec["conceded_after"] >= 2
+    assert rec["verdict"] == "a kettőzésük gólba kerül"
+
+
+def test_double_punishment_flags_the_free_lunch():
+    """Sok kettőzött kocka gól nélkül → büntetlenül termel."""
+    from handball.pipeline.defense import double_punishment
+
+    rec = double_punishment(_dbp_match(False, doubled_frames=100))["away"]
+    assert rec["doubled_frames"] >= 150
+    assert rec["verdict"] == "a kettőzésük büntetlenül termel"
+
+
+def test_double_punishment_needs_signal():
+    """Kevés kettőzés, gól nélkül → nincs ítélet."""
+    from handball.pipeline.defense import double_punishment
+
+    rec = double_punishment(
+        _dbp_match(False, doubled_frames=50, cycles=1))["away"]
+    assert rec["verdict"] is None

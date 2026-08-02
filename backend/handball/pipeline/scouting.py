@@ -659,6 +659,8 @@ class ScoutingReport:
     wfk_fooled: int = 0
     rdk_saves: int = 0
     rdk_read: int = 0
+    dbp_doubled_frames: int = 0
+    dbp_conceded_after: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2520,6 +2522,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Reflexből véd a kapusuk (csak {rep.rdk_read}/"
                 f"{rep.rdk_saves} olvasott védés) — nincs mit "
                 "becsapni: a kitartott, pontos sarok-lövés visz be.")
+
+    # Kettőzés-büntetés: megéri-e kivárni a kettőzésüket.
+    if rep.dbp_conceded_after >= 2:
+        keys.append(
+            f"A kettőzésük gólba kerül ({rep.dbp_conceded_after} "
+            "gól esett közvetlenül kettőzés után) — a kettőzés-jel "
+            "nálatok támadási jel: az első passz azonnal a "
+            "felszabadult emberhez, és kész a helyzet.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6432,6 +6442,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rdkrec = _rdk(match, config)[team.value]
         rep.rdk_saves = rdkrec["saves"]
         rep.rdk_read = rdkrec["read"]
+        from .defense import double_punishment as _dbp
+        dbprec = _dbp(match, config)[team.value]
+        rep.dbp_doubled_frames = dbprec["doubled_frames"]
+        rep.dbp_conceded_after = dbprec["conceded_after"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8851,6 +8865,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 223) Az ő gólba kerülő kettőzésük × a ti gyors elengedésetek:
+    # a kettőzés-jelre már megy is a labda az üres emberhez.
+    if (opp.dbp_conceded_after >= 2 and own.sr_shots >= 10):
+        _sr223 = 100.0 * own.sr_quick / max(1, own.sr_shots)
+        if _sr223 >= 50.0:
+            plan.append(
+                f"A kettőzésük gólba kerül ({opp.dbp_conceded_after} "
+                f"gól esett közvetlenül kettőzés után), ti pedig "
+                f"gyorsan engeditek el a labdát (a lövéseitek "
+                f"{_sr223:.0f}%-a gyors elengedés) — a kettőzés "
+                "pillanatában egy-érintéses passz a felszabadult "
+                "emberhez: náluk ez bizonyítottan gólt ér.")
 
     # 222) Az ő reflex-kapusuk × a ti sarokra lőtt góljaitok: első
     # ütemből, kitartott sarok.
@@ -12393,6 +12420,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         wfk_fooled=sum(r.wfk_fooled for r in reports),
         rdk_saves=sum(r.rdk_saves for r in reports),
         rdk_read=sum(r.rdk_read for r in reports),
+        dbp_doubled_frames=sum(r.dbp_doubled_frames
+                               for r in reports),
+        dbp_conceded_after=sum(r.dbp_conceded_after
+                               for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

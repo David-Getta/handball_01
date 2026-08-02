@@ -3484,6 +3484,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import double_punishment
+            res["double_punishment"] = double_punishment(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4426,6 +4431,9 @@ def create_app():
                 from ..pipeline.goalkeeper import reading_keeper
                 _layer("reading_keeper",
                        lambda: reading_keeper(match))
+                from ..pipeline.defense import double_punishment
+                _layer("double_punishment",
+                       lambda: double_punishment(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

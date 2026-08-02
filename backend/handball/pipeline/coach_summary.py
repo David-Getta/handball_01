@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kettőzés-büntetés: mögé betalálnak-e a kettőzésnek.
+    try:
+        from .defense import double_punishment
+        dbp = double_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dbp = dbp[side]
+            if rec_dbp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kettőzéséről kiderült: "
+                     f"{rec_dbp['verdict']} ({rec_dbp['conceded_after']}"
+                     " gól esett közvetlenül kettőzés után).")
+    except Exception:
+        pass
     # Olvasó kapus: előre olvassa-e a lövéseket a kapus.
     try:
         from .goalkeeper import reading_keeper

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kettőzés-büntetés**: MÖGÉ BETALÁLNAK-E a kettőzésüknek. A
+  kettőzés-rétegek megmondják, jönnek-e és ki jön — ez az árát: a
+  kettőzött pillanatok után 3 mp-en belül kapott gólok (2+ gól =
+  gólba kerül; 150+ kettőzött kocka gól nélkül = büntetlenül
+  termel). Akinek a kettőzése gólba kerül, ott a kettőzés-jel
+  támadási jel — az első passz a felszabadult emberhez; a saját
+  gólba kerülő kettőzésnél a csúszás-rend és a visszazárás a téma.
+  Egy réteg, sok felület: `double_punishment` motor, edzői
+  összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (darabszámok, edzői kulcs + csempe), 223. meccsterv-szabály (az ő
+  gólba kerülő kettőzésük × a ti gyors elengedésetek), 244.
+  edzés-szabály (kettőzés-visszazárás kijelölt csúszással).
+
 - **Olvasó kapus**: ELŐRE OLVASSA-E a lövéseket a kapusuk. A
   becsapott kapus a gólokat nézi — ez a védéseket: a kapus a védett
   lövéseknél már a labda érkezési oldala felé mozgott-e (5+ mért

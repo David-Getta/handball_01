@@ -3671,3 +3671,77 @@ def conceded_momentum(match, config=None) -> dict:
             elif pct <= CGM_SET_PCT:
                 rec["verdict"] = "állóhelyből is bekapják"
     return out
+
+
+# Kettőzés-büntetés: a kettőzött kocka utáni ennyi másodpercen belüli
+# kapott gól még a kettőzés számlájára megy; ennyi ilyen gól kell a
+# büntetett ítélethez, és ennyi kettőzött kocka a büntetlenül termelő
+# kettőzéshez.
+DBP_TAIL_S = 3.0
+DBP_MIN_GOALS = 2
+DBP_MIN_FRAMES = 150
+
+
+def double_punishment(match, config=None) -> dict:
+    """Kettőzés-büntetés: MÖGÉ BETALÁLNAK-E a kettőzésüknek.
+
+    A kettőzés (double_teams) megmondja, jön-e a második védő, a
+    kettőző emberek azt, ki — ez az árát: a kettőzött pillanatok
+    után közvetlenül (DBP_TAIL_S-en belül) kapott gólokat. A
+    kettőzés mindig üresen hagy valakit: van, akinél ezt sosem
+    találják meg, és van, akinél a kettőzés rendre gólba kerül.
+
+    Edzőileg: akinek a kettőzése gólba kerül, az ellen a kettőzés-jel
+    a támadási jel — az első passz azonnal a felszabadult emberhez,
+    és kész a helyzet; a saját, gólba kerülő kettőzésünknél pedig
+    vagy gyorsabb a visszazárás, vagy vissza kell fogni a kettőzést.
+
+    Visszatérés csapatonként (a KETTŐZŐ, védekező oldal):
+    {"doubled_frames", "conceded_after", "verdict"} — a verdict "a
+    kettőzésük gólba kerül" (DBP_MIN_GOALS-tól), "a kettőzésük
+    büntetlenül termel" (DBP_MIN_FRAMES-nyi kettőzés, ilyen gól
+    nélkül), különben None.
+    """
+    import math
+
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(DBP_TAIL_S * fps)
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    doubled_ts = {"home": [], "away": []}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        defender = "away" if holder.team.value == "home" else "home"
+        near = sum(1 for p in f.players
+                   if p.team is not None and p.team != holder.team
+                   and p.role != "kapus"
+                   and math.hypot(p.x - holder.x, p.y - holder.y)
+                   <= DOUBLE_TEAM_M)
+        if near >= 2:
+            doubled_ts[defender].append(f.t)
+
+    out: dict = {}
+    for side, other in (("home", "away"), ("away", "home")):
+        ts = doubled_ts[side]
+        conceded = 0
+        for (gt, tm) in goals:
+            if tm != other:
+                continue
+            if any(0 <= gt - t <= tail for t in ts):
+                conceded += 1
+        rec = {"doubled_frames": len(ts), "conceded_after": conceded,
+               "verdict": None}
+        if conceded >= DBP_MIN_GOALS:
+            rec["verdict"] = "a kettőzésük gólba kerül"
+        elif len(ts) >= DBP_MIN_FRAMES and conceded == 0:
+            rec["verdict"] = "a kettőzésük büntetlenül termel"
+        out[side] = rec
+    return out

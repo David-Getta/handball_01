@@ -1841,6 +1841,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Kettőzés-büntetés: mögé betalálnak-e a kettőzésnek (2+ gól
+  // közvetlenül kettőzés után — a backend-kulccsal azonos küszöb).
+  String? _doublePunishment(Map<String, dynamic> r) {
+    final conceded = ((r["dbp_conceded_after"] as num?) ?? 0).toInt();
+    if (conceded < 2) return null;
+    return "a kettőzésük gólba kerül ($conceded gól közvetlenül "
+        "kettőzés után) · a kettőzés-jelre azonnali passz a "
+        "felszabadult emberhez — bizonyítottan gólt ér";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5773,6 +5783,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Becsapott kapus", _wrongfootedKeeper(r)!],
       if (_readingKeeper(r) != null)
         ["Olvasó kapus", _readingKeeper(r)!],
+      if (_doublePunishment(r) != null)
+        ["Kettőzés-büntetés", _doublePunishment(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

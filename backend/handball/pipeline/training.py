@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 244) Kettőzés-büntetés: ha a kettőzésünk gólba kerül, a
+    # kettőzés-visszazárás a téma — vagy vissza kell fogni.
+    try:
+        from .defense import double_punishment
+        dbp244 = double_punishment(match, config)
+        for side in ("home", "away"):
+            rec244 = dbp244[side]
+            if rec244["verdict"] != "a kettőzésük gólba kerül":
+                continue
+            add(side, "vedekezes", "Kettőzés-visszazárás",
+                f"a kettőzésünk gólba kerül ({rec244['conceded_after']}"
+                " gól esett közvetlenül kettőzés után) — az üresen "
+                "hagyott embert rendre megtalálják",
+                "kettőzés-visszazárás: a kettőzés pillanatában a "
+                "maradék védők előre kijelölt csúszása (ki veszi át "
+                "az üres embert), és a kettőzők azonnali "
+                "visszazárása a kiadás után — az edzésmeccsen a "
+                "kettőzés utáni 3 mp-en belül kapott gól dupla "
+                "mínusz, a lezárt kettőzés-hullám pont")
+    except Exception:
+        pass
     # 243) Olvasó kapus: ha a kapusunk csak reflexből véd, az
     # olvasás-készség a téma — a lövő teste elárulja a sarkot.
     try:
