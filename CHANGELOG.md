@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Folyosó-gólok**: NYITOTT FOLYOSÓN kapják-e a gólokat. Az
+  átvert védők a lövő melletti párharcot nézik — ez a lövés útját:
+  a kapott góloknál volt-e bárki a lövő és a kapu-közép közti
+  sávban (a lövésvonaltól 1,5 m-en belül; 5+ kapott gól, 50%+
+  nyitott / 20%- zárt). A nyitott folyosós gól a fal-zárás és a
+  visszazárás hibája — ellene betörés és gyors átmenet; a zárt fal
+  mögött is bekapott gól a kapus-oldal kérdése — ellene kimozgatás
+  és pontos elhelyezés. Egy réteg, sok felület: `corridor_goals`
+  motor, edzői összefoglaló, /analyze + meccs-csomag,
+  felderítés-profil (darabszámok, két edzői kulcs + csempe), 218.
+  meccsterv-szabály (az ő nyitott folyosóik × a ti éles kontrátok),
+  239. edzés-szabály (folyosó-zárás: az első védő a kapu-lövő
+  vonalra).
+
 - **Csere-büntetés**: GÓLBA KERÜLNEK-E a csere-lyukak. A
   csere-lyukak a kitettséget mérik — ez a megfizetett árát: a rövid
   (cserés, nem kiállításos) öt fős szakaszok alatt és közvetlenül

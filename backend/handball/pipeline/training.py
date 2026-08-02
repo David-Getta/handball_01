@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 239) Folyosó-gólok: ha nyitott folyosókon kapjuk a gólokat, a
+    # visszazárás és a fal-zárás a téma.
+    try:
+        from .defense import corridor_goals
+        crg239 = corridor_goals(match, config)
+        for side in ("home", "away"):
+            rec239 = crg239[side]
+            if rec239["verdict"] != "nyitott folyosókon kapják a gólokat":
+                continue
+            add(side, "vedekezes", "Folyosó-zárás",
+                f"a kapott góljaink zöménél senki nem állt a "
+                f"lövésvonalban ({rec239['open']}/{rec239['goals']}) "
+                "— a fal nem ér oda vagy szétnyílik, a kapus "
+                "fedezetlen lövéseket kap",
+                "folyosó-zárás: visszarendeződésnél az első védő "
+                "MINDIG a kapu-lövő vonalra áll (nem a labdára fut), "
+                "a fal pedig zárás-jelre húz össze — az edzésmeccsen "
+                "a lövésvonalban álló védővel kapott gól rendben "
+                "van, a nyitott folyosós gól dupla mínusz")
+    except Exception:
+        pass
     # 238) Csere-büntetés: ha a csere-lyukaink már gólba kerültek, a
     # csere-ütem javítása sürgős — nem mért kockázat, megfizetett ár.
     try:

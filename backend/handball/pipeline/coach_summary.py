@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Folyosó-gólok: nyitott folyosón kapják-e a gólokat.
+    try:
+        from .defense import corridor_goals
+        crg = corridor_goals(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_crg = crg[side]
+            if rec_crg["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott góljairól kiderült: "
+                     f"{rec_crg['verdict']} ({rec_crg['open']}/"
+                     f"{rec_crg['goals']} gól előtt nem állt senki "
+                     "a lövésvonalban).")
+    except Exception:
+        pass
     # Csere-büntetés: gólba kerülnek-e a csere-lyukak.
     try:
         from .substitutions import gap_punishment

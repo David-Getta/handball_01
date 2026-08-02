@@ -3459,6 +3459,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import corridor_goals
+            res["corridor_goals"] = corridor_goals(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4386,6 +4391,9 @@ def create_app():
                 from ..pipeline.substitutions import gap_punishment
                 _layer("gap_punishment",
                        lambda: gap_punishment(match))
+                from ..pipeline.defense import corridor_goals
+                _layer("corridor_goals",
+                       lambda: corridor_goals(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

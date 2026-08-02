@@ -2379,3 +2379,59 @@ def test_unpressured_assists_needs_enough_goals():
 
     rec = unpressured_assists(_upa_match(False, n_goals=3))["away"]
     assert rec["verdict"] is None
+
+
+# ---- Folyosó-gólok (nyitott folyosón kapják-e a gólokat) --------------------
+
+def _crg_match(blocked, n_goals=5, fps=25.0):
+    """Hazai gól-sorozat: a lövés útjában áll (vagy nem áll) vendég
+    védő — a folyosó zárt vagy nyitott."""
+    frames = []
+    t = 0
+    dx, dy = (36.0, 10.0) if blocked else (36.0, 4.0)
+    for _ in range(n_goals):
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(21, Team.AWAY, dx, dy)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 10.0),
+                _pl(21, Team.AWAY, dx, dy)],
+                ball=Ball(x=min(33.0 + (i + 1), 40.5), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_corridor_goals_flags_the_open_corridors():
+    """A lövésvonaltól távol álló védő → nyitott folyosós gólok."""
+    from handball.pipeline.defense import corridor_goals
+
+    rec = corridor_goals(_crg_match(False))["away"]
+    assert rec["goals"] >= 5 and rec["open"] == rec["goals"]
+    assert rec["verdict"] == "nyitott folyosókon kapják a gólokat"
+
+
+def test_corridor_goals_flags_the_closed_wall():
+    """A lövés útjában álló védő → zárt fal mögött is bekapják."""
+    from handball.pipeline.defense import corridor_goals
+
+    rec = corridor_goals(_crg_match(True))["away"]
+    assert rec["open"] == 0
+    assert rec["verdict"] == "zárt fal mögött is bekapják"
+
+
+def test_corridor_goals_needs_enough_goals():
+    """Kevés (5-nél kevesebb) kapott gólnál nincs ítélet."""
+    from handball.pipeline.defense import corridor_goals
+
+    rec = corridor_goals(_crg_match(False, n_goals=3))["away"]
+    assert rec["verdict"] is None

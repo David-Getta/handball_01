@@ -1738,6 +1738,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "középkezdés";
   }
 
+  // Folyosó-gólok: nyitott folyosón kapják-e a gólokat (5+ kapott
+  // gól; 50%+ nyitott, 20%- zárt — a backend-kulccsal azonos
+  // küszöbök).
+  String? _corridorGoals(Map<String, dynamic> r) {
+    final goals = ((r["crg_goals"] as num?) ?? 0).toInt();
+    final open = ((r["crg_open"] as num?) ?? 0).toInt();
+    if (goals < 5) return null;
+    final pct = 100.0 * open / goals;
+    if (pct >= 50.0) {
+      return "nyitott folyosókon kapják a gólokat ($open/$goals "
+          "előtt senki nem állt a lövésvonalban) · betörést és "
+          "gyors átmenetet erőltess, a faluk nem ér oda";
+    }
+    if (pct <= 20.0) {
+      return "zárt fal mögött is bekapják (csak $open/$goals nyitott "
+          "folyosón) · a kapus-oldal a kérdés: kimozgatás és pontos "
+          "elhelyezés kell";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5660,6 +5681,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Zavartalan előkészítők", _unpressuredAssists(r)!],
       if (_gapPunishment(r) != null)
         ["Csere-büntetés", _gapPunishment(r)!],
+      if (_corridorGoals(r) != null)
+        ["Folyosó-gólok", _corridorGoals(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

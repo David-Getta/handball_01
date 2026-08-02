@@ -649,6 +649,8 @@ class ScoutingReport:
     gpn_gap_s: float = 0.0
     gpn_gaps: int = 0
     gpn_conceded: int = 0
+    crg_goals: int = 0
+    crg_open: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2429,6 +2431,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "— a cseréjük pillanata bizonyítottan támadható: gyors "
             "középkezdés és azonnali befejezés, amíg hiányzik az "
             "emberük.")
+
+    # Folyosó-gólok: a faluk vagy a kapusuk a gyenge pont.
+    if rep.crg_goals >= 5:
+        _crg_pct = 100.0 * rep.crg_open / rep.crg_goals
+        if _crg_pct >= 50.0:
+            keys.append(
+                f"Nyitott folyosókon kapják a gólokat "
+                f"({rep.crg_open}/{rep.crg_goals} előtt senki nem "
+                "állt a lövésvonalban) — a faluk nem ér oda: a "
+                "betörést és a gyors átmenetet erőltessétek, ne a "
+                "kintről lövöldözést.")
+        elif _crg_pct <= 20.0:
+            keys.append(
+                f"Zárt fal mögött is bekapják (csak {rep.crg_open}/"
+                f"{rep.crg_goals} gól jött nyitott folyosón) — a "
+                "kapus-oldaluk a kérdés: türelmes, kimozgató játék "
+                "után a pontos elhelyezés visz be, nem az erő.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6321,6 +6340,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.gpn_gap_s = gpnrec["gap_s"]
         rep.gpn_gaps = gpnrec["gaps"]
         rep.gpn_conceded = gpnrec["conceded"]
+        from .defense import corridor_goals as _crg
+        crgrec = _crg(match, config)[team.value]
+        rep.crg_goals = crgrec["goals"]
+        rep.crg_open = crgrec["open"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8740,6 +8763,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 218) Az ő nyitott folyosóik × a ti éles kontrátok: a betörés
+    # és a gyors átmenet a nyitott ajtón megy be.
+    if (opp.crg_goals >= 5 and own.fbc_breaks >= 5):
+        _crg218 = 100.0 * opp.crg_open / opp.crg_goals
+        _fbc218 = 100.0 * own.fbc_goals / max(1, own.fbc_breaks)
+        if _crg218 >= 50.0 and _fbc218 >= 40.0:
+            plan.append(
+                f"Nyitott folyosókon kapják a gólokat ({opp.crg_open}"
+                f"/{opp.crg_goals} előtt senki nem állt a "
+                f"lövésvonalban), ti pedig élesen fejezitek be a "
+                f"kontrát (a lerohanásaitok {_fbc218:.0f}%-a gól) — "
+                "minden szerzés után azonnali indulás: a faluk "
+                "lassan zár vissza, a folyosó nyitva vár.")
 
     # 217) Az ő gólba kerülő csere-lyukaik × a ti gyors
     # újraindításotok: a cseréjük a ti órajeletek.
@@ -12195,6 +12232,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         gpn_gap_s=round(sum(r.gpn_gap_s for r in reports), 1),
         gpn_gaps=sum(r.gpn_gaps for r in reports),
         gpn_conceded=sum(r.gpn_conceded for r in reports),
+        crg_goals=sum(r.crg_goals for r in reports),
+        crg_open=sum(r.crg_open for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

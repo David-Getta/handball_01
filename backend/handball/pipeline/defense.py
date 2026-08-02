@@ -3454,3 +3454,85 @@ def unpressured_assists(match, config=None) -> dict:
             elif pct <= UPA_TIGHT_PCT:
                 rec["verdict"] = "az előkészítőre rálépnek"
     return out
+
+
+# Folyosó-gólok: a lövő és a kapu-közép közti szakasztól ennél
+# közelebb álló védő zárja a folyosót; ennyi kapott gól kell az
+# ítélethez, és e feletti / alatti nyitott arány a nyitott folyosók,
+# illetve a zárt fal mögötti gólok jele.
+CRG_LANE_M = 1.5
+CRG_MIN_GOALS = 5
+CRG_OPEN_PCT = 50.0
+CRG_CLOSED_PCT = 20.0
+
+
+def corridor_goals(match, config=None) -> dict:
+    """Folyosó-gólok: NYITOTT FOLYOSÓN kapják-e a gólokat.
+
+    Az átvert védők a lövő melletti párharcot nézik — ez a lövés
+    útját: a kapott góloknál volt-e VALAKI a lövő és a kapu-közép
+    közti sávban (a lövésvonaltól CRG_LANE_M-en belül). A nyitott
+    folyosós gól a fal-zárás és a visszazárás hibája; a zárt fal
+    mögött is bekapott gól a blokk-kéz és a kapus kérdése.
+
+    Edzőileg: aki nyitott folyosókon kapja a gólokat, annál a
+    betörést és a gyors átmenetet kell erőltetni — a fal nem ér oda;
+    aki zárt fal mögött is bekapja, annál a lövés ereje/elhelyezése
+    ütötte át a rendszert — ellene a türelmes, kimozgató játék kell,
+    nem a rá-lövöldözés.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals", "open",
+    "open_pct", "verdict"} — az open_pct/verdict None CRG_MIN_GOALS
+    alatt; a verdict "nyitott folyosókon kapják a gólokat" / "zárt
+    fal mögött is bekapják" / None.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .calibration import COURT_WIDTH_M
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    def _lane_dist(px, py, ax, ay, bx, by):
+        # pont távolsága az (a→b) szakasztól
+        vx, vy = bx - ax, by - ay
+        L2 = vx * vx + vy * vy
+        if L2 <= 0:
+            return math.hypot(px - ax, py - ay)
+        t = max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / L2))
+        return math.hypot(px - (ax + t * vx), py - (ay + t * vy))
+
+    out = {side: {"goals": 0, "open": 0, "open_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") != "goal":
+            continue
+        deff = "away" if sh["team"] == "home" else "home"
+        i0 = idx_of.get(sh["t"])
+        if i0 is None:
+            continue
+        goal_x = config.attacks_toward_x(Team(sh["team"]))
+        gy = COURT_WIDTH_M / 2.0
+        blocked = any(
+            p.team.value == deff and p.role != "kapus"
+            and _lane_dist(p.x, p.y, sh["x"], sh["y"], goal_x, gy)
+            <= CRG_LANE_M
+            for p in match.frames[i0].players)
+        rec = out[deff]
+        rec["goals"] += 1
+        if not blocked:
+            rec["open"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["goals"] >= CRG_MIN_GOALS:
+            pct = 100.0 * rec["open"] / rec["goals"]
+            rec["open_pct"] = round(pct, 1)
+            if pct >= CRG_OPEN_PCT:
+                rec["verdict"] = "nyitott folyosókon kapják a gólokat"
+            elif pct <= CRG_CLOSED_PCT:
+                rec["verdict"] = "zárt fal mögött is bekapják"
+    return out
