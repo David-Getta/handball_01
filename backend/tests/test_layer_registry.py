@@ -412,3 +412,21 @@ def test_reteg_katalogus_friss():
     assert int(m.group(1)) == len(layers), (
         f"a katalógus {m.group(1)} réteget mond, a registry "
         f"{len(layers)}-t — futtasd: python -m scripts.layer_catalog")
+
+
+def test_kliens_csempe_helperek_leteznek():
+    """Minden csempe-sorban hivatkozott Dart-helper legyen deklarálva
+    is — a hiányzó helper csak a Flutter-buildnél bukna ki (mint a
+    v0.1.23-as kiadásnál a névütközés), itt fogjuk meg előbb."""
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    src = dart.read_text(encoding="utf-8")
+    declared = set(re.findall(
+        r'^\s+(?:String\?|Widget|bool|int|double|List<[^>]+>\??)\s+'
+        r'(_\w+)\(', src, flags=re.M))
+    used = set(re.findall(r'\[\"[^\"]+\", (_\w+)\(r\)!\]', src))
+    assert len(used) > 200, "a csempe-olvasás elromlott"
+    missing = sorted(used - declared)
+    assert not missing, f"csempéből hivatkozott, de hiányzó helperek: {missing}"

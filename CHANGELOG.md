@@ -5,6 +5,10 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Őr-teszt: csempe-helper hivatkozás-teljesség** — minden
+  felderítés-csempében hivatkozott Dart-helpernek deklarálva is kell
+  lennie; a hiányzó helper eddig csak a Flutter-buildnél bukott volna
+  ki, mostantól a pytest fogja meg.
 - **Gól-minta** (`goal_patterns`): a gólok tér-ujjlenyomata
   (oldal-sáv × lövéstáv, pl. "bal-távoli") — ha a gólok nagy része
   ugyanabból a mintából jön, egyetlen fal-igazítás elzárja a fő
