@@ -34,7 +34,7 @@ if _BACKEND not in sys.path:
 from handball.models.tracking import Match  # noqa: E402
 from handball.pipeline.validation import (  # noqa: E402
     parse_truth_csv, validate_events, validation_ledger_row,
-    validation_report_html)
+    validation_report_html, validation_template_csv)
 
 
 def _load_match(path: str) -> Match:
@@ -47,7 +47,13 @@ def main(argv=None) -> int:
         description="Pontosság-validáció kézi ground-truth ellen.")
     ap.add_argument("match_json", help="A feldolgozott meccs JSON-ja "
                     "(pl. data/matches/<id>.json).")
-    ap.add_argument("truth_csv", help="A kézi eseménylista CSV/TSV fájlja.")
+    ap.add_argument("truth_csv", nargs="?", default=None,
+                    help="A kézi eseménylista CSV/TSV fájlja "
+                         "(elhagyható, ha --sablon fut).")
+    ap.add_argument("--sablon", default=None, metavar="SABLON_CSV",
+                    help="Előtöltött annotációs sablont ír ide a motor "
+                         "felismeréseiből, és kilép — ezt javítja kézzel "
+                         "az annotátor (lásd docs/ANNOTACIOS_UTMUTATO.md).")
     ap.add_argument("--tol", type=float, default=3.0,
                     help="Idő-tűrés másodpercben (alap: 3.0).")
     ap.add_argument("--out", default=None,
@@ -61,6 +67,16 @@ def main(argv=None) -> int:
 
     if not os.path.exists(args.match_json):
         print(f"HIBA: nincs ilyen meccs-fájl: {args.match_json}",
+              file=sys.stderr)
+        return 2
+    if args.sablon:
+        match = _load_match(args.match_json)
+        Path(args.sablon).write_text(validation_template_csv(match),
+                                     encoding="utf-8")
+        print(f"Annotációs sablon kiírva: {args.sablon}")
+        return 0
+    if not args.truth_csv:
+        print("HIBA: kell a kézi CSV (vagy futtasd --sablon móddal).",
               file=sys.stderr)
         return 2
     if not os.path.exists(args.truth_csv):

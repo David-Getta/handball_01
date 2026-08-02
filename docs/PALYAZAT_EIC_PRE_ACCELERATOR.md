@@ -23,6 +23,22 @@ https://eic.ec.europa.eu/eic-funding-opportunities/eic-pre-accelerator_en
   (mentorálás, coaching, befektetői és vevői kapcsolatok) — és a
   program deklarált kimenete a **felkészítés az EIC Acceleratorra**.
 
+## 1/b. A mi célunk: beadás 2027. május 5-től, 500 000 – 1 000 000 €
+
+- **Cél-dátum: 2027. május 5-től pályázunk** — a 2027-re várt
+  felhívásra készülünk, minden akcióterv-határidő ehhez igazítva
+  (lásd 6. pont).
+- **Cél-keret: 500 000 – 1 000 000 € összköltségű projekt.** Fontos a
+  program-korlát: a Pre-accelerator **grant-plafonja 500 000 €**, a
+  támogatási ráta 70%. A sáv így értelmezhető:
+  - **500 k€ grant** (a plafon) + 30% önerő → **~714 k€
+    összköltségvetésű projekt** — ez a fő terv;
+  - ha a cél az 1 M€ felé nyújtózik, a különbözetet önerő/befektetés
+    fedezi, VAGY a nagyobb igényt a következő lépcső, az **EIC
+    Accelerator** (max. 2,5 M€ grant — `docs/PALYAZAT_EIC.md`) viszi.
+- A pénzügyi tervet (6. pont) a maximális, 500 k€-s grantra és
+  ~714 k€ összköltségre méretezzük, 24 hónapra.
+
 ## 2. Ki pályázhat? (jogosultsági ellenőrzőlista)
 
 | Feltétel | Állapot nálunk |
@@ -119,7 +135,17 @@ pilot-klubok száma, elemzett meccsek száma, fizető licencek.
    `docs/EXECUTIVE_SUMMARY_EN.md`).
 6. ⬜ **Pénzügyi terv** 2 évre, munkacsomagokkal és KPI-kkal.
 7. ⬜ Felhívás-figyelés (NKFIH NCP + Funding & Tenders értesítő), és
-   beadás a 2027-es felhívásra.
+   **beadás 2027. május 5-től** az akkor nyitott felhívásra.
+
+**Visszafelé ütemezve a 2027. május 5-i cél-dátumtól:**
+
+| Mikorra | Mi legyen kész |
+|---|---|
+| 2026 Q4 | cégalapítás + IPR a cégben; annotált valós-videó mérések futnak (mérési jegyzőkönyv telik) |
+| 2027 Q1 | TRL 4 lezárva valós adaton; 3–5 pilot-klub LOI aláírva (`docs/LOI_SABLON.md`) |
+| 2027. március | Part B kész angolul (`docs/PART_B_VAZLAT_EN.md` kitöltve), pénzügyi terv 500 k€ grantra + önerő-igazolás |
+| 2027. április | NCP-vel átnézetés, portál-regisztráció (EU Login, PIC-szám), próba-feltöltés |
+| **2027. május 5.** | **beadás** |
 
 ## 7. Kapcsolódó dokumentumok és források
 

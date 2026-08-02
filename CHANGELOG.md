@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Pályázati csomag bővítése**: Part B angol vázlat munkacsomagokkal
+  és KPI-kkal (`docs/PART_B_VAZLAT_EN.md`), kétnyelvű pilot
+  LOI-sablon (`docs/LOI_SABLON.md`), annotációs útmutató a valós
+  meccses pontosság-méréshez (`docs/ANNOTACIOS_UTMUTATO.md`) + a
+  `scripts/validate_match` új `--sablon` módja (előtöltött annotációs
+  CSV-t ír a motor felismeréseiből). A terv rögzíti a cél-beadást
+  (2027. május 5-től) és a cél-keretet (500 k€ grant-plafon, ~714 k€
+  összköltség; az 1 M€ feletti igény az Accelerator-lépcső), a
+  visszafelé ütemezett mérföldkövekkel.
 - **Mérési jegyzőkönyv (TRL-4 evidencia-napló)**: új
   `docs/MERESI_JEGYZOKONYV.md` napló + `validation_ledger_row` a
   validációs modulban + `--jegyzokonyv` kapcsoló a
