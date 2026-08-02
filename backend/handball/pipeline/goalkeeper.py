@@ -461,6 +461,51 @@ def outlet_speed(match: Match, config=None) -> dict:
 EMPTY_NET_GOAL_MARGIN_S = 5.0
 
 
+# Kapus-gólpassz: a kapus indítása közvetlen gólpasszt ér.
+GKA_MIN = 2   # ennyi kapus-gólpassztól ítélet
+
+
+def gk_assists(match: Match, config=None) -> dict:
+    """Kapus-gólpassz: hány gól indul KÖZVETLENÜL a kapus kezéből.
+
+    A kontra-forrás (break_sources) azt mondja meg, miből indul a
+    lerohanás — ez azt, amikor az indítás maga a gólpassz: a gólhoz
+    bekönyvelt assziszt a saját kapusé. Ez a leggyorsabb gól a
+    kézilabdában — egyetlen hosszú kéz, és a visszazárás előtt vége.
+
+    Edzőileg: aki ellen a kapus-indítás gólpasszt ér, ott a lövés
+    pillanatában kell hátraindulni — az első hazafutó dolga nem a
+    labda, hanem a kapus-passz sávjának elvágása; a saját oldalon a
+    kapus hosszú keze tudatosan edzhető fegyver (kifutó szélső +
+    azonnali hosszú indítás a védés után).
+
+    Visszatérés csapatonként: {"assists", "verdict"} — a verdict
+    "a kapusuk indítása gólpasszt ér" (GKA_MIN-től), különben None.
+    """
+    from .event_detection import EventType, detect_events
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    gk_ids = {"home": set(), "away": set()}
+    for f in match.frames:
+        for p in f.players:
+            if p.role == ROLE_GOALKEEPER:
+                gk_ids[p.team.value].add(p.track_id)
+    out = {side: {"assists": 0, "verdict": None}
+           for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        aid = (e.detail or {}).get("assist_id")
+        side = getattr(e.team, "value", e.team)
+        if aid is not None and aid in gk_ids[side]:
+            out[side]["assists"] += 1
+    for rec in out.values():
+        if rec["assists"] >= GKA_MIN:
+            rec["verdict"] = "a kapusuk indítása gólpasszt ér"
+    return out
+
+
 # Kapus-sorozat: egymás utáni védések — a "rákapó" kapus jele.
 GKS_STREAK_LEN = 3      # ennyi egymás utáni védés számít sorozatnak
 GKS_MIN_ON_TARGET = 6   # ennyi kapura tartó lövés alatt nincs ítélet

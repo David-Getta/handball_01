@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kapus-gólpassz** (`gk_assists`): hány gól indul közvetlenül a
+  kapus kezéből (a gólhoz bekönyvelt assziszt a kapusé) — a
+  leggyorsabb gól a kézilabdában. Edzői olvasat: ellene a lövés
+  pillanatában kell hátraindulni, az első hazafutó a kapus-passz
+  sávját vágja el; a saját oldalon a kapus hosszú keze tudatos
+  fegyver. Felületek: `/analyze` + meccs-csomag (`gk_assists`), edzői
+  összefoglaló, felderítés (edzői kulcs + 238-as meccsterv-szabály),
+  edzés-fókusz (259-es szabály, tükör-oldalra), kliens-csempe.
 - **Passz-irány-állás** (`pass_direction_by_score`): a passz-irányok
   az eredményjelző szerint — az előnyben megugró hátrajáratás tudatos
   időölés (és letámadható minta), a hátrányban erőltetett előre-passz

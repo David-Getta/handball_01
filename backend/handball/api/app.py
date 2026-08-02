@@ -3559,6 +3559,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_assists
+            res["gk_assists"] = gk_assists(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4544,6 +4549,8 @@ def create_app():
                 from ..pipeline.attack_types import pass_direction_by_score
                 _layer("pass_direction_by_score",
                        lambda: pass_direction_by_score(match))
+                from ..pipeline.goalkeeper import gk_assists
+                _layer("gk_assists", lambda: gk_assists(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

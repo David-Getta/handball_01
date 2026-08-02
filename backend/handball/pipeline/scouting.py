@@ -703,6 +703,7 @@ class ScoutingReport:
     pds_lead_back: int = 0
     pds_rest_passes: int = 0
     pds_rest_back: int = 0
+    gka_assists: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2745,6 +2746,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_pds_rest:.0f}%) — ha ők vezetnek, magas "
                 "letámadás: az első hátrapasszra rá lehet lépni, az "
                 "időölésükből szerzés lesz.")
+
+    # Kapus-gólpassz: a kapus-indítás sávját kell zárni.
+    if rep.gka_assists >= 2:
+        keys.append(
+            f"A kapusuk keze gólt indít ({rep.gka_assists} "
+            "kapus-gólpassz) — a lövésetek pillanatában induljon a "
+            "visszafutás: az első hazafutó dolga nem a labda, hanem "
+            "a kapus-passz sávjának elvágása.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6735,6 +6744,8 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
                                + pdsrec["level"]["passes"])
         rep.pds_rest_back = (pdsrec["trailing"]["back"]
                              + pdsrec["level"]["back"])
+        from .goalkeeper import gk_assists as _gka
+        rep.gka_assists = _gka(match, config)[team.value]["assists"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9154,6 +9165,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 238) Az ő kapus-gólpasszaik × a ti visszazárásotok: a hosszú
+    # kéz sávja elvágható.
+    if (opp.gka_assists >= 2 and own.transition_turnovers >= 5):
+        _gka238 = (100.0 * own.transition_goals_against
+                   / own.transition_turnovers)
+        if _gka238 <= 20.0:
+            plan.append(
+                f"A kapusuk keze gólt indít ({opp.gka_assists} "
+                f"kapus-gólpassz), a ti visszazárásotok viszont bírja "
+                f"(labdavesztés után csak {_gka238:.0f}% a gyors "
+                "kapott gól) — a lövésetek pillanatában az első "
+                "hazafutó a kapus-passz sávját vágja el: a hosszú "
+                "indításuk így levegőben hal meg.")
 
     # 237) Az ő előny-hátrajáratásuk × a ti aktív kezetek: az
     # időölésükből szerzés lehet.
@@ -12961,6 +12986,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pds_lead_back=sum(r.pds_lead_back for r in reports),
         pds_rest_passes=sum(r.pds_rest_passes for r in reports),
         pds_rest_back=sum(r.pds_rest_back for r in reports),
+        gka_assists=sum(r.gka_assists for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

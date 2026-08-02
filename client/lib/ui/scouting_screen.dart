@@ -1896,6 +1896,16 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Kapus-gólpassz: a kapus keze gólt indít (2+ — a backenddel
+  // azonos küszöb).
+  String? _gkAssists(Map<String, dynamic> r) {
+    final assists = ((r["gka_assists"] as num?) ?? 0).toInt();
+    if (assists < 2) return null;
+    return "a kapusuk indítása gólpasszt ér ($assists kapus-gólpassz) "
+        "· a lövésed pillanatában induljon a visszafutás: az első "
+        "hazafutó a kapus-passz sávját vágja el";
+  }
+
   // Passz-irány-állás: előnyben hátrajáratás (állapotonként 10+
   // passz, 12 pp többlet — a backenddel azonos küszöbök).
   String? _passDirectionByScore(Map<String, dynamic> r) {
@@ -6040,6 +6050,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Szünet-váltás", _attackMixShift(r)!],
       if (_passDirectionByScore(r) != null)
         ["Passz-irány-állás", _passDirectionByScore(r)!],
+      if (_gkAssists(r) != null)
+        ["Kapus-gólpassz", _gkAssists(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

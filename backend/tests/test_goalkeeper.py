@@ -2087,3 +2087,71 @@ def test_gk_save_streaks_no_streak_no_verdict():
     assert h["on_target"] == 6
     assert h["streaks"] == 0
     assert h["verdict"] is None
+
+
+def _gka_match(n_goals: int):
+    """n_goals vendég-gól, mindegyik a vendég kapus (90-es) hosszú
+    indításából: kapus-passz a szélsőnek (10,10), aki az x=0 kapuba lő."""
+    meta = MatchMeta(match_id="gka", home_team="H", away_team="A", fps=25.0)
+
+    def pl(tid, team, x, y, role=None):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y, role=role)
+
+    def cast():
+        return [pl(90, Team.AWAY, 38.0, 10.0, role="kapus"),
+                pl(31, Team.AWAY, 10.0, 10.0)]
+
+    frames = []
+    t = 0
+    for _ in range(n_goals):
+        # A kapusnál a labda (1,5 mp).
+        for _ in range(38):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=38.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Hosszú indítás a szélsőnek: 0,5/kocka, 38 → 10.
+        x = 38.0
+        while x > 10.0:
+            x -= 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=max(x, 10.0), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # A szélső rövid tartás után (gólpassz-ablakon belül) lő.
+        for _ in range(12):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+            t += 1
+        x = 10.0
+        while x > -0.5:
+            x -= 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=max(x, -0.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # Zóna-reset: a labda a felezőn pihen.
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(meta, frames)
+
+
+def test_gk_assists_counts_keeper_assists():
+    """3 kapus-indításból lőtt vendég-gól → kapus-gólpassz ítélet."""
+    from handball.pipeline.goalkeeper import gk_assists
+
+    gka = gk_assists(_gka_match(3))
+    assert gka["away"]["assists"] == 3
+    assert gka["away"]["verdict"] == "a kapusuk indítása gólpasszt ér"
+    assert gka["home"]["assists"] == 0
+    assert gka["home"]["verdict"] is None
+
+
+def test_gk_assists_few_samples_none():
+    """Egyetlen kapus-gólpassz → még nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_assists
+
+    gka = gk_assists(_gka_match(1))
+    assert gka["away"]["assists"] == 1
+    assert gka["away"]["verdict"] is None

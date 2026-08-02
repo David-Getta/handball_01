@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 259) Kapus-gólpassz: ha az ellenfél kapusa gólpasszt ért
+    # ellenünk, a lövés utáni azonnali hátraindulás a téma.
+    try:
+        from .goalkeeper import gk_assists
+        gka259 = gk_assists(match, config)
+        for side, other in (("home", "away"), ("away", "home")):
+            rec259 = gka259[other]
+            if rec259["verdict"] is None:
+                continue
+            add(side, "vedekezes", "Kapus-indítás sávzárás",
+                f"az ellenfél kapusa {rec259['assists']} gólpasszt "
+                "ért ellenünk — a lövésünk után senki nem vágta el "
+                "a hosszú indítás sávját",
+                "kapus-indítás elleni zárás: lövés-gyakorlat, ahol a "
+                "lövés PILLANATÁBAN egy kijelölt ember (a lövéstől "
+                "legtávolabbi) sarkon fordul és a felező-sávba fut — "
+                "a kapus-kidobás elé érés pont, a mögé engedés "
+                "büntetőkör")
+    except Exception:
+        pass
     # 258) Passz-irány-állás: ha az ellenfél előnyben hátrajáratott
     # ellenünk, a vezetés elleni letámadás a téma.
     try:

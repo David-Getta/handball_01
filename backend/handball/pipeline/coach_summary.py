@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kapus-gólpassz: a kapus keze gólt indít.
+    try:
+        from .goalkeeper import gk_assists
+        gka = gk_assists(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gka = gka[side]
+            if rec_gka["verdict"] is None:
+                continue
+            body += (f" A(z) {name} leggyorsabb fegyvere a kapus keze: "
+                     f"{rec_gka['assists']} gólpasszt ért az indítása — "
+                     "az ellenfélnek a lövés pillanatában kell "
+                     "hátraindulnia.")
+    except Exception:
+        pass
     # Passz-irány-állás: merre jár a labda az állás szerint.
     try:
         from .attack_types import pass_direction_by_score
