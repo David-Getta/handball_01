@@ -3584,6 +3584,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import fading_scorers
+            res["fading_scorers"] = fading_scorers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4583,6 +4588,9 @@ def create_app():
                        lambda: attack_side_shift(match))
                 from ..pipeline.momentum import black_window
                 _layer("black_window", lambda: black_window(match))
+                from ..pipeline.momentum import fading_scorers
+                _layer("fading_scorers",
+                       lambda: fading_scorers(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

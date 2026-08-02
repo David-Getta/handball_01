@@ -1343,6 +1343,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 264) Eltűnő ember: ha a kulcsemberünk a második félidőre elhal,
+    # a terhelés-menedzsment a téma.
+    try:
+        from .momentum import fading_scorers
+        fdr264 = fading_scorers(match, config)
+        for side in ("home", "away"):
+            rec264 = fdr264[side]
+            if rec264["verdict"] is None:
+                continue
+            add(side, "taktika", "Terhelés-menedzsment",
+                f"{rec264['verdict']} — a második félidőre elfogy a "
+                "kulcsemberünk",
+                "terhelés-menedzsment: a kulcsember az első félidőben "
+                "rövidebb blokkokban játszik (tervezett 2-3 perces "
+                "pihenőkkel), a szünet után pedig friss lábbal, "
+                "kijelölt figurákra érkezik — az edzésen a fáradásos "
+                "befejezés-gyakorlat az övé")
+    except Exception:
+        pass
     # 263) Fekete ötperc: ha egy öt perces ablakunk rendre elúszik, a
     # tervezett csere-blokk és az időkérés-készenlét a téma.
     try:

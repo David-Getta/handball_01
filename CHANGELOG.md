@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Eltűnő ember** (`fading_scorers`): játékosonkénti gól-részvétel
+  (gól + gólpassz) félidőnként — akinél az első félidei termelés a
+  másodikra elhal, azt az első 30 percben kell megfogni. Edzői
+  olvasat: friss őrzővel dupla figyelem az elején; a saját oldalon
+  terhelés-menedzsment. Felületek: `/analyze` + meccs-csomag
+  (`fading_scorers`), edzői összefoglaló, felderítés (játékosonkénti
+  lista meccsek közt összegezve + edzői kulcs + 243-as
+  meccsterv-szabály), edzés-fókusz (264-es szabály), kliens-csempe.
 - **Fekete ötperc** (`black_window`): öt perces ablakonként a dobott
   és kapott gólok, a legrosszabb ablak ítélettel — a felderítésben az
   ablak-darabszámok meccsek közt összegződnek, így a visszatérő fekete

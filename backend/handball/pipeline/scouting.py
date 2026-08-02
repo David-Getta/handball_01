@@ -718,6 +718,7 @@ class ScoutingReport:
     sds_sh_counts: dict = field(default_factory=dict)
     blw_scored: dict = field(default_factory=dict)
     blw_conceded: dict = field(default_factory=dict)
+    fdr_players: list = field(default_factory=list)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2827,6 +2828,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"{rep.blw_conceded.get(_blw_worst, 0)}) — oda "
             "időzítsétek a nyomást: friss sor, letámadás és gyors "
             "középkezdések pont abban az ablakban.")
+
+    # Eltűnő ember: az első félidőben kell megfogni.
+    for _fdr_p in (rep.fdr_players or []):
+        if _fdr_p["fh"] >= 3 and _fdr_p["fh"] >= 3 * max(1, _fdr_p["sh"]):
+            keys.append(
+                f"A(z) {_fdr_p['player_id']}. számú emberük az első "
+                f"félidőben él ({_fdr_p['fh']} gól-részvétel), a "
+                f"másodikban eltűnik ({_fdr_p['sh']}) — az első 30 "
+                "percben duplán fogjátok (friss őrzővel), a második "
+                "félidő ellene magától megoldódik.")
+            break
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6847,6 +6859,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.blw_conceded = {b: v["conceded"]
                             for b, v in blwrec["buckets"].items()
                             if v["conceded"]}
+        from .momentum import fading_scorers as _fdr
+        rep.fdr_players = [
+            dict(p) for p in _fdr(match, config)[team.value]["players"]
+            if p["fh"] or p["sh"]]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -7946,6 +7962,19 @@ def _merge_seven_earners(reports) -> list:
                                      + int(e["earned"]))
     return [{"player_id": pid, "earned": n}
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
+def _merge_fdr_players(reports) -> list:
+    """Játékosonkénti félidei gól-részvételek pontos összegzése."""
+    tally: dict = {}
+    for r in reports:
+        for e in (r.fdr_players or []):
+            rec = tally.setdefault(e["player_id"], [0, 0])
+            rec[0] += int(e["fh"])
+            rec[1] += int(e["sh"])
+    return [{"player_id": pid, "fh": fh, "sh": sh}
+            for pid, (fh, sh) in sorted(tally.items(),
+                                        key=lambda kv: -kv[1][0])]
 
 
 def _merge_susp_earners(reports) -> list:
@@ -9266,6 +9295,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 243) Az ő eltűnő kulcsemberük × a ti fegyelmezett kezdésetek: az
+    # első 30 perc a meccs ellene.
+    _fdr243 = next(
+        (p for p in (opp.fdr_players or [])
+         if p["fh"] >= 3 and p["fh"] >= 3 * max(1, p["sh"])), None)
+    if _fdr243 is not None and own.suspensions <= 2:
+        plan.append(
+            f"A(z) {_fdr243['player_id']}. számú emberük az első "
+            f"félidőben él ({_fdr243['fh']} gól-részvétel), aztán "
+            f"eltűnik ({_fdr243['sh']}), ti pedig kiállítás nélkül "
+            f"tudtok keményen védekezni ({own.suspensions} "
+            "kiállítás) — az első 30 percre tegyétek rá a legjobb "
+            "őrzőtöket friss lábbal: ha az elejét megfogjátok, a "
+            "második félidő ellene magától megoldódik.")
 
     # 242) Az ő fekete ötpercük × a ti arany-ablakotok: időzített
     # nyomás oda, ahol ők rendre elsüllyednek.
@@ -13208,6 +13252,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.blw_scored for r in reports),
         blw_conceded=_merge_count_dicts(
             r.blw_conceded for r in reports),
+        fdr_players=_merge_fdr_players(reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

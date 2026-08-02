@@ -1456,3 +1456,68 @@ def test_black_window_small_deficit_none():
     blw = black_window(Match(_meta(), frames))
     assert blw["home"]["worst_diff"] == -1
     assert blw["home"]["verdict"] is None
+
+
+def _fdr_away_goal(frames, t, shooter_id):
+    """Egy vendég-gól a megadott lövővel: (10,10) → x=0 kapu."""
+    for _ in range(30):
+        frames.append(Frame(t=t,
+                            players=[_pl(shooter_id, Team.AWAY, 10.0, 10.0)],
+                            ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+        t += 1
+    x = 10.0
+    while x > -0.5:
+        x -= 0.5
+        frames.append(Frame(t=t,
+                            players=[_pl(shooter_id, Team.AWAY, 10.0, 10.0)],
+                            ball=Ball(x=max(x, -0.5), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Hazai érintés: a következő vendég-birtoklás ne kapcsolódjon
+    # össze fantom vendég-passzá (gólpassz-jóváírást okozna).
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return t
+
+
+def test_fading_scorers_flags_first_half_star():
+    """A 9-es 3 első félidei gólja után a másodikban csendben marad →
+    eltűnő ember."""
+    from handball.pipeline.momentum import fading_scorers
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        t = _fdr_away_goal(frames, t, 9)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(2):
+        t = _fdr_away_goal(frames, t, 8)
+
+    fdr = fading_scorers(Match(_meta(), frames))
+    a = fdr["away"]
+    assert a["top"] == 9
+    assert a["verdict"] == ("a(z) 9. az első félidőben él "
+                            "(3 gól-részvétel), a másodikban "
+                            "eltűnik (0)")
+    assert fdr["home"]["verdict"] is None
+
+
+def test_fading_scorers_needs_halftime():
+    """Felismert szünet nélkül nincs ítélet."""
+    from handball.pipeline.momentum import fading_scorers
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        t = _fdr_away_goal(frames, t, 9)
+    fdr = fading_scorers(Match(_meta(), frames))
+    assert fdr["away"]["verdict"] is None
+    assert fdr["away"]["players"] == []

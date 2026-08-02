@@ -850,6 +850,70 @@ def goal_droughts(match: Match, config=None) -> dict:
     return out
 
 
+# Eltűnő ember: első félidei gól-részvétel után a másodikban csend.
+FDR_MIN_FH = 3   # ennyi első félidei gól-részvétel (gól+gólpassz) kell
+FDR_MAX_SH = 1   # a második félidőben legfeljebb ennyi = eltűnt
+
+
+def fading_scorers(match: Match, config=None) -> dict:
+    """Eltűnő ember: KI él az első félidőben, és tűnik el a másodikra.
+
+    A hajrá-emberek (clutch_scorers) azt mondják meg, ki van ott a
+    végén — ez a fordítottját: játékosonként számoljuk a
+    gól-részvételt (gól vagy gólpassz) félidőnként, és megkeressük,
+    akinél az első félidei termelés a másodikra elhal. A tipikus ok
+    a kondíció vagy az, hogy az ellenfél a szünet után ráállt — de a
+    felderítésnek mindegy is: az ilyen embert az ELSŐ félidőben kell
+    megfogni, a második magától megoldódik.
+
+    Edzőileg: az eltűnő kulcsember ellen az első 30 perc a meccs —
+    duplán rá kell menni, cserével frissen tartott őrzővel; a saját
+    eltűnő emberünknél a terhelés-menedzsment (korábbi pihentetés,
+    rövidebb blokkok) a téma.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "fh",
+    "sh"}] (fh szerint csökkenő), "top", "verdict"} — a verdict
+    "a(z) N. az első félidőben él (F gól-részvétel), a másodikban
+    eltűnik (S)" (FDR_MIN_FH/FDR_MAX_SH szerint), felismert szünet
+    nélkül None.
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out = {side: {"players": [], "top": None, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        side = getattr(e.team, "value", e.team)
+        half = "fh" if e.t <= ht else "sh"
+        for pid in (e.player_id, (e.detail or {}).get("assist_id")):
+            if pid is None:
+                continue
+            rec = tally[side].setdefault(pid, {"fh": 0, "sh": 0})
+            rec[half] += 1
+    for side in ("home", "away"):
+        players = [{"player_id": pid, **rec}
+                   for pid, rec in tally[side].items()]
+        players.sort(key=lambda r: (-r["fh"], r["sh"]))
+        out[side]["players"] = players
+        for r in players:
+            if r["fh"] >= FDR_MIN_FH and r["sh"] <= FDR_MAX_SH:
+                out[side]["top"] = r["player_id"]
+                out[side]["verdict"] = (
+                    f"a(z) {r['player_id']}. az első félidőben él "
+                    f"({r['fh']} gól-részvétel), a másodikban "
+                    f"eltűnik ({r['sh']})")
+                break
+    return out
+
+
 # Fekete ötperc: ekkora bukott gólkülönbség egy öt perces ablakban.
 BLW_BUCKET_S = 300.0
 BLW_MIN_DEFICIT = 3

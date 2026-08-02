@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Eltűnő ember: aki az első félidőben él, a másodikra elhal.
+    try:
+        from .momentum import fading_scorers
+        fdr = fading_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fdr = fdr[side]
+            if rec_fdr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kulcsemberéről kiderült: "
+                     f"{rec_fdr['verdict']} — az ellenfélnek az első "
+                     "30 perc a meccs ellene.")
+    except Exception:
+        pass
     # Fekete ötperc: melyik öt perc süllyed el.
     try:
         from .momentum import black_window
