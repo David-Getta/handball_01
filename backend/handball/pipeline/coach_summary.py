@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Szünet-váltás: átrendezik-e a támadójátékot a szünet után.
+    try:
+        from .attack_types import attack_mix_shift
+        ams = attack_mix_shift(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ams = ams[side]
+            if rec_ams["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szünet-képe: {rec_ams['verdict']} "
+                     f"(a támadás-mix {rec_ams['shift_pp']:.0f} "
+                     "százalékpontot rendeződött át).")
+    except Exception:
+        pass
     # Lepattanó-esés: melyik félidőben él a második roham.
     try:
         from .attack_types import second_chance_fade

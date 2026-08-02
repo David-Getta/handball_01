@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Szünet-váltás** (`attack_mix_shift`): a támadás-mix átrendeződése
+  a két félidő között (össz-eltolódás százalékpontban). A nagy váltás
+  alkalmazkodó, jól vezetett csapat jele; a mozdulatlan mix a
+  kiszámíthatóé. Edzői olvasat: az átrendező ellen a szünetben a
+  váltásukra készülj; a mozdulatlan ellen egy terv kitart 60 percen
+  át; a saját oldalon a B-terv hiánya edzés-téma. Felületek:
+  `/analyze` + meccs-csomag (`attack_mix_shift`), edzői összefoglaló,
+  felderítés (edzői kulcs két iránnyal + 236-os meccsterv-szabály),
+  edzés-fókusz (257-es szabály), kliens-csempe.
 - **Lepattanó-esés** (`second_chance_fade`): a visszaharcolt második
   rohamok részaránya félidőnként — a hajrára elfogyó lepattanó-harc
   tiszta fáradás-jel (a lepattanó a láb és az akarat játéka). Edzői

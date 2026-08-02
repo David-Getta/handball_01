@@ -1896,6 +1896,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Szünet-váltás: a támadás-mix átrendeződése (félidőnként 6+
+  // támadás, 30/10 pp küszöb — a backenddel azonos, a mix a
+  // lerohanás+gyors indítás részarányából becsülve).
+  String? _attackMixShift(Map<String, dynamic> r) {
+    final fhA = ((r["ams_fh_attacks"] as num?) ?? 0).toInt();
+    final shA = ((r["ams_sh_attacks"] as num?) ?? 0).toInt();
+    if (fhA < 6 || shA < 6) return null;
+    final fhB = ((r["ams_fh_break"] as num?) ?? 0).toInt();
+    final shB = ((r["ams_sh_break"] as num?) ?? 0).toInt();
+    final fhQ = ((r["ams_fh_quick"] as num?) ?? 0).toInt();
+    final shQ = ((r["ams_sh_quick"] as num?) ?? 0).toInt();
+    final shift = ((100.0 * fhB / fhA - 100.0 * shB / shA).abs() +
+            (100.0 * fhQ / fhA - 100.0 * shQ / shA).abs()) /
+        2.0;
+    if (shift >= 30.0) {
+      return "a szünet után átrendezik a támadójátékukat "
+          "(~${shift.toStringAsFixed(0)} pp mix-váltás) · a "
+          "szünetedben a váltásukra készülj, ne a folytatásra";
+    }
+    if (shift <= 10.0) {
+      return "félidőn át ugyanazt játsszák (alig mozduló támadás-mix) "
+          "· egy jól előkészített védő-terv kitart 60 percen át";
+    }
+    return null;
+  }
+
   // Lepattanó-esés: a hajrára elfogyó második roham (félidőnként 3+
   // lehetőség, 25 pp esés — a backenddel azonos küszöbök).
   String? _secondChanceFade(Map<String, dynamic> r) {
@@ -5995,6 +6021,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gólpassz-esés", _assistFade(r)!],
       if (_secondChanceFade(r) != null)
         ["Lepattanó-esés", _secondChanceFade(r)!],
+      if (_attackMixShift(r) != null)
+        ["Szünet-váltás", _attackMixShift(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

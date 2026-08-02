@@ -1215,6 +1215,71 @@ SHTIM_EARLY_PCT = 45.0
 SHTIM_LATE_AVG_S = 22.0
 
 
+# Szünet-váltás: a támadás-mix átrendeződése a két félidő között.
+AMS_MIN_ATTACKS_HALF = 6   # félidőnként ennyi támadás kell az ítélethez
+AMS_SHIFT_PP = 30.0        # ekkora össz-átrendeződés = tudatos váltás
+AMS_STATIC_PP = 10.0       # ez alatt: félidőn át ugyanaz a játék
+
+
+def attack_mix_shift(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Szünet-váltás: ÁTRENDEZIK-E a támadójátékot a szünet után.
+
+    A támadás-mix (attack_mix) a meccs egészét nézi — ez a két
+    félidőt külön: a támadás-típusok részarányát hasonlítjuk össze, és
+    az össz-átrendeződést mérjük (a részarány-eltolódások összege
+    /2, százalékpontban). A nagy váltás jól vezetett, alkalmazkodó
+    csapat jele: az első félidei képe NEM a második félidei igazsága.
+    A mozdulatlan mix a kiszámíthatóé: egy védő-terv kitart 60 percen
+    át.
+
+    Edzőileg: az átrendező csapat ellen a szünetben nem a folytatásra,
+    hanem a VÁLTÁSRA kell készülni (mit hoznak, ha ez nem megy); a
+    mozdulatlan ellen elég egy terv, és azt lehet egész meccsen
+    csiszolni. A saját oldalon a B-terv hiánya edzés-téma.
+
+    Visszatérés csapatonként: {"fh_attacks", "sh_attacks", "fh_mix",
+    "sh_mix", "shift_pp", "verdict"} — a fh_mix/sh_mix típusonkénti
+    darabszám; shift_pp/verdict None felismert szünet nélkül vagy
+    félidőnként AMS_MIN_ATTACKS_HALF-nál kevesebb támadásnál; a
+    verdict "a szünet után átrendezik a támadójátékukat" / "félidőn
+    át ugyanazt játsszák" / None.
+    """
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    out = {side: {"fh_attacks": 0, "sh_attacks": 0,
+                  "fh_mix": {}, "sh_mix": {}, "shift_pp": None,
+                  "verdict": None} for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    mixes = {side: {"fh": out[side]["fh_mix"],
+                    "sh": out[side]["sh_mix"]}
+             for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        half = "fh" if a["start_frame"] <= ht else "sh"
+        rec = mixes[a["team"]][half]
+        rec[a["type"]] = rec.get(a["type"], 0) + 1
+        out[a["team"]][half + "_attacks"] += 1
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["fh_attacks"] < AMS_MIN_ATTACKS_HALF \
+                or rec["sh_attacks"] < AMS_MIN_ATTACKS_HALF:
+            continue
+        fh, sh = mixes[side]["fh"], mixes[side]["sh"]
+        types = set(fh) | set(sh)
+        shift = sum(abs(100.0 * fh.get(tp, 0) / rec["fh_attacks"]
+                        - 100.0 * sh.get(tp, 0) / rec["sh_attacks"])
+                    for tp in types) / 2.0
+        rec["shift_pp"] = round(shift, 1)
+        if shift >= AMS_SHIFT_PP:
+            rec["verdict"] = "a szünet után átrendezik a támadójátékukat"
+        elif shift <= AMS_STATIC_PP:
+            rec["verdict"] = "félidőn át ugyanazt játsszák"
+    return out
+
+
 # Lepattanó-esés: a megnyert második rohamok részaránya félidőnként.
 SCF_MIN_MISSES = 3   # félidőnként ennyi lepattanó-lehetőség kell
 SCF_DROP_PP = 25.0   # ekkora részarány-változás számít mintázatnak

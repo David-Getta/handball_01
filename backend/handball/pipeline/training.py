@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 257) Szünet-váltás: ha félidőn át ugyanazt játsszuk, a B-terv a
+    # téma — a kiszámítható mixre az ellenfél ráállhat.
+    try:
+        from .attack_types import attack_mix_shift
+        ams257 = attack_mix_shift(match, config)
+        for side in ("home", "away"):
+            rec257 = ams257[side]
+            if rec257["verdict"] != "félidőn át ugyanazt játsszák":
+                continue
+            add(side, "taktika", "B-terv a szünetre",
+                f"félidőn át ugyanazt játsszuk (a támadás-mixünk "
+                f"mindössze {rec257['shift_pp']:.0f} százalékpontot "
+                "mozdult a szünet után) — az ellenfél védő-terve "
+                "végig ránk állhat",
+                "B-terv építése: az edzésmeccs második felében "
+                "KÖTELEZŐ a mix-váltás (a pad hangos jelére a felállt "
+                "játékról indításokra vagy fordítva) — a cél, hogy a "
+                "szünet utáni első öt percben más képet mutassunk")
+    except Exception:
+        pass
     # 256) Lepattanó-esés: ha a hajrára elfogy a lepattanó-harcunk, a
     # fáradásos lepattanó-munka a téma — a második labda akarat-játék.
     try:

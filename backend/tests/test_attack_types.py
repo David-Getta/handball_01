@@ -3518,3 +3518,74 @@ def test_second_chance_fade_needs_halftime():
     scf = second_chance_fade(Match(meta, frames))
     assert scf["home"]["verdict"] is None
     assert scf["home"]["gap_pp"] is None
+
+
+def _ams_half_frames(t0, n, fast: bool):
+    """n hazai támadás: fast=True esetén 3 mp-es lerohanások (x=21→33),
+    különben 8 mp-es felállt támadások (x=30-nál állva)."""
+    frames = []
+    t = t0
+    for _ in range(n):
+        if fast:
+            for k in range(int(3 * 25)):
+                x = 21.0 + 12.0 * (k + 1) / (3 * 25)
+                frames.append(Frame(t=t,
+                                    players=[_pl(1, Team.HOME, x, 10.0)],
+                                    ball=Ball(x=x, y=10.0, confidence=1.0)))
+                t += 1
+        else:
+            for _ in range(int(8 * 25)):
+                frames.append(Frame(t=t,
+                                    players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                    ball=Ball(x=30.0, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+            t += 1
+    return frames, t
+
+
+def test_attack_mix_shift_flags_the_adapting_team():
+    """1. félidő csupa felállt, 2. félidő csupa lerohanás → átrendezik."""
+    from handball.pipeline.attack_types import attack_mix_shift
+
+    meta = MatchMeta(match_id="ams", home_team="H", away_team="A", fps=25.0)
+    frames, t = _ams_half_frames(0, 6, fast=False)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    sh, t = _ams_half_frames(t, 6, fast=True)
+    frames += sh
+
+    ams = attack_mix_shift(Match(meta, frames))
+    h = ams["home"]
+    assert h["fh_attacks"] >= 6 and h["sh_attacks"] >= 6
+    assert h["shift_pp"] is not None and h["shift_pp"] >= 30.0
+    assert h["verdict"] == "a szünet után átrendezik a támadójátékukat"
+    assert ams["away"]["verdict"] is None
+
+
+def test_attack_mix_shift_flags_the_static_team():
+    """Mindkét félidő ugyanaz a felállt játék → félidőn át ugyanaz;
+    szünet-jel nélkül nincs ítélet."""
+    from handball.pipeline.attack_types import attack_mix_shift
+
+    meta = MatchMeta(match_id="ams2", home_team="H", away_team="A", fps=25.0)
+    frames, t = _ams_half_frames(0, 6, fast=False)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    sh, t = _ams_half_frames(t, 6, fast=False)
+    frames += sh
+
+    ams = attack_mix_shift(Match(meta, frames))
+    assert ams["home"]["shift_pp"] is not None
+    assert ams["home"]["shift_pp"] <= 10.0
+    assert ams["home"]["verdict"] == "félidőn át ugyanazt játsszák"
+
+    # Szünet nélkül: nincs ítélet.
+    nob, t2 = _ams_half_frames(0, 6, fast=False)
+    ams2 = attack_mix_shift(Match(meta, nob))
+    assert ams2["home"]["verdict"] is None

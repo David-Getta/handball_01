@@ -693,6 +693,12 @@ class ScoutingReport:
     scf_fh_won: int = 0
     scf_sh_misses: int = 0
     scf_sh_won: int = 0
+    ams_fh_attacks: int = 0
+    ams_fh_break: int = 0
+    ams_fh_quick: int = 0
+    ams_sh_attacks: int = 0
+    ams_sh_break: int = 0
+    ams_sh_quick: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2701,6 +2707,28 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"lepattanó {_scf_fh:.0f}% → {_scf_sh:.0f}%) — "
                 "záráskor a blokk és a védés utáni labda a tiétek: "
                 "a kimaradt lövésük ott már a támadásuk vége.")
+
+    # Szünet-váltás: kire készülj a második félidőben.
+    if rep.ams_fh_attacks >= 6 and rep.ams_sh_attacks >= 6:
+        _ams_shift = (abs(100.0 * rep.ams_fh_break / rep.ams_fh_attacks
+                          - 100.0 * rep.ams_sh_break
+                          / rep.ams_sh_attacks)
+                      + abs(100.0 * rep.ams_fh_quick
+                            / rep.ams_fh_attacks
+                            - 100.0 * rep.ams_sh_quick
+                            / rep.ams_sh_attacks)) / 2.0
+        if _ams_shift >= 30.0:
+            keys.append(
+                f"A szünet után átrendezik a támadójátékukat "
+                f"(~{_ams_shift:.0f} százalékpontos mix-váltás) — a "
+                "ti szünetetekben ne a folytatásra készüljetek, "
+                "hanem arra, MIT hoznak, ha az első félidei nem megy.")
+        elif _ams_shift <= 10.0:
+            keys.append(
+                "Félidőn át ugyanazt játsszák (a támadás-mixük alig "
+                "mozdul a szünet után) — egy jól előkészített "
+                "védő-terv kitart ellenük 60 percen át: azt "
+                "csiszoljátok, ne váltogassatok.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6674,6 +6702,15 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.scf_fh_won = scfrec["fh_won"]
         rep.scf_sh_misses = scfrec["sh_misses"]
         rep.scf_sh_won = scfrec["sh_won"]
+        from .attack_types import AttackType as _AT
+        from .attack_types import attack_mix_shift as _ams
+        amsrec = _ams(match, config)[team.value]
+        rep.ams_fh_attacks = amsrec["fh_attacks"]
+        rep.ams_sh_attacks = amsrec["sh_attacks"]
+        rep.ams_fh_break = amsrec["fh_mix"].get(_AT.FAST_BREAK.value, 0)
+        rep.ams_sh_break = amsrec["sh_mix"].get(_AT.FAST_BREAK.value, 0)
+        rep.ams_fh_quick = amsrec["fh_mix"].get(_AT.QUICK.value, 0)
+        rep.ams_sh_quick = amsrec["sh_mix"].get(_AT.QUICK.value, 0)
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9093,6 +9130,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 236) Az ő mozdulatlan támadás-mixük × a ti bejáratott faltok:
+    # egy terv kitart ellenük 60 percen át.
+    if (opp.ams_fh_attacks >= 6 and opp.ams_sh_attacks >= 6
+            and own.defense_main != "—"):
+        _ams236 = (abs(100.0 * opp.ams_fh_break / opp.ams_fh_attacks
+                       - 100.0 * opp.ams_sh_break
+                       / opp.ams_sh_attacks)
+                   + abs(100.0 * opp.ams_fh_quick
+                         / opp.ams_fh_attacks
+                         - 100.0 * opp.ams_sh_quick
+                         / opp.ams_sh_attacks)) / 2.0
+        if _ams236 <= 10.0:
+            plan.append(
+                f"Félidőn át ugyanazt játsszák (a támadás-mixük alig "
+                f"mozdul a szünet után), nektek pedig bejáratott "
+                f"fő-falatok van ({own.defense_main}) — ne "
+                f"váltogassatok: a {own.defense_main} ellenük egész "
+                "meccsen kitart, a szünetben a finomhangolásra "
+                "menjen az idő, ne új tervre.")
 
     # 235) Az ő elfogyó lepattanó-harcuk × a ti blokkoló falatok: a
     # zárásban minden második labda a tiétek.
@@ -12855,6 +12912,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         scf_fh_won=sum(r.scf_fh_won for r in reports),
         scf_sh_misses=sum(r.scf_sh_misses for r in reports),
         scf_sh_won=sum(r.scf_sh_won for r in reports),
+        ams_fh_attacks=sum(r.ams_fh_attacks for r in reports),
+        ams_fh_break=sum(r.ams_fh_break for r in reports),
+        ams_fh_quick=sum(r.ams_fh_quick for r in reports),
+        ams_sh_attacks=sum(r.ams_sh_attacks for r in reports),
+        ams_sh_break=sum(r.ams_sh_break for r in reports),
+        ams_sh_quick=sum(r.ams_sh_quick for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
