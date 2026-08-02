@@ -1896,6 +1896,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Teendő-rangsor: honnan jön a legtöbb jelzés (4+ jelzés, 2+ egy
+  // családban — a backenddel azonos küszöbök).
+  String? _priorityFocus(Map<String, dynamic> r) {
+    final fams = (r["prf_families"] as Map?)?.cast<String, dynamic>();
+    if (fams == null || fams.isEmpty) return null;
+    var total = 0;
+    String? top;
+    var topN = 0;
+    fams.forEach((k, v) {
+      final c = (v as num).toInt();
+      total += c;
+      if (c > topN) {
+        topN = c;
+        top = k;
+      }
+    });
+    if (total < 4 || topN < 2 || top == null) return null;
+    const hu = {
+      "ár": "a hibáik megfizetett ára",
+      "ember": "néven nevezhető emberi minták",
+      "szünet": "a szünet utáni átrendeződésük",
+      "fáradás": "az időbeli visszaesésük",
+      "állás": "az eredményjelző-függő szokásaik",
+    };
+    return "a róluk gyűlt $total jelzésből $topN ide mutat: "
+        "${hu[top] ?? top} · a felkészülés súlypontját is ide tedd";
+  }
+
   // Befejező-váltás: egymás utáni befejezések ugyanattól (8+ lövés,
   // 35/10%-os ismétlés — a backenddel azonos küszöbök).
   String? _finisherRotation(Map<String, dynamic> r) {
@@ -6321,6 +6349,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_priorityFocus(r) != null)
+        ["Felkészülés-súlypont", _priorityFocus(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

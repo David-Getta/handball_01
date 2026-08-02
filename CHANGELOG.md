@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Teendő-rangsor** (`priority_findings`, új `pipeline/priorities`
+  modul): a megszólaló ítéleteket összegyűjti a rangsorba vont
+  rétegekből, és kimondott edzői elv szerint rendezi — **ár → ember →
+  szünet → fáradás → állás** (a hiba megfizetett ára a legdrágább
+  információ, a néven nevezett minta a legkönnyebben kiosztható
+  feladat, a szünet-váltás felülírja a meccs közbeni döntést, a
+  fáradás az utolsó húsz percet tervezi, az állás-függő minta pedig
+  feltételes). Nem újabb mérés: háromszáz rétegből öt döntés. Ha
+  semmi nem szólal meg, üres marad — nem találgat. Felületek:
+  `/analyze` + meccs-csomag (`priority_findings`), edzői összefoglaló
+  (a rangsor élével), meccs-jelentés új "Teendő-rangsor" szekciója a
+  szabály-blokk elején, felderítés (családonkénti jelzés-számok
+  meccsek közt összegezve + edzői kulcs + 251-es meccsterv-szabály),
+  edzés-fókusz (272-es szabály: heti súlypont), kliens-csempe.
 - **Befejező-váltás** (`finisher_rotation`): hányszor lő ugyanaz az
   ember kétszer egymás után (a kimenetel mindegy — a védekezés a lövő
   személyére áll rá). Hat mezőnyjátékosnál a véletlen ismétlődés ~17%,

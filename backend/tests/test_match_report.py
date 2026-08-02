@@ -1557,3 +1557,36 @@ def test_report_match_card_en_section():
     assert "Match card (EN)" in html
     assert "Lions 2–0 Bears" in html
     assert "Top scorer for Lions: player #1 with 2 goals." in html
+
+
+def test_report_teendo_rangsor_section():
+    """Két családot kiváltó meccsen a jelentés Teendő-rangsor
+    szekciója megjelenik, az ár-jelzéssel az élen."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, Team)
+
+    meta = MatchMeta(match_id="rep-prf", home_team="Hazai",
+                     away_team="Vendég", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(3):
+        for _ in range(int(36 * 25)):
+            frames.append(Frame(t=t, players=[
+                PlayerPosition(track_id=1, team=Team.HOME, x=30.0,
+                               y=10.0),
+                PlayerPosition(track_id=2, team=Team.HOME, x=25.0,
+                               y=10.0, role="kapus"),
+            ], ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(3 * 25)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    m = Match(meta, frames)
+
+    html = match_report_html(m, {}, [], None)
+    assert "Teendő-rangsor (mivel foglalkozz)" in html
+    assert "Elhúzódó támadás ára" in html
+    # A rangsor-elv is ki van írva a jelentésben.
+    assert "ár → ember → szünet → fáradás → állás" in html

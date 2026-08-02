@@ -1194,6 +1194,35 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
                 for e in sevens)
             parts_html.append("<h2>Hétméteresek</h2><ul>" + lis + "</ul>")
 
+        # Teendő-rangsor: a szabály-blokk ELEJÉN, mert ez a jelentés
+        # legsűrűbb része — háromszáz rétegből öt döntés.
+        try:
+            from .priorities import PRF_FAMILY_ORDER, priority_findings
+            prf = priority_findings(match)
+            cols = []
+            for key, name in (("home", home), ("away", away)):
+                rec = prf.get(key) or {}
+                if not rec.get("top"):
+                    continue
+                lis = "".join(
+                    f"<li><b>{escape(it['label'])}</b> "
+                    f"<small>({escape(it['family'])})</small><br>"
+                    f"{escape(it['verdict'])}</li>"
+                    for it in rec["top"])
+                cols.append(f'<div class="col"><b>{escape(name)}</b>'
+                            f"<ol>{lis}</ol>"
+                            f"<small>{rec['total']} megszólaló "
+                            f"jelzésből</small></div>")
+            if cols:
+                parts_html.append(
+                    "<h2>Teendő-rangsor (mivel foglalkozz)</h2>"
+                    "<p>A sorrend kimondott edzői elv szerint: "
+                    + escape(" → ".join(PRF_FAMILY_ORDER))
+                    + ".</p>"
+                    '<div class="cols">' + "".join(cols) + "</div>")
+        except Exception:
+            pass
+
         # Angol meccs-kártya: nemzetközi megosztáshoz egy tömör,
         # tényszerű angol blokk a jelentés szabály-részének elején.
         try:

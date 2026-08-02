@@ -1343,6 +1343,30 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 272) Teendő-rangsor: ha egy területről jön a jelzések többsége,
+    # a heti edzés súlypontját is oda kell tenni.
+    try:
+        from .priorities import priority_findings
+        prf272 = priority_findings(match, config)
+        for side in ("home", "away"):
+            rec272 = prf272[side]
+            fams = rec272.get("families") or {}
+            total = sum(fams.values())
+            if total < 4:
+                continue
+            top, n = max(fams.items(), key=lambda kv: kv[1])
+            if n < 2:
+                continue
+            add(side, "taktika", "Heti súlypont",
+                f"a rólunk gyűlt {total} jelzésből {n} ugyanabba az "
+                f"irányba mutat ({top}-család) — szétszórt "
+                "javítgatás helyett egy területre kell koncentrálni",
+                "heti súlypont: a hét edzéseinek fő blokkja erre az "
+                "egy területre menjen (a többi legfeljebb "
+                "bemelegítés-szinten), és a hét végén ugyanezt a "
+                "réteget nézzük vissza — mérhető javulás vagy nem")
+    except Exception:
+        pass
     # 271) Befejező-váltás: ha ugyanaz fejez be sorozatban, a
     # befejezés-rotáció a téma — a védekezés ráállhat a lövőnkre.
     try:

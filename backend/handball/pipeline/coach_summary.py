@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Teendő-rangsor: mivel foglalkozzon a jövő héten.
+    try:
+        from .priorities import priority_findings
+        prf = priority_findings(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_prf = prf[side]
+            if not rec_prf["top"]:
+                continue
+            first = rec_prf["top"][0]
+            body += (f" A(z) {name} jövő heti fő fókusza a rangsor "
+                     f"tetejéről: {first['label']} — "
+                     f"{first['verdict']} (összesen "
+                     f"{rec_prf['total']} megszólaló jelzés).")
+    except Exception:
+        pass
     # Befejező-váltás: ugyanaz fejez-e be sorozatban.
     try:
         from .xg import finisher_rotation

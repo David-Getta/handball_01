@@ -3629,6 +3629,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.priorities import priority_findings
+            res["priority_findings"] = priority_findings(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4653,6 +4658,9 @@ def create_app():
                 from ..pipeline.xg import finisher_rotation
                 _layer("finisher_rotation",
                        lambda: finisher_rotation(match))
+                from ..pipeline.priorities import priority_findings
+                _layer("priority_findings",
+                       lambda: priority_findings(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

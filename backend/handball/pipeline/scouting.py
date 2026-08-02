@@ -733,6 +733,7 @@ class ScoutingReport:
     gpt_patterns: dict = field(default_factory=dict)
     frt_shots: int = 0
     frt_repeats: int = 0
+    prf_families: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2938,6 +2939,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Teendő-rangsor: honnan jön a legtöbb jelzés ellenük.
+    if rep.prf_families:
+        _prf_total = sum(rep.prf_families.values())
+        _prf_top, _prf_n = max(rep.prf_families.items(),
+                               key=lambda kv: kv[1])
+        if _prf_total >= 4 and _prf_n >= 2:
+            _prf_hu = {
+                "ár": "a hibáik megfizetett ára",
+                "ember": "néven nevezhető emberi minták",
+                "szünet": "a szünet utáni átrendeződésük",
+                "fáradás": "az időbeli visszaesésük",
+                "állás": "az eredményjelző-függő szokásaik",
+            }.get(_prf_top, _prf_top)
+            keys.append(
+                f"A róluk gyűlt {_prf_total} jelzés közül a legtöbb "
+                f"({_prf_n}) ide mutat: {_prf_hu} — a felkészülés "
+                "súlypontját is ide tegyétek, ne szórjátok szét a "
+                "figyelmet.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6994,6 +7014,9 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         frtrec = _frt(match, config)[team.value]
         rep.frt_shots = frtrec["shots"]
         rep.frt_repeats = frtrec["repeats"]
+        from .priorities import priority_findings as _prf
+        rep.prf_families = dict(
+            _prf(match, config)[team.value]["families"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9457,6 +9480,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 251) Az ő jelzés-súlypontjuk × a ti tiszta lapotok: oda
+    # koncentráljátok a felkészülést, ahol a legtöbb fogás van.
+    if opp.prf_families:
+        _prf251_total = sum(opp.prf_families.values())
+        _prf251_top, _prf251_n = max(opp.prf_families.items(),
+                                     key=lambda kv: kv[1])
+        if (_prf251_total >= 4 and _prf251_n >= 2
+                and sum(own.prf_families.values()) < _prf251_total):
+            plan.append(
+                f"A róluk gyűlt {_prf251_total} jelzésből {_prf251_n} "
+                f"ugyanabba az irányba mutat ({_prf251_top}-család), "
+                f"nálatok pedig kevesebb a támadható minta — a heti "
+                "felkészülés súlypontját tegyétek erre az egy "
+                "területre: ott van a legtöbb fogás rajtuk, és ti "
+                "közben kevesebb felületet adtok.")
 
     # 250) Az ő sorozat-befejezőjük × a ti kettőző védekezésetek: a
     # második lövése előtt el lehet kapni.
@@ -13532,6 +13571,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.gpt_patterns for r in reports),
         frt_shots=sum(r.frt_shots for r in reports),
         frt_repeats=sum(r.frt_repeats for r in reports),
+        prf_families=_merge_count_dicts(
+            r.prf_families for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
