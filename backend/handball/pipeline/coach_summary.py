@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Elhúzódó támadás ára: megéri-e a hosszú akció.
+    try:
+        from .tactics import slow_attack_cost
+        sac = slow_attack_cost(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sac = sac[side]
+            if rec_sac["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hosszú akcióiról kiderült: "
+                     f"{rec_sac['verdict']} ({rec_sac['scored']}/"
+                     f"{rec_sac['slow']} elhúzódó támadás ért gólt).")
+    except Exception:
+        pass
     # Indítás-hiba ára: gólba kerülnek-e az elszórt indítások.
     try:
         from .goalkeeper import outlet_punishment

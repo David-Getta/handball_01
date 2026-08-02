@@ -667,6 +667,8 @@ class ScoutingReport:
     pmb_punished: int = 0
     olp_lost: int = 0
     olp_punished: int = 0
+    sac_slow: int = 0
+    sac_scored: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2572,6 +2574,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"/{rep.olp_lost} elveszett kihozatal után jött gyors "
             "gól) — a magas letámadás bizonyítottan termel ellenük: "
             "a kapus-indításokat vadásszátok.")
+
+    # Elhúzódó támadás ára: megéri-e nekik a hosszú akció.
+    if rep.sac_slow >= 3:
+        _sac_pct = 100.0 * rep.sac_scored / rep.sac_slow
+        if _sac_pct <= 25.0:
+            keys.append(
+                f"Az elhúzódó támadásaik üresen zárulnak ({rep.sac_scored}"
+                f"/{rep.sac_slow} hosszú akció ért gólt) — türelmes, "
+                "hibátlan védekezéssel a passzív jel nektek dolgozik: "
+                "ne kockáztassatok, várjátok ki a kényszerű lövést.")
+        elif _sac_pct >= 60.0:
+            keys.append(
+                f"A hosszú akcióikat is gólra váltják ({rep.sac_scored}"
+                f"/{rep.sac_slow}) — a 35. másodpercben is teljes "
+                "koncentráció: a falban senki nem kapcsolhat ki.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6500,6 +6517,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         olprec = _olp(match, config)[team.value]
         rep.olp_lost = olprec["lost"]
         rep.olp_punished = olprec["punished"]
+        from .tactics import slow_attack_cost as _sac
+        sacrec = _sac(match, config)[team.value]
+        rep.sac_slow = sacrec["slow"]
+        rep.sac_scored = sacrec["scored"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8919,6 +8940,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 227) Az ő üresjáratos hosszú támadásaik × a ti fegyelmezett
+    # faltok: a passzív jel nektek dolgozik.
+    if (opp.sac_slow >= 3 and own.suspensions <= 2):
+        _sac227 = 100.0 * opp.sac_scored / opp.sac_slow
+        if _sac227 <= 25.0:
+            plan.append(
+                f"Az elhúzódó támadásaik üresen zárulnak "
+                f"({opp.sac_scored}/{opp.sac_slow} hosszú akciójuk "
+                f"ért gólt), a ti falatok pedig fegyelmezett "
+                f"({own.suspensions} kiállítás) — türelmes, hiba "
+                "nélküli védekezéssel hagyjátok kifutni az akcióikat: "
+                "a passzív jel nektek dolgozik, ne kockáztassatok "
+                "korai szerzést.")
 
     # 226) Az ő gólba kerülő indítás-hibáik × a ti sáv-záró
     # védekezésetek: a kihozatal-vadászat bizonyítottan termel.
@@ -12529,6 +12564,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         pmb_punished=sum(r.pmb_punished for r in reports),
         olp_lost=sum(r.olp_lost for r in reports),
         olp_punished=sum(r.olp_punished for r in reports),
+        sac_slow=sum(r.sac_slow for r in reports),
+        sac_scored=sum(r.sac_scored for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

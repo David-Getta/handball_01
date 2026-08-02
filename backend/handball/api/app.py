@@ -3504,6 +3504,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.tactics import slow_attack_cost
+            res["slow_attack_cost"] = slow_attack_cost(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4458,6 +4463,9 @@ def create_app():
                 from ..pipeline.goalkeeper import outlet_punishment
                 _layer("outlet_punishment",
                        lambda: outlet_punishment(match))
+                from ..pipeline.tactics import slow_attack_cost
+                _layer("slow_attack_cost",
+                       lambda: slow_attack_cost(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

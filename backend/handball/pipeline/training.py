@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 248) Elhúzódó támadás ára: ha a hosszú akcióink üresen zárulnak,
+    # a támadás-lezárás időre a téma — a türelem most nem terem gólt.
+    try:
+        from .tactics import slow_attack_cost
+        sac248 = slow_attack_cost(match, config)
+        for side in ("home", "away"):
+            rec248 = sac248[side]
+            if rec248["verdict"] != \
+                    "az elhúzódó támadásaik üresen zárulnak":
+                continue
+            add(side, "tamadas", "Támadás-lezárás időre",
+                f"az elhúzódó támadásaink üresen zárulnak "
+                f"({rec248['scored']}/{rec248['slow']} hosszú akció "
+                "ért gólt) — a passzív jel árnyékában körbejáratunk "
+                "terv nélkül",
+                "támadás-lezárás időre: a figura a 25. másodpercben "
+                "indul kötelezően, 35 mp-nél síp — ami addig nem "
+                "zárul lövéssel, az mínusz pont; a játékvezető "
+                "passzív jelet mutat, hogy a döntéskényszer beépüljön")
+    except Exception:
+        pass
     # 247) Indítás-hiba ára: ha az elszórt indításaink gólba kerülnek,
     # az indítás-biztonság sürgős — az ár már bizonyított.
     try:

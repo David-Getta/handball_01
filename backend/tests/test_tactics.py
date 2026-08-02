@@ -226,6 +226,49 @@ def test_slow_attacks_flags_long_possession():
     assert sa["away"]["attacks"] == 0
 
 
+def test_slow_attack_cost_idle_verdict():
+    """3 elhúzódó (36 mp-es) hazai támadás gól nélkül → üresjárat."""
+    from handball.pipeline.tactics import slow_attack_cost
+    meta = MatchMeta(match_id="sac", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(3):
+        # 36 mp hazai támadás a támadó térfélen, birtoklással.
+        for _ in range(int(36 * 25)):
+            frames.append(Frame(t=t,
+                                players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        # Megszakítás: szabad labda a felezőnél — új szakasz kezdődik.
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    sac = slow_attack_cost(Match(meta, frames))
+    assert sac["home"]["slow"] == 3
+    assert sac["home"]["scored"] == 0
+    assert sac["home"]["scored_pct"] == 0.0
+    assert sac["home"]["verdict"] == "az elhúzódó támadásaik üresen zárulnak"
+    assert sac["away"]["slow"] == 0
+    assert sac["away"]["verdict"] is None
+
+
+def test_slow_attack_cost_few_samples_none():
+    """Egyetlen elhúzódó támadás → kevés minta, nincs ítélet."""
+    from handball.pipeline.tactics import slow_attack_cost
+    meta = MatchMeta(match_id="sac2", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(int(36 * 25)):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 10.0)],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+    sac = slow_attack_cost(Match(meta, frames))
+    assert sac["home"]["slow"] == 1
+    assert sac["home"]["scored_pct"] is None
+    assert sac["home"]["verdict"] is None
+
+
 def test_attack_sides_direction_normalized():
     """A hazai (a +x kapura támadva) y=3-nál játszik → 'bal'; a vendég
     (a -x kapura) ugyanennél az y-nál a SAJÁT jobbján játszik."""

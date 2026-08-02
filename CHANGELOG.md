@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Elhúzódó támadás ára** (`slow_attack_cost`): a passzív-veszélyes,
+  35 mp-nél hosszabb támadó-akciók megtérülése — hány zárul góllal a
+  szakasz alatt vagy közvetlenül utána. Edzői olvasat: az üresjáratos
+  hosszú támadás ellen türelmes, hibátlan védekezéssel a passzív jel a
+  védőnek dolgozik; a saját oldalon a támadás-lezárást (időre futtatott
+  figura) kell edzeni. Felületek: `/analyze` + meccs-csomag
+  (`slow_attack_cost`), edzői összefoglaló, felderítés (edzői kulcs +
+  227-es meccsterv-szabály), edzés-fókusz (248-as szabály), kliens-csempe.
 - **Indítás-hiba ára**: GÓLBA KERÜLNEK-E az elszórt kapus-indítások.
   Az indítás-biztonság azt méri, hány kihozatal vész el — ez az árát:
   az elveszett indítás utáni 10 másodpercen belüli ellenfél-gólok

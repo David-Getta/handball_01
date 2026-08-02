@@ -1896,6 +1896,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Elhúzódó támadás ára: üresen zárulnak-e a hosszú akcióik (3+
+  // hosszú akció, 25% alatti gól-arány — a backenddel azonos küszöb).
+  String? _slowAttackCost(Map<String, dynamic> r) {
+    final slow = ((r["sac_slow"] as num?) ?? 0).toInt();
+    final scored = ((r["sac_scored"] as num?) ?? 0).toInt();
+    if (slow < 3) return null;
+    final pct = 100.0 * scored / slow;
+    if (pct <= 25.0) {
+      return "az elhúzódó támadásaik üresen zárulnak ($scored/$slow "
+          "hosszú akció ért gólt) · türelmes védekezéssel a passzív "
+          "jel nektek dolgozik";
+    }
+    if (pct >= 60.0) {
+      return "a hosszú akcióikat is gólra váltják ($scored/$slow) · "
+          "a 35. másodpercben is teljes koncentráció a falban";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5836,6 +5855,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kihagyás-büntetés", _punishedMisses(r)!],
       if (_outletPunishment(r) != null)
         ["Indítás-hiba ára", _outletPunishment(r)!],
+      if (_slowAttackCost(r) != null)
+        ["Elhúzódó támadás ára", _slowAttackCost(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

@@ -245,6 +245,95 @@ def slow_attacks(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Elhúzódó támadás ára: megéri-e a passzív-veszélyes hosszú akció.
+SAC_TAIL_S = 4.0      # a szakasz vége után ennyin belüli gól még az akcióé
+SAC_MIN_SLOW = 3      # ennyi elhúzódó támadás alatt nincs ítélet
+SAC_IDLE_PCT = 25.0   # gól-arány ez alatt: üresjárat
+SAC_PAY_PCT = 60.0    # gól-arány e felett: érő türelem
+
+
+def slow_attack_cost(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Elhúzódó támadás ára: a passzív-veszélyes hosszú akciók HOZAMA.
+
+    Az elhúzódó támadások (slow_attacks) a kitettséget mérik — ez a
+    megtérülésüket: a SLOW_ATTACK_S-nél hosszabb támadó-szakaszok
+    közül hány zárul góllal (a szakasz alatt vagy SAC_TAIL_S-en
+    belül utána). A türelem önmagában nem érték: ha a hosszú akció
+    rendre üresen fut ki, az nem türelmes játék, hanem terv nélküli
+    körbejáratás a passzív jel árnyékában.
+
+    Edzőileg: az üresjáratos hosszú támadás ellen elég türelmesen,
+    hiba nélkül védekezni — a passzív jel a védőnek dolgozik; a
+    saját oldalon a támadás-lezárást (időre futtatott figura) kell
+    edzeni. Aki viszont a hosszú akcióit is gólra váltja, az ellen a
+    35. másodpercben is teljes koncentráció kell a faltól.
+
+    Visszatérés csapatonként: {"slow", "scored", "scored_pct",
+    "verdict"} — a verdict "az elhúzódó támadásaik üresen zárulnak"
+    (SAC_IDLE_PCT alatt), "az elhúzódó támadásaikat gólra váltják"
+    (SAC_PAY_PCT felett); kevés mintánál (SAC_MIN_SLOW alatt,
+    scored_pct is None) és a köztes sávban None.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out = {side: {"slow": 0, "scored": 0, "scored_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    tail = round(SAC_TAIL_S * fps)
+    min_len = SLOW_ATTACK_S * fps
+
+    spans = []  # (oldal, kezdő frame, záró frame)
+    current = 0
+    current_phase: Optional[Phase] = None
+    start_f: Optional[int] = None
+
+    def close_run(end_f: int):
+        nonlocal current, current_phase, start_f
+        if current > min_len and current_phase is not None:
+            side = ("home" if current_phase == Phase.HOME_ATTACK
+                    else "away")
+            spans.append((side, start_f, end_f))
+        current = 0
+        current_phase = None
+        start_f = None
+
+    attack_phases = {Phase.HOME_ATTACK, Phase.AWAY_ATTACK}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph in attack_phases:
+            if ph == current_phase:
+                current += 1
+            else:
+                close_run(f.t)
+                current = 1
+                current_phase = ph
+                start_f = f.t
+        else:
+            close_run(f.t)
+    if match.frames:
+        close_run(match.frames[-1].t)
+
+    for (side, a, b) in spans:
+        rec = out[side]
+        rec["slow"] += 1
+        if any(tm == side and a <= t <= b + tail for (t, tm) in goals):
+            rec["scored"] += 1
+    for rec in out.values():
+        if rec["slow"] >= SAC_MIN_SLOW:
+            rec["scored_pct"] = round(
+                100.0 * rec["scored"] / rec["slow"], 1)
+            if rec["scored_pct"] <= SAC_IDLE_PCT:
+                rec["verdict"] = "az elhúzódó támadásaik üresen zárulnak"
+            elif rec["scored_pct"] >= SAC_PAY_PCT:
+                rec["verdict"] = "az elhúzódó támadásaikat gólra váltják"
+    return out
+
+
 # Támadás-oldal megoszlás: ekkora többség számít "súlypontnak".
 def attack_sides(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """Melyik oldalon folyik a támadójáték — bal/közép/jobb sáv szerint.
