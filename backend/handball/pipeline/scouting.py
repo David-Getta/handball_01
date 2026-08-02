@@ -716,6 +716,8 @@ class ScoutingReport:
     sds_sh_frames: int = 0
     sds_fh_counts: dict = field(default_factory=dict)
     sds_sh_counts: dict = field(default_factory=dict)
+    blw_scored: dict = field(default_factory=dict)
+    blw_conceded: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2808,6 +2810,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "a szünet utáni első öt percben olvassátok újra a "
             "súlypontot: a fal erős embere és a kettőzés kerüljön át "
             "a másik oldalra.")
+
+    # Fekete ötperc: a visszatérő lyukra kell időzíteni a nyomást.
+    _blw_keys = set(rep.blw_scored) | set(rep.blw_conceded)
+    _blw_worst = None
+    _blw_diff = 0
+    for _b in _blw_keys:
+        _d = (rep.blw_scored.get(_b, 0)
+              - rep.blw_conceded.get(_b, 0))
+        if _d < _blw_diff:
+            _blw_worst, _blw_diff = _b, _d
+    if _blw_worst is not None and _blw_diff <= -3:
+        keys.append(
+            f"A fekete ötpercük a {_blw_worst}. perc (összesítve "
+            f"{rep.blw_scored.get(_blw_worst, 0)}-"
+            f"{rep.blw_conceded.get(_blw_worst, 0)}) — oda "
+            "időzítsétek a nyomást: friss sor, letámadás és gyors "
+            "középkezdések pont abban az ablakban.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6820,6 +6839,14 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sds_sh_frames = sdsrec["sh_frames"]
         rep.sds_fh_counts = dict(sdsrec["fh_counts"])
         rep.sds_sh_counts = dict(sdsrec["sh_counts"])
+        from .momentum import black_window as _blw
+        blwrec = _blw(match, config)[team.value]
+        rep.blw_scored = {b: v["scored"]
+                          for b, v in blwrec["buckets"].items()
+                          if v["scored"]}
+        rep.blw_conceded = {b: v["conceded"]
+                            for b, v in blwrec["buckets"].items()
+                            if v["conceded"]}
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9239,6 +9266,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 242) Az ő fekete ötpercük × a ti arany-ablakotok: időzített
+    # nyomás oda, ahol ők rendre elsüllyednek.
+    _blw242_keys = set(opp.blw_scored) | set(opp.blw_conceded)
+    _blw242_worst = None
+    _blw242_diff = 0
+    for _b242 in _blw242_keys:
+        _d242 = (opp.blw_scored.get(_b242, 0)
+                 - opp.blw_conceded.get(_b242, 0))
+        if _d242 < _blw242_diff:
+            _blw242_worst, _blw242_diff = _b242, _d242
+    if _blw242_worst is not None and _blw242_diff <= -3:
+        _own242 = (own.blw_scored.get(_blw242_worst, 0)
+                   - own.blw_conceded.get(_blw242_worst, 0))
+        if _own242 >= 2:
+            plan.append(
+                f"A fekete ötpercük a {_blw242_worst}. perc "
+                f"({-_blw242_diff} gólos összesített bukás), és "
+                f"nektek pont ez az ablak arany (+{_own242}) — "
+                "időzítsétek oda a nyomást: friss, kontraedzett sor "
+                "lépjen pályára, letámadás és gyors középkezdések, "
+                "amíg a lyuk nyitva van.")
 
     # 241) Az ő szünet utáni oldal-váltásuk × a ti falat váltó
     # védekezésetek: a súlypont-olvasás nálatok rutin.
@@ -13155,6 +13204,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sds_fh_counts for r in reports),
         sds_sh_counts=_merge_count_dicts(
             r.sds_sh_counts for r in reports),
+        blw_scored=_merge_count_dicts(
+            r.blw_scored for r in reports),
+        blw_conceded=_merge_count_dicts(
+            r.blw_conceded for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

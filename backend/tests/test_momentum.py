@@ -1396,3 +1396,63 @@ def test_punished_misses_needs_enough_misses():
 
     rec = punished_misses(_pmb_match(True, n_misses=3))["home"]
     assert rec["verdict"] is None
+
+
+def _blw_away_goal(frames, t):
+    """Egy vendég-gól a t kezdő-időnél: lövő (10,10) → x=0 kapu."""
+    for _ in range(30):
+        frames.append(Frame(t=t, players=[_pl(9, Team.AWAY, 10.0, 10.0)],
+                            ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+        t += 1
+    x = 10.0
+    while x > -0.5:
+        x -= 0.5
+        frames.append(Frame(t=t, players=[_pl(9, Team.AWAY, 10.0, 10.0)],
+                            ball=Ball(x=max(x, -0.5), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    for _ in range(40):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return t
+
+
+def test_black_window_flags_recurring_hole():
+    """3 kapott gól az 5–10. perc ablakában → hazai fekete ötperc."""
+    from handball.pipeline.momentum import black_window
+
+    frames = []
+    t = 0
+    # Üresjárat a 6. percig (t = 6*60*25 = 9000).
+    while t < 9000:
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):
+        t = _blw_away_goal(frames, t)
+    m = Match(_meta(), frames)
+
+    blw = black_window(m)
+    h = blw["home"]
+    assert h["worst"] == "5–10"
+    assert h["worst_diff"] == -3
+    assert h["verdict"] == "a 5–10. perc a fekete ötpercük (0-3)"
+    # A vendégnél ugyanez az arany-ablak, nem fekete.
+    assert blw["away"]["verdict"] is None
+
+
+def test_black_window_small_deficit_none():
+    """Egyetlen kapott gól → nincs fekete ötperc."""
+    from handball.pipeline.momentum import black_window
+
+    frames = []
+    t = 0
+    while t < 9000:
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    t = _blw_away_goal(frames, t)
+    blw = black_window(Match(_meta(), frames))
+    assert blw["home"]["worst_diff"] == -1
+    assert blw["home"]["verdict"] is None

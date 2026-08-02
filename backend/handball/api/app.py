@@ -3579,6 +3579,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import black_window
+            res["black_window"] = black_window(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4576,6 +4581,8 @@ def create_app():
                 from ..pipeline.tactics import attack_side_shift
                 _layer("attack_side_shift",
                        lambda: attack_side_shift(match))
+                from ..pipeline.momentum import black_window
+                _layer("black_window", lambda: black_window(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

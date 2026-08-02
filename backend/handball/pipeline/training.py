@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 263) Fekete ötperc: ha egy öt perces ablakunk rendre elúszik, a
+    # tervezett csere-blokk és az időkérés-készenlét a téma.
+    try:
+        from .momentum import black_window
+        blw263 = black_window(match, config)
+        for side in ("home", "away"):
+            rec263 = blw263[side]
+            if rec263["verdict"] is None:
+                continue
+            add(side, "taktika", "Fekete ötperc kezelése",
+                f"{rec263['verdict']} — ebben az ablakban rendre "
+                "elveszítjük a fonalat",
+                "fekete ötperc-terv: a kispad előre kijelölt "
+                "csere-blokkot időzít az ablak ELÉ (friss védő-sor), "
+                "az időkérés-jel készenlétben — az edzésmeccsen a "
+                "gyakorlatvezető szimulálja a lyukat (két gyors "
+                "kapott gól), és a csapat begyakorolt protokollal "
+                "válaszol: lassított támadás, biztos befejezés")
+    except Exception:
+        pass
     # 262) Oldal-váltás a szünetre: ha az ellenfél a szünetben szárnyat
     # váltott ellenünk, a súlypont-olvasás a téma.
     try:

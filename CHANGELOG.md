@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Fekete ötperc** (`black_window`): öt perces ablakonként a dobott
+  és kapott gólok, a legrosszabb ablak ítélettel — a felderítésben az
+  ablak-darabszámok meccsek közt összegződnek, így a visszatérő fekete
+  ötperc is kirajzolódik. Edzői olvasat: az ellenfél fekete ötpercére
+  időzített nyomás (friss sor, letámadás); a saját oldalra tervezett
+  csere-blokk és időkérés-készenlét. Felületek: `/analyze` +
+  meccs-csomag (`black_window`), edzői összefoglaló, felderítés (edzői
+  kulcs + 242-es meccsterv-szabály: az ő fekete ötpercük × a ti
+  arany-ablakotok), edzés-fókusz (263-as szabály), kliens-csempe.
 - **Oldal-váltás a szünetre** (`attack_side_shift`): félidőnként a
   támadójáték fő oldala (bal/közép/jobb, a támadás iránya szerint
   normálva) — aki a szünet után szárnyat vált, annál a beállított

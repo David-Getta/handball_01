@@ -1896,6 +1896,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Fekete ötperc: a visszatérően elúszó öt perces ablak (3+ gólos
+  // összesített bukás — a backenddel azonos küszöb).
+  String? _blackWindow(Map<String, dynamic> r) {
+    final scored = (r["blw_scored"] as Map?)?.cast<String, dynamic>();
+    final conceded =
+        (r["blw_conceded"] as Map?)?.cast<String, dynamic>();
+    final keys = <String>{
+      ...?scored?.keys,
+      ...?conceded?.keys,
+    };
+    String? worst;
+    var worstDiff = 0;
+    for (final b in keys) {
+      final d = ((scored?[b] as num?) ?? 0).toInt() -
+          ((conceded?[b] as num?) ?? 0).toInt();
+      if (d < worstDiff) {
+        worst = b;
+        worstDiff = d;
+      }
+    }
+    if (worst == null || worstDiff > -3) return null;
+    final sc = ((scored?[worst] as num?) ?? 0).toInt();
+    final co = ((conceded?[worst] as num?) ?? 0).toInt();
+    return "a fekete ötpercük a $worst. perc (összesítve $sc-$co) · "
+        "oda időzítsd a nyomást: friss sor, letámadás, gyors "
+        "középkezdés";
+  }
+
   // Oldal-váltás a szünetre: más fő szárny a két félidőben
   // (félidőnként 100+ kocka, 40%-os fő oldal — a backenddel azonos).
   String? _attackSideShift(Map<String, dynamic> r) {
@@ -6134,6 +6162,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fal-váltás a szünetre", _defenseFormShift(r)!],
       if (_attackSideShift(r) != null)
         ["Oldal-váltás a szünetre", _attackSideShift(r)!],
+      if (_blackWindow(r) != null)
+        ["Fekete ötperc", _blackWindow(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

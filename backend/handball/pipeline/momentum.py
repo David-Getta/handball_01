@@ -850,6 +850,68 @@ def goal_droughts(match: Match, config=None) -> dict:
     return out
 
 
+# Fekete ötperc: ekkora bukott gólkülönbség egy öt perces ablakban.
+BLW_BUCKET_S = 300.0
+BLW_MIN_DEFICIT = 3
+
+
+def black_window(match: Match, config=None) -> dict:
+    """Fekete ötperc: a meccs MELYIK ÖT PERCE süllyed el.
+
+    A gól-idővonal (scoring_timeline) megmutatja, mikor esnek a
+    gólok — ez ítéletet mond: öt perces ablakonként számoljuk a
+    dobott és kapott gólokat, és megkeressük a legrosszabb ablakot.
+    A felderítésben az ablakonkénti darabszámok meccsek közt
+    összegződnek, így a VISSZATÉRŐ fekete ötperc is kirajzolódik —
+    az a szakasz, ahol egy csapat rendre elveszíti a meccset (tipikus
+    ok: az első sor pihenője, a bemelegedés hiánya, a 2. félidő eleji
+    alvás).
+
+    Edzőileg: az ellenfél fekete ötpercére kell időzíteni a nyomást —
+    kontraedzett sor, letámadás, gyors középkezdések; a saját fekete
+    ötpercre pedig tervezett csere-blokk és időkérés-készenlét kell,
+    mielőtt a lyuk kinyílik.
+
+    Visszatérés csapatonként: {"buckets": {"NN–MM": {"scored",
+    "conceded"}}, "worst", "worst_diff", "verdict"} — a verdict
+    "a NN–MM. perc a fekete ötpercük (dobott-kapott)"
+    (BLW_MIN_DEFICIT-nyi bukásnál), különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = BLW_BUCKET_S * fps
+    out = {side: {"buckets": {}, "worst": None, "worst_diff": None,
+                  "verdict": None} for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        i = int(e.t // win)
+        label = f"{i * 5}–{(i + 1) * 5}"
+        scorer = getattr(e.team, "value", e.team)
+        conceder = "away" if scorer == "home" else "home"
+        for side, key in ((scorer, "scored"), (conceder, "conceded")):
+            b = out[side]["buckets"].setdefault(
+                label, {"scored": 0, "conceded": 0})
+            b[key] += 1
+    for rec in out.values():
+        worst = None
+        worst_diff = None
+        for label, b in rec["buckets"].items():
+            diff = b["scored"] - b["conceded"]
+            if worst_diff is None or diff < worst_diff:
+                worst, worst_diff = label, diff
+        rec["worst"] = worst
+        rec["worst_diff"] = worst_diff
+        if worst is not None and worst_diff <= -BLW_MIN_DEFICIT:
+            b = rec["buckets"][worst]
+            rec["verdict"] = (f"a {worst}. perc a fekete ötpercük "
+                              f"({b['scored']}-{b['conceded']})")
+    return out
+
+
 def scoring_timeline(match: Match, bucket_s: float = 300.0, config=None) -> dict:
     """Gólok idő-eloszlása idő-vödrökben (alapból 5 perc).
 

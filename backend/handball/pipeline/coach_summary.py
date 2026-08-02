@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Fekete ötperc: melyik öt perc süllyed el.
+    try:
+        from .momentum import black_window
+        blw = black_window(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_blw = blw[side]
+            if rec_blw["verdict"] is None:
+                continue
+            body += (f" A(z) {name} meccsének volt egy fekete lyuka: "
+                     f"{rec_blw['verdict']} — ide tervezett "
+                     "csere-blokk és időkérés-készenlét kell.")
+    except Exception:
+        pass
     # Oldal-váltás a szünetre: másik szárnyra kerül-e a súlypont.
     try:
         from .tactics import attack_side_shift
