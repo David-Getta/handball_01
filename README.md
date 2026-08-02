@@ -114,6 +114,7 @@ A projekt EU-forrásból való továbbfejlesztésének tervei:
 - Part B vázlat (EN): `docs/PART_B_VAZLAT_EN.md` · Költségterv-vázlat:
   `docs/KOLTSEGTERV_VAZLAT.md` · Pitch deck-vázlat:
   `docs/PITCH_DECK_VAZLAT.md`
+- Versenytárs-tábla: `docs/VERSENYTARS_TABLA.md`
 - Pilot LOI-sablon: `docs/LOI_SABLON.md` · Annotációs útmutató:
   `docs/ANNOTACIOS_UTMUTATO.md` · Mérési jegyzőkönyv:
   `docs/MERESI_JEGYZOKONYV.md`

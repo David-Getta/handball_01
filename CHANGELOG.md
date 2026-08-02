@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Versenytárs-tábla** (`docs/VERSENYTARS_TABLA.md`): kvalitatív
+  összevetés (Veo, Hudl, Spiideo, Catapult vs SportMachine) a pitch
+  deck 7. diájához — szerkezeti különbségek (hardver, felhő,
+  szabály-értés, magyarázhatóság, elemzői munkaigény) és a védhető
+  pozicionálás egy mondatban.
 - **Pályázati csomag: költségterv- és pitch deck-vázlat**: 24 hónapos,
   500 k€ grantra (~714 k€ összköltségre) méretezett költségterv-vázlat
   munkacsomag-bontással és önerő-forrásokkal
