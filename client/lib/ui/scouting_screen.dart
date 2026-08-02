@@ -1851,6 +1851,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "felszabadult emberhez — bizonyítottan gólt ér";
   }
 
+  // Kilépés-büntetés: a kilépés mögé betalálnak-e (5+ mért kapott
+  // gól; 40%+ kiugró-arány — a backend-kulccsal azonos küszöbök).
+  String? _stepoutPunishment(Map<String, dynamic> r) {
+    final goals = ((r["sop_goals"] as num?) ?? 0).toInt();
+    final behind = ((r["sop_behind"] as num?) ?? 0).toInt();
+    if (goals < 5) return null;
+    if (100.0 * behind / goals < 40.0) return null;
+    return "a kilépésük mögé betalálnak ($behind/$goals kapott "
+        "gólnál volt kiugró védő) · a kilépőt játszd meg: átemelés "
+        "vagy betörés a helyére";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5785,6 +5797,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Olvasó kapus", _readingKeeper(r)!],
       if (_doublePunishment(r) != null)
         ["Kettőzés-büntetés", _doublePunishment(r)!],
+      if (_stepoutPunishment(r) != null)
+        ["Kilépés-büntetés", _stepoutPunishment(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

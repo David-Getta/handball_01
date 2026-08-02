@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kilépés-büntetés: a kilépésük mögé betalálnak-e.
+    try:
+        from .defense import stepout_punishment
+        sop = stepout_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sop = sop[side]
+            if rec_sop["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kilépéseiről kiderült: "
+                     f"{rec_sop['verdict']} "
+                     f"({rec_sop['behind_stepout']}/{rec_sop['goals']}"
+                     " kapott gólnál volt kiugró védő a sorban).")
+    except Exception:
+        pass
     # Kettőzés-büntetés: mögé betalálnak-e a kettőzésnek.
     try:
         from .defense import double_punishment

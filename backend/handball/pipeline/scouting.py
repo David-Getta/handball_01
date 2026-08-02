@@ -661,6 +661,8 @@ class ScoutingReport:
     rdk_read: int = 0
     dbp_doubled_frames: int = 0
     dbp_conceded_after: int = 0
+    sop_goals: int = 0
+    sop_behind: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2530,6 +2532,16 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "gól esett közvetlenül kettőzés után) — a kettőzés-jel "
             "nálatok támadási jel: az első passz azonnal a "
             "felszabadult emberhez, és kész a helyzet.")
+
+    # Kilépés-büntetés: a kilépőjük mögötti rés bizonyítottan él.
+    if rep.sop_goals >= 5:
+        _sop_pct = 100.0 * rep.sop_behind / rep.sop_goals
+        if _sop_pct >= 40.0:
+            keys.append(
+                f"A kilépésük mögé betalálnak ({rep.sop_behind}/"
+                f"{rep.sop_goals} kapott gólnál volt kiugró védő) — "
+                "a kilépőt játsszátok meg: gyors átemelés vagy "
+                "betörés a helyére, a rés bizonyítottan ott van.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6446,6 +6458,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         dbprec = _dbp(match, config)[team.value]
         rep.dbp_doubled_frames = dbprec["doubled_frames"]
         rep.dbp_conceded_after = dbprec["conceded_after"]
+        from .defense import stepout_punishment as _sop
+        soprec = _sop(match, config)[team.value]
+        rep.sop_goals = soprec["goals"]
+        rep.sop_behind = soprec["behind_stepout"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8865,6 +8881,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 224) Az ő gólba kerülő kilépéseik × a ti beálló-játékotok: a
+    # kilépő helyére a beálló fordul be.
+    if (opp.sop_goals >= 5
+            and own.pivot_attacks >= 6):
+        _sop224 = 100.0 * opp.sop_behind / opp.sop_goals
+        _pu224 = (100.0 * own.pivot_goals
+                  / max(1, own.pivot_attacks))
+        if _sop224 >= 40.0 and _pu224 >= 30.0:
+            plan.append(
+                f"A kilépésük mögé betalálnak ({opp.sop_behind}/"
+                f"{opp.sop_goals} kapott gólnál volt kiugró védő), "
+                f"ti pedig termő beállós játékot játszotok (a "
+                f"beállós támadásaitok {_pu224:.0f}%-a gól) — a "
+                "kilépés pillanatában a beálló a kiugró helyére "
+                "forduljon be: a rés bizonyítottan gólt ér.")
 
     # 223) Az ő gólba kerülő kettőzésük × a ti gyors elengedésetek:
     # a kettőzés-jelre már megy is a labda az üres emberhez.
@@ -12424,6 +12456,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
                                for r in reports),
         dbp_conceded_after=sum(r.dbp_conceded_after
                                for r in reports),
+        sop_goals=sum(r.sop_goals for r in reports),
+        sop_behind=sum(r.sop_behind for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

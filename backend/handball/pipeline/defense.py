@@ -3745,3 +3745,69 @@ def double_punishment(match, config=None) -> dict:
             rec["verdict"] = "a kettőzésük büntetlenül termel"
         out[side] = rec
     return out
+
+
+# Kilépés-büntetés: a kapott gól előtti pillanatban a fal-vonalnál
+# ennyivel előrébb álló védő számít kiugrónak; ennyi kapott gól kell
+# az ítélethez, és e feletti arány a kilépés mögé kapott gólok jele.
+SOP_AHEAD_M = 3.0
+SOP_MIN_GOALS = 5
+SOP_PUNISH_PCT = 40.0
+
+
+def stepout_punishment(match, config=None) -> dict:
+    """Kilépés-büntetés: A KILÉPÉSÜK MÖGÉ betalálnak-e.
+
+    A kiugró védő (advanced_defender) megmondja, ki játszik elöl —
+    ez az árát: a kapott gólok hányadánál volt a fal-vonalból
+    (a védők medián kapu-távolságából) érdemben kiugró védő a gól
+    előtti pillanatban. A kilépés mögött mindig rés marad — van,
+    akinél ezt sosem játsszák meg, és van, akinél a kiugrás rendre
+    gólt ér az ellenfélnek.
+
+    Edzőileg: akinek a kilépése gólba kerül, az ellen a kilépőt kell
+    megjátszani — gyors átemelés vagy betörés a helyére, a rés
+    bizonyítottan ott van; a saját gólba kerülő kilépésnél a mögé
+    csúszás (a szomszéd zár) a téma, vagy fegyelmezettebb fal kell.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals",
+    "behind_stepout", "verdict"} — a verdict "a kilépésük mögé
+    betalálnak" (SOP_MIN_GOALS mért góltól, SOP_PUNISH_PCT arány
+    felett), különben None.
+    """
+    from ..models.tracking import Team
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    out = {side: {"goals": 0, "behind_stepout": 0, "verdict": None}
+           for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") != "goal":
+            continue
+        deff = "away" if sh["team"] == "home" else "home"
+        i0 = idx_of.get(sh["t"])
+        if i0 is None:
+            continue
+        own_goal_x = config.own_goal_x(
+            Team.HOME if deff == "home" else Team.AWAY)
+        dists = sorted(abs(p.x - own_goal_x)
+                       for p in match.frames[i0].players
+                       if p.team.value == deff and p.role != "kapus")
+        if len(dists) < 3:
+            continue
+        median = dists[len(dists) // 2]
+        rec = out[deff]
+        rec["goals"] += 1
+        if dists[-1] - median >= SOP_AHEAD_M:
+            rec["behind_stepout"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["goals"] >= SOP_MIN_GOALS:
+            pct = 100.0 * rec["behind_stepout"] / rec["goals"]
+            if pct >= SOP_PUNISH_PCT:
+                rec["verdict"] = "a kilépésük mögé betalálnak"
+    return out

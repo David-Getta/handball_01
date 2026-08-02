@@ -2617,3 +2617,63 @@ def test_double_punishment_needs_signal():
     rec = double_punishment(
         _dbp_match(False, doubled_frames=50, cycles=1))["away"]
     assert rec["verdict"] is None
+
+
+# ---- Kilépés-büntetés (a kilépés mögé betalálnak-e) -------------------------
+
+def _sop_match(with_stepout, n_goals=5, fps=25.0):
+    """Hazai gól-sorozat: a vendég falból egy védő kiugrik (vagy a
+    sor együtt marad) a gól pillanatában."""
+    frames = []
+    t = 0
+    ax = 33.0 if with_stepout else 37.5     # a kiugró (vagy soros) védő
+    for _ in range(n_goals):
+        for _ in range(10):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 6.0),
+                _pl(21, Team.AWAY, ax, 14.0),
+                _pl(22, Team.AWAY, 37.5, 8.0),
+                _pl(23, Team.AWAY, 37.5, 12.0)],
+                ball=Ball(x=33.0, y=6.0, confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 33.0, 6.0),
+                _pl(21, Team.AWAY, ax, 14.0),
+                _pl(22, Team.AWAY, 37.5, 8.0),
+                _pl(23, Team.AWAY, 37.5, 12.0)],
+                ball=Ball(x=min(33.0 + (i + 1), 40.5),
+                          y=6.0 + 3.0 * min(1.0, (i + 1) / 7.0),
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_stepout_punishment_flags_the_punished_stepout():
+    """Kiugró védő mellett esett gólok → a kilépésük mögé betalálnak."""
+    from handball.pipeline.defense import stepout_punishment
+
+    rec = stepout_punishment(_sop_match(True))["away"]
+    assert rec["goals"] >= 5
+    assert rec["verdict"] == "a kilépésük mögé betalálnak"
+
+
+def test_stepout_punishment_united_wall_no_verdict():
+    """Együtt maradó sor mellett kapott gólok → nincs kilépés-ítélet."""
+    from handball.pipeline.defense import stepout_punishment
+
+    rec = stepout_punishment(_sop_match(False))["away"]
+    assert rec["behind_stepout"] == 0 and rec["verdict"] is None
+
+
+def test_stepout_punishment_needs_enough_goals():
+    """Kevés (5-nél kevesebb) mért kapott gólnál nincs ítélet."""
+    from handball.pipeline.defense import stepout_punishment
+
+    rec = stepout_punishment(_sop_match(True, n_goals=3))["away"]
+    assert rec["verdict"] is None

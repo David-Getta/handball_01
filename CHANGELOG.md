@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kilépés-büntetés**: A KILÉPÉSÜK MÖGÉ betalálnak-e. A kiugró
+  védő megmondja, ki játszik elöl — ez az árát: a kapott gólok
+  hányadánál volt a fal-vonalból (a védők medián kapu-távolságából)
+  3+ méterrel kiugró védő (5+ mért kapott gól; 40%+ aránytól). A
+  kilépés mögötti rést az ilyen csapatnál bizonyítottan megjátsszák
+  — ellene átemelés vagy betörés a kilépő helyére; a saját oldalon
+  a szomszéd mögé csúszása a téma. Egy réteg, sok felület:
+  `stepout_punishment` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (darabszámok, edzői kulcs +
+  csempe), 224. meccsterv-szabály (az ő gólba kerülő kilépéseik × a
+  ti beálló-játékotok), 245. edzés-szabály (mögé csúszás hangos
+  jelre).
+
 - **Kettőzés-büntetés**: MÖGÉ BETALÁLNAK-E a kettőzésüknek. A
   kettőzés-rétegek megmondják, jönnek-e és ki jön — ez az árát: a
   kettőzött pillanatok után 3 mp-en belül kapott gólok (2+ gól =

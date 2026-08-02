@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 245) Kilépés-büntetés: ha a kilépésünk mögé betalálnak, a mögé
+    # csúszás a téma — a szomszéd zárja a rést.
+    try:
+        from .defense import stepout_punishment
+        sop245 = stepout_punishment(match, config)
+        for side in ("home", "away"):
+            rec245 = sop245[side]
+            if rec245["verdict"] != "a kilépésük mögé betalálnak":
+                continue
+            add(side, "vedekezes", "Mögé csúszás",
+                f"a kilépéseink mögé betalálnak ({rec245['behind_stepout']}"
+                f"/{rec245['goals']} kapott gólnál volt kiugró "
+                "védőnk) — a kilépés mögötti rést rendre megjátsszák",
+                "mögé csúszás gyakorlat: minden kilépésnél a "
+                "szomszéd védő automatikusan a rés mögé csúszik "
+                "(hangos jelre), a kilépő pedig a kiadás után "
+                "azonnal visszazár — az edzésmeccsen a kilépés mögé "
+                "kapott gól dupla mínusz, a lezárt rés pont a "
+                "csúszónak")
+    except Exception:
+        pass
     # 244) Kettőzés-büntetés: ha a kettőzésünk gólba kerül, a
     # kettőzés-visszazárás a téma — vagy vissza kell fogni.
     try:
