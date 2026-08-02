@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Eltűnő védő** (`fading_defenders`): játékosonkénti védő-akciók
+  (labdaszerzés + blokk) félidőnként — az eltűnő ember védő-oldali
+  párja: kinek a zónája nyílik ki a hajrára. Edzői olvasat: a második
+  félidőben a kifulladó védő-motor zónáján át kell támadni; a saját
+  oldalon a védő-rotáció (szünet körüli pihenő-blokk) a téma.
+  Felületek: `/analyze` + meccs-csomag (`fading_defenders`), edzői
+  összefoglaló, felderítés (játékosonkénti lista meccsek közt
+  összegezve + edzői kulcs + 245-ös meccsterv-szabály), edzés-fókusz
+  (266-os szabály), kliens-csempe.
 - **Sprint-állás** (`sprints_by_score`): a sprint-ütem (sprint/perc)
   az eredményjelző szerint — a hátrányban megugró ütem a menekülő
   futás: a hajrára elfogyó energia leggyorsabb útja, a fáradás-rétegek

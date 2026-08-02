@@ -1045,6 +1045,69 @@ def ball_winners(match, config=None) -> dict:
     return out
 
 
+# Eltűnő védő: első félidei védő-akciók után a másodikban csend.
+FDD_MIN_FH = 3   # ennyi első félidei védő-akció (szerzés+blokk) kell
+FDD_MAX_SH = 1   # a második félidőben legfeljebb ennyi = leállt
+
+
+def fading_defenders(match, config=None) -> dict:
+    """Eltűnő védő: KI viszi a védekezést az első félidőben — és áll le.
+
+    Az eltűnő ember (fading_scorers) védő-oldali párja: játékosonként
+    számoljuk a védő-akciókat (labdaszerzés + blokk) félidőnként, és
+    megkeressük, akinél az első félidei motor a másodikra leáll. A
+    védekezés-fáradás így nem csapat-átlagban, hanem néven nevezve
+    látszik: kinek a zónája nyílik ki a hajrára.
+
+    Edzőileg: az ellenfél kifulladó védő-motorja ellen a második
+    félidőben az Ő zónáján át kell támadni — az első félidei képe
+    alapján még kerülnék, pedig addigra már nem ér oda; a saját
+    oldalon a védő-motor rotációja (tervezett pihenő a szünet körül)
+    az edzés-téma.
+
+    Visszatérés csapatonként: {"players": [{"player_id", "fh",
+    "sh"}] (fh szerint csökkenő), "top", "verdict"} — a verdict
+    "a(z) N. viszi a védekezést az első félidőben (F szerzés+blokk),
+    a másodikban leáll (S)"; felismert szünet nélkül None.
+    """
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    out = {side: {"players": [], "top": None, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    tally: dict = {"home": {}, "away": {}}
+
+    def add(side, pid, t):
+        rec = tally[side].setdefault(pid, {"fh": 0, "sh": 0})
+        rec["fh" if t <= ht else "sh"] += 1
+
+    bw = ball_winners(match, config)
+    blk = detect_blocks(match, config)
+    for side in ("home", "away"):
+        for e in bw[side]["ts"]:
+            add(side, e["player_id"], e["t"])
+        for e in blk[side]["events"]:
+            if e.get("player_id") is not None:
+                add(side, e["player_id"], e["t"])
+    for side in ("home", "away"):
+        players = [{"player_id": pid, **rec}
+                   for pid, rec in tally[side].items()]
+        players.sort(key=lambda r: (-r["fh"], r["sh"]))
+        out[side]["players"] = players
+        for r in players:
+            if r["fh"] >= FDD_MIN_FH and r["sh"] <= FDD_MAX_SH:
+                out[side]["top"] = r["player_id"]
+                out[side]["verdict"] = (
+                    f"a(z) {r['player_id']}. viszi a védekezést az "
+                    f"első félidőben ({r['fh']} szerzés+blokk), a "
+                    f"másodikban leáll ({r['sh']})")
+                break
+    return out
+
+
 # Eladás-időzítés: ennyi időzíthető eladástól ítélünk; a birtoklás
 # első ennyi másodpercében elvesztett labda számít korainak, és e
 # részarány felett "korai eladó" a csapat.

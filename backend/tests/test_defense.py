@@ -2677,3 +2677,75 @@ def test_stepout_punishment_needs_enough_goals():
 
     rec = stepout_punishment(_sop_match(True, n_goals=3))["away"]
     assert rec["verdict"] is None
+
+
+def _fdd_steal_cycle(frames, t, home_id):
+    """Egy oda-vissza szerzés-pár: a vendég 21-es labdáját a megadott
+    hazai játékos szerzi meg, majd a labda visszavándorol a 21-eshez."""
+    def cast(bx):
+        return [_pl(21, Team.AWAY, 18.0, 10.0),
+                _pl(home_id, Team.HOME, 22.0, 10.0)], Ball(
+                    x=bx, y=10.0, confidence=1.0)
+
+    for _ in range(15):
+        pl, b = cast(18.0)
+        frames.append(Frame(t=t, players=pl, ball=b))
+        t += 1
+    x = 18.0
+    while x < 22.0:
+        x += 0.2
+        pl, b = cast(min(x, 22.0))
+        frames.append(Frame(t=t, players=pl, ball=b))
+        t += 1
+    for _ in range(15):
+        pl, b = cast(22.0)
+        frames.append(Frame(t=t, players=pl, ball=b))
+        t += 1
+    x = 22.0
+    while x > 18.0:
+        x -= 0.2
+        pl, b = cast(max(x, 18.0))
+        frames.append(Frame(t=t, players=pl, ball=b))
+        t += 1
+    for _ in range(15):
+        pl, b = cast(18.0)
+        frames.append(Frame(t=t, players=pl, ball=b))
+        t += 1
+    return t
+
+
+def test_fading_defenders_flags_stalling_motor():
+    """A 4-es 3 első félidei szerzése után a másodikban a 6-os dolgozik
+    → a 4-es az eltűnő védő; a végig dolgozó vendég 21-es nem az."""
+    from handball.pipeline.defense import fading_defenders
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        t = _fdd_steal_cycle(frames, t, 4)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(2):
+        t = _fdd_steal_cycle(frames, t, 6)
+
+    fdd = fading_defenders(Match(_meta(), frames))
+    h = fdd["home"]
+    assert h["top"] == 4
+    assert h["verdict"] == ("a(z) 4. viszi a védekezést az első "
+                            "félidőben (3 szerzés+blokk), a "
+                            "másodikban leáll (0)")
+    assert fdd["away"]["verdict"] is None  # a 21-es mindkét félidőben szerez
+
+
+def test_fading_defenders_needs_halftime():
+    """Felismert szünet nélkül nincs ítélet."""
+    from handball.pipeline.defense import fading_defenders
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        t = _fdd_steal_cycle(frames, t, 4)
+    fdd = fading_defenders(Match(_meta(), frames))
+    assert fdd["home"]["verdict"] is None
+    assert fdd["home"]["players"] == []

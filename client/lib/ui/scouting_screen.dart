@@ -1896,6 +1896,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Eltűnő védő: első félidei szerzés+blokk, második félidei csend
+  // (3+ akció, 3x-os arány — a backenddel azonos küszöbök).
+  String? _fadingDefenders(Map<String, dynamic> r) {
+    final players = (r["fdd_players"] as List?) ?? const [];
+    for (final p in players) {
+      final m = (p as Map).cast<String, dynamic>();
+      final fh = ((m["fh"] as num?) ?? 0).toInt();
+      final sh = ((m["sh"] as num?) ?? 0).toInt();
+      if (fh >= 3 && fh >= 3 * (sh < 1 ? 1 : sh)) {
+        return "a(z) ${m["player_id"]}. védőjük viszi az első félidőt "
+            "($fh szerzés+blokk), aztán leáll ($sh) · a 2. félidőben "
+            "az ő zónáján át támadj";
+      }
+    }
+    return null;
+  }
+
   // Sprint-állás: hátrányban megugró sprint-ütem (60+ mp mindkét
   // oldalon, 8+ sprint, 1,5x ütem — a backenddel azonos küszöbök).
   String? _sprintsByScore(Map<String, dynamic> r) {
@@ -6202,6 +6219,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Eltűnő ember", _fadingScorers(r)!],
       if (_sprintsByScore(r) != null)
         ["Sprint-állás", _sprintsByScore(r)!],
+      if (_fadingDefenders(r) != null)
+        ["Eltűnő védő", _fadingDefenders(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

@@ -1343,6 +1343,25 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 266) Eltűnő védő: ha a védő-motorunk a második félidőre leáll,
+    # a védő-rotáció a téma.
+    try:
+        from .defense import fading_defenders
+        fdd266 = fading_defenders(match, config)
+        for side in ("home", "away"):
+            rec266 = fdd266[side]
+            if rec266["verdict"] is None:
+                continue
+            add(side, "vedekezes", "Védő-motor rotáció",
+                f"{rec266['verdict']} — a hajrában az ő zónája "
+                "nyílik ki",
+                "védő-motor rotáció: a legtöbbet dolgozó védő a "
+                "szünet KÖRÜL kap tervezett pihenő-blokkot (az utolsó "
+                "5 perc az első félidőből + az első 5 a másodikból), "
+                "hogy a hajrában is odaérjen — az edzésmeccsen a pad "
+                "számolja a szerzés+blokk terhelést")
+    except Exception:
+        pass
     # 265) Sprint-állás: ha hátrányban sprintbe menekülünk, az
     # ütemtartó felzárkózás a téma — a pánik-futás a hajrát viszi el.
     try:

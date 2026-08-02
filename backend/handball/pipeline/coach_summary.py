@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Eltűnő védő: kinek a zónája nyílik ki a hajrára.
+    try:
+        from .defense import fading_defenders
+        fdd = fading_defenders(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fdd = fdd[side]
+            if rec_fdd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védekezéséről kiderült: "
+                     f"{rec_fdd['verdict']} — a hajrában az ő zónája "
+                     "nyílik ki.")
+    except Exception:
+        pass
     # Sprint-állás: hátrányban sprintbe menekülés.
     try:
         from .stats import sprints_by_score

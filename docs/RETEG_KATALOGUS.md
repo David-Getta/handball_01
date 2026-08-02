@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **290 réteg**, modulonként csoportosítva; a
+Összesen **291 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (68)
@@ -95,7 +95,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `pressure_sensitive_players` | Pressz-érzékeny játékosok: KI VESZÍTI EL a labdát szorításban. |
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 
-## defense (54)
+## defense (55)
 
 | Réteg | Mit mér |
 |---|---|
@@ -126,6 +126,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `double_punishment` | Kettőzés-büntetés: MÖGÉ BETALÁLNAK-E a kettőzésüknek. |
 | `double_teams` | Kettőzés: rálép-e a második védő is a labdásra. |
 | `doubling_defenders` | Kettőző emberek: KI JÖN MÁSODIKNAK a labdásra. |
+| `fading_defenders` | Eltűnő védő: KI viszi a védekezést az első félidőben — és áll le. |
 | `high_steal_players` | Elöl szerző védők: KI SZED LABDÁT a támadó térfélen. |
 | `line_height_by_score` | Védekezési mélység állás szerint: ELŐNYBEN vagy HÁTRÁNYBAN |
 | `marking` | Őrzési párok: ki kit fogott a védekezésben. |
