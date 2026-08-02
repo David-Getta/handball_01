@@ -727,6 +727,8 @@ class ScoutingReport:
     cbc_players: list = field(default_factory=list)
     xsp_windows: int = 0
     xsp_seconds: float = 0.0
+    dsh_seconds: float = 0.0
+    dsh_conceded: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2890,6 +2892,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "hetedik mezőnyjátékosuk a pályán) — a váltás-pillanatuk "
             "kettős célpont: jelezhető a zsűrinek, és a "
             "rendezetlenségbe azonnali gyors támadás mehet.")
+
+    # Kettős emberhátrány: a második kiállítás fegyver lehet ellene.
+    if rep.dsh_conceded >= 2:
+        keys.append(
+            f"A kettős emberhátrány végzetes nekik "
+            f"({rep.dsh_conceded} kapott gól {rep.dsh_seconds:.0f} "
+            "mp négyfős játékból) — az emberhátrányukban érdemes a "
+            "második szabálytalanságot is kiprovokálni: két perc "
+            "alatt fordul velük a meccs.")
+    elif rep.dsh_seconds >= 20.0 and rep.dsh_conceded == 0:
+        keys.append(
+            f"A kettős hátrányt is túlélik ({rep.dsh_seconds:.0f} mp "
+            "négy mezőnyjátékossal, kapott gól nélkül) — az "
+            "emberelőnyt ellenük végig kell játszani türelmesen: "
+            "maguktól nem esnek szét.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6934,6 +6951,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         xsprec = _xsp(match, config)[team.value]
         rep.xsp_windows = xsprec["windows"]
         rep.xsp_seconds = xsprec["seconds"]
+        from .rules import double_shorthand as _dsh
+        dshrec = _dsh(match, config)[team.value]
+        rep.dsh_seconds = dshrec["seconds"]
+        rep.dsh_conceded = dshrec["conceded"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8033,6 +8054,11 @@ def _merge_seven_earners(reports) -> list:
                                      + int(e["earned"]))
     return [{"player_id": pid, "earned": n}
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
+
+
+def rep_earn_count(rep) -> int:
+    """A riport kiharcolt kiállításainak összege (susp_earners lista)."""
+    return sum(int(e.get("earned", 0)) for e in (rep.susp_earners or []))
 
 
 def _merge_cbc_players(reports) -> list:
@@ -9392,6 +9418,16 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 248) Az ő végzetes kettős hátrányuk × a ti hetes-kiharcolásotok:
+    # a második kiállítás fegyver.
+    if (opp.dsh_conceded >= 2 and rep_earn_count(own) >= 2):
+        plan.append(
+            f"A kettős emberhátrány végzetes nekik "
+            f"({opp.dsh_conceded} kapott gól négyfős játékukból), ti "
+            "pedig tudtok szabálytalanságot kiharcolni — az "
+            "emberhátrányuk alatt is menjetek bátran betörésre: a "
+            "második kiállításuk két perc alatt fordítja a meccset.")
 
     # 247) Az ő csere-átfedésük × a ti gyors újraindításotok: a
     # váltás-pillanatuk kettős célpont.
@@ -13421,6 +13457,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         cbc_players=_merge_cbc_players(reports),
         xsp_windows=sum(r.xsp_windows for r in reports),
         xsp_seconds=round(sum(r.xsp_seconds for r in reports), 1),
+        dsh_seconds=round(sum(r.dsh_seconds for r in reports), 1),
+        dsh_conceded=sum(r.dsh_conceded for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

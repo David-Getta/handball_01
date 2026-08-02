@@ -124,6 +124,66 @@ def suspensions_from_powerplay(match: Match) -> list[Suspension]:
             for w in detect_powerplay(match)]
 
 
+# Kettős emberhátrány: legfeljebb négy mezőnyjátékos a pályán.
+DSH_MIN_S = 20.0      # legalább ennyi kettős-hátrány idő kell
+DSH_FATAL_GOALS = 2   # ennyi kapott gól alatta: végzetes minta
+DSH_TAIL_S = 3.0      # a szakasz utáni gól még a hátrányé
+
+
+def double_shorthand(match: Match, config=None) -> dict:
+    """Kettős emberhátrány: MIT KEZD a csapat négy mezőnyjátékossal.
+
+    Az emberhátrány-rétegek az 5 fős játékot nézik — ez a ritkább, de
+    meccsdöntő kettős hátrányt (két kiállítás átfedésben, legfeljebb
+    4 mezőnyjátékos): mennyi ideig tartott, és hány gól esett bele.
+    A kettős hátrány kezelése külön műfaj: más fal (3-1 vagy 4-0
+    mélyen), más labdatartás — aki nem gyakorolja, annak két perc
+    alatt fordul meg a meccse.
+
+    Edzőileg: akinél a kettős hátrány rendre gólesőt hoz, ott a
+    második kiállítás kiprovokálása tudatos fegyver lehet ellene; a
+    saját oldalon a 4 fős fal és az időhúzó labdatartás gyakorlása a
+    téma.
+
+    Visszatérés csapatonként: {"seconds", "conceded", "verdict"} — a
+    verdict "a kettős emberhátrány végzetes nekik" (DSH_FATAL_GOALS
+    kapott góltól), "a kettős hátrányt is túlélik" (DSH_MIN_S-nyi idő
+    gól nélkül), különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tl = field_count_timeline(match)
+    out = {side: {"seconds": 0.0, "conceded": 0, "verdict": None}
+           for side in ("home", "away")}
+    if len(tl) < 2:
+        return out
+    win_frames = tl[1]["start_frame"] - tl[0]["start_frame"]
+    win_s = win_frames / fps
+    goals = [(e.t, getattr(e.team, "value", e.team))
+             for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    tail = round(DSH_TAIL_S * fps)
+    for side, other in (("home", "away"), ("away", "home")):
+        rec = out[side]
+        for w in tl:
+            if w[side] <= 4 and w[side] < w[other]:
+                rec["seconds"] += win_s
+                a = w["start_frame"]
+                b = a + win_frames
+                rec["conceded"] += sum(
+                    1 for (t, tm) in goals
+                    if tm == other and a <= t <= b + tail)
+        rec["seconds"] = round(rec["seconds"], 1)
+        if rec["conceded"] >= DSH_FATAL_GOALS:
+            rec["verdict"] = "a kettős emberhátrány végzetes nekik"
+        elif rec["seconds"] >= DSH_MIN_S and rec["conceded"] == 0:
+            rec["verdict"] = "a kettős hátrányt is túlélik"
+    return out
+
+
 # Létszám-hiba: csere-átfedésből hetedik mezőnyjátékos a pályán.
 XSP_MIN_WINDOWS = 2   # ennyi (PP_WINDOW_S-es) többlet-ablaktól ítélet
 

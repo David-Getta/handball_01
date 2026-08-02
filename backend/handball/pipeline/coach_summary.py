@@ -883,6 +883,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kettős emberhátrány: mit kezdenek négy mezőnyjátékossal.
+    try:
+        from .rules import double_shorthand
+        dsh = double_shorthand(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dsh = dsh[side]
+            if rec_dsh["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kettős emberhátrányban is "
+                     f"vizsgázott: {rec_dsh['verdict']} "
+                     f"({rec_dsh['seconds']:.0f} mp négy "
+                     f"mezőnyjátékossal, {rec_dsh['conceded']} "
+                     "kapott gól).")
+    except Exception:
+        pass
     # Létszám-hiba: csere-átfedésben hetedik ember a pályán.
     try:
         from .rules import excess_players

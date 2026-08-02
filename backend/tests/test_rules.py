@@ -1378,3 +1378,56 @@ def test_excess_players_normal_roster_none():
     xsp = excess_players(Match(_meta(), _roster_frames(0, 90, 6, 6)))
     assert xsp["home"]["windows"] == 0
     assert xsp["home"]["verdict"] is None
+
+
+def test_double_shorthand_survived():
+    """30 mp négy hazai mezőnyjátékossal, kapott gól nélkül → a kettős
+    hátrányt is túlélik."""
+    from handball.pipeline.rules import double_shorthand
+
+    frames = _roster_frames(0, 30, 6, 6)
+    frames += _roster_frames(frames[-1].t + 1, 30, 4, 6)
+    frames += _roster_frames(frames[-1].t + 1, 30, 6, 6)
+    dsh = double_shorthand(Match(_meta(), frames))
+    assert dsh["home"]["seconds"] >= 20.0
+    assert dsh["home"]["conceded"] == 0
+    assert dsh["home"]["verdict"] == "a kettős hátrányt is túlélik"
+    assert dsh["away"]["verdict"] is None
+
+
+def test_double_shorthand_fatal():
+    """Négy hazai mezőnyjátékos mellett két gyors kapott gól → a kettős
+    emberhátrány végzetes."""
+    from handball.pipeline.rules import double_shorthand
+
+    def cast(ball_x):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 6.0 + 2 * k)
+                   for k in range(4)]
+        players.append(_pl(200, Team.AWAY, 10.0, 10.0))
+        players += [_pl(201 + k, Team.AWAY, 25.0 + k, 4.0 + 2 * k)
+                    for k in range(5)]
+        return players, Ball(x=ball_x, y=10.0, confidence=1.0)
+
+    frames = _roster_frames(0, 30, 6, 6)
+    t = frames[-1].t + 1
+    # 40 mp 4v6, közben két vendég-gól az x=0 kapura.
+    for _ in range(2):
+        for _ in range(int(4 * 25)):
+            pl, b = cast(10.0)
+            frames.append(Frame(t=t, players=pl, ball=b))
+            t += 1
+        x = 10.0
+        while x > -0.5:
+            x -= 0.5
+            pl, b = cast(max(x, -0.5))
+            frames.append(Frame(t=t, players=pl, ball=b))
+            t += 1
+        for _ in range(int(5 * 25)):
+            pl, b = cast(20.0)
+            frames.append(Frame(t=t, players=pl, ball=b))
+            t += 1
+    frames += _roster_frames(t, 30, 6, 6)
+
+    dsh = double_shorthand(Match(_meta(), frames))
+    assert dsh["home"]["conceded"] >= 2
+    assert dsh["home"]["verdict"] == "a kettős emberhátrány végzetes nekik"

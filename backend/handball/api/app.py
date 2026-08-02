@@ -3614,6 +3614,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import double_shorthand
+            res["double_shorthand"] = double_shorthand(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4630,6 +4635,9 @@ def create_app():
                 from ..pipeline.rules import excess_players
                 _layer("excess_players",
                        lambda: excess_players(match))
+                from ..pipeline.rules import double_shorthand
+                _layer("double_shorthand",
+                       lambda: double_shorthand(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

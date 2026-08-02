@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 269) Kettős emberhátrány: ha a négyfős játékunk gólesőt hoz, a
+    # 4 fős fal és az időhúzó labdatartás a téma.
+    try:
+        from .rules import double_shorthand
+        dsh269 = double_shorthand(match, config)
+        for side in ("home", "away"):
+            rec269 = dsh269[side]
+            if rec269["verdict"] != "a kettős emberhátrány végzetes nekik":
+                continue
+            add(side, "vedekezes", "Négyfős fal",
+                f"a kettős emberhátrány végzetes nekünk "
+                f"({rec269['conceded']} kapott gól "
+                f"{rec269['seconds']:.0f} mp alatt) — a 4 fős "
+                "játékunk nincs begyakorolva",
+                "négyfős fal: 4-0 mély fal gyakorlása kapussal "
+                "(sarok-védés felosztva), támadásban időhúzó "
+                "labdatartás-rondó — kettős hátrányban a cél nem a "
+                "gól, hanem a túlélés: 2 percet kell ellenni, nem "
+                "kettőt visszadobni")
+    except Exception:
+        pass
     # 268) Létszám-hiba: ha a cseréink átfednek, a cserefolyosó-
     # fegyelem a téma — a hetedik ember ingyen kiállítást ér.
     try:

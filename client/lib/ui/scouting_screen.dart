@@ -1896,6 +1896,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Kettős emberhátrány: négyfős játék mérlege (2+ kapott gól vagy
+  // 20+ mp gól nélkül — a backenddel azonos küszöbök).
+  String? _doubleShorthand(Map<String, dynamic> r) {
+    final seconds = ((r["dsh_seconds"] as num?) ?? 0).toDouble();
+    final conceded = ((r["dsh_conceded"] as num?) ?? 0).toInt();
+    if (conceded >= 2) {
+      return "a kettős emberhátrány végzetes nekik ($conceded kapott "
+          "gól ${seconds.toStringAsFixed(0)} mp négyfős játékból) · "
+          "az emberhátrányukban a második kiállítás is kiprovokálható";
+    }
+    if (seconds >= 20.0 && conceded == 0) {
+      return "a kettős hátrányt is túlélik "
+          "(${seconds.toStringAsFixed(0)} mp gól nélkül) · az "
+          "emberelőnyt végig kell játszani: maguktól nem esnek szét";
+    }
+    return null;
+  }
+
   // Létszám-hiba: csere-átfedés, hetedik ember a pályán (2+ ablak —
   // a backenddel azonos küszöb).
   String? _excessPlayers(Map<String, dynamic> r) {
@@ -6253,6 +6271,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Felzárkózás-húzó", _comebackCarriers(r)!],
       if (_excessPlayers(r) != null)
         ["Létszám-hiba", _excessPlayers(r)!],
+      if (_doubleShorthand(r) != null)
+        ["Kettős emberhátrány", _doubleShorthand(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

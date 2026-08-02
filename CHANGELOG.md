@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kettős emberhátrány** (`double_shorthand`): a legfeljebb négy
+  mezőnyjátékossal játszott szakaszok mérlege (idő + kapott gólok),
+  két iránnyal: "végzetes nekik" / "túlélik". Edzői olvasat: akinél
+  gólesőt hoz, ott a második kiállítás kiprovokálása fegyver; a saját
+  oldalon a 4 fős fal és az időhúzó labdatartás a téma. Felületek:
+  `/analyze` + meccs-csomag (`double_shorthand`), edzői összefoglaló,
+  felderítés (edzői kulcs két iránnyal + 248-as meccsterv-szabály:
+  végzetes kettős hátrányuk × hetes/kiállítás-kiharcolásotok),
+  edzés-fókusz (269-es szabály), kliens-csempe.
 - **Létszám-hiba** (`excess_players`): a csere-átfedésből pályán lévő
   hetedik mezőnyjátékos felismerése (a kiállítás-felismerés
   többlet-oldali párja). Edzői olvasat: az átfedő cseréjű ellenfél
