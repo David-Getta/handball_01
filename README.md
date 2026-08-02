@@ -103,3 +103,11 @@ macOS-telepítővel, SportMachine néven; a fejlemények a CHANGELOG-ban):
 ## Elv
 Alulról építkezünk. A megbízható 2D követés a rendszer gerince; minden további
 elemzés (taktika, döntések, szimuláció, VR, élő javaslat) erre épül.
+
+## Pályázat
+
+A projekt EU-forrásból való továbbfejlesztésének tervei:
+- **EIC Pre-accelerator** (widening-országok belépő programja, 300–500 k€,
+  TRL 4→6): `docs/PALYAZAT_EIC_PRE_ACCELERATOR.md`
+- **EIC Accelerator** (a következő lépcső): `docs/PALYAZAT_EIC.md`
+- Angol projekt-összefoglaló a Part B-hez: `docs/EXECUTIVE_SUMMARY_EN.md`

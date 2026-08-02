@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **EIC Pre-accelerator felkészülési csomag**: új pályázati terv
+  (`docs/PALYAZAT_EIC_PRE_ACCELERATOR.md`) a widening-országos EIC
+  Pre-accelerator programra (300–500 k€, 70% ráta, TRL 4→6) —
+  jogosultsági ellenőrzőlista, TRL-önértékelés bizonyíték-térképpel,
+  Excellence/Impact/Implementation sztori, 2 éves projektváz és
+  akcióterv; hozzá angol projekt-összefoglaló
+  (`docs/EXECUTIVE_SUMMARY_EN.md`), kereszt-hivatkozás az EIC
+  Accelerator-tervből és README-mutató.
 - **Eltűnő ember** (`fading_scorers`): játékosonkénti gól-részvétel
   (gól + gólpassz) félidőnként — akinél az első félidei termelés a
   másodikra elhal, azt az első 30 percben kell megfogni. Edzői

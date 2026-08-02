@@ -4,6 +4,11 @@ Cél: a SportMachine (egykamerás, MI-alapú kézilabda-elemző) benyújtása az
 EU **EIC Accelerator** programjára.
 Hivatalos oldal: https://eic.ec.europa.eu/eic-funding-opportunities/eic-accelerator_en
 
+> **Belépő lépcső:** widening-országbeli (magyar) KKV-ként előbb az
+> **EIC Pre-accelerator** a reális cél (300–500 k€, TRL 4→6, kifejezetten
+> felkészít erre a programra) — annak terve:
+> `docs/PALYAZAT_EIC_PRE_ACCELERATOR.md`.
+
 ---
 
 ## 1. Mit ad a program?
