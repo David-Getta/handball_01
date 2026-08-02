@@ -689,6 +689,10 @@ class ScoutingReport:
     asf_fh_assisted: int = 0
     asf_sh_goals: int = 0
     asf_sh_assisted: int = 0
+    scf_fh_misses: int = 0
+    scf_fh_won: int = 0
+    scf_sh_misses: int = 0
+    scf_sh_won: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2686,6 +2690,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_asf_fh:.0f}% → {_asf_sh:.0f}%) — a második "
                 "félidőben a labdás emberük dupla nyomást kaphat: "
                 "a passz úgyis megállt, egyéni megoldásból élnek.")
+
+    # Lepattanó-esés: záráskor a második labda a tiétek.
+    if rep.scf_fh_misses >= 3 and rep.scf_sh_misses >= 3:
+        _scf_fh = 100.0 * rep.scf_fh_won / rep.scf_fh_misses
+        _scf_sh = 100.0 * rep.scf_sh_won / rep.scf_sh_misses
+        if _scf_fh - _scf_sh >= 25.0:
+            keys.append(
+                f"A hajrára elfogy a lepattanó-harcuk (visszaharcolt "
+                f"lepattanó {_scf_fh:.0f}% → {_scf_sh:.0f}%) — "
+                "záráskor a blokk és a védés utáni labda a tiétek: "
+                "a kimaradt lövésük ott már a támadásuk vége.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6653,6 +6668,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.asf_fh_assisted = asfrec["fh_assisted"]
         rep.asf_sh_goals = asfrec["sh_goals"]
         rep.asf_sh_assisted = asfrec["sh_assisted"]
+        from .attack_types import second_chance_fade as _scf
+        scfrec = _scf(match, config)[team.value]
+        rep.scf_fh_misses = scfrec["fh_misses"]
+        rep.scf_fh_won = scfrec["fh_won"]
+        rep.scf_sh_misses = scfrec["sh_misses"]
+        rep.scf_sh_won = scfrec["sh_won"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9072,6 +9093,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 235) Az ő elfogyó lepattanó-harcuk × a ti blokkoló falatok: a
+    # zárásban minden második labda a tiétek.
+    if (opp.scf_fh_misses >= 3 and opp.scf_sh_misses >= 3
+            and own.blocks >= 4):
+        _scf235_fh = 100.0 * opp.scf_fh_won / opp.scf_fh_misses
+        _scf235_sh = 100.0 * opp.scf_sh_won / opp.scf_sh_misses
+        if _scf235_fh - _scf235_sh >= 25.0:
+            plan.append(
+                f"A hajrára elfogy a lepattanó-harcuk (visszaharcolt "
+                f"lepattanó {_scf235_fh:.0f}% → {_scf235_sh:.0f}%), "
+                f"a ti falatok pedig blokkol ({own.blocks} blokk) — "
+                "a zárásban a blokk utáni labdára ti induljatok "
+                "először: az ő lábuk már nem megy oda, minden "
+                "második labda a tiétek lehet.")
 
     # 234) Az ő hajrában megálló labdájuk × a ti szabályos kezetek: a
     # labdás emberük a hajrában dupla nyomást kaphat.
@@ -12815,6 +12851,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         asf_fh_assisted=sum(r.asf_fh_assisted for r in reports),
         asf_sh_goals=sum(r.asf_sh_goals for r in reports),
         asf_sh_assisted=sum(r.asf_sh_assisted for r in reports),
+        scf_fh_misses=sum(r.scf_fh_misses for r in reports),
+        scf_fh_won=sum(r.scf_fh_won for r in reports),
+        scf_sh_misses=sum(r.scf_sh_misses for r in reports),
+        scf_sh_won=sum(r.scf_sh_won for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

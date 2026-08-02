@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 256) Lepattanó-esés: ha a hajrára elfogy a lepattanó-harcunk, a
+    # fáradásos lepattanó-munka a téma — a második labda akarat-játék.
+    try:
+        from .attack_types import second_chance_fade
+        scf256 = second_chance_fade(match, config)
+        for side in ("home", "away"):
+            rec256 = scf256[side]
+            if rec256["verdict"] != "a hajrára elfogy a lepattanó-harcuk":
+                continue
+            add(side, "tamadas", "Lepattanó-harc fáradtan",
+                f"a hajrára elfogy a lepattanó-harcunk (visszaharcolt "
+                f"lepattanó {rec256['fh_won']}/{rec256['fh_misses']} → "
+                f"{rec256['sh_won']}/{rec256['sh_misses']}) — a "
+                "kimaradt lövésünk a hajrában a támadásunk vége",
+                "fáradásos lepattanó-gyakorlat: sprint-sorozat után "
+                "lövés + KÖTELEZŐ rárobbanás a kipattanóra (aki nem "
+                "indul meg, büntetőkör) — a második labda akarat-"
+                "játék, fáradt lábbal kell beépülnie")
+    except Exception:
+        pass
     # 255) Gólpassz-esés: ha a hajrában megáll nálunk a labda, a
     # fáradt csapatjáték a téma — az egyéni megoldás védekezhetőbb.
     try:

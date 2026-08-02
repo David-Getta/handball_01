@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Lepattanó-esés** (`second_chance_fade`): a visszaharcolt második
+  rohamok részaránya félidőnként — a hajrára elfogyó lepattanó-harc
+  tiszta fáradás-jel (a lepattanó a láb és az akarat játéka). Edzői
+  olvasat: ellene záráskor a blokk/védés utáni labda rendre a tiétek;
+  a saját oldalon a fáradásos lepattanó-gyakorlat a téma. Felületek:
+  `/analyze` + meccs-csomag (`second_chance_fade`), edzői
+  összefoglaló, felderítés (edzői kulcs + 235-ös meccsterv-szabály),
+  edzés-fókusz (256-os szabály), kliens-csempe.
 - **Gólpassz-esés** (`assist_fade`): a gólpasszos gólok részaránya
   félidőnként — ha a hajrára beesik, a csapatjáték fáradt el: megáll a
   labda, jönnek az egyéni megoldások. Edzői olvasat: ellene a hajrában

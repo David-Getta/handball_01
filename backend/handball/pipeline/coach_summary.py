@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Lepattanó-esés: melyik félidőben él a második roham.
+    try:
+        from .attack_types import second_chance_fade
+        scf = second_chance_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scf = scf[side]
+            if rec_scf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lepattanó-képe: "
+                     f"{rec_scf['verdict']} (visszaharcolt lepattanó "
+                     f"{rec_scf['fh_won']}/{rec_scf['fh_misses']} → "
+                     f"{rec_scf['sh_won']}/{rec_scf['sh_misses']}).")
+    except Exception:
+        pass
     # Gólpassz-esés: megáll-e a labda a hajrára.
     try:
         from .attack_types import assist_fade

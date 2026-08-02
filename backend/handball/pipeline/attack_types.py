@@ -1215,6 +1215,74 @@ SHTIM_EARLY_PCT = 45.0
 SHTIM_LATE_AVG_S = 22.0
 
 
+# Lepattanó-esés: a megnyert második rohamok részaránya félidőnként.
+SCF_MIN_MISSES = 3   # félidőnként ennyi lepattanó-lehetőség kell
+SCF_DROP_PP = 25.0   # ekkora részarány-változás számít mintázatnak
+
+
+def second_chance_fade(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Lepattanó-esés: MELYIK FÉLIDŐBEN él a második roham.
+
+    A fáradás-család lepattanó-tagja: a második roham (second_chance)
+    a meccs egészére mondja meg, hányszor harcolja vissza a csapat a
+    saját kimaradt lövését — ez félidőnként: a hajrára elfogyó
+    lepattanó-harc tiszta fáradás-jel, mert a lepattanó a láb és az
+    akarat játéka, nem a technikáé. A fordítottja (a hajrában
+    erősödő) a mélyebb kispad vagy a tudatos zárás jele.
+
+    Edzőileg: akinek a hajrára elfogy a lepattanó-harca, az ellen
+    záráskor a blokk és a védés utáni labda rendre a tiétek — a
+    kimaradt lövésük a támadásuk vége; a saját oldalon a fáradásos
+    lepattanó-gyakorlat a téma.
+
+    Visszatérés csapatonként: {"fh_misses", "fh_won", "sh_misses",
+    "sh_won", "gap_pp", "verdict"} — gap_pp/verdict None felismert
+    szünet nélkül vagy félidőnként SCF_MIN_MISSES-nél kevesebb
+    lehetőségnél; a verdict "a hajrára elfogy a lepattanó-harcuk" /
+    "a hajrában erősödik a lepattanó-harcuk" / None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = SECOND_CHANCE_WINDOW_S * fps
+    out = {side: {"fh_misses": 0, "fh_won": 0, "sh_misses": 0,
+                  "sh_won": 0, "gap_pp": None, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+    for i, e in enumerate(shots):
+        if e.type == EventType.GOAL:
+            continue
+        rec = out[e.team.value]
+        first = e.t <= ht
+        rec["fh_misses" if first else "sh_misses"] += 1
+        for nxt in shots[i + 1:]:
+            if nxt.t - e.t > win:
+                break
+            if nxt.team != e.team:
+                break
+            rec["fh_won" if first else "sh_won"] += 1
+            break
+    for rec in out.values():
+        if rec["fh_misses"] < SCF_MIN_MISSES \
+                or rec["sh_misses"] < SCF_MIN_MISSES:
+            continue
+        fh_pct = 100.0 * rec["fh_won"] / rec["fh_misses"]
+        sh_pct = 100.0 * rec["sh_won"] / rec["sh_misses"]
+        rec["gap_pp"] = round(sh_pct - fh_pct, 1)
+        if rec["gap_pp"] <= -SCF_DROP_PP:
+            rec["verdict"] = "a hajrára elfogy a lepattanó-harcuk"
+        elif rec["gap_pp"] >= SCF_DROP_PP:
+            rec["verdict"] = "a hajrában erősödik a lepattanó-harcuk"
+    return out
+
+
 def shot_timing(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     """Lövés-időzítés: MIKOR lőnek a támadáson belül — első hullámban
     (korai) vagy kivárva.

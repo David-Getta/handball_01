@@ -3437,3 +3437,84 @@ def test_assist_fade_needs_halftime_and_goals():
     asf = assist_fade(Match(meta, frames))
     assert asf["home"]["verdict"] is None
     assert asf["home"]["gap_pp"] is None
+
+
+def _scf_miss_frames(t0, rebound: bool):
+    """Egy hazai kimaradt lövés a +x kapura (szélesre, y=5), utána
+    rebound=True esetén 2 mp-en belül újra lövés (megnyert lepattanó)."""
+    frames = []
+    t = t0
+
+    def flight(x0, y0, x1, y1, step=0.5):
+        nonlocal t
+        import math as _m
+        d = _m.hypot(x1 - x0, y1 - y0)
+        n = max(1, int(d / step))
+        for k in range(1, n + 1):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=x0 + (x1 - x0) * k / n,
+                                          y=y0 + (y1 - y0) * k / n,
+                                          confidence=1.0)))
+            t += 1
+
+    # Nyugalmi tartás a zónán kívül.
+    for _ in range(20):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+    # Lövés szélesre: a kapufákon kívül (y=5) hagyja el a pályát.
+    flight(30.0, 10.0, 40.5, 5.0)
+    if rebound:
+        # A lepattanó visszakerül, és 2 mp-en belül jön az új lövés.
+        for _ in range(5):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+        flight(30.0, 10.0, 40.5, 5.0)
+    # Hosszú szünet: a következő lövés már kívül esik az ablakon.
+    for _ in range(int(8 * 25)):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_second_chance_fade_flags_fading_fight():
+    """1. félidő: 3 visszaharcolt lepattanó; 2. félidő: 3 elveszett →
+    a hajrára elfogy a lepattanó-harcuk."""
+    from handball.pipeline.attack_types import second_chance_fade
+
+    meta = MatchMeta(match_id="scf", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(3):
+        gf, t = _scf_miss_frames(t, rebound=True)
+        frames += gf
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(3):
+        gf, t = _scf_miss_frames(t, rebound=False)
+        frames += gf
+
+    scf = second_chance_fade(Match(meta, frames))
+    h = scf["home"]
+    assert h["fh_misses"] >= 3 and h["fh_won"] >= 3
+    assert h["sh_misses"] == 3 and h["sh_won"] == 0
+    assert h["verdict"] == "a hajrára elfogy a lepattanó-harcuk"
+    assert scf["away"]["verdict"] is None
+
+
+def test_second_chance_fade_needs_halftime():
+    """Felismert szünet nélkül nincs ítélet."""
+    from handball.pipeline.attack_types import second_chance_fade
+
+    meta = MatchMeta(match_id="scf2", home_team="H", away_team="A", fps=25.0)
+    frames = []
+    t = 0
+    for _ in range(3):
+        gf, t = _scf_miss_frames(t, rebound=True)
+        frames += gf
+    scf = second_chance_fade(Match(meta, frames))
+    assert scf["home"]["verdict"] is None
+    assert scf["home"]["gap_pp"] is None

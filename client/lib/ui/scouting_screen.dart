@@ -1896,6 +1896,23 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Lepattanó-esés: a hajrára elfogyó második roham (félidőnként 3+
+  // lehetőség, 25 pp esés — a backenddel azonos küszöbök).
+  String? _secondChanceFade(Map<String, dynamic> r) {
+    final fhM = ((r["scf_fh_misses"] as num?) ?? 0).toInt();
+    final fhW = ((r["scf_fh_won"] as num?) ?? 0).toInt();
+    final shM = ((r["scf_sh_misses"] as num?) ?? 0).toInt();
+    final shW = ((r["scf_sh_won"] as num?) ?? 0).toInt();
+    if (fhM < 3 || shM < 3) return null;
+    final fhPct = 100.0 * fhW / fhM;
+    final shPct = 100.0 * shW / shM;
+    if (fhPct - shPct < 25.0) return null;
+    return "a hajrára elfogy a lepattanó-harcuk (visszaharcolt "
+        "lepattanó ${fhPct.toStringAsFixed(0)}% → "
+        "${shPct.toStringAsFixed(0)}%) · záráskor a blokk utáni "
+        "labda a tiéd";
+  }
+
   // Gólpassz-esés: a hajrában megálló labda (félidőnként 3+ gól,
   // 25 pp esés — a backenddel azonos küszöbök).
   String? _assistFade(Map<String, dynamic> r) {
@@ -5976,6 +5993,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus-sorozat", _gkSaveStreaks(r)!],
       if (_assistFade(r) != null)
         ["Gólpassz-esés", _assistFade(r)!],
+      if (_secondChanceFade(r) != null)
+        ["Lepattanó-esés", _secondChanceFade(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
