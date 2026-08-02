@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Csere-büntetés**: GÓLBA KERÜLNEK-E a csere-lyukak. A
+  csere-lyukak a kitettséget mérik — ez a megfizetett árát: a rövid
+  (cserés, nem kiállításos) öt fős szakaszok alatt és közvetlenül
+  utánuk kapott gólok (2+ góltól büntetett; 20+ mp lyuk gól nélkül
+  = büntetlenül megúszták). Akinél a lyuk gólba kerül, ott a
+  csere-pillanat bizonyítottan támadható; a saját oldalon a
+  csere-ütem javítása sürgős. Egy réteg, sok felület:
+  `gap_punishment` motor, edzői összefoglaló, /analyze +
+  meccs-csomag, felderítés-profil (lyuk-másodperc + darabszámok,
+  edzői kulcs + csempe), 217. meccsterv-szabály (az ő gólba kerülő
+  lyukaik × a ti gyors újraindításotok), 238. edzés-szabály
+  (csere-ütem: ki és be egy ütemben).
+
 - **Zavartalan előkészítők**: HAGYJÁK-E DOLGOZNI a gólpassz-adót.
   Az átvert védők a lövő párharcát nézik — ez az eggyel korábbi
   pillanatot: a kapott gólpasszos góloknál volt-e védő (2 m-en

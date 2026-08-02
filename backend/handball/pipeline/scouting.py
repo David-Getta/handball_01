@@ -646,6 +646,9 @@ class ScoutingReport:
     btn_defenders: dict = field(default_factory=dict)
     upa_assisted: int = 0
     upa_unpressured: int = 0
+    gpn_gap_s: float = 0.0
+    gpn_gaps: int = 0
+    gpn_conceded: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2417,6 +2420,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"/{rep.upa_assisted} zavartalan kiadás) — az utolsó "
                 "passz eléjük nehéz: egy-ütemű, korai kiadások "
                 "kellenek, mielőtt a nyomás odaér.")
+
+    # Csere-büntetés: bizonyítottan büntethető-e a cseréjük.
+    if rep.gpn_conceded >= 2:
+        keys.append(
+            f"A csere-lyukaik gólba kerülnek ({rep.gpn_conceded} "
+            f"kapott gól {rep.gpn_gap_s:.0f} mp öt fős játék alatt) "
+            "— a cseréjük pillanata bizonyítottan támadható: gyors "
+            "középkezdés és azonnali befejezés, amíg hiányzik az "
+            "emberük.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6304,6 +6316,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         uparec = _upa(match, config)[team.value]
         rep.upa_assisted = uparec["assisted"]
         rep.upa_unpressured = uparec["unpressured"]
+        from .substitutions import gap_punishment as _gpn
+        gpnrec = _gpn(match, config)[team.value]
+        rep.gpn_gap_s = gpnrec["gap_s"]
+        rep.gpn_gaps = gpnrec["gaps"]
+        rep.gpn_conceded = gpnrec["conceded"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8723,6 +8740,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 217) Az ő gólba kerülő csere-lyukaik × a ti gyors
+    # újraindításotok: a cseréjük a ti órajeletek.
+    if (opp.gpn_conceded >= 2 and own.rs_restarts >= 4):
+        _rs217 = 100.0 * own.rs_fast / max(1, own.rs_restarts)
+        if _rs217 >= 40.0:
+            plan.append(
+                f"A csere-lyukaik bizonyítottan gólba kerülnek "
+                f"({opp.gpn_conceded} kapott gól öt fős játék "
+                f"alatt), ti pedig gyorsan indítjátok újra a "
+                f"játékot (az újraindításaitok {_rs217:.0f}%-a "
+                "gyors) — a cseréjük a ti órajeletek: minden "
+                "hullámuknál azonnali középkezdés és kapura vitt "
+                "első támadás.")
 
     # 216) Az ő laza előkészítő-védekezésük × a ti gólpasszos
     # játékotok: az utolsó passz szabadon futhat.
@@ -12161,6 +12192,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             [r.btn_defenders for r in reports]),
         upa_assisted=sum(r.upa_assisted for r in reports),
         upa_unpressured=sum(r.upa_unpressured for r in reports),
+        gpn_gap_s=round(sum(r.gpn_gap_s for r in reports), 1),
+        gpn_gaps=sum(r.gpn_gaps for r in reports),
+        gpn_conceded=sum(r.gpn_conceded for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

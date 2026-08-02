@@ -472,3 +472,81 @@ def subs_by_score(match: Match,
                 rec["verdict"] = "vezetve sem nyúlnak a sorhoz"
         out[side] = rec
     return out
+
+
+# Csere-büntetés: a csere-lyuk utáni ennyi másodpercen belüli gól még
+# a lyuk számlájára megy; ennyi kapott gól kell a büntetett, és ennyi
+# lyuk-másodperc a büntetlenül megúszott ítélethez.
+GPN_TAIL_S = 3.0
+GPN_MIN_GOALS = 2
+GPN_ESCAPE_MIN_S = 20.0
+
+
+def gap_punishment(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-büntetés: GÓLBA KERÜLNEK-E a csere-lyukak.
+
+    A csere-lyukak (sub_gaps) a kitettséget mérik — ez a megfizetett
+    árát: a rövid (cserés, nem kiállításos) öt fős szakaszok alatt és
+    közvetlenül utánuk kapott gólokat. Van, aki éveken át lyukasan
+    cserél és megússza; és van, akinél a lyuk rendre a hálóban
+    végződik.
+
+    Edzőileg: akinél a csere-lyuk gólba kerül, ott a csere-pillanat
+    célzottan támadható — gyors középkezdés, azonnali befejezés; a
+    saját oldalon pedig nem elég mérni a lyukat: ha már gól esett
+    belőle, a csere-ütem javítása sürgős edzés-téma.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ, cserélő oldal): {"gap_s",
+    "gaps", "conceded", "verdict"} — a verdict "a csere-lyukaik
+    gólba kerülnek" (GPN_MIN_GOALS-tól), "a csere-lyukakat
+    büntetlenül megússzák" (GPN_ESCAPE_MIN_S-nyi lyuk, gól nélkül),
+    különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .rules import PP_MIN_S, field_count_timeline
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tl = field_count_timeline(match)
+    empty = {side: {"gap_s": 0.0, "gaps": 0, "conceded": 0,
+                    "verdict": None} for side in ("home", "away")}
+    if len(tl) < 2:
+        return empty
+    win_frames = tl[1]["start_frame"] - tl[0]["start_frame"]
+    win_s = win_frames / fps
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    tail = round(GPN_TAIL_S * fps)
+
+    out = empty
+    for side, other in (("home", "away"), ("away", "home")):
+        rec = out[side]
+        run_s = 0.0
+        run_start = None
+        spans = []
+        for w in tl + [None]:
+            active = (w is not None and w[side] <= 4 + 1
+                      and w[side] < w[other])
+            if active:
+                if run_start is None:
+                    run_start = w["start_frame"]
+                run_s += win_s
+            else:
+                if SBG_MIN_WINDOW_S <= run_s < PP_MIN_S:
+                    end = run_start + round(run_s * fps)
+                    spans.append((run_start, end))
+                    rec["gap_s"] += run_s
+                run_s = 0.0
+                run_start = None
+        rec["gap_s"] = round(rec["gap_s"], 1)
+        rec["gaps"] = len(spans)
+        for (a, b) in spans:
+            rec["conceded"] += sum(
+                1 for (t, tm) in goals
+                if tm == other and a <= t <= b + tail)
+        if rec["conceded"] >= GPN_MIN_GOALS:
+            rec["verdict"] = "a csere-lyukaik gólba kerülnek"
+        elif rec["gap_s"] >= GPN_ESCAPE_MIN_S and rec["conceded"] == 0:
+            rec["verdict"] = "a csere-lyukakat büntetlenül megússzák"
+    return out

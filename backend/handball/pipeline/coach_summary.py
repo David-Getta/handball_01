@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Csere-büntetés: gólba kerülnek-e a csere-lyukak.
+    try:
+        from .substitutions import gap_punishment
+        gpn = gap_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gpn = gpn[side]
+            if rec_gpn["verdict"] is None:
+                continue
+            body += (f" A(z) {name} cseréiről kiderült: "
+                     f"{rec_gpn['verdict']} ({rec_gpn['conceded']} "
+                     f"kapott gól {rec_gpn['gap_s']:.0f} mp öt fős "
+                     "játék alatt).")
+    except Exception:
+        pass
     # Zavartalan előkészítők: hagyják-e dolgozni a gólpassz-adót.
     try:
         from .defense import unpressured_assists

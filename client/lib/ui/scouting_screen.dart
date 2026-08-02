@@ -1726,6 +1726,18 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Csere-büntetés: gólba kerülnek-e a csere-lyukak (2+ lyuk alatt
+  // kapott gól — a backend-kulccsal azonos küszöb).
+  String? _gapPunishment(Map<String, dynamic> r) {
+    final conceded = ((r["gpn_conceded"] as num?) ?? 0).toInt();
+    final gapS = ((r["gpn_gap_s"] as num?) ?? 0).toDouble();
+    if (conceded < 2) return null;
+    return "a csere-lyukaik gólba kerülnek ($conceded kapott gól "
+        "${gapS.toStringAsFixed(0)} mp öt fős játék alatt) · a "
+        "cseréjük pillanata bizonyítottan támadható: azonnali "
+        "középkezdés";
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5646,6 +5658,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Átvert védők", _beatenDefenders(r)!],
       if (_unpressuredAssists(r) != null)
         ["Zavartalan előkészítők", _unpressuredAssists(r)!],
+      if (_gapPunishment(r) != null)
+        ["Csere-büntetés", _gapPunishment(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)

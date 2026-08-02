@@ -3454,6 +3454,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.substitutions import gap_punishment
+            res["gap_punishment"] = gap_punishment(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4378,6 +4383,9 @@ def create_app():
                 from ..pipeline.defense import unpressured_assists
                 _layer("unpressured_assists",
                        lambda: unpressured_assists(match))
+                from ..pipeline.substitutions import gap_punishment
+                _layer("gap_punishment",
+                       lambda: gap_punishment(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

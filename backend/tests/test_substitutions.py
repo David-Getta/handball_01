@@ -435,3 +435,70 @@ def test_subs_by_score_needs_enough_subs():
 
     rec = subs_by_score(_sbs_match(True, n_lead=2, n_rest=1))["home"]
     assert rec["verdict"] is None
+
+
+# ---- Csere-büntetés (gólba kerülnek-e a csere-lyukak) -----------------------
+
+def _gpn_match(with_goals, gap_runs=2, fps=25.0):
+    """Csere-lyukas meccs: a 30 mp-es öt fős szakaszok közepén a
+    vendégek gólt lőnek (vagy nem) — a lyuk ára így mérhető."""
+    frames = []
+    t = 0
+
+    def _block(seconds, home_n, goal_at_s=None):
+        nonlocal t
+        n = int(seconds * fps)
+        goal_start = (None if goal_at_s is None
+                      else int(goal_at_s * fps))
+        for i in range(n):
+            players = [_sbg_pl(100 + k, Team.HOME, 12.0 + k, 4.0 + k)
+                       for k in range(home_n)]
+            players += [_sbg_pl(200 + k, Team.AWAY, 24.0 + k, 4.0 + k)
+                        for k in range(5)]
+            if goal_start is not None and i >= goal_start:
+                j = i - goal_start
+                if j < 10:          # a vendég 205-ös a kapunk előtt
+                    bx, px = 6.0, 6.0
+                elif j < 17:        # lövés a -x kapunkba
+                    bx, px = max(6.0 - (j - 9) * 1.0, -0.5), 6.0
+                else:
+                    bx, px = 20.0, 26.0
+                players.append(_sbg_pl(205, Team.AWAY, px, 10.0))
+                ball = Ball(x=bx, y=10.0, confidence=1.0)
+            else:
+                players.append(_sbg_pl(205, Team.AWAY, 26.0, 10.0))
+                ball = Ball(x=20.0, y=10.0, confidence=1.0)
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+
+    _block(40, 6)
+    for _ in range(gap_runs):
+        _block(30, 5, goal_at_s=(12.0 if with_goals else None))
+        _block(40, 6)
+    return Match(_meta(fps), frames)
+
+
+def test_gap_punishment_flags_the_punished_gaps():
+    """Mindkét csere-lyuk alatt gólt kapnak → gólba kerülnek."""
+    from handball.pipeline.substitutions import gap_punishment
+
+    rec = gap_punishment(_gpn_match(True))["home"]
+    assert rec["gaps"] >= 2 and rec["conceded"] >= 2
+    assert rec["verdict"] == "a csere-lyukaik gólba kerülnek"
+
+
+def test_gap_punishment_flags_the_lucky_escape():
+    """Sok lyuk-másodperc gól nélkül → büntetlenül megússzák."""
+    from handball.pipeline.substitutions import gap_punishment
+
+    rec = gap_punishment(_gpn_match(False))["home"]
+    assert rec["gap_s"] >= 20.0 and rec["conceded"] == 0
+    assert rec["verdict"] == "a csere-lyukakat büntetlenül megússzák"
+
+
+def test_gap_punishment_no_gaps_no_verdict():
+    """Lyuk nélkül nincs ítélet."""
+    from handball.pipeline.substitutions import gap_punishment
+
+    rec = gap_punishment(_gpn_match(False, gap_runs=0))["home"]
+    assert rec["gap_s"] == 0.0 and rec["verdict"] is None

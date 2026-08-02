@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 238) Csere-büntetés: ha a csere-lyukaink már gólba kerültek, a
+    # csere-ütem javítása sürgős — nem mért kockázat, megfizetett ár.
+    try:
+        from .substitutions import gap_punishment
+        gpn238 = gap_punishment(match, config)
+        for side in ("home", "away"):
+            rec238 = gpn238[side]
+            if rec238["verdict"] != "a csere-lyukaik gólba kerülnek":
+                continue
+            add(side, "vedekezes", "Csere-ütem",
+                f"a csere-lyukaink gólba kerülnek ({rec238['conceded']}"
+                f" kapott gól {rec238['gap_s']:.0f} mp öt fős játék "
+                "alatt) — a lassú csere már nem kockázat, hanem "
+                "megfizetett ár",
+                "csere-ütem gyakorlat: ki és be EGY ütemben, a "
+                "cserezónán belül kéz-a-kézben váltás — az "
+                "edzésmeccsen minden öt fős védekezett másodperc "
+                "mínusz pont a cserélő sornak, a csere alatt kapott "
+                "gól dupla mínusz")
+    except Exception:
+        pass
     # 237) Zavartalan előkészítők: ha a gólpassz-adót hagyjuk
     # dolgozni, a passzsáv-nyomás a téma.
     try:
