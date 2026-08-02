@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Réteg-katalógus** (`docs/RETEG_KATALOGUS.md`, generált): a
+  meccs-csomag mind a 289 regisztrált rétege modulonként, a
+  réteg-függvény docstringjének első sorával (az álnevek a lambda
+  hívását követve feloldva). Generátor:
+  `python -m scripts.layer_catalog` (`--check` móddal); új őr-teszt
+  tartja szinkronban a kóddal. A pályázati "N elemző réteg" állítás
+  ellenőrizhető alátámasztása.
 - **Versenytárs-tábla** (`docs/VERSENYTARS_TABLA.md`): kvalitatív
   összevetés (Veo, Hudl, Spiideo, Catapult vs SportMachine) a pitch
   deck 7. diájához — szerkezeti különbségek (hardver, felhő,

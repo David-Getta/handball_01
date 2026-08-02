@@ -393,3 +393,22 @@ def test_claude_md_szamlalok_szinkronban():
     assert next_training == max_training + 1, (
         f"CLAUDE.md edzés-számláló {next_training}, de a legnagyobb "
         f"kiosztott szabályszám {max_training}")
+
+
+def test_reteg_katalogus_friss():
+    """A docs/RETEG_KATALOGUS.md generált fájl — ennek a tesztnek a
+    dolga, hogy ne csússzon el a kódtól: minden regisztrált rétegnek
+    szerepelnie kell benne, és a fejlécben lévő darabszámnak egyeznie
+    kell a registry-vel. (Frissítés: python -m scripts.layer_catalog)"""
+    root = Path(__file__).resolve().parent.parent
+    cat = root.parent / "docs" / "RETEG_KATALOGUS.md"
+    assert cat.exists(), "hiányzik a docs/RETEG_KATALOGUS.md — generáld"
+    text = cat.read_text(encoding="utf-8")
+    layers = _registered_package_layers()
+    missing = [n for n in layers if f"`{n}`" not in text]
+    assert not missing, f"a katalógusból hiányzó rétegek: {missing}"
+    m = re.search(r"Összesen \*\*(\d+) réteg\*\*", text)
+    assert m, "a katalógus fejléce elmozdult"
+    assert int(m.group(1)) == len(layers), (
+        f"a katalógus {m.group(1)} réteget mond, a registry "
+        f"{len(layers)}-t — futtasd: python -m scripts.layer_catalog")

@@ -115,6 +115,8 @@ A projekt EU-forrásból való továbbfejlesztésének tervei:
   `docs/KOLTSEGTERV_VAZLAT.md` · Pitch deck-vázlat:
   `docs/PITCH_DECK_VAZLAT.md`
 - Versenytárs-tábla: `docs/VERSENYTARS_TABLA.md`
+- Réteg-katalógus (generált, mind a 289 réteg egy helyen):
+  `docs/RETEG_KATALOGUS.md`
 - Pilot LOI-sablon: `docs/LOI_SABLON.md` · Annotációs útmutató:
   `docs/ANNOTACIOS_UTMUTATO.md` · Mérési jegyzőkönyv:
   `docs/MERESI_JEGYZOKONYV.md`
