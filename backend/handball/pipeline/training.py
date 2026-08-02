@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 262) Oldal-váltás a szünetre: ha az ellenfél a szünetben szárnyat
+    # váltott ellenünk, a súlypont-olvasás a téma.
+    try:
+        from .tactics import attack_side_shift
+        sds262 = attack_side_shift(match, config)
+        for side, other in (("home", "away"), ("away", "home")):
+            rec262 = sds262[other]
+            if rec262["verdict"] is None:
+                continue
+            add(side, "vedekezes", "Súlypont-olvasás a szünet után",
+                f"az ellenfél a szünetben szárnyat váltott ellenünk "
+                f"({rec262['fh_main']} → {rec262['sh_main']}) — a "
+                "falunk súlypontja a rossz oldalon maradt",
+                "súlypont-olvasás: az edzésmeccs második felében a "
+                "támadó csapat a pad jelére oldalt vált, a védő fal "
+                "hangosan mondja be és három labdán belül tükrözi a "
+                "súlypontot (erős védő + kettőzés az új oldalra) — "
+                "aki későn vált, büntetőkört fut")
+    except Exception:
+        pass
     # 261) Fal-váltás a szünetre: ha az ellenfél a szünetben falat
     # váltott ellenünk, a felismerés-rutin a téma.
     try:

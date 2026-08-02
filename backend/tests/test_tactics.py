@@ -614,3 +614,60 @@ def test_defense_form_shift_stable_wall_and_no_halftime():
     nob, _t2 = _dfs_half_frames(0, 5, advanced_one=False)
     dfs2 = defense_form_shift(Match(meta, nob))
     assert dfs2["away"]["verdict"] is None
+
+
+def _sds_half_frames(t0, y, seconds=8.0):
+    """seconds hossznyi hazai támadás a megadott y-sávban (x=30)."""
+    frames = []
+    t = t0
+    for _ in range(int(seconds * 25)):
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, y)],
+                            ball=Ball(x=30.0, y=y, confidence=1.0)))
+        t += 1
+    for _ in range(10):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=18.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_attack_side_shift_flags_wing_change():
+    """1. félidő bal szárny (y=3), 2. félidő jobb (y=17) → oldalt
+    váltanak."""
+    from handball.pipeline.tactics import attack_side_shift
+
+    meta = MatchMeta(match_id="sds", home_team="H", away_team="A", fps=25.0)
+    frames, t = _sds_half_frames(0, 3.0)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    sh, t = _sds_half_frames(t, 17.0)
+    frames += sh
+
+    sds = attack_side_shift(Match(meta, frames))
+    h = sds["home"]
+    assert h["fh_main"] == "bal"
+    assert h["sh_main"] == "jobb"
+    assert h["verdict"] == "a szünet után oldalt váltanak (bal → jobb)"
+    assert sds["away"]["verdict"] is None
+
+
+def test_attack_side_shift_stable_or_no_halftime_none():
+    """Azonos szárny mindkét félidőben, vagy szünet-jel nélkül →
+    nincs ítélet."""
+    from handball.pipeline.tactics import attack_side_shift
+
+    meta = MatchMeta(match_id="sds2", home_team="H", away_team="A", fps=25.0)
+    frames, t = _sds_half_frames(0, 3.0)
+    for _ in range(int(90 * 25)):
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    sh, t = _sds_half_frames(t, 3.0)
+    frames += sh
+    sds = attack_side_shift(Match(meta, frames))
+    assert sds["home"]["fh_main"] == "bal"
+    assert sds["home"]["sh_main"] == "bal"
+    assert sds["home"]["verdict"] is None
+
+    nob, _t = _sds_half_frames(0, 3.0)
+    assert attack_side_shift(Match(meta, nob))["home"]["verdict"] is None

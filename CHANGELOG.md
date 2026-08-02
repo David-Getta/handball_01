@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Oldal-váltás a szünetre** (`attack_side_shift`): félidőnként a
+  támadójáték fő oldala (bal/közép/jobb, a támadás iránya szerint
+  normálva) — aki a szünet után szárnyat vált, annál a beállított
+  fal-súlypont a 2. félidőben rossz oldalon áll. Edzői olvasat: a
+  szünet utáni első öt percben újra kell olvasni a súlypontot, az erős
+  védő és a kettőzés kerüljön át; a saját oldalon tudatos fegyver.
+  Felületek: `/analyze` + meccs-csomag (`attack_side_shift`), edzői
+  összefoglaló, felderítés (edzői kulcs + 241-es meccsterv-szabály),
+  edzés-fókusz (262-es szabály, tükör-oldalra), kliens-csempe.
 - **Meccs-jelentés: Szünet-lencse szekció** — a HTML-jelentésben új
   táblázat mutatja, mi változik a két félidő között: a támadás-mix
   átrendeződés (szünet-váltás) és a védekezési fal-váltás megszólaló

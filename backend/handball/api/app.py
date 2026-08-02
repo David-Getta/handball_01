@@ -3574,6 +3574,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.tactics import attack_side_shift
+            res["attack_side_shift"] = attack_side_shift(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import turnovers_by_score
             res["turnovers_by_score"] = turnovers_by_score(match)
         except Exception:
@@ -4568,6 +4573,9 @@ def create_app():
                 from ..pipeline.tactics import defense_form_shift
                 _layer("defense_form_shift",
                        lambda: defense_form_shift(match))
+                from ..pipeline.tactics import attack_side_shift
+                _layer("attack_side_shift",
+                       lambda: attack_side_shift(match))
                 from ..pipeline.attack_types import turnovers_by_score
                 _layer("turnovers_by_score",
                        lambda: turnovers_by_score(match))

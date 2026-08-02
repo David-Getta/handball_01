@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Oldal-váltás a szünetre: másik szárnyra kerül-e a súlypont.
+    try:
+        from .tactics import attack_side_shift
+        sds = attack_side_shift(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sds = sds[side]
+            if rec_sds["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szárny-játékáról kiderült: "
+                     f"{rec_sds['verdict']} — a fal súlypontját a "
+                     "szünet után át kell tenni.")
+    except Exception:
+        pass
     # Fal-váltás a szünetre: más falat hoznak-e a 2. félidőre.
     try:
         from .tactics import defense_form_shift

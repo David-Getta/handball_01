@@ -376,6 +376,89 @@ def attack_sides(match: Match, config: Optional[TacticsConfig] = None) -> dict:
     return out
 
 
+# Oldal-váltás a szünetre: a támadó oldal-súlyok a két félidőben.
+SDS_MIN_FRAMES_HALF = 100   # félidőnként ennyi támadó-kocka kell
+SDS_MAIN_PCT = 40.0         # a fő oldal részaránya a kimondáshoz
+
+
+def attack_side_shift(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Oldal-váltás a szünetre: MÁSIK SZÁRNYRA teszik-e át a játékot.
+
+    A támadás-oldal megoszlás (attack_sides) a meccs egészét nézi —
+    ez a szünetet: félidőnként megkeressük a támadójáték FŐ oldalát
+    (a támadó-fázisú kockák bal/közép/jobb megoszlásának uralkodó
+    sávját, a támadás iránya szerint normálva), és összevetjük a
+    kettőt. Aki a szünet után szárnyat vált, annál az első félidei
+    kép alapján beállított fal-súlypont a második félidőben már
+    rossz oldalon áll.
+
+    Edzőileg: az oldalt váltó csapat ellen a szünet utáni első öt
+    percben újra kell olvasni a súlypontot, és a fal erős emberét
+    (meg a kettőzést) a másik oldalra tenni; a saját oldalon ez
+    fegyver — a bejáratott szárny a szünet után tudatosan váltható.
+
+    Visszatérés csapatonként: {"fh_frames", "sh_frames", "fh", "sh"
+    (bal/közép/jobb %), "fh_counts", "sh_counts" (kocka-darabszámok),
+    "fh_main", "sh_main", "verdict"} — a
+    fh_main/sh_main None kevés kockánál vagy SDS_MAIN_PCT alatti
+    uralkodó oldalnál; a verdict "a szünet után oldalt váltanak
+    (X → Y)" / None.
+    """
+    from .calibration import COURT_WIDTH_M
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    lanes = ("bal", "közép", "jobb")
+    out = {side: {"fh_frames": 0, "sh_frames": 0,
+                  "fh": {k: 0.0 for k in lanes},
+                  "sh": {k: 0.0 for k in lanes},
+                  "fh_counts": {k: 0 for k in lanes},
+                  "sh_counts": {k: 0 for k in lanes},
+                  "fh_main": None, "sh_main": None, "verdict": None}
+           for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    counts = {side: {"fh": {k: 0 for k in lanes},
+                     "sh": {k: 0 for k in lanes}}
+              for side in ("home", "away")}
+    for f in match.frames:
+        ph = classify_phase(f, config)
+        if ph not in (Phase.HOME_ATTACK, Phase.AWAY_ATTACK) \
+                or f.ball is None:
+            continue
+        team = Team.HOME if ph == Phase.HOME_ATTACK else Team.AWAY
+        third = (0 if f.ball.y < COURT_WIDTH_M / 3 else
+                 1 if f.ball.y < 2 * COURT_WIDTH_M / 3 else 2)
+        attacks_positive = (config.attacks_toward_x(team)
+                            > COURT_LENGTH_M / 2)
+        if not attacks_positive:
+            third = 2 - third
+        half = "fh" if f.t <= ht else "sh"
+        counts[team.value][half][lanes[third]] += 1
+    for side in ("home", "away"):
+        rec = out[side]
+        for half in ("fh", "sh"):
+            total = sum(counts[side][half].values())
+            rec[half + "_frames"] = total
+            rec[half + "_counts"] = dict(counts[side][half])
+            if not total:
+                continue
+            for k in lanes:
+                rec[half][k] = round(
+                    100.0 * counts[side][half][k] / total, 1)
+            if total >= SDS_MIN_FRAMES_HALF:
+                main = max(lanes, key=lambda k: rec[half][k])
+                if rec[half][main] >= SDS_MAIN_PCT:
+                    rec[half + "_main"] = main
+        if rec["fh_main"] and rec["sh_main"] \
+                and rec["fh_main"] != rec["sh_main"]:
+            rec["verdict"] = (f"a szünet után oldalt váltanak "
+                              f"({rec['fh_main']} → {rec['sh_main']})")
+    return out
+
+
 # Forma elleni hatékonyság: pár kockával a lövés ELŐTT nézzük a védő-
 # formát (a lövés pillanatában a fal már felbomlóban lehet).
 FORMATION_LOOKBACK = 12

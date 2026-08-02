@@ -712,6 +712,10 @@ class ScoutingReport:
     dfs_sh_attacks: int = 0
     dfs_fh_labels: dict = field(default_factory=dict)
     dfs_sh_labels: dict = field(default_factory=dict)
+    sds_fh_frames: int = 0
+    sds_sh_frames: int = 0
+    sds_fh_counts: dict = field(default_factory=dict)
+    sds_sh_counts: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2789,6 +2793,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             "két kész figurasorral érkezzetek: az első félidei "
             "támadó-terv a másodikban már nem ér semmit, a szünet "
             "utáni első támadásnál hangosan mondjátok be a formát.")
+
+    # Oldal-váltás a szünetre: a fal súlypontját át kell tenni.
+    def _sds_main(cnt, n):
+        if n < 100 or not cnt:
+            return None
+        main, c = max(cnt.items(), key=lambda kv: kv[1])
+        return main if 100.0 * c / n >= 40.0 else None
+    _sds_fh = _sds_main(rep.sds_fh_counts, rep.sds_fh_frames)
+    _sds_sh = _sds_main(rep.sds_sh_counts, rep.sds_sh_frames)
+    if _sds_fh and _sds_sh and _sds_fh != _sds_sh:
+        keys.append(
+            f"A szünet után oldalt váltanak ({_sds_fh} → {_sds_sh}) — "
+            "a szünet utáni első öt percben olvassátok újra a "
+            "súlypontot: a fal erős embere és a kettőzés kerüljön át "
+            "a másik oldalra.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6795,6 +6814,12 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.dfs_sh_attacks = dfsrec["sh_attacks"]
         rep.dfs_fh_labels = dict(dfsrec["fh_labels"])
         rep.dfs_sh_labels = dict(dfsrec["sh_labels"])
+        from .tactics import attack_side_shift as _sds
+        sdsrec = _sds(match, config)[team.value]
+        rep.sds_fh_frames = sdsrec["fh_frames"]
+        rep.sds_sh_frames = sdsrec["sh_frames"]
+        rep.sds_fh_counts = dict(sdsrec["fh_counts"])
+        rep.sds_sh_counts = dict(sdsrec["sh_counts"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9214,6 +9239,31 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 241) Az ő szünet utáni oldal-váltásuk × a ti falat váltó
+    # védekezésetek: a súlypont-olvasás nálatok rutin.
+    def _sds241_main(cnt, n):
+        if n < 100 or not cnt:
+            return None
+        m241, c241 = max(cnt.items(), key=lambda kv: kv[1])
+        return m241 if 100.0 * c241 / n >= 40.0 else None
+    _sds241_fh = _sds241_main(opp.sds_fh_counts, opp.sds_fh_frames)
+    _sds241_sh = _sds241_main(opp.sds_sh_counts, opp.sds_sh_frames)
+    def _dfs241_main(labels, n):
+        if n < 5 or not labels:
+            return None
+        m241b, c241b = max(labels.items(), key=lambda kv: kv[1])
+        return m241b if 100.0 * c241b / n >= 60.0 else None
+    if (_sds241_fh and _sds241_sh and _sds241_fh != _sds241_sh
+            and _dfs241_main(own.dfs_fh_labels, own.dfs_fh_attacks)
+            and _dfs241_main(own.dfs_sh_labels, own.dfs_sh_attacks)):
+        plan.append(
+            f"A szünet után oldalt váltanak ({_sds241_fh} → "
+            f"{_sds241_sh}), a ti falatok pedig bizonyítottan tud "
+            "átrendeződni (félidőnként stabil, kimondható formát "
+            "játszotok) — a szünetben készítsétek elő a tükrözést: "
+            "az erős védőtök és a kettőzés az új súlypont-oldalra "
+            "kerüljön, és az első öt perc után hangos megerősítés.")
 
     # 240) Az ő szünet utáni fal-váltásuk × a ti bizonyított
     # játék-váltásotok: két figurasor, és nem ér meglepetés.
@@ -13099,6 +13149,12 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.dfs_fh_labels for r in reports),
         dfs_sh_labels=_merge_count_dicts(
             r.dfs_sh_labels for r in reports),
+        sds_fh_frames=sum(r.sds_fh_frames for r in reports),
+        sds_sh_frames=sum(r.sds_sh_frames for r in reports),
+        sds_fh_counts=_merge_count_dicts(
+            r.sds_fh_counts for r in reports),
+        sds_sh_counts=_merge_count_dicts(
+            r.sds_sh_counts for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),
