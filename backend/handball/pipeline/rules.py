@@ -176,6 +176,57 @@ def suspensions_by_score(match: Match, config=None) -> dict:
     return out
 
 
+# Hetes-állás: a kiharcolt hetesek az eredményjelző szerint.
+SVS_MIN_TOTAL = 3   # ennyi kiharcolt hetes alatt nincs ítélet
+SVS_DIFF = 2        # ekkora hátrány-többlet számít mintázatnak
+
+
+def sevens_by_score(match: Match, config=None) -> dict:
+    """Hetes-állás: MIKOR harcolják ki a heteseiket — állás szerint.
+
+    A hetes-kiharcolók (seven_meter_earners) azt mondják meg, KI hozza
+    a heteseket — ez azt, MILYEN ÁLLÁSNÁL jönnek: a kiharcolás
+    pillanatában vezetett, állt vagy hátrányban volt-e a kiharcoló
+    csapat. A hátrányban sűrűsödő hetes tudatos menekülő-fegyver:
+    a lemaradó csapat a betörésbe és a kontaktba menekül, mert a
+    hetes a legolcsóbb gól.
+
+    Edzőileg: az ilyen csapat ellen vezetésnél a fal lábbal
+    védekezzen és ne üssön — a betörőjük a kezet keresi; a kapusnak
+    pedig vezetésnél kell a hetes-készenlét, mert jönni fog. A saját
+    oldalon ugyanez fegyverként tanítható: hátrányban a betörés a
+    hetesig vihető.
+
+    Visszatérés csapatonként (a KIHARCOLÓ oldal): {"trailing",
+    "leading", "level", "verdict"} — a verdict "hátrányban harcolják
+    ki a heteseiket" (SVS_DIFF-nyi hátrány-többletnél), különben
+    None (kevés hetesnél is None).
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+    out = {side: {"trailing": 0, "leading": 0, "level": 0,
+                  "verdict": None} for side in ("home", "away")}
+    for sm in detect_seven_meters(match, config):
+        side = sm["team"]
+        t0 = sm["t"]
+        own = sum(1 for (t, tm) in goals if t < t0 and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < t0 and tm != side)
+        state = ("leading" if own > opp
+                 else "trailing" if own < opp else "level")
+        out[side][state] += 1
+    for rec in out.values():
+        total = rec["trailing"] + rec["leading"] + rec["level"]
+        if total < SVS_MIN_TOTAL:
+            continue
+        if rec["trailing"] - (rec["leading"] + rec["level"]) >= SVS_DIFF:
+            rec["verdict"] = "hátrányban harcolják ki a heteseiket"
+    return out
+
+
 # Fegyelem-esés: ennyi kiállítástól ítélünk, és ekkora félidők közti
 # többlet számít mintázatnak (nem egyszeri balszerencsének).
 DISC_FADE_MIN_TOTAL = 3

@@ -1343,6 +1343,26 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 251) Hetes-állás: ha vezetésnél sorra adjuk az olcsó heteseket a
+    # hátrányban lévőnek, a vezetés-őrző lábmunka a téma.
+    try:
+        from .rules import sevens_by_score
+        svs251 = sevens_by_score(match, config)
+        for side, other in (("home", "away"), ("away", "home")):
+            rec251 = svs251[other]
+            if rec251["verdict"] != \
+                    "hátrányban harcolják ki a heteseiket":
+                continue
+            add(side, "vedekezes", "Vezetés-őrző lábmunka",
+                f"az ellenfél hátrányból {rec251['trailing']} hetest "
+                "harcolt ki ellenünk — vezetésnél kézzel ütünk a "
+                "betörőre, és visszaadjuk a legolcsóbb gólt",
+                "vezetés-őrző lábmunka: betörés-védés 1-1-ben úgy, "
+                "hogy a kéz végig a magasban marad (lent ütő kéz = "
+                "azonnali hetes a gyakorlatban is) — a cél az elzárt "
+                "út, nem a labdaütés")
+    except Exception:
+        pass
     # 250) Fegyelem-állás: ha a kiállításaink hátrányban sűrűsödnek,
     # a hideg fej a téma — a frusztrációs kiállítás dupla ár.
     try:

@@ -1220,11 +1220,11 @@ def test_susp_earner_roles_needs_enough_suspensions():
     assert rec["top"] is None
 
 
-def _sps_away_goal_frames(t0, fps=25.0):
-    """Egy vendég-gól: 6v6 létszám mellett a vendég lövő (6,10)-ről a
+def _sps_away_goal_frames(t0, fps=25.0, hold_x=6.0):
+    """Egy vendég-gól: 6v6 létszám mellett a vendég lövő hold_x-ről a
     x=0 kapuba lő, majd a labda lassú visszavitel helyett a felezőre
     kerül (zóna-reset szünettel)."""
-    def crowd(shooter_ball_x, shooter_x=6.0):
+    def crowd(shooter_ball_x, shooter_x=hold_x):
         players = [_pl(100 + k, Team.HOME, 15.0 + k, 3.0 + 2 * k)
                    for k in range(6)]
         players += [_pl(201 + k, Team.AWAY, 16.0 + k, 4.0 + 2 * k)
@@ -1234,13 +1234,13 @@ def _sps_away_goal_frames(t0, fps=25.0):
 
     frames = []
     t = t0
-    # 40 kocka: a vendég lövő tartja a labdát (6,10)-nél.
+    # 40 kocka: a vendég lövő tartja a labdát (hold_x,10)-nél.
     for _ in range(40):
-        frames.append(Frame(t=t, players=crowd(6.0),
-                            ball=Ball(x=6.0, y=10.0, confidence=1.0)))
+        frames.append(Frame(t=t, players=crowd(hold_x),
+                            ball=Ball(x=hold_x, y=10.0, confidence=1.0)))
         t += 1
     # Lövés: a labda 0,5/kocka lépésben a kapuba (x=0 alá) repül.
-    x = 6.0
+    x = hold_x
     while x > -0.5:
         x -= 0.5
         frames.append(Frame(t=t, players=crowd(x),
@@ -1295,3 +1295,59 @@ def test_suspensions_by_score_few_samples_none():
     assert sps["home"]["trailing"] + sps["home"]["leading"] \
         + sps["home"]["level"] == 2
     assert sps["home"]["verdict"] is None
+
+
+def test_sevens_by_score_trailing_pattern():
+    """3 vendég-gól után 3 hazai kiharcolt hetes → hátrányban
+    harcolják ki a heteseiket."""
+    from handball.pipeline.rules import sevens_by_score
+
+    frames = []
+    t = 0
+    for _ in range(3):
+        gf, t = _sps_away_goal_frames(t, hold_x=10.0)
+        frames += gf
+    for _ in range(3):
+        # Hetes-jel: a labda 2 mp-ig áll a +x kapu 7 m-es pontján.
+        for _ in range(50):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME,
+                                                  32.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # 11 mp szünet a felezőn (debounce + zóna-reset).
+        for _ in range(int(11 * 25)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME,
+                                                  20.0, 10.0)],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    svs = sevens_by_score(Match(_meta(), frames))
+    h = svs["home"]
+    assert h["trailing"] == 3
+    assert h["leading"] == 0 and h["level"] == 0
+    assert h["verdict"] == "hátrányban harcolják ki a heteseiket"
+    assert svs["away"]["verdict"] is None
+
+
+def test_sevens_by_score_few_samples_none():
+    """2 kiharcolt hetes → kevés minta, nincs ítélet."""
+    from handball.pipeline.rules import sevens_by_score
+
+    frames = []
+    t = 0
+    for _ in range(2):
+        for _ in range(50):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(11 * 25)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    svs = sevens_by_score(Match(_meta(), frames))
+    assert svs["home"]["level"] == 2
+    assert svs["home"]["verdict"] is None

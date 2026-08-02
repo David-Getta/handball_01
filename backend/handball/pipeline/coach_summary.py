@@ -883,6 +883,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Hetes-állás: mikor harcolják ki a heteseket.
+    try:
+        from .rules import sevens_by_score
+        svs = sevens_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svs = svs[side]
+            if rec_svs["verdict"] is None:
+                continue
+            _svs_n = (rec_svs["trailing"] + rec_svs["leading"]
+                      + rec_svs["level"])
+            body += (f" A(z) {name} hetes-képe árulkodó: "
+                     f"{rec_svs['verdict']} ({rec_svs['trailing']}/"
+                     f"{_svs_n}) — hátrányban a betörés és a kontakt "
+                     "a menekülő-fegyverük.")
+    except Exception:
+        pass
     # Fegyelem-állás: mikor jönnek a kiállítások az állás szerint.
     try:
         from .rules import suspensions_by_score

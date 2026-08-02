@@ -673,6 +673,9 @@ class ScoutingReport:
     sps_tr: int = 0
     sps_lead: int = 0
     sps_level: int = 0
+    svs_tr: int = 0
+    svs_lead: int = 0
+    svs_level: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2615,6 +2618,15 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
             f"Előnyben szabálytalankodnak ({rep.sps_lead}/{_sps_n} "
             "kiállításuk vezetésnél jött) — vezetés-őrző keménység: "
             "ha ők vezetnek, a betörőt védeni kell, jön az ütés.")
+
+    # Hetes-állás: hátrányban a hetes a menekülő-fegyverük.
+    _svs_n = rep.svs_tr + rep.svs_lead + rep.svs_level
+    if _svs_n >= 3 and rep.svs_tr - (rep.svs_lead + rep.svs_level) >= 2:
+        keys.append(
+            f"Hátrányban a hetes a menekülő-fegyverük ({rep.svs_tr}/"
+            f"{_svs_n} kiharcolt hetesük hátrányban jött) — ha "
+            "vezettek, a fal lábbal védekezzen és ne üssön: a "
+            "betörőjük a kezet keresi, a kapusnál hetes-készenlét.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6554,6 +6566,11 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         rep.sps_tr = spsrec["trailing"]
         rep.sps_lead = spsrec["leading"]
         rep.sps_level = spsrec["level"]
+        from .rules import sevens_by_score as _svs
+        svsrec = _svs(match, config)[team.value]
+        rep.svs_tr = svsrec["trailing"]
+        rep.svs_lead = svsrec["leading"]
+        rep.svs_level = svsrec["level"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8973,6 +8990,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 230) Az ő hátrány-heteseik × a ti lábbal védekező faltok: a
+    # menekülő-fegyverük elvehető.
+    if (opp.svs_tr >= 3
+            and opp.svs_tr - (opp.svs_lead + opp.svs_level) >= 2
+            and own.suspensions <= 2):
+        plan.append(
+            f"Hátrányban a hetes a menekülő-fegyverük ({opp.svs_tr} "
+            f"kiharcolt hetesük hátrányban jött), a ti falatok pedig "
+            f"szabályosan dolgozik ({own.suspensions} kiállítás) — ha "
+            "vezettek, a betörőik kontaktot és kezet keresnek: lábbal "
+            "elzárt út, magasban tartott kéz, és a legolcsóbb "
+            "góljukat veszitek el.")
 
     # 229) Az ő frusztrációs kiállításaik × a ti hideg fejetek: a
     # vezetés kiállítást terem.
@@ -12626,6 +12656,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         sps_tr=sum(r.sps_tr for r in reports),
         sps_lead=sum(r.sps_lead for r in reports),
         sps_level=sum(r.sps_level for r in reports),
+        svs_tr=sum(r.svs_tr for r in reports),
+        svs_lead=sum(r.svs_lead for r in reports),
+        svs_level=sum(r.svs_level for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

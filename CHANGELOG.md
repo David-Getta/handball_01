@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Hetes-állás** (`sevens_by_score`): a kiharcolt hetesek az
+  eredményjelző szerint — hátrányban sűrűsödő hetes = a betörés és a
+  kontakt a menekülő-fegyver. Edzői olvasat: az ilyen csapat ellen
+  vezetésnél lábbal védekező fal és kapus-hetes-készenlét kell; a saját
+  oldalon a vezetés-őrző lábmunka a téma. Felületek: `/analyze` +
+  meccs-csomag (`sevens_by_score`), edzői összefoglaló, felderítés
+  (edzői kulcs + 230-as meccsterv-szabály), edzés-fókusz (251-es
+  szabály), kliens-csempe.
 - **Fegyelem-állás** (`suspensions_by_score`): a kiállítások az
   eredményjelző szerint — a kiállítás pillanatában vezetett, állt vagy
   hátrányban volt-e a kiállított csapat. Edzői olvasat: a hátrányban

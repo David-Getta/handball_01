@@ -1896,6 +1896,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Hetes-állás: mikor harcolják ki a heteseket (3+ hetes, 2-es
+  // hátrány-többlet — a backenddel azonos küszöbök).
+  String? _sevensByScore(Map<String, dynamic> r) {
+    final tr = ((r["svs_tr"] as num?) ?? 0).toInt();
+    final lead = ((r["svs_lead"] as num?) ?? 0).toInt();
+    final level = ((r["svs_level"] as num?) ?? 0).toInt();
+    final total = tr + lead + level;
+    if (total < 3 || tr - (lead + level) < 2) return null;
+    return "hátrányban a hetes a menekülő-fegyverük ($tr/$total "
+        "kiharcolt hetes hátrányban) · ha vezetsz, lábbal védekezz: "
+        "a betörőjük a kezet keresi";
+  }
+
   // Fegyelem-állás: kiállítások az állás szerint (3+ kiállítás, 2-es
   // többlet — a backenddel azonos küszöbök).
   String? _suspensionsByScore(Map<String, dynamic> r) {
@@ -5891,6 +5904,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kidobott labda", _ballsOut(r)!],
       if (_suspensionsByScore(r) != null)
         ["Fegyelem-állás", _suspensionsByScore(r)!],
+      if (_sevensByScore(r) != null)
+        ["Hetes-állás", _sevensByScore(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
