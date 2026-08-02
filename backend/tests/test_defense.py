@@ -2494,3 +2494,67 @@ def test_conceded_tempo_needs_enough_goals():
 
     rec = conceded_tempo(_ctm_match(True, n_goals=3))["away"]
     assert rec["verdict"] is None
+
+
+# ---- Lendület-gólok (mozgásból érkező lövőktől kapják-e) --------------------
+
+def _cgm_match(running, n_goals=5, fps=25.0):
+    """Hazai gól-sorozat: a lövő mozgásból érkezve (vagy állóhelyből)
+    lő a kapuba."""
+    frames = []
+    t = 0
+    for _ in range(n_goals):
+        if running:
+            for i in range(24):     # a lövő labdával lendületet vesz
+                x = 30.0 + 0.15 * i
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, x, 10.0)],
+                    ball=Ball(x=x, y=10.0, confidence=1.0)))
+                t += 1
+            sx = 30.0 + 0.15 * 23
+        else:
+            for _ in range(24):     # állóhelyből
+                frames.append(Frame(t=t, players=[
+                    _pl(1, Team.HOME, 33.0, 10.0)],
+                    ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+                t += 1
+            sx = 33.0
+        for i in range(8):          # gól a +x kapura
+            px = sx + (0.15 * (i + 1) if running else 0.0)
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, px, 10.0)],
+                ball=Ball(x=min(sx + (i + 1), 40.5), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_conceded_momentum_flags_the_late_pickup():
+    """Lendületből érkező lövők góljai → mozgásból kapják."""
+    from handball.pipeline.defense import conceded_momentum
+
+    rec = conceded_momentum(_cgm_match(True))["away"]
+    assert rec["goals"] >= 5
+    assert rec["verdict"] == "mozgásból kapják a gólokat"
+
+
+def test_conceded_momentum_flags_the_passive_wall():
+    """Állóhelyből lőtt gólok → állóhelyből is bekapják."""
+    from handball.pipeline.defense import conceded_momentum
+
+    rec = conceded_momentum(_cgm_match(False))["away"]
+    assert rec["running"] == 0
+    assert rec["verdict"] == "állóhelyből is bekapják"
+
+
+def test_conceded_momentum_needs_enough_goals():
+    """Kevés (5-nél kevesebb) mért kapott gólnál nincs ítélet."""
+    from handball.pipeline.defense import conceded_momentum
+
+    rec = conceded_momentum(_cgm_match(True, n_goals=3))["away"]
+    assert rec["verdict"] is None

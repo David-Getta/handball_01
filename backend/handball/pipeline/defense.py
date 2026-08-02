@@ -3599,3 +3599,75 @@ def conceded_tempo(match, config=None) -> dict:
             elif avg <= CTM_SLOW_AVG:
                 rec["verdict"] = "egyéni akciókból kapják a gólokat"
     return out
+
+
+# Lendület-gólok: a gól pillanatában e feletti sebességű lövő számít
+# mozgásból érkezőnek; ennyi mért kapott gól kell az ítélethez, és e
+# feletti / alatti mozgásos arány a bekísérés-hiba, illetve az
+# állóhelyből tisztán lőtt gólok jele.
+CGM_RUN_MS = 2.5
+CGM_MIN_GOALS = 5
+CGM_RUN_PCT = 55.0
+CGM_SET_PCT = 25.0
+
+
+def conceded_momentum(match, config=None) -> dict:
+    """Lendület-gólok: MOZGÁSBÓL ÉRKEZŐ lövőktől kapják-e a gólokat.
+
+    A gól-pillanati család sebesség-tagja: a kapott góloknál a lövő
+    mozgás-sebességét mérjük a lövés pillanata körül. A lendületből
+    érkező lövő gólja bekísérés-hiba — az embert senki nem vette fel
+    időben; az állóhelyből lőtt gól tiszta felállt lövés — ott a
+    kilépés (vagy a blokk-kéz) hiányzott.
+
+    Edzőileg: aki mozgásból kapja a gólokat, az ellen a betörőt és a
+    befutót kell játszani — a bekísérésük késik; aki állóból kapja,
+    annak a fala enged tiszta lövést — ellene a nyugodt, kivárt
+    átlövés is termel.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals" (mért
+    kapott gólok), "running", "run_pct", "verdict"} — a
+    run_pct/verdict None CGM_MIN_GOALS alatt; a verdict "mozgásból
+    kapják a gólokat" / "állóhelyből is bekapják" / None.
+    """
+    import math
+
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    out = {side: {"goals": 0, "running": 0, "run_pct": None,
+                  "verdict": None} for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        if sh.get("outcome") != "goal" or sh.get("player_id") is None:
+            continue
+        deff = "away" if sh["team"] == "home" else "home"
+        i0 = idx_of.get(sh["t"])
+        if i0 is None or i0 < 2 or i0 + 2 >= len(match.frames):
+            continue
+        p_before = next((p for p in match.frames[i0 - 2].players
+                         if p.track_id == sh["player_id"]), None)
+        p_after = next((p for p in match.frames[i0 + 2].players
+                        if p.track_id == sh["player_id"]), None)
+        if p_before is None or p_after is None:
+            continue
+        speed = (math.hypot(p_after.x - p_before.x,
+                            p_after.y - p_before.y) * fps / 4.0)
+        rec = out[deff]
+        rec["goals"] += 1
+        if speed >= CGM_RUN_MS:
+            rec["running"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["goals"] >= CGM_MIN_GOALS:
+            pct = 100.0 * rec["running"] / rec["goals"]
+            rec["run_pct"] = round(pct, 1)
+            if pct >= CGM_RUN_PCT:
+                rec["verdict"] = "mozgásból kapják a gólokat"
+            elif pct <= CGM_SET_PCT:
+                rec["verdict"] = "állóhelyből is bekapják"
+    return out

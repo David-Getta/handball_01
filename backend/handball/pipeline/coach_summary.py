@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Lendület-gólok: mozgásból érkező lövőktől kapják-e a gólokat.
+    try:
+        from .defense import conceded_momentum
+        cgm = conceded_momentum(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cgm = cgm[side]
+            if rec_cgm["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott góljairól kiderült: "
+                     f"{rec_cgm['verdict']} ({rec_cgm['running']}/"
+                     f"{rec_cgm['goals']} gólnál lendületből "
+                     "érkezett a lövő).")
+    except Exception:
+        pass
     # Bontó tempó: a járatás szedi-e szét a védekezésüket.
     try:
         from .defense import conceded_tempo

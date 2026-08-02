@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Lendület-gólok**: MOZGÁSBÓL ÉRKEZŐ lövőktől kapják-e a
+  gólokat. A gól-pillanati család sebesség-tagja: a kapott góloknál
+  a lövő mozgás-sebessége a lövés pillanata körül (5+ mért kapott
+  gól; 55%+ mozgásos = a bekísérés késik, 25% alatti = állóhelyből
+  is tiszta lövést engednek). A mozgásból bekapó ellen a betörőt és
+  a befutót kell játszani; az állóból bekapó ellen a kivárt átlövés
+  is termel. Egy réteg, sok felület: `conceded_momentum` motor,
+  edzői összefoglaló, /analyze + meccs-csomag, felderítés-profil
+  (darabszámok, két edzői kulcs + csempe), 220. meccsterv-szabály
+  (az ő késő bekísérésük × a ti befutóitok), 241. edzés-szabály
+  (bekísérés hangos átadás-jellel).
+
 - **Bontó tempó**: A JÁRATÁS SZEDI-E SZÉT a védekezésüket. A
   gól-pillanati család negyedik tagja: a kapott gólok előtti 8
   másodperc passzainak átlaga (5+ kapott gól; 3+ passz a járatásos,

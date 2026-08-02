@@ -653,6 +653,8 @@ class ScoutingReport:
     crg_open: int = 0
     ctm_goals: int = 0
     ctm_passes_sum: int = 0
+    cgm_goals: int = 0
+    cgm_running: int = 0
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2466,6 +2468,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_ctm_avg:.1f} passz a góljaik előtt) — az 1v1-ben "
                 "erős embereiteket engedjétek rájuk: a hosszú "
                 "járatás csak időt ad nekik rendeződni.")
+
+    # Lendület-gólok: a betörőt vagy az átlövőt kell rájuk küldeni.
+    if rep.cgm_goals >= 5:
+        _cgm_pct = 100.0 * rep.cgm_running / rep.cgm_goals
+        if _cgm_pct >= 55.0:
+            keys.append(
+                f"Mozgásból kapják a gólokat ({rep.cgm_running}/"
+                f"{rep.cgm_goals} gólnál lendületből érkezett a "
+                "lövő) — a bekísérésük késik: a betörőt és a "
+                "befutót játsszátok, az érkező embert nem veszik "
+                "fel időben.")
+        elif _cgm_pct <= 25.0:
+            keys.append(
+                f"Állóhelyből is bekapják (csak {rep.cgm_running}/"
+                f"{rep.cgm_goals} gól jött mozgásból) — a faluk "
+                "tiszta lövést enged: a nyugodt, kivárt átlövés is "
+                "termel ellenük.")
 
     # Hiba-állás: mikor éri meg présre váltani.
     if rep.tbs_tr_attacks >= 5 and rep.tbs_rest_attacks >= 5:
@@ -6366,6 +6385,10 @@ def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None)
         ctmrec = _ctm(match, config)[team.value]
         rep.ctm_goals = ctmrec["goals"]
         rep.ctm_passes_sum = ctmrec["passes_sum"]
+        from .defense import conceded_momentum as _cgm
+        cgmrec = _cgm(match, config)[team.value]
+        rep.cgm_goals = cgmrec["goals"]
+        rep.cgm_running = cgmrec["running"]
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -8785,6 +8808,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 220) Az ő késő bekísérésük × a ti befutóitok: a mozgásból
+    # érkező embert nem tudják felvenni.
+    if (opp.cgm_goals >= 5 and own.fbw_breaks >= 5):
+        _cgm220 = 100.0 * opp.cgm_running / opp.cgm_goals
+        _fbw220 = 100.0 * own.fbw_second / max(1, own.fbw_breaks)
+        if _cgm220 >= 55.0 and _fbw220 >= 40.0:
+            plan.append(
+                f"Mozgásból kapják a gólokat ({opp.cgm_running}/"
+                f"{opp.cgm_goals} gólnál lendületből érkezett a "
+                f"lövő), a ti kontráitokat pedig gyakran a befutó "
+                f"fejezi be ({own.fbw_second}/{own.fbw_breaks}) — a "
+                "második hullámot és a betörőt játsszátok: az "
+                "érkező embert nem veszik fel időben, a lendület "
+                "átmegy rajtuk.")
 
     # 219) Az ő járatással bontható faluk × a ti oldalváltós
     # járatásotok: a tempó szedi szét őket.
@@ -12272,6 +12310,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         crg_open=sum(r.crg_open for r in reports),
         ctm_goals=sum(r.ctm_goals for r in reports),
         ctm_passes_sum=sum(r.ctm_passes_sum for r in reports),
+        cgm_goals=sum(r.cgm_goals for r in reports),
+        cgm_running=sum(r.cgm_running for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

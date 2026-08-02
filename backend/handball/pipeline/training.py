@@ -1343,6 +1343,27 @@ def training_focus(match: Match,
     except Exception:
         pass
 
+    # 241) Lendület-gólok: ha mozgásból kapjuk a gólokat, a bekísérés
+    # a téma — az érkező embert időben fel kell venni.
+    try:
+        from .defense import conceded_momentum
+        cgm241 = conceded_momentum(match, config)
+        for side in ("home", "away"):
+            rec241 = cgm241[side]
+            if rec241["verdict"] != "mozgásból kapják a gólokat":
+                continue
+            add(side, "vedekezes", "Bekísérés",
+                f"a kapott góljaink zöménél lendületből érkezett a "
+                f"lövő ({rec241['running']}/{rec241['goals']}) — az "
+                "érkező embert senki nem veszi fel időben, a "
+                "lendület átmegy a falon",
+                "bekísérés-gyakorlat: a fal a betörő/befutó embert "
+                "hangos átadás-jellel kíséri (aki elé kerül, azé), "
+                "és a mélységből érkezőre KÖTELEZŐ a korai kilépés "
+                "— az edzésmeccsen a lendületből kapott gól dupla "
+                "mínusz, a megállított betörés pont a felvevőnek")
+    except Exception:
+        pass
     # 240) Bontó tempó: ha a járatás szed szét minket, a váltás-
     # fegyelem tempó alatt a téma.
     try:

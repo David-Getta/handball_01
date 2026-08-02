@@ -1780,6 +1780,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Lendület-gólok: mozgásból érkező lövőktől kapják-e a gólokat
+  // (5+ mért kapott gól; 55%+ mozgásos, 25%- álló — a
+  // backend-kulccsal azonos küszöbök).
+  String? _concededMomentum(Map<String, dynamic> r) {
+    final goals = ((r["cgm_goals"] as num?) ?? 0).toInt();
+    final running = ((r["cgm_running"] as num?) ?? 0).toInt();
+    if (goals < 5) return null;
+    final pct = 100.0 * running / goals;
+    if (pct >= 55.0) {
+      return "mozgásból kapják a gólokat ($running/$goals lendületes "
+          "lövőtől) · a bekísérésük késik: a betörőt és a befutót "
+          "játszd";
+    }
+    if (pct <= 25.0) {
+      return "állóhelyből is bekapják (csak $running/$goals "
+          "mozgásból) · tiszta lövést engednek: a kivárt átlövés is "
+          "termel";
+    }
+    return null;
+  }
+
   // Csere-lyukak: csere közbeni öt fős másodpercek (20+ mp — a
   // backend-kulccsal azonos küszöb).
   String? _subGaps(Map<String, dynamic> r) {
@@ -5706,6 +5727,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Folyosó-gólok", _corridorGoals(r)!],
       if (_concededTempo(r) != null)
         ["Bontó tempó", _concededTempo(r)!],
+      if (_concededMomentum(r) != null)
+        ["Lendület-gólok", _concededMomentum(r)!],
       if (_turnoversByScore(r) != null)
         ["Hiba-állás", _turnoversByScore(r)!],
       if (_defenseByScore(r) != null)
