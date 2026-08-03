@@ -59,6 +59,13 @@ def possession_team(frame: Frame, config: TacticsConfig) -> Optional[Team]:
     Ha nincs labda, vagy a legközelebbi játékos is távolabb van a sugárnál,
     None ("szabad labda" / nincs egyértelmű birtokos).
     """
+    from .primitive_cache import cached_frame
+    return cached_frame("possession_team", frame, config,
+                        lambda: _possession_team(frame, config))
+
+
+def _possession_team(frame: Frame, config: TacticsConfig) -> Optional[Team]:
+    """A tényleges birtokos-csapat számítás (lásd `possession_team`)."""
     ball = frame.ball
     if ball is None or not frame.players:
         return None
@@ -89,6 +96,13 @@ def classify_phase(frame: Frame, config: TacticsConfig) -> Phase:
     labda az ő TÁMADÓ térfelén van. Minden más (szabad labda, saját térfélen
     felépítés) ÁTMENET. Labda nélkül UNKNOWN.
     """
+    from .primitive_cache import cached_frame
+    return cached_frame("classify_phase", frame, config,
+                        lambda: _classify_phase(frame, config))
+
+
+def _classify_phase(frame: Frame, config: TacticsConfig) -> Phase:
+    """A tényleges fázis-besorolás (lásd `classify_phase`)."""
     ball = frame.ball
     if ball is None:
         return Phase.UNKNOWN

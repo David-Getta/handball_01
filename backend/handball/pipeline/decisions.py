@@ -92,6 +92,13 @@ class Option:
 
 def ball_holder(frame: Frame, config: TacticsConfig) -> Optional[PlayerPosition]:
     """A labdát épp birtokló JÁTÉKOS (a labdához legközelebbi, sugáron belül)."""
+    from .primitive_cache import cached_frame
+    return cached_frame("ball_holder", frame, config,
+                        lambda: _ball_holder(frame, config))
+
+
+def _ball_holder(frame: Frame, config: TacticsConfig) -> Optional[PlayerPosition]:
+    """A tényleges birtokos-keresés (lásd `ball_holder`)."""
     ball = frame.ball
     if ball is None or not frame.players:
         return None

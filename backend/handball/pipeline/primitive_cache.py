@@ -126,7 +126,7 @@ def primitive_cache(match: Match):
         yield  # újra-belépés: a külső blokk gyorsítótárát használjuk
         return
 
-    token = _SCOPE.set({"match": match, "store": {}, "roles": 0})
+    token = _SCOPE.set({"match": match, "store": {}, "frames": {}, "roles": 0})
     try:
         yield
     finally:
@@ -182,10 +182,39 @@ def open_scope(match: Match):
     scope = _SCOPE.get()
     if scope is not None and scope["match"] is match:
         return None
-    return _SCOPE.set({"match": match, "store": {}, "roles": 0})
+    return _SCOPE.set({"match": match, "store": {}, "frames": {}, "roles": 0})
 
 
 def close_scope(token) -> None:
     """A `open_scope`-pal nyitott hatókör bezárása (None-ra nem művelet)."""
     if token is not None:
         _SCOPE.reset(token)
+
+
+def cached_frame(name: str, frame, config, compute: Callable):
+    """Kocka-szintű memoizálás — a legforróbb, kockánkénti mérésekhez.
+
+    A birtoklás-számítás (`ball_holder`, `possession_team`,
+    `classify_phase`) kockánként fut, és egy nagy összeállítás alatt
+    ugyanarra a kockára több százszor. Ez a segéd a nyitott hatókörön
+    belül kockánként egyszer számol.
+
+    A bejegyzés MAGÁT A KOCKÁT is eltárolja: így a kocka nem
+    szemetelődhet ki a bejegyzés alatt, tehát az azonosítója sem
+    használódhat újra egy másik kockára (a hatókörön belül keletkező
+    ideiglenes kockák miatt fontos). A visszaadott érték nem másolat —
+    ugyanaz az objektum, amit gyorsítótár nélkül is kapnánk (játékos a
+    kockából, illetve érték-típusú csapat/fázis).
+    """
+    scope = _SCOPE.get()
+    if scope is None:
+        return compute()
+    key = (name, id(frame),
+           getattr(config, "possession_radius_m", None),
+           getattr(config, "home_attacks_positive", None))
+    entry = scope["frames"].get(key)
+    if entry is not None and entry[0] is frame:
+        return entry[1]
+    val = compute()
+    scope["frames"][key] = (frame, val)
+    return val

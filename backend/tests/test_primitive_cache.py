@@ -213,3 +213,36 @@ def test_repeated_role_marking_keeps_the_cache():
         detect_goalkeepers(m)  # nem változtat semmit
         measure(m)
     assert len(calls) == 1, calls
+
+
+def test_frame_level_cache_computes_once():
+    """A kocka-szintű memoizálás kockánként egyszer számol a hatókörben."""
+    from handball.pipeline.primitive_cache import cached_frame
+
+    calls = []
+    m = _goal_match()
+    f0, f1 = m.frames[0], m.frames[1]
+    cfg = TacticsConfig()
+
+    def measure(frame):
+        return cached_frame("teszt_kocka", frame, cfg,
+                            lambda: (calls.append(frame.t), frame.t)[1])
+
+    with primitive_cache(m):
+        assert measure(f0) == 0
+        assert measure(f0) == 0
+        assert measure(f1) == 1
+    assert calls == [0, 1], calls
+
+
+def test_frame_level_cache_is_off_without_scope():
+    """Hatókör nélkül a kocka-szintű memoizálás sem tárol."""
+    from handball.pipeline.primitive_cache import cached_frame
+
+    calls = []
+    m = _goal_match()
+    cfg = TacticsConfig()
+    for _ in range(2):
+        cached_frame("teszt_kocka2", m.frames[0], cfg,
+                     lambda: calls.append(1))
+    assert len(calls) == 2, calls

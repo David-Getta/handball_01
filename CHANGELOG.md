@@ -24,8 +24,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   érték friss másolat, így egy réteg jelölése (pl. a gólpassz beírása)
   nem szivárog a következőbe; a kapus-szerep jelölése pedig a
   gyorsítótár-kulcs része, tehát amikor a jelölés megváltozik, a
-  szerepből dolgozó mérések újraszámolnak. Új teszt-fájl
-  (`tests/test_primitive_cache.py`, 10 teszt) rögzíti mindezt.
+  szerepből dolgozó mérések újraszámolnak. A legforróbb, KOCKÁNKÉNTI
+  mérések (birtokos játékos, birtokló csapat, játékfázis) is a
+  hatókörben memoizálódnak — ezek egy nagy összeállítás alatt
+  milliószor futottak le ugyanazokra a kockákra; a bejegyzés magát a
+  kockát is fogja, így ideiglenes kockák sem keverhetők össze vele.
+  Új teszt-fájl (`tests/test_primitive_cache.py`, 12 teszt) rögzíti
+  mindezt.
 
 - **Teendő-rangsor** (`priority_findings`, új `pipeline/priorities`
   modul): a megszólaló ítéleteket összegyűjti a rangsorba vont
