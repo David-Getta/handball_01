@@ -6309,7 +6309,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
 
 
 def scout_team(match: Match, team: Team, config: Optional[TacticsConfig] = None) -> ScoutingReport:
-    """Egy csapat felderítő jelentése EGY meccsből."""
+    """Egy csapat felderítő jelentése EGY meccsből.
+
+    A jelentés több száz réteget olvas ugyanarról a meccsről, ezért egy
+    `primitive_cache` hatókörben fut: az alap-mérések meccsenként
+    egyszer futnak le. Az eredmény változatlan.
+    """
+    from .primitive_cache import primitive_cache
+    with primitive_cache(match):
+        return _scout_team_cached(match, team, config)
+
+
+def _scout_team_cached(match: Match, team: Team,
+                       config: Optional[TacticsConfig] = None) -> ScoutingReport:
+    """A felderítő jelentés tényleges felépítése (lásd `scout_team`)."""
     config = config or TacticsConfig()
     team_name = match.meta.home_team if team == Team.HOME else match.meta.away_team
 

@@ -636,7 +636,25 @@ def match_report_html(match, tactics: dict, events: list, quality: dict | None,
     (compute_player_stats — terhelés-tábla) és az edzői jegyzetek.
     Minden szakasz hiányzó adatnál is értelmes szöveget ad — a jelentés
     sosem "törik el".
+
+    A jelentés több száz réteget olvas ugyanarról a meccsről, ezért
+    egy `primitive_cache` hatókörben épül fel: az alap-mérések
+    meccsenként egyszer futnak le. A jelentés tartalma változatlan.
     """
+    from .primitive_cache import primitive_cache
+    with primitive_cache(match):
+        return _match_report_html_cached(
+            match, tactics, events, quality, heatmaps=heatmaps,
+            player_stats=player_stats, notes=notes)
+
+
+def _match_report_html_cached(match, tactics: dict, events: list,
+                              quality: dict | None,
+                              heatmaps: dict | None = None,
+                              player_stats: dict | None = None,
+                              notes: list | None = None) -> str:
+    """A jelentés tényleges felépítése (lásd `match_report_html`)."""
+
     meta = match.meta
     home, away = escape(meta.home_team), escape(meta.away_team)
     fps = meta.fps if meta.fps > 0 else 25.0

@@ -10,14 +10,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   újra elvégezték — egyetlen edzői összefoglaló futása alatt a
   lövés-felismerés négyszáznál is többször futott le ugyanarra a
   meccsre. Mostantól a nagy összeállítások (edzői összefoglaló,
-  edzés-fókusz, teendő-rangsor, támadás-végpont, teljes meccs-csomag)
-  egy kimondott hatókörben futnak, amelyen belül az alap-mérések
+  edzés-fókusz, teendő-rangsor, felderítő jelentés, meccs-jelentés,
+  támadás-végpont, teljes meccs-csomag) egy kimondott hatókörben futnak, amelyen belül az alap-mérések
   (lövés- és eseményfelismerés, birtoklás-váltások, támadás-szakaszok,
   támadás-típusok, poszt-becslés, létszám-idővonal, játékos-statisztika,
   üres-kapus szakaszok, félidő-keresés) meccsenként egyszer futnak le.
   **Az eredmény bitre változatlan** — a hatókör csak kevesebbszer
   számol: mért gyorsulás egy 5 perces meccsen 2,4–2,7× (jelentés +
-  összefoglaló + edzés-fókusz + rangsor: 97 mp → 37 mp). Biztonsági
+  összefoglaló + edzés-fókusz + rangsor: 97 mp → 37 mp; felderítő
+  jelentés: 14 mp → 6,5 mp). Biztonsági
   elvek: a hatókör a meccs objektumhoz kötött és a blokk végén
   nyomtalanul eltűnik (nincs hosszú életű, elavuló tár); minden kiadott
   érték friss másolat, így egy réteg jelölése (pl. a gólpassz beírása)
