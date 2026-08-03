@@ -27,7 +27,19 @@ MAX_ITEMS = 5
 
 def training_focus(match: Match,
                    config: Optional[TacticsConfig] = None) -> dict:
-    """Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...})."""
+    """Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}).
+
+    A szabályok ugyanazokat az alap-méréseket kérik újra, ezért a futás
+    egy `primitive_cache` hatókörben zajlik — az eredmény változatlan.
+    """
+    from .primitive_cache import primitive_cache
+    with primitive_cache(match):
+        return _training_focus_cached(match, config)
+
+
+def _training_focus_cached(match: Match,
+                           config: Optional[TacticsConfig] = None) -> dict:
+    """Az edzés-fókusz tényleges felépítése (lásd `training_focus`)."""
     config = config or TacticsConfig()
     out: dict = {"home": [], "away": []}
 

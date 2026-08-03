@@ -16,6 +16,7 @@ from typing import Optional
 from ..models.tracking import Match, Team
 from .calibration import COURT_WIDTH_M
 from .tactics import COURT_LENGTH_M, TacticsConfig, possession_team
+from .primitive_cache import copy_nested, memoize_primitive
 
 # Legalább ennyi támadó-fázisú kocka kell egy játékos poszt-becsléséhez.
 ROLE_MIN_SAMPLES = 100
@@ -27,6 +28,7 @@ ROLE_PIVOT_DIST_M = 8.0
 ROLE_BACKCOURT_DIST_M = 10.5
 
 
+@memoize_primitive("estimate_positions", copy=copy_nested)
 def estimate_positions(match: Match,
                        config: Optional[TacticsConfig] = None) -> dict:
     """Poszt-becslés a támadó-fázis átlag-pozícióiból.
@@ -34,6 +36,9 @@ def estimate_positions(match: Match,
     Visszatérés: {"home"/"away": {track_id: {"poszt", "samples",
     "avg_dist_m"}}} — csak a ROLE_MIN_SAMPLES-t elérő játékosokra.
     A kapus (role="kapus") kimarad: az ő posztja adott.
+
+    Nyitott `primitive_cache` hatókörön belül meccsenként egyszer fut le;
+    a visszaadott dict mindig friss másolat.
     """
     config = config or TacticsConfig()
     acc: dict = {}

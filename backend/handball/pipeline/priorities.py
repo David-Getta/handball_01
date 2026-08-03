@@ -106,20 +106,25 @@ def priority_findings(match: Match, config=None) -> dict:
     """
     import importlib
 
+    from .primitive_cache import primitive_cache
+
     found: dict = {"home": [], "away": []}
-    for family, label, mod_name, fn_name in _registry():
-        try:
-            mod = importlib.import_module(f".{mod_name}", __package__)
-            fn = getattr(mod, fn_name)
-            res = fn(match, config)
-        except Exception:
-            continue  # egy réteg hibája nem viheti el a rangsort
-        for side in ("home", "away"):
-            rec = (res or {}).get(side) or {}
-            verdict = rec.get("verdict")
-            if verdict:
-                found[side].append({"family": family, "label": label,
-                                    "verdict": str(verdict)})
+    # Közös hatókör: a rangsorba vont rétegek ugyanazokat az alap-
+    # méréseket kérik — így meccsenként egyszer futnak le.
+    with primitive_cache(match):
+        for family, label, mod_name, fn_name in _registry():
+            try:
+                mod = importlib.import_module(f".{mod_name}", __package__)
+                fn = getattr(mod, fn_name)
+                res = fn(match, config)
+            except Exception:
+                continue  # egy réteg hibája nem viheti el a rangsort
+            for side in ("home", "away"):
+                rec = (res or {}).get(side) or {}
+                verdict = rec.get("verdict")
+                if verdict:
+                    found[side].append({"family": family, "label": label,
+                                        "verdict": str(verdict)})
 
     order = {f: i for i, f in enumerate(PRF_FAMILY_ORDER)}
     out = {}

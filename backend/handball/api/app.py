@@ -2450,12 +2450,23 @@ def create_app():
     def get_attacks(match_id: str):
         """Támadás-szakaszok típus-címkével (lerohanás / gyors indítás /
         felállt / 7 a 6) + csapatonkénti támadás-mix százalékban."""
-        from ..pipeline.attack_types import (attack_duration_efficiency,
-                                             attack_efficiency, attack_mix,
-                                             classify_attacks)
         match = _store.get(match_id)
         if match is None:
             raise HTTPException(status_code=404, detail="match not found")
+        # Ez a végpont több száz réteget futtat ugyanarra a meccsre;
+        # közös gyorsítótár-hatókörben az alap-mérések egyszer futnak le.
+        from ..pipeline.primitive_cache import close_scope, open_scope
+        _cache_token = open_scope(match)
+        try:
+            return _attacks_payload(match)
+        finally:
+            close_scope(_cache_token)
+
+    def _attacks_payload(match):
+        """A támadás-végpont válasza (lásd `get_attacks`)."""
+        from ..pipeline.attack_types import (attack_duration_efficiency,
+                                             attack_efficiency, attack_mix,
+                                             classify_attacks)
         res = {"attacks": classify_attacks(match),
                "mix": attack_mix(match),
                "efficiency": attack_efficiency(match),
@@ -3968,8 +3979,16 @@ def create_app():
             import zipfile
             from ..pipeline.clips import export_event_clips
             from ..pipeline.quality import compute_quality_report
+            from ..pipeline.primitive_cache import close_scope, open_scope
             from ..pipeline.report_html import match_report_html
+            # Egy KÖZÖS gyorsítótár-hatókör az egész csomagra: a jelentés,
+            # a CSV és a több száz elemzési réteg ugyanazokat az alap-
+            # méréseket kéri (lövés-felismerés, esemény-lista, poszt-
+            # becslés, …) — így meccsenként egyszer futnak le. Az
+            # eredmény változatlan, csak kevesebbszer számolunk.
+            _cache_token = None
             try:
+                _cache_token = open_scope(match)
                 out_dir.mkdir(parents=True, exist_ok=True)
                 events = detect_events(match)
                 # 1) Jelentés (HTML) — minden mellék-adattal, ami van.
@@ -4948,6 +4967,8 @@ def create_app():
                 job["status"] = "error"
                 job["error"] = str(e)
                 job["message"] = f"hiba: {e}"
+            finally:
+                close_scope(_cache_token)  # a hatókör mindenképp bezárul
             _log_job(job)
 
         _threading.Thread(target=_work, daemon=True).start()

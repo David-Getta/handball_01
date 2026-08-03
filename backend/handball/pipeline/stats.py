@@ -18,6 +18,7 @@ import math
 from dataclasses import dataclass, field
 
 from ..models.tracking import Match, PositionSource, Team
+from .primitive_cache import copy_by_id, memoize_primitive
 
 
 @dataclass
@@ -112,6 +113,7 @@ def _sprint_and_zones(stats: PlayerStats, segments: list) -> None:
     stats.zone_seconds = {k: round(v, 1) for k, v in zones.items()}
 
 
+@memoize_primitive("compute_player_stats", copy=copy_by_id)
 def compute_player_stats(match: Match) -> dict[int, PlayerStats]:
     """Játékosonkénti statisztikát számol a teljes Match-ből.
 

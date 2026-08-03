@@ -24,6 +24,7 @@ from typing import Optional
 from ..models.tracking import Match
 from .setplays import segment_attacks
 from .tactics import TacticsConfig
+from .primitive_cache import copy_rows, memoize_primitive
 
 # Küszöbök (magyarázható, mért szabályok):
 FAST_BREAK_MAX_S = 6.0     # lerohanás: legfeljebb ennyi ideig tart
@@ -52,6 +53,7 @@ def _advance_speed(seq, target_x: float, fps: float) -> float:
     return (last.x - first.x) * sign / duration_s if duration_s > 0 else 0.0
 
 
+@memoize_primitive("classify_attacks", copy=copy_rows)
 def classify_attacks(match: Match,
                      config: Optional[TacticsConfig] = None) -> list[dict]:
     """A meccs támadás-szakaszai típus-címkével, időrendben.

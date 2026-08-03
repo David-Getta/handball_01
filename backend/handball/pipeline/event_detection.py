@@ -23,6 +23,7 @@ from ..models.tracking import Match, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 from .tactics import TacticsConfig
 from .decisions import ball_holder
+from .primitive_cache import copy_events, memoize_primitive
 
 # Heurisztikus küszöbök:
 SHOT_SPEED_MS = 8.0      # a labda ennél gyorsabban a kapu felé tartva = lövés
@@ -116,12 +117,17 @@ def _reaches_goal_line(match: Match, idx: int, goal_x: float) -> bool:
     return False
 
 
+@memoize_primitive("detect_shots", copy=copy_events)
 def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
     """Lövések és gólok felismerése a labda kinematikájából.
 
     Egy lövést akkor jelölünk, amikor a labda GYORSAN a kapu felé tart és (x-ben)
     megközelíti azt. Debounce: egy kapu-megközelítésből egy esemény. Gól, ha a
     labda a kapufák között eléri a gólvonalat.
+
+    Nyitott `primitive_cache` hatókörön belül a mérés meccsenként egyszer
+    fut le; a visszaadott lista mindig friss másolat (a hívók jelölhetik
+    az eseményeket, pl. gólpasszal), blokk nélkül a viselkedés változatlan.
     """
     config = config or TacticsConfig()
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
@@ -168,6 +174,7 @@ def detect_shots(match: Match, config: Optional[TacticsConfig] = None) -> list[M
     return events
 
 
+@memoize_primitive("detect_possession_changes", copy=copy_events)
 def detect_possession_changes(match: Match,
                               config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
     """Passzok (csapaton belül) és labdaeladások (az ellenfélhez) felismerése."""
@@ -222,6 +229,7 @@ def annotate_assists(match: Match, events: list[MatchEvent],
     return events
 
 
+@memoize_primitive("detect_events", copy=copy_events)
 def detect_events(match: Match, config: Optional[TacticsConfig] = None) -> list[MatchEvent]:
     """Az összes esemény időrendben, a lövés utáni labdaeladást elnyomva.
 

@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from ..models.tracking import Match, Frame, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 from .tactics import TacticsConfig, classify_phase, Phase
+from .primitive_cache import memoize_primitive
 
 
 @dataclass
@@ -44,6 +45,7 @@ class AttackSequence:
         return len(self.frames)
 
 
+@memoize_primitive("segment_attacks")
 def segment_attacks(match: Match, config: TacticsConfig | None = None,
                     min_length: int = 5) -> list[AttackSequence]:
     """A meccset szervezett támadás-szakaszokra bontja.

@@ -26,6 +26,7 @@ from ..models.tracking import Match, PositionSource, Team
 from ..models.events import Suspension
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
 from .tactics import TacticsConfig
+from .primitive_cache import copy_rows, memoize_primitive
 
 # Kiállítás-felismerés küszöbei:
 PP_WINDOW_S = 10.0        # ekkora ablakonként számoljuk a pályán lévőket
@@ -44,6 +45,7 @@ SEVEN_DEBOUNCE_S = 10.0   # két hétméteres között legalább ennyi idő
 PASSIVE_MIN_S = 35.0
 
 
+@memoize_primitive("field_count_timeline", copy=copy_rows)
 def field_count_timeline(match: Match, window_s: float = PP_WINDOW_S) -> list[dict]:
     """Ablakonként a pályán látott MEZŐNYJÁTÉKOS-trackek száma csapatonként.
 
@@ -51,6 +53,9 @@ def field_count_timeline(match: Match, window_s: float = PP_WINDOW_S) -> list[di
     (role="kapus") nem számolja, és a nagyon rövid ideig látszó trackeket
     (az ablak <20%-a) zajként kihagyja. A pásztázó kamera miatt EGY kockán
     nem látszik mindenki — ablakon belül igen.
+
+    Nyitott `primitive_cache` hatókörön belül meccsenként egyszer fut
+    le; a visszaadott lista mindig friss másolat.
     """
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     win = max(1, round(window_s * fps))

@@ -5,6 +5,27 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Hatókörös elsődleges gyorsítótár** (`pipeline/primitive_cache`): a
+  rétegek szándékosan önállóak, ezért ugyanazt az alap-mérést újra és
+  újra elvégezték — egyetlen edzői összefoglaló futása alatt a
+  lövés-felismerés négyszáznál is többször futott le ugyanarra a
+  meccsre. Mostantól a nagy összeállítások (edzői összefoglaló,
+  edzés-fókusz, teendő-rangsor, támadás-végpont, teljes meccs-csomag)
+  egy kimondott hatókörben futnak, amelyen belül az alap-mérések
+  (lövés- és eseményfelismerés, birtoklás-váltások, támadás-szakaszok,
+  támadás-típusok, poszt-becslés, létszám-idővonal, játékos-statisztika,
+  üres-kapus szakaszok, félidő-keresés) meccsenként egyszer futnak le.
+  **Az eredmény bitre változatlan** — a hatókör csak kevesebbszer
+  számol: mért gyorsulás egy 5 perces meccsen 2,4–2,7× (jelentés +
+  összefoglaló + edzés-fókusz + rangsor: 97 mp → 37 mp). Biztonsági
+  elvek: a hatókör a meccs objektumhoz kötött és a blokk végén
+  nyomtalanul eltűnik (nincs hosszú életű, elavuló tár); minden kiadott
+  érték friss másolat, így egy réteg jelölése (pl. a gólpassz beírása)
+  nem szivárog a következőbe; a kapus-szerep jelölése pedig a
+  gyorsítótár-kulcs része, tehát amikor a jelölés megváltozik, a
+  szerepből dolgozó mérések újraszámolnak. Új teszt-fájl
+  (`tests/test_primitive_cache.py`, 10 teszt) rögzíti mindezt.
+
 - **Teendő-rangsor** (`priority_findings`, új `pipeline/priorities`
   modul): a megszólaló ítéleteket összegyűjti a rangsorba vont
   rétegekből, és kimondott edzői elv szerint rendezi — **ár → ember →

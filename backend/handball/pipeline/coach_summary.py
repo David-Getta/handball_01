@@ -4675,7 +4675,19 @@ def coach_summary(match: Match) -> dict:
     Visszatérés: {"sections": [{"title", "body"}, ...],
                   "highlights": ["figyelemfelhívó mondat", ...]}
     — a sections a leíró rész, a highlights a "mire nézz rá" lista.
+
+    Az összefoglaló több tucat réteget olvas, azok pedig ugyanazokat az
+    alap-méréseket kérik újra és újra — ezért a futás egy
+    `primitive_cache` hatókörben zajlik (lásd a modult). Az eredmény
+    változatlan, csak az alap-mérések futnak egyszer.
     """
+    from .primitive_cache import primitive_cache
+    with primitive_cache(match):
+        return _coach_summary_cached(match)
+
+
+def _coach_summary_cached(match: Match) -> dict:
+    """Az összefoglaló tényleges felépítése (lásd `coach_summary`)."""
     home, away = _team_names(match)
     sections: list[dict] = []
     highlights: list[str] = []

@@ -22,6 +22,7 @@ from typing import Optional
 
 from ..models.tracking import Match, PositionSource, Team
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+from .primitive_cache import memoize_primitive
 
 # Szünet-felismerés küszöbei:
 BREAK_WINDOW_S = 10.0     # ekkora ablakokban mérjük az aktivitást
@@ -34,6 +35,7 @@ MID_LO, MID_HI = 0.2, 0.8  # a szünetet a felvétel középső részén keress�
 SWAP_MIN_SHIFT_M = 3.0
 
 
+@memoize_primitive("detect_halftime")
 def detect_halftime(match: Match) -> Optional[int]:
     """A félidei szünet KÖZEPÉNEK frame-ideje, vagy None, ha nincs szünet.
 

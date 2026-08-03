@@ -23,6 +23,8 @@ import math
 
 from ..models.tracking import Match, PositionSource
 from .calibration import COURT_LENGTH_M, COURT_WIDTH_M
+from .primitive_cache import (copy_rows, mark_roles_changed,
+                              memoize_primitive)
 
 # A kapuelőtér sugara + ráhagyás (a 6 m-es vonalon kicsit kívülre is kilép).
 GOAL_AREA_RADIUS_M = 6.8
@@ -80,10 +82,15 @@ def detect_goalkeepers(match: Match,
                 chosen[best_tid] = best_share
 
     if chosen:
+        changed = False
         for frame in match.frames:
             for p in frame.players:
-                if p.track_id in chosen:
+                if p.track_id in chosen and p.role != ROLE_GOALKEEPER:
                     p.role = ROLE_GOALKEEPER
+                    changed = True
+        if changed:
+            # A szerep a mérések bemenete — a gyorsítótár tudjon róla.
+            mark_roles_changed()
     return chosen
 
 def goalkeeper_stats(match: Match, config=None) -> dict:
@@ -304,6 +311,7 @@ EMPTY_NET_MIN_S = 3.0    # legalább ennyi ideig tartó szakasz számít
 EMPTY_NET_JOIN_S = 1.0   # ennél rövidebb megszakadást összevonunk
 
 
+@memoize_primitive("detect_empty_net", copy=copy_rows)
 def detect_empty_net(match: Match, config=None) -> list[dict]:
     """7 a 6 elleni (üres kapus) szakaszok felismerése.
 
