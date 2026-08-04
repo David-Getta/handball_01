@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 276) Poszt-váltás a szünetre: ha a befejezésünk átrendeződik,
+    # tudatosítani kell — ne véletlen legyen.
+    try:
+        from .roles import RSS_GAP_PP, role_share_shift
+        rss276 = role_share_shift(match, config)
+        for side in ("home", "away"):
+            rec276 = rss276[side]
+            if rec276["verdict"] is None:
+                continue
+            sh276 = rec276["shift"]
+            add(side, "taktika", "Félidei átrendezés",
+                f"a befejezésünk átrendeződik a szünetre: "
+                f"{rec276['verdict']} ({sh276['first_pct']:.0f}% → "
+                f"{sh276['second_pct']:.0f}%; {RSS_GAP_PP:.0f} "
+                "százalékpont fölött már mintázat) — kérdés, hogy ez "
+                "tudatos döntés volt-e vagy a fáradás sodorta így",
+                "félidei átrendezés: a második félidő első három "
+                "támadását előre kiosztott felállással gyakoroljuk "
+                "(a szünetben kimondott poszt-fókusszal), és "
+                "videón nézzük vissza, hogy a váltás szándékos volt-e")
+    except Exception:
+        pass
     # 275) Gólpassz-tengely: ha a góljaink egy vonalon esnek, azt az
     # ellenfél elvágja — több tengely kell.
     try:

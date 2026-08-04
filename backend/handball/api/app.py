@@ -2472,6 +2472,11 @@ def create_app():
                "efficiency": attack_efficiency(match),
                "duration_efficiency": attack_duration_efficiency(match)}
         try:
+            from ..pipeline.roles import role_share_shift
+            res["role_share_shift"] = role_share_shift(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import assist_role_pairs
             res["assist_role_pairs"] = assist_role_pairs(match)
         except Exception:
@@ -4829,6 +4834,9 @@ def create_app():
                 from ..pipeline.roles import assist_role_pairs
                 _layer("assist_role_pairs",
                        lambda: assist_role_pairs(match))
+                from ..pipeline.roles import role_share_shift
+                _layer("role_share_shift",
+                       lambda: role_share_shift(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

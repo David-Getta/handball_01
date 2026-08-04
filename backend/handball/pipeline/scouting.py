@@ -738,6 +738,8 @@ class ScoutingReport:
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
     arp_pairs: dict = field(default_factory=dict)
+    rss_first: dict = field(default_factory=dict)
+    rss_second: dict = field(default_factory=dict)
     ser_goals_by_role: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
@@ -2944,6 +2946,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-váltás a szünetre: melyik posztra állnak rá a második
+    # félidőben.
+    _rss_n1 = sum(rep.rss_first.values())
+    _rss_n2 = sum(rep.rss_second.values())
+    if _rss_n1 >= 4 and _rss_n2 >= 4:
+        _rss_best = None
+        for _rss_p in set(rep.rss_first) | set(rep.rss_second):
+            _p1 = 100.0 * rep.rss_first.get(_rss_p, 0) / _rss_n1
+            _p2 = 100.0 * rep.rss_second.get(_rss_p, 0) / _rss_n2
+            if _rss_best is None or abs(_p2 - _p1) > abs(_rss_best[3]):
+                _rss_best = (_rss_p, _p1, _p2, _p2 - _p1)
+        if _rss_best is not None and abs(_rss_best[3]) >= 20.0:
+            _rss_p, _p1, _p2, _gap = _rss_best
+            _dir = "nő" if _gap > 0 else "csökken"
+            keys.append(
+                f"A szünet után a(z) {_rss_p} szerepe {_dir} a "
+                f"befejezésükben ({_p1:.0f}% → {_p2:.0f}%) — az "
+                "átrendeződésre a félidőben kell felkészülni, nem a "
+                "második kapott gól után.")
 
     # Gólpassz-tengely: melyik vonalon esnek a góljaik.
     if rep.arp_pairs:
@@ -7084,6 +7106,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_share_shift as _rss
+        rssrec = _rss(match, config)[team.value]
+        rep.rss_first = dict(rssrec["first"])
+        rep.rss_second = dict(rssrec["second"])
         from .roles import assist_role_pairs as _arp
         rep.arp_pairs = dict(_arp(match, config)[team.value]["pairs"])
         from .roles import shot_efficiency_by_role as _ser
@@ -9565,6 +9591,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 255) Az ő szünet utáni poszt-váltásuk × a ti félidei
+    # felkészülésetek: az átrendeződést előre tudni lehet.
+    _rss255_n1 = sum(opp.rss_first.values())
+    _rss255_n2 = sum(opp.rss_second.values())
+    if _rss255_n1 >= 4 and _rss255_n2 >= 4:
+        _rss255_best = None
+        for _p255 in set(opp.rss_first) | set(opp.rss_second):
+            _a255 = 100.0 * opp.rss_first.get(_p255, 0) / _rss255_n1
+            _b255 = 100.0 * opp.rss_second.get(_p255, 0) / _rss255_n2
+            if (_rss255_best is None
+                    or abs(_b255 - _a255) > abs(_rss255_best[3])):
+                _rss255_best = (_p255, _a255, _b255, _b255 - _a255)
+        if _rss255_best is not None and _rss255_best[3] >= 20.0:
+            _p255, _a255, _b255, _ = _rss255_best
+            plan.append(
+                f"A szünet után a(z) {_p255} posztjukra állnak rá "
+                f"({_a255:.0f}% → {_b255:.0f}% a poszthoz kötött "
+                "góljaikból) — a félidei megbeszélésen ezt osszátok "
+                "ki előre: az adott poszt őrzését erősítsétek meg a "
+                "második félidő ELSŐ támadásától, ne a második kapott "
+                "gól után.")
 
     # 254) Az ő gólpassz-tengelyük × a ti kettőzésetek: egy vonalat
     # kell elvágni, nem két embert fogni.
@@ -13714,6 +13762,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rss_first=_merge_count_dicts(r.rss_first for r in reports),
+        rss_second=_merge_count_dicts(r.rss_second for r in reports),
         ser_shots_by_role=_merge_count_dicts(
             r.ser_shots_by_role for r in reports),
         ser_goals_by_role=_merge_count_dicts(

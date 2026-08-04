@@ -429,3 +429,52 @@ def test_assist_role_pairs_silent_with_few_goals():
     rec = assist_role_pairs(_arp_match([(3, 1)] * 2))["home"]
     assert rec["pairs_total"] <= 2, rec
     assert rec["top"] is None, rec
+
+
+# ---- Poszt-váltás a szünetre -------------------------------------------------
+
+def _rss_match(first_scorers, second_scorers, break_s=90.0):
+    """Első félidő góljai, ~90 mp üres szünet, majd a második félidő.
+
+    A szünetben nincs mért játékos — így ismeri fel a félidő-kereső.
+    """
+    first = _role_goal_match(first_scorers)
+    second = _role_goal_match(second_scorers)
+    frames = list(first.frames)
+    t = frames[-1].t + 1
+    for _ in range(int(break_s * 25)):
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for f in second.frames:
+        frames.append(Frame(t=t, players=f.players, ball=f.ball))
+        t += 1
+    return Match(MatchMeta(match_id="rss", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_share_shift_names_the_rising_post():
+    """Szünet előtt a szélső, utána a beálló viszi a gólokat."""
+    from handball.pipeline.halftime import detect_halftime
+    from handball.pipeline.roles import role_share_shift
+
+    match = _rss_match([2, 2, 2, 2, 1], [1, 1, 1, 1, 2])
+    assert detect_halftime(match) is not None, "kell felismert félidő"
+    rec = role_share_shift(match)["home"]
+    assert rec["first_total"] >= 4 and rec["second_total"] >= 4, rec
+    assert rec["shift"] is not None, rec
+    assert rec["shift"]["poszt"] in ("beálló", "szélső"), rec
+    assert rec["verdict"] and "szünet után" in rec["verdict"], rec
+    if rec["shift"]["poszt"] == "beálló":
+        assert rec["shift"]["gap_pp"] > 0, rec
+    else:
+        assert rec["shift"]["gap_pp"] < 0, rec
+
+
+def test_role_share_shift_silent_without_halftime():
+    """Felismert félidő nélkül nincs ítélet — nem találgatunk."""
+    from handball.pipeline.roles import role_share_shift
+
+    rec = role_share_shift(_role_goal_match([2, 2, 1, 1, 1]))["home"]
+    assert rec["shift"] is None and rec["verdict"] is None, rec
+    assert rec["first_total"] == 0 and rec["second_total"] == 0, rec

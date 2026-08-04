@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-váltás a szünetre** (`role_share_shift`): melyik posztra
+  épül a befejezésük a második félidőben. A poszt szerinti
+  gólmegoszlás (`goals_by_role`) az egész meccset nézi — de az edző a
+  szünetben átrendezi a támadást; ez a réteg a félidő előtti és utáni
+  gólok poszt-megoszlását veti össze, és megnevezi a legtöbbet mozduló
+  posztot. Edzői olvasat: ez a meccs közbeni döntést írja felül — ha
+  tudjuk, hogy a szünet után a beállójukra állnak rá, a beálló-őrzést
+  már a félidőben meg kell erősíteni, nem a második kapott gól után.
+  Felismert félidő nélkül, félidőnként 4 gól alatt vagy 20
+  százalékpontnál kisebb elmozdulásnál nincs ítélet. Felületek:
+  `/matches/{id}/attacks` + meccs-csomag (`role_share_shift`), edzői
+  összefoglaló, felderítés (félidőnkénti poszt-számlálók meccsek közt
+  összegezve + edzői kulcs + 255-ös meccsterv-szabály), 276-os
+  edzés-szabály ("Félidei átrendezés"), kliens-csempe
+  ("Poszt-váltás a szünetre").
+
 - **Gólpassz-tengely** (`assist_role_pairs`): melyik poszt melyik
   posztnak adja a gólpasszt (pl. "irányító → beálló"). A
   gólpassz-posztok (`assists_by_role`) azt mondják meg, melyik poszt

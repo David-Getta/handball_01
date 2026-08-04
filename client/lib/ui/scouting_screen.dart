@@ -1896,6 +1896,39 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-váltás a szünetre: melyik posztra állnak rá a második
+  // félidőben (félidőnként 4+ gól, 20 százalékpont eltérés — a
+  // backenddel azonos küszöbök).
+  String? _halftimeRoleShift(Map<String, dynamic> r) {
+    final first = (r["rss_first"] as Map?)?.cast<String, dynamic>();
+    final second = (r["rss_second"] as Map?)?.cast<String, dynamic>();
+    if (first == null || second == null) return null;
+    var n1 = 0;
+    var n2 = 0;
+    first.forEach((k, v) => n1 += (v as num).toInt());
+    second.forEach((k, v) => n2 += (v as num).toInt());
+    if (n1 < 4 || n2 < 4) return null;
+    String? best;
+    var bestGap = 0.0;
+    var bestFirst = 0.0;
+    var bestSecond = 0.0;
+    for (final k in {...first.keys, ...second.keys}) {
+      final p1 = 100.0 * (((first[k] as num?) ?? 0).toInt()) / n1;
+      final p2 = 100.0 * (((second[k] as num?) ?? 0).toInt()) / n2;
+      if (best == null || (p2 - p1).abs() > bestGap.abs()) {
+        best = k;
+        bestGap = p2 - p1;
+        bestFirst = p1;
+        bestSecond = p2;
+      }
+    }
+    if (best == null || bestGap.abs() < 20.0) return null;
+    final dir = bestGap > 0 ? "nő" : "csökken";
+    return "a szünet után a(z) $best szerepe $dir a befejezésükben "
+        "(${bestFirst.round()}% → ${bestSecond.round()}%) · az "
+        "átrendeződésre a félidőben készülj, ne a második kapott gól után";
+  }
+
   // Gólpassz-tengely: melyik poszt-vonalon esnek a góljaik (4+ pár,
   // 40%-os részarány — a backenddel azonos küszöbök).
   String? _assistAxis(Map<String, dynamic> r) {
@@ -6434,6 +6467,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_halftimeRoleShift(r) != null)
+        ["Poszt-váltás a szünetre", _halftimeRoleShift(r)!],
       if (_assistAxis(r) != null)
         ["Gólpassz-tengely", _assistAxis(r)!],
       if (_roleEfficiency(r) != null)

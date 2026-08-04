@@ -883,6 +883,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-váltás a szünetre: melyik posztra állnak rá a második
+    # félidőben.
+    try:
+        from .roles import role_share_shift
+        rss = role_share_shift(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rss = rss[side]
+            if rec_rss["verdict"] is None:
+                continue
+            sh = rec_rss["shift"]
+            body += (f" A(z) {name} befejezése átrendeződik a szünetre: "
+                     f"{rec_rss['verdict']} "
+                     f"({sh['first_pct']:.0f}% → {sh['second_pct']:.0f}% "
+                     f"a poszthoz kötött góljaikból; "
+                     f"{rec_rss['first_total']}/"
+                     f"{rec_rss['second_total']} gól a két félidőben).")
+    except Exception:
+        pass
     # Gólpassz-tengely: melyik vonalon esnek a góljaik.
     try:
         from .roles import assist_role_pairs

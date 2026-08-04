@@ -483,3 +483,84 @@ def assist_role_pairs(match: Match,
                        "share_pct": round(share, 1)}
         out[side] = {"pairs_total": total, "pairs": pairs, "top": top}
     return out
+
+
+# Poszt-váltás a szünetre: félidőnként ennyi poszthoz kötött gól kell,
+# és ekkora részarány-változás (százalékpont) számít érdemi váltásnak.
+RSS_MIN_GOALS = 4
+RSS_GAP_PP = 20.0
+
+
+def role_share_shift(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-váltás a szünetre: MELYIK POSZTRA épül a befejezésük a
+    második félidőben.
+
+    A poszt szerinti gólmegoszlás (goals_by_role) az egész meccset
+    nézi — de egy edző a szünetben átrendezi a támadást. Ez a réteg a
+    felismert félidő előtti és utáni gólok poszt-megoszlását veti
+    össze, és megnevezi azt a posztot, amelynek a részaránya a
+    legtöbbet mozdult.
+
+    Edzőileg ez a meccs közbeni döntést írja felül: ha tudjuk, hogy a
+    szünet után a beállójukra állnak rá, a beálló-őrzést már a
+    félidőben meg kell erősíteni, nem a második gól után; ha a
+    szélsőjük tűnik el, a szélső védője behúzható középre.
+
+    Visszatérés csapatonként: {"first": {poszt: gól}, "second":
+    {poszt: gól}, "first_total", "second_total", "shift": {"poszt",
+    "first_pct", "second_pct", "gap_pp"} | None, "verdict": str |
+    None} — a shift/verdict None, ha nincs felismert félidő, ha
+    valamelyik félidőben RSS_MIN_GOALS-nál kevesebb poszthoz kötött
+    gól van, vagy ha a legnagyobb elmozdulás sem éri el az
+    RSS_GAP_PP-t (kevés mintából nem ítélünk).
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ht = detect_halftime(match)
+
+    tally: dict = {"home": [{}, {}], "away": [{}, {}]}
+    if ht is not None:
+        for e in detect_events(match, config):
+            if e.type != EventType.GOAL or e.player_id is None:
+                continue
+            side = e.team.value
+            rec_role = roles[side].get(e.player_id)
+            if rec_role is None:
+                continue
+            half = 0 if e.t <= ht else 1
+            poszt = rec_role["poszt"]
+            tally[side][half][poszt] = tally[side][half].get(poszt, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        first, second = tally[side]
+        n1, n2 = sum(first.values()), sum(second.values())
+        shift = verdict = None
+        if n1 >= RSS_MIN_GOALS and n2 >= RSS_MIN_GOALS:
+            best = None
+            for poszt in set(first) | set(second):
+                p1 = 100.0 * first.get(poszt, 0) / n1
+                p2 = 100.0 * second.get(poszt, 0) / n2
+                gap = p2 - p1
+                if best is None or abs(gap) > abs(best[3]):
+                    best = (poszt, p1, p2, gap)
+            if best is not None and abs(best[3]) >= RSS_GAP_PP:
+                poszt, p1, p2, gap = best
+                shift = {"poszt": poszt, "first_pct": round(p1, 1),
+                         "second_pct": round(p2, 1),
+                         "gap_pp": round(gap, 1)}
+                verdict = (f"a(z) {poszt} szerepe nő a szünet után"
+                           if gap > 0
+                           else f"a(z) {poszt} szerepe csökken a szünet "
+                                "után")
+        out[side] = {"first": dict(sorted(first.items(),
+                                          key=lambda kv: -kv[1])),
+                     "second": dict(sorted(second.items(),
+                                           key=lambda kv: -kv[1])),
+                     "first_total": n1, "second_total": n2,
+                     "shift": shift, "verdict": verdict}
+    return out
