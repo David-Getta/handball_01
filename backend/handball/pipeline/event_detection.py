@@ -76,7 +76,20 @@ def _shooter_before(match: Match, idx: int, team: Team,
     """A lövő: az utolsó labdabirtokos a TÁMADÓ csapatból a lövés előtt.
 
     A lövés pillanatában a labda már úton van (nincs birtokos), ezért
-    visszafelé keresünk legfeljebb SHOOTER_LOOKBACK_S másodpercet."""
+    visszafelé keresünk legfeljebb SHOOTER_LOOKBACK_S másodpercet.
+
+    ISMERT KORLÁT — kapu-felé torzítás. A lövés-eseményt a labda
+    KAPU-MEGKÖZELÍTÉSEKOR jelöljük (APPROACH_X_M), nem az elengedés
+    pillanatában. Távoli (átlövő) lövésnél a labda a visszakeresési
+    ablak alatt már a kapu közelében jár, ezért a "birtokos" gyakran
+    egy kapuhoz közeli játékos (pl. a beálló) lesz — a lövés így őhozzá
+    kerül. Mérve: 12 m-ről elengedett lövések mind a 6 m-en álló
+    játékoshoz kerültek. Ez minden JÁTÉKOS- és POSZT-bontású
+    lövés-rétegre hat; a csapat-szintű számokat nem érinti. Javítás
+    csak az elengedés-pillanat külön felismerésével lehetséges — a
+    valós-videós validáció (docs/MERESI_JEGYZOKONYV.md) egyik
+    kiemelt mérendője.
+    """
     back = max(0, idx - round(SHOOTER_LOOKBACK_S * fps))
     for j in range(idx, back - 1, -1):
         holder = ball_holder(match.frames[j], config)

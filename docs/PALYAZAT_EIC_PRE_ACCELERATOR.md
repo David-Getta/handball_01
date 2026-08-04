@@ -87,7 +87,15 @@ A Pre-accelerator belépője a **validált TRL 4**, a projekt vége TRL 5–6.
 2. ⬜ A meglévő validációs modul lefuttatása ezeken → **publikálható
    precision/recall tábla** verziónként (a benchmark-infrastruktúra
    már megvan, csak valós adat kell alá).
-3. ⬜ Az eredmények beépítése a `docs/FOOTAGE_NOTES.md` /
+3. ⬜ **Lövő-hozzárendelés kapu-felé torzítása** — mért, ismert
+   korlát: a lövés-eseményt a labda kapu-megközelítésekor jelöljük,
+   ezért a távolról (átlövő-poszt) elengedett lövések a kapuhoz közeli
+   játékoshoz kerülnek. Szimulált ellenőrzésben 12 méterről elengedett
+   lövések mind a 6 méteren álló játékoshoz kerültek. A csapat-szintű
+   számokat nem érinti, a JÁTÉKOS- és POSZT-bontású lövés-rétegeket
+   igen. Javítás: az elengedés-pillanat külön felismerése; ez a
+   valós-videós mérés egyik kiemelt tétele.
+4. ⬜ Az eredmények beépítése a `docs/FOOTAGE_NOTES.md` /
    `MVP_PLAN.md` vonalába, dátumozott mérési jegyzőkönyvként.
 
 ## 5. A pályázati sztori (Excellence / Impact / Implementation)

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Mért, dokumentált korlát: a lövő-hozzárendelés kapu-felé
+  torzítása.** A lövés-eseményt a labda kapu-megközelítésekor jelöljük
+  (nem az elengedéskor), ezért a visszakeresési ablakban a labda már a
+  kapu közelében jár — a távolról elengedett lövések így a kapuhoz
+  közeli játékoshoz kerülnek. Ellenőrzésben 12 méterről elengedett
+  lövések **mind** a 6 méteren álló játékoshoz kerültek. Ez a
+  csapat-szintű számokat nem érinti, a játékos- és poszt-bontású
+  lövés-rétegeket viszont igen. A korlát mostantól ki van mondva a
+  `_shooter_before` docstringjében és az EIC-terv TRL-4 feladatai
+  közt; javítása az elengedés-pillanat külön felismerését igényli, és
+  a valós-videós validáció kiemelt tétele. (Emiatt egy tervezett
+  poszt-lövőtávolság réteg NEM került be — a mérése ezen a torzításon
+  bukott volna.)
+
 - **A README száma is a szinkron alá került**: a nyitólap "Minőség"
   sora 1103 automata tesztet állított, miközben a valóság 1246 — épp
   az a szám volt elavult, amit egy érdeklődő először meglát. A
