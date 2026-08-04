@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **299 réteg**, modulonként csoportosítva; a
+Összesen **300 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (69)
@@ -362,11 +362,12 @@ leírás a réteg-függvény docstringjének első sora.
 | `substitutions` | Cserék + a cserék utáni IMPACT_S másodperc mérlege csapatonként. |
 | `swap_pairs` | Váltópárok: KI KIT VÁLT a cseréknél. |
 
-## summary_en (1)
+## summary_en (2)
 
 | Réteg | Mit mér |
 |---|---|
 | `match_card_en` | English match card: compact, English-language match summary. |
+| `scouting_cards_en` | English scouting card: a one-page opponent brief per team. |
 
 ## tactics (12)
 

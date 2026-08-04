@@ -61,3 +61,33 @@ def test_match_card_en_empty_match_is_safe():
     card = match_card_en(Match(_meta(), frames))
     assert card["headline"] == "Lions 0\u20130 Bears"
     assert isinstance(card["lines"], list)
+
+
+def test_scouting_cards_en_reports_established_facts():
+    """A szimulált meccsről angol pontok születnek — mérhető tényekből."""
+    from handball.pipeline.summary_en import scouting_cards_en
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    cards = scouting_cards_en(simulate_ground_truth(duration_s=180.0,
+                                                    seed=3))
+    assert set(cards) == {"home", "away"}
+    for side in ("home", "away"):
+        card = cards[side]
+        assert card["headline"]
+        assert card["lines"], card
+        text = " ".join(card["lines"])
+        assert "Main defensive formation" in text or "Possession" in text
+        # Angol felület: magyar ékezetes szó nem szivároghat bele.
+        assert "támadás" not in text and "lövés" not in text
+
+
+def test_scouting_cards_en_stays_silent_without_evidence():
+    """Üres meccsen nincs állítás — a kártya nem találgat."""
+    from handball.pipeline.summary_en import scouting_cards_en
+
+    frames = [Frame(t=i, players=[], ball=Ball(x=20.0, y=10.0,
+                                               confidence=1.0))
+              for i in range(120)]
+    cards = scouting_cards_en(Match(_meta(), frames))
+    for side in ("home", "away"):
+        assert cards[side]["lines"] == [], cards[side]

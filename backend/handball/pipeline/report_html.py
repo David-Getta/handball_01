@@ -1256,6 +1256,27 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         except Exception:
             pass
 
+        # Angol felderítő kártya: csapatonként rövid, tényszerű angol
+        # pontok — EU-s pilot-klubnak és bemutatónak.
+        try:
+            from .summary_en import scouting_cards_en
+            cards = scouting_cards_en(match)
+            blocks = []
+            for side in ("home", "away"):
+                rec_sc = cards.get(side) or {}
+                if not rec_sc.get("lines"):
+                    continue
+                lis = "".join(f"<li>{escape(l)}</li>"
+                              for l in rec_sc["lines"])
+                blocks.append(
+                    f"<p><b>{escape(rec_sc['headline'])}</b></p>"
+                    "<ul>" + lis + "</ul>")
+            if blocks:
+                parts_html.append("<h2>Scouting card (EN)</h2>"
+                                  + "".join(blocks))
+        except Exception:
+            pass
+
         # Állás-lencse: az eredményjelző szerinti rétegek ítéletei egy
         # helyen — csak a megszólaló (nem None) ítéletek jelennek meg.
         try:

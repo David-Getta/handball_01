@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Angol felderítő kártya** (`scouting_cards_en`): a magyar felderítő
+  jelentés a teljes mélység — ez a nemzetközi felület. Csapatonként
+  rövid, tényszerű angol pontok az ellenfélről: támadó stílus
+  (átmenet-arány, átlagos támadás-hossz), fő védekezési forma,
+  befejezés-hatékonyság, helyzetminőség (gól − xG), mit engednek
+  (szabad lövések aránya), labdabiztonság (eladások a támadó
+  harmadban), labdabirtoklás, és a betörés utáni kiosztás célpontja.
+  Csak a MEGÁLLAPÍTHATÓ tények kerülnek bele: amihez kevés a minta,
+  az kimarad — üres meccsen a kártya néma. Felületek:
+  `/matches/{id}/attacks` + meccs-csomag (`scouting_cards_en`), és a
+  meccs-jelentés új "Scouting card (EN)" szekciója az angol
+  meccs-kártya után.
+
 - **Sorrend-érzékenység mérése** (`scripts/order_sensitivity` →
   `docs/SORREND_FUGGES.md`): a kapus-jelölés (`detect_goalkeepers`)
   beleír a meccsbe, és több réteg a szerepből dolgozik — emiatt egy

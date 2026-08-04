@@ -93,3 +93,85 @@ def match_card_en(match: Match, config=None) -> dict:
         pass
 
     return {"headline": headline, "lines": lines}
+
+
+# Angol felderítő kártya: ennyi minta kell egy-egy állításhoz, és
+# ekkora gól−xG eltérés fölött mondjuk ki a befejezés-minőséget.
+SCEN_MIN_SHOTS = 5
+SCEN_MIN_ATTACKS = 5
+SCEN_MIN_KICKOUTS = 4
+SCEN_XG_GAP = 1.0
+SCEN_KICKOUT_PCT = 55.0
+
+
+def scouting_cards_en(match: Match, config=None) -> dict:
+    """English scouting card: a one-page opponent brief per team.
+
+    A magyar felderítő jelentés (scouting.scout_team) a teljes mélység
+    — ez a nemzetközi felület: EU-s pilot-klubnak, bemutatónak és
+    értékelőnek ad rövid, tényszerű angol pontokat az ellenfélről.
+    Szándékosan a MEGÁLLAPÍTHATÓ tényekre szorítkozik: amihez kevés a
+    minta, az egyszerűen kimarad (nem találgatunk).
+
+    Returns per team: {"headline": str, "lines": [str, ...]} —
+    headline is the team name, lines are short factual English
+    statements (attack identity, defensive formation, finishing,
+    chance quality, what they concede, ball security, possession,
+    and the kick-out target after a drive).
+    """
+    from ..models.tracking import Team
+    from .scouting import scout_team
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out: dict = {}
+    for side, team in (("home", Team.HOME), ("away", Team.AWAY)):
+        try:
+            rep = scout_team(match, team, config)
+        except Exception:
+            out[side] = {"headline": side, "lines": []}
+            continue
+        lines: list[str] = []
+
+        if rep.attacks >= SCEN_MIN_ATTACKS:
+            lines.append(
+                f"Attacking style: {rep.fast_break_pct:.0f}% of their "
+                f"attacks come from transition; a set attack lasts "
+                f"{rep.avg_attack_duration_s:.0f} s on average "
+                f"({rep.attacks} attacks measured).")
+        if rep.defense_main and rep.defense_main != "—":
+            lines.append(f"Main defensive formation: {rep.defense_main}.")
+        if rep.shots >= SCEN_MIN_SHOTS:
+            lines.append(
+                f"Finishing: {rep.shot_efficiency_pct:.0f}% "
+                f"({rep.goals} goals from {rep.shots} shots).")
+            if abs(rep.xg_diff) >= SCEN_XG_GAP:
+                word = ("outperform" if rep.xg_diff > 0 else "underperform")
+                lines.append(
+                    f"They {word} their chances by "
+                    f"{abs(rep.xg_diff):.1f} goals (xG {rep.xg:.1f}) — "
+                    "the difference is in the finishing, not the "
+                    "chance creation.")
+        if rep.def_shots_against >= SCEN_MIN_SHOTS:
+            lines.append(
+                f"What they concede: {rep.def_free_shots} of "
+                f"{rep.def_shots_against} shots against were "
+                "unmarked (no defender within 2 m of the shooter).")
+        if rep.turnover_total >= SCEN_MIN_SHOTS:
+            lines.append(
+                f"Ball security: {rep.turnover_total} turnovers, "
+                f"{rep.turnover_front} of them in the attacking third "
+                "(those are the ones that turn into fast breaks).")
+        if rep.possession_pct:
+            lines.append(f"Possession: {rep.possession_pct:.0f}%.")
+        if rep.kot_targets and rep.kot_kickouts >= SCEN_MIN_KICKOUTS:
+            who, n = max(rep.kot_targets.items(), key=lambda kv: kv[1])
+            pct = 100.0 * n / rep.kot_kickouts
+            if pct >= SCEN_KICKOUT_PCT:
+                lines.append(
+                    f"After a drive into the wall, the ball goes to "
+                    f"{who} {pct:.0f}% of the time ({n} of "
+                    f"{rep.kot_kickouts}) — that pass lane can be "
+                    "taken away.")
+        out[side] = {"headline": rep.team_name or side, "lines": lines}
+    return out
