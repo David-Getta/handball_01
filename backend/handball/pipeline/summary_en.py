@@ -102,6 +102,18 @@ SCEN_MIN_ATTACKS = 5
 SCEN_MIN_KICKOUTS = 4
 SCEN_XG_GAP = 1.0
 SCEN_KICKOUT_PCT = 55.0
+SCEN_ROLE_GAP_PP = 15.0   # poszt-hatékonyság: ekkora lemaradás számít
+SCEN_MIN_PAIRS = 4        # gólpassz-tengely: ennyi pár kell
+SCEN_AXIS_PCT = 40.0      # ekkora részarány fölött tengely
+
+# A posztok angol nevei — egy angol brief ne magyarul nevezze meg őket.
+_POSTS_EN = {"beálló": "pivot", "szélső": "wing", "átlövő": "back",
+             "irányító": "centre back", "kapus": "goalkeeper"}
+
+
+def _post_en(name: str) -> str:
+    """Poszt magyar neve → angol (ismeretlen nevet változatlanul hagy)."""
+    return _POSTS_EN.get(name, name)
 
 
 def scouting_cards_en(match: Match, config=None) -> dict:
@@ -164,6 +176,37 @@ def scouting_cards_en(match: Match, config=None) -> dict:
                 "(those are the ones that turn into fast breaks).")
         if rep.possession_pct:
             lines.append(f"Possession: {rep.possession_pct:.0f}%.")
+        # Poszt-alapú tények: a posztok akkor is stabilak, ha a nevek
+        # cserélődnek — egy nemzetközi brief épp ezekre épül.
+        ser_total = sum(rep.ser_shots_by_role.values())
+        if ser_total >= 2 * SCEN_MIN_SHOTS:
+            team_pct = 100.0 * sum(rep.ser_goals_by_role.values()) / ser_total
+            rows = [(p, n, rep.ser_goals_by_role.get(p, 0))
+                    for p, n in rep.ser_shots_by_role.items()
+                    if n >= SCEN_MIN_SHOTS]
+            if rows:
+                poszt, n, g = min(rows, key=lambda r: r[2] / r[1])
+                pct = 100.0 * g / n
+                if team_pct - pct >= SCEN_ROLE_GAP_PP:
+                    lines.append(
+                        f"Weakest finishing post: {_post_en(poszt)} "
+                        f"scores "
+                        f"{pct:.0f}% ({g} of {n} shots) against a team "
+                        f"average of {team_pct:.0f}% — that is the shot "
+                        "worth conceding.")
+        if rep.arp_pairs:
+            arp_total = sum(rep.arp_pairs.values())
+            key, n = max(rep.arp_pairs.items(), key=lambda kv: kv[1])
+            key = " → ".join(_post_en(part)
+                             for part in key.split("→"))
+            if arp_total >= SCEN_MIN_PAIRS:
+                share = 100.0 * n / arp_total
+                if share >= SCEN_AXIS_PCT:
+                    lines.append(
+                        f"Main assist axis: {key} — {share:.0f}% of "
+                        f"their assisted goals ({n} of {arp_total}); "
+                        "cutting that one lane beats marking two "
+                        "players.")
         if rep.kot_targets and rep.kot_kickouts >= SCEN_MIN_KICKOUTS:
             who, n = max(rep.kot_targets.items(), key=lambda kv: kv[1])
             pct = 100.0 * n / rep.kot_kickouts

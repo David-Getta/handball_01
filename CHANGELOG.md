@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Az angol felderítő kártya poszt-alapú tényekkel bővült**: a
+  leggyengébb befejező poszt (mit érdemes rájuk engedni) és a
+  gólpassz-tengely angolul is megjelenik. A posztok angol néven
+  szerepelnek (beálló → pivot, szélső → wing, átlövő → back, irányító
+  → centre back) — egy angol brief ne magyarul nevezze meg a
+  beállót; ismeretlen posztot változatlanul hagyunk. Küszöbök
+  modul-szintű konstansban, a magyar felülettel azonos elven: kevés
+  mintánál a sor egyszerűen kimarad.
+
 - **Poszt-lencse**: a poszt-alapú rétegek egy helyen. A posztok akkor
   is stabilak, ha a nevek meccsről meccsre cserélődnek — ezért ez a
   lencse a felkészülés gerince. A meccs-jelentés új "Poszt-lencse"

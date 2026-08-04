@@ -91,3 +91,36 @@ def test_scouting_cards_en_stays_silent_without_evidence():
     cards = scouting_cards_en(Match(_meta(), frames))
     for side in ("home", "away"):
         assert cards[side]["lines"] == [], cards[side]
+
+
+def test_scouting_cards_en_reports_the_post_facts():
+    """A poszt-alapú tények angolul is megjelennek, ha van rájuk minta."""
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    from handball.pipeline.summary_en import scouting_cards_en
+    from tests.test_roles import _rtc_match
+
+    # Az eladás-teszt meccse elég poszt-mintát ad a felderítéshez.
+    cards = scouting_cards_en(_rtc_match([(3, True)] * 4))
+    text = " ".join(cards["home"]["lines"] + cards["away"]["lines"])
+    # Angol felület: magyar mondat nem szivároghat bele.
+    assert "eladás" not in text and "poszt" not in text
+    # A kártya vagy mond valamit, vagy néma — de nem félmagyar.
+    for side in ("home", "away"):
+        for line in cards[side]["lines"]:
+            assert line.strip().endswith((".", "?")), line
+
+
+def test_scouting_cards_en_translates_the_post_names():
+    """A posztok angolul jelennek meg — egy angol brief ne magyarul
+    nevezze meg a beállót."""
+    from handball.pipeline.summary_en import _post_en
+
+    assert _post_en("beálló") == "pivot"
+    assert _post_en("szélső") == "wing"
+    assert _post_en("átlövő") == "back"
+    assert _post_en("irányító") == "centre back"
+    # Ismeretlen posztot változatlanul hagyunk (nem találgatunk).
+    assert _post_en("ismeretlen") == "ismeretlen"
