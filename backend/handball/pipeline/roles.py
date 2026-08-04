@@ -350,6 +350,14 @@ def shot_efficiency_by_role(match: Match,
     legkevesebb kockázat), a sokkal jobbat viszont el kell zárni —
     inkább vállalva, hogy máshonnan lőnek. Ez a "hova tereld" döntés.
 
+    KORLÁT: a lövéseket a felismerés lövőjéhez kötjük, az pedig
+    kapu-felé torzít (lásd `event_detection._shooter_before`): a
+    távolról elengedett lövések gyakran a kapuhoz közeli poszthoz
+    kerülnek. A poszt-bontás ezért ma inkább a BEFEJEZÉS HELYÉT
+    tükrözi, mint az elengedését — az ítélet ("erre a posztra rá lehet
+    engedni") ettől még használható, de valós felvételen ellenőrizni
+    kell (docs/MERESI_JEGYZOKONYV.md).
+
     Visszatérés csapatonként: {"shots", "goals", "team_pct",
     "roles": {poszt: {"shots", "goals", "pct"}},
     "best"/"worst": {"poszt", "shots", "goals", "pct", "gap_pp"} |
