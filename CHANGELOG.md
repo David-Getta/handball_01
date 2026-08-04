@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Sorrend-érzékenység mérése** (`scripts/order_sensitivity` →
+  `docs/SORREND_FUGGES.md`): a kapus-jelölés (`detect_goalkeepers`)
+  beleír a meccsbe, és több réteg a szerepből dolgozik — emiatt egy
+  réteg MÁS számot adhat friss meccsen, mint azután, hogy egy korábbi
+  réteg már megjelölte a kapusokat. A szkript rétegenként két friss,
+  azonos magból generált meccsen összeveti a két sorrendet, és kiírja,
+  melyik réteget érinti. **Mérés (240 mp-es szimulált meccs): 299
+  rétegből 38 sorrend-függő** (a kettőzés-, blokk-, fal-magasság- és
+  emberfogás-családban a legtöbb). A szkript nem javít semmit — a
+  lista a döntés alapja, hol érdemes kimondott, determinisztikus
+  szerep-jelöléssel indítani. Új teszt-fájl
+  (`tests/test_order_sensitivity.py`, 4 teszt), köztük egy, amely
+  rögzíti, hogy a jelenség valós, nem a mérőeszköz hibája.
+
 - **Kiosztás-célpont** (`kickout_targets`): ha a betörés nem lövéssel
   zárul, KIHEZ kerül a labda. Az áttörő emberek azt mondják meg, ki
   viszi be a labdát a falba, a visszahozás-arány azt, lezárják-e a
