@@ -1256,6 +1256,47 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         except Exception:
             pass
 
+        # Poszt-lencse: a poszt-alapú rétegek ítéletei egy helyen. A
+        # posztok akkor is stabilak, ha a nevek meccsről meccsre
+        # cserélődnek — ezért ez a lencse a felkészülés gerince.
+        try:
+            from .roles import (assist_role_pairs, goals_by_role,
+                                role_share_by_score, role_share_shift,
+                                role_turnover_cost,
+                                shot_efficiency_by_role)
+            prows = []
+            for label, fn in (
+                    ("Gól-posztok", goals_by_role),
+                    ("Poszt-hatékonyság", shot_efficiency_by_role),
+                    ("Gólpassz-tengely", assist_role_pairs),
+                    ("Eladás-ár posztonként", role_turnover_cost),
+                    ("Poszt-váltás a szünetre", role_share_shift),
+                    ("Poszt-állás", role_share_by_score)):
+                try:
+                    res_p = fn(match)
+                except Exception:
+                    continue
+                for side, name in (("home", home), ("away", away)):
+                    rec_p = (res_p or {}).get(side) or {}
+                    verdict = rec_p.get("verdict")
+                    if not verdict and rec_p.get("top"):
+                        top_p = rec_p["top"]
+                        verdict = (f"{top_p.get('poszt', '')} "
+                                   f"({top_p.get('share_pct', 0):.0f}%)"
+                                   ).strip()
+                    if not verdict:
+                        continue
+                    prows.append(f"<tr><td>{escape(label)}</td>"
+                                 f"<td>{name}</td>"
+                                 f"<td>{escape(str(verdict))}</td></tr>")
+            if prows:
+                parts_html.append(
+                    "<h2>Poszt-lencse</h2>"
+                    "<table><tr><th>Réteg</th><th>Csapat</th>"
+                    "<th>Ítélet</th></tr>" + "".join(prows) + "</table>")
+        except Exception:
+            pass
+
         # Angol felderítő kártya: csapatonként rövid, tényszerű angol
         # pontok — EU-s pilot-klubnak és bemutatónak.
         try:

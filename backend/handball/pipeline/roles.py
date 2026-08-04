@@ -412,10 +412,18 @@ def shot_efficiency_by_role(match: Match,
                     best = rec_pick
                 else:
                     worst = rec_pick
+        verdict = None
+        if worst is not None:
+            verdict = (f"a(z) {worst['poszt']} posztjukról alig megy be "
+                       "a lövés")
+        elif best is not None:
+            verdict = (f"a(z) {best['poszt']} posztjuk a legveszélyesebb "
+                       "befejező")
         out[side] = {"shots": shots, "goals": goals,
                      "team_pct": round(team_pct, 1)
                      if team_pct is not None else None,
-                     "roles": rows, "best": best, "worst": worst}
+                     "roles": rows, "best": best, "worst": worst,
+                     "verdict": verdict}
     return out
 
 
@@ -481,7 +489,10 @@ def assist_role_pairs(match: Match,
                 frm, to = key.split("→", 1)
                 top = {"from": frm, "to": to, "goals": n,
                        "share_pct": round(share, 1)}
-        out[side] = {"pairs_total": total, "pairs": pairs, "top": top}
+        verdict = (f"a(z) {top['from']} → {top['to']} vonal a "
+                   "gólpassz-tengelyük") if top else None
+        out[side] = {"pairs_total": total, "pairs": pairs, "top": top,
+                     "verdict": verdict}
     return out
 
 
@@ -643,9 +654,11 @@ def role_turnover_cost(match: Match,
             poszt, r = max(eligible, key=lambda pr: pr[1]["rate_pct"])
             worst = {"poszt": poszt, "turnovers": r["turnovers"],
                      "punished": r["punished"], "rate_pct": r["rate_pct"]}
+        verdict = (f"a(z) {worst['poszt']} posztjuk eladásai gólba "
+                   "kerülnek") if worst else None
         out[side] = {"turnovers": totals[side][0],
                      "punished": totals[side][1],
-                     "roles": rows, "worst": worst}
+                     "roles": rows, "worst": worst, "verdict": verdict}
     return out
 
 

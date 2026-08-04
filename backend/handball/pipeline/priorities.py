@@ -52,6 +52,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("ár", "Kilépés ára", "defense", "stepout_punishment"),
         ("ár", "Indítás-hiba ára", "goalkeeper", "outlet_punishment"),
         ("ár", "Elhúzódó támadás ára", "tactics", "slow_attack_cost"),
+        ("ár", "Eladás-ár posztonként", "roles", "role_turnover_cost"),
         # --- ember: néven nevezett minta -----------------------------
         ("ember", "Tüzes kéz", "momentum", "hot_hands"),
         ("ember", "Aszály-törő", "momentum", "drought_breakers"),
@@ -65,6 +66,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "defense_form_shift"),
         ("szünet", "Oldal-váltás a szünetre", "tactics",
          "attack_side_shift"),
+        ("szünet", "Poszt-váltás a szünetre", "roles",
+         "role_share_shift"),
         # --- fáradás: időfüggő romlás --------------------------------
         ("fáradás", "Tempó-esés", "attack_types", "team_pace_fade"),
         ("fáradás", "Lövőerő-esés", "event_detection",
@@ -82,6 +85,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("állás", "Hetes-állás", "rules", "sevens_by_score"),
         ("állás", "7a6-állás", "goalkeeper", "empty_net_by_score"),
         ("állás", "Sprint-állás", "stats", "sprints_by_score"),
+        ("állás", "Poszt-állás", "roles", "role_share_by_score"),
     ]
 
 

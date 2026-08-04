@@ -1590,3 +1590,31 @@ def test_report_teendo_rangsor_section():
     assert "Elhúzódó támadás ára" in html
     # A rangsor-elv is ki van írva a jelentésben.
     assert "ár → ember → szünet → fáradás → állás" in html
+
+
+def test_report_shows_the_role_lens_when_a_post_layer_speaks():
+    """A Poszt-lencse akkor jelenik meg, ha van poszt-alapú ítélet.
+
+    A posztok akkor is stabilak, ha a nevek meccsről meccsre
+    cserélődnek — ezért ez a lencse a felkészülés gerince; néma
+    rétegeknél viszont nem foglal helyet a jelentésben.
+    """
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    from tests.test_roles import _role_goal_match
+
+    match = _role_goal_match([2, 2, 2, 2, 1, 1])
+    html = match_report_html(match, team_style_profile(match),
+                             detect_events(match), None)
+    # A szekció csak akkor kerül be, ha van sora — a jelenléte tehát
+    # már azt jelenti, hogy legalább egy poszt-réteg megszólalt. Hogy
+    # MELYIK, az függ a kapus-jelöléstől is (lásd
+    # docs/SORREND_FUGGES.md), ezért konkrét réteget nem kötünk ki.
+    assert "Poszt-lencse" in html
+    assert match.meta.home_team in html
+
+    # Üres meccsen egyetlen poszt-réteg sem szólal meg → nincs szekció.
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Poszt-lencse" not in match_report_html(empty, {}, [], None)

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-lencse**: a poszt-alapú rétegek egy helyen. A posztok akkor
+  is stabilak, ha a nevek meccsről meccsre cserélődnek — ezért ez a
+  lencse a felkészülés gerince. A meccs-jelentés új "Poszt-lencse"
+  szekciója egy táblában hozza a megszólaló poszt-ítéleteket
+  (gól-posztok, poszt-hatékonyság, gólpassz-tengely, eladás-ár
+  posztonként, poszt-váltás a szünetre, poszt-állás); ha egyik réteg
+  sem szólal meg, a szekció el sem készül. Három poszt-réteg mostantól
+  kimondott `verdict` mezőt is ad (a kódbázis konvenciója szerint),
+  így hárman bekerültek a **teendő-rangsorba** is: az eladás-ár az
+  **ár**-családba (a hiba már gólban meg van fizetve), a szünet-váltás
+  a **szünet**-, a poszt-állás pedig az **állás**-családba.
+
 - **Poszt-állás** (`role_share_by_score`): melyik poszton keresztül
   fejeznek be HÁTRÁNYBAN. A poszt-váltás a szünetre
   (`role_share_shift`) az idő szerinti átrendeződést nézi — ez az
