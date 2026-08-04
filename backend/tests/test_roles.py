@@ -478,3 +478,74 @@ def test_role_share_shift_silent_without_halftime():
     rec = role_share_shift(_role_goal_match([2, 2, 1, 1, 1]))["home"]
     assert rec["shift"] is None and rec["verdict"] is None, rec
     assert rec["first_total"] == 0 and rec["second_total"] == 0, rec
+
+
+# ---- Eladás-ár poszt szerint -------------------------------------------------
+
+# Hazai posztok az eladás-teszthez: irányító (12 m) és beálló (6 m).
+_RTC = {3: (28.0, 10.0), 1: (34.0, 10.0)}
+
+
+def _rtc_players():
+    players = [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RTC.items()]
+    players.append(_pl(20, Team.AWAY, 15.0, 10.0))
+    return players
+
+
+def _rtc_match(losses, warmup=150):
+    """`losses` = [(eladó, büntetve?)] — eladás, majd (ha büntetve) az
+    ellenfél gólja 30 mp-en belül."""
+    frames = []
+    t = 0
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_rtc_players(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):
+        _add(28.0, 10.0)
+    for loser, punished in losses:
+        lx, ly = _RTC[loser]
+        cur = (frames[-1].ball.x, frames[-1].ball.y)
+        for i in range(1, 61):  # vissza a hazai birtokoshoz
+            f_ = i / 60.0
+            _add(cur[0] + (lx - cur[0]) * f_, cur[1] + (ly - cur[1]) * f_)
+        for _ in range(5):      # a hazai játékos birtokol
+            _add(lx, ly)
+        for i in range(1, 31):  # a labda a vendéghez kerül: ELADÁS
+            f_ = i / 30.0
+            _add(lx + (15.0 - lx) * f_, 10.0)
+        for _ in range(20):     # vendég-birtoklás (a lövés-elnyomás miatt)
+            _add(15.0, 10.0)
+        if punished:
+            for i in range(1, 16):  # lövés a hazai kapuba: vendég-gól
+                _add(15.0 - 15.5 * (i / 15.0), 10.0)
+            for _ in range(25):
+                _add(-0.5, 10.0)
+        else:
+            for _ in range(40):     # marad kint, nincs gól
+                _add(15.0, 10.0)
+    return Match(MatchMeta(match_id="rt", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_turnover_cost_names_the_punished_post():
+    """Az irányítójuk eladásai rendre gólba kerülnek → őt kell letámadni."""
+    from handball.pipeline.roles import RTC_MIN_TO, role_turnover_cost
+
+    rec = role_turnover_cost(_rtc_match([(3, True)] * 4))["home"]
+    assert rec["turnovers"] >= RTC_MIN_TO, rec
+    assert rec["worst"] is not None, rec
+    assert rec["worst"]["poszt"] == "irányító", rec
+    assert rec["worst"]["rate_pct"] >= 35.0, rec
+    assert rec["roles"]["irányító"]["punished"] >= RTC_MIN_TO, rec
+
+
+def test_role_turnover_cost_silent_with_few_turnovers():
+    """Két eladásból nincs ítélet egyik posztról sem."""
+    from handball.pipeline.roles import role_turnover_cost
+
+    rec = role_turnover_cost(_rtc_match([(3, True)] * 2))["home"]
+    assert rec["worst"] is None, rec

@@ -564,3 +564,86 @@ def role_share_shift(match: Match,
                      "first_total": n1, "second_total": n2,
                      "shift": shift, "verdict": verdict}
     return out
+
+
+# Eladás-ár poszt szerint: posztonként ennyi eladás kell az ítélethez,
+# ennyi másodpercen belüli kapott gól számít büntetésnek, és e fölötti
+# büntetett arány a kiemelt (támadható) poszt. A 30 mp-es ablak a
+# csapat-szintű eladás-büntetéssel (defense.turnover_punishment) azonos.
+RTC_MIN_TO = 4
+RTC_QUICK_S = 30.0
+RTC_HIGH_PCT = 35.0
+
+
+def role_turnover_cost(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Eladás-ár poszt szerint: MELYIK POSZTJUK eladása kerül gólba.
+
+    Az eladás-posztok (turnovers_by_role) azt mondják meg, melyik
+    poszt ADJA el a labdát, a csapat-szintű eladás-büntetés
+    (turnover_punishment) azt, mennyibe kerül összesen — ez a kettőt
+    köti össze: melyik POSZT eladása után esik a leggyakrabban gyors
+    kapott gól.
+
+    Edzőileg ez a legdrágább információ, mert már gólban meg van
+    fizetve: azt a posztot kell letámadni, amelyiknek az eladásai
+    rendre büntetést érnek — ott a legnagyobb a hozam. Saját oldalon
+    ugyanez a poszt visszarendeződését (váltás-sprint) írja elő.
+
+    Visszatérés csapatonként: {"turnovers", "punished",
+    "roles": {poszt: {"turnovers", "punished", "rate_pct"}},
+    "worst": {"poszt", "turnovers", "punished", "rate_pct"} | None} —
+    a "worst" akkor van kitöltve, ha az adott poszt elérte az
+    RTC_MIN_TO eladást és a büntetett aránya az RTC_HIGH_PCT-t
+    (kevés mintából nem ítélünk).
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = RTC_QUICK_S * fps
+
+    events = detect_events(match, config)
+    goals = [(e.t, e.team.value) for e in events if e.type == EventType.GOAL]
+
+    tally: dict = {"home": {}, "away": {}}
+    totals: dict = {"home": [0, 0], "away": [0, 0]}  # [eladás, büntetett]
+    for e in events:
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue  # ismeretlen poszt — nem találgatunk
+        other = "away" if side == "home" else "home"
+        punished = any(tm == other and 0 <= t - e.t <= win
+                       for (t, tm) in goals)
+        rec = tally[side].setdefault(rec_role["poszt"], [0, 0])
+        rec[0] += 1
+        totals[side][0] += 1
+        if punished:
+            rec[1] += 1
+            totals[side][1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = {}
+        for poszt, (n, p) in sorted(tally[side].items(),
+                                    key=lambda kv: -kv[1][1]):
+            rows[poszt] = {"turnovers": n, "punished": p,
+                           "rate_pct": round(100.0 * p / n, 1) if n
+                           else None}
+        worst = None
+        eligible = [(p, r) for p, r in rows.items()
+                    if r["turnovers"] >= RTC_MIN_TO
+                    and r["rate_pct"] is not None
+                    and r["rate_pct"] >= RTC_HIGH_PCT]
+        if eligible:
+            poszt, r = max(eligible, key=lambda pr: pr[1]["rate_pct"])
+            worst = {"poszt": poszt, "turnovers": r["turnovers"],
+                     "punished": r["punished"], "rate_pct": r["rate_pct"]}
+        out[side] = {"turnovers": totals[side][0],
+                     "punished": totals[side][1],
+                     "roles": rows, "worst": worst}
+    return out

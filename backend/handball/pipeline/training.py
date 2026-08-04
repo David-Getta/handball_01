@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 277) Eladás-ár poszt szerint: ha egy posztunk eladásai rendre
+    # gólba kerülnek, ott a visszarendeződés hiányzik.
+    try:
+        from .roles import RTC_QUICK_S, role_turnover_cost
+        rtc277 = role_turnover_cost(match, config)
+        for side in ("home", "away"):
+            rec277 = rtc277[side]
+            worst277 = rec277.get("worst")
+            if worst277 is None:
+                continue
+            add(side, "átmenet", "Eladás utáni visszarendeződés",
+                f"a(z) {worst277['poszt']} posztunk eladásainak "
+                f"{worst277['rate_pct']:.0f}%-át "
+                f"({worst277['punished']}/{worst277['turnovers']}) "
+                f"{RTC_QUICK_S:.0f} mp-en belüli kapott gól követte — "
+                "itt nem az eladások SZÁMA a baj, hanem hogy mindig "
+                "büntetlenül indulhat rá a kontra",
+                "váltás-sprint: eladás-szimuláció ebből a posztból, "
+                "és az első három másodperc gyakorlása — kijelölt "
+                "fékező ember a labdára, a többi vonalban vissza; "
+                "sorozatban, fáradtan is")
+    except Exception:
+        pass
     # 276) Poszt-váltás a szünetre: ha a befejezésünk átrendeződik,
     # tudatosítani kell — ne véletlen legyen.
     try:

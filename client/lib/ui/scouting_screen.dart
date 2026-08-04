@@ -1896,6 +1896,35 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Eladás-ár poszt szerint: melyik posztjukat érdemes letámadni
+  // (posztonként 4+ eladás, 35%-os büntetett arány — a backenddel
+  // azonos küszöbök).
+  String? _turnoverCostRole(Map<String, dynamic> r) {
+    final tos = (r["rtc_to_by_role"] as Map?)?.cast<String, dynamic>();
+    final pun = (r["rtc_punished_by_role"] as Map?)?.cast<String, dynamic>();
+    if (tos == null || tos.isEmpty || pun == null) return null;
+    String? worst;
+    var worstPct = 0.0;
+    var worstN = 0;
+    var worstP = 0;
+    tos.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 4) return;
+      final p = ((pun[k] as num?) ?? 0).toInt();
+      final pct = 100.0 * p / n;
+      if (pct > worstPct) {
+        worstPct = pct;
+        worst = k;
+        worstN = n;
+        worstP = p;
+      }
+    });
+    if (worst == null || worstPct < 35.0) return null;
+    return "a(z) $worst posztjuk eladásait ${worstPct.round()}%-ban "
+        "gyors gól követi ($worstP/$worstN) · oda irányítsd a "
+        "letámadást, ott a legnagyobb a hozam";
+  }
+
   // Poszt-váltás a szünetre: melyik posztra állnak rá a második
   // félidőben (félidőnként 4+ gól, 20 százalékpont eltérés — a
   // backenddel azonos küszöbök).
@@ -6467,6 +6496,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_turnoverCostRole(r) != null)
+        ["Eladás-ár posztonként", _turnoverCostRole(r)!],
       if (_halftimeRoleShift(r) != null)
         ["Poszt-váltás a szünetre", _halftimeRoleShift(r)!],
       if (_assistAxis(r) != null)

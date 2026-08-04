@@ -2472,6 +2472,11 @@ def create_app():
                "efficiency": attack_efficiency(match),
                "duration_efficiency": attack_duration_efficiency(match)}
         try:
+            from ..pipeline.roles import role_turnover_cost
+            res["role_turnover_cost"] = role_turnover_cost(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_share_shift
             res["role_share_shift"] = role_share_shift(match)
         except Exception:
@@ -4837,6 +4842,9 @@ def create_app():
                 from ..pipeline.roles import role_share_shift
                 _layer("role_share_shift",
                        lambda: role_share_shift(match))
+                from ..pipeline.roles import role_turnover_cost
+                _layer("role_turnover_cost",
+                       lambda: role_turnover_cost(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

@@ -883,6 +883,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Eladás-ár poszt szerint: melyik poszt eladása kerül gólba.
+    try:
+        from .roles import RTC_QUICK_S, role_turnover_cost
+        rtc = role_turnover_cost(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtc = rtc[side]
+            worst_rtc = rec_rtc.get("worst")
+            if worst_rtc is None:
+                continue
+            body += (f" A(z) {name} eladásainak ára a(z) "
+                     f"{worst_rtc['poszt']} posztnál a legnagyobb: "
+                     f"{worst_rtc['punished']}/"
+                     f"{worst_rtc['turnovers']} eladásukat "
+                     f"({worst_rtc['rate_pct']:.0f}%) {RTC_QUICK_S:.0f} "
+                     "mp-en belüli kapott gól követte.")
+    except Exception:
+        pass
     # Poszt-váltás a szünetre: melyik posztra állnak rá a második
     # félidőben.
     try:

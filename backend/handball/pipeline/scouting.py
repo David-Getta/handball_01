@@ -738,6 +738,8 @@ class ScoutingReport:
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
     arp_pairs: dict = field(default_factory=dict)
+    rtc_to_by_role: dict = field(default_factory=dict)
+    rtc_punished_by_role: dict = field(default_factory=dict)
     rss_first: dict = field(default_factory=dict)
     rss_second: dict = field(default_factory=dict)
     ser_goals_by_role: dict = field(default_factory=dict)
@@ -2946,6 +2948,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Eladás-ár poszt szerint: melyik posztjukat érdemes letámadni.
+    if rep.rtc_to_by_role:
+        _rtc_rows = [(p, n, rep.rtc_punished_by_role.get(p, 0))
+                     for p, n in rep.rtc_to_by_role.items() if n >= 4]
+        if _rtc_rows:
+            _rtc_p, _rtc_n, _rtc_pun = max(_rtc_rows,
+                                           key=lambda r: r[2] / r[1])
+            _rtc_pct = 100.0 * _rtc_pun / _rtc_n
+            if _rtc_pct >= 35.0:
+                keys.append(
+                    f"A(z) {_rtc_p} posztjuk eladásai kerülnek a "
+                    f"legtöbbe: {_rtc_pun}/{_rtc_n} eladásukat "
+                    f"({_rtc_pct:.0f}%) fél percen belüli kapott gól "
+                    "követte — őt támadjátok le, ott a legnagyobb a "
+                    "hozam.")
 
     # Poszt-váltás a szünetre: melyik posztra állnak rá a második
     # félidőben.
@@ -7106,6 +7124,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_turnover_cost as _rtc
+        rtcrec = _rtc(match, config)[team.value]
+        rep.rtc_to_by_role = {p: r["turnovers"]
+                              for p, r in rtcrec["roles"].items()}
+        rep.rtc_punished_by_role = {p: r["punished"]
+                                    for p, r in rtcrec["roles"].items()}
         from .roles import role_share_shift as _rss
         rssrec = _rss(match, config)[team.value]
         rep.rss_first = dict(rssrec["first"])
@@ -9591,6 +9615,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 256) Az ő drága eladó posztjuk × a ti letámadásotok: oda menjen
+    # a nyomás, ahol az eladás már gólban meg van fizetve.
+    if opp.rtc_to_by_role:
+        _rtc256 = [(p, n, opp.rtc_punished_by_role.get(p, 0))
+                   for p, n in opp.rtc_to_by_role.items() if n >= 4]
+        if _rtc256:
+            _p256, _n256, _pun256 = max(_rtc256, key=lambda r: r[2] / r[1])
+            _pct256 = 100.0 * _pun256 / _n256
+            # A ti oldalatokon a szerzés utáni AZONNALI indítás a
+            # feltétel — enélkül a letámadásból nem lesz gól.
+            _fwd256 = (100.0 * own.stl_fwd / own.stl_steals
+                       if own.stl_steals >= 5 else 0.0)
+            if _pct256 >= 35.0 and _fwd256 >= 40.0:
+                plan.append(
+                    f"A(z) {_p256} posztjuk eladásait {_pct256:.0f}%-ban "
+                    f"gyors gól követi ({_pun256}/{_n256}) — a "
+                    "letámadást rá irányítsátok: az ő zónájában "
+                    "vállaljatok kockázatot, és a szerzés után azonnal "
+                    "induljon a kontra, mert ott már bizonyítottan "
+                    f"megfizetik (ti a szerzéseitek {_fwd256:.0f}%-át "
+                    "viszitek azonnal előre).")
 
     # 255) Az ő szünet utáni poszt-váltásuk × a ti félidei
     # felkészülésetek: az átrendeződést előre tudni lehet.
@@ -13762,6 +13808,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rtc_to_by_role=_merge_count_dicts(
+            r.rtc_to_by_role for r in reports),
+        rtc_punished_by_role=_merge_count_dicts(
+            r.rtc_punished_by_role for r in reports),
         rss_first=_merge_count_dicts(r.rss_first for r in reports),
         rss_second=_merge_count_dicts(r.rss_second for r in reports),
         ser_shots_by_role=_merge_count_dicts(

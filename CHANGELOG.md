@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Eladás-ár poszt szerint** (`role_turnover_cost`): melyik posztjuk
+  eladása kerül gólba. Az eladás-posztok (`turnovers_by_role`) azt
+  mondják meg, melyik poszt ADJA el a labdát, a csapat-szintű
+  eladás-büntetés (`turnover_punishment`) azt, mennyibe kerül
+  összesen — ez a kettőt köti össze: melyik POSZT eladása után esik a
+  leggyakrabban fél percen belüli kapott gól. Edzői olvasat: ez a
+  legdrágább információ, mert már gólban meg van fizetve — azt a
+  posztot kell letámadni, ahol az eladás bizonyítottan büntetést ér;
+  saját oldalon ugyanez a poszt visszarendeződését (váltás-sprint)
+  írja elő. Posztonként 4 eladás és 35%-os büntetett arány alatt
+  nincs ítélet. Felületek: `/matches/{id}/attacks` + meccs-csomag
+  (`role_turnover_cost`), edzői összefoglaló, felderítés (poszt-bontású
+  eladás/büntetett darabszámok meccsek közt összegezve + edzői kulcs +
+  256-os meccsterv-szabály), 277-es edzés-szabály ("Eladás utáni
+  visszarendeződés"), kliens-csempe ("Eladás-ár posztonként").
+
 - **Poszt-váltás a szünetre** (`role_share_shift`): melyik posztra
   épül a befejezésük a második félidőben. A poszt szerinti
   gólmegoszlás (`goals_by_role`) az egész meccset nézi — de az edző a
