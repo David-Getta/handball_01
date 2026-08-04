@@ -1,8 +1,9 @@
 # Útiterv (fázisok)
 
-> ## Állapot-összefoglaló (frissítve: 2026-07)
+> ## Állapot-összefoglaló (frissítve: 2026-08)
 >
-> **Kész és tesztelt (114 automata teszt zöld):**
+> **Kész és tesztelt (1227 automata teszt zöld; élő számok:
+> `docs/SZAMOK.md`):**
 > - Teljes feldolgozó lánc [A]–[H]: YOLO-detektálás, ByteTrack, bíró-szűrő,
 >   csapatszín (k-means), 4-sarkos kalibráció + **pásztázás-követés**
 >   (kameramozgás-kompenzáció), **képen kívüli becslés** (roster/kiállítások

@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **A pályázati számokat őr-teszt tartja frissen**: az EIC-anyagok
+  (executive summary, Part B, pitch deck, felkészülési terv) és az
+  útiterv szövegében is szerepel a réteg- és teszt-szám — ezek eddig
+  csendben elavultak minden réteg-commit után, pedig épp ezeket
+  ellenőrzi az értékelő. Az új őr összeveti a dokumentumokban ÍRT
+  számokat a generált `docs/SZAMOK.md`-vel, és eltérésnél elbukik. A
+  meglévő számok frissítve (300 réteg, 1227 teszt), az útiterv
+  állapot-összefoglalója pedig a valós számra javítva (114 helyett).
+
 - **Angol felderítő kártya** (`scouting_cards_en`): a magyar felderítő
   jelentés a teljes mélység — ez a nemzetközi felület. Csapatonként
   rövid, tényszerű angol pontok az ellenfélről: támadó stílus

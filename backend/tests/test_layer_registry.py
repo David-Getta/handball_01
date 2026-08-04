@@ -446,3 +446,45 @@ def test_projekt_szamok_frissek():
     assert res.returncode == 0, (
         "elavult tény-lap — futtasd: python -m scripts.project_facts\n"
         + res.stderr)
+
+
+def test_palyazati_szamok_egyeznek_a_teny_lappal():
+    """A pályázati/bemutató anyagokba ÍRT számok egyezzenek a tény-lappal.
+
+    Az EIC-anyagok (executive summary, Part B, pitch deck, felkészülési
+    terv) szöveg közben is megnevezik a réteg- és teszt-számot. Ezek
+    csendben elavulnának minden réteg-commit után — az értékelő pedig
+    ellenőrzi őket. Ez az őr összeveti a szöveges említéseket a
+    generált `docs/SZAMOK.md`-vel.
+    """
+    import re
+    root = Path(__file__).resolve().parent.parent.parent
+    facts = (root / "docs" / "SZAMOK.md").read_text(encoding="utf-8")
+
+    def _fact(label: str) -> int:
+        m = re.search(rf"\| {label} [^|]*\| \*\*(\d+)\*\*", facts)
+        assert m, f"nincs '{label}' sor a tény-lapon"
+        return int(m.group(1))
+
+    layers = _fact("Elemző réteg")
+    tests = _fact("Automata teszt")
+
+    # "300 elemző réteg" / "300 analysis layers" / "1226 automata
+    # teszt" / "1,226 automated tests" — a vessző csak tagolás.
+    pat = re.compile(
+        r"([\d][\d,]*)\s+(elemző réteg|analysis layers|"
+        r"automata teszt|automated tests)")
+    checked = 0
+    for doc in sorted((root / "docs").glob("*.md")):
+        if doc.name in ("SZAMOK.md", "RETEG_KATALOGUS.md"):
+            continue  # ezek generáltak
+        for m in pat.finditer(doc.read_text(encoding="utf-8")):
+            value = int(m.group(1).replace(",", ""))
+            want = layers if "réteg" in m.group(2) or "layers" in m.group(2) \
+                else tests
+            assert value == want, (
+                f"{doc.name}: '{m.group(0)}' — a tény-lap szerint "
+                f"{want}. Frissítsd a dokumentumot "
+                "(python -m scripts.project_facts adja a mérvadó számot).")
+            checked += 1
+    assert checked >= 4, f"csak {checked} említést találtam — romlott a minta"
