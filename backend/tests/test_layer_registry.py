@@ -501,17 +501,17 @@ def test_szam_szinkron_javitja_az_elavult_doksit():
     root = Path(__file__).resolve().parent.parent.parent
     doc = root / "docs" / "PITCH_DECK_VAZLAT.md"
     original = doc.read_text(encoding="utf-8")
+    # A VALÓS számokkal szinkronizálunk: így csak a szándékosan
+    # elrontott réteg-szám javul, a többi doksi nem mozdul.
+    facts = collect_facts()
+    good = f"{facts['layers']} elemző réteg"
+    assert good in original, good
     try:
-        doc.write_text(
-            original.replace("300 elemző réteg", "42 elemző réteg"),
-            encoding="utf-8")
-        # A VALÓS számokkal szinkronizálunk: így csak a szándékosan
-        # elrontott réteg-szám javul, a többi doksi nem mozdul.
-        facts = collect_facts()
+        doc.write_text(original.replace(good, "42 elemző réteg"),
+                       encoding="utf-8")
         stale = sync_docs(facts, write=False)
         assert "PITCH_DECK_VAZLAT.md" in stale, stale
         sync_docs(facts)
-        assert (f"{facts['layers']} elemző réteg"
-                in doc.read_text(encoding="utf-8"))
+        assert good in doc.read_text(encoding="utf-8")
     finally:
         doc.write_text(original, encoding="utf-8")

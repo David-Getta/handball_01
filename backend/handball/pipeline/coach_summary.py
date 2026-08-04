@@ -883,6 +883,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-hatékonyság: melyik posztról érdemes engedni a lövést.
+    try:
+        from .roles import SER_GAP_PP, shot_efficiency_by_role
+        ser = shot_efficiency_by_role(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ser = ser[side]
+            worst = rec_ser.get("worst")
+            if worst is None:
+                continue
+            body += (f" A(z) {name} befejezésében a(z) {worst['poszt']} "
+                     f"a leggyengébb: {worst['pct']:.0f}% "
+                     f"({worst['goals']}/{worst['shots']} lövés), a "
+                     f"csapat-átlaguk {rec_ser['team_pct']:.0f}% — "
+                     f"{abs(worst['gap_pp']):.0f} százalékpont a "
+                     f"különbség ({SER_GAP_PP:.0f} fölött érdemi).")
+    except Exception:
+        pass
     # Kiosztás-célpont: kihez megy a labda a betörés után.
     try:
         from .attack_types import KOT_CONCENTRATION_PCT, kickout_targets

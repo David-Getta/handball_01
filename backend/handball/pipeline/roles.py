@@ -326,3 +326,94 @@ def assists_by_role(match: Match,
                 rec["top"] = {"poszt": poszt, "assists": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Poszt szerinti befejezés-hatékonyság: ennyi poszthoz kötött lövés
+# kell egy poszt megítéléséhez, és ekkora eltérés a csapat-átlagtól
+# számít érdemi különbségnek (százalékpont).
+SER_MIN_SHOTS = 5
+SER_GAP_PP = 15.0
+
+
+def shot_efficiency_by_role(match: Match,
+                            config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt szerinti befejezés-hatékonyság: MELYIK POSZTRÓL ÉRDEMES
+    engedni a lövést.
+
+    A poszt szerinti gólmegoszlás (goals_by_role) azt mondja meg,
+    honnan JÖNNEK a góljaik — de egy poszt attól is termelhet sok
+    gólt, hogy sokat lő. Ez a réteg a poszt lövéseit és góljait
+    együtt nézi: melyik posztról hány százalék megy be.
+
+    Edzőileg ez fordítja meg a védekezési logikát: a csapat-átlagnál
+    SOKKAL rosszabb posztra rá lehet engedni a lövést (ott áll a
+    legkevesebb kockázat), a sokkal jobbat viszont el kell zárni —
+    inkább vállalva, hogy máshonnan lőnek. Ez a "hova tereld" döntés.
+
+    Visszatérés csapatonként: {"shots", "goals", "team_pct",
+    "roles": {poszt: {"shots", "goals", "pct"}},
+    "best"/"worst": {"poszt", "shots", "goals", "pct", "gap_pp"} |
+    None} — a best/worst csak akkor van kitöltve, ha az adott poszt
+    elérte a SER_MIN_SHOTS lövést, és a csapat-átlagtól legalább
+    SER_GAP_PP százalékponttal tér el (kevés mintából nem ítélünk).
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    out: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    totals: dict = {"home": [0, 0], "away": [0, 0]}  # [lövés, gól]
+
+    for e in detect_events(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue  # ismeretlen poszt — nem találgatunk
+        poszt = rec_role["poszt"]
+        rec = tally[side].setdefault(poszt, [0, 0])
+        rec[0] += 1
+        totals[side][0] += 1
+        if e.type == EventType.GOAL:
+            rec[1] += 1
+            totals[side][1] += 1
+
+    for side in ("home", "away"):
+        shots, goals = totals[side]
+        team_pct = (100.0 * goals / shots) if shots else None
+        rows = {}
+        for poszt, (s_n, g_n) in sorted(tally[side].items(),
+                                        key=lambda kv: -kv[1][0]):
+            rows[poszt] = {"shots": s_n, "goals": g_n,
+                           "pct": round(100.0 * g_n / s_n, 1) if s_n
+                           else None}
+        best = worst = None
+        if team_pct is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["shots"] >= SER_MIN_SHOTS]
+            for pick, key in (("best", max), ("worst", min)):
+                if not eligible:
+                    continue
+                poszt, r = key(eligible, key=lambda pr: pr[1]["pct"])
+                gap = r["pct"] - team_pct
+                if abs(gap) < SER_GAP_PP:
+                    continue
+                if (pick == "best" and gap < 0) or \
+                        (pick == "worst" and gap > 0):
+                    continue
+                rec_pick = {"poszt": poszt, "shots": r["shots"],
+                            "goals": r["goals"], "pct": r["pct"],
+                            "gap_pp": round(gap, 1)}
+                if pick == "best":
+                    best = rec_pick
+                else:
+                    worst = rec_pick
+        out[side] = {"shots": shots, "goals": goals,
+                     "team_pct": round(team_pct, 1)
+                     if team_pct is not None else None,
+                     "roles": rows, "best": best, "worst": worst}
+    return out

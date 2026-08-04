@@ -2472,6 +2472,11 @@ def create_app():
                "efficiency": attack_efficiency(match),
                "duration_efficiency": attack_duration_efficiency(match)}
         try:
+            from ..pipeline.roles import shot_efficiency_by_role
+            res["shot_efficiency_by_role"] = shot_efficiency_by_role(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import kickout_targets
             res["kickout_targets"] = kickout_targets(match)
         except Exception:
@@ -4813,6 +4818,9 @@ def create_app():
                 _layer("attack_width", lambda: attack_width(match))
                 from ..pipeline.attack_types import kickout_targets
                 _layer("kickout_targets", lambda: kickout_targets(match))
+                from ..pipeline.roles import shot_efficiency_by_role
+                _layer("shot_efficiency_by_role",
+                       lambda: shot_efficiency_by_role(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

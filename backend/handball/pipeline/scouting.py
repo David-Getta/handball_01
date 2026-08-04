@@ -736,6 +736,8 @@ class ScoutingReport:
     prf_families: dict = field(default_factory=dict)
     kot_kickouts: int = 0
     kot_targets: dict = field(default_factory=dict)
+    ser_shots_by_role: dict = field(default_factory=dict)
+    ser_goals_by_role: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2941,6 +2943,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-hatékonyság: melyik posztjukra lehet ráengedni a lövést.
+    _ser_total = sum(rep.ser_shots_by_role.values())
+    if _ser_total >= 10:
+        _ser_team = 100.0 * sum(rep.ser_goals_by_role.values()) / _ser_total
+        _ser_rows = [(p, n, rep.ser_goals_by_role.get(p, 0))
+                     for p, n in rep.ser_shots_by_role.items() if n >= 5]
+        if _ser_rows:
+            _ser_p, _ser_n, _ser_g = min(
+                _ser_rows, key=lambda r: r[2] / r[1])
+            _ser_pct = 100.0 * _ser_g / _ser_n
+            if _ser_team - _ser_pct >= 15.0:
+                keys.append(
+                    f"A(z) {_ser_p} posztjukról csak {_ser_pct:.0f}% megy "
+                    f"be ({_ser_g}/{_ser_n} lövés), a csapat-átlaguk "
+                    f"{_ser_team:.0f}% — oda rá lehet engedni a lövést, "
+                    "és a többi vonalat kell zárni.")
 
     # Kiosztás-célpont: kihez megy a labda a betörésük után.
     if rep.kot_targets and rep.kot_kickouts >= 4:
@@ -7051,6 +7070,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import shot_efficiency_by_role as _ser
+        serrec = _ser(match, config)[team.value]
+        rep.ser_shots_by_role = {p: r["shots"]
+                                 for p, r in serrec["roles"].items()}
+        rep.ser_goals_by_role = {p: r["goals"]
+                                 for p, r in serrec["roles"].items()}
         from .attack_types import kickout_targets as _kot
         kotrec = _kot(match, config)[team.value]
         rep.kot_kickouts = kotrec["kickouts"]
@@ -9524,6 +9549,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 253) Az ő gyenge lövő-posztjuk × a ti falatok: oda tereljétek a
+    # befejezést, a többi vonalat zárjátok.
+    _ser253_total = sum(opp.ser_shots_by_role.values())
+    if _ser253_total >= 10:
+        _ser253_team = (100.0 * sum(opp.ser_goals_by_role.values())
+                        / _ser253_total)
+        _ser253_rows = [(p, n, opp.ser_goals_by_role.get(p, 0))
+                        for p, n in opp.ser_shots_by_role.items() if n >= 5]
+        if _ser253_rows:
+            _p253, _n253, _g253 = min(_ser253_rows,
+                                      key=lambda r: r[2] / r[1])
+            _pct253 = 100.0 * _g253 / _n253
+            if (_ser253_team - _pct253 >= 15.0
+                    and own.def_shots_against >= 10):
+                plan.append(
+                    f"A(z) {_p253} posztjukról csak {_pct253:.0f}% megy be "
+                    f"({_g253}/{_n253}), a csapat-átlaguk "
+                    f"{_ser253_team:.0f}% — a falatok oda terelje a "
+                    "befejezést: ne lépjetek ki rá, a belső vonalakat "
+                    "és a beállót zárjátok, és vállaljátok, hogy onnan "
+                    "lőnek.")
 
     # 252) Az ő kiszámítható kiosztásuk × a ti kettőző védekezésetek:
     # a betörésük után a passz célpontja előre tudható.
@@ -13633,6 +13680,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         frt_repeats=sum(r.frt_repeats for r in reports),
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
+        ser_shots_by_role=_merge_count_dicts(
+            r.ser_shots_by_role for r in reports),
+        ser_goals_by_role=_merge_count_dicts(
+            r.ser_goals_by_role for r in reports),
         kot_kickouts=sum(r.kot_kickouts for r in reports),
         kot_targets=_merge_count_dicts(
             r.kot_targets for r in reports),

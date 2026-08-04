@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 274) Poszt-hatékonyság: ha egy posztunkról alig megy be a lövés,
+    # az a poszt befejezés-gyakorlata a heti téma.
+    try:
+        from .roles import (SER_GAP_PP, SER_MIN_SHOTS,
+                            shot_efficiency_by_role)
+        ser274 = shot_efficiency_by_role(match, config)
+        for side in ("home", "away"):
+            rec274 = ser274[side]
+            worst274 = rec274.get("worst")
+            if worst274 is None or worst274["shots"] < SER_MIN_SHOTS:
+                continue
+            add(side, "támadás", "Poszt-befejezés",
+                f"a(z) {worst274['poszt']} posztunkról csak "
+                f"{worst274['pct']:.0f}% megy be "
+                f"({worst274['goals']}/{worst274['shots']} lövés), a "
+                f"csapat-átlagunk {rec274['team_pct']:.0f}% — "
+                f"{abs(worst274['gap_pp']):.0f} százalékpont a "
+                f"lemaradás ({SER_GAP_PP:.0f} fölött érdemi); az "
+                "ellenfél erre rá fog engedni",
+                f"poszt-befejezés: {worst274['poszt']}-gyakorlat "
+                "sorozatban, mérkőzés-szerű fáradtsággal — előbb "
+                "üres kapura a technika, aztán kapussal és védővel, "
+                "és a hét végén ugyanezt a réteget nézzük vissza")
+    except Exception:
+        pass
     # 273) Kiosztás-célpont: ha a betörés után mindig ugyanoda megy a
     # labda, a védekezés előre tudja — a kiosztást variálni kell.
     try:

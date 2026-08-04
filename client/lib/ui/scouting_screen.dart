@@ -1896,6 +1896,41 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-hatékonyság: melyik posztjukra lehet ráengedni a lövést
+  // (10+ lövés, posztonként 5+, 15 százalékpont eltérés — a
+  // backenddel azonos küszöbök).
+  String? _roleEfficiency(Map<String, dynamic> r) {
+    final shots = (r["ser_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final goals = (r["ser_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || goals == null) return null;
+    var total = 0;
+    var totalGoals = 0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    goals.forEach((k, v) => totalGoals += (v as num).toInt());
+    if (total < 10) return null;
+    final teamPct = 100.0 * totalGoals / total;
+    String? worst;
+    var worstPct = 101.0;
+    var worstShots = 0;
+    var worstGoals = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 5) return;
+      final g = ((goals[k] as num?) ?? 0).toInt();
+      final pct = 100.0 * g / n;
+      if (pct < worstPct) {
+        worstPct = pct;
+        worst = k;
+        worstShots = n;
+        worstGoals = g;
+      }
+    });
+    if (worst == null || teamPct - worstPct < 15.0) return null;
+    return "a(z) $worst posztjukról csak ${worstPct.round()}% megy be "
+        "($worstGoals/$worstShots lövés, csapat-átlag "
+        "${teamPct.round()}%) · oda engedd a lövést, a többi vonalat zárd";
+  }
+
   // Kiosztás-célpont: kihez megy a labda a betörés után (4+ kiosztás,
   // 55%-os koncentráció — a backenddel azonos küszöbök).
   String? _kickoutTarget(Map<String, dynamic> r) {
@@ -6376,6 +6411,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_roleEfficiency(r) != null)
+        ["Poszt-hatékonyság", _roleEfficiency(r)!],
       if (_kickoutTarget(r) != null)
         ["Kiosztás-célpont", _kickoutTarget(r)!],
       if (_priorityFocus(r) != null)

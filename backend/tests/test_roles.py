@@ -289,3 +289,73 @@ def test_assists_by_role_needs_enough_assists():
 
     rec = assists_by_role(_role_goal_match([2, 2, 1]))["home"]
     assert rec["top"] is None
+
+
+# ---- Poszt szerinti befejezés-hatékonyság ------------------------------------
+
+def _role_shot_match(attempts, warmup=150):
+    """Poszt-mintát adó birtoklás, majd `attempts` = [(lövő, gól?)].
+
+    Gólnál a labda a kapufák közé (y=10) érkezik; kihagyásnál olyan
+    pályán, amely a gólvonal környékén VÉGIG a kapufákon kívül halad
+    (a szélsőnél a saját sávjában marad, a középről indulóknál y=14
+    felé) — így a lövés lövés marad, nem lesz gól.
+    """
+    frames = []
+    t = 0
+    for _ in range(warmup):
+        players, ball = _lineup()
+        frames.append(Frame(t=t, players=players, ball=ball))
+        t += 1
+    for tid, scored in attempts:
+        sx, sy = _SPOTS[tid]
+        cur_x, cur_y = (frames[-1].ball.x, frames[-1].ball.y)
+        for i in range(1, 61):  # lassan a lövőhöz (nem lövés-sebesség)
+            f_ = i / 60.0
+            frames.append(Frame(
+                t=t, players=_lineup()[0],
+                ball=Ball(x=cur_x + (sx - cur_x) * f_,
+                          y=cur_y + (sy - cur_y) * f_, confidence=1.0)))
+            t += 1
+        for _ in range(3):  # a lövő birtokolja a labdát
+            players, ball = _lineup(tid)
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+        target_y = 10.0 if scored else (sy if sy < 8.0 else 14.0)
+        steps = max(3, int(round(40.5 - sx)))
+        for i in range(1, steps + 1):
+            f_ = i / steps
+            frames.append(Frame(
+                t=t, players=_lineup()[0],
+                ball=Ball(x=sx + (40.5 - sx) * f_,
+                          y=sy + (target_y - sy) * f_, confidence=1.0)))
+            t += 1
+        for _ in range(25):  # szünet a kísérletek közt
+            players, ball = _lineup()
+            frames.append(Frame(t=t, players=players, ball=ball))
+            t += 1
+    return Match(MatchMeta(match_id="rs", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_shot_efficiency_by_role_separates_the_two_posts():
+    """A szélsőjük sokat lő, keveset szerez — arra rá lehet engedni."""
+    from handball.pipeline.roles import SER_MIN_SHOTS, shot_efficiency_by_role
+
+    attempts = ([(2, False)] * 5 + [(2, True)]      # szélső: 1/6
+                + [(1, True)] * 5 + [(1, False)])   # beálló: 5/6
+    rec = shot_efficiency_by_role(_role_shot_match(attempts))["home"]
+    assert rec["shots"] >= 2 * SER_MIN_SHOTS, rec
+    assert rec["roles"]["szélső"]["pct"] < rec["roles"]["beálló"]["pct"], rec
+    assert rec["worst"] is not None and rec["worst"]["poszt"] == "szélső"
+    assert rec["best"] is not None and rec["best"]["poszt"] == "beálló"
+    assert rec["worst"]["gap_pp"] < 0 < rec["best"]["gap_pp"]
+
+
+def test_shot_efficiency_by_role_silent_with_few_shots():
+    """Két lövésből nem mondunk ítéletet egyik posztról sem."""
+    from handball.pipeline.roles import shot_efficiency_by_role
+
+    rec = shot_efficiency_by_role(
+        _role_shot_match([(2, True), (1, False)]))["home"]
+    assert rec["best"] is None and rec["worst"] is None, rec

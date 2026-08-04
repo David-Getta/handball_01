@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-hatékonyság** (`shot_efficiency_by_role`): melyik posztról
+  hány százalék megy be. A poszt szerinti gólmegoszlás
+  (`goals_by_role`) azt mondja meg, honnan JÖNNEK a góljaik — de egy
+  poszt attól is termelhet sok gólt, hogy sokat lő. Ez a réteg a
+  poszt lövéseit és góljait együtt nézi. Edzői olvasat: ez fordítja
+  meg a védekezési logikát — a csapat-átlagnál sokkal rosszabb
+  posztra rá lehet engedni a lövést, a sokkal jobbat viszont el kell
+  zárni, vállalva, hogy máshonnan lőnek ("hova tereld"). Posztonként
+  5 lövés alatt és 15 százalékpontnál kisebb eltérésnél nincs ítélet.
+  Felületek: `/matches/{id}/attacks` + meccs-csomag
+  (`shot_efficiency_by_role`), edzői összefoglaló, felderítés
+  (poszt-bontású lövés/gól darabszámok meccsek közt összegezve +
+  edzői kulcs + 253-as meccsterv-szabály), 274-es edzés-szabály
+  ("Poszt-befejezés"), kliens-csempe ("Poszt-hatékonyság").
+
 - **Validáció: eltérés-lista a pontosság-mérés mellé.** A
   precision/recall szám megmondja, MENNYIRE pontos a felismerés — de
   nem azt, hol kell javítani. A `validate_events` mostantól tételesen
