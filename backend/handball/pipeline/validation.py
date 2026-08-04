@@ -30,6 +30,9 @@ VALIDATION_TOL_S = 3.0
 # eseményfelismerése "elég a taktikai döntéshez".
 VALIDATION_TARGET_RECALL = 0.90
 VALIDATION_TARGET_PRECISION = 0.85
+# Az eltérés-listából ennyi tételt mutatunk meg (a teljes lista
+# az eredményben marad) — egy jegyzőkönyv ne fulladjon bele.
+VALIDATION_MISMATCH_SHOWN = 20
 
 # Kézi címkék → belső típus (magyar és angol elfogadva).
 _TYPE_MAP = {
@@ -230,10 +233,21 @@ def validate_events(match: Match, truth: list,
                     best_i, best_dt = i, dt
             if best_i is not None:
                 used.add(best_i)
+                t["_paired"] = True
                 tp += 1
         fp = len(d_list) - len(used)
         fn = len(t_list) - tp
-        return _prf(tp, fp, fn)
+        out = _prf(tp, fp, fn)
+        # Az ELTÉRÉSEK tételesen: enélkül a 80%-os recall csak egy
+        # szám; így megmondható, MELYIK eseményt kell megnézni a
+        # felvételen (annotálás-javítás vagy motor-hiba).
+        out["missed"] = [{"t_s": t["t_s"], "type": dtype,
+                          "team": t["team"]}
+                         for t in t_list if t.get("_paired") is not True]
+        out["spurious"] = [{"t_s": d["t_s"], "type": dtype,
+                            "team": d["team"]}
+                           for i, d in enumerate(d_list) if i not in used]
+        return out
 
     by_type = {ty: _match_type(ty) for ty in ("goal", "shot")}
     tp = sum(by_type[t]["tp"] for t in by_type)
@@ -347,7 +361,68 @@ def validation_report_html(res: dict, home_team: str = "",
         "<th class=\"num\">F1</th></tr>"
         + "".join(rows)
         + "</table>"
-        f'<div class="foot">Idő-tűrés: {res.get("tol_s", "")} mp. '
+        + _mismatch_html(res)
+        + f'<div class="foot">Idő-tűrés: {res.get("tol_s", "")} mp. '
         "A TP a kézi listával párosított felismerés; az FP téves felismerés; "
         "az FN a kimaradt (kézi listában van, de nem ismerte fel).</div>"
         "</body></html>")
+
+
+def _mismatch_html(res: dict) -> str:
+    """Az eltérés-lista blokkja a riportba (üres, ha nincs eltérés).
+
+    Ez teszi a riportot MUNKAESZKÖZZÉ: az annotáló végig tud menni a
+    felvételen a felsorolt időpontokon.
+    """
+    from html import escape
+
+    lines = mismatch_lines(res)
+    if not lines:
+        return ("<p><b>Nincs eltérés</b> — minden kézi esemény "
+                "párosítva, téves felismerés nélkül.</p>")
+    lis = "".join(f"<li>{escape(x)}</li>" for x in lines)
+    return ("<h2>Mit nézz meg a felvételen</h2>"
+            "<ul>" + lis + "</ul>")
+
+
+def _mmss(t_s: float) -> str:
+    """Másodperc → perc:másodperc (a felvételen így keresi az ember)."""
+    t = max(0, int(round(t_s)))
+    return f"{t // 60}:{t % 60:02d}"
+
+
+def mismatch_lines(res: dict,
+                   limit: int = VALIDATION_MISMATCH_SHOWN) -> list[str]:
+    """Az eltérések emberi nyelven — mit nézzen meg az annotáló.
+
+    A precision/recall szám megmondja, MENNYIRE pontos a felismerés;
+    ez azt, HOL kell megnézni a felvételt. Két hibafajta:
+    "kimaradt" (a kézi listában van, a motor nem látta) és "téves"
+    (a motor jelezte, a kézi listában nincs). A sorrend idő szerinti,
+    hogy a felvételen végig lehessen menni rajta.
+
+    Visszatérés: magyar mondatok listája (legfeljebb `limit` tétel +
+    egy záró sor, ha volt levágás); üres lista, ha nincs eltérés.
+    """
+    labels = {"goal": "gól", "shot": "lövés"}
+    sides = {"home": "hazai", "away": "vendég"}
+    rows: list[tuple] = []
+    for ty in ("goal", "shot"):
+        rec = (res.get("by_type") or {}).get(ty) or {}
+        for kind, items in (("kimaradt", rec.get("missed") or []),
+                            ("téves", rec.get("spurious") or [])):
+            for it in items:
+                rows.append((float(it.get("t_s", 0.0)), kind,
+                             labels.get(ty, ty), it.get("team")))
+    if not rows:
+        return []
+    rows.sort(key=lambda r: (r[0], r[1]))
+    out = []
+    for t_s, kind, label, team in rows[:max(0, limit)]:
+        who = sides.get(team)
+        who = f" ({who})" if who else ""
+        out.append(f"{_mmss(t_s)} — {kind} {label}{who}")
+    if len(rows) > limit > 0:
+        out.append(f"… és további {len(rows) - limit} eltérés "
+                   "(a teljes lista az eredményben).")
+    return out

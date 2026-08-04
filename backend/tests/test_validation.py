@@ -213,3 +213,87 @@ def test_validation_ledger_row_handles_missing_data():
     row = validation_ledger_row(res)
     assert row.startswith("| ") and row.endswith("| ? |")
     assert row.count("—/—") == 2
+
+
+def test_mismatch_lines_point_to_the_footage():
+    """Az eltérések idő szerint, emberi nyelven — mit nézzen meg az annotáló."""
+    from handball.pipeline.validation import mismatch_lines
+
+    res = {"by_type": {
+        "goal": {"missed": [{"t_s": 65.0, "type": "goal", "team": "home"}],
+                 "spurious": []},
+        "shot": {"missed": [],
+                 "spurious": [{"t_s": 12.0, "type": "shot",
+                               "team": "away"}]},
+    }}
+    lines = mismatch_lines(res)
+    assert lines == ["0:12 — téves lövés (vendég)",
+                     "1:05 — kimaradt gól (hazai)"], lines
+
+
+def test_mismatch_lines_are_empty_without_errors():
+    """Hibátlan validációnál nincs teendő-lista."""
+    from handball.pipeline.validation import mismatch_lines
+
+    res = {"by_type": {"goal": {"missed": [], "spurious": []},
+                       "shot": {"missed": [], "spurious": []}}}
+    assert mismatch_lines(res) == []
+
+
+def test_mismatch_lines_truncate_long_lists():
+    """Hosszú listát levágunk, de kimondjuk, hány maradt ki."""
+    from handball.pipeline.validation import mismatch_lines
+
+    res = {"by_type": {
+        "goal": {"missed": [{"t_s": float(i), "type": "goal",
+                             "team": "home"} for i in range(25)],
+                 "spurious": []},
+        "shot": {"missed": [], "spurious": []},
+    }}
+    lines = mismatch_lines(res, limit=5)
+    assert len(lines) == 6, lines
+    assert "további 20 eltérés" in lines[-1]
+
+
+def test_validate_events_lists_the_missed_event():
+    """A kimaradt kézi esemény tételesen is megjelenik az eredményben."""
+    from handball.pipeline.validation import validate_events
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    match = simulate_ground_truth(duration_s=90.0, seed=2)
+    # Olyan időpont, ahol biztosan nincs felismert gól (a felvétel eleje).
+    res = validate_events(match, [{"t_s": 1.0, "type": "gol",
+                                   "team": "home"}])
+    goal = res["by_type"]["goal"]
+    assert goal["fn"] == 1, goal
+    assert goal["missed"] == [{"t_s": 1.0, "type": "goal",
+                               "team": "home"}], goal["missed"]
+
+
+def test_validation_report_html_shows_the_mismatches():
+    """A HTML-riport is felsorolja, mit kell megnézni a felvételen."""
+    from handball.pipeline.validation import validation_report_html
+
+    res = {"tol_s": 3.0, "verdict": {"pass": False, "text": "GYENGE"},
+           "overall": {"tp": 0, "fp": 0, "fn": 1, "precision": None,
+                       "recall": 0.0, "f1": None},
+           "by_type": {
+               "goal": {"tp": 0, "fp": 0, "fn": 1, "precision": None,
+                        "recall": 0.0, "f1": None,
+                        "missed": [{"t_s": 65.0, "type": "goal",
+                                    "team": "home"}],
+                        "spurious": []},
+               "shot": {"tp": 0, "fp": 0, "fn": 0, "precision": None,
+                        "recall": None, "f1": None,
+                        "missed": [], "spurious": []}}}
+    html = validation_report_html(res, "H", "A")
+    assert "Mit nézz meg a felvételen" in html
+    assert "1:05 — kimaradt gól (hazai)" in html
+    # Hibátlan futásnál viszont kimondjuk, hogy nincs eltérés.
+    clean = {"tol_s": 3.0, "verdict": {"pass": True, "text": "MEGFELEL"},
+             "overall": {"tp": 1, "fp": 0, "fn": 0},
+             "by_type": {"goal": {"tp": 1, "fp": 0, "fn": 0,
+                                  "missed": [], "spurious": []},
+                         "shot": {"tp": 0, "fp": 0, "fn": 0,
+                                  "missed": [], "spurious": []}}}
+    assert "Nincs eltérés" in validation_report_html(clean)

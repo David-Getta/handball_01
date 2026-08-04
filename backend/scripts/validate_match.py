@@ -33,7 +33,8 @@ if _BACKEND not in sys.path:
 
 from handball.models.tracking import Match  # noqa: E402
 from handball.pipeline.validation import (  # noqa: E402
-    parse_truth_csv, validate_events, validation_ledger_row,
+    mismatch_lines, parse_truth_csv, validate_events,
+    validation_ledger_row,
     validation_report_html, validation_template_csv)
 
 
@@ -106,6 +107,15 @@ def main(argv=None) -> int:
           f"F1 {_pct(ov['f1'])}")
     print()
     print(res["verdict"]["text"])
+
+    # Az eltérések tételesen: a szám megmondja, MENNYIRE pontos —
+    # ez azt, HOL kell megnézni a felvételt.
+    lines = mismatch_lines(res)
+    if lines:
+        print()
+        print("Mit nézz meg a felvételen:")
+        for line in lines:
+            print(f"  {line}")
 
     if args.out:
         html = validation_report_html(

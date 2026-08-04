@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Validáció: eltérés-lista a pontosság-mérés mellé.** A
+  precision/recall szám megmondja, MENNYIRE pontos a felismerés — de
+  nem azt, hol kell javítani. A `validate_events` mostantól tételesen
+  visszaadja a **kimaradt** (a kézi listában van, a motor nem látta)
+  és a **téves** (a motor jelezte, a kézi listában nincs) eseményeket,
+  a `mismatch_lines` pedig idő szerinti, magyar mondatokká fordítja
+  ("1:05 — kimaradt gól (hazai)"). Így a validáció munkaeszköz lesz:
+  az annotáló végig tud menni a felvételen a felsorolt időpontokon.
+  Felületek: `python -m scripts.validate_match` kimenete ("Mit nézz
+  meg a felvételen") és a HTML-riport új szekciója; hibátlan futásnál
+  a riport kimondja, hogy nincs eltérés. Hosszú lista levágva, a
+  levágott darabszám kiírva.
+
 - **A pályázati számokat őr-teszt tartja frissen**: az EIC-anyagok
   (executive summary, Part B, pitch deck, felkészülési terv) és az
   útiterv szövegében is szerepel a réteg- és teszt-szám — ezek eddig
