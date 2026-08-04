@@ -737,6 +737,7 @@ class ScoutingReport:
     kot_kickouts: int = 0
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
+    arp_pairs: dict = field(default_factory=dict)
     ser_goals_by_role: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
@@ -2943,6 +2944,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Gólpassz-tengely: melyik vonalon esnek a góljaik.
+    if rep.arp_pairs:
+        _arp_total = sum(rep.arp_pairs.values())
+        _arp_key, _arp_n = max(rep.arp_pairs.items(), key=lambda kv: kv[1])
+        _arp_share = 100.0 * _arp_n / _arp_total
+        if _arp_total >= 4 and _arp_share >= 40.0:
+            keys.append(
+                f"A gólpassz-tengelyük a(z) {_arp_key} vonal: a "
+                f"poszthoz kötött gólpasszos góljaik "
+                f"{_arp_share:.0f}%-a innen jött ({_arp_n}/"
+                f"{_arp_total}) — ezt az egy vonalat vágjátok el, ne "
+                "két embert fogjatok külön.")
 
     # Poszt-hatékonyság: melyik posztjukra lehet ráengedni a lövést.
     _ser_total = sum(rep.ser_shots_by_role.values())
@@ -7070,6 +7084,8 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import assist_role_pairs as _arp
+        rep.arp_pairs = dict(_arp(match, config)[team.value]["pairs"])
         from .roles import shot_efficiency_by_role as _ser
         serrec = _ser(match, config)[team.value]
         rep.ser_shots_by_role = {p: r["shots"]
@@ -9549,6 +9565,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 254) Az ő gólpassz-tengelyük × a ti kettőzésetek: egy vonalat
+    # kell elvágni, nem két embert fogni.
+    if opp.arp_pairs:
+        _arp254_total = sum(opp.arp_pairs.values())
+        _arp254_key, _arp254_n = max(opp.arp_pairs.items(),
+                                     key=lambda kv: kv[1])
+        _arp254_share = 100.0 * _arp254_n / _arp254_total
+        if (_arp254_total >= 4 and _arp254_share >= 40.0
+                and own.dbl_doubled_frames >= 50):
+            plan.append(
+                f"A gólpasszos góljaik {_arp254_share:.0f}%-a a(z) "
+                f"{_arp254_key} vonalon esik ({_arp254_n}/"
+                f"{_arp254_total}), ti pedig tudtok kettőzni — a "
+                "kettőzés a passzoló posztjára menjen, a fogadó elé "
+                "pedig álljatok be: egy tengely elvágása olcsóbb, "
+                "mint két ember külön fogása.")
 
     # 253) Az ő gyenge lövő-posztjuk × a ti falatok: oda tereljétek a
     # befejezést, a többi vonalat zárjátok.
@@ -13680,6 +13713,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         frt_repeats=sum(r.frt_repeats for r in reports),
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
+        arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
         ser_shots_by_role=_merge_count_dicts(
             r.ser_shots_by_role for r in reports),
         ser_goals_by_role=_merge_count_dicts(

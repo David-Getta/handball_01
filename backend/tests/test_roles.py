@@ -359,3 +359,73 @@ def test_shot_efficiency_by_role_silent_with_few_shots():
     rec = shot_efficiency_by_role(
         _role_shot_match([(2, True), (1, False)]))["home"]
     assert rec["best"] is None and rec["worst"] is None, rec
+
+
+# ---- Gólpassz-tengelyek poszt szerint ----------------------------------------
+
+# Két hazai poszt: irányító (12 m, közép) és beálló (6 m, közép).
+_ARP = {3: (28.0, 10.0), 1: (34.0, 10.0)}
+
+
+def _arp_players(ball_xy=None):
+    players = [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _ARP.items()]
+    players.append(_pl(20, Team.AWAY, 37.0, 16.0))  # távoli vendég
+    return players
+
+
+def _arp_match(passes, warmup=150):
+    """`passes` = [(passzoló, lövő)] — mindegyikből gólpasszos gól lesz."""
+    frames = []
+    t = 0
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_arp_players(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):
+        _add(28.0, 10.0)
+    for passer, scorer in passes:
+        px, py = _ARP[passer]
+        sx, sy = _ARP[scorer]
+        cur = (frames[-1].ball.x, frames[-1].ball.y)
+        for i in range(1, 61):  # lassan a passzolóhoz (nem lövés)
+            f_ = i / 60.0
+            _add(cur[0] + (px - cur[0]) * f_, cur[1] + (py - cur[1]) * f_)
+        for _ in range(3):      # a passzoló birtokol
+            _add(px, py)
+        for i in range(1, 26):  # a passz: lassan a lövőhöz
+            f_ = i / 25.0
+            _add(px + (sx - px) * f_, py + (sy - py) * f_)
+        for _ in range(3):      # a lövő birtokol
+            _add(sx, sy)
+        steps = max(3, int(round(40.5 - sx)))
+        for i in range(1, steps + 1):   # a lövés a kapuba
+            f_ = i / steps
+            _add(sx + (40.5 - sx) * f_, sy + (10.0 - sy) * f_)
+        for _ in range(25):
+            _add(40.5, 10.0)
+    return Match(MatchMeta(match_id="ap", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_assist_role_pairs_finds_the_axis():
+    """Négy gól ugyanazon a tengelyen → az irányító–beálló vonal a téma."""
+    from handball.pipeline.roles import assist_role_pairs
+
+    rec = assist_role_pairs(_arp_match([(3, 1)] * 4))["home"]
+    assert rec["pairs_total"] == 4, rec
+    assert rec["pairs"].get("irányító→beálló") == 4, rec
+    assert rec["top"] is not None
+    assert rec["top"]["from"] == "irányító" and rec["top"]["to"] == "beálló"
+    assert rec["top"]["share_pct"] == 100.0
+
+
+def test_assist_role_pairs_silent_with_few_goals():
+    """Két gólpasszos gólból nincs tengely-ítélet."""
+    from handball.pipeline.roles import assist_role_pairs
+
+    rec = assist_role_pairs(_arp_match([(3, 1)] * 2))["home"]
+    assert rec["pairs_total"] <= 2, rec
+    assert rec["top"] is None, rec

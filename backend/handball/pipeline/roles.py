@@ -417,3 +417,69 @@ def shot_efficiency_by_role(match: Match,
                      if team_pct is not None else None,
                      "roles": rows, "best": best, "worst": worst}
     return out
+
+
+# Gólpassz-tengelyek: ennyi poszthoz kötött gólpassz-pár kell az
+# ítélethez, és ekkora részarány fölött nevezzük tengelynek.
+ARP_MIN_PAIRS = 4
+ARP_SHARE = 40.0
+
+
+def assist_role_pairs(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpassz-tengelyek poszt szerint: MELYIK VONALON esnek a góljaik.
+
+    A gólpassz-posztok (assists_by_role) azt mondják meg, melyik poszt
+    OSZTJA a gólpasszokat, a poszt szerinti gólmegoszlás
+    (goals_by_role) azt, melyik poszt LŐ — ez a kettőt köti össze:
+    melyik poszt melyik posztnak adja a gólpasszt (pl. "irányító →
+    beálló"). A neveket használó gólpassz-hálózattal szemben ez akkor
+    is látszik, ha a játékosok meccsről meccsre cserélődnek.
+
+    Edzőileg ez egyetlen, kiosztható feladat: a domináns tengelyt kell
+    elvágni, nem két embert külön fogni. Irányító→beálló tengelynél a
+    beálló elé állás és a felső kettőzés együtt; átlövő→szélső
+    tengelynél a szélső zárása a lövő-mozdulat pillanatában.
+
+    Visszatérés csapatonként: {"pairs_total", "pairs": {"A→B": darab},
+    "top": {"from", "to", "goals", "share_pct"} | None} — a "top"
+    akkor van kitöltve, ha legalább ARP_MIN_PAIRS poszthoz kötött pár
+    van, a vezető pár részaránya eléri az ARP_SHARE-t, és nincs
+    holtversenyben másik párral.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    tally: dict = {"home": {}, "away": {}}
+
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        assist_id = (e.detail or {}).get("assist_id")
+        if assist_id is None:
+            continue
+        side = e.team.value
+        scorer = roles[side].get(e.player_id)
+        passer = roles[side].get(assist_id)
+        if scorer is None or passer is None:
+            continue  # ismeretlen poszt — nem találgatunk
+        key = f"{passer['poszt']}→{scorer['poszt']}"
+        tally[side][key] = tally[side].get(key, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        pairs = dict(sorted(tally[side].items(), key=lambda kv: -kv[1]))
+        total = sum(pairs.values())
+        top = None
+        items = list(pairs.items())
+        if total >= ARP_MIN_PAIRS and items:
+            key, n = items[0]
+            share = 100.0 * n / total
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= ARP_SHARE and not tie:
+                frm, to = key.split("→", 1)
+                top = {"from": frm, "to": to, "goals": n,
+                       "share_pct": round(share, 1)}
+        out[side] = {"pairs_total": total, "pairs": pairs, "top": top}
+    return out

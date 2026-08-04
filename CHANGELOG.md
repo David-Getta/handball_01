@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Gólpassz-tengely** (`assist_role_pairs`): melyik poszt melyik
+  posztnak adja a gólpasszt (pl. "irányító → beálló"). A
+  gólpassz-posztok (`assists_by_role`) azt mondják meg, melyik poszt
+  OSZTJA a gólpasszokat, a poszt szerinti gólmegoszlás
+  (`goals_by_role`) azt, melyik poszt LŐ — ez a kettőt köti össze. A
+  neveket használó gólpassz-hálózattal szemben akkor is látszik, ha a
+  játékosok meccsről meccsre cserélődnek. Edzői olvasat: egyetlen,
+  kiosztható feladat — a domináns tengelyt kell elvágni, nem két
+  embert külön fogni. Négy poszthoz kötött pár alatt, 40% részarány
+  alatt vagy holtversenynél nincs ítélet. Felületek:
+  `/matches/{id}/attacks` + meccs-csomag (`assist_role_pairs`), edzői
+  összefoglaló, felderítés (tengely-számlálók meccsek közt összegezve
+  + edzői kulcs + 254-es meccsterv-szabály), 275-ös edzés-szabály
+  ("Tengely-bővítés"), kliens-csempe ("Gólpassz-tengely").
+
 - **Poszt-hatékonyság** (`shot_efficiency_by_role`): melyik posztról
   hány százalék megy be. A poszt szerinti gólmegoszlás
   (`goals_by_role`) azt mondja meg, honnan JÖNNEK a góljaik — de egy

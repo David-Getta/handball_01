@@ -883,6 +883,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Gólpassz-tengely: melyik vonalon esnek a góljaik.
+    try:
+        from .roles import assist_role_pairs
+        arp = assist_role_pairs(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_arp = arp[side]
+            top_arp = rec_arp.get("top")
+            if top_arp is None:
+                continue
+            body += (f" A(z) {name} gólpassz-tengelye a(z) "
+                     f"{top_arp['from']} → {top_arp['to']} vonal: a "
+                     f"poszthoz kötött gólpasszos góljaik "
+                     f"{top_arp['share_pct']:.0f}%-a innen jött "
+                     f"({top_arp['goals']}/{rec_arp['pairs_total']}) — "
+                     "ezt az egy vonalat kell elvágni, nem két embert "
+                     "külön fogni.")
+    except Exception:
+        pass
     # Poszt-hatékonyság: melyik posztról érdemes engedni a lövést.
     try:
         from .roles import SER_GAP_PP, shot_efficiency_by_role

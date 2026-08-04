@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 275) Gólpassz-tengely: ha a góljaink egy vonalon esnek, azt az
+    # ellenfél elvágja — több tengely kell.
+    try:
+        from .roles import ARP_MIN_PAIRS, ARP_SHARE, assist_role_pairs
+        arp275 = assist_role_pairs(match, config)
+        for side in ("home", "away"):
+            rec275 = arp275[side]
+            top275 = rec275.get("top")
+            if top275 is None or rec275["pairs_total"] < ARP_MIN_PAIRS:
+                continue
+            add(side, "támadás", "Tengely-bővítés",
+                f"a gólpasszos góljaink {top275['share_pct']:.0f}%-a a(z) "
+                f"{top275['from']} → {top275['to']} vonalon esik "
+                f"({top275['goals']}/{rec275['pairs_total']}; "
+                f"{ARP_SHARE:.0f}% fölött már kiszámítható) — egy "
+                "felkészült ellenfél ezt az egy vonalat elvágja",
+                "tengely-bővítés: ugyanabból a felállásból két másik "
+                "befejező vonal gyakorlása (a domináns tengely "
+                "SZÁNDÉKOS kihagyásával), majd szabad játék, ahol a "
+                "védő mozgása dönti el, melyik vonal nyílik")
+    except Exception:
+        pass
     # 274) Poszt-hatékonyság: ha egy posztunkról alig megy be a lövés,
     # az a poszt befejezés-gyakorlata a heti téma.
     try:

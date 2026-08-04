@@ -1896,6 +1896,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Gólpassz-tengely: melyik poszt-vonalon esnek a góljaik (4+ pár,
+  // 40%-os részarány — a backenddel azonos küszöbök).
+  String? _assistAxis(Map<String, dynamic> r) {
+    final pairs = (r["arp_pairs"] as Map?)?.cast<String, dynamic>();
+    if (pairs == null || pairs.isEmpty) return null;
+    var total = 0;
+    String? top;
+    var topN = 0;
+    pairs.forEach((k, v) {
+      final n = (v as num).toInt();
+      total += n;
+      if (n > topN) {
+        topN = n;
+        top = k;
+      }
+    });
+    if (total < 4 || top == null) return null;
+    final pct = (100.0 * topN / total).round();
+    if (pct < 40) return null;
+    return "a gólpasszos góljaik $pct%-a a(z) $top vonalon esik "
+        "($topN/$total) · ezt az egy vonalat vágd el, ne két embert fogj";
+  }
+
   // Poszt-hatékonyság: melyik posztjukra lehet ráengedni a lövést
   // (10+ lövés, posztonként 5+, 15 százalékpont eltérés — a
   // backenddel azonos küszöbök).
@@ -6411,6 +6434,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_assistAxis(r) != null)
+        ["Gólpassz-tengely", _assistAxis(r)!],
       if (_roleEfficiency(r) != null)
         ["Poszt-hatékonyság", _roleEfficiency(r)!],
       if (_kickoutTarget(r) != null)
