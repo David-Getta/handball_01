@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 278) Poszt-állás: ha hátrányban egyetlen posztra szűkül a
+    # befejezésünk, azt az ellenfél lezárja.
+    try:
+        from .roles import RBS_GAP_PP, role_share_by_score
+        rbs278 = role_share_by_score(match, config)
+        for side in ("home", "away"):
+            rec278 = rbs278[side]
+            sh278 = rec278.get("shift")
+            if sh278 is None or sh278["gap_pp"] <= 0:
+                continue
+            add(side, "támadás", "Hátrány-befejezés",
+                f"hátrányban a(z) {sh278['poszt']} posztra szűkül a "
+                f"befejezésünk ({sh278['trailing_pct']:.0f}% vs "
+                f"{sh278['rest_pct']:.0f}% egyébként; "
+                f"{RBS_GAP_PP:.0f} százalékpont fölött már mintázat) — "
+                "egy felkészült ellenfél a hajrában pont ezt a vonalat "
+                "zárja le",
+                "hátrány-forgatókönyv: két perc hátrányból indított "
+                "játék, ahol a domináns poszt SZÁNDÉKOSAN nem "
+                "fejezhet be — a cél, hogy nyomás alatt is legyen "
+                "második és harmadik befejező vonalunk")
+    except Exception:
+        pass
     # 277) Eladás-ár poszt szerint: ha egy posztunk eladásai rendre
     # gólba kerülnek, ott a visszarendeződés hiányzik.
     try:

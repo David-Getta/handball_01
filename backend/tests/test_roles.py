@@ -549,3 +549,82 @@ def test_role_turnover_cost_silent_with_few_turnovers():
 
     rec = role_turnover_cost(_rtc_match([(3, True)] * 2))["home"]
     assert rec["worst"] is None, rec
+
+
+# ---- Poszt-állás (hátrányban melyik poszt fejez be) --------------------------
+
+def _rbs_match(home_scorers_trailing, home_scorers_rest, away_goals=5,
+               warmup=150):
+    """Előbb a vendég szerez `away_goals` gólt (a hazai hátrányba kerül),
+    utána a hazai gólok — előbb hátrányban, majd a többi állásban."""
+    frames = []
+    t = 0
+
+    def _add(bx, by, players):
+        nonlocal t
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    def _lineup_away():
+        players = [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _SPOTS.items()]
+        players.append(_pl(20, Team.AWAY, 10.0, 10.0))
+        return players
+
+    def _travel(tx, ty, steps=60):
+        cur = (frames[-1].ball.x, frames[-1].ball.y) if frames else (28.5, 10.0)
+        for i in range(1, steps + 1):
+            f_ = i / steps
+            _add(cur[0] + (tx - cur[0]) * f_, cur[1] + (ty - cur[1]) * f_,
+                 _lineup_away())
+
+    for _ in range(warmup):
+        _add(28.5, 10.0, _lineup_away())
+    for _ in range(away_goals):
+        _travel(10.0, 10.0)
+        for _ in range(20):
+            _add(10.0, 10.0, _lineup_away())
+        for i in range(1, 11):          # vendég-gól a hazai kapuba
+            _add(10.0 - 10.5 * (i / 10.0), 10.0, _lineup_away())
+        for _ in range(25):
+            _add(-0.5, 10.0, _lineup_away())
+    for tid in list(home_scorers_trailing) + list(home_scorers_rest):
+        sx, sy = _SPOTS[tid]
+        # Előbb ki a kapu-közeli zónából (a lövés-debounce így nyílik
+        # újra), csak utána a lövő helyére.
+        _travel(25.0, 10.0, steps=40)
+        _travel(sx, sy, steps=40)
+        for _ in range(5):
+            _add(sx, sy, _lineup_away())
+        steps = max(3, int(round(40.5 - sx)))
+        for i in range(1, steps + 1):   # hazai gól
+            f_ = i / steps
+            _add(sx + (40.5 - sx) * f_, sy + (10.0 - sy) * f_,
+                 _lineup_away())
+        for _ in range(25):
+            _add(40.5, 10.0, _lineup_away())
+    return Match(MatchMeta(match_id="rb", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_share_by_score_names_the_trailing_finisher():
+    """Hátrányban a szélső viszi a befejezést, egyenlítés után a beálló."""
+    from handball.pipeline.roles import role_share_by_score
+
+    rec = role_share_by_score(_rbs_match([2] * 5, [1] * 4))["home"]
+    assert rec["trailing_total"] >= 4 and rec["rest_total"] >= 4, rec
+    assert rec["shift"] is not None, rec
+    assert rec["verdict"] and "hátrányban" in rec["verdict"], rec
+    if rec["shift"]["poszt"] == "szélső":
+        assert rec["shift"]["gap_pp"] > 0, rec
+    else:
+        assert rec["shift"]["gap_pp"] < 0, rec
+
+
+def test_role_share_by_score_silent_without_both_buckets():
+    """Ha nincs hátrányban szerzett góljuk, nincs ítélet."""
+    from handball.pipeline.roles import role_share_by_score
+
+    rec = role_share_by_score(_role_goal_match([2, 2, 1, 1, 1]))["home"]
+    assert rec["trailing_total"] == 0, rec
+    assert rec["shift"] is None and rec["verdict"] is None, rec

@@ -883,6 +883,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-állás: melyik poszton keresztül fejeznek be hátrányban.
+    try:
+        from .roles import role_share_by_score
+        rbs = role_share_by_score(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rbs = rbs[side]
+            if rec_rbs["verdict"] is None:
+                continue
+            sh_rbs = rec_rbs["shift"]
+            body += (f" A(z) {name} hátrány-befejezése: "
+                     f"{rec_rbs['verdict']} "
+                     f"({sh_rbs['trailing_pct']:.0f}% hátrányban vs "
+                     f"{sh_rbs['rest_pct']:.0f}% egyébként; "
+                     f"{rec_rbs['trailing_total']}/"
+                     f"{rec_rbs['rest_total']} poszthoz kötött gól).")
+    except Exception:
+        pass
     # Eladás-ár poszt szerint: melyik poszt eladása kerül gólba.
     try:
         from .roles import RTC_QUICK_S, role_turnover_cost

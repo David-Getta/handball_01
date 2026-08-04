@@ -1896,6 +1896,38 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-állás: melyik posztra szűkül a hátrány-befejezésük (mindkét
+  // oldalon 4+ gól, 20 százalékpont eltérés — a backenddel azonos
+  // küszöbök).
+  String? _trailingFinisher(Map<String, dynamic> r) {
+    final trail = (r["rbs_trailing"] as Map?)?.cast<String, dynamic>();
+    final rest = (r["rbs_rest"] as Map?)?.cast<String, dynamic>();
+    if (trail == null || rest == null) return null;
+    var n1 = 0;
+    var n2 = 0;
+    trail.forEach((k, v) => n1 += (v as num).toInt());
+    rest.forEach((k, v) => n2 += (v as num).toInt());
+    if (n1 < 4 || n2 < 4) return null;
+    String? best;
+    var bestGap = 0.0;
+    var bestTrail = 0.0;
+    var bestRest = 0.0;
+    for (final k in {...trail.keys, ...rest.keys}) {
+      final q1 = 100.0 * (((trail[k] as num?) ?? 0).toInt()) / n1;
+      final q2 = 100.0 * (((rest[k] as num?) ?? 0).toInt()) / n2;
+      if (best == null || (q1 - q2).abs() > bestGap.abs()) {
+        best = k;
+        bestGap = q1 - q2;
+        bestTrail = q1;
+        bestRest = q2;
+      }
+    }
+    if (best == null || bestGap < 20.0) return null;
+    return "hátrányban a(z) $best posztra szűkül a befejezésük "
+        "(${bestTrail.round()}% vs ${bestRest.round()}%) · szoros "
+        "hajrában ezt a vonalat zárd le";
+  }
+
   // Eladás-ár poszt szerint: melyik posztjukat érdemes letámadni
   // (posztonként 4+ eladás, 35%-os büntetett arány — a backenddel
   // azonos küszöbök).
@@ -6496,6 +6528,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_trailingFinisher(r) != null)
+        ["Hátrány-befejezés", _trailingFinisher(r)!],
       if (_turnoverCostRole(r) != null)
         ["Eladás-ár posztonként", _turnoverCostRole(r)!],
       if (_halftimeRoleShift(r) != null)

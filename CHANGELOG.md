@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-állás** (`role_share_by_score`): melyik poszton keresztül
+  fejeznek be HÁTRÁNYBAN. A poszt-váltás a szünetre
+  (`role_share_shift`) az idő szerinti átrendeződést nézi — ez az
+  eredményjelző szerintit: minden gólnál megnézzük az addigi állást,
+  és a poszthoz kötött gólok megoszlását hátrányban, illetve minden
+  más helyzetben. Edzői olvasat: feltételes, de nagyon konkrét — ha
+  hátrányban mindent az átlövőikre bíznak, a szoros hajrában a 9
+  méteres vonalat kell lezárni és vállalni a beállót; saját oldalon
+  ugyanez a kérdés, hogy nyomás alatt szűkül-e a befejezésünk egyetlen
+  posztra. Oldalanként 4 gól és 20 százalékpont alatt nincs ítélet.
+  Felületek: `/matches/{id}/attacks` + meccs-csomag
+  (`role_share_by_score`), edzői összefoglaló, felderítés
+  (állás-bontású poszt-számlálók meccsek közt összegezve + edzői kulcs
+  + 257-es meccsterv-szabály), 278-as edzés-szabály
+  ("Hátrány-befejezés"), kliens-csempe ("Hátrány-befejezés").
+
 - **Eladás-ár poszt szerint** (`role_turnover_cost`): melyik posztjuk
   eladása kerül gólba. Az eladás-posztok (`turnovers_by_role`) azt
   mondják meg, melyik poszt ADJA el a labdát, a csapat-szintű

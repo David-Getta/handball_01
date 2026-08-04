@@ -738,6 +738,8 @@ class ScoutingReport:
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
     arp_pairs: dict = field(default_factory=dict)
+    rbs_trailing: dict = field(default_factory=dict)
+    rbs_rest: dict = field(default_factory=dict)
     rtc_to_by_role: dict = field(default_factory=dict)
     rtc_punished_by_role: dict = field(default_factory=dict)
     rss_first: dict = field(default_factory=dict)
@@ -2948,6 +2950,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-állás: melyik posztra épül a hátrány-befejezésük.
+    _rbs_n1 = sum(rep.rbs_trailing.values())
+    _rbs_n2 = sum(rep.rbs_rest.values())
+    if _rbs_n1 >= 4 and _rbs_n2 >= 4:
+        _rbs_best = None
+        for _rbs_p in set(rep.rbs_trailing) | set(rep.rbs_rest):
+            _q1 = 100.0 * rep.rbs_trailing.get(_rbs_p, 0) / _rbs_n1
+            _q2 = 100.0 * rep.rbs_rest.get(_rbs_p, 0) / _rbs_n2
+            if _rbs_best is None or abs(_q1 - _q2) > abs(_rbs_best[3]):
+                _rbs_best = (_rbs_p, _q1, _q2, _q1 - _q2)
+        if _rbs_best is not None and _rbs_best[3] >= 20.0:
+            _rbs_p, _q1, _q2, _ = _rbs_best
+            keys.append(
+                f"Hátrányban a(z) {_rbs_p} posztra szűkül a "
+                f"befejezésük ({_q1:.0f}% hátrányban vs {_q2:.0f}% "
+                "egyébként) — szoros hajrában ezt a vonalat zárjátok "
+                "le, és vállaljátok a többit.")
 
     # Eladás-ár poszt szerint: melyik posztjukat érdemes letámadni.
     if rep.rtc_to_by_role:
@@ -7124,6 +7144,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_share_by_score as _rbs
+        rbsrec = _rbs(match, config)[team.value]
+        rep.rbs_trailing = dict(rbsrec["trailing"])
+        rep.rbs_rest = dict(rbsrec["rest"])
         from .roles import role_turnover_cost as _rtc
         rtcrec = _rtc(match, config)[team.value]
         rep.rtc_to_by_role = {p: r["turnovers"]
@@ -9615,6 +9639,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 257) Az ő hátrány-befejezésük × a ti hajrátok: szoros végjátékban
+    # előre tudható, melyik vonal jön.
+    _rbs257_n1 = sum(opp.rbs_trailing.values())
+    _rbs257_n2 = sum(opp.rbs_rest.values())
+    if _rbs257_n1 >= 4 and _rbs257_n2 >= 4:
+        _rbs257_best = None
+        for _p257 in set(opp.rbs_trailing) | set(opp.rbs_rest):
+            _c1 = 100.0 * opp.rbs_trailing.get(_p257, 0) / _rbs257_n1
+            _c2 = 100.0 * opp.rbs_rest.get(_p257, 0) / _rbs257_n2
+            if (_rbs257_best is None
+                    or abs(_c1 - _c2) > abs(_rbs257_best[3])):
+                _rbs257_best = (_p257, _c1, _c2, _c1 - _c2)
+        if (_rbs257_best is not None and _rbs257_best[3] >= 20.0
+                and own.clutch_matches >= 1):
+            _p257, _c1, _c2, _ = _rbs257_best
+            plan.append(
+                f"Hátrányban a(z) {_p257} posztra szűkül a "
+                f"befejezésük ({_c1:.0f}% vs {_c2:.0f}%) — ha ti "
+                "vezettek a hajrában, erre a vonalra álljatok rá "
+                "névre szólóan, a többit pedig vállaljátok: a "
+                "kapkodásukat így a saját kezükben hagyjátok.")
 
     # 256) Az ő drága eladó posztjuk × a ti letámadásotok: oda menjen
     # a nyomás, ahol az eladás már gólban meg van fizetve.
@@ -13808,6 +13854,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rbs_trailing=_merge_count_dicts(r.rbs_trailing for r in reports),
+        rbs_rest=_merge_count_dicts(r.rbs_rest for r in reports),
         rtc_to_by_role=_merge_count_dicts(
             r.rtc_to_by_role for r in reports),
         rtc_punished_by_role=_merge_count_dicts(

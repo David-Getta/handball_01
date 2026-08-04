@@ -647,3 +647,85 @@ def role_turnover_cost(match: Match,
                      "punished": totals[side][1],
                      "roles": rows, "worst": worst}
     return out
+
+
+# Poszt-állás: a hátrány-vödörben és a többi állásban is ennyi
+# poszthoz kötött gól kell, és ekkora részarány-változás
+# (százalékpont) számít érdemi elmozdulásnak.
+RBS_MIN_GOALS = 4
+RBS_GAP_PP = 20.0
+
+
+def role_share_by_score(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-állás: MELYIK POSZTON keresztül fejeznek be HÁTRÁNYBAN.
+
+    A poszt-váltás a szünetre (role_share_shift) az IDŐ szerinti
+    átrendeződést nézi — ez az eredményjelző szerintit: minden gólnál
+    megnézzük az addigi állást (hátrányban / nem hátrányban), és a
+    poszthoz kötött gólok megoszlását a két helyzetben.
+
+    Edzőileg ez feltételes, de nagyon konkrét: ha hátrányban mindent
+    az átlövőikre bíznak, a szoros hajrában a 9 méteres vonalat kell
+    lezárni és vállalni a beállót; ha a szélsőt keresik, a szélső
+    kifutása lesz a döntő. A saját oldalon ugyanez a kérdés: nyomás
+    alatt szűkül-e a befejezésünk egyetlen posztra.
+
+    Visszatérés csapatonként: {"trailing": {poszt: gól}, "rest":
+    {poszt: gól}, "trailing_total", "rest_total", "shift": {"poszt",
+    "trailing_pct", "rest_pct", "gap_pp"} | None, "verdict": str |
+    None} — a shift/verdict None, ha valamelyik oldalon
+    RBS_MIN_GOALS-nál kevesebb poszthoz kötött gól van, vagy a
+    legnagyobb elmozdulás sem éri el az RBS_GAP_PP-t.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    events = detect_events(match, config)
+    goals = [(e.t, e.team.value) for e in events
+             if e.type == EventType.GOAL]
+
+    tally: dict = {"home": [{}, {}], "away": [{}, {}]}  # [hátrány, többi]
+    for e in events:
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        own = sum(1 for (t, tm) in goals if t < e.t and tm == side)
+        opp = sum(1 for (t, tm) in goals if t < e.t and tm != side)
+        bucket = 0 if own < opp else 1
+        poszt = rec_role["poszt"]
+        tally[side][bucket][poszt] = tally[side][bucket].get(poszt, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        trail, rest = tally[side]
+        n1, n2 = sum(trail.values()), sum(rest.values())
+        shift = verdict = None
+        if n1 >= RBS_MIN_GOALS and n2 >= RBS_MIN_GOALS:
+            best = None
+            for poszt in set(trail) | set(rest):
+                p1 = 100.0 * trail.get(poszt, 0) / n1
+                p2 = 100.0 * rest.get(poszt, 0) / n2
+                gap = p1 - p2  # mennyivel több hátrányban
+                if best is None or abs(gap) > abs(best[3]):
+                    best = (poszt, p1, p2, gap)
+            if best is not None and abs(best[3]) >= RBS_GAP_PP:
+                poszt, p1, p2, gap = best
+                shift = {"poszt": poszt, "trailing_pct": round(p1, 1),
+                         "rest_pct": round(p2, 1),
+                         "gap_pp": round(gap, 1)}
+                verdict = (f"hátrányban a(z) {poszt} viszi a befejezést"
+                           if gap > 0
+                           else f"hátrányban a(z) {poszt} tűnik el a "
+                                "befejezésből")
+        out[side] = {"trailing": dict(sorted(trail.items(),
+                                             key=lambda kv: -kv[1])),
+                     "rest": dict(sorted(rest.items(),
+                                         key=lambda kv: -kv[1])),
+                     "trailing_total": n1, "rest_total": n2,
+                     "shift": shift, "verdict": verdict}
+    return out
