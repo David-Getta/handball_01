@@ -488,3 +488,30 @@ def test_palyazati_szamok_egyeznek_a_teny_lappal():
                 "(python -m scripts.project_facts adja a mérvadó számot).")
             checked += 1
     assert checked >= 4, f"csak {checked} említést találtam — romlott a minta"
+
+
+def test_szam_szinkron_javitja_az_elavult_doksit():
+    """A tény-lap generálása a doksikba írt számokat is igazítja.
+
+    Enélkül minden réteg-commit után kézzel kellene öt pályázati
+    dokumentumot átírni — és pont az maradna el, amit az értékelő néz.
+    """
+    from scripts.project_facts import collect_facts, sync_docs
+
+    root = Path(__file__).resolve().parent.parent.parent
+    doc = root / "docs" / "PITCH_DECK_VAZLAT.md"
+    original = doc.read_text(encoding="utf-8")
+    try:
+        doc.write_text(
+            original.replace("300 elemző réteg", "42 elemző réteg"),
+            encoding="utf-8")
+        # A VALÓS számokkal szinkronizálunk: így csak a szándékosan
+        # elrontott réteg-szám javul, a többi doksi nem mozdul.
+        facts = collect_facts()
+        stale = sync_docs(facts, write=False)
+        assert "PITCH_DECK_VAZLAT.md" in stale, stale
+        sync_docs(facts)
+        assert (f"{facts['layers']} elemző réteg"
+                in doc.read_text(encoding="utf-8"))
+    finally:
+        doc.write_text(original, encoding="utf-8")

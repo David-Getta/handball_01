@@ -88,21 +88,73 @@ A rétegek tételes listája (mit mér melyik):
 """
 
 
+# A szövegbe ÍRT számok mintája a doksikban ("300 elemző réteg",
+# "1,227 automated tests"). A vessző csak ezres tagolás.
+_DOC_NUM = re.compile(
+    r"([\d][\d,]*)(\s+)(elemző réteg|analysis layers|"
+    r"automata teszt|automated tests)")
+
+# Ezek generált fájlok — nem bennük tartjuk a szöveges említéseket.
+_GENERATED_DOCS = ("SZAMOK.md", "RETEG_KATALOGUS.md", "SORREND_FUGGES.md")
+
+
+def _grouped(value: int, sample: str) -> str:
+    """A szám a helyi tagolással: ha a doksiban vesszős volt, az marad."""
+    return f"{value:,}" if "," in sample else str(value)
+
+
+def sync_docs(facts: dict, write: bool = True) -> list[str]:
+    """A doksikba írt réteg-/teszt-számok igazítása a tény-laphoz.
+
+    A pályázati anyagok szöveg közben is megnevezik ezeket a számokat;
+    minden réteg-commit után elavulnának. Visszatérés: az ELTÉRŐ
+    (write=True esetén: a frissített) fájlok neve.
+    """
+    changed: list[str] = []
+    for doc in sorted((_ROOT / "docs").glob("*.md")):
+        if doc.name in _GENERATED_DOCS:
+            continue
+        src = doc.read_text(encoding="utf-8")
+
+        def _fix(m):
+            want = (facts["layers"] if "réteg" in m.group(3)
+                    or "layers" in m.group(3) else facts["tests"])
+            return _grouped(want, m.group(1)) + m.group(2) + m.group(3)
+
+        out = _DOC_NUM.sub(_fix, src)
+        if out != src:
+            changed.append(doc.name)
+            if write:
+                doc.write_text(out, encoding="utf-8")
+    return changed
+
+
 def main(argv=None) -> int:
     check = "--check" in (argv or sys.argv[1:])
     text = build_facts_md()
+    facts = collect_facts()
     if check:
         current = _OUT.read_text(encoding="utf-8") if _OUT.exists() else ""
         if current != text:
             print("ELTÉRÉS: a tény-lap elavult — futtasd: "
                   "python -m scripts.project_facts", file=sys.stderr)
             return 1
+        stale = sync_docs(facts, write=False)
+        if stale:
+            print("ELTÉRÉS: elavult számok a doksikban ("
+                  + ", ".join(stale)
+                  + ") — futtasd: python -m scripts.project_facts",
+                  file=sys.stderr)
+            return 1
         print("A tény-lap friss.")
         return 0
     _OUT.write_text(text, encoding="utf-8")
     print(f"Tény-lap kiírva: {_OUT}")
-    for k, v in collect_facts().items():
+    for k, v in facts.items():
         print(f"  {k}: {v}")
+    synced = sync_docs(facts)
+    if synced:
+        print("  frissített doksik: " + ", ".join(synced))
     return 0
 
 

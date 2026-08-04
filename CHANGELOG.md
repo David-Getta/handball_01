@@ -11,8 +11,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   csendben elavultak minden réteg-commit után, pedig épp ezeket
   ellenőrzi az értékelő. Az új őr összeveti a dokumentumokban ÍRT
   számokat a generált `docs/SZAMOK.md`-vel, és eltérésnél elbukik. A
-  meglévő számok frissítve (300 réteg, 1227 teszt), az útiterv
-  állapot-összefoglalója pedig a valós számra javítva (114 helyett).
+  meglévő számok frissítve, az útiterv állapot-összefoglalója pedig a
+  valós számra javítva (114 helyett). Hogy ez ne legyen kézi munka
+  minden réteg-commitnál, a `scripts/project_facts` mostantól a
+  doksikba írt számokat is ÁTÍRJA a mérvadó értékre (a `--check` mód
+  pedig jelzi, ha elavultak).
 
 - **Angol felderítő kártya** (`scouting_cards_en`): a magyar felderítő
   jelentés a teljes mélység — ez a nemzetközi felület. Csapatonként

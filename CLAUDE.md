@@ -73,7 +73,11 @@ dokumentumot (őr-teszt ellenőrzi mindkettőt):
 ```bash
 cd backend && python3 -m scripts.layer_catalog   # docs/RETEG_KATALOGUS.md
 cd backend && python3 -m scripts.project_facts   # docs/SZAMOK.md
-``` A README "Hol tartunk" teszt-számát
+```
+
+A `project_facts` a pályázati doksikba ÍRT réteg-/teszt-számokat is
+igazítja (executive summary, Part B, pitch deck, EIC-terv, útiterv) —
+őr-teszt ellenőrzi, hogy egyeznek a tény-lappal. A README "Hol tartunk" teszt-számát
 (jelenleg 1103) elég kiadáskor frissíteni.
 
 ## Commit-stílus
