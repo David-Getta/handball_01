@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kiosztás-célpont** (`kickout_targets`): ha a betörés nem lövéssel
+  zárul, KIHEZ kerül a labda. Az áttörő emberek azt mondják meg, ki
+  viszi be a labdát a falba, a visszahozás-arány azt, lezárják-e a
+  betörést — ez azt, hova megy a kiosztás: minden betörés-epizód után
+  megnézzük, ad-e a betörő 3 mp-en belül passzt, és ki a fogadó.
+  Edzői olvasat: ez a legkonkrétabban kiosztható feladat — ha a labda
+  mindig ugyanahhoz az emberhez megy (55% fölött), az ő védője előre
+  elmozdulhat a passzsávba, és a betörésre indulhat a kettőzés; ha
+  változatos a célpont, passz-olvasásra nem lehet védekezést építeni,
+  magát a betörést kell megállítani. Négy kiosztás alatt nincs ítélet.
+  Felületek: `/matches/{id}/attacks` + meccs-csomag
+  (`kickout_targets`), edzői összefoglaló, felderítés (mezszám
+  szerinti célpont-számláló meccsek közt összegezve + edzői kulcs +
+  252-es meccsterv-szabály), 273-as edzés-szabály
+  ("Kiosztás-variálás"), kliens-csempe ("Kiosztás-célpont").
+
 - **Hatókörös elsődleges gyorsítótár** (`pipeline/primitive_cache`): a
   rétegek szándékosan önállóak, ezért ugyanazt az alap-mérést újra és
   újra elvégezték — egyetlen edzői összefoglaló futása alatt a

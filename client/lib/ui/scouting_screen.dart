@@ -1896,6 +1896,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Kiosztás-célpont: kihez megy a labda a betörés után (4+ kiosztás,
+  // 55%-os koncentráció — a backenddel azonos küszöbök).
+  String? _kickoutTarget(Map<String, dynamic> r) {
+    final total = ((r["kot_kickouts"] as num?) ?? 0).toInt();
+    final targets = (r["kot_targets"] as Map?)?.cast<String, dynamic>();
+    if (total < 4 || targets == null || targets.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    targets.forEach((k, v) {
+      final c = (v as num).toInt();
+      if (c > topN) {
+        topN = c;
+        top = k;
+      }
+    });
+    if (top == null) return null;
+    final pct = (100.0 * topN / total).round();
+    if (pct < 55) {
+      return "változatos a kiosztásuk a betörés után ($total kiosztás, "
+          "a legtöbbet kapó is csak $pct%) · passz-olvasásra ne építs, "
+          "magát a betörést állítsd meg";
+    }
+    return "a betörés után a labda $pct%-ban a(z) $top játékoshoz megy "
+        "($topN/$total kiosztás) · az ő védője álljon be a passzsávba, "
+        "a betörőre pedig induljon a kettőzés";
+  }
+
   // Teendő-rangsor: honnan jön a legtöbb jelzés (4+ jelzés, 2+ egy
   // családban — a backenddel azonos küszöbök).
   String? _priorityFocus(Map<String, dynamic> r) {
@@ -6349,6 +6376,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_kickoutTarget(r) != null)
+        ["Kiosztás-célpont", _kickoutTarget(r)!],
       if (_priorityFocus(r) != null)
         ["Felkészülés-súlypont", _priorityFocus(r)!],
       if (_turnoversByScore(r) != null)

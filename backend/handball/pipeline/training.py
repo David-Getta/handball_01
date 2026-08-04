@@ -1355,6 +1355,34 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 273) Kiosztás-célpont: ha a betörés után mindig ugyanoda megy a
+    # labda, a védekezés előre tudja — a kiosztást variálni kell.
+    try:
+        from .attack_types import (KOT_CONCENTRATION_PCT,
+                                   KOT_MIN_KICKOUTS, kickout_targets)
+        kot273 = kickout_targets(match, config)
+        for side in ("home", "away"):
+            rec273 = kot273[side]
+            if (rec273["verdict"] != "kiszámítható a kiosztás"
+                    or rec273["kickouts"] < KOT_MIN_KICKOUTS):
+                continue
+            who273 = rec273["top"]
+            lab273 = (f"{who273['jersey']} mezszámú"
+                      if who273.get("jersey") is not None
+                      else f"{who273['player_id']} azonosítójú")
+            add(side, "támadás", "Kiosztás-variálás",
+                f"a betörés után a labda {rec273['top_pct']:.0f}%-ban "
+                f"a(z) {lab273} játékoshoz megy "
+                f"({who273['count']}/{rec273['kickouts']} kiosztás; "
+                f"{KOT_CONCENTRATION_PCT:.0f}% fölött a védekezés "
+                "előre tudja) — az ő védője előre elmozdulhat a "
+                "passzsávba, a betörőnkre pedig indulhat a kettőzés",
+                "kiosztás-variálás: ugyanabból a betörésből három "
+                "kimenet gyakorlása (átadás a másik oldalra, "
+                "visszaadás a felívelőre, saját befejezés) — a "
+                "célpontot a védő mozgása döntse el, ne a beidegzés")
+    except Exception:
+        pass
     # 272) Teendő-rangsor: ha egy területről jön a jelzések többsége,
     # a heti edzés súlypontját is oda kell tenni.
     try:

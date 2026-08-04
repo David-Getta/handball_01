@@ -3662,3 +3662,69 @@ def test_pass_direction_by_score_few_passes_none():
     frames, t = _pds_pass_frames(0, 24.0, 30.0, 5)
     pds = pass_direction_by_score(Match(meta, frames))
     assert pds["home"]["verdict"] is None
+
+
+def _kot_cycle(t, target_y, fps=25.0):
+    """Egy betörés → kiosztás ciklus kockái.
+
+    1) a betörő (1) a kapu 9 méteres körzetében birtokolja a labdát,
+    2) kiosztja a társának (2) a zónán kívülre → PASSZ esemény,
+    3) az ellenfél megszerzi a labdát a saját térfelén → a szakasz zárul
+       (és a passz-lánc sem folytatódik a következő ciklusba).
+    """
+    frames = []
+    for _ in range(40):  # 1) betörés: a labda a kaputól 7 m-re
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 33.0, 10.0),
+            _pl(2, Team.HOME, 28.0, target_y),
+            _pl(20, Team.AWAY, 35.0, 10.0)],
+            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(30):  # 2) kiosztás a zónán kívülre
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 33.0, 10.0),
+            _pl(2, Team.HOME, 28.0, target_y),
+            _pl(20, Team.AWAY, 35.0, 10.0)],
+            ball=Ball(x=28.0, y=target_y, confidence=1.0)))
+        t += 1
+    for _ in range(30):  # 3) ellenfél-birtoklás: szakasz-határ
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 20.0, 10.0),
+            _pl(2, Team.HOME, 22.0, 12.0),
+            _pl(20, Team.AWAY, 10.0, 10.0)],
+            ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_kickout_targets_flags_a_predictable_target():
+    """Öt betörés, mindig ugyanaz a kiosztás-célpont → kiszámítható."""
+    from handball.pipeline.attack_types import kickout_targets
+
+    frames, t = [], 0
+    for _ in range(5):
+        chunk, t = _kot_cycle(t, 14.0)
+        frames += chunk
+    res = kickout_targets(Match(_meta(), frames))
+    h = res["home"]
+    assert h["kickouts"] >= 4, h
+    assert h["top"] is not None and h["top"]["player_id"] == 2, h
+    assert h["top_pct"] == 100.0, h
+    assert h["verdict"] == "kiszámítható a kiosztás", h
+    # A vendégnek nincs betörése — nem találgatunk helyette.
+    assert res["away"]["verdict"] is None, res["away"]
+
+
+def test_kickout_targets_silent_with_few_kickouts():
+    """Két betörés kevés az ítélethez — None, nem hallgatólagos 0."""
+    from handball.pipeline.attack_types import kickout_targets
+
+    frames, t = [], 0
+    for _ in range(2):
+        chunk, t = _kot_cycle(t, 14.0)
+        frames += chunk
+    res = kickout_targets(Match(_meta(), frames))
+    h = res["home"]
+    assert h["kickouts"] <= 2, h
+    assert h["top"] is None and h["top_pct"] is None, h
+    assert h["verdict"] is None, h

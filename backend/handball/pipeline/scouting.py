@@ -734,6 +734,8 @@ class ScoutingReport:
     frt_shots: int = 0
     frt_repeats: int = 0
     prf_families: dict = field(default_factory=dict)
+    kot_kickouts: int = 0
+    kot_targets: dict = field(default_factory=dict)
     tbs_tr_attacks: int = 0
     tbs_tr_tos: int = 0
     tbs_rest_attacks: int = 0
@@ -2939,6 +2941,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Kiosztás-célpont: kihez megy a labda a betörésük után.
+    if rep.kot_targets and rep.kot_kickouts >= 4:
+        _kot_who, _kot_n = max(rep.kot_targets.items(),
+                               key=lambda kv: kv[1])
+        _kot_pct = 100.0 * _kot_n / rep.kot_kickouts
+        if _kot_pct >= 55.0:
+            keys.append(
+                f"A betörés után a labda {_kot_pct:.0f}%-ban a(z) "
+                f"{_kot_who} játékoshoz megy ({_kot_n}/"
+                f"{rep.kot_kickouts} kiosztás) — az ő védője előre "
+                "elmozdulhat a passzsávba, és a betörőre indulhat a "
+                "kettőzés: a kiosztás így elveszti az értelmét.")
+        else:
+            keys.append(
+                f"Változatos a kiosztásuk a betörés után "
+                f"({rep.kot_kickouts} kiosztás, a legtöbbet kapó is "
+                f"csak {_kot_pct:.0f}%) — passz-olvasásra ne "
+                "építsetek: magát a betörést kell megállítani.")
 
     # Teendő-rangsor: honnan jön a legtöbb jelzés ellenük.
     if rep.prf_families:
@@ -7030,6 +7051,16 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .attack_types import kickout_targets as _kot
+        kotrec = _kot(match, config)[team.value]
+        rep.kot_kickouts = kotrec["kickouts"]
+        # Mezszám szerint tároljuk: így meccsek közt is összeadható.
+        rep.kot_targets = {}
+        for _row in kotrec["targets"]:
+            _lab = (f"#{_row['jersey']}" if _row.get("jersey") is not None
+                    else f"id{_row['player_id']}")
+            rep.kot_targets[_lab] = (rep.kot_targets.get(_lab, 0)
+                                     + _row["count"])
         from .attack_types import turnovers_by_score as _tbs
         tbsrec = _tbs(match, config)[team.value]
         rep.tbs_tr_attacks = tbsrec["trailing"]["attacks"]
@@ -9493,6 +9524,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 252) Az ő kiszámítható kiosztásuk × a ti kettőző védekezésetek:
+    # a betörésük után a passz célpontja előre tudható.
+    if opp.kot_targets and opp.kot_kickouts >= 4:
+        _kot252_who, _kot252_n = max(opp.kot_targets.items(),
+                                     key=lambda kv: kv[1])
+        _kot252_pct = 100.0 * _kot252_n / opp.kot_kickouts
+        if _kot252_pct >= 55.0 and own.dbl_doubled_frames >= 50:
+            plan.append(
+                f"A betörésük után a labda {_kot252_pct:.0f}%-ban a(z) "
+                f"{_kot252_who} játékoshoz megy ({_kot252_n}/"
+                f"{opp.kot_kickouts} kiosztás), ti pedig tudtok "
+                "kettőzni — a betörésre induljon a második ember, a "
+                "célpont védője pedig ne kövesse hátra, hanem álljon "
+                "be a passzsávba: a kiosztás vagy elmarad, vagy a ti "
+                "labdátok lesz.")
 
     # 251) Az ő jelzés-súlypontjuk × a ti tiszta lapotok: oda
     # koncentráljátok a felkészülést, ahol a legtöbb fogás van.
@@ -13586,6 +13633,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         frt_repeats=sum(r.frt_repeats for r in reports),
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
+        kot_kickouts=sum(r.kot_kickouts for r in reports),
+        kot_targets=_merge_count_dicts(
+            r.kot_targets for r in reports),
         tbs_tr_attacks=sum(r.tbs_tr_attacks for r in reports),
         tbs_tr_tos=sum(r.tbs_tr_tos for r in reports),
         tbs_rest_attacks=sum(r.tbs_rest_attacks for r in reports),

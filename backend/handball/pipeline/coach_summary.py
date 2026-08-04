@@ -883,6 +883,26 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kiosztás-célpont: kihez megy a labda a betörés után.
+    try:
+        from .attack_types import KOT_CONCENTRATION_PCT, kickout_targets
+        kot = kickout_targets(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kot = kot[side]
+            if rec_kot["verdict"] is None:
+                continue
+            who = rec_kot["top"]
+            label = (f"{who['jersey']} mezszámú" if who.get("jersey")
+                     is not None else f"{who['player_id']} azonosítójú")
+            body += (f" A(z) {name} betörés utáni kiosztása: "
+                     f"{rec_kot['verdict']} — a labda "
+                     f"{rec_kot['top_pct']:.0f}%-ban a(z) {label} "
+                     f"játékoshoz megy ({who['count']}/"
+                     f"{rec_kot['kickouts']} kiosztás; "
+                     f"{KOT_CONCENTRATION_PCT:.0f}% fölött "
+                     "kiszámítható).")
+    except Exception:
+        pass
     # Teendő-rangsor: mivel foglalkozzon a jövő héten.
     try:
         from .priorities import priority_findings

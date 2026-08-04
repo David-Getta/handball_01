@@ -4733,3 +4733,117 @@ def balls_out(match: Match,
         if rec["out"] >= OBT_MIN:
             rec["verdict"] = "sok kidobott labda"
     return out
+
+
+# Kiosztás-célpont: a betörés zónája (méter a kaputól), a kiosztásnak
+# számító passz időablaka, az ítélethez kellő kiosztás-szám, és az a
+# részesedés, ami fölött EGY célpont már kiszámítható.
+KOT_IN_DIST_M = 9.0
+KOT_WINDOW_S = 3.0
+KOT_MIN_KICKOUTS = 4
+KOT_CONCENTRATION_PCT = 55.0
+
+
+def kickout_targets(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Kiosztás-célpont: HOVÁ megy a labda, ha a betörés nem lövéssel zárul.
+
+    Az áttörő emberek (breakthrough_players) azt mondják meg, KI viszi
+    be a labdát a falba, a visszahozás-arány (pullback_rate) azt, hogy
+    lezárják-e a betörést — ez azt, KIHEZ kerül a labda, amikor a
+    betörő nem lő: minden betörés-epizód után megnézzük, ad-e a betörő
+    KOT_WINDOW_S mp-en belül passzt, és ki a fogadó.
+
+    Edzőileg ez a legkonkrétabban kiosztható feladat: ha a betörés
+    után a labda mindig ugyanahhoz az emberhez megy, az ő védője
+    előre elmozdulhat a passzsávba, és a betörésre indulhat a
+    kettőzés — a kiosztás így elveszti az értelmét. Ha viszont
+    változatos a célpont, a betörést magát kell megállítani, mert a
+    passz-olvasásra nem lehet védekezést építeni.
+
+    Visszatérés csapatonként: {"kickouts", "targets": [{"player_id",
+    "jersey", "count"}], "top", "top_pct", "verdict"} — a targets
+    lista darabszám szerint csökkenő; a top/top_pct/verdict None
+    KOT_MIN_KICKOUTS alatt (kevés mintából nem mondunk ítéletet).
+    """
+    import math
+
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+    from .event_detection import (EventType, detect_possession_changes,
+                                  detect_shots)
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    win = round(KOT_WINDOW_S * fps)
+    gy = COURT_WIDTH_M / 2.0
+
+    shots = [(e.t, e.team.value) for e in detect_shots(match, config)]
+    passes = [e for e in detect_possession_changes(match, config)
+              if e.type == EventType.PASS]
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        goal_x = config.attacks_toward_x(seq.team)
+        # A betörés-epizódok: összefüggő kockák, ahol a támadó csapat
+        # (nem kapus) birtokosa a kapu KOT_IN_DIST_M-es körzetében van.
+        episode: list = []
+        for fr in list(seq.frames) + [None]:
+            h = ball_holder(fr, config) if fr is not None else None
+            inside = (h is not None and h.team == seq.team
+                      and h.role != "kapus"
+                      and math.hypot(h.x - goal_x, h.y - gy)
+                      <= KOT_IN_DIST_M)
+            if inside:
+                episode.append((fr.t, h))
+                continue
+            if not episode:
+                continue
+            t0, _ = episode[0]
+            t1, driver = episode[-1]
+            episode = []
+            # Lövéssel záruló betörés nem kiosztás — azt lezárták.
+            if any(tm == side and t0 <= t <= t1 + tail
+                   for (t, tm) in shots):
+                continue
+            # A kiosztás: a betörő passza az epizód után, időablakon belül.
+            kick = None
+            for p in passes:
+                if p.t < t1 or p.t > t1 + win:
+                    continue
+                if p.team != seq.team or p.player_id != driver.track_id:
+                    continue
+                kick = p
+                break
+            if kick is None:
+                continue
+            target = (kick.detail or {}).get("receiver_id")
+            if target is None:
+                continue
+            if driver.jersey_number is not None:
+                jersey.setdefault(driver.track_id, driver.jersey_number)
+            for pl in (fr.players if fr is not None else []):
+                if pl.track_id == target and pl.jersey_number is not None:
+                    jersey.setdefault(target, pl.jersey_number)
+            tally[side][target] = tally[side].get(target, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid), "count": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["count"] for r in rows)
+        top = top_pct = verdict = None
+        if total >= KOT_MIN_KICKOUTS and rows:
+            top = rows[0]
+            top_pct = 100.0 * rows[0]["count"] / total
+            verdict = ("kiszámítható a kiosztás"
+                       if top_pct >= KOT_CONCENTRATION_PCT
+                       else "változatos a kiosztás")
+        out[side] = {"kickouts": total, "targets": rows, "top": top,
+                     "top_pct": top_pct, "verdict": verdict}
+    return out

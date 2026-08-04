@@ -2472,6 +2472,11 @@ def create_app():
                "efficiency": attack_efficiency(match),
                "duration_efficiency": attack_duration_efficiency(match)}
         try:
+            from ..pipeline.attack_types import kickout_targets
+            res["kickout_targets"] = kickout_targets(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import pivot_usage
             res["pivot"] = pivot_usage(match)
         except Exception:
@@ -4798,6 +4803,8 @@ def create_app():
                        lambda: setplay_efficiency(match))
                 from ..pipeline.attack_types import attack_width
                 _layer("attack_width", lambda: attack_width(match))
+                from ..pipeline.attack_types import kickout_targets
+                _layer("kickout_targets", lambda: kickout_targets(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""
