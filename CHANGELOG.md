@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **A README száma is a szinkron alá került**: a nyitólap "Minőség"
+  sora 1103 automata tesztet állított, miközben a valóság 1246 — épp
+  az a szám volt elavult, amit egy érdeklődő először meglát. A
+  `project_facts` mostantól a README-t is igazítja, az őr-teszt pedig
+  ellenőrzi; a receptből így kikerült a "kiadáskor elég frissíteni"
+  kézi lépés.
+
 - **Az angol felderítő kártya poszt-alapú tényekkel bővült**: a
   leggyengébb befejező poszt (mit érdemes rájuk engedni) és a
   gólpassz-tengely angolul is megjelenik. A posztok angol néven

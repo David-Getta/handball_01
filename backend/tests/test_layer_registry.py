@@ -475,9 +475,13 @@ def test_palyazati_szamok_egyeznek_a_teny_lappal():
         r"([\d][\d,]*)\s+(elemző réteg|analysis layers|"
         r"automata teszt|automated tests)")
     checked = 0
-    for doc in sorted((root / "docs").glob("*.md")):
-        if doc.name in ("SZAMOK.md", "RETEG_KATALOGUS.md"):
+    targets = sorted((root / "docs").glob("*.md")) + [root / "README.md"]
+    for doc in targets:
+        if doc.name in ("SZAMOK.md", "RETEG_KATALOGUS.md",
+                        "SORREND_FUGGES.md"):
             continue  # ezek generáltak
+        if not doc.exists():
+            continue
         for m in pat.finditer(doc.read_text(encoding="utf-8")):
             value = int(m.group(1).replace(",", ""))
             want = layers if "réteg" in m.group(2) or "layers" in m.group(2) \

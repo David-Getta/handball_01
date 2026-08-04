@@ -76,16 +76,16 @@ cd backend && python3 -m scripts.project_facts   # docs/SZAMOK.md
 ```
 
 A `project_facts` a pályázati doksikba ÍRT réteg-/teszt-számokat is
-igazítja (executive summary, Part B, pitch deck, EIC-terv, útiterv) —
-őr-teszt ellenőrzi, hogy egyeznek a tény-lappal.
+igazítja (executive summary, Part B, pitch deck, EIC-terv, útiterv és
+a README) — őr-teszt ellenőrzi, hogy egyeznek a tény-lappal. A README
+"Hol tartunk" számát tehát nem kell külön kézzel frissíteni.
 
 A sorrend-függés jelentése (`docs/SORREND_FUGGES.md`) lassú (percek),
 ezért NINCS őr-tesztje — kiadás előtt futtasd:
 
 ```bash
 cd backend && python3 -m scripts.order_sensitivity
-``` A README "Hol tartunk" teszt-számát
-(jelenleg 1103) elég kiadáskor frissíteni.
+```
 
 ## Commit-stílus
 

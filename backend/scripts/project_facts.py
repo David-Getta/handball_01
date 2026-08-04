@@ -111,7 +111,11 @@ def sync_docs(facts: dict, write: bool = True) -> list[str]:
     (write=True esetén: a frissített) fájlok neve.
     """
     changed: list[str] = []
-    for doc in sorted((_ROOT / "docs").glob("*.md")):
+    targets = sorted((_ROOT / "docs").glob("*.md"))
+    readme = _ROOT / "README.md"
+    if readme.exists():
+        targets.append(readme)  # a nyitólap száma is elavulna
+    for doc in targets:
         if doc.name in _GENERATED_DOCS:
             continue
         src = doc.read_text(encoding="utf-8")
