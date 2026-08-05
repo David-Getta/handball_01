@@ -301,3 +301,46 @@ def test_xg_verdict_sentences():
                        "H", "A") is None
     assert _xg_verdict({"goals": 3, "xg": 2.0}, {"goals": 1, "xg": 1.5},
                        "H", "A") is None
+
+
+def test_summary_sections_are_split_into_sentences():
+    """A szakaszok mondatokra bontva is elmennek — a felületek ebből
+    tudnak felsorolást építeni.
+
+    A "Játékkép és tempó" szakasz a rétegekkel négyezer karakteres,
+    negyvenmondatos bekezdéssé nőtt; egy ilyet senki nem olvas el.
+    A `body` változatlan (a meglévő fogyasztók miatt), a `lines` az
+    új, tördelhető alak.
+    """
+    from handball.pipeline.coach_summary import coach_summary
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    cs = coach_summary(simulate_ground_truth(duration_s=180.0, seed=7))
+    assert cs["sections"], "a mintameccsen van összefoglaló"
+    for sec in cs["sections"]:
+        assert "lines" in sec, sec.get("title")
+        # A mondatok együtt kiadják a bekezdés minden szavát — a
+        # tördelés nem veszíthet szöveget.
+        joined = " ".join(sec["lines"])
+        assert joined.split() == sec["body"].split(), sec["title"]
+    longest = max(cs["sections"], key=lambda s: len(s["lines"]))
+    assert len(longest["lines"]) >= 5, longest["title"]
+
+
+def test_sentence_split_keeps_decimals_together():
+    """A tizedes-pont nem mondathatár (3.9 m/s egy szám marad)."""
+    from handball.pipeline.coach_summary import split_sentences
+
+    lines = split_sentences(
+        "A támadásuk mozgásos volt (átlag 3.9 m/s). A fal réses volt.")
+    assert len(lines) == 2, lines
+    assert "3.9 m/s" in lines[0]
+    assert lines[1].startswith("A fal")
+
+
+def test_sentence_split_handles_empty_body():
+    """Üres szakaszból üres lista lesz — nem None és nem [""]."""
+    from handball.pipeline.coach_summary import split_sentences
+
+    assert split_sentences("") == []
+    assert split_sentences("   ") == []

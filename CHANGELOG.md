@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Edzői összefoglaló: mondatokra bontva, felsorolásként.** A
+  "Játékkép és tempó" szakasz a rétegekkel **4357 karakteres, 43
+  mondatos EGYETLEN bekezdéssé** nőtt — minden új réteg egy mondatot
+  fűzött hozzá, és a végeredményt már senki nem olvassa el. A
+  `coach_summary` mostantól a szakaszok szövegét mondatokra bontva is
+  átadja (`lines`); a `body` változatlan marad, tehát a meglévő
+  fogyasztók nem törnek el. A tördelés megjelenítési segédlet, nem
+  nyelvtani elemzés: a tizedes-pont (3.9 m/s) nem mondathatár, és a
+  mondatok együtt szóról szóra kiadják a bekezdést — őr-teszt
+  ellenőrzi mindkettőt. Felületek: a **meccs-jelentés** hosszú
+  szakaszt felsorolásként ír ki (2 mondat alatt marad a bekezdés), az
+  **appban** pedig a szakasz címe mellett ott a megállapítások száma,
+  alapból az első öt mondat látszik, "Mind a N megállapítás" gombbal.
+
 - **Felderítés-képernyő: olvashatóvá tett mutató-fal és listák.** A
   képernyő addig nőtt a rétegekkel, hogy használhatatlanná vált:
   **297 mérőszám** egyetlen tagolatlan blokkban, alatta 33 edzői kulcs

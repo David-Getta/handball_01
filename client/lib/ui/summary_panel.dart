@@ -690,19 +690,7 @@ class SummaryPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final s in sections)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text.rich(TextSpan(children: [
-                      TextSpan(
-                          text: "${s["title"]}. ",
-                          style: AppText.value.copyWith(fontSize: 12.5)),
-                      TextSpan(
-                          text: (s["body"] as String?) ?? "",
-                          style: AppText.label.copyWith(
-                              fontSize: 12.5, color: AppColors.textPrimary)),
-                    ])),
-                  ),
+                for (final s in sections) _CoachSection(section: s),
                 for (final h in highlights)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -834,6 +822,106 @@ class SummaryPanel extends StatelessWidget {
               backgroundColor: AppColors.surfaceAlt,
               valueColor: AlwaysStoppedAnimation(color),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Egy összefoglaló-szakasz: cím + MONDATONKÉNTI felsorolás.
+///
+/// A "Játékkép és tempó" szakasz a rétegekkel negyven mondatos, négyezer
+/// karakteres bekezdéssé nőtt — úgy senki nem olvassa el. A backend
+/// mondatokra bontva is átadja (`lines`), ebből lesz felsorolás; a
+/// hosszú szakaszból alapból az első néhány mondat látszik.
+///
+/// Régi backend-válasszal (ahol még nincs `lines`) a régi, egybefüggő
+/// bekezdést mutatja — a képernyő nem törik el emiatt.
+class _CoachSection extends StatefulWidget {
+  final Map<String, dynamic> section;
+
+  const _CoachSection({required this.section});
+
+  @override
+  State<_CoachSection> createState() => _CoachSectionState();
+}
+
+class _CoachSectionState extends State<_CoachSection> {
+  /// Ennyi mondat látszik alapból a hosszú szakaszokból.
+  static const int _preview = 5;
+  bool _all = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = "${widget.section["title"]}";
+    final lines =
+        ((widget.section["lines"] as List?) ?? const []).cast<String>();
+    final body = (widget.section["body"] as String?) ?? "";
+
+    // Rövid szakasz (vagy régi backend): marad az egybefüggő bekezdés.
+    if (lines.length <= 2) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Text.rich(TextSpan(children: [
+          TextSpan(
+              text: "$title. ",
+              style: AppText.value.copyWith(fontSize: 12.5)),
+          TextSpan(
+              text: body.isEmpty ? lines.join(" ") : body,
+              style: AppText.label
+                  .copyWith(fontSize: 12.5, color: AppColors.textPrimary)),
+        ])),
+      );
+    }
+
+    final shown = _all ? lines : lines.take(_preview).toList();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Text(title, style: AppText.value.copyWith(fontSize: 12.5)),
+            const SizedBox(width: 6),
+            Text("${lines.length} megállapítás",
+                style: AppText.label.copyWith(fontSize: 11)),
+          ]),
+          const SizedBox(height: 4),
+          for (final l in shown)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, right: 8),
+                    child: Container(
+                      width: 4,
+                      height: 4,
+                      decoration: const BoxDecoration(
+                        color: AppColors.textFaint,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(l,
+                        style: AppText.label.copyWith(
+                            fontSize: 12.5,
+                            color: AppColors.textPrimary)),
+                  ),
+                ],
+              ),
+            ),
+          TextButton.icon(
+            onPressed: () => setState(() => _all = !_all),
+            icon: Icon(_all ? Icons.expand_less : Icons.expand_more,
+                size: 18),
+            label: Text(_all
+                ? "Rövidítve (az első $_preview)"
+                : "Mind a ${lines.length} megállapítás"),
           ),
         ],
       ),

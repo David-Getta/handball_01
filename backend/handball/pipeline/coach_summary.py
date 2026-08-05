@@ -11,6 +11,8 @@ kiszámolt szám áll, így a szöveg ellenőrizhető és determinisztikus.
 
 from __future__ import annotations
 
+import re
+
 from ..models.tracking import Match, Team
 from .event_detection import EventType, detect_shots
 from .stats import compute_intensity_timeline, compute_player_stats
@@ -5231,7 +5233,36 @@ def _coach_summary_cached(match: Match) -> dict:
     except Exception:
         pass
 
+    # A szakaszok MONDATOKRA bontva is elmennek. A "Játékkép és tempó"
+    # szakasz a rétegekkel négyezer karakteres, negyvenmondatos
+    # bekezdéssé nőtt — úgy olvashatatlan. A `body` változatlan marad
+    # (a meglévő fogyasztók miatt), a felületek a `lines`-ból tudnak
+    # felsorolást építeni.
+    for sec in sections:
+        sec["lines"] = split_sentences(sec.get("body", ""))
     return {"sections": sections, "highlights": highlights}
+
+
+# Mondathatár: pont/felkiáltó/kérdőjel UTÁN álló szóköz, amit nagybetű
+# vagy szám követ. A tizedes-pont (pl. "3.9 m") így nem téveszt meg,
+# mert utána nincs szóköz.
+_SENTENCE_SPLIT = re.compile(
+    r"(?<=[.!?])\s+(?=[A-ZÁÉÍÓÖŐÚÜŰ0-9])")
+
+
+def split_sentences(body: str) -> list[str]:
+    """Egy összefoglaló-szakasz szövege mondatokra bontva.
+
+    Nem nyelvtani elemzés, hanem megjelenítési segédlet: a felületek
+    ebből tudnak felsorolást építeni a tömbszerű bekezdés helyett. Ha
+    a bontás valahol téved, a szöveg akkor is hiánytalanul megvan —
+    csak a tördelés lesz más.
+    """
+    text = (body or "").strip()
+    if not text:
+        return []
+    return [part.strip() for part in _SENTENCE_SPLIT.split(text)
+            if part.strip()]
 
 
 def coach_summary_text(match: Match) -> str:

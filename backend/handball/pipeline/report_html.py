@@ -945,9 +945,17 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .coach_summary import coach_summary
         cs = coach_summary(match)
         if cs["sections"]:
-            paras = "".join(
-                f'<p class="cs"><b>{escape(s["title"])}.</b> '
-                f'{escape(s["body"])}</p>' for s in cs["sections"])
+            # Hosszú szakasz FELSOROLÁSKÉNT olvasható — a "Játékkép és
+            # tempó" negyven mondata egy bekezdésben nem az.
+            def _cs_block(sec):
+                lines = sec.get("lines") or []
+                head = f'<p class="cs"><b>{escape(sec["title"])}.</b>'
+                if len(lines) <= 2:
+                    return head + f' {escape(sec["body"])}</p>'
+                items = "".join(f"<li>{escape(x)}</li>" for x in lines)
+                return head + "</p><ul>" + items + "</ul>"
+
+            paras = "".join(_cs_block(s) for s in cs["sections"])
             hl = ""
             if cs["highlights"]:
                 hl = ('<ul>' + "".join(
