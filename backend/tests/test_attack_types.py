@@ -1226,6 +1226,10 @@ def test_shooter_placement_flags_predictable_finisher():
         """A pid-es hazai lövő gólja a +x kapu megadott magasságába."""
         nonlocal t, frames
         shooter = [_pl(pid, Team.HOME, 31.0, 10.0)]
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=shooter,
+                                ball=Ball(x=31.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(12):
             bx = min(31.0 + 0.9 * (i + 1), 40.0)
             by = 10.0 + (y_end - 10.0) * (i + 1) / 12.0
@@ -2028,6 +2032,11 @@ def _distance_fade_match(fh_x=33.0, sh_x=28.0, fps=25.0):
 
     def _shot(sx):
         nonlocal t, frames
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, sx, 10.0)] + _wall(),
+                ball=Ball(x=sx + 0.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(10):
             frames.append(Frame(
                 t=t, players=[_pl(1, Team.HOME, sx, 10.0)] + _wall(),

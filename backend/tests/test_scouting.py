@@ -1361,6 +1361,10 @@ def test_match_key_players_goal_axis():
                                           pl(2, 30.0, 10.0)],
                             ball=Ball(x=30.0, y=10.0, confidence=1.0)))
         t += 1
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=[pl(2, 33.0, 10.0)],
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(7):
             frames.append(Frame(t=t, players=[pl(2, 33.0, 10.0)],
                                 ball=Ball(x=34.0 + i, y=10.0,

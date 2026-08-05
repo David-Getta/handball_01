@@ -35,7 +35,12 @@ TURNOVER_SUPPRESS = 12   # lövés után ennyi frame-en belüli labdaeladást el
 _GOAL_Y_LOW = COURT_WIDTH_M / 2.0 - 1.5   # 8.5 — alsó kapufa
 _GOAL_Y_HIGH = COURT_WIDTH_M / 2.0 + 1.5  # 11.5 — felső kapufa
 
-SHOOTER_LOOKBACK_S = 0.8  # a lövés előtt ennyi időn belülről keressük a lövőt
+SHOOTER_LOOKBACK_S = 1.2  # a lövés előtt ennyi időn belülről keressük a lövőt
+# A REPÜLŐ labdához közel álló játékos NEM birtokos. Kézben tartva a
+# labda a játékossal együtt mozog (sprint alatt is 9 m/s alatt), egy
+# lövés viszont 15–30 m/s. E fölött tehát a labda úton van, és a
+# közelében álló beálló csak "útközben" van a röppályán.
+SHOOTER_HELD_MAX_MS = 9.0
 ASSIST_WINDOW_S = 4.0     # a gól előtt ennyi időn belüli utolsó passz = gólpassz
 SAVE_RADIUS_M = 1.6       # a labda ennyire a kapushoz érve = védés
 _GK_NEAR_GOAL_M = 9.0     # a kapus csak a SAJÁT kapujánál "véd"
@@ -78,24 +83,44 @@ def _shooter_before(match: Match, idx: int, team: Team,
     A lövés pillanatában a labda már úton van (nincs birtokos), ezért
     visszafelé keresünk legfeljebb SHOOTER_LOOKBACK_S másodpercet.
 
-    ISMERT KORLÁT — kapu-felé torzítás. A lövés-eseményt a labda
-    KAPU-MEGKÖZELÍTÉSEKOR jelöljük (APPROACH_X_M), nem az elengedés
-    pillanatában. Távoli (átlövő) lövésnél a labda a visszakeresési
-    ablak alatt már a kapu közelében jár, ezért a "birtokos" gyakran
-    egy kapuhoz közeli játékos (pl. a beálló) lesz — a lövés így őhozzá
-    kerül. Mérve: 12 m-ről elengedett lövések mind a 6 m-en álló
-    játékoshoz kerültek. Ez minden JÁTÉKOS- és POSZT-bontású
-    lövés-rétegre hat; a csapat-szintű számokat nem érinti. Javítás
-    csak az elengedés-pillanat külön felismerésével lehetséges — a
-    valós-videós validáció (docs/MERESI_JEGYZOKONYV.md) egyik
-    kiemelt mérendője.
+    A lövés-eseményt a labda KAPU-MEGKÖZELÍTÉSEKOR jelöljük
+    (APPROACH_X_M), nem az elengedés pillanatában. Távoli (átlövő)
+    lövésnél a labda ekkor már a kapu közelében jár, és a puszta
+    "legközelebbi játékos" szabály a röppálya mellett álló beállót
+    tenné meg lövőnek. Mérve (a régi viselkedés): 12 m-ről elengedett
+    lövések MIND a 6 m-en álló játékoshoz kerültek.
+
+    Ezért a visszakeresés kihagyja azokat a kockákat, ahol a labda
+    SEBESSÉGE már lövés-szintű (SHOOTER_HELD_MAX_MS fölött): ott a
+    labda úton van, nincs birtokosa. Az első olyan kocka számít,
+    ahol a labda lassú ÉS a támadó csapat egyik játékosa birtokolja —
+    ez az elengedés pillanata.
+
+    Ha ilyen kocka nincs az ablakban, `None`-t adunk: a "nem tudjuk"
+    jobb, mint a magabiztosan rossz név.
     """
+    frames = match.frames
     back = max(0, idx - round(SHOOTER_LOOKBACK_S * fps))
     for j in range(idx, back - 1, -1):
-        holder = ball_holder(match.frames[j], config)
+        if _ball_speed_ms(frames, j, fps) > SHOOTER_HELD_MAX_MS:
+            continue  # a labda repül — aki mellette áll, nem birtokos
+        holder = ball_holder(frames[j], config)
         if holder is not None and holder.team == team:
             return holder.track_id
     return None
+
+
+def _ball_speed_ms(frames, j: int, fps: float) -> float:
+    """A labda sebessége a `j`. kockán (m/s), az előző kockához mérve.
+
+    Az első kockán (és hiányzó labdánál) 0-t adunk: ott nincs mihez
+    mérni, és a "nem tudjuk" itt ne zárja ki a birtoklást."""
+    if j <= 0:
+        return 0.0
+    a, b = frames[j - 1].ball, frames[j].ball
+    if a is None or b is None:
+        return 0.0
+    return math.hypot(b.x - a.x, b.y - a.y) * fps
 
 
 def _save_by_goalkeeper(match: Match, idx: int, goal_x: float) -> Optional[int]:

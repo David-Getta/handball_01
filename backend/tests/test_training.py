@@ -465,6 +465,11 @@ def test_single_axis_goals_trigger_variety_focus():
                                           _pl(2, Team.HOME, 30.0, 10.0)],
                             ball=Ball(x=30.0, y=10.0, confidence=1.0)))
         t += 1
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t,
+                                players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(7):
             frames.append(Frame(t=t,
                                 players=[_pl(2, Team.HOME, 33.0, 10.0)],

@@ -87,14 +87,17 @@ A Pre-accelerator belépője a **validált TRL 4**, a projekt vége TRL 5–6.
 2. ⬜ A meglévő validációs modul lefuttatása ezeken → **publikálható
    precision/recall tábla** verziónként (a benchmark-infrastruktúra
    már megvan, csak valós adat kell alá).
-3. ⬜ **Lövő-hozzárendelés kapu-felé torzítása** — mért, ismert
-   korlát: a lövés-eseményt a labda kapu-megközelítésekor jelöljük,
-   ezért a távolról (átlövő-poszt) elengedett lövések a kapuhoz közeli
-   játékoshoz kerülnek. Szimulált ellenőrzésben 12 méterről elengedett
-   lövések mind a 6 méteren álló játékoshoz kerültek. A csapat-szintű
-   számokat nem érinti, a JÁTÉKOS- és POSZT-bontású lövés-rétegeket
-   igen. Javítás: az elengedés-pillanat külön felismerése; ez a
-   valós-videós mérés egyik kiemelt tétele.
+3. ✅ **Lövő-hozzárendelés kapu-felé torzítása — javítva.** Mért,
+   ismert korlát volt: a lövés-eseményt a labda kapu-megközelítésekor
+   jelöljük, ezért a puszta "legközelebbi játékos" szabály a távolról
+   elengedett lövéseket a kapuhoz közeli játékoshoz írta (szimulált
+   ellenőrzésben 12 méterről elengedett lövések MIND a 6 méteren álló
+   játékoshoz kerültek). A visszakeresés mostantól kihagyja azokat a
+   kockákat, ahol a labda sebessége lövés-szintű — így az elengedés
+   pillanatát találja meg, és a lövés a valódi lövőhöz kerül. A
+   javítás a JÁTÉKOS- és POSZT-bontású lövés-rétegek mindegyikét
+   érinti; a csapat-szintű számok változatlanok. Valós videón a
+   pontosságát a fenti annotált teszthalmazon kell megmérni.
 4. ⬜ Az eredmények beépítése a `docs/FOOTAGE_NOTES.md` /
    `MVP_PLAN.md` vonalába, dátumozott mérési jegyzőkönyvként.
 

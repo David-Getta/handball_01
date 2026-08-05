@@ -47,8 +47,17 @@ def test_symmetry_between_goals():
 
 
 def _shot_frames(t0, shooter_x, shooter_y, goal=True):
-    """Egy hazai lövés kockái: a lövő a megadott helyen, a labda a +x kapura."""
+    """Egy hazai lövés kockái: a lövő a megadott helyen, a labda a +x kapura.
+
+    A repülés ELŐTT a labda néhány kockán a lövő kezében van — enélkül
+    nincs elengedés-pillanat, és a lövő azonosítatlan maradna (lásd
+    `_shooter_before`)."""
     frames = []
+    for k in range(3):
+        frames.append(Frame(
+            t=t0 - 3 + k,
+            players=[_pl(1, Team.HOME, shooter_x, shooter_y)],
+            ball=Ball(x=shooter_x + 0.2, y=shooter_y, confidence=1.0)))
     for i in range(8):
         bx = min(34.0 + i, 40.0)
         by = shooter_y + (10.0 - shooter_y) * min(1.0, i / 6.0) if goal else 5.0
@@ -392,12 +401,17 @@ def test_shot_concentration_flags_one_man_offense():
 
     def _shot_by(t0, pid):
         frames = []
+        for k in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(
+                t=t0 + k,
+                players=[_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
         for i in range(8):
             frames.append(Frame(
-                t=t0 + i,
+                t=t0 + 3 + i,
                 players=[_pl(pid, Team.HOME, 33.0, 10.0)],
                 ball=Ball(x=min(34.0 + i, 40.0), y=10.0, confidence=1.0)))
-        frames.append(Frame(t=t0 + 9, players=[],
+        frames.append(Frame(t=t0 + 12, players=[],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         return frames
 
@@ -537,6 +551,10 @@ def _ccq_match(positions, fps=25.0):
     frames = []
     t = 0
     for (x, y) in positions:
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, x, y)],
+                                ball=Ball(x=x + 0.2, y=y, confidence=1.0)))
+            t += 1
         for i in range(8):
             bx = x + (40.0 - x) * min(1.0, i / 5.0)
             by = y + (10.0 - y) * min(1.0, i / 5.0)
@@ -596,15 +614,23 @@ def _wf_active(t0, seconds, fps=25.0):
 def _wf_shot(t0, x, y, fps=25.0):
     """Hazai lövés (x, y)-ból a +x kapura, aktív háttérrel."""
     frames = []
-    for i in range(8):
-        bx = x + (40.0 - x) * min(1.0, i / 5.0)
-        by = y + (10.0 - y) * min(1.0, i / 5.0)
+
+    def _cast():
         players = [_pl(1, Team.HOME, x, y)]
         players += [_pl(100 + k, Team.HOME, 8.0 + k, 15.0 + 0.5 * k)
                     for k in range(5)]
         players += [_pl(200 + k, Team.AWAY, 30.0 + k, 16.0 + 0.5 * k)
                     for k in range(5)]
-        frames.append(Frame(t=t0 + i, players=players,
+        return players
+
+    # A labda előbb a lövő kezében: enélkül nincs elengedés-pillanat.
+    for k in range(3):
+        frames.append(Frame(t=t0 + k, players=_cast(),
+                            ball=Ball(x=x + 0.2, y=y, confidence=1.0)))
+    for i in range(8):
+        bx = x + (40.0 - x) * min(1.0, i / 5.0)
+        by = y + (10.0 - y) * min(1.0, i / 5.0)
+        frames.append(Frame(t=t0 + 3 + i, players=_cast(),
                             ball=Ball(x=bx, y=by, confidence=1.0)))
     return frames
 
@@ -746,6 +772,11 @@ def _bcf_match(cases, fps=25.0):
     frames = []
     t = 0
     for (pid, scored) in cases:
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=[_pl(pid, Team.HOME,
+                                                  35.0, 10.0)],
+                                ball=Ball(x=35.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(8):
             bx = 35.0 + 5.0 * min(1.0, i / 4.0)
             by = 10.0 if scored else 10.0 - 6.0 * min(1.0, i / 4.0)

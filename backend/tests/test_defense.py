@@ -1091,6 +1091,10 @@ def test_wing_defense_flags_open_wings():
         nonlocal t, frames
         shooter = [_pl(1, Team.HOME, 31.0, y)]
         y_end = 10.0 if goal else 2.0
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=shooter,
+                                ball=Ball(x=31.2, y=y, confidence=1.0)))
+            t += 1
         for i in range(10):
             bx = min(31.0 + 0.9 * (i + 1), 40.0)
             by = y + (y_end - y) * (i + 1) / 10.0
@@ -2062,6 +2066,15 @@ def _wco_match(def_dist, n_shots=5, fps=25.0):
             ball=Ball(x=28.0, y=10.0, confidence=1.0)))
         t += 1
     for _ in range(n_shots):
+        for _ in range(3):      # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=[
+                _pl(2, Team.HOME, 36.0, 2.0),
+                _pl(21, Team.AWAY, 36.0, 2.0 + def_dist),
+                _pl(29, Team.AWAY, 39.5, 10.0, role="kapus")],
+                # A tartás a kapu-megközelítési sávon KÍVÜL (x < 36),
+                # de a lövő karnyújtásnyi közelében.
+                ball=Ball(x=35.5, y=2.0, confidence=1.0)))
+            t += 1
         for i in range(8):      # a szélső lövése a +x kapura
             frames.append(Frame(t=t, players=[
                 _pl(2, Team.HOME, 36.0, 2.0),

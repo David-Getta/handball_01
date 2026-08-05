@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A lövés a valódi lövőhöz kerül (mért torzítás javítva).** A
+  lövés-eseményt a labda kapu-megközelítésekor jelöljük, és a lövőt
+  visszafelé keresve a "legközelebbi játékos" szabállyal találtuk meg.
+  Ez rendszeresen tévedett: mérve, **12 méterről elengedett lövések MIND
+  a 6 méteren álló játékoshoz kerültek** — a röppálya mellett álló
+  beálló lett a "lövő". A visszakeresés mostantól kihagyja azokat a
+  kockákat, ahol a labda sebessége lövés-szintű (9 m/s fölött): ott a
+  labda úton van, nincs birtokosa. Így az elengedés pillanata a
+  hivatkozási pont. Ha ilyen pillanat nincs a keresési ablakban, a
+  lövő azonosítatlan marad — a "nem tudjuk" jobb, mint a magabiztosan
+  rossz név. A javítás **minden játékos- és poszt-bontású
+  lövés-réteget** érint (lövő-erő, elhelyezés, ziccer-befejezők,
+  emberelőnyös befejező, gólpassz-párok, sorozatlövő, válság-lövő, …);
+  a csapat-szintű számok változatlanok. A pályázati doksi TRL-4
+  nyitott pontja ezzel lezárult.
+
 - **Az üres panelek megmondják, miért üresek.** A statisztika-panel
   nulla felismert játékosnál is kirajzolta a fejlécet, a
   rendezés-gombokat és a két csapatnevet — alattuk semmivel; a

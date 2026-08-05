@@ -830,13 +830,21 @@ def _pp_shooter_match(shooters, fps=25.0):
 
     def _shot(shooter, away_n):
         nonlocal t, frames
-        for i in range(8):
+
+        def _cast():
             players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
                        for k in range(6)]
             players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
                         for k in range(away_n)]
             players.append(_pl(shooter, Team.HOME, 33.0, 10.0))
-            frames.append(Frame(t=t, players=players,
+            return players
+
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=_cast(),
                                 ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
                                           confidence=1.0)))
             t += 1
@@ -896,13 +904,23 @@ def _sh_shooter_match(shooters, fps=25.0):
 
     def _shot(shooter, home_n):
         nonlocal t, frames
-        for i in range(8):
+
+        def _cast():
+            # A lövő az öt egyike — ha hatodikként jelenne meg, a hazai
+            # létszám visszaállna, és az emberhátrány-ablak bezárulna.
             players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
-                       for k in range(home_n)]
+                       for k in range(home_n - 1)]
             players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
                         for k in range(6)]
             players.append(_pl(shooter, Team.HOME, 33.0, 10.0))
-            frames.append(Frame(t=t, players=players,
+            return players
+
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=_cast(),
                                 ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
                                           confidence=1.0)))
             t += 1
@@ -912,6 +930,10 @@ def _sh_shooter_match(shooters, fps=25.0):
     for shooter in shooters:      # a kiállítás-ablak 45 mp-nél hosszabb
         _rosters(15.0, 5)
         _shot(shooter, 5)
+    # Az UTOLSÓ lövés után is marad emberhátrány: a létszám-idővonal
+    # ablakokra bontva dolgozik, és a záró ablakba nem eshet bele a
+    # visszaállás — különben az utolsó lövés kimaradna az ablakból.
+    _rosters(10.0, 5)
     _rosters(30.0, 6)
     return Match(_meta(fps), frames)
 

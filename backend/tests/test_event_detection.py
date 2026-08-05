@@ -167,8 +167,12 @@ def _goal_with_pass(passer_present=True, receiver_id=2):
     if not passer_present:  # csak a lövő: nincs passz-esemény a gól előtt
         frames = [Frame(t=f.t, players=[p for p in f.players if p.track_id == 2],
                         ball=f.ball) for f in frames]
+    for k in range(3):  # a labda a lövő kezében (elengedés előtt)
+        frames.append(Frame(t=3 + k,
+                            players=pls(_pl(2, Team.HOME, 33.0, 10.0)),
+                            ball=Ball(x=33.2, y=10.0, confidence=1.0)))
     for i in range(7):  # a lövés: 34..40, y=10 → gól a kapufák között
-        frames.append(Frame(t=3 + i,
+        frames.append(Frame(t=6 + i,
                             players=pls(_pl(2, Team.HOME, 33.0, 10.0)),
                             ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
     return Match(_meta(), frames)
@@ -230,6 +234,10 @@ def test_assist_network_pairs_and_leaders():
                                           _pl(2, Team.HOME, 30.0, 10.0)],
                             ball=Ball(x=30.0, y=10.0, confidence=1.0)))
         t += 1
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(7):
             frames.append(Frame(t=t, players=[_pl(2, Team.HOME, 33.0, 10.0)],
                                 ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
@@ -437,6 +445,10 @@ def test_shooter_power_names_the_cannon():
         halad a +x kapu felé (25 fps → step * 90 km/h)."""
         nonlocal t, frames
         shooter = [_pl(pid, Team.HOME, 33.0, 10.0)]
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=shooter,
+                                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(8):
             frames.append(Frame(t=t, players=shooter,
                                 ball=Ball(x=min(34.0 + step * i, 40.0),
@@ -479,8 +491,13 @@ def _assist_from(px, py, t0):
                                  _pl(2, Team.HOME, 33.0, 10.0)],
               ball=Ball(x=33.0, y=10.0, confidence=1.0)),   # passz 1→2
     ]
+    for k in range(3):   # a labda a lövő kezében (elengedés előtt)
+        frames.append(Frame(t=t0 + 2 + k,
+                            players=[_pl(1, Team.HOME, px, py),
+                                     _pl(2, Team.HOME, 33.0, 10.0)],
+                            ball=Ball(x=33.2, y=10.0, confidence=1.0)))
     for i in range(7):   # lövés: 34..40, y=10 → gól
-        frames.append(Frame(t=t0 + 2 + i,
+        frames.append(Frame(t=t0 + 5 + i,
                             players=[_pl(1, Team.HOME, px, py),
                                      _pl(2, Team.HOME, 33.0, 10.0)],
                             ball=Ball(x=34.0 + i, y=10.0, confidence=1.0)))
@@ -651,20 +668,15 @@ def test_pass_length_by_score_few_passes_none():
     assert pls["home"]["verdict"] is None
 
 
-def test_shooter_attribution_is_biased_toward_the_goal():
-    """JELLEMZŐ-TESZT: a lövő-hozzárendelés kapu-felé torzít.
+def test_shooter_is_the_releasing_player_not_the_nearest_to_goal():
+    """A lövő az ELENGEDŐ, nem a kapuhoz legközelebbi játékos.
 
-    Ez NEM a kívánt viselkedést rögzíti, hanem egy MÉRT, ismert
-    korlátot (lásd `_shooter_before` docstring és
-    docs/PALYAZAT_EIC_PRE_ACCELERATOR.md TRL-4 pontja): a lövés-
-    eseményt a labda KAPU-MEGKÖZELÍTÉSEKOR jelöljük, nem az elengedés
-    pillanatában, ezért a visszakeresés a kapuhoz KÖZELI játékost
-    találja meg.
-
-    A teszt célja, hogy a torzítás ne változhasson észrevétlenül: ha
-    valaki bevezeti az elengedés-pillanat felismerését, ez a teszt
-    elbukik — akkor ITT kell átírni a várt lövőt a távoli játékosra,
-    és a fenti dokumentációt is frissíteni.
+    Korábban ez fordítva volt (jellemző-tesztként rögzítve): a lövés-
+    eseményt a labda kapu-megközelítésekor jelöljük, és a puszta
+    "legközelebbi játékos" szabály a röppálya mellett álló beállót
+    tette meg lövőnek. A `_shooter_before` most kihagyja azokat a
+    kockákat, ahol a labda sebessége lövés-szintű — így az elengedés
+    pillanatát találja meg.
     """
     # A távoli játékos (id 3) 12 m-ről engedi el; a közeli (id 1) a
     # kapu előtt, 6 m-en áll, és nem nyúl a labdához.
@@ -689,7 +701,7 @@ def test_shooter_attribution_is_biased_toward_the_goal():
                             fps=25.0), frames)
     goals = [e for e in detect_shots(match) if e.type == EventType.GOAL]
     assert goals, "a mintajeleneten van gól"
-    # A LÖVŐ a 3-as volt — a felismerés mégis az 1-est nevezi meg.
-    assert goals[0].player_id == 1, (
-        "megváltozott a lövő-hozzárendelés: ha ez már a tényleges "
-        "elengedőt (3) adja, frissítsd a dokumentált korlátot is")
+    # A LÖVŐ a 3-as (12 m-ről engedte el); az 1-es csak a kapu előtt áll.
+    assert goals[0].player_id == 3, (
+        "a lövés a kapuhoz közeli játékoshoz került — visszatért a "
+        "kapu-felé torzítás")

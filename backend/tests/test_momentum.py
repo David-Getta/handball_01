@@ -729,13 +729,20 @@ def test_clutch_shot_quality_flags_rushed_finishing():
     def _home_shot(t0, shooter_x):
         """Egy hazai lövés a +x kapura, a megadott távolságból."""
         fr = []
+        def _pl():
+            return PlayerPosition(track_id=1, team=Team.HOME, x=shooter_x,
+                                  y=10.0, source=PositionSource.MEASURED,
+                                  confidence=1.0)
+        # A labda előbb a lövő kezében (különben nincs elengedés-pillanat,
+        # és a lövő azonosítatlan marad).
+        for k in range(3):
+            fr.append(Frame(t=t0 - 3 + k, players=[_pl()],
+                            ball=Ball(x=shooter_x + 0.2, y=10.0,
+                                      confidence=1.0)))
         for i in range(8):
             fr.append(Frame(
                 t=t0 + i,
-                players=[PlayerPosition(track_id=1, team=Team.HOME,
-                                        x=shooter_x, y=10.0,
-                                        source=PositionSource.MEASURED,
-                                        confidence=1.0)],
+                players=[_pl()],
                 ball=Ball(x=min(shooter_x + (40.0 - shooter_x) / 7.0 * i,
                                 40.0),
                           y=10.0, confidence=1.0)))
@@ -1053,6 +1060,11 @@ def _bench_match(scorers, fps=25.0):
             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
     for pid in scorers:
+        for _ in range(4):   # a labda a lövő KEZÉBEN (az elengedés előtt)
+            frames.append(Frame(t=t, players=[
+                _clo_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
+            t += 1
         for i in range(8):   # gól a +x kapuba, a labda a lövőtől indul
             frames.append(Frame(t=t, players=[
                 _clo_pl(pid, Team.HOME, 33.0, 10.0)],
@@ -1300,6 +1312,11 @@ def _drb_match(goal_plan, fps=5.0):
             frames.append(Frame(t=t, players=[],
                                 ball=Ball(x=20.0, y=10.0,
                                           confidence=1.0)))
+            t += 1
+        for _ in range(3):   # a labda a lövő kezében (elengedés előtt)
+            frames.append(Frame(t=t, players=[
+                _clo_pl(pid, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=33.2, y=10.0, confidence=1.0)))
             t += 1
         for i in range(8):
             frames.append(Frame(t=t, players=[

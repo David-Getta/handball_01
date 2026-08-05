@@ -350,12 +350,11 @@ def shot_efficiency_by_role(match: Match,
     legkevesebb kockázat), a sokkal jobbat viszont el kell zárni —
     inkább vállalva, hogy máshonnan lőnek. Ez a "hova tereld" döntés.
 
-    KORLÁT: a lövéseket a felismerés lövőjéhez kötjük, az pedig
-    kapu-felé torzít (lásd `event_detection._shooter_before`): a
-    távolról elengedett lövések gyakran a kapuhoz közeli poszthoz
-    kerülnek. A poszt-bontás ezért ma inkább a BEFEJEZÉS HELYÉT
-    tükrözi, mint az elengedését — az ítélet ("erre a posztra rá lehet
-    engedni") ettől még használható, de valós felvételen ellenőrizni
+    A lövéseket a felismerés lövőjéhez kötjük. Ez korábban kapu-felé
+    torzított (a távolról elengedett lövés a kapuhoz közeli poszthoz
+    került); a `_shooter_before` azóta az ELENGEDÉS pillanatát keresi
+    meg, tehát a poszt-bontás az elengedő posztját tükrözi. Valós
+    felvételen a hozzárendelés pontosságát még ellenőrizni
     kell (docs/MERESI_JEGYZOKONYV.md).
 
     Visszatérés csapatonként: {"shots", "goals", "team_pct",
@@ -774,10 +773,9 @@ def role_possession_share(match: Match,
     címzettje adott, és a játékuk megakad; ha viszont megoszlik, a
     nyomás nem térül meg, és inkább a falat kell rendezni.
 
-    LÉNYEGES: ez a réteg NEM a lövő-hozzárendelésből dolgozik (amely
-    kapu-felé torzít, lásd `event_detection._shooter_before`), hanem a
+    LÉNYEGES: ez a réteg NEM a lövő-hozzárendelésből dolgozik, hanem a
     kockánkénti birtoklásból — ezért a poszt-bontása közvetlenül
-    mérhető.
+    mérhető, a lövő-felismerés pontosságától függetlenül.
 
     Visszatérés csapatonként: {"frames" (poszthoz kötött labdás
     kockák), "roles": {poszt: {"frames", "pct"}},
@@ -852,8 +850,7 @@ def role_pass_map(match: Match,
     a passzsáv zárása megakasztja a felépítést.
 
     Ez a réteg a birtokos-váltásokból dolgozik (nem a
-    lövő-hozzárendelésből, amely kapu-felé torzít) — a poszt-bontása
-    közvetlenül mérhető.
+    lövő-hozzárendelésből) — a poszt-bontása közvetlenül mérhető.
 
     Visszatérés csapatonként: {"passes_total", "pairs": {"A→B": db},
     "top": {"from", "to", "passes", "share_pct"} | None, "verdict":
@@ -1147,7 +1144,7 @@ def role_turnover_zones(match: Match,
     zajos lehet, a zóna viszont már beszédes.
 
     A réteg a birtokos-váltásokból és a pozíciókból dolgozik (nem a
-    kapu-felé torzító lövő-hozzárendelésből).
+    lövő-hozzárendelésből).
 
     Visszatérés csapatonként: {"turnovers", "front", "team_front_pct",
     "roles": {poszt: {"turnovers", "front", "front_pct"}},
