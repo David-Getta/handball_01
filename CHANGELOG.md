@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A réteg-őrzés végre látja a lövés-rétegeket is.** Az "egyetlen
+  réteg sem bukhat el némán" füstteszt eddig 8 másodperces szimulált
+  meccsen futott — lövés nélkül. A lövés-alapú rétegek így üres
+  szerkezetet adtak vissza, a teszt pedig zölden átment anélkül, hogy
+  a rétegek érdemi ága egyszer is lefutott volna. A mintameccs
+  mostantól LŐ (40 mp, 8 lövés azonosított lövővel), és új őrzés
+  követeli meg, hogy a lövés-rétegek ne üresen jöjjenek vissza — a
+  "kulcs ott van" ellenőrzés önmagában gyenge volt. A füstteszt 11-ről
+  38 másodpercre lassult; cserébe több mint száz réteg érdemi ága
+  végigfut minden körben.
+
 - **A szimuláció tud lőni — és ezzel száz réteg került mérés alá.** A
   `simulate_ground_truth` eddig CSAK mozgást modellezett: egyetlen
   lövés-eseményt sem termelt. Emiatt a lövés-alapú rétegek (több mint

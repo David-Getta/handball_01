@@ -53,7 +53,12 @@ _CONDITIONAL_KEYS = {"first_half_close"}
 
 def _client_with_match():
     os.environ["HANDBALL_DATA_DIR"] = _tmp
-    m = simulate_ground_truth(duration_s=8, fps=25.0, seed=1)
+    # LÖVÉSEKKEL: a szimuláció alapból csak mozgást modellez, és
+    # lövések nélkül a több mint száz lövés-alapú réteg üres bemeneten
+    # fut — az "egyetlen réteg sem bukhat el némán" őrzés épp rájuk nem
+    # érne semmit. 40 mp / 12 lövés-perc = 8 lövés, azonosított lövővel.
+    m = simulate_ground_truth(duration_s=40, fps=25.0, seed=1,
+                              shots_per_min=12.0)
     matches_dir = Path(_tmp) / "data" / "matches"
     matches_dir.mkdir(parents=True, exist_ok=True)
     (matches_dir / f"{m.meta.match_id}.json").write_text(
@@ -93,6 +98,40 @@ def test_package_minden_regisztralt_reteg_elkeszul():
     analyses = json.loads(z.read("elemzesek.json").decode("utf-8"))
     missing = sorted(set(names) - set(analyses))
     assert not missing, f"némán elbukott rétegek a csomagban: {missing}"
+
+
+def test_loves_retegek_valodi_adatot_kapnak():
+    """A lövés-alapú rétegek NEM üresen jönnek vissza.
+
+    A "kulcs ott van" őrzés önmagában gyenge: egy lövés nélküli
+    meccsen minden lövés-réteg üres szerkezetet ad, és a teszt zölden
+    átmegy anélkül, hogy a réteg érdemi ága lefutott volna. A
+    mintameccs ezért LŐ is — itt pedig megköveteljük, hogy a
+    lövés-rétegek lássák is a lövéseket.
+    """
+    client, mid = _client_with_match()
+    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
+    job = _wait_job(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    pkg = client.get(f"/matches/{mid}/package/download")
+    z = zipfile.ZipFile(io.BytesIO(pkg.content))
+    analyses = json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+    empty = []
+    for name in ("role_shot_distance", "role_shot_timing",
+                 "role_shot_power", "shot_speeds", "xg"):
+        rec = analyses.get(name)
+        if rec is None:
+            empty.append(f"{name}: hiányzik")
+            continue
+        blob = json.dumps(rec, ensure_ascii=False)
+        # A hazai csapat lő a mintameccsen: valamelyik számnak nullánál
+        # nagyobbnak kell lennie.
+        if not any(ch.isdigit() and ch != "0" for ch in blob):
+            empty.append(f"{name}: üres")
+    assert not empty, (
+        "a lövés-rétegek nem kaptak valódi bemenetet — a mintameccs "
+        f"lövései nem érnek el hozzájuk: {empty}")
 
 
 def test_package_reteg_nevek_egyediek():
