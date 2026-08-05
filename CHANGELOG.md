@@ -5,6 +5,27 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Felderítés-képernyő: olvashatóvá tett mutató-fal és listák.** A
+  képernyő addig nőtt a rétegekkel, hogy használhatatlanná vált:
+  **297 mérőszám** egyetlen tagolatlan blokkban, alatta 33 edzői kulcs
+  és a teljes meccsterv, mind egyszerre. Amit egy edző keres, azt nem
+  lehetett megtalálni.
+  - **Mutató-fal**: mindig látható kiemelt sáv (lövés/gól, gólarány,
+    labdabirtoklás, eladás, támadás-típusok, tempó, felkészülés-
+    súlypont), **kereső** ("keress a mutatók közt" — a találatok
+    csoportjai maguktól kinyílnak, a fejléc mutatja a találat-számot),
+    és **hét lenyitható csoport** darabszámmal (Kapus, Posztok,
+    Szabály és létszám, Idő/állás/forma, Védekezés, Támadás és
+    befejezés, Emberek és cserék). A csoportot a címke kulcsszavai
+    döntik el; **őr-teszt** vizsgálja, hogy minden csempe valódi
+    csoportba esik-e — új réteg csempéje nem csúszhat csendben az
+    "Egyéb" gyűjtőbe.
+  - **Hosszú felsorolások** (edzői kulcsok, meccsterv): alapból az
+    első hat látszik, "Mind a N megjelenítése" gombbal. A gomb
+    szövege kimondja, hogy a rövidítés a jelentés SORRENDJÉBŐL vág —
+    a rendszer itt nem állít fontossági rangsort, és nem is teszünk
+    úgy, mintha tenne.
+
 - **Poszt-eladási zóna** (`role_turnover_zones`): melyik posztjuk adja
   el a labdát a TÁMADÓ harmadban — vagyis kinek az eladása hív kontrát.
   A csapat-szintű eladási zónák (`turnover_zones`) azt mondják meg, a

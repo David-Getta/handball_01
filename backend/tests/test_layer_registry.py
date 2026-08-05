@@ -519,3 +519,42 @@ def test_szam_szinkron_javitja_az_elavult_doksit():
         assert good in doc.read_text(encoding="utf-8")
     finally:
         doc.write_text(original, encoding="utf-8")
+
+
+def test_kliens_mutato_csoportok_lefedik_a_csempeket():
+    """A mutató-fal minden csempéje valódi csoportba essen.
+
+    A felderítés-képernyőn háromszáz körüli mérőszám van; ezek
+    csoportosítva és kereshetően jelennek meg. A csoportot a címke
+    kulcsszavai döntik el — ha egy ÚJ réteg csempéje egyik kulcsszóra
+    sem illeszkedik, csendben az "Egyéb" gyűjtőbe csúszik, és ott
+    elveszik. Ez az őr ezt fogja meg: ilyenkor vagy a címkét kell
+    beszédesebbre venni, vagy a csoport kulcsszavait bővíteni.
+    """
+    import re
+    dart = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    src = dart.read_text(encoding="utf-8")
+
+    # A csoport-szabályok kiolvasása a Dart forrásból.
+    start = src.index("_metricGroups = [")
+    end = src.index("\n  ];", start)
+    keywords = re.findall(r'"([^"]+)"', src[start:end])
+    # Az első idézőjeles elem minden rekordban a csoport NEVE — a
+    # kulcsszavak közé az is beleférne, de csak rontaná a lefedést,
+    # ezért nem szűrjük ki: a nevek nem illeszkednek címkékre.
+    assert len(keywords) > 50, "a csoport-szabályok olvasása elromlott"
+
+    # A csempe-címkék kiolvasása.
+    t0 = src.index("final tiles = <List<String>>[")
+    t1 = src.index("\n    ];", t0)
+    labels = re.findall(r'\["([^"]+)",', src[t0:t1])
+    assert len(labels) > 200, "a csempe-olvasás elromlott"
+
+    orphans = sorted({lab for lab in labels
+                      if not any(k in lab.lower() for k in keywords)})
+    assert not orphans, (
+        "ezek a csempék az \"Egyéb\" csoportba esnének (bővítsd a "
+        f"_metricGroups kulcsszavait vagy pontosítsd a címkét): {orphans}")

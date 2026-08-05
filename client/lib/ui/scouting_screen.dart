@@ -50,6 +50,39 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   String? _error;
   bool _loading = true;
 
+  // --- Mutató-fal állapota -------------------------------------------------
+  // Háromszáz körüli mutató egyetlen listában olvashatatlan. A fal ezért
+  // KERESHETŐ és CSOPORTOSÍTOTT: alapból csak a kiemelt mutatók látszanak,
+  // a csoportok lenyithatók, keresésre pedig automatikusan kinyílnak.
+  String _metricQuery = "";
+  final Set<String> _openMetricGroups = <String>{};
+
+  // Hosszú felsorolások (edzői kulcsok, meccsterv) alapból rövidítve
+  // jelennek meg — egy harminc pontos lista olvasatlan marad.
+  bool _allKeys = false;
+  bool _allPlan = false;
+
+  /// Ennyi tétel látszik alapból a hosszú felsorolásokból.
+  static const int _listPreview = 6;
+
+  /// "Mind a N megjelenítése" / "Rövidítve" kapcsoló a hosszú listákhoz.
+  /// Szándékosan kimondja, hogy a rövidítés a jelentés SORRENDJÉBŐL vág,
+  /// nem fontossági rangsorból — rangsort a rendszer itt nem állít.
+  Widget _moreToggle(int total, bool expanded, VoidCallback onTap) {
+    if (total <= _listPreview) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: TextButton.icon(
+        onPressed: onTap,
+        icon: Icon(expanded ? Icons.expand_less : Icons.expand_more,
+            size: 18),
+        label: Text(expanded
+            ? "Rövidítve (az első $_listPreview)"
+            : "Mind a $total megjelenítése"),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -307,13 +340,17 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 style: AppText.sectionLabel
                     .copyWith(color: AppColors.accent)),
             const SizedBox(height: AppSpacing.sm),
-            for (final p in _matchup)
+            for (final p in (_allPlan
+                ? _matchup
+                : _matchup.take(_listPreview)))
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text("• $p",
                     style: AppText.label.copyWith(
                         fontSize: 12.5, color: AppColors.textPrimary)),
               ),
+            _moreToggle(_matchup.length, _allPlan,
+                () => setState(() => _allPlan = !_allPlan)),
           ],
         ),
       ),
@@ -322,6 +359,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
 
   Widget _keysCard(Map<String, dynamic> r) {
     final keys = (r["keys_to_game"] as List?) ?? const [];
+    final shownKeys = _allKeys ? keys : keys.take(_listPreview).toList();
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -338,7 +376,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
             Text("HOGYAN JÁTSSZ ELLENÜK", style: AppText.sectionLabel.copyWith(color: AppColors.gold)),
           ]),
           const SizedBox(height: AppSpacing.md),
-          for (final k in keys)
+          for (final k in shownKeys)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -349,6 +387,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 Expanded(child: Text("$k", style: AppText.value.copyWith(fontSize: 14))),
               ]),
             ),
+          _moreToggle(keys.length, _allKeys,
+              () => setState(() => _allKeys = !_allKeys)),
         ],
       ),
     );
@@ -6761,21 +6801,198 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ],
       ["Figurák", fmt(r["num_figures"])],
     ];
+    return _metricsWall(tiles);
+  }
+
+  /// A mutató-csoportok sorrendje — ez adja a szekciók sorrendjét is.
+  /// A rendezés a legspecifikusabbtól halad az általános felé, mert az
+  /// első illeszkedő szabály nyer (pl. a "Kapus-védés posztonként" a
+  /// KAPUS csoportba tartozik, nem a posztokba).
+  static const List<(String, List<String>)> _metricGroups = [
+    ("Kapus", ["kapus", "bravúr", "becsapott", "olvasó", "kipattanó",
+               "hetes-védés", "kapu-sarok"]),
+    ("Posztok", ["poszt"]),
+    ("Szabály és létszám", ["hetes", "kiállítás", "fegyelem",
+                            "emberelőny", "emberhátrány", "létszám",
+                            "előny-", "hátrány-", "kettős ember"]),
+    ("Idő, állás, forma", ["-állás", "állás szerint", "félidő", "félidei",
+                           "szünet", "hajrá", "negyedóra", "ötperc",
+                           "-esés", "fáradás", "holtpont", "ritmus",
+                           "sorozat", "lendület", "elalvás", "gólcsend",
+                           "csend-", "hidegedés", "bemelegedés",
+                           "utolsó labda", "meccsek", "percek", "forró",
+                           "hosszú áll"]),
+    ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
+                   "betörés", "kilép", "átvert", "lefogott", "őr",
+                   "kifutás", "visszaérés", "visszaállás", "press",
+                   "engedett", "kapott", "keménység", "mélység",
+                   "folyosó", "szorult", "elöl szerző", "zóna"]),
+    ("Támadás és befejezés", ["támad", "lövés", "lövő", "gól", "passz",
+                              "beálló", "szélső", "elzár", "kontra",
+                              "lerohan", "felhozatal", "kihozatal",
+                              "indítás", "labdatartás", "forgatás",
+                              "ziccer", "befejez", "célzás", "oldal",
+                              "xg", "tempó", "birtoklás", "figur",
+                              "keresztjáték", "roham", "áttörő",
+                              "kivárás", "bontó", "kiosztás",
+                              "előkészít", "asszist", "elsütés",
+                              "középkezdés", "labda", "elad", "hiba",
+                              "kockázatos", "pontatlan", "fedezett",
+                              "kihagy"]),
+    ("Emberek és cserék", ["csere", "váltó", "váltott", "rotáció",
+                           "pad-", "sprint", "futás", "játékos",
+                           "kezd", "ember", "páros", "időkérés",
+                           "területi", "támogatás", "mérleg",
+                           "felkészülés"]),
+  ];
+
+  /// Mindig látható mutatók: ezekkel kezdi az edző, ezért nem kell
+  /// hozzájuk se keresés, se lenyitás.
+  static const List<String> _coreMetrics = [
+    "Lövés / gól",
+    "Gólarány",
+    "Labdabirtoklás",
+    "Labdaeladás",
+    "Szervezett támadás",
+    "Gyors indítás",
+    "Tempó",
+    "Felkészülés-súlypont",
+  ];
+
+  /// Egy mutató csoportja a címkéje alapján (az első illeszkedő szabály
+  /// nyer). Ismeretlen címke az "Egyéb" csoportba kerül — így egy új
+  /// réteg csempéje sem tűnhet el a falról.
+  String _metricGroupOf(String label) {
+    final low = label.toLowerCase();
+    for (final g in _metricGroups) {
+      for (final k in g.$2) {
+        if (low.contains(k)) return g.$1;
+      }
+    }
+    return "Egyéb";
+  }
+
+  /// A mutató-fal: kiemelt sáv + kereső + lenyitható csoportok.
+  Widget _metricsWall(List<List<String>> tiles) {
+    final q = _metricQuery.trim().toLowerCase();
+    final core = <List<String>>[
+      for (final name in _coreMetrics)
+        ...tiles.where((t) => t[0] == name),
+    ];
+    // Csoportosítás a megjelenítéshez (a nyers lista érintetlen marad).
+    final grouped = <String, List<List<String>>>{};
+    for (final t in tiles) {
+      grouped.putIfAbsent(_metricGroupOf(t[0]), () => []).add(t);
+    }
+    final order = <String>[for (final g in _metricGroups) g.$1, "Egyéb"];
+    final hits = q.isEmpty
+        ? tiles.length
+        : tiles.where((t) => t[0].toLowerCase().contains(q)).length;
+
     return Container(
       decoration: AppTheme.card(),
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("MUTATÓK", style: AppText.sectionLabel),
+          Row(children: [
+            Text("MUTATÓK", style: AppText.sectionLabel),
+            const SizedBox(width: AppSpacing.sm),
+            Text(q.isEmpty
+                    ? "${tiles.length} mérőszám"
+                    : "$hits találat ${tiles.length} mérőszámból",
+                style: AppText.label.copyWith(fontSize: 11)),
+            const Spacer(),
+            SizedBox(
+              width: 240,
+              child: TextField(
+                onChanged: (v) => setState(() => _metricQuery = v),
+                style: AppText.value.copyWith(fontSize: 13),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: "Keresés a mutatók közt…",
+                  hintStyle: AppText.label.copyWith(fontSize: 12),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: q.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 16),
+                          onPressed: () =>
+                              setState(() => _metricQuery = ""),
+                        ),
+                ),
+              ),
+            ),
+          ]),
           const SizedBox(height: AppSpacing.md),
+          // Kiemelt sáv: keresés közben elrejtjük, hogy a találat legyen
+          // a fókuszban.
+          if (q.isEmpty && core.isNotEmpty) ...[
+            Wrap(
+              spacing: AppSpacing.lg,
+              runSpacing: AppSpacing.md,
+              children: [for (final t in core) _metricTile(t[0], t[1])],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            const Divider(height: 1),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          for (final name in order)
+            if (grouped[name] != null)
+              _metricGroupSection(name, grouped[name]!, q),
+          if (q.isNotEmpty && hits == 0)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: Text("Nincs \"$_metricQuery\" nevű mutató.",
+                  style: AppText.label),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Egy csoport-szekció: fejléc (név + darabszám) és lenyitott tartalom.
+  /// Keresés közben a találatot tartalmazó csoport magától nyílik.
+  Widget _metricGroupSection(
+      String name, List<List<String>> items, String query) {
+    final shown = query.isEmpty
+        ? items
+        : items.where((t) => t[0].toLowerCase().contains(query)).toList();
+    if (shown.isEmpty) return const SizedBox.shrink();
+    final open = query.isNotEmpty || _openMetricGroups.contains(name);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: query.isNotEmpty
+              ? null
+              : () => setState(() {
+                    if (!_openMetricGroups.remove(name)) {
+                      _openMetricGroups.add(name);
+                    }
+                  }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Row(children: [
+              Icon(open ? Icons.expand_less : Icons.expand_more,
+                  size: 18, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Text(name.toUpperCase(), style: AppText.sectionLabel),
+              const SizedBox(width: AppSpacing.sm),
+              Text("${shown.length}",
+                  style: AppText.label.copyWith(fontSize: 11)),
+            ]),
+          ),
+        ),
+        if (open) ...[
           Wrap(
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.md,
-            children: [for (final t in tiles) _metricTile(t[0], t[1])],
+            children: [for (final t in shown) _metricTile(t[0], t[1])],
           ),
+          const SizedBox(height: AppSpacing.md),
         ],
-      ),
+      ],
     );
   }
 
