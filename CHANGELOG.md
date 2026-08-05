@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Minden jelentés megmondja, mikor készült.** Az edzőnél mappában
+  állnak a nyomatok, és eddig egyetlen lapon sem volt dátum: ugyanarról
+  az ellenfélről a szeptemberi és a novemberi felderítés
+  megkülönböztethetetlen volt. Márpedig egy elavult felderítés rosszabb,
+  mint a semmi — az edző elhiszi. Mostantól minden generált jelentés
+  lábléce percre pontos készítés-bélyeget kap ("· Kelt: 2026-03-14
+  09:05"); a meglévő láblécszöveg érintetlen marad, és ha egy
+  jelentésnek nincs lábléce, nem nyúlunk hozzá.
+
 - **A jelentések papíron is rendesen tördelődnek.** Hét generált
   jelentésből **ötben egyáltalán nem volt nyomtatási stílus** — azok a
   képernyős margókkal, tetszőleges tördeléssel kerültek papírra: a

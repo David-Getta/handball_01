@@ -7,6 +7,9 @@ a "Hétméteresek" részt. A jegyzék ezért a fejléc alá kerül, sorszámozva
 Nyomtatási stílus (`with_print_css`): a böngésző alapértelmezett
 tördelése a jelentés szerkezetéről semmit nem tud — árván hagyja a
 szakasz-címet az oldal alján, és kettévágja a táblázatot.
+
+Készítés-bélyeg (`with_stamp`): az edzőnél mappában állnak a nyomatok,
+és egy elavult felderítés rosszabb, mint a semmi — mert elhiszi.
 """
 from __future__ import annotations
 
@@ -190,3 +193,63 @@ def test_minden_jelentesben_van_nyomtatasi_stilus():
     docs = src.count('f"""<!DOCTYPE html>')
     finished = src.count('return finish_report(f"""<!DOCTYPE html>')
     assert docs == finished == 7, (docs, finished)
+
+
+# --- Készítés-bélyeg ---------------------------------------------------
+
+def _stamped(**kw):
+    from handball.pipeline.report_html import with_stamp
+    src = ("<html><head><style>x{}</style></head><body><header></header>"
+           "<h2>A</h2><footer>Lábléc-szöveg</footer></body></html>")
+    return with_stamp(src, **kw)
+
+
+def test_belyeg_a_lablecbe_kerul():
+    """A jelentés megmondja, MIKOR készült — percre pontosan.
+
+    Az edzőnél mappában állnak a nyomatok; ugyanarról az ellenfélről a
+    szeptemberi és a novemberi felderítés eddig megkülönböztethetetlen
+    volt.
+    """
+    from datetime import datetime
+    out = _stamped(when=datetime(2026, 3, 14, 9, 5))
+    assert "2026-03-14 09:05" in out
+    assert out.index("Lábléc-szöveg") < out.index("Kelt:")
+    assert out.index("Kelt:") < out.index("</footer>")
+
+
+def test_belyeg_nem_bantja_a_meglevo_lablecet():
+    """A meglévő láblécszöveg érintetlen marad."""
+    out = _stamped()
+    assert "Lábléc-szöveg" in out
+    assert out.count("</footer>") == 1
+
+
+def test_lablec_nelkul_nincs_belyeg():
+    """Nincs hova tenni → hozzá se nyúlunk."""
+    from handball.pipeline.report_html import with_stamp
+    src = "<html><body><h2>A</h2></body></html>"
+    assert with_stamp(src) == src
+
+
+def test_belyeg_stilusa_egyszer_kerul_be():
+    """A bélyeg stílusa nem duplázódik ismételt futtatásnál."""
+    from handball.pipeline.report_html import with_stamp
+    twice = with_stamp(_stamped())
+    assert twice.count("footer .stamp") == 1
+
+
+def test_eles_jelentes_datumozott():
+    """Éles jelentésen is ott a bélyeg — ez a lényeg, nem a segéd-HTML."""
+    from handball.pipeline.report_html import scouting_report_html
+    from handball.pipeline.scouting import ScoutingReport
+    rep = ScoutingReport(
+        team="away", team_name="Szeged", matches=1,
+        attack_share_pct=60.0, fast_break_pct=10.0, avg_ball_speed_ms=4.0,
+        avg_attack_duration_s=8.0, defense_main="6-0",
+        defense_distribution={"6-0": 100.0},
+        attack_centroid_x=30.0, attack_centroid_y=10.0, num_figures=0,
+        attacks=10, shots=8, goals=4, turnovers=2, shot_efficiency_pct=50.0,
+        key_players=[], strengths=[], weaknesses=[], keys_to_game=[],
+    )
+    assert "Kelt:" in scouting_report_html(rep)

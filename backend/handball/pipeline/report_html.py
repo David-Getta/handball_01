@@ -85,10 +85,41 @@ def with_print_css(html: str) -> str:
     return html.replace("</style>", _PRINT_CSS + "</style>", 1)
 
 
+_STAMP_CSS = """
+  footer .stamp { color: #8492A6; font-size: 10.5px; white-space: nowrap; }
+"""
+
+
+def with_stamp(html: str, when=None) -> str:
+    """Készítés-bélyeg a láblécbe: MIKOR készült a jelentés.
+
+    Az edzőnél mappában állnak a nyomatok. Ugyanarról az ellenfélről a
+    szeptemberi és a novemberi felderítés eddig megkülönböztethetetlen
+    volt: egyetlen lapon sem szerepelt dátum. Márpedig egy elavult
+    felderítés rosszabb, mint a semmi — az edző elhiszi.
+
+    A bélyeg percre pontos (egy napon belül több nyomat is készülhet),
+    és a lábléc VÉGÉRE kerül, hogy a meglévő láblécszöveget ne bántsa.
+    Lábléc nélkül változatlanul adjuk vissza a jelentést.
+
+    `when`: a tesztek átadhatják az időt; alapból a mostani perc.
+    """
+    if "</footer>" not in html:
+        return html
+    from datetime import datetime
+    ts = (when or datetime.now()).strftime("%Y-%m-%d %H:%M")
+    stamp = f' <span class="stamp">· Kelt: {ts}</span>'
+    out = html.replace("</footer>", stamp + "</footer>", 1)
+    if "</style>" in out and _STAMP_CSS not in out:
+        out = out.replace("</style>", _STAMP_CSS + "</style>", 1)
+    return out
+
+
 def finish_report(html: str) -> str:
-    """Egy kész jelentés-HTML utolsó simításai: tartalomjegyzék és
-    nyomtatási stílus. A generátorok ezt hívják a visszatérésükre."""
-    return with_print_css(with_toc(html))
+    """Egy kész jelentés-HTML utolsó simításai: tartalomjegyzék,
+    nyomtatási stílus és készítés-bélyeg. A generátorok ezt hívják a
+    visszatérésükre."""
+    return with_stamp(with_print_css(with_toc(html)))
 
 
 def _section_id(index: int) -> str:
