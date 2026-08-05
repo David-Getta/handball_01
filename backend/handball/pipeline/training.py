@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 283) Poszt-eladási zóna: ha egy posztunk a támadó harmadban ad
+    # el, abból kontra lesz.
+    try:
+        from .roles import RTZ_GAP_PP, role_turnover_zones
+        rtz283 = role_turnover_zones(match, config)
+        for side in ("home", "away"):
+            rec283 = rtz283[side]
+            risk283 = rec283.get("riskiest")
+            if risk283 is None:
+                continue
+            add(side, "átmenet", "Kockázatos eladási zóna",
+                f"a(z) {risk283['poszt']} posztunk eladásainak "
+                f"{risk283['front_pct']:.0f}%-a "
+                f"({risk283['front']}/{risk283['turnovers']}) a támadó "
+                f"harmadban történik, a csapat-átlagunk "
+                f"{rec283['team_front_pct']:.0f}% "
+                f"({RTZ_GAP_PP:.0f} százalékpont fölött már mintázat) — "
+                "onnan indul ellenünk a kontra",
+                "kockázatos zóna: befejezés-gyakorlat ebből a posztból "
+                "azzal a szabállyal, hogy eladás után AZONNAL indul a "
+                "visszafutás — kijelölt fékező emberrel; a cél nem a "
+                "kevesebb eladás, hanem hogy ne legyen belőle gól")
+    except Exception:
+        pass
     # 282) Poszt-labdatartás: ha egy posztunknál megáll a labda, az
     # ellenfél oda küldi a második embert.
     try:

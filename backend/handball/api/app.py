@@ -2472,6 +2472,11 @@ def create_app():
                "efficiency": attack_efficiency(match),
                "duration_efficiency": attack_duration_efficiency(match)}
         try:
+            from ..pipeline.roles import role_turnover_zones
+            res["role_turnover_zones"] = role_turnover_zones(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_hold_time
             res["role_hold_time"] = role_hold_time(match)
         except Exception:
@@ -4883,6 +4888,9 @@ def create_app():
                        lambda: role_receive_zones(match))
                 from ..pipeline.roles import role_hold_time
                 _layer("role_hold_time", lambda: role_hold_time(match))
+                from ..pipeline.roles import role_turnover_zones
+                _layer("role_turnover_zones",
+                       lambda: role_turnover_zones(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

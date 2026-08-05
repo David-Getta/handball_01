@@ -883,6 +883,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-eladási zóna: kinek az eladása hív kontrát.
+    try:
+        from .roles import role_turnover_zones
+        rtz = role_turnover_zones(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtz = rtz[side]
+            if rec_rtz["verdict"] is None:
+                continue
+            rk = rec_rtz["riskiest"]
+            body += (f" A(z) {name} eladásai közül a(z) {rk['poszt']} "
+                     f"posztjáé a legveszélyesebb: "
+                     f"{rk['front']}/{rk['turnovers']} eladása "
+                     f"({rk['front_pct']:.0f}%) a támadó harmadban "
+                     f"történt, a csapat-átlaguk "
+                     f"{rec_rtz['team_front_pct']:.0f}% — onnan indul a "
+                     "kontra.")
+    except Exception:
+        pass
     # Poszt-labdatartás: melyik posztnál áll meg a labda.
     try:
         from .roles import role_hold_time

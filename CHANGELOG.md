@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-eladási zóna** (`role_turnover_zones`): melyik posztjuk adja
+  el a labdát a TÁMADÓ harmadban — vagyis kinek az eladása hív kontrát.
+  A csapat-szintű eladási zónák (`turnover_zones`) azt mondják meg, a
+  csapat hol veszíti el a labdát, az eladás-posztok
+  (`turnovers_by_role`) azt, ki adja el; ez a kettőt köti össze. Az
+  eladás-ár (`role_turnover_cost`) azt méri, mennyi gólba KERÜLT, ez
+  azt, mennyire KOCKÁZATOS a hely — kevés meccsen az ár még zajos
+  lehet, a zóna viszont már beszédes. Posztonként 5 eladás és 20
+  százalékpont alatt nincs ítélet. Felületek:
+  `/matches/{id}/attacks` + meccs-csomag (`role_turnover_zones`),
+  edzői összefoglaló, meccs-jelentés Poszt-lencséje, felderítés
+  (+ edzői kulcs + 262-es meccsterv-szabály), 283-as edzés-szabály
+  ("Kockázatos eladási zóna"), kliens-csempe ("Poszt-eladási zóna").
+
 - **Poszt-labdatartás** (`role_hold_time`): melyik posztnál áll meg a
   labda. A poszt-birtoklás (`role_possession_share`) az össz-időt
   osztja posztokra — ez az EGY ÉRINTÉSRE jutó időt; a kettő

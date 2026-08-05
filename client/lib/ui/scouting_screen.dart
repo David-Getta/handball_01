@@ -1896,6 +1896,41 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-eladási zóna: kinek az eladása hív kontrát (10+ eladás,
+  // posztonként 5+, 20 százalékpont eltérés — a backenddel azonos
+  // küszöbök).
+  String? _turnoverZoneRole(Map<String, dynamic> r) {
+    final tos = (r["rtz_to_by_role"] as Map?)?.cast<String, dynamic>();
+    final front = (r["rtz_front_by_role"] as Map?)?.cast<String, dynamic>();
+    if (tos == null || tos.isEmpty || front == null) return null;
+    var total = 0;
+    var totalFront = 0;
+    tos.forEach((k, v) => total += (v as num).toInt());
+    front.forEach((k, v) => totalFront += (v as num).toInt());
+    if (total < 10) return null;
+    final teamPct = 100.0 * totalFront / total;
+    String? worst;
+    var worstPct = 0.0;
+    var worstN = 0;
+    var worstF = 0;
+    tos.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 5) return;
+      final f = ((front[k] as num?) ?? 0).toInt();
+      final pct = 100.0 * f / n;
+      if (pct > worstPct) {
+        worstPct = pct;
+        worst = k;
+        worstN = n;
+        worstF = f;
+      }
+    });
+    if (worst == null || worstPct - teamPct < 20.0) return null;
+    return "a(z) $worst posztjuk eladásainak ${worstPct.round()}%-a "
+        "($worstF/$worstN) a támadó harmadban történik (csapat-átlag "
+        "${teamPct.round()}%) · onnan indul a kontra";
+  }
+
   // Poszt-labdatartás: melyik posztnál áll meg a labda (16+ szakasz,
   // posztonként 8+, 0,7 mp eltérés — a backenddel azonos küszöbök).
   String? _holdTimeRole(Map<String, dynamic> r) {
@@ -6638,6 +6673,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_turnoverZoneRole(r) != null)
+        ["Poszt-eladási zóna", _turnoverZoneRole(r)!],
       if (_holdTimeRole(r) != null)
         ["Poszt-labdatartás", _holdTimeRole(r)!],
       if (_receiveZone(r) != null)

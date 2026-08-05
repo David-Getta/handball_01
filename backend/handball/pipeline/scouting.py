@@ -738,6 +738,8 @@ class ScoutingReport:
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
     arp_pairs: dict = field(default_factory=dict)
+    rtz_to_by_role: dict = field(default_factory=dict)
+    rtz_front_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -2956,6 +2958,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-eladási zóna: kinek az eladása hív kontrát.
+    _rtz_n = sum(rep.rtz_to_by_role.values())
+    if _rtz_n >= 10:
+        _rtz_team = 100.0 * sum(rep.rtz_front_by_role.values()) / _rtz_n
+        _rtz_rows = [(p, n, rep.rtz_front_by_role.get(p, 0))
+                     for p, n in rep.rtz_to_by_role.items() if n >= 5]
+        if _rtz_rows:
+            _rtz_p, _rtz_cnt, _rtz_f = max(_rtz_rows,
+                                           key=lambda r: r[2] / r[1])
+            _rtz_pct = 100.0 * _rtz_f / _rtz_cnt
+            if _rtz_pct - _rtz_team >= 20.0:
+                keys.append(
+                    f"A(z) {_rtz_p} posztjuk eladásai a legveszélyesebbek: "
+                    f"{_rtz_f}/{_rtz_cnt} ({_rtz_pct:.0f}%) a támadó "
+                    f"harmadban történt, a csapat-átlaguk "
+                    f"{_rtz_team:.0f}% — onnan indul a kontra, oda "
+                    "érdemes a szerzés utáni azonnali indítást tervezni.")
 
     # Poszt-labdatartás: melyik posztjuk a kettőzés célpontja.
     _rht_h = sum(rep.rht_holds_by_role.values())
@@ -7207,6 +7227,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_turnover_zones as _rtz
+        rtzrec = _rtz(match, config)[team.value]
+        rep.rtz_to_by_role = {p: r["turnovers"]
+                              for p, r in rtzrec["roles"].items()}
+        rep.rtz_front_by_role = {p: r["front"]
+                                 for p, r in rtzrec["roles"].items()}
         from .roles import role_hold_time as _rht
         rhtrec = _rht(match, config)[team.value]
         rep.rht_holds_by_role = {p: r["holds"]
@@ -9725,6 +9751,29 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 262) Az ő kockázatos eladó posztjuk × a ti kontrátok: a támadó
+    # harmadban vesztett labda azonnali indítást ér.
+    _rtz262_n = sum(opp.rtz_to_by_role.values())
+    if _rtz262_n >= 10:
+        _rtz262_team = (100.0 * sum(opp.rtz_front_by_role.values())
+                        / _rtz262_n)
+        _rtz262_rows = [(p, n, opp.rtz_front_by_role.get(p, 0))
+                        for p, n in opp.rtz_to_by_role.items() if n >= 5]
+        if _rtz262_rows:
+            _p262, _n262, _f262 = max(_rtz262_rows,
+                                      key=lambda r: r[2] / r[1])
+            _pct262 = 100.0 * _f262 / _n262
+            _fwd262 = (100.0 * own.stl_fwd / own.stl_steals
+                       if own.stl_steals >= 5 else 0.0)
+            if _pct262 - _rtz262_team >= 20.0 and _fwd262 >= 40.0:
+                plan.append(
+                    f"A(z) {_p262} posztjuk eladásainak {_pct262:.0f}%-a "
+                    f"a támadó harmadban történik ({_f262}/{_n262}, a "
+                    f"csapat-átlaguk {_rtz262_team:.0f}%), ti pedig a "
+                    f"szerzéseitek {_fwd262:.0f}%-át azonnal előre "
+                    "viszitek — az ő zónájában szerzett labdára "
+                    "készüljön kijelölt indító és két futó ember.")
 
     # 261) Az ő labdatartó posztjuk × a ti kettőzésetek: nála van idő
     # odaérni, tehát ott térül meg a második ember.
@@ -14012,6 +14061,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rtz_to_by_role=_merge_count_dicts(
+            r.rtz_to_by_role for r in reports),
+        rtz_front_by_role=_merge_count_dicts(
+            r.rtz_front_by_role for r in reports),
         rht_holds_by_role=_merge_count_dicts(
             r.rht_holds_by_role for r in reports),
         rht_frames_by_role=_merge_count_dicts(

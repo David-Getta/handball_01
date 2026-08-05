@@ -791,3 +791,69 @@ def test_role_hold_time_silent_with_few_holds():
 
     rec = role_hold_time(_rht_match(cycles=3))["home"]
     assert rec["slowest"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-eladási zóna ------------------------------------------------------
+
+# A hazai (+x kapura támadó) felállás. A pálya-harmadok a HOSSZ (x)
+# mentén oszlanak, ezért x-ben mérünk: a beálló a támadó harmadban áll
+# (6 m a kaputól), a szélső azon kívül (14 m).
+_RTZ = {1: (34.0, 10.0), 2: (26.0, 3.0)}
+
+
+def _rtz_players():
+    players = [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RTZ.items()]
+    players.append(_pl(20, Team.AWAY, 10.0, 10.0))
+    return players
+
+
+def _rtz_match(losers, warmup=200):
+    """`losers` = a labdát elvesztő hazai játékosok sorrendben."""
+    frames = []
+    t = 0
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_rtz_players(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):      # poszt-minta: a beálló birtokol
+        _add(34.0, 10.0)
+    for tid in losers:
+        lx, ly = _RTZ[tid]
+        cur = (frames[-1].ball.x, frames[-1].ball.y)
+        for i in range(1, 21):   # a labda a vesztes játékoshoz
+            f_ = i / 20.0
+            _add(cur[0] + (lx - cur[0]) * f_, cur[1] + (ly - cur[1]) * f_)
+        for _ in range(10):      # birtokolja
+            _add(lx, ly)
+        for i in range(1, 21):   # a vendéghez kerül: ELADÁS
+            f_ = i / 20.0
+            _add(lx + (10.0 - lx) * f_, ly + (10.0 - ly) * f_)
+        for _ in range(25):
+            _add(10.0, 10.0)
+    return Match(MatchMeta(match_id="tz", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_turnover_zones_finds_the_risky_post():
+    """A beálló a támadó harmadban ad el — az ő eladása hív kontrát."""
+    from handball.pipeline.roles import RTZ_MIN_TO, role_turnover_zones
+
+    rec = role_turnover_zones(_rtz_match([1] * 6 + [2] * 6))["home"]
+    assert rec["turnovers"] >= 2 * RTZ_MIN_TO, rec
+    assert rec["roles"]["beálló"]["front_pct"] > \
+        rec["roles"]["szélső"]["front_pct"], rec
+    assert rec["riskiest"] is not None, rec
+    assert rec["riskiest"]["poszt"] == "beálló", rec
+    assert rec["riskiest"]["gap_pp"] >= 20.0, rec
+    assert rec["verdict"] and "beálló" in rec["verdict"], rec
+
+
+def test_role_turnover_zones_silent_with_few_turnovers():
+    """Két eladásból nincs ítélet."""
+    from handball.pipeline.roles import role_turnover_zones
+
+    rec = role_turnover_zones(_rtz_match([1, 2]))["home"]
+    assert rec["riskiest"] is None and rec["verdict"] is None, rec

@@ -1121,3 +1121,104 @@ def role_hold_time(match: Match,
                      "roles": rows, "slowest": slowest,
                      "verdict": verdict}
     return out
+
+
+# Poszt-eladási zóna: posztonként ennyi mért eladás kell az ítélethez,
+# és ekkora (százalékpontos) eltérés a csapat-átlagtól számít érdemi
+# kockázat-különbségnek.
+RTZ_MIN_TO = 5
+RTZ_GAP_PP = 20.0
+
+
+def role_turnover_zones(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-eladási zóna: MELYIK POSZTJUK adja el a labdát a TÁMADÓ
+    harmadban — vagyis kinek az eladása hív kontrát.
+
+    A csapat-szintű eladási zónák (defense.turnover_zones) azt mondják
+    meg, a csapat HOL veszíti el a labdát, az eladás-posztok
+    (turnovers_by_role) azt, KI adja el — ez a kettőt köti össze: a
+    támadó harmadban elvesztett labda a legveszélyesebb, mert üresen
+    hagyja a védelmet a gyors indításnak.
+
+    Az eladás-ár (role_turnover_cost) azt méri, mennyi gólba KERÜLT;
+    ez azt, mennyire KOCKÁZATOS a hely, ahol elveszik — a kettő együtt
+    mondja meg, hol térül meg a letámadás. Kevés meccsen az ár még
+    zajos lehet, a zóna viszont már beszédes.
+
+    A réteg a birtokos-váltásokból és a pozíciókból dolgozik (nem a
+    kapu-felé torzító lövő-hozzárendelésből).
+
+    Visszatérés csapatonként: {"turnovers", "front", "team_front_pct",
+    "roles": {poszt: {"turnovers", "front", "front_pct"}},
+    "riskiest": {"poszt", "turnovers", "front", "front_pct",
+    "gap_pp"} | None, "verdict": str | None} — a riskiest/verdict
+    None, ha a poszt nem érte el az RTZ_MIN_TO eladást, vagy a
+    csapat-átlagot nem haladja meg RTZ_GAP_PP-vel.
+    """
+    from .calibration import COURT_LENGTH_M
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    by_frame = {f.t: f for f in match.frames}
+    third = COURT_LENGTH_M / 3.0
+
+    tally: dict = {"home": {}, "away": {}}
+    totals: dict = {"home": [0, 0], "away": [0, 0]}  # [eladás, támadó harmad]
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        frame = by_frame.get(e.t)
+        if frame is None:
+            continue
+        who = next((p for p in frame.players
+                    if p.track_id == e.player_id), None)
+        if who is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        # A TÁMADÓ harmad: a támadott kapuhoz legközelebbi harmad.
+        dist_to_target = abs(who.x - goal_x)
+        front = dist_to_target <= third
+        rec = tally[side].setdefault(rec_role["poszt"], [0, 0])
+        rec[0] += 1
+        totals[side][0] += 1
+        if front:
+            rec[1] += 1
+            totals[side][1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_all, n_front = totals[side]
+        team_pct = (100.0 * n_front / n_all) if n_all else None
+        rows = {}
+        for poszt, (n, f_) in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1][0]):
+            rows[poszt] = {"turnovers": n, "front": f_,
+                           "front_pct": round(100.0 * f_ / n, 1)}
+        riskiest = verdict = None
+        if team_pct is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["turnovers"] >= RTZ_MIN_TO]
+            if eligible:
+                poszt, r = max(eligible,
+                               key=lambda pr: pr[1]["front_pct"])
+                gap = r["front_pct"] - team_pct
+                if gap >= RTZ_GAP_PP:
+                    riskiest = {"poszt": poszt,
+                                "turnovers": r["turnovers"],
+                                "front": r["front"],
+                                "front_pct": r["front_pct"],
+                                "gap_pp": round(gap, 1)}
+                    verdict = (f"a(z) {poszt} a támadó harmadban adja el "
+                               f"a labdát ({r['front_pct']:.0f}%)")
+        out[side] = {"turnovers": n_all, "front": n_front,
+                     "team_front_pct": round(team_pct, 1)
+                     if team_pct is not None else None,
+                     "roles": rows, "riskiest": riskiest,
+                     "verdict": verdict}
+    return out
