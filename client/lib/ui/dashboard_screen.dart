@@ -1302,126 +1302,97 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () {
-                    // Csapatnevek a könyvtárból (egyediek, betűrendben).
-                    final teams = <String>{
-                      for (final m in _matches) ...[
-                        if (m["home_team"] != null) m["home_team"] as String,
-                        if (m["away_team"] != null) m["away_team"] as String,
-                      ]
-                    }.toList()
-                      ..sort();
-                    Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => PlayerTrendScreen(teams: teams)));
-                  },
-                  icon: const Icon(Icons.timeline, color: AppColors.textSecondary),
-                  tooltip: "Játékos-fejlődés (mezszám alapján)",
-                ),
-                // Egymás ellen: két csapat közös meccseinek riportja.
-                IconButton(
-                  onPressed: _saveHeadToHead,
-                  icon: const Icon(Icons.compare_arrows,
-                      color: AppColors.textSecondary),
-                  tooltip: "Egymás ellen riport (két csapat)",
-                ),
-                // Szezon-riport: csapat-választás után nyomtatható HTML.
+                // Elemző műveletek NÉVVEL — nyolc egyforma szürke ikon
+                // helyett három olvasható gomb és egy gyűjtő-menü.
+                _toolButton(Icons.timeline, "Játékos-fejlődés",
+                    _openPlayerTrend),
+                const SizedBox(width: AppSpacing.sm),
+                _toolButton(Icons.compare_arrows, "Egymás ellen",
+                    _saveHeadToHead),
+                const SizedBox(width: AppSpacing.sm),
+                _toolButton(Icons.assessment_outlined, "Szezon-riport",
+                    _pickTeamForSeasonReport),
+                const SizedBox(width: AppSpacing.sm),
+                // Karbantartás egy helyen: ezeket ritkán kell elővenni,
+                // de ha kell, névvel keresi az ember.
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.assessment_outlined,
-                      color: AppColors.textSecondary),
-                  tooltip: "Szezon-riport mentése (csapatonként)",
-                  color: AppColors.surface,
-                  onSelected: _saveSeasonReport,
-                  itemBuilder: (_) => [
-                    for (final t in <String>{
-                      for (final m in _matches) ...[
-                        if (m["home_team"] != null)
-                          m["home_team"] as String,
-                        if (m["away_team"] != null)
-                          m["away_team"] as String,
-                      ]
-                    }.toList()
-                      ..sort())
-                      PopupMenuItem(
-                        value: t,
-                        child: Text(t, style: AppText.value
-                            .copyWith(fontSize: 13)),
-                      ),
-                  ],
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.archive_outlined,
-                      color: AppColors.textSecondary),
-                  tooltip: "Meccskönyvtár mentése / visszaállítása",
+                  tooltip: "További eszközök",
                   color: AppColors.surface,
                   onSelected: (v) {
+                    if (v == "refresh") _load();
+                    if (v == "health") _healthCheck();
                     if (v == "export") _exportLibrary();
                     if (v == "import") _importLibrary();
+                    if (v == "update") _checkUpdatesManually();
+                    if (v == "token") _updateTokenDialog();
+                    if (v == "help") _showHelp();
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(
+                      value: "refresh",
+                      child: ListTile(
+                          leading: Icon(Icons.refresh, size: 18),
+                          title: Text("Lista frissítése"),
+                          dense: true),
+                    ),
+                    PopupMenuItem(
+                      value: "health",
+                      child: ListTile(
+                          leading:
+                              Icon(Icons.health_and_safety_outlined, size: 18),
+                          title: Text("Rendszer-ellenőrzés"),
+                          dense: true),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
                       value: "export",
                       child: ListTile(
-                        leading: Icon(Icons.download, size: 18),
-                        title: Text("Könyvtár mentése (zip)"),
-                        dense: true,
-                      ),
+                          leading: Icon(Icons.download, size: 18),
+                          title: Text("Könyvtár mentése (zip)"),
+                          dense: true),
                     ),
                     PopupMenuItem(
                       value: "import",
                       child: ListTile(
-                        leading: Icon(Icons.upload, size: 18),
-                        title: Text("Könyvtár visszaállítása"),
-                        dense: true,
-                      ),
+                          leading: Icon(Icons.upload, size: 18),
+                          title: Text("Könyvtár visszaállítása"),
+                          dense: true),
                     ),
-                  ],
-                ),
-                IconButton(
-                  onPressed: _showHelp,
-                  icon: const Icon(Icons.help_outline, color: AppColors.textSecondary),
-                  tooltip: "Első lépések / súgó",
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.system_update_alt,
-                      color: AppColors.textSecondary),
-                  tooltip: "Programfrissítés",
-                  color: AppColors.surface,
-                  onSelected: (v) {
-                    if (v == "check") _checkUpdatesManually();
-                    if (v == "token") _updateTokenDialog();
-                  },
-                  itemBuilder: (_) => const [
+                    PopupMenuDivider(),
                     PopupMenuItem(
-                      value: "check",
+                      value: "update",
                       child: ListTile(
-                        leading: Icon(Icons.system_update_alt, size: 18),
-                        title: Text("Frissítés keresése"),
-                        dense: true,
-                      ),
+                          leading: Icon(Icons.system_update_alt, size: 18),
+                          title: Text("Frissítés keresése"),
+                          dense: true),
                     ),
                     PopupMenuItem(
                       value: "token",
                       child: ListTile(
-                        leading: Icon(Icons.key, size: 18),
-                        title: Text("Frissítési kulcs (privát repóhoz)"),
-                        dense: true,
-                      ),
+                          leading: Icon(Icons.key, size: 18),
+                          title: Text("Frissítési kulcs (privát repóhoz)"),
+                          dense: true),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: "help",
+                      child: ListTile(
+                          leading: Icon(Icons.help_outline, size: 18),
+                          title: Text("Első lépések / súgó"),
+                          dense: true),
                     ),
                   ],
-                ),
-                IconButton(
-                  onPressed: _load,
-                  icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
-                  tooltip: "Lista frissítése",
-                ),
-                // Telepítés-diagnosztika: csomagok, modell, írási jog,
-                // tárhely, kodek — pilot-gépeken az első ellenőrzés.
-                IconButton(
-                  onPressed: _healthCheck,
-                  icon: const Icon(Icons.health_and_safety_outlined,
-                      color: AppColors.textSecondary),
-                  tooltip: "Rendszer-ellenőrzés",
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.more_horiz,
+                          size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Text("Továbbiak",
+                          style: AppText.label.copyWith(fontSize: 12)),
+                    ]),
+                  ),
                 ),
               ],
             ),
@@ -2145,6 +2116,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Egymás ellen riport: két csapat kiválasztása, letöltés, mentés.
+  /// A könyvtárban szereplő csapatnevek (egyediek, betűrendben).
+  List<String> _teamNames() {
+    final teams = <String>{
+      for (final m in _matches) ...[
+        if (m["home_team"] != null) m["home_team"] as String,
+        if (m["away_team"] != null) m["away_team"] as String,
+      ]
+    }.toList()
+      ..sort();
+    return teams;
+  }
+
+  /// Feliratos eszköz-gomb. Ikon MELLETT névvel: nyolc egyforma szürke
+  /// ikonból nem derül ki, melyik mit csinál.
+  Widget _toolButton(IconData icon, String label, VoidCallback onTap) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.textSecondary,
+        side: const BorderSide(color: AppColors.border),
+        visualDensity: VisualDensity.compact,
+      ),
+      icon: Icon(icon, size: 16),
+      label: Text(label, style: AppText.label.copyWith(fontSize: 12)),
+    );
+  }
+
+  void _openPlayerTrend() {
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => PlayerTrendScreen(teams: _teamNames())));
+  }
+
+  /// Szezon-riport: előbb csapatot választunk, aztán mentünk. (Korábban
+  /// ez egy név nélküli ikon mögötti legördülő volt.)
+  Future<void> _pickTeamForSeasonReport() async {
+    final teams = _teamNames();
+    if (teams.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Még nincs elemzett meccs a könyvtárban.")));
+      return;
+    }
+    final team = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Melyik csapat szezon-riportja?",
+            style: AppText.value.copyWith(fontSize: 15)),
+        children: [
+          for (final t in teams)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(t),
+              child: Text(t, style: AppText.value.copyWith(fontSize: 13)),
+            ),
+        ],
+      ),
+    );
+    if (team != null) await _saveSeasonReport(team);
+  }
+
   Future<void> _saveHeadToHead() async {
     final teams = <String>{
       for (final m in _matches) ...[

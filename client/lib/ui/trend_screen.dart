@@ -81,6 +81,7 @@ class _TrendScreenState extends State<TrendScreen> {
     return Row(children: [
       IconButton(
         onPressed: () => Navigator.of(context).maybePop(),
+        tooltip: "Vissza",
         icon: const Icon(Icons.arrow_back, color: AppColors.textSecondary),
       ),
       const SizedBox(width: 4),

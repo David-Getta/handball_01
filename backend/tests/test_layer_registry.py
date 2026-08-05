@@ -558,3 +558,31 @@ def test_kliens_mutato_csoportok_lefedik_a_csempeket():
     assert not orphans, (
         "ezek a csempék az \"Egyéb\" csoportba esnének (bővítsd a "
         f"_metricGroups kulcsszavait vagy pontosítsd a címkét): {orphans}")
+
+
+def test_kliens_ikongombok_kapnak_sugobuborekot():
+    """Minden csak-ikonos gombnak legyen tooltipje.
+
+    Egy név nélküli ikonról a felhasználó nem tudja kitalálni, mit
+    csinál — a kezdőlapon nyolc egyforma szürke ikon sorakozott, és
+    három gombnak még súgóbuboréka sem volt. A tooltip a minimum:
+    rámutatásra megmondja, mi ez.
+    """
+    import re
+    root = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui")
+    if not root.exists():
+        pytest.skip("nincs kliens a fában")
+    offenders = []
+    for path in sorted(root.rglob("*.dart")):
+        src = path.read_text(encoding="utf-8")
+        # Durva, de elég: egy IconButton(...) blokk a kiegyensúlyozott
+        # zárójelig (egy szint beágyazott zárójelet kezel).
+        for m in re.finditer(r"IconButton\((?:[^()]|\([^()]*\))*\)", src,
+                             flags=re.S):
+            if "tooltip:" not in m.group(0):
+                line = src[:m.start()].count("\n") + 1
+                offenders.append(f"{path.name}:{line}")
+    assert not offenders, (
+        "tooltip nélküli ikongombok (a felhasználó nem tudja, mit "
+        f"csinálnak): {offenders}")

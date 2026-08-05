@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Kezdőlap: nyolc néma ikon helyett nevesített műveletek.** A
+  fejlécben nyolc egyforma szürke ikon sorakozott (játékos-fejlődés,
+  egymás ellen, szezon-riport, könyvtár, súgó, frissítés, újratöltés,
+  rendszer-ellenőrzés) — melyik mit csinál, csak rámutatásra derült ki.
+  Mostantól a három ELEMZŐ művelet felirattal látszik
+  ("Játékos-fejlődés", "Egymás ellen", "Szezon-riport"), a karbantartás
+  pedig egyetlen **"Továbbiak"** menübe került, olvasható tételekkel.
+  A szezon-riport csapat-választása ikon mögötti legördülőből rendes
+  párbeszédablak lett (üres könyvtárnál kimondja, hogy még nincs
+  elemzett meccs).
+- **Minden csak-ikonos gomb kapott súgóbuborékot.** Négy gombnak
+  (meccs újratöltése, lejátszás/szünet a meccs- és élő nézetben,
+  vissza a felderítésből és a fejlődés-nézetből) egyáltalán nem volt —
+  ott a felhasználónak esélye sem volt kitalálni, mit csinál. **Új
+  őr-teszt** végigmegy a kliens minden Dart-fájlján, és elbukik, ha
+  tooltip nélküli `IconButton` kerül be.
+
 - **Edzői összefoglaló: mondatokra bontva, felsorolásként.** A
   "Játékkép és tempó" szakasz a rétegekkel **4357 karakteres, 43
   mondatos EGYETLEN bekezdéssé** nőtt — minden új réteg egy mondatot

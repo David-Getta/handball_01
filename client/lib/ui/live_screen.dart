@@ -660,6 +660,7 @@ class _LiveScreenState extends State<LiveScreen> {
           iconSize: 40,
           color: AppColors.accent,
           onPressed: _togglePlay,
+          tooltip: _playing ? "Szünet" : "Lejátszás",
           icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_fill),
         ),
         // Újraindítás az elejéről (a folyam is tisztul).

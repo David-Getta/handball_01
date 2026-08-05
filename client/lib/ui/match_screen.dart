@@ -1465,7 +1465,11 @@ class _MatchScreenState extends State<MatchScreen> {
           icon: const Icon(Icons.table_chart_outlined, color: AppColors.textSecondary),
           tooltip: "Statisztika mentése (Excel/CSV)",
         ),
-        IconButton(onPressed: _load, icon: const Icon(Icons.refresh, color: AppColors.textSecondary)),
+        IconButton(
+              onPressed: _load,
+              tooltip: "Meccs újratöltése",
+              icon: const Icon(Icons.refresh,
+                  color: AppColors.textSecondary)),
       ],
     );
   }
@@ -2444,6 +2448,7 @@ class _MatchScreenState extends State<MatchScreen> {
           iconSize: 38,
           color: AppColors.accent,
           onPressed: _togglePlay,
+          tooltip: _playing ? "Szünet (szóköz)" : "Lejátszás (szóköz)",
           icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_fill),
         ),
         // Előző/következő esemény — a szűrt listán belül ugrál (pl. csak gólok).
