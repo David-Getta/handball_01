@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A jelentések papíron is rendesen tördelődnek.** Hét generált
+  jelentésből **ötben egyáltalán nem volt nyomtatási stílus** — azok a
+  képernyős margókkal, tetszőleges tördeléssel kerültek papírra: a
+  szakasz-cím árván maradt az oldal alján, a táblázat kettévágódott, a
+  belső hivatkozás pedig kék aláhúzott linkként éktelenkedett. Mostantól
+  minden jelentés ugyanazt a nyomtatási szabálykészletet kapja (cím a
+  szakaszával együtt marad, táblázat/sor/csempe/ábra nem törik ketté,
+  a horgony-linkek papíron feketék), a modern `break-*` és a régebbi
+  `page-break-*` jelöléssel is — a felhasználó böngészőjét nem
+  ismerjük. A két jelentés saját, hiányos nyomtatási blokkja megszűnt:
+  egy hely, egy szabálykészlet.
+
 - **Tartalomjegyzék a nyomtatható jelentésekben.** A meccsjelentés
   huszonöt-ötven szakaszig is elmegy, és papíron nincs keresés: az edző
   lapozgat, amíg megtalálja a "Hétméteresek" részt. Mostantól minden

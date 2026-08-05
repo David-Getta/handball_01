@@ -1,8 +1,12 @@
-"""A nyomtatható jelentések tartalomjegyzékének (with_toc) tesztjei.
+"""A nyomtatható jelentések utolsó simításainak tesztjei.
 
-A meccsjelentés huszonöt-ötven szakaszig is elmegy, és papíron nincs
-keresés: az edző lapozgat, amíg megtalálja a "Hétméteresek" részt. A
-jegyzék ezért a fejléc alá kerül, sorszámozva.
+Tartalomjegyzék (`with_toc`): a meccsjelentés huszonöt-ötven szakaszig
+is elmegy, és papíron nincs keresés — az edző lapozgat, amíg megtalálja
+a "Hétméteresek" részt. A jegyzék ezért a fejléc alá kerül, sorszámozva.
+
+Nyomtatási stílus (`with_print_css`): a böngésző alapértelmezett
+tördelése a jelentés szerkezetéről semmit nem tud — árván hagyja a
+szakasz-címet az oldal alján, és kettévágja a táblázatot.
 """
 from __future__ import annotations
 
@@ -12,7 +16,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from handball.pipeline.report_html import (TOC_MIN_SECTIONS,
-                                           TOC_TWO_COLUMNS_FROM, with_toc)
+                                           TOC_TWO_COLUMNS_FROM,
+                                           finish_report, with_print_css,
+                                           with_toc)
 
 
 def _doc(titles: list[str], header: bool = True) -> str:
@@ -123,3 +129,64 @@ def test_valos_felderito_jelentesben_minden_link_celba_er():
     assert links, "az éles jelentésben van jegyzék"
     assert set(links) == set(ids), (set(links) ^ set(ids))
     assert len(ids) == len(set(ids)), "a horgonyok egyediek"
+
+
+# --- Nyomtatási stílus -------------------------------------------------
+
+def test_nyomtatasi_stilus_bekerul():
+    """A közös nyomtatási szabályok a stíluslap VÉGÉRE kerülnek.
+
+    A jelentés papíron él tovább (az edző kinyomtatja és beviszi az
+    öltözőbe), a böngésző alapértelmezett tördelése viszont a jelentés
+    szerkezetéről semmit nem tud.
+    """
+    out = with_print_css(_doc(["A"]))
+    assert "@media print" in out
+    for rule in ["break-after: avoid",      # árva szakasz-cím
+                 "break-inside: avoid",     # kettévágott táblázat
+                 'a[href^="#"]']:           # papíron ne látszódjon linknek
+        assert rule in out, rule
+    # A stíluslap végére: a jelentés saját szabályait felülírhatja.
+    assert out.index("@media print") < out.index("</style>")
+
+
+def test_regi_bongeszo_jelolese_is_kikerul():
+    """A `break-*` mellett a régebbi `page-break-*` is — a felhasználó
+    böngészőjét nem ismerjük."""
+    out = with_print_css(_doc(["A"]))
+    assert "page-break-after: avoid" in out
+    assert "page-break-inside: avoid" in out
+
+
+def test_nyomtatasi_stilus_nem_duplazodik():
+    """Kétszeri futtatás nem fűzi be újra ugyanazt a blokkot."""
+    once = with_print_css(_doc(["A"]))
+    assert with_print_css(once) == once
+
+
+def test_stiluslap_nelkul_valtozatlan():
+    """Nincs hova beszúrni → hozzá se nyúlunk."""
+    src = "<html><body><h2>A</h2></body></html>"
+    assert with_print_css(src) == src
+
+
+def test_finish_report_mindkettot_elvegzi():
+    """A generátorok egyetlen hívása: jegyzék ÉS nyomtatási stílus."""
+    out = finish_report(_doc([f"Cím {i}" for i in range(TOC_MIN_SECTIONS)]))
+    assert '<nav class="toc' in out
+    assert "@media print" in out
+
+
+def test_minden_jelentesben_van_nyomtatasi_stilus():
+    """Mind a hét generátor átmegy a `finish_report`-on.
+
+    Hét jelentésből ötben eredetileg EGYÁLTALÁN nem volt `@media print`
+    blokk — azok a képernyős margókkal kerültek papírra. Ez a teszt a
+    forrásban rögzíti, hogy egyik se maradjon ki.
+    """
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "handball" / "pipeline" / "report_html.py").read_text("utf-8")
+    docs = src.count('f"""<!DOCTYPE html>')
+    finished = src.count('return finish_report(f"""<!DOCTYPE html>')
+    assert docs == finished == 7, (docs, finished)

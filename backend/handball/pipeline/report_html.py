@@ -42,6 +42,54 @@ _TOC_CSS = """
   @media print { nav.toc { break-inside: avoid; } }
 """
 
+# Közös nyomtatási stílus MINDEN generált jelentéshez.
+#
+# A jelentés papíron él tovább: az edző kinyomtatja és beviszi az
+# öltözőbe. A böngésző alapértelmezett tördelése viszont a jelentés
+# szerkezetéről semmit nem tud — árván hagyja a szakasz-címet az oldal
+# alján, kettévágja a táblázatot és a mérőszám-csempét, a horgony-linket
+# pedig kékre és aláhúzottra festi, ami papíron csak zaj.
+#
+# A `break-*` a modern szabály, a `page-break-*` a régebbi böngészőké:
+# mindkettőt kiírjuk, mert a felhasználó böngészőjét nem ismerjük.
+_PRINT_CSS = """
+  @media print {
+    .page { padding: 0; max-width: none; }
+    /* A szakasz-cím ne maradjon árván az oldal alján. */
+    h2 { break-after: avoid; page-break-after: avoid; }
+    /* Ami egyben olvasható, azt ne vágjuk ketté. */
+    table, tr, .bar-row, .metric, .keys, figure, svg {
+      break-inside: avoid; page-break-inside: avoid;
+    }
+    footer { break-inside: avoid; page-break-inside: avoid; }
+    /* A belső horgonyok papíron ne látszódjanak linknek. */
+    a[href^="#"] { color: inherit; text-decoration: none; }
+  }
+"""
+
+
+def with_print_css(html: str) -> str:
+    """A közös nyomtatási stílus beszúrása egy kész jelentés-HTML-be.
+
+    A jelentések saját stíluslappal épülnek, és hét generátorból ötben
+    egyáltalán NEM volt `@media print` blokk — azok a képernyős
+    margókkal és tetszőleges tördeléssel kerültek papírra. Ez a
+    függvény a meglévő stíluslap végére fűzi a közös szabályokat (a
+    később jövő szabály nyer, tehát a jelentés saját beállításait
+    felülírja, ha ütköznek).
+
+    Ha nincs stíluslap, VÁLTOZATLANUL adjuk vissza.
+    """
+    if "</style>" not in html or _PRINT_CSS in html:
+        return html
+    return html.replace("</style>", _PRINT_CSS + "</style>", 1)
+
+
+def finish_report(html: str) -> str:
+    """Egy kész jelentés-HTML utolsó simításai: tartalomjegyzék és
+    nyomtatási stílus. A generátorok ezt hívják a visszatérésükre."""
+    return with_print_css(with_toc(html))
+
 
 def _section_id(index: int) -> str:
     """A szekció horgonya. Sorszám alapú: a magyar ékezetes címekből
@@ -393,7 +441,7 @@ def scouting_report_html(rep: ScoutingReport,
                                     f"{rep.empty_net_s:.0f} s"))
     metrics = "".join(metric_items)
 
-    return with_toc(f"""<!DOCTYPE html>
+    return finish_report(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -434,10 +482,6 @@ def scouting_report_html(rep: ScoutingReport,
   .num {{ text-align: right; }}
   footer {{ margin-top: 34px; padding-top: 12px; border-top: 1px solid #e4e9f0;
             color: #8492A6; font-size: 11px; display: flex; justify-content: space-between; }}
-  @media print {{
-    .page {{ padding: 0; max-width: none; }}
-    .keys {{ break-inside: avoid; }}
-  }}
 </style>
 </head>
 <body>
@@ -2610,7 +2654,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                   + _metric("Mért játékos/kocka", measured)
                   + "</div>" + w_html)
 
-    return with_toc(f"""<!DOCTYPE html>
+    return finish_report(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -2648,7 +2692,6 @@ def _match_report_html_cached(match, tactics: dict, events: list,
   .num {{ text-align: right; }}
   footer {{ margin-top: 34px; padding-top: 12px; border-top: 1px solid #e4e9f0;
             color: #8492A6; font-size: 11px; display: flex; justify-content: space-between; }}
-  @media print {{ .page {{ padding: 0; max-width: none; }} }}
 </style>
 </head>
 <body>
@@ -3165,7 +3208,7 @@ def player_report_html(match, track_id: int) -> str:
         sub += f" · becsült poszt: {poszt}"
     gk_html = (f'<h2>Kapus-mérleg</h2><div class="metrics">'
                f'{"".join(gk_items)}</div>' if gk_items else "")
-    return with_toc(f"""<!DOCTYPE html>
+    return finish_report(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3247,7 +3290,7 @@ def trend_report_html(tr: dict) -> str:
     table = _trend_metrics_table(tr)
     summary = "".join(f"<li>{escape(s_)}</li>"
                       for s_ in tr.get("summary", []))
-    return with_toc(f"""<!DOCTYPE html>
+    return finish_report(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3400,7 +3443,7 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
              '<th class="num">Táv</th><th class="num">Sprint</th></tr>'
              + "".join(rows) + "</table>")
 
-    return with_toc(f"""<!DOCTYPE html>
+    return finish_report(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3536,7 +3579,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             for f_ in focuses)
         focus_html = ("<h2>Visszatérő edzés-fókuszok</h2><ul>"
                       + items + "</ul>")
-    return with_toc(f"""<!DOCTYPE html>
+    return finish_report(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3622,7 +3665,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
             f"<h2>Meccsterv a visszavágóra ({escape(team_a)} "
             "szemszögéből, a legutóbbi meccs profiljából)</h2>"
             "<ul>" + items + "</ul>")
-    return with_toc(f"""<!DOCTYPE html>
+    return finish_report(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
