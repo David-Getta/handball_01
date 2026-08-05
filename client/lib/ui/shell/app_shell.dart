@@ -59,6 +59,83 @@ void navTo(BuildContext context, NavId id) {
       MaterialPageRoute(builder: (_) => page));
 }
 
+/// A gyorsbillentyűk EGY helyen — a súgó minden képernyőről nyílik
+/// (felső sáv billentyű-ikonja, illetve ? vagy F1).
+///
+/// Miért itt: eddig csak a meccs-elemzőben létezett egy lista, és az
+/// app-szintű navigációs billentyűket nem is említette. Két külön lista
+/// előbb-utóbb széttart; ez a közös.
+const List<(String, List<(String, String)>)> kShortcutGroups = [
+  ("Bárhol", [
+    ("Cmd/Ctrl + 1..7", "váltás a menü elemei közt (a menü sorrendjében)"),
+    ("? vagy F1", "ez a súgó"),
+  ]),
+  ("Meccs-elemzőben", [
+    ("Szóköz", "lejátszás / szünet"),
+    ("← / →", "1 képkocka vissza / előre"),
+    ("Shift + ← / →", "5 másodperc vissza / előre"),
+    ("Q / E  vagy  ↑ / ↓",
+     "előző / következő ugrópont az aktív szűrő szerint"),
+  ]),
+];
+
+/// A gyorsbillentyű-súgó megnyitása (bárhonnan).
+void showShortcutHelp(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppColors.surface,
+      title: const Text("Gyorsbillentyűk"),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (group, rows) in kShortcutGroups) ...[
+              Padding(
+                padding: const EdgeInsets.only(
+                    top: AppSpacing.sm, bottom: 4),
+                child: Text(group.toUpperCase(),
+                    style: AppText.sectionLabel),
+              ),
+              for (final (key, what) in rows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    Container(
+                      width: 150,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.borderStrong),
+                      ),
+                      child: Text(key,
+                          style: AppText.value.copyWith(fontSize: 12)),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                        child: Text(what,
+                            style: AppText.label.copyWith(
+                                fontSize: 12.5,
+                                color: AppColors.textPrimary))),
+                  ]),
+                ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Bezárás")),
+      ],
+    ),
+  );
+}
+
 /// A shell keret: felső sáv + sidebar + tartalom.
 class AppShell extends StatelessWidget {
   final NavId active;
@@ -97,6 +174,11 @@ class AppShell extends StatelessWidget {
       bindings[SingleActivator(digits[i], meta: true)] = go;    // macOS
       bindings[SingleActivator(digits[i], control: true)] = go; // Win/Linux
     }
+    // A súgó mindenhonnan elérhető, ne csak a meccs-elemzőből.
+    void help() => showShortcutHelp(context);
+    bindings[const SingleActivator(LogicalKeyboardKey.f1)] = help;
+    bindings[const SingleActivator(LogicalKeyboardKey.slash, shift: true)] =
+        help;
     return Scaffold(
       body: SafeArea(
         child: CallbackShortcuts(
@@ -181,9 +263,14 @@ class _TopBar extends StatelessWidget {
                 color: AppColors.textSecondary)),
           ],
           const Spacer(),
-          Tooltip(
-            message: "Gyors váltás: Cmd/Ctrl + 1..7",
-            child: Icon(Icons.keyboard_outlined, size: 16,
+          // Eddig ez csak egy tooltipes ikon volt — kattintani lehetett
+          // rajta, csak nem történt semmi. Most megnyitja a súgót.
+          IconButton(
+            onPressed: () => showShortcutHelp(context),
+            tooltip: "Gyorsbillentyűk (? vagy F1)",
+            iconSize: 16,
+            splashRadius: 16,
+            icon: const Icon(Icons.keyboard_outlined,
                 color: AppColors.textFaint),
           ),
         ],

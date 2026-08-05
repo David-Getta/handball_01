@@ -510,61 +510,10 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
-  /// Gyorsbillentyű-súgó: az összes lejátszó-billentyű egy lapon —
-  /// ?-re (Shift+/) vagy F1-re nyílik.
-  void _showShortcutHelp() {
-    const rows = [
-      ("Szóköz", "lejátszás / szünet"),
-      ("← / →", "1 képkocka vissza / előre"),
-      ("Shift + ← / →", "5 másodperc vissza / előre"),
-      ("Q / E  vagy  ↑ / ↓",
-       "előző / következő ugrópont az aktív szűrő szerint"),
-      ("? vagy F1", "ez a súgó"),
-    ];
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text("Gyorsbillentyűk"),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final (key, what) in rows)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: AppColors.borderStrong),
-                      ),
-                      child: Text(key,
-                          style: AppText.value.copyWith(fontSize: 12)),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                        child: Text(what,
-                            style: AppText.label.copyWith(
-                                fontSize: 12.5,
-                                color: AppColors.textPrimary))),
-                  ]),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Bezárás")),
-        ],
-      ),
-    );
-  }
+  /// Gyorsbillentyű-súgó. A listát a shell tartja (kShortcutGroups) —
+  /// két külön lista előbb-utóbb széttartana, és a meccs-elemzős
+  /// változat az app-szintű navigációs billentyűket nem is említette.
+  void _showShortcutHelp() => showShortcutHelp(context);
 
   /// Események-panel: a felismert passzok/lövések/gólok/labdaeladások listája.
   /// Egy elemre kattintva a lejátszó az esemény képkockájára ugrik.

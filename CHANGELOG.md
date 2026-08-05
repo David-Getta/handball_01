@@ -5,7 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
-*(még nincs benne semmi)*
+- **Gyorsbillentyű-súgó mindenhonnan, egy listából.** Eddig csak a
+  meccs-elemzőben létezett súgó (rejtett `?`/F1 gombra), és az
+  app-szintű navigációs billentyűket (Cmd/Ctrl + 1..7) nem is
+  említette — a felső sáv billentyű-ikonja pedig **kattintható
+  látszatot keltett, de nem csinált semmit**. Mostantól a súgó a
+  shellben él, két szekcióval ("Bárhol" · "Meccs-elemzőben"), a
+  felső sáv ikonja megnyitja, és a `?`/F1 az egész alkalmazásban
+  működik. A meccs-elemző ugyanezt a listát hívja — két külön lista
+  előbb-utóbb széttartott volna.
 
 ## v0.1.24 — kiadva (2026-08-05)
 
