@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A demó góljainak van lövőjük.** A demó meccs gól-epizódjaiban a
+  labda a semmiből indult a kapu felé — elengedés-pillanat nélkül. A
+  javított lövő-felismerés ezért a demóban a négy gólból kettőnél nem
+  talált lövőt, és a játékos-bontású lövés-rétegek üresen maradtak
+  volna: aki először nyitja meg a programot, épp azokat a rétegeket
+  nem látta volna működni. Mostantól minden demó-gólnak KIJELÖLT lövője
+  van (a hazai mezőnyjátékosok közül, a hármas sorozatban más-más
+  emberrel), aki a lövés idejére a 9 méteres vonalra áll, kezében a
+  labdával.
+
 - **Poszt-lövéserő: melyik posztra készüljön a kapus.** Új elemző
   réteg. A lövő-erő eddig NÉVRE mondta meg, ki a bombázó — ez posztra
   mondja. A név meccsről meccsre cserélődhet (sérülés, csere, más

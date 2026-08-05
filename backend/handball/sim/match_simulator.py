@@ -244,15 +244,39 @@ def append_demo_episodes(match: Match) -> None:
                                   ball=ball))
         t += 1
 
-    def goal_to_plus_x():
-        for i in range(7):
-            emit(Ball(x=min(40.0, 34.0 + i), y=10.0, confidence=1.0))
+    # A demó góljainak KIJELÖLT lövője van: egy hazai mezőnyjátékos, aki
+    # a lövés idejére a 9 m-es vonalra áll. Elengedés-fázis nélkül a
+    # lövő-felismerés (amely az elengedés pillanatát keresi, lásd
+    # `event_detection._shooter_before`) nem találna lövőt, és a demóban
+    # üresen maradnának a játékos-bontású lövés-rétegek.
+    _shooters = [p for p in base.players
+                 if p.team == Team.HOME and p.role != "kapus"]
+
+    def goal_to_plus_x(idx: int = 0):
+        shooter = (_shooters[idx % len(_shooters)] if _shooters else None)
+        who = ([PlayerPosition(track_id=shooter.track_id, team=Team.HOME,
+                               x=31.0, y=10.0,
+                               source=PositionSource.MEASURED,
+                               confidence=1.0,
+                               jersey_number=shooter.jersey_number,
+                               role=shooter.role)]
+               if shooter is not None else None)
+        if shooter is not None:
+            gone.add(shooter.track_id)   # a klón helyett a lövő-példány
+        for _ in range(5):               # a labda a lövő kezében
+            emit(Ball(x=31.3, y=10.0, confidence=1.0), extra=who)
+        for i in range(9):               # elengedés → gól a +x kapuba
+            emit(Ball(x=min(40.0, 31.3 + 1.1 * (i + 1)), y=10.0,
+                      confidence=1.0), extra=who)
+        if shooter is not None:
+            gone.discard(shooter.track_id)
         for _ in range(50):  # visszaállás (debounce a következő gólig)
             emit(Ball(x=20.0, y=10.0, confidence=1.0))
 
-    # 1) Hazai 3 gólos sorozat.
-    for _ in range(3):
-        goal_to_plus_x()
+    # 1) Hazai 3 gólos sorozat (más-más lövővel, hogy a
+    #    játékos-bontású rétegeknek legyen mit szétválasztaniuk).
+    for i in range(3):
+        goal_to_plus_x(i)
 
     # 2) Hétméteres: álló labda a 7 m-es ponton, majd értékesítés.
     for _ in range(30):
