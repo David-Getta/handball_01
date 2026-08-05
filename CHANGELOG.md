@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Tartalomjegyzék a nyomtatható jelentésekben.** A meccsjelentés
+  huszonöt-ötven szakaszig is elmegy, és papíron nincs keresés: az edző
+  lapozgat, amíg megtalálja a "Hétméteresek" részt. Mostantól minden
+  generált jelentés (felderítés, meccs, játékos, fejlődés, szezon,
+  egymás elleni, játékos-szezon) a fejléc alatt sorszámozott
+  tartalomjegyzéket kap, a szakaszokra mutató horgonyokkal — képernyőn
+  kattintható, papíron a sorszám mondja meg, hányadik szakaszt keresse.
+  Tizenkét szakasztól két hasábban. Négy szakasz alatt nincs jegyzék (a
+  navigáció ilyenkor csak helyet venne el), és ha nincs hova beszúrni,
+  a jelentés VÁLTOZATLAN marad — a jegyzék sose ronthat el egy
+  jelentést.
+
 - **A mutató-csempék végre olvashatók.** A csempék "értéke" nem szám: a
   283 csempe-mutató 371 lehetséges szövegéből **369 hosszabb 12
   karakternél** — jellemzően egész mondat ("62% elöl · területi

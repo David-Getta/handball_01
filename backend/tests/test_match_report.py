@@ -42,8 +42,12 @@ def test_report_includes_heatmaps_when_given():
     assert "Területi lefedettség" in html
     # Mindkét csapat hőtérképe megvan (más szakaszok — pl. tempó-grafikon —
     # további SVG-ket adhatnak, ezért a hőtérkép-szakaszon belül számolunk).
-    hm_section = html.split("Területi lefedettség")[1]
-    assert hm_section.count("<svg") == 2
+    # A cím a tartalomjegyzékben IS szerepel, ezért magára a <h2>-re
+    # vágunk, nem a puszta szövegre.
+    import re
+    parts = re.split(r"<h2[^>]*>Területi lefedettség[^<]*</h2>", html)
+    assert len(parts) == 2, "pontosan egy hőtérkép-szakasz van"
+    assert parts[1].count("<svg") == 2
 
 
 def test_report_includes_player_load_when_given():

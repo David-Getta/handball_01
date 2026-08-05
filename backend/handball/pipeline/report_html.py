@@ -12,9 +12,83 @@ Tiszta stdlib (html.escape), függőség nélkül → egyszerűen tesztelhető.
 
 from __future__ import annotations
 
+import re
 from html import escape
 
 from .scouting import ScoutingReport
+
+# Ennyi szekció alatt nincs tartalomjegyzék: két-három címhez nem kell
+# navigáció, a jegyzék csak elveszi a helyet az első oldalról.
+TOC_MIN_SECTIONS = 4
+
+# Ennyi szekciónál a jegyzék két hasábra tördelődik (különben egy
+# ötven soros lista magában kitölt egy A4-et).
+TOC_TWO_COLUMNS_FROM = 12
+
+_H2 = re.compile(r"<h2(?P<attrs>[^>]*)>(?P<title>.*?)</h2>", re.S)
+_TAGS = re.compile(r"<[^>]+>")
+
+_TOC_CSS = """
+  nav.toc { border: 1px solid #e4e9f0; border-radius: 10px; padding: 12px 16px;
+            margin: 0 0 22px; background: #fafcfe; }
+  nav.toc .toc-title { font-size: 11px; letter-spacing: .18em;
+                       text-transform: uppercase; color: #4A5768;
+                       margin-bottom: 8px; }
+  nav.toc ol { margin: 0; padding-left: 20px; }
+  nav.toc li { font-size: 12.5px; margin: 2px 0; }
+  nav.toc a { color: #101722; text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  nav.toc.two-col ol { columns: 2; column-gap: 26px; }
+  @media print { nav.toc { break-inside: avoid; } }
+"""
+
+
+def _section_id(index: int) -> str:
+    """A szekció horgonya. Sorszám alapú: a magyar ékezetes címekből
+    képzett azonosító törékeny lenne (ütközés, kódolás)."""
+    return f"sz{index}"
+
+
+def with_toc(html: str, min_sections: int = TOC_MIN_SECTIONS) -> str:
+    """Tartalomjegyzék beszúrása egy kész jelentés-HTML-be.
+
+    A nyomtatható jelentések ötven szekcióig is elmennek (meccsjelentés),
+    és papíron nincs keresés: az edző lapozgat, amíg megtalálja a
+    "Hétméteresek" részt. A jegyzék a fejléc alá kerül, sorszámozva, a
+    szekciókra mutató horgonyokkal — képernyőn kattintható, papíron a
+    sorszám mondja meg, hányadik szakaszt keresse.
+
+    A HTML-t szövegként kezeljük (a jelentések f-stringből épülnek, nincs
+    parser-függőség). Ha kevés a szekció, vagy nincs hova beszúrni,
+    VÁLTOZATLANUL adjuk vissza — a jegyzék sose ronthatja el a jelentést.
+    """
+    titles: list[str] = []
+
+    def _mark(m: re.Match) -> str:
+        # A már azonosítóval bíró címeket nem írjuk felül (kétszeri
+        # futtatás így nem duplázza a horgonyokat).
+        if "id=" in m.group("attrs"):
+            return m.group(0)
+        titles.append(_TAGS.sub("", m.group("title")).strip())
+        return (f'<h2{m.group("attrs")} id="{_section_id(len(titles))}">'
+                f'{m.group("title")}</h2>')
+
+    marked = _H2.sub(_mark, html)
+    if len(titles) < min_sections:
+        return html
+
+    items = "".join(
+        f'<li><a href="#{_section_id(i)}">{t}</a></li>'
+        for i, t in enumerate(titles, 1))
+    two = " two-col" if len(titles) >= TOC_TWO_COLUMNS_FROM else ""
+    nav = (f'<nav class="toc{two}"><div class="toc-title">Tartalom '
+           f'({len(titles)} szakasz)</div><ol>{items}</ol></nav>')
+
+    if "</style>" in marked:
+        marked = marked.replace("</style>", _TOC_CSS + "</style>", 1)
+    if "</header>" in marked:
+        return marked.replace("</header>", "</header>\n  " + nav, 1)
+    return html  # nincs fejléc — inkább ne nyúljunk hozzá
 
 
 def _rows(items: list, empty: str) -> str:
@@ -319,7 +393,7 @@ def scouting_report_html(rep: ScoutingReport,
                                     f"{rep.empty_net_s:.0f} s"))
     metrics = "".join(metric_items)
 
-    return f"""<!DOCTYPE html>
+    return with_toc(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -426,7 +500,7 @@ def scouting_report_html(rep: ScoutingReport,
 </div>
 </body>
 </html>
-"""
+""")
 
 
 # ---------------------------------------------------------------------------
@@ -2536,7 +2610,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                   + _metric("Mért játékos/kocka", measured)
                   + "</div>" + w_html)
 
-    return f"""<!DOCTYPE html>
+    return with_toc(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -2650,7 +2724,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
 </div>
 </body>
 </html>
-"""
+""")
 
 
 def player_report_html(match, track_id: int) -> str:
@@ -3091,7 +3165,7 @@ def player_report_html(match, track_id: int) -> str:
         sub += f" · becsült poszt: {poszt}"
     gk_html = (f'<h2>Kapus-mérleg</h2><div class="metrics">'
                f'{"".join(gk_items)}</div>' if gk_items else "")
-    return f"""<!DOCTYPE html>
+    return with_toc(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3136,7 +3210,7 @@ def player_report_html(match, track_id: int) -> str:
 <footer>A számok a pálya-koordinátás követésből és a magyarázható
 elemzési rétegekből jönnek — azonos küszöbökkel, mint a
 meccsjelentésben.</footer>
-</div></body></html>"""
+</div></body></html>""")
 
 
 def _trend_metrics_table(tr: dict) -> str:
@@ -3173,7 +3247,7 @@ def trend_report_html(tr: dict) -> str:
     table = _trend_metrics_table(tr)
     summary = "".join(f"<li>{escape(s_)}</li>"
                       for s_ in tr.get("summary", []))
-    return f"""<!DOCTYPE html>
+    return with_toc(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3219,7 +3293,7 @@ def trend_report_html(tr: dict) -> str:
 <footer>▲ javulás · ▼ romlás · – semleges irányú mutató. A nem mért
 időszakok mutatói kimaradnak, hogy ne látsszanak hamis változásnak.
 </footer>
-</div></body></html>"""
+</div></body></html>""")
 
 
 def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
@@ -3326,7 +3400,7 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
              '<th class="num">Táv</th><th class="num">Sprint</th></tr>'
              + "".join(rows) + "</table>")
 
-    return f"""<!DOCTYPE html>
+    return with_toc(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3370,7 +3444,7 @@ def player_season_html(team: str, jersey: int, points: list[dict]) -> str:
 <footer>A mezszám-hozzárendelés utáni track-csoportok összegzett
 számai; a "—" azt jelzi, az adott meccsen nem volt mérhető adat.
 </footer>
-</div></body></html>"""
+</div></body></html>""")
 
 
 def season_report_html(team: str, tr: dict, focuses: list[dict],
@@ -3462,7 +3536,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
             for f_ in focuses)
         focus_html = ("<h2>Visszatérő edzés-fókuszok</h2><ul>"
                       + items + "</ul>")
-    return f"""<!DOCTYPE html>
+    return with_toc(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3513,7 +3587,7 @@ def season_report_html(team: str, tr: dict, focuses: list[dict],
 <footer>▲ javulás · ▼ romlás · – semleges irányú mutató; a darabszám-
 mutatók meccsenkénti átlagra normálva. A visszatérő fókusz: ami
 legalább két meccsen előjött — nem egyszeri kisiklás.</footer>
-</div></body></html>"""
+</div></body></html>""")
 
 
 def h2h_report_html(team_a: str, team_b: str, stats: dict,
@@ -3548,7 +3622,7 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
             f"<h2>Meccsterv a visszavágóra ({escape(team_a)} "
             "szemszögéből, a legutóbbi meccs profiljából)</h2>"
             "<ul>" + items + "</ul>")
-    return f"""<!DOCTYPE html>
+    return with_toc(f"""<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="utf-8">
@@ -3604,4 +3678,4 @@ def h2h_report_html(team_a: str, team_b: str, stats: dict,
 <footer>A visszavágó-készüléshez: a legutóbbi meccs csomagjában ott a
 meccsterv.txt, a felderítő képernyőn pedig a több-meccses
 ellenfél-profil.</footer>
-</div></body></html>"""
+</div></body></html>""")
