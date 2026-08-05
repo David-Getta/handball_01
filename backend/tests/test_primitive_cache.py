@@ -166,15 +166,30 @@ def _gk_match():
     return Match(_meta(), frames)
 
 
-def test_role_change_invalidates_the_cache():
-    """A kapus-jelölés megváltozása után a mérés ÚJRA lefut.
+def test_scope_marks_goalkeepers_up_front():
+    """A hatókör NYITÁSAKOR megtörténik a kapus-jelölés.
 
-    Több réteg a szerepből dolgozik (`role == "kapus"`), a
-    `detect_goalkeepers` pedig beleír a meccsbe. A gyorsítótár ezért a
-    szerep-nemzedéket is kulcsolja: aki a jelölés ELŐTT mért, ne kapja
-    vissza ugyanazt a jelölés UTÁN.
+    Enélkül ugyanaz a réteg más számot ad attól függően, hányadikként
+    értékeltük ki (a kapust nem számolja védőnek, birtokosnak,
+    lövőnek) — ezt mérte a docs/SORREND_FUGGES.md. A jelölés a hatókör
+    elején tehát SORREND-FÜGGETLENNÉ teszi az összeállítást.
     """
-    from handball.pipeline.goalkeeper import detect_goalkeepers
+    m = _gk_match()
+    assert not any(p.role == "kapus" for f in m.frames for p in f.players)
+    with primitive_cache(m):
+        assert any(p.role == "kapus" for f in m.frames for p in f.players), \
+            "a hatókör nyitásakor meg kell történnie a jelölésnek"
+
+
+def test_role_change_invalidates_the_cache():
+    """A szerep megváltozása után a mérés ÚJRA lefut.
+
+    Több réteg a szerepből dolgozik (`role == "kapus"`), és a szerep
+    menet közben is változhat (pl. kapus-csere felismerése). A
+    gyorsítótár ezért a szerep-nemzedéket is kulcsolja: aki a változás
+    ELŐTT mért, ne kapja vissza ugyanazt UTÁNA.
+    """
+    from handball.pipeline.primitive_cache import mark_roles_changed
 
     seen = []
 
@@ -188,10 +203,13 @@ def test_role_change_invalidates_the_cache():
     with primitive_cache(m):
         before = measure(m)
         assert measure(m) == before and len(seen) == 1  # gyorsítótárból
-        chosen = detect_goalkeepers(m)
-        assert chosen, "a mintameccsen felismerhető a kapus"
+        for f in m.frames:                    # szerep-változás menet közben
+            for p in f.players:
+                if p.track_id == 2:
+                    p.role = "beálló"
+        mark_roles_changed()
         after = measure(m)
-    assert len(seen) == 2, seen  # a jelölés után újra kellett mérni
+    assert len(seen) == 2, seen  # a változás után újra kellett mérni
     assert after != before, (before, after)
 
 

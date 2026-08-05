@@ -761,19 +761,37 @@ def test_training_flags_underused_pivot():
     def scene(ball_at_pivot):
         frames = []
         t = 0
+        # A jelenetben KAPUS is van (a 9-es, a saját kapujában), a
+        # beálló pedig MOZOG a hatos vonalán. Enélkül a beálló egy
+        # mozdulatlan pont a kapu előtt — azt bármely pozíció-alapú
+        # szabály kapusnak látja, és a beálló-rétegek épp őt hagynák ki.
+        gk = _pl(9, Team.HOME, 1.0, 10.0)
+        # A VENDÉG kapusa is kell: enélkül a jobb oldali kapuelőteret a
+        # beálló "nyerné meg", és őt jelölné kapusnak a felismerés.
+        gk_away = _pl(29, Team.AWAY, 39.0, 10.0)
+
+        def pivot(i):
+            return _pl(5, Team.HOME, 34.0, 7.0 + 6.0 * ((i % 50) / 50.0))
+
         for _ in range(8):  # 8 hazai támadás-szakasz, szünetekkel
             for i in range(150):
-                bx, by = (34.0, 10.0) if ball_at_pivot else (27.0, 10.0)
+                bx, by = ((34.0, pivot(i).y) if ball_at_pivot
+                          else (27.0, 10.0))
                 frames.append(Frame(t=t, players=[
                     _pl(1, Team.HOME, 27.0, 10.0),
-                    _pl(5, Team.HOME, 34.0, 10.0),
+                    pivot(i),
+                    gk, gk_away,
                     _pl(20, Team.AWAY, 36.0, 8.0)],
                     ball=Ball(x=bx, y=by, confidence=1.0)))
                 t += 1
             for i in range(40):  # vendég-birtoklás: szakasz-határ
                 frames.append(Frame(t=t, players=[
                     _pl(1, Team.HOME, 20.0, 10.0),
-                    _pl(5, Team.HOME, 34.0, 10.0),
+                    # Védekező fázisban a beálló is hazajön — enélkül
+                    # a meccs 100%-át a kapuelőtérben töltené, és a
+                    # kapus-felismerés őt is kapusnak nézné.
+                    _pl(5, Team.HOME, 18.0, 10.0),
+                    gk, gk_away,
                     _pl(20, Team.AWAY, 19.0, 10.0)],
                     ball=Ball(x=19.0, y=10.0, confidence=1.0)))
                 t += 1

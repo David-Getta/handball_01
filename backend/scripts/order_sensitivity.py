@@ -132,6 +132,14 @@ def build_report(res: dict, seconds: float, seed: int,
         "",
         "## A mérés köre",
         "",
+        "**Fontos: ez a mérés a rétegeket KÖZVETLENÜL hívja, hatókör",
+        "nélkül.** A termék viszont `primitive_cache` hatókörben futtatja",
+        "őket (meccs-csomag, elemzés-végpontok, felderítés), a hatókör",
+        "nyitása pedig ELVÉGZI a kapus-jelölést — ott tehát a sorrend nem",
+        "számít. Az alábbi lista így azt mondja meg, mely rétegek",
+        "SZEREP-FÜGGŐK: ezeket közvetlenül (hatókörön kívül) hívva más",
+        "számot kaphatsz, mint a terméken belül.",
+        "",
     ]
     if shots_per_min > 0:
         lines += [

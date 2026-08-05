@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A kiértékelés sorrendje már nem befolyásolja az eredményt.** A
+  kapus-jelölés (`role = "kapus"`) eddig CSAK akkor történt meg, ha épp
+  lefutott egy kapus-réteg — több mint ötven réteg viszont a szerepből
+  dolgozik (a kapust nem számolja védőnek, birtokosnak, lövőnek).
+  Ugyanaz a réteg tehát más számot adott attól függően, hányadikként
+  értékeltük ki; ezt mérte a `docs/SORREND_FUGGES.md`. Mostantól a
+  jelölés a `primitive_cache` hatókör NYITÁSAKOR megtörténik, tehát a
+  termék minden összeállítása (meccs-csomag, elemzés-végpontok,
+  felderítés, edzői összefoglaló) sorrend-független. Őr-teszt rögzíti
+  a garanciát. A jelentés listája továbbra is hasznos: azt mondja meg,
+  mely rétegek SZEREP-FÜGGŐK — ezeket hatókörön kívül, közvetlenül
+  hívva más számot lehet kapni, mint a terméken belül; a jelentés
+  mostantól ezt ki is mondja.
+
 - **A réteg-őrzés végre látja a lövés-rétegeket is.** Az "egyetlen
   réteg sem bukhat el némán" füstteszt eddig 8 másodperces szimulált
   meccsen futott — lövés nélkül. A lövés-alapú rétegek így üres

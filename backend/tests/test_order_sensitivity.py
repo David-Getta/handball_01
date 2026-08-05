@@ -101,3 +101,33 @@ def test_goalkeeper_marking_really_changes_a_layer():
     detect_goalkeepers(marked_match)
     marked = double_punishment(marked_match)
     assert plain != marked, (plain, marked)
+
+
+def test_scope_makes_the_listed_layers_order_independent():
+    """A TERMÉK útvonalán a sorrend már nem számít.
+
+    A jelentés listája közvetlen (hatókör nélküli) hívásokból készül. A
+    termék viszont `primitive_cache` hatókörben futtat, aminek a
+    nyitása elvégzi a kapus-jelölést — ugyanaz a réteg tehát ugyanazt
+    adja akkor is, ha előtte már futott kapus-réteg, és akkor is, ha
+    nem. Ezt a garanciát itt rögzítjük, a listáról vett mintán.
+    """
+    import json
+
+    from handball.pipeline.defense import double_punishment
+    from handball.pipeline.goalkeeper import detect_goalkeepers
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    def _run(mark_first: bool):
+        m = simulate_ground_truth(duration_s=60.0, seed=7,
+                                  shots_per_min=6.0)
+        with primitive_cache(m):
+            if mark_first:
+                detect_goalkeepers(m)
+            return json.dumps(double_punishment(m), sort_keys=True,
+                              default=str)
+
+    assert _run(False) == _run(True), (
+        "a hatókörön belül a kapus-jelölés sorrendje nem "
+        "befolyásolhatja az eredményt")

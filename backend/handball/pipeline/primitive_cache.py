@@ -112,6 +112,29 @@ def active_match() -> Optional[Match]:
     return scope["match"] if scope else None
 
 
+def _mark_goalkeepers(match: Match) -> None:
+    """Kapus-jelölés a hatókör NYITÁSAKOR — hogy az eredmény ne függjön
+    a kiértékelés SORRENDJÉTŐL.
+
+    A `detect_goalkeepers` beleír a meccsbe (`role = "kapus"`), és több
+    mint ötven réteg a szerepből dolgozik (a kapust nem számolja
+    védőnek, birtokosnak, lövőnek). Ha a jelölés csak akkor történik
+    meg, amikor épp egy kapus-réteg lefut, ugyanaz a réteg MÁS számot
+    ad attól függően, hányadikként értékeltük ki — ezt mérte a
+    docs/SORREND_FUGGES.md (50 érintett réteg).
+
+    A jelölés idempotens, és csak tényleges változásnál jelez a
+    gyorsítótárnak, tehát az ismételt hívás nem dob el semmit. Hibára
+    NEM esünk szét: ha a felismerés elszáll, a hatókör attól még nyílik
+    (egy réteg hibája nem viheti el a többit).
+    """
+    try:
+        from .goalkeeper import detect_goalkeepers
+        detect_goalkeepers(match)
+    except Exception:
+        pass
+
+
 @contextmanager
 def primitive_cache(match: Match):
     """Hatókör, amelyen belül az alap-mérések egyszer futnak le.
@@ -128,6 +151,7 @@ def primitive_cache(match: Match):
 
     token = _SCOPE.set({"match": match, "store": {}, "frames": {}, "roles": 0})
     try:
+        _mark_goalkeepers(match)
         yield
     finally:
         _SCOPE.reset(token)
@@ -182,7 +206,10 @@ def open_scope(match: Match):
     scope = _SCOPE.get()
     if scope is not None and scope["match"] is match:
         return None
-    return _SCOPE.set({"match": match, "store": {}, "frames": {}, "roles": 0})
+    token = _SCOPE.set({"match": match, "store": {}, "frames": {},
+                        "roles": 0})
+    _mark_goalkeepers(match)
+    return token
 
 
 def close_scope(token) -> None:
