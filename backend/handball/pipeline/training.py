@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 281) Poszt-átvételi zóna: ha egy posztunk messze veszi át a
+    # labdát, onnan nehéz befejezni.
+    try:
+        from .roles import RRZ_GAP_M, role_receive_zones
+        rrz281 = role_receive_zones(match, config)
+        for side in ("home", "away"):
+            rec281 = rrz281[side]
+            far281 = rec281.get("farthest")
+            if far281 is None:
+                continue
+            add(side, "támadás", "Átvételi mélység",
+                f"a(z) {far281['poszt']} posztunk átlagosan "
+                f"{far281['avg_m']:.1f} m-en veszi át a labdát, a "
+                f"csapat-átlagunk {rec281['team_avg_m']:.1f} m "
+                f"({RRZ_GAP_M:.1f} m fölötti eltérés már érdemi) — "
+                "onnan minden befejezés nehezebb, és a védő kényelmesen "
+                "áll",
+                "átvételi mélység: bejátszás-gyakorlat, ahol a "
+                "fogadónak MOZGÁSBAN, egy méterrel beljebb kell "
+                "megkapnia a labdát — a passzoló csak akkor adhat, ha a "
+                "fogadó indult; védővel, sorozatban")
+    except Exception:
+        pass
     # 280) Poszt-passzháló: ha a passzaink egy vonalon mennek, az
     # elfogás kiszámítható.
     try:

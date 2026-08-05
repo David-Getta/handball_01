@@ -713,3 +713,31 @@ def test_role_pass_map_silent_with_few_passes():
     rec = role_pass_map(_rpm_match([(3, 1)] * 3))["home"]
     assert rec["passes_total"] < 20, rec
     assert rec["top"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-átvételi zóna -----------------------------------------------------
+
+def test_role_receive_zones_separates_near_and_far_receivers():
+    """A beálló 6 m-en, az irányító 12 m-en veszi át a labdát."""
+    from handball.pipeline.roles import (RRZ_MIN_RECEPTIONS,
+                                         role_receive_zones)
+
+    # _ARP: irányító (28,10) = 12 m, beálló (34,10) = 6 m a kaputól.
+    rec = role_receive_zones(_rpm_match([(3, 1)] * 12))["home"]
+    assert rec["receptions"] >= 2 * RRZ_MIN_RECEPTIONS, rec
+    assert rec["roles"]["beálló"]["avg_m"] < \
+        rec["roles"]["irányító"]["avg_m"], rec
+    assert rec["closest"] is not None and rec["closest"]["poszt"] == "beálló"
+    assert rec["farthest"] is not None
+    assert rec["farthest"]["poszt"] == "irányító", rec
+    assert rec["closest"]["gap_m"] < 0 < rec["farthest"]["gap_m"]
+    assert rec["verdict"] and "beálló" in rec["verdict"], rec
+
+
+def test_role_receive_zones_silent_with_few_receptions():
+    """Néhány átvételből nincs ítélet."""
+    from handball.pipeline.roles import role_receive_zones
+
+    rec = role_receive_zones(_rpm_match([(3, 1)] * 2))["home"]
+    assert rec["closest"] is None and rec["farthest"] is None, rec
+    assert rec["verdict"] is None, rec

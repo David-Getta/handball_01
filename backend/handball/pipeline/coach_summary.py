@@ -883,6 +883,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-átvételi zóna: hol kapja meg a labdát az egyes posztjuk.
+    try:
+        from .roles import role_receive_zones
+        rrz = role_receive_zones(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rrz = rrz[side]
+            if rec_rrz["verdict"] is None:
+                continue
+            body += (f" A(z) {name} átvételi zónáiról kiderült: "
+                     f"{rec_rrz['verdict']} "
+                     f"(csapat-átlaguk {rec_rrz['team_avg_m']:.1f} m, "
+                     f"{rec_rrz['receptions']} mért átvételből).")
+    except Exception:
+        pass
     # Poszt-passzháló: melyik vonalon jár a legtöbb passzuk.
     try:
         from .roles import role_pass_map

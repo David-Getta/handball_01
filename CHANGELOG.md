@@ -5,6 +5,24 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-átvételi zóna** (`role_receive_zones`): milyen messze a
+  kaputól veszi át a labdát az egyes posztjuk. A poszt-passzháló
+  (`role_pass_map`) azt mondja meg, ki kinek ad — ez azt, HOL kapja
+  meg. **Miért az átvétel és nem a lövés:** a lövő-hozzárendelés
+  kapu-felé torzít (lásd a mai bejegyzést), ezért egy lövés-távolság
+  poszt-bontása ma nem lenne megbízható; az átvétel viszont pontosan
+  mért — a passz-esemény kockáján a fogadó ott áll, ahol a labdát
+  megkapta. Edzői olvasat: ez a fal magasságát és az elé állást
+  állítja be — ha a beállójuk 6 méteren kapja a labdát, az elé állás
+  már késő, a bejátszás vonalát kell testtel zárni. Posztonként 8
+  átvétel és 1,5 m eltérés alatt nincs ítélet. A felderítésben
+  darabszám ÉS távolság-ÖSSZEG tárolódik (átlag sose), hogy meccsek
+  közt pontosan összegződjön. Felületek: `/matches/{id}/attacks` +
+  meccs-csomag (`role_receive_zones`), edzői összefoglaló,
+  meccs-jelentés Poszt-lencséje, felderítés (+ edzői kulcs + 260-as
+  meccsterv-szabály), 281-es edzés-szabály ("Átvételi mélység"),
+  kliens-csempe ("Poszt-átvételi zóna").
+
 - **Poszt-passzháló** (`role_pass_map`): melyik vonalon jár a labda
   posztról posztra. A gólpassz-tengely (`assist_role_pairs`) csak a
   GÓLT érő passzokat nézi, a passz-hálózat a NEVEKET — ez az összes

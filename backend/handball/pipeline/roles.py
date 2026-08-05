@@ -899,3 +899,119 @@ def role_pass_map(match: Match,
         out[side] = {"passes_total": total, "pairs": pairs, "top": top,
                      "verdict": verdict}
     return out
+
+
+# Poszt-átvételi zóna: posztonként ennyi mért átvétel kell az
+# ítélethez, és ekkora (méteres) eltérés a csapat-átlagtól számít
+# érdeminek.
+RRZ_MIN_RECEPTIONS = 8
+RRZ_GAP_M = 1.5
+
+
+def role_receive_zones(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-átvételi zóna: MILYEN MESSZE a kaputól veszi át a labdát
+    az egyes posztjuk.
+
+    A poszt-passzháló (role_pass_map) azt mondja meg, KI KINEK ad — ez
+    azt, HOL kapja meg: minden passznál a FOGADÓ helyzetét mérjük a
+    támadott kaputól, és posztonként átlagoljuk.
+
+    Miért az átvétel és nem a lövés? A lövő-hozzárendelés kapu-felé
+    torzít (lásd `event_detection._shooter_before`), ezért egy
+    lövés-távolság poszt-bontása ma nem lenne megbízható. Az átvétel
+    viszont PONTOSAN mért: a passz-esemény kockáján a fogadó ott áll,
+    ahol a labdát megkapta.
+
+    Edzőileg ez a fal magasságát és az elé állást állítja be. Ha a
+    beállójuk 6 méteren kapja a labdát, az elé állás nem működik —
+    testtel kell zárni a bejátszás vonalát; ha 8-on, akkor még
+    megelőzhető. A hátsó soruk átvételi távolsága azt mondja meg,
+    kell-e előrelépni a lövő-vonalba.
+
+    Visszatérés csapatonként: {"receptions", "team_avg_m",
+    "roles": {poszt: {"receptions", "avg_m"}},
+    "closest"/"farthest": {"poszt", "receptions", "avg_m", "gap_m"} |
+    None, "verdict": str | None} — a closest/farthest csak akkor van
+    kitöltve, ha az adott poszt elérte az RRZ_MIN_RECEPTIONS átvételt,
+    és a csapat-átlagtól legalább RRZ_GAP_M-rel eltér.
+    """
+    import math
+
+    from .calibration import COURT_WIDTH_M
+    from .event_detection import EventType, detect_possession_changes
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    gy = COURT_WIDTH_M / 2.0
+    by_frame = {f.t: f for f in match.frames}
+
+    tally: dict = {"home": {}, "away": {}}
+    totals: dict = {"home": [0, 0.0], "away": [0, 0.0]}
+    for e in detect_possession_changes(match, config):
+        if e.type != EventType.PASS:
+            continue
+        receiver = (e.detail or {}).get("receiver_id")
+        if receiver is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(receiver)
+        if rec_role is None:
+            continue
+        frame = by_frame.get(e.t)
+        if frame is None:
+            continue
+        who = next((p for p in frame.players
+                    if p.track_id == receiver), None)
+        if who is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        dist = math.hypot(who.x - goal_x, who.y - gy)
+        rec = tally[side].setdefault(rec_role["poszt"], [0, 0.0])
+        rec[0] += 1
+        rec[1] += dist
+        totals[side][0] += 1
+        totals[side][1] += dist
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_all, sum_all = totals[side]
+        team_avg = (sum_all / n_all) if n_all else None
+        rows = {}
+        for poszt, (n, tot) in sorted(tally[side].items(),
+                                      key=lambda kv: -kv[1][0]):
+            rows[poszt] = {"receptions": n, "avg_m": round(tot / n, 1)}
+        closest = farthest = None
+        if team_avg is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["receptions"] >= RRZ_MIN_RECEPTIONS]
+            for pick, key in (("closest", min), ("farthest", max)):
+                if not eligible:
+                    continue
+                poszt, r = key(eligible, key=lambda pr: pr[1]["avg_m"])
+                gap = r["avg_m"] - team_avg
+                if abs(gap) < RRZ_GAP_M:
+                    continue
+                if (pick == "closest" and gap > 0) or \
+                        (pick == "farthest" and gap < 0):
+                    continue
+                rec_pick = {"poszt": poszt,
+                            "receptions": r["receptions"],
+                            "avg_m": r["avg_m"], "gap_m": round(gap, 1)}
+                if pick == "closest":
+                    closest = rec_pick
+                else:
+                    farthest = rec_pick
+        verdict = None
+        if closest is not None:
+            verdict = (f"a(z) {closest['poszt']} közel, "
+                       f"{closest['avg_m']:.1f} m-en veszi át a labdát")
+        elif farthest is not None:
+            verdict = (f"a(z) {farthest['poszt']} messze, "
+                       f"{farthest['avg_m']:.1f} m-en veszi át a labdát")
+        out[side] = {"receptions": n_all,
+                     "team_avg_m": round(team_avg, 1)
+                     if team_avg is not None else None,
+                     "roles": rows, "closest": closest,
+                     "farthest": farthest, "verdict": verdict}
+    return out

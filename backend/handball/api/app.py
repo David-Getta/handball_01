@@ -2472,6 +2472,11 @@ def create_app():
                "efficiency": attack_efficiency(match),
                "duration_efficiency": attack_duration_efficiency(match)}
         try:
+            from ..pipeline.roles import role_receive_zones
+            res["role_receive_zones"] = role_receive_zones(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_pass_map
             res["role_pass_map"] = role_pass_map(match)
         except Exception:
@@ -4868,6 +4873,9 @@ def create_app():
                        lambda: role_possession_share(match))
                 from ..pipeline.roles import role_pass_map
                 _layer("role_pass_map", lambda: role_pass_map(match))
+                from ..pipeline.roles import role_receive_zones
+                _layer("role_receive_zones",
+                       lambda: role_receive_zones(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

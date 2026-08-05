@@ -1263,6 +1263,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             from .roles import (assist_role_pairs, goals_by_role,
                                 role_share_by_score, role_share_shift,
                                 role_pass_map, role_possession_share,
+                                role_receive_zones,
                                 role_turnover_cost,
                                 shot_efficiency_by_role)
             prows = []
@@ -1274,7 +1275,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     ("Poszt-váltás a szünetre", role_share_shift),
                     ("Poszt-állás", role_share_by_score),
                     ("Poszt-birtoklás", role_possession_share),
-                    ("Poszt-passzháló", role_pass_map)):
+                    ("Poszt-passzháló", role_pass_map),
+                    ("Poszt-átvételi zóna", role_receive_zones)):
                 try:
                     res_p = fn(match)
                 except Exception:

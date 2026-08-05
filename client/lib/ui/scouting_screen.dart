@@ -1896,6 +1896,38 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-átvételi zóna: hol veszi át a labdát az egyes posztjuk
+  // (16+ átvétel, posztonként 8+, 1,5 m eltérés — a backenddel azonos
+  // küszöbök).
+  String? _receiveZone(Map<String, dynamic> r) {
+    final cnt = (r["rrz_recv_by_role"] as Map?)?.cast<String, dynamic>();
+    final sum = (r["rrz_dist_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    if (cnt == null || cnt.isEmpty || sum == null) return null;
+    var total = 0;
+    var distTotal = 0.0;
+    cnt.forEach((k, v) => total += (v as num).toInt());
+    sum.forEach((k, v) => distTotal += (v as num).toDouble());
+    if (total < 16) return null;
+    final teamAvg = distTotal / total;
+    String? best;
+    var bestAvg = 0.0;
+    var bestN = 0;
+    cnt.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 8) return;
+      final avg = ((sum[k] as num?) ?? 0).toDouble() / n;
+      if (best == null || avg < bestAvg) {
+        best = k;
+        bestAvg = avg;
+        bestN = n;
+      }
+    });
+    if (best == null || teamAvg - bestAvg < 1.5) return null;
+    return "a(z) $best posztjuk ${bestAvg.toStringAsFixed(1)} m-en veszi "
+        "át a labdát (csapat-átlag ${teamAvg.toStringAsFixed(1)} m, "
+        "$bestN átvétel) · az elé állás késő, a bejátszás vonalát zárd";
+  }
+
   // Poszt-passzháló: melyik vonalon jár a legtöbb passzuk (20+ passz,
   // 30%-os részarány — a backenddel azonos küszöbök).
   String? _passLane(Map<String, dynamic> r) {
@@ -6574,6 +6606,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_receiveZone(r) != null)
+        ["Poszt-átvételi zóna", _receiveZone(r)!],
       if (_passLane(r) != null)
         ["Poszt-passzháló", _passLane(r)!],
       if (_possessionRole(r) != null)
