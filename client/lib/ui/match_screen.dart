@@ -34,6 +34,7 @@ import "summary_panel.dart";
 import "video_panel.dart";
 import "error_text.dart";
 import "waiting.dart";
+import "empty_state.dart";
 
 enum ViewMode { players, heatmap, shots, passes }
 
@@ -2596,7 +2597,12 @@ class _MatchScreenState extends State<MatchScreen> {
                       onPlayerReport: (tid, label) =>
                           _savePlayerReport(match, tid, label)),
                   _summary == null
-                      ? const SizedBox()
+                      ? const EmptyState(
+                          "Nincs edzői összefoglaló",
+                          why: "Az összefoglaló a meccs betöltésekor "
+                              "készül el. Ha üres maradt, töltsd újra a "
+                              "meccset.",
+                          icon: Icons.summarize_outlined)
                       : SummaryPanel(
                           summary: _summary!,
                           homeName: match.meta.homeTeam,

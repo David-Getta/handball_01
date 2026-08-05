@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Az üres panelek megmondják, miért üresek.** A statisztika-panel
+  nulla felismert játékosnál is kirajzolta a fejlécet, a
+  rendezés-gombokat és a két csapatnevet — alattuk semmivel; a
+  meccs-elemző "Összegzés" füle pedig egyszerűen ÜRES DOBOZ volt, ha
+  nem készült összefoglaló. Mindkettő ugyanaz a hiba, mint a néma
+  pörgettyű: a felhasználó nem tudja eldönteni, hogy a program romlott
+  el, vagy tényleg nincs adat. Mostantól közös üres-állapot mondja meg,
+  mi hiányzik és MIÉRT ("A terhelés-tábla a követett játékosokból épül
+  — ha nem sikerült a detektálás, nézd meg a kalibrációt"), egy
+  csapatnyi hiányra pedig egysoros jelzés kerül. Őr-teszt tiltja a néma
+  üres dobozt a feltételes ágakban.
+
 - **A hibafelismerés nem téveszt fájlnévre.** A státuszkód-mintákat
   eddig puszta számként kerestük a kivétel szövegében: egy
   `match_404.mp4` útvonal vagy egy 401-et tartalmazó azonosító elég

@@ -691,6 +691,39 @@ def test_kliens_varakozas_felirattal():
         f"`WaitingView`-t (mire várunk, meddig tart): {offenders}")
 
 
+def test_kliens_ures_panel_megszolal():
+    """Panel ne váljon némán üres dobozzá.
+
+    A néma üres panel ugyanaz a hiba, mint a néma pörgettyű: a
+    felhasználó nem tudja eldönteni, hogy a program romlott el, vagy
+    tényleg nincs adat. A `SizedBox()` mint ág-érték pont ezt csinálja
+    ("ha nincs adat, rajzolj a semmit") — helyette `EmptyState` kell,
+    ami megmondja, MIÉRT üres.
+
+    A `SizedBox()` más szerepben rendben van (pl. `underline:` egy
+    lenyílónál, üres táblázat-cella), ezért csak a feltételes ágakat
+    tiltjuk. A kettőt a kettőspont előtti szóköz különbözteti meg: a
+    nevesített argumentumnál a kettőspont a névhez TAPAD
+    (`underline:`), a feltételes ág kettőspontja előtt szóköz van.
+    """
+    import re
+    root = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui")
+    if not root.exists():
+        pytest.skip("nincs kliens a fában")
+    assert (root / "empty_state.dart").exists(), "hiányzik az üres-állapot"
+
+    branch = re.compile(r"(?:\?|\s:)\s*const SizedBox\(\s*\)")
+    offenders = []
+    for path in sorted(root.rglob("*.dart")):
+        src = path.read_text(encoding="utf-8")
+        for m in branch.finditer(src):
+            offenders.append(f"{path.name}:{src[:m.start()].count(chr(10)) + 1}")
+    assert not offenders, (
+        "néma üres doboz feltételes ágban — használd az `EmptyState`-et "
+        f"(mi hiányzik, miért): {offenders}")
+
+
 def test_kliens_szekcio_ugras_celba_er():
     """A felderítő jelentés ugró-csipjei létező szekcióra mutatnak.
 

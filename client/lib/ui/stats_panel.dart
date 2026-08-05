@@ -10,6 +10,7 @@ import "package:flutter/material.dart";
 import "../analytics/court_analytics.dart";
 import "../models/tracking.dart";
 import "../theme/app_theme.dart";
+import "empty_state.dart";
 
 class StatsPanel extends StatefulWidget {
   final Map<int, PlayerStat> stats;
@@ -69,6 +70,15 @@ class _StatsPanelState extends State<StatsPanel> {
     final maxDist = widget.stats.values
         .fold(0.0, (m, s) => s.distanceM > m ? s.distanceM : m);
 
+    if (home.isEmpty && away.isEmpty) {
+      return const EmptyState(
+        "Nincs felismert játékos ezen a meccsen",
+        why: "A terhelés-tábla a követett játékosokból épül. Ha a "
+            "felvételen nem sikerült a detektálás, itt nem lesz adat — "
+            "nézd meg a kalibrációt és az elemzés megbízhatóságát.",
+        icon: Icons.directions_run,
+      );
+    }
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
@@ -85,10 +95,16 @@ class _StatsPanelState extends State<StatsPanel> {
         _header(),
         const SizedBox(height: 2),
         _teamHeader(widget.homeName, widget.homeColor),
-        ...home.map((s) => _row(s, maxDist)),
+        if (home.isEmpty)
+          emptyRow("Ennél a csapatnál nincs felismert játékos.")
+        else
+          ...home.map((s) => _row(s, maxDist)),
         const SizedBox(height: AppSpacing.lg),
         _teamHeader(widget.awayName, widget.awayColor),
-        ...away.map((s) => _row(s, maxDist)),
+        if (away.isEmpty)
+          emptyRow("Ennél a csapatnál nincs felismert játékos.")
+        else
+          ...away.map((s) => _row(s, maxDist)),
       ],
     );
   }
