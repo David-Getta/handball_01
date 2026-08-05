@@ -740,6 +740,8 @@ class ScoutingReport:
     arp_pairs: dict = field(default_factory=dict)
     rtz_to_by_role: dict = field(default_factory=dict)
     rtz_front_by_role: dict = field(default_factory=dict)
+    rsd_shots_by_role: dict = field(default_factory=dict)
+    rsd_dist_sum_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -2958,6 +2960,30 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-lövéstávolság: kire lépj ki, kire lehet ráengedni.
+    _rsd_n = sum(rep.rsd_shots_by_role.values())
+    if _rsd_n >= 8:
+        _rsd_team = sum(rep.rsd_dist_sum_by_role.values()) / _rsd_n
+        _rsd_rows = [(p, n, rep.rsd_dist_sum_by_role.get(p, 0.0) / n)
+                     for p, n in rep.rsd_shots_by_role.items() if n >= 4]
+        if _rsd_rows:
+            _rsd_p, _rsd_c, _rsd_avg = min(_rsd_rows, key=lambda r: r[2])
+            if _rsd_team - _rsd_avg >= 2.0:
+                keys.append(
+                    f"A(z) {_rsd_p} posztjuk jön be a legközelebb a "
+                    f"befejezéshez: átlag {_rsd_avg:.1f} m {_rsd_c} "
+                    f"lövésen, a csapat-átlaguk {_rsd_team:.1f} m — őt ki "
+                    "kell zárni, mert onnan a kapusnak alig van esélye.")
+            else:
+                _rsd_p2, _rsd_c2, _rsd_avg2 = max(_rsd_rows,
+                                                  key=lambda r: r[2])
+                if _rsd_avg2 - _rsd_team >= 2.0:
+                    keys.append(
+                        f"A(z) {_rsd_p2} posztjuk távolról fejez be: "
+                        f"átlag {_rsd_avg2:.1f} m {_rsd_c2} lövésen (a "
+                        f"csapat-átlaguk {_rsd_team:.1f} m) — rá inkább "
+                        "rá lehet engedni, a passzsáv zárása többet ér.")
 
     # Poszt-eladási zóna: kinek az eladása hív kontrát.
     _rtz_n = sum(rep.rtz_to_by_role.values())
@@ -7227,6 +7253,13 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_shot_distance as _rsd
+        rsdrec = _rsd(match, config)[team.value]
+        rep.rsd_shots_by_role = {p: r["shots"]
+                                 for p, r in rsdrec["roles"].items()}
+        # MÉTER-ÖSSZEG (nem átlag): meccsek közt pontosan összegződik.
+        rep.rsd_dist_sum_by_role = {p: round(r["shots"] * r["avg_m"], 1)
+                                    for p, r in rsdrec["roles"].items()}
         from .roles import role_turnover_zones as _rtz
         rtzrec = _rtz(match, config)[team.value]
         rep.rtz_to_by_role = {p: r["turnovers"]
@@ -9751,6 +9784,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 263) Az ő közeli befejező posztjuk × a ti kettőzésetek: aki
+    # rendre 6-7 méterről fejez be, ott a kapusnak alig van esélye —
+    # oda a második ember többet ér, mint bárhol máshol.
+    _rsd263_n = sum(opp.rsd_shots_by_role.values())
+    if _rsd263_n >= 8:
+        _rsd263_team = sum(opp.rsd_dist_sum_by_role.values()) / _rsd263_n
+        _rsd263_rows = [(p, n, opp.rsd_dist_sum_by_role.get(p, 0.0) / n)
+                        for p, n in opp.rsd_shots_by_role.items() if n >= 4]
+        if _rsd263_rows:
+            _p263, _n263, _avg263 = min(_rsd263_rows, key=lambda r: r[2])
+            if (_rsd263_team - _avg263 >= 2.0
+                    and own.dbl_doubled_frames >= 50):
+                plan.append(
+                    f"A(z) {_p263} posztjuk átlag {_avg263:.1f} méterről "
+                    f"fejez be ({_n263} lövés; a csapat-átlaguk "
+                    f"{_rsd263_team:.1f} m), ti pedig kettőztök — a "
+                    "második embert ide tegyétek: az ő befejezését "
+                    "kizárni többet ér, mint bárkiét a lövő-vonalon.")
 
     # 262) Az ő kockázatos eladó posztjuk × a ti kontrátok: a támadó
     # harmadban vesztett labda azonnali indítást ér.
@@ -14061,6 +14113,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rsd_shots_by_role=_merge_count_dicts(
+            r.rsd_shots_by_role for r in reports),
+        rsd_dist_sum_by_role=_merge_count_dicts(
+            r.rsd_dist_sum_by_role for r in reports),
         rtz_to_by_role=_merge_count_dicts(
             r.rtz_to_by_role for r in reports),
         rtz_front_by_role=_merge_count_dicts(

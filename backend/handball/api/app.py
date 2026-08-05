@@ -2472,6 +2472,11 @@ def create_app():
                "efficiency": attack_efficiency(match),
                "duration_efficiency": attack_duration_efficiency(match)}
         try:
+            from ..pipeline.roles import role_shot_distance
+            res["role_shot_distance"] = role_shot_distance(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_turnover_zones
             res["role_turnover_zones"] = role_turnover_zones(match)
         except Exception:
@@ -4891,6 +4896,9 @@ def create_app():
                 from ..pipeline.roles import role_turnover_zones
                 _layer("role_turnover_zones",
                        lambda: role_turnover_zones(match))
+                from ..pipeline.roles import role_shot_distance
+                _layer("role_shot_distance",
+                       lambda: role_shot_distance(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

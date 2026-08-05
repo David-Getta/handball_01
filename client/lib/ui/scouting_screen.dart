@@ -2040,6 +2040,50 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-lövéstávolság: melyik posztjuk milyen messziről fejez be
+  // (8+ lövés, posztonként 4+, 2 m eltérés — a backenddel azonos
+  // küszöbök: RSD_MIN_SHOTS, RSD_GAP_M).
+  String? _shotDistanceRole(Map<String, dynamic> r) {
+    final shots = (r["rsd_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final sums = (r["rsd_dist_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || sums == null) return null;
+    var total = 0;
+    var totalM = 0.0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    sums.forEach((k, v) => totalM += (v as num).toDouble());
+    if (total < 8) return null;
+    final teamAvg = totalM / total;
+    String? near, far;
+    var nearAvg = 0.0, farAvg = 0.0;
+    var nearN = 0, farN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 4) return;
+      final avg = ((sums[k] as num?) ?? 0).toDouble() / n;
+      if (near == null || avg < nearAvg) {
+        near = k;
+        nearAvg = avg;
+        nearN = n;
+      }
+      if (far == null || avg > farAvg) {
+        far = k;
+        farAvg = avg;
+        farN = n;
+      }
+    });
+    if (near != null && teamAvg - nearAvg >= 2.0) {
+      return "a(z) $near posztjuk jön be a legközelebb: átlag "
+          "${nearAvg.toStringAsFixed(1)} m ($nearN lövés, csapat-átlag "
+          "${teamAvg.toStringAsFixed(1)} m) · őt ki kell zárni";
+    }
+    if (far != null && farAvg - teamAvg >= 2.0) {
+      return "a(z) $far posztjuk távolról fejez be: átlag "
+          "${farAvg.toStringAsFixed(1)} m ($farN lövés, csapat-átlag "
+          "${teamAvg.toStringAsFixed(1)} m) · rá lehet engedni";
+    }
+    return null;
+  }
+
   // Poszt-eladási zóna: kinek az eladása hív kontrát (10+ eladás,
   // posztonként 5+, 20 százalékpont eltérés — a backenddel azonos
   // küszöbök).
@@ -6817,6 +6861,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_shotDistanceRole(r) != null)
+        ["Poszt-lövéstávolság", _shotDistanceRole(r)!],
       if (_turnoverZoneRole(r) != null)
         ["Poszt-eladási zóna", _turnoverZoneRole(r)!],
       if (_holdTimeRole(r) != null)

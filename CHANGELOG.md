@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Poszt-lövéstávolság: kire lépj ki, kire lehet ráengedni.** Új
+  elemző réteg. Minden felismert lövéshez megkeressük az ELENGEDŐ
+  játékost és a helyét az elengedés pillanatában, majd a kaputól mért
+  távolságot a posztjához írjuk. Edzői olvasat: aki rendre 11-12
+  méterről lő, arra rá lehet engedni (a távoli lövés a kapusnak
+  dolgozik, és a passzsáv zárása többet ér); aki viszont beugrással 7
+  méterre jön be, azt ki kell zárni, mert onnan a kapusnak alig van
+  esélye. A csapat-átlag keveset mond — a posztok közti KÜLÖNBSÉG adja
+  a "meddig lépj ki" döntést. Négy lövés alatt, illetve 2 méternél
+  kisebb eltérésnél nincs ítélet. Ez a réteg eddig azért hiányzott,
+  mert a lövő-hozzárendelés kapu-felé torzított; a torzítás javítása
+  után lett mérhető. Felületek: elemzés-végpont, meccs-csomag, edzői
+  összefoglaló, felderítő kulcsok, meccsterv (263. szabály),
+  edzés-fókusz (284. szabály), felderítés-képernyő csempéje.
+
 - **A lövés a valódi lövőhöz kerül (mért torzítás javítva).** A
   lövés-eseményt a labda kapu-megközelítésekor jelöljük, és a lövőt
   visszafelé keresve a "legközelebbi játékos" szabállyal találtuk meg.

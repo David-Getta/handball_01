@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 284) Poszt-lövéstávolság: ha egy posztunk rendre messziről lő,
+    # az a kapusnak dolgozik — a befejezést közelebb kell hozni.
+    try:
+        from .roles import RSD_GAP_M, role_shot_distance
+        rsd284 = role_shot_distance(match, config)
+        for side in ("home", "away"):
+            rec284 = rsd284[side]
+            far284 = rec284.get("farthest")
+            if far284 is None:
+                continue
+            add(side, "befejezés", "Túl messziről fejezünk be",
+                f"a(z) {far284['poszt']} posztunk átlag "
+                f"{far284['avg_m']:.1f} méterről lő "
+                f"({far284['shots']} lövés), a csapat-átlagunk "
+                f"{rec284['team_avg_m']:.1f} m — a különbség "
+                f"{far284['gap_m']:.1f} m "
+                f"({RSD_GAP_M:.0f} m fölött már mintázat), és a távoli "
+                "lövés a kapusnak kedvez",
+                "befejezés-gyakorlat ebből a posztból ÚGY, hogy a lövés "
+                "csak a 9 m-es vonalon belülről érvényes: elzárás után "
+                "beugrás vagy egy plusz labdajáratás — a cél nem több "
+                "lövés, hanem közelebbi")
+    except Exception:
+        pass
     # 283) Poszt-eladási zóna: ha egy posztunk a támadó harmadban ad
     # el, abból kontra lesz.
     try:

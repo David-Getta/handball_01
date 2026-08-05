@@ -1219,3 +1219,112 @@ def role_turnover_zones(match: Match,
                      "roles": rows, "riskiest": riskiest,
                      "verdict": verdict}
     return out
+
+
+# Poszt-lövéstávolság: posztonként ennyi mért lövés kell az ítélethez,
+# és ekkora (méteres) eltérés a csapat-átlagtól számít érdeminek. A
+# 2 m nagyjából egy egész lövés-zónányi különbség (9 m-es vonal vs.
+# beugrás), tehát edzőileg is más döntést kíván.
+RSD_MIN_SHOTS = 4
+RSD_GAP_M = 2.0
+
+
+def role_shot_distance(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-lövéstávolság: MELYIK POSZTJUK MILYEN MESSZIRŐL lő.
+
+    Minden felismert lövéshez megkeressük az ELENGEDŐ játékost és a
+    helyét az elengedés kockáján, majd a támadott kaputól mért
+    távolságot a posztjához írjuk.
+
+    Edzőileg ez a "meddig lépj ki" döntés. Aki rendre 11-12 méterről
+    lő, arra RÁ LEHET engedni: a távoli lövés a kapusnak kedvez, és a
+    kilépés helyett érdemesebb a passzsávot zárni. Aki viszont
+    beugrással 7 méterre jön be, azt KI KELL zárni, mert onnan a
+    kapusnak alig van esélye. A csapat-átlag önmagában keveset mond —
+    a posztok közti KÜLÖNBSÉG mondja meg, kire kell másképp védekezni.
+
+    Ez a réteg a lövő-hozzárendelésre épül, amely az elengedés
+    pillanatát keresi meg (lásd `event_detection._shooter_before`) —
+    a mért távolság tehát az elengedés helye, nem a becsapódásé.
+
+    Visszatérés csapatonként: {"shots" (mért lövés), "team_avg_m",
+    "roles": {poszt: {"shots", "avg_m"}}, "farthest": {"poszt",
+    "shots", "avg_m", "gap_m"} | None, "closest": {...} | None,
+    "verdict": str | None} — a farthest/closest/verdict None, ha a
+    poszt nem érte el az RSD_MIN_SHOTS lövést, vagy a csapat-átlagtól
+    való eltérése kisebb RSD_GAP_M-nél.
+    """
+    import math
+
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    by_frame = {f.t: f for f in match.frames}
+
+    tally: dict = {"home": {}, "away": {}}     # poszt → [db, összeg m]
+    totals: dict = {"home": [0, 0.0], "away": [0, 0.0]}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        frame = by_frame.get(e.t)
+        if frame is None:
+            continue
+        who = next((p for p in frame.players
+                    if p.track_id == e.player_id), None)
+        if who is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        # A kaputól mért TÉNYLEGES (egyenes) távolság: a szélső 6 m-es
+        # lövése is messzebb van a kaputól, mint a beállóé.
+        dist = math.hypot(goal_x - who.x, 10.0 - who.y)
+        rec = tally[side].setdefault(rec_role["poszt"], [0, 0.0])
+        rec[0] += 1
+        rec[1] += dist
+        totals[side][0] += 1
+        totals[side][1] += dist
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_all, sum_all = totals[side]
+        team_avg = (sum_all / n_all) if n_all else None
+        rows = {}
+        for poszt, (n, s_m) in sorted(tally[side].items(),
+                                      key=lambda kv: -kv[1][0]):
+            rows[poszt] = {"shots": n, "avg_m": round(s_m / n, 1)}
+        farthest = closest = verdict = None
+        if team_avg is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["shots"] >= RSD_MIN_SHOTS]
+            if eligible:
+                p_far, r_far = max(eligible, key=lambda pr: pr[1]["avg_m"])
+                if r_far["avg_m"] - team_avg >= RSD_GAP_M:
+                    farthest = {"poszt": p_far, "shots": r_far["shots"],
+                                "avg_m": r_far["avg_m"],
+                                "gap_m": round(r_far["avg_m"] - team_avg, 1)}
+                p_near, r_near = min(eligible, key=lambda pr: pr[1]["avg_m"])
+                if team_avg - r_near["avg_m"] >= RSD_GAP_M:
+                    closest = {"poszt": p_near, "shots": r_near["shots"],
+                               "avg_m": r_near["avg_m"],
+                               "gap_m": round(team_avg - r_near["avg_m"], 1)}
+                if closest is not None:
+                    verdict = (f"a(z) {closest['poszt']} közelről fejez be "
+                               f"(átl. {closest['avg_m']:.1f} m) — őt ki "
+                               f"kell zárni")
+                elif farthest is not None:
+                    verdict = (f"a(z) {farthest['poszt']} távolról lő "
+                               f"(átl. {farthest['avg_m']:.1f} m) — rá "
+                               f"lehet engedni")
+        out[side] = {"shots": n_all,
+                     "team_avg_m": round(team_avg, 1)
+                     if team_avg is not None else None,
+                     "roles": rows, "farthest": farthest,
+                     "closest": closest, "verdict": verdict}
+    return out

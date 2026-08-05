@@ -885,6 +885,29 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-lövéstávolság: kire lépj ki, kire lehet ráengedni.
+    try:
+        from .roles import role_shot_distance
+        rsd = role_shot_distance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsd = rsd[side]
+            if rec_rsd["verdict"] is None:
+                continue
+            near, far = rec_rsd["closest"], rec_rsd["farthest"]
+            if near is not None:
+                body += (f" A(z) {name} befejezéseiből a(z) "
+                         f"{near['poszt']} jön be a legközelebb "
+                         f"(átl. {near['avg_m']:.1f} m {near['shots']} "
+                         f"lövésen, a csapat-átlaguk "
+                         f"{rec_rsd['team_avg_m']:.1f} m) — őt ki kell "
+                         "zárni, mert onnan a kapusnak alig van esélye.")
+            elif far is not None:
+                body += (f" A(z) {name} legtávolabbi befejezője a(z) "
+                         f"{far['poszt']} (átl. {far['avg_m']:.1f} m "
+                         f"{far['shots']} lövésen) — rá inkább rá lehet "
+                         "engedni, a passzsáv zárása többet ér.")
+    except Exception:
+        pass
     # Poszt-eladási zóna: kinek az eladása hív kontrát.
     try:
         from .roles import role_turnover_zones

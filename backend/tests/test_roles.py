@@ -857,3 +857,73 @@ def test_role_turnover_zones_silent_with_few_turnovers():
 
     rec = role_turnover_zones(_rtz_match([1, 2]))["home"]
     assert rec["riskiest"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-lövéstávolság (melyik posztjuk milyen messziről lő) --------------
+
+# A beálló a 6 m-en, az irányító 12 m-en áll; a szélső a sávban.
+_RSD = {1: (34.0, 10.0), 2: (28.0, 10.0)}
+
+
+def _rsd_players():
+    players = [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RSD.items()]
+    players.append(_pl(20, Team.AWAY, 10.0, 10.0))
+    return players
+
+
+def _rsd_match(shooters, warmup=200):
+    """`shooters` = a lövést leadó hazai játékosok sorrendben.
+
+    Minden lövésnél a labda előbb a lövő KEZÉBEN van (ez az elengedés
+    pillanata), majd lövés-tempóban a +x kapuba repül.
+    """
+    frames = []
+    t = 0
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_rsd_players(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):      # poszt-minta: a beálló birtokol
+        _add(34.0, 10.0)
+    for tid in shooters:
+        sx, sy = _RSD[tid]
+        for _ in range(6):       # a lövő kezében a labda
+            _add(sx + 0.2, sy)
+        x = sx + 0.2
+        while x < 40.5:          # lövés: ~25 m/s a kapuba
+            x += 1.0
+            _add(min(x, 40.5), 10.0)
+        for _ in range(30):      # a labda visszakerül középre
+            _add(20.0, 10.0)
+    return Match(MatchMeta(match_id="sd", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_shot_distance_separates_the_posts():
+    """A beálló 6 m-ről, az irányító 12 m-ről fejez be — a posztok
+    közti különbség adja a "meddig lépj ki" döntést."""
+    from handball.pipeline.roles import RSD_MIN_SHOTS, role_shot_distance
+
+    rec = role_shot_distance(_rsd_match([1] * 5 + [2] * 5))["home"]
+    assert rec["shots"] >= 2 * RSD_MIN_SHOTS, rec
+    posts = rec["roles"]
+    assert len(posts) == 2, rec
+    # A két poszt átlagtávolsága érdemben eltér.
+    avgs = sorted(r["avg_m"] for r in posts.values())
+    assert avgs[1] - avgs[0] >= 4.0, rec
+    assert rec["closest"] is not None and rec["farthest"] is not None, rec
+    assert rec["closest"]["avg_m"] < rec["farthest"]["avg_m"], rec
+    # A közeli befejezőt kell kizárni — ez az elsődleges ítélet.
+    assert rec["verdict"] and "ki kell zárni" in rec["verdict"], rec
+
+
+def test_role_shot_distance_silent_with_few_shots():
+    """Két lövésből nincs ítélet (sose hallgatólagos átlag)."""
+    from handball.pipeline.roles import role_shot_distance
+
+    rec = role_shot_distance(_rsd_match([1, 2]))["home"]
+    assert rec["closest"] is None and rec["farthest"] is None, rec
+    assert rec["verdict"] is None, rec
