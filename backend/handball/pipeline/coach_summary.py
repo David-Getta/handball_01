@@ -883,6 +883,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-passzháló: melyik vonalon jár a legtöbb passzuk.
+    try:
+        from .roles import role_pass_map
+        rpm = role_pass_map(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rpm = rpm[side]
+            if rec_rpm["verdict"] is None:
+                continue
+            top_rpm = rec_rpm["top"]
+            body += (f" A(z) {name} labdajáratásának legterheltebb "
+                     f"vonala a(z) {top_rpm['from']} → {top_rpm['to']}: "
+                     f"a poszthoz kötött passzaik "
+                     f"{top_rpm['share_pct']:.0f}%-a "
+                     f"({top_rpm['passes']}/{rec_rpm['passes_total']}) "
+                     "megy erre — az elfogás is itt a legvalószínűbb.")
+    except Exception:
+        pass
     # Poszt-birtoklás: melyik poszt tartja a labdát a támadásaikban.
     try:
         from .roles import role_possession_share

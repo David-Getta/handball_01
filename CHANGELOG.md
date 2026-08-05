@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-passzháló** (`role_pass_map`): melyik vonalon jár a labda
+  posztról posztra. A gólpassz-tengely (`assist_role_pairs`) csak a
+  GÓLT érő passzokat nézi, a passz-hálózat a NEVEKET — ez az összes
+  passzt, posztonként; a kép így sokkal sűrűbb (meccsenként több száz
+  passz, gólpassz húsz körül). Edzői olvasat: a legterheltebb vonal
+  az, ahol az elfogás a legvalószínűbb — oda érdemes a kezet és a
+  testet tenni; ha egy vonal a passzok harmadát viszi, a
+  labdajáratásuk kiszámítható. A réteg a birtokos-váltásokból dolgozik
+  (nem a kapu-felé torzító lövő-hozzárendelésből). Húsz passz alatt,
+  30%-os részarány alatt vagy holtversenynél nincs ítélet. Felületek:
+  `/matches/{id}/attacks` + meccs-csomag (`role_pass_map`), edzői
+  összefoglaló, meccs-jelentés Poszt-lencséje, felderítés
+  (vonal-számlálók meccsek közt összegezve + edzői kulcs + 259-es
+  meccsterv-szabály), 280-as edzés-szabály ("Passz-útvonalak
+  bővítése"), kliens-csempe ("Poszt-passzháló").
+
 - **Poszt-birtoklás** (`role_possession_share`): melyik posztnál van a
   labda a szervezett támadásaikban. A játékmester-függés és a
   tartás-idők a NEVEKET nézik — ez a posztot, ami akkor is stabil, ha

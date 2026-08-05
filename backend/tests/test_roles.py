@@ -659,3 +659,57 @@ def test_role_possession_share_silent_with_few_frames():
 
     rec = role_possession_share(_rps_match(3, frames_n=200))["home"]
     assert rec["top"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-passzháló ---------------------------------------------------------
+
+def _rpm_match(passes, warmup=150):
+    """`passes` = [(passzoló, fogadó)] — mindegyikből egy passz-esemény.
+
+    A labda lassan vándorol a két poszt között; a birtokos-váltás adja
+    a passzt. Lövés nincs: a labda a kaputól végig 6 méternél messzebb
+    marad.
+    """
+    frames = []
+    t = 0
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_arp_players(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):
+        _add(28.0, 10.0)
+    for passer, receiver in passes:
+        for tid in (passer, receiver):
+            tx, ty = _ARP[tid]
+            cur = (frames[-1].ball.x, frames[-1].ball.y)
+            for i in range(1, 26):
+                f_ = i / 25.0
+                _add(cur[0] + (tx - cur[0]) * f_,
+                     cur[1] + (ty - cur[1]) * f_)
+            for _ in range(4):
+                _add(tx, ty)
+    return Match(MatchMeta(match_id="pm", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_pass_map_finds_the_busiest_lane():
+    """Ha a labda mindig ugyanazon a vonalon jár, az elfogás oda kell."""
+    from handball.pipeline.roles import role_pass_map
+
+    rec = role_pass_map(_rpm_match([(3, 1)] * 15))["home"]
+    assert rec["passes_total"] >= 20, rec
+    assert rec["top"] is not None, rec
+    assert {rec["top"]["from"], rec["top"]["to"]} == {"irányító", "beálló"}
+    assert rec["verdict"] and "vonalon megy" in rec["verdict"], rec
+
+
+def test_role_pass_map_silent_with_few_passes():
+    """Néhány passzból nincs ítélet — nem találgatunk."""
+    from handball.pipeline.roles import role_pass_map
+
+    rec = role_pass_map(_rpm_match([(3, 1)] * 3))["home"]
+    assert rec["passes_total"] < 20, rec
+    assert rec["top"] is None and rec["verdict"] is None, rec

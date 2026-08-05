@@ -828,3 +828,74 @@ def role_possession_share(match: Match,
         out[side] = {"frames": n, "roles": rows, "top": top,
                      "verdict": verdict}
     return out
+
+
+# Poszt-passzháló: ennyi poszthoz kötött passz kell az ítélethez, és
+# ekkora részarány fölött nevezzük kiszámítható labdajáratásnak.
+RPM_MIN_PASSES = 20
+RPM_SHARE = 30.0
+
+
+def role_pass_map(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-passzháló: MELYIK VONALON jár a labda a támadásaikban.
+
+    A gólpassz-tengely (assist_role_pairs) csak a GÓLT érő passzokat
+    nézi, a passz-hálózat a NEVEKET — ez az összes passzt, posztról
+    posztra. A poszt akkor is stabil, ha a nevek cserélődnek, és a
+    kép sokkal sűrűbb, mint a gólpasszoké: egy meccsen több száz passz
+    van, gólpassz húsz körül.
+
+    Edzőileg: a legterheltebb vonal az, ahol az elfogás a
+    legvalószínűbb — oda érdemes a kezet és a testet tenni. Ha egy
+    vonal a passzok harmadát viszi, a labdajáratásuk kiszámítható, és
+    a passzsáv zárása megakasztja a felépítést.
+
+    Ez a réteg a birtokos-váltásokból dolgozik (nem a
+    lövő-hozzárendelésből, amely kapu-felé torzít) — a poszt-bontása
+    közvetlenül mérhető.
+
+    Visszatérés csapatonként: {"passes_total", "pairs": {"A→B": db},
+    "top": {"from", "to", "passes", "share_pct"} | None, "verdict":
+    str | None} — a top/verdict None RPM_MIN_PASSES alatt, ha a vezető
+    vonal nem éri el az RPM_SHARE-t, vagy ha holtverseny van.
+    """
+    from .event_detection import EventType, detect_possession_changes
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    tally: dict = {"home": {}, "away": {}}
+
+    for e in detect_possession_changes(match, config):
+        if e.type != EventType.PASS or e.player_id is None:
+            continue
+        receiver = (e.detail or {}).get("receiver_id")
+        if receiver is None:
+            continue
+        side = e.team.value
+        frm = roles[side].get(e.player_id)
+        to = roles[side].get(receiver)
+        if frm is None or to is None:
+            continue  # ismeretlen poszt — nem találgatunk
+        key = f"{frm['poszt']}→{to['poszt']}"
+        tally[side][key] = tally[side].get(key, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        pairs = dict(sorted(tally[side].items(), key=lambda kv: -kv[1]))
+        total = sum(pairs.values())
+        top = verdict = None
+        items = list(pairs.items())
+        if total >= RPM_MIN_PASSES and items:
+            key, n = items[0]
+            share = 100.0 * n / total
+            tie = len(items) > 1 and items[1][1] == n
+            if share >= RPM_SHARE and not tie:
+                frm_p, to_p = key.split("→", 1)
+                top = {"from": frm_p, "to": to_p, "passes": n,
+                       "share_pct": round(share, 1)}
+                verdict = (f"a passzaik {share:.0f}%-a a(z) {frm_p} → "
+                           f"{to_p} vonalon megy")
+        out[side] = {"passes_total": total, "pairs": pairs, "top": top,
+                     "verdict": verdict}
+    return out

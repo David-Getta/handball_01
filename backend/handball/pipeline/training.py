@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 280) Poszt-passzháló: ha a passzaink egy vonalon mennek, az
+    # elfogás kiszámítható.
+    try:
+        from .roles import RPM_SHARE, role_pass_map
+        rpm280 = role_pass_map(match, config)
+        for side in ("home", "away"):
+            rec280 = rpm280[side]
+            top280 = rec280.get("top")
+            if top280 is None:
+                continue
+            add(side, "támadás", "Passz-útvonalak bővítése",
+                f"a poszthoz kötött passzaink "
+                f"{top280['share_pct']:.0f}%-a a(z) {top280['from']} → "
+                f"{top280['to']} vonalon megy "
+                f"({top280['passes']}/{rec280['passes_total']}; "
+                f"{RPM_SHARE:.0f}% fölött már kiszámítható) — egy "
+                "olvasó védő erre a sávra áll rá, és ingyen labdát kap",
+                "passz-útvonalak: labdajáratás-gyakorlat szabállyal — "
+                "ugyanaz a vonal kétszer egymás után nem használható, "
+                "így a harmadik és negyedik útvonal is beépül; "
+                "aktív, kezes védelem ellen, sorozatban")
+    except Exception:
+        pass
     # 279) Poszt-birtoklás: ha a labda idejének több mint felét egy
     # poszt tartja, a játékunk egy emberen áll.
     try:

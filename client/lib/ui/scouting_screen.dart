@@ -1896,6 +1896,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-passzháló: melyik vonalon jár a legtöbb passzuk (20+ passz,
+  // 30%-os részarány — a backenddel azonos küszöbök).
+  String? _passLane(Map<String, dynamic> r) {
+    final lanes = (r["rpm_lanes"] as Map?)?.cast<String, dynamic>();
+    if (lanes == null || lanes.isEmpty) return null;
+    var total = 0;
+    String? top;
+    var topN = 0;
+    lanes.forEach((k, v) {
+      final n = (v as num).toInt();
+      total += n;
+      if (n > topN) {
+        topN = n;
+        top = k;
+      }
+    });
+    if (total < 20 || top == null) return null;
+    final pct = (100.0 * topN / total).round();
+    if (pct < 30) return null;
+    return "a poszthoz kötött passzaik $pct%-a a(z) $top vonalon megy "
+        "($topN/$total) · az elfogás is itt a legvalószínűbb";
+  }
+
   // Poszt-birtoklás: melyik poszt tartja a labdát (250+ kocka, 55%-os
   // részarány — a backenddel azonos küszöbök).
   String? _possessionRole(Map<String, dynamic> r) {
@@ -6551,6 +6574,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_passLane(r) != null)
+        ["Poszt-passzháló", _passLane(r)!],
       if (_possessionRole(r) != null)
         ["Poszt-birtoklás", _possessionRole(r)!],
       if (_trailingFinisher(r) != null)

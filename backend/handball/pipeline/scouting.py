@@ -738,6 +738,7 @@ class ScoutingReport:
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
     arp_pairs: dict = field(default_factory=dict)
+    rpm_lanes: dict = field(default_factory=dict)
     rps_frames_by_role: dict = field(default_factory=dict)
     rbs_trailing: dict = field(default_factory=dict)
     rbs_rest: dict = field(default_factory=dict)
@@ -2951,6 +2952,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-passzháló: melyik vonalon jár a legtöbb passzuk.
+    if rep.rpm_lanes:
+        _rpm_total = sum(rep.rpm_lanes.values())
+        _rpm_key, _rpm_n = max(rep.rpm_lanes.items(), key=lambda kv: kv[1])
+        _rpm_pct = 100.0 * _rpm_n / _rpm_total
+        if _rpm_total >= 20 and _rpm_pct >= 30.0:
+            keys.append(
+                f"A labdajáratásuk legterheltebb vonala a(z) {_rpm_key}: "
+                f"a poszthoz kötött passzaik {_rpm_pct:.0f}%-a "
+                f"({_rpm_n}/{_rpm_total}) megy erre — az elfogás is itt "
+                "a legvalószínűbb, ide tegyétek a kezet és a testet.")
 
     # Poszt-birtoklás: melyik posztra érdemes nyomást tenni.
     _rps_total = sum(rep.rps_frames_by_role.values())
@@ -7158,6 +7171,8 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_pass_map as _rpm
+        rep.rpm_lanes = dict(_rpm(match, config)[team.value]["pairs"])
         from .roles import role_possession_share as _rps
         rep.rps_frames_by_role = {
             p: r["frames"]
@@ -9657,6 +9672,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 259) Az ő legterheltebb passz-vonaluk × a ti szerzéseitek: az
+    # elfogás oda a legvalószínűbb.
+    if opp.rpm_lanes:
+        _rpm259_total = sum(opp.rpm_lanes.values())
+        _rpm259_key, _rpm259_n = max(opp.rpm_lanes.items(),
+                                     key=lambda kv: kv[1])
+        _rpm259_pct = 100.0 * _rpm259_n / _rpm259_total
+        if (_rpm259_total >= 20 and _rpm259_pct >= 30.0
+                and own.stl_steals >= 5):
+            plan.append(
+                f"A passzaik {_rpm259_pct:.0f}%-a a(z) {_rpm259_key} "
+                f"vonalon megy ({_rpm259_n}/{_rpm259_total}), ti pedig "
+                f"meccsenként {own.stl_steals} labdát szereztetek — "
+                "erre a sávra álljatok rá kézzel és testtel: a "
+                "kiszámítható labdajáratás elfogása olcsóbb pont, mint "
+                "a támadásból szerzett.")
 
     # 258) Az ő labdatartó posztjuk × a ti letámadásotok: a nyomásnak
     # kijelölt címzettje legyen.
@@ -13890,6 +13922,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rpm_lanes=_merge_count_dicts(r.rpm_lanes for r in reports),
         rps_frames_by_role=_merge_count_dicts(
             r.rps_frames_by_role for r in reports),
         rbs_trailing=_merge_count_dicts(r.rbs_trailing for r in reports),
