@@ -254,9 +254,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      final s = "$e"; // nyers-hiba-szándékos: ILLESZTÉSHEZ kell, nem kiíráshoz
       // 404: nincs kiadás VAGY privát a repó; 401/403: rossz/lejárt token.
-      final authIssue = s.contains("404") || s.contains("401") || s.contains("403");
+      // A felismerés az error_text.dart nevesített minta-listáiból megy —
+      // puszta "404"-re nem illesztünk, mert az egy kiadás-névben vagy
+      // URL-ben is előfordulhat.
+      final authIssue = looksLikeAccessIssue(e);
       messenger.showSnackBar(SnackBar(
         content: Text(authIssue
             ? "Nem érem el a kiadásokat — privát repónál add meg a "

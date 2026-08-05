@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A hibafelismerés nem téveszt fájlnévre.** A státuszkód-mintákat
+  eddig puszta számként kerestük a kivétel szövegében: egy
+  `match_404.mp4` útvonal vagy egy 401-et tartalmazó azonosító elég
+  volt hozzá, hogy a program magabiztosan azt mondja, "a kért elem
+  nincs meg". Egy ilyen véletlen találat rosszabb, mint a nyers üzenet
+  — valótlant állít. Mostantól a kulcsok kontextussal keresnek ("http
+  404", "404 not found", "status 404"), és a frissítés-ellenőrzés is
+  ugyanezekből a nevesített listákból dolgozik (`looksLikeAccessIssue`)
+  a saját kezű illesztés helyett — így a két hely nem tud széttartani.
+  Őr-teszt tiltja a puszta számos kulcsot.
+
 - **Minden jelentés megmondja, mikor készült.** Az edzőnél mappában
   állnak a nyomatok, és eddig egyetlen lapon sem volt dátum: ugyanarról
   az ellenfélről a szeptemberi és a novemberi felderítés

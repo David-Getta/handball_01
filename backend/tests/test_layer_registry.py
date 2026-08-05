@@ -624,6 +624,43 @@ def test_kliens_nem_ir_ki_nyers_kivetelt():
         f"megjegyzéssel: {offenders}")
 
 
+def test_kliens_statuszkod_nem_puszta_szam():
+    """A státuszkód-mintákat ne puszta számként keressük.
+
+    A "404" előfordulhat fájlnévben (`match_404.mp4`), azonosítóban,
+    időbélyegben vagy egy kiadás nevében is. Egy ilyen véletlen találat
+    ROSSZABB, mint a nyers üzenet: magabiztosan mond valótlant ("A kért
+    elem nincs meg"). Ezért minden státusz-kulcshoz kontextus tartozik
+    ("http 404", "404 not found", "status 404").
+
+    A frissítés-ellenőrzés ugyanezekből a listákból dolgozik
+    (`looksLikeAccessIssue`), hogy a két hely ne tudjon széttartani.
+    """
+    import re
+    ui = (Path(__file__).resolve().parent.parent.parent
+          / "client" / "lib" / "ui")
+    if not ui.exists():
+        pytest.skip("nincs kliens a fában")
+    src = (ui / "error_text.dart").read_text(encoding="utf-8")
+
+    keys = []
+    for name in ("kNotFoundKeys", "kForbiddenKeys"):
+        m = re.search(r"const List<String> %s = \[(.*?)\];" % name,
+                      src, flags=re.S)
+        assert m, name
+        keys += re.findall(r'"([^"]+)"', m.group(1))
+    assert keys, "üres státusz-lista"
+    bare = [k for k in keys if re.fullmatch(r"\d{3}", k.strip())]
+    assert not bare, (
+        f"puszta számként keresett státuszkód (kontextus kell): {bare}")
+
+    dash = (ui / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert "looksLikeAccessIssue(e)" in dash
+    assert 'contains("404")' not in dash, (
+        "a frissítés-ellenőrzés saját kezűleg illeszt — használja a "
+        "közös `looksLikeAccessIssue`-t")
+
+
 def test_kliens_varakozas_felirattal():
     """Egy egész képernyőt kitöltő pörgettyű ne álljon felirat nélkül.
 
