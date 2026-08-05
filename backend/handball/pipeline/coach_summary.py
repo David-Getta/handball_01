@@ -885,6 +885,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-lövéserő: melyik posztra készüljön a kapus.
+    try:
+        from .roles import role_shot_power
+        rsp = role_shot_power(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsp = rsp[side]
+            hard = rec_rsp["hardest"]
+            if hard is None:
+                continue
+            body += (f" A(z) {name} legkeményebb befejezője a(z) "
+                     f"{hard['poszt']} posztjuk: átlag "
+                     f"{hard['avg_kmh']:.0f} km/h {hard['shots']} "
+                     f"lövésen, a csapat-átlaguk "
+                     f"{rec_rsp['team_avg_kmh']:.0f} km/h — ellene a "
+                     "kapus korábban induljon, a fal szöget zárjon.")
+    except Exception:
+        pass
     # Poszt-lövésidőzítés: ki lő korán, ki vár ki.
     try:
         from .roles import role_shot_timing

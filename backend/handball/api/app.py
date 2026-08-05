@@ -2482,6 +2482,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.roles import role_shot_power
+            res["role_shot_power"] = role_shot_power(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_turnover_zones
             res["role_turnover_zones"] = role_turnover_zones(match)
         except Exception:
@@ -4907,6 +4912,9 @@ def create_app():
                 from ..pipeline.roles import role_shot_timing
                 _layer("role_shot_timing",
                        lambda: role_shot_timing(match))
+                from ..pipeline.roles import role_shot_power
+                _layer("role_shot_power",
+                       lambda: role_shot_power(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

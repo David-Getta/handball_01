@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Poszt-lövéserő: melyik posztra készüljön a kapus.** Új elemző
+  réteg. A lövő-erő eddig NÉVRE mondta meg, ki a bombázó — ez posztra
+  mondja. A név meccsről meccsre cserélődhet (sérülés, csere, más
+  felállás), a poszt viszont marad, ezért a kapus felkészítése
+  poszt-alapon tart. Edzői olvasat: a kemény lövésre a kapusnak
+  korábban kell indulnia és inkább a szöget zárnia, mint reagálnia; a
+  helyezett lövésnél fordítva, ott a kivárás fizet. A fal ugyanezt a
+  döntést hozza. Ha nem tudjuk, melyik posztjuk melyik, a kapus
+  mindkettőre félig készül. Négy lövés alatt, illetve 12 km/h-nál
+  kisebb eltérésnél nincs ítélet. Felületek: elemzés-végpont,
+  meccs-csomag, edzői összefoglaló, felderítő kulcsok, meccsterv (265.
+  szabály: az ő kemény lövő posztjuk × a ti kapusotok tempó-profilja),
+  edzés-fókusz (286. szabály), felderítés-képernyő csempéje.
+
 - **Poszt-lövésidőzítés: ki lő korán, ki vár ki.** Új elemző réteg.
   Minden lövéshez megkeressük a támadás-szakasz kezdetét, és az addig
   eltelt időt az elengedő játékos posztjához írjuk. Edzői olvasat: ez a

@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 286) Poszt-lövéserő: ha az egyik posztunk lövése kiugróan
+    # kemény, a többié viszont nem, a befejezés egy emberre szűkül.
+    try:
+        from .roles import RSP_GAP_KMH, role_shot_power
+        rsp286 = role_shot_power(match, config)
+        for side in ("home", "away"):
+            rec286 = rsp286[side]
+            hard286 = rec286.get("hardest")
+            if hard286 is None:
+                continue
+            add(side, "befejezés", "Egy posztra szűkül a lövőerő",
+                f"a(z) {hard286['poszt']} posztunk átlag "
+                f"{hard286['avg_kmh']:.0f} km/h-val lő "
+                f"({hard286['shots']} lövés), a csapat-átlagunk "
+                f"{rec286['team_avg_kmh']:.0f} km/h — a különbség "
+                f"{hard286['gap_kmh']:.0f} km/h "
+                f"({RSP_GAP_KMH:.0f} km/h fölött már mintázat), tehát a "
+                "kapusnak elég egy posztra készülnie",
+                "lövőerő-gyakorlat a TÖBBI posztnak: elzárás utáni "
+                "felugrásos befejezés súlyzós bemelegítés után, és "
+                "kapura lövés kötött karmunkával — a cél, hogy a fal ne "
+                "tudjon egyetlen emberre beállni")
+    except Exception:
+        pass
     # 285) Poszt-lövésidőzítés: ha egy posztunk a támadás végén lő, az
     # a passzív-jel kockázata és a kifáradt befejezés.
     try:

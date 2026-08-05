@@ -744,6 +744,8 @@ class ScoutingReport:
     rsd_dist_sum_by_role: dict = field(default_factory=dict)
     rst_shots_by_role: dict = field(default_factory=dict)
     rst_time_sum_by_role: dict = field(default_factory=dict)
+    rsp_shots_by_role: dict = field(default_factory=dict)
+    rsp_kmh_sum_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -2962,6 +2964,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-lövéserő: melyik posztra készüljön a kapusunk.
+    _rsp_n = sum(rep.rsp_shots_by_role.values())
+    if _rsp_n >= 8:
+        _rsp_team = sum(rep.rsp_kmh_sum_by_role.values()) / _rsp_n
+        _rsp_rows = [(p, n, rep.rsp_kmh_sum_by_role.get(p, 0.0) / n)
+                     for p, n in rep.rsp_shots_by_role.items() if n >= 4]
+        if _rsp_rows:
+            _rsp_p, _rsp_c, _rsp_avg = max(_rsp_rows, key=lambda r: r[2])
+            if _rsp_avg - _rsp_team >= 12.0:
+                keys.append(
+                    f"A(z) {_rsp_p} posztjuk lő a legkeményebben: átlag "
+                    f"{_rsp_avg:.0f} km/h {_rsp_c} lövésen (a "
+                    f"csapat-átlaguk {_rsp_team:.0f} km/h) — a kapusunk "
+                    "ellene korábban induljon és a szöget zárja, a fal "
+                    "ne vakon blokkoljon.")
 
     # Poszt-lövésidőzítés: ki lő korán, ki vár ki.
     _rst_n = sum(rep.rst_shots_by_role.values())
@@ -7281,6 +7299,13 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_shot_power as _rsp
+        rsprec = _rsp(match, config)[team.value]
+        rep.rsp_shots_by_role = {p: r["shots"]
+                                 for p, r in rsprec["roles"].items()}
+        # KM/H-ÖSSZEG (nem átlag): meccsek közt pontosan összegződik.
+        rep.rsp_kmh_sum_by_role = {p: round(r["shots"] * r["avg_kmh"], 1)
+                                   for p, r in rsprec["roles"].items()}
         from .roles import role_shot_timing as _rst
         rstrec = _rst(match, config)[team.value]
         rep.rst_shots_by_role = {p: r["shots"]
@@ -9819,6 +9844,32 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 265) Az ő kemény lövő posztjuk × a ti kapusotok tempó-profilja:
+    # ha a kapusunk épp a kemény lövéseknél gyengébb, ott kell a fal
+    # segítsége — szöget zárni, nem vakon blokkolni.
+    _rsp265_n = sum(opp.rsp_shots_by_role.values())
+    if _rsp265_n >= 8:
+        _rsp265_team = sum(opp.rsp_kmh_sum_by_role.values()) / _rsp265_n
+        _rsp265_rows = [(p, n, opp.rsp_kmh_sum_by_role.get(p, 0.0) / n)
+                        for p, n in opp.rsp_shots_by_role.items() if n >= 4]
+        if _rsp265_rows:
+            _p265, _n265, _avg265 = max(_rsp265_rows, key=lambda r: r[2])
+            _hard265 = (100.0 * own.gsp_hard_saves / own.gsp_hard_faced
+                        if own.gsp_hard_faced >= 5 else 100.0)
+            _placed265 = (100.0 * own.gsp_placed_saves
+                          / own.gsp_placed_faced
+                          if own.gsp_placed_faced >= 5 else 0.0)
+            if (_avg265 - _rsp265_team >= 12.0
+                    and _placed265 - _hard265 >= 10.0):
+                plan.append(
+                    f"A(z) {_p265} posztjuk átlag {_avg265:.0f} km/h-val "
+                    f"lő ({_n265} lövés; a csapat-átlaguk "
+                    f"{_rsp265_team:.0f} km/h), a ti kapusotok pedig a "
+                    f"kemény lövéseket {_hard265:.0f}%-ban fogja a "
+                    f"helyezettek {_placed265:.0f}%-ával szemben — az ő "
+                    "lövésénél a fal zárja a szöget, ne vakon "
+                    "blokkoljon: a kapus így kap fél métert.")
 
     # 264) Az ő korai befejező posztjuk × a ti visszaéréstek: aki a
     # támadás első másodperceiben lő, azt a felállt fal már nem éri el
@@ -14173,6 +14224,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rsp_shots_by_role=_merge_count_dicts(
+            r.rsp_shots_by_role for r in reports),
+        rsp_kmh_sum_by_role=_merge_count_dicts(
+            r.rsp_kmh_sum_by_role for r in reports),
         rst_shots_by_role=_merge_count_dicts(
             r.rst_shots_by_role for r in reports),
         rst_time_sum_by_role=_merge_count_dicts(

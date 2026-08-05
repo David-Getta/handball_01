@@ -2040,6 +2040,39 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-lövéserő: melyik posztjuk lő keményen (8+ lövés,
+  // posztonként 4+, 12 km/h eltérés — a backenddel azonos küszöbök:
+  // RSP_MIN_SHOTS, RSP_GAP_KMH).
+  String? _shotPowerRole(Map<String, dynamic> r) {
+    final shots = (r["rsp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final sums = (r["rsp_kmh_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || sums == null) return null;
+    var total = 0;
+    var totalK = 0.0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    sums.forEach((k, v) => totalK += (v as num).toDouble());
+    if (total < 8) return null;
+    final teamAvg = totalK / total;
+    String? hard;
+    var hardAvg = 0.0;
+    var hardN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 4) return;
+      final avg = ((sums[k] as num?) ?? 0).toDouble() / n;
+      if (hard == null || avg > hardAvg) {
+        hard = k;
+        hardAvg = avg;
+        hardN = n;
+      }
+    });
+    if (hard == null || hardAvg - teamAvg < 12.0) return null;
+    return "a(z) $hard posztjuk lő a legkeményebben: átlag "
+        "${hardAvg.round()} km/h ($hardN lövés, csapat-átlag "
+        "${teamAvg.round()} km/h) · a kapus korábban induljon, a fal "
+        "szöget zárjon";
+  }
+
   // Poszt-lövésidőzítés: melyik posztjuk mikor fejez be a támadáson
   // belül (8+ lövés, posztonként 4+, 4 mp eltérés — a backenddel
   // azonos küszöbök: RST_MIN_SHOTS, RST_GAP_S).
@@ -6907,6 +6940,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_shotPowerRole(r) != null)
+        ["Poszt-lövéserő", _shotPowerRole(r)!],
       if (_shotTimingRole(r) != null)
         ["Poszt-lövésidőzítés", _shotTimingRole(r)!],
       if (_shotDistanceRole(r) != null)

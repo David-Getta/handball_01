@@ -1434,3 +1434,84 @@ def role_shot_timing(match: Match,
                      "roles": rows, "earliest": earliest,
                      "latest": latest, "verdict": verdict}
     return out
+
+
+# Poszt-lövéserő: posztonként ennyi mért lövés kell az ítélethez, és
+# ekkora (km/h) eltérés a csapat-átlagtól számít érdeminek. A 12 km/h
+# nagyjából egy kapus-reakciónyi különbség a hat méteren.
+RSP_MIN_SHOTS = 4
+RSP_GAP_KMH = 12.0
+
+
+def role_shot_power(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-lövéserő: MELYIK POSZTJUK LŐ KEMÉNYEN.
+
+    A lövő-erő (event_detection.shooter_power) NÉVRE mondja meg, ki a
+    bombázó — ez posztra. A név meccsről meccsre cserélődhet (sérülés,
+    csere, más felállás), a poszt viszont marad: a kapus felkészítése
+    ezért poszt-alapon tart.
+
+    Edzőileg: a kemény lövésre a kapusnak KORÁBBAN kell indulnia és
+    inkább a szöget kell zárnia, mint reagálnia; a helyezett (lassabb)
+    lövésnél fordítva — ott a kivárás fizet. A fal ugyanezt a döntést
+    hozza: a bombázó poszttal szemben szöget zárni, a helyezővel
+    szemben a kezet fent tartani. Ha nem tudjuk, melyik posztjuk
+    melyik, a kapus mindkettőre félig készül.
+
+    Visszatérés csapatonként: {"shots" (mért lövés), "team_avg_kmh",
+    "roles": {poszt: {"shots", "avg_kmh"}}, "hardest": {"poszt",
+    "shots", "avg_kmh", "gap_kmh"} | None, "verdict": str | None} — a
+    hardest/verdict None, ha a poszt nem érte el az RSP_MIN_SHOTS
+    lövést, vagy a csapat-átlagot nem haladja meg RSP_GAP_KMH-val.
+    """
+    from .event_detection import shot_speeds
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    speeds = shot_speeds(match, config)
+
+    tally: dict = {"home": {}, "away": {}}     # poszt → [db, összeg km/h]
+    totals: dict = {"home": [0, 0.0], "away": [0, 0.0]}
+    for s_ in speeds["shots"]:
+        side = s_["team"]
+        pid = s_["player_id"]
+        if side not in tally or pid is None:
+            continue
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        rec = tally[side].setdefault(rec_role["poszt"], [0, 0.0])
+        rec[0] += 1
+        rec[1] += s_["speed_kmh"]
+        totals[side][0] += 1
+        totals[side][1] += s_["speed_kmh"]
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_all, sum_all = totals[side]
+        team_avg = (sum_all / n_all) if n_all else None
+        rows = {}
+        for poszt, (n, s_k) in sorted(tally[side].items(),
+                                      key=lambda kv: -kv[1][0]):
+            rows[poszt] = {"shots": n, "avg_kmh": round(s_k / n, 1)}
+        hardest = verdict = None
+        if team_avg is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["shots"] >= RSP_MIN_SHOTS]
+            if eligible:
+                poszt, r = max(eligible, key=lambda pr: pr[1]["avg_kmh"])
+                gap = r["avg_kmh"] - team_avg
+                if gap >= RSP_GAP_KMH:
+                    hardest = {"poszt": poszt, "shots": r["shots"],
+                               "avg_kmh": r["avg_kmh"],
+                               "gap_kmh": round(gap, 1)}
+                    verdict = (f"a(z) {poszt} lő a legkeményebben "
+                               f"(átl. {r['avg_kmh']:.0f} km/h) — ellene "
+                               "a kapus korábban induljon, a fal szöget "
+                               "zárjon")
+        out[side] = {"shots": n_all,
+                     "team_avg_kmh": round(team_avg, 1)
+                     if team_avg is not None else None,
+                     "roles": rows, "hardest": hardest, "verdict": verdict}
+    return out

@@ -992,3 +992,64 @@ def test_role_shot_timing_silent_with_few_shots():
     rec = role_shot_timing(_rst_match([(1, 1.5), (2, 15.0)]))["home"]
     assert rec["earliest"] is None and rec["latest"] is None, rec
     assert rec["verdict"] is None, rec
+
+
+# ---- Poszt-lövéserő (melyik posztjuk lő keményen) ---------------------------
+
+def _rsp_match(plan, warmup=200):
+    """`plan` = (lövő-azonosító, a labda méter/kocka tempója) párok.
+
+    25 fps mellett 1 m/kocka = 90 km/h, tehát a tempó közvetlenül
+    állítja a mért lövéserőt.
+    """
+    frames = []
+    t = 0
+
+    def _cast():
+        return [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RSD.items()] + \
+            [_pl(20, Team.AWAY, 5.0, 10.0)]
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_cast(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):      # poszt-minta: a beálló birtokol
+        _add(34.0, 10.0)
+    for (tid, step) in plan:
+        sx, sy = _RSD[tid]
+        for _ in range(6):       # a lövő kezében a labda
+            _add(sx + 0.2, sy)
+        x = sx + 0.2
+        while x < 40.5:
+            x += step
+            _add(min(x, 40.5), 10.0)
+        for _ in range(40):
+            _add(5.0, 10.0)
+    return Match(MatchMeta(match_id="sp", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_shot_power_finds_the_hard_hitting_post():
+    """Az irányítójuk ~135 km/h-val lő, a beálló ~63-mal — a kapust
+    poszt szerint kell felkészíteni."""
+    from handball.pipeline.roles import RSP_MIN_SHOTS, role_shot_power
+
+    rec = role_shot_power(
+        _rsp_match([(2, 1.5)] * 5 + [(1, 0.7)] * 5))["home"]
+    assert rec["shots"] >= 2 * RSP_MIN_SHOTS, rec
+    assert rec["hardest"] is not None, rec
+    assert rec["hardest"]["gap_kmh"] >= 12.0, rec
+    # A keményen lövő poszt átlaga a másiké fölött van.
+    avgs = sorted(r["avg_kmh"] for r in rec["roles"].values())
+    assert avgs[1] - avgs[0] >= 30.0, rec
+    assert rec["verdict"] and "kapus" in rec["verdict"], rec
+
+
+def test_role_shot_power_silent_with_few_shots():
+    """Két lövésből nincs ítélet."""
+    from handball.pipeline.roles import role_shot_power
+
+    rec = role_shot_power(_rsp_match([(2, 1.5), (1, 0.7)]))["home"]
+    assert rec["hardest"] is None and rec["verdict"] is None, rec
