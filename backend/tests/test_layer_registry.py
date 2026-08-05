@@ -622,3 +622,33 @@ def test_kliens_nem_ir_ki_nyers_kivetelt():
         "nyers kivétel-szöveg a felületen — tedd `humanError(e)`-be, vagy "
         "ha tényleg logikához kell, jelöld a `nyers-hiba-szándékos` "
         f"megjegyzéssel: {offenders}")
+
+
+def test_kliens_varakozas_felirattal():
+    """Egy egész képernyőt kitöltő pörgettyű ne álljon felirat nélkül.
+
+    A felderítő jelentés több meccsen PERCEKIG fut. Néma pörgettyűnél a
+    felhasználó nem tudja eldönteni, dolgozik-e a program vagy megakadt
+    — mégegyszer megnyomja, vagy kilép. A `WaitingView` (ui/waiting.dart)
+    kiírja, mire várunk, meddig szokott tartani, és mennyi ideje fut.
+    """
+    import re
+    root = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui")
+    if not root.exists():
+        pytest.skip("nincs kliens a fában")
+    assert (root / "waiting.dart").exists(), "hiányzik a várakozó nézet"
+
+    offenders = []
+    for path in sorted(root.rglob("*.dart")):
+        src = path.read_text(encoding="utf-8")
+        # A `Center(child: CircularProgressIndicator())` a néma változat:
+        # nincs mellette semmilyen szöveg. A gombokba tett kis pörgettyű
+        # (SizedBox + felirattal járó gomb) rendben van.
+        for m in re.finditer(
+                r"Center\(\s*child:\s*CircularProgressIndicator\(\s*\)\s*\)",
+                src, flags=re.S):
+            offenders.append(f"{path.name}:{src[:m.start()].count(chr(10)) + 1}")
+    assert not offenders, (
+        "felirat nélküli teljes képernyős pörgettyű — használd a "
+        f"`WaitingView`-t (mire várunk, meddig tart): {offenders}")

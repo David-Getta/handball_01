@@ -21,6 +21,7 @@ import "../sim/demo_data.dart";
 import "../theme/app_theme.dart";
 import "court_painter.dart";
 import "shell/app_shell.dart";
+import "waiting.dart";
 
 class LiveScreen extends StatefulWidget {
   final String matchId;
@@ -536,7 +537,10 @@ class _LiveScreenState extends State<LiveScreen> {
       crumbPath: "ÉLŐ KÖVETÉS · VALÓS IDEJŰ ELEMZÉS",
       collapsed: true,
       child: match == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const WaitingView("Meccs betöltése az élő nézethez…",
+              hint: "Ha nincs feldolgozott meccs, a demó azonnal "
+                  "indítható a kezdőlapról.",
+              icon: Icons.sensors)
           : match.frames.isEmpty
               ? _emptyState()
               : Column(

@@ -16,6 +16,7 @@ import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
 import "error_text.dart";
+import "waiting.dart";
 
 class ScoutingScreen extends StatefulWidget {
   final String matchId;
@@ -243,7 +244,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   }
 
   Widget _body() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const WaitingView("Felderítő jelentés készül…",
+          hint: "Több száz elemző réteg fut le a kijelölt meccseken. "
+              "Több meccsnél ez PERCEKIG tart — ez normális.",
+          icon: Icons.assignment_outlined);
+    }
     if (_error != null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [

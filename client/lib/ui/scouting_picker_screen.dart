@@ -13,6 +13,7 @@ import "../theme/app_theme.dart";
 import "scouting_screen.dart";
 import "shell/app_shell.dart";
 import "error_text.dart";
+import "waiting.dart";
 
 class ScoutingPickerScreen extends StatefulWidget {
   const ScoutingPickerScreen({super.key});
@@ -82,7 +83,9 @@ class _ScoutingPickerScreenState extends State<ScoutingPickerScreen> {
       active: NavId.scouting,
       crumbPath: "ELEMZÉS · ELLENFÉL-FELDERÍTÉS",
       child: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const WaitingView("Feldolgozott meccsek keresése…",
+              hint: "Ezekből a meccsekből készül a felderítés.",
+              icon: Icons.folder_open_outlined)
           : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text("Ellenfél-felderítés", style: AppText.title),
               const SizedBox(height: 4),

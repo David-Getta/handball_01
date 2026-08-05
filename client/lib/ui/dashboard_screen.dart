@@ -21,6 +21,7 @@ import "scouting_screen.dart";
 import "shell/app_shell.dart";
 import "trend_screen.dart";
 import "error_text.dart";
+import "waiting.dart";
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -1555,7 +1556,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (_loading)
               const Padding(
                 padding: EdgeInsets.all(AppSpacing.xl),
-                child: Center(child: CircularProgressIndicator()),
+                child: WaitingView("Meccslista betöltése…",
+                    icon: Icons.list_alt_outlined),
               )
             else if (_offline)
               _notice(Icons.cloud_off, "A backend nem elérhető",

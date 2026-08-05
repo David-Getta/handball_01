@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A várakozás megmondja, mire várunk.** Hét képernyőn néma pörgettyű
+  pörgött: a felderítő jelentés több meccsen PERCEKIG fut, és közben
+  semmi nem árulta el, hogy a program dolgozik-e vagy megakadt — aki
+  ilyet lát, mégegyszer megnyomja a gombot, vagy kilép. Mostantól a
+  várakozó nézet kiírja, MIT csinálunk ("Felderítő jelentés készül…"),
+  MEDDIG szokott tartani ("több meccsnél ez percekig tart — ez
+  normális"), és élő számlálóval azt is, mennyi ideje fut; fél perc
+  után külön megnyugtató sort is. Őr-teszt tiltja az új néma
+  pörgettyűt.
+
 - **Hibaüzenetek emberi nyelven — a teendővel együtt.** Eddig a
   felület a nyers kivételt írta ki, például: `SocketException:
   Connection refused (OS Error: Connection refused, errno = 111),

@@ -15,6 +15,7 @@ import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
 import "error_text.dart";
+import "waiting.dart";
 
 class TrendScreen extends StatefulWidget {
   final List<Map<String, String>> older; // a korábbi időszak meccsei
@@ -135,7 +136,12 @@ class _TrendScreenState extends State<TrendScreen> {
   }
 
   Widget _body() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const WaitingView("Időszakok összevetése…",
+          hint: "A korábbi és az újabb meccsek külön-külön végigfutnak "
+              "az elemzésen, azért tart tovább egy meccsnél.",
+          icon: Icons.trending_up);
+    }
     if (_error != null) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [

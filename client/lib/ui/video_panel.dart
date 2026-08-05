@@ -16,6 +16,7 @@ import "package:video_player/video_player.dart";
 
 import "../theme/app_theme.dart";
 import "error_text.dart";
+import "waiting.dart";
 
 class VideoPanel extends StatefulWidget {
   /// Az eredeti videófájl útja (a Tracking meta.video_path mezőjéből).
@@ -114,7 +115,9 @@ class VideoPanelState extends State<VideoPanel> {
               ),
             )
           : c == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const WaitingView("Videókép betöltése…",
+                  hint: "Az első képkocka kiolvasása a felvételből.",
+                  icon: Icons.movie_outlined)
               : Row(
                   children: [
                     // Maga a videókép (a panel magasságához igazítva).

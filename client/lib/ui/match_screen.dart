@@ -33,6 +33,7 @@ import "story_timeline.dart";
 import "summary_panel.dart";
 import "video_panel.dart";
 import "error_text.dart";
+import "waiting.dart";
 
 enum ViewMode { players, heatmap, shots, passes }
 
@@ -441,7 +442,10 @@ class _MatchScreenState extends State<MatchScreen> {
       crumbPath: "MECCS-ELEMZŐ · FELÜLNÉZETI TAKTIKAI NÉZET",
       collapsed: true,
       child: match == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const WaitingView("Meccs betöltése…",
+              hint: "A képkockák és az események beolvasása. Hosszú "
+                  "felvételnél ez eltarthat egy ideig.",
+              icon: Icons.sports_handball)
           : match.frames.isEmpty
               ? _emptyState()
               : _withShortcuts(match, Column(
