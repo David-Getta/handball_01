@@ -883,6 +883,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-birtoklás: melyik poszt tartja a labdát a támadásaikban.
+    try:
+        from .roles import role_possession_share
+        rps = role_possession_share(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rps = rps[side]
+            if rec_rps["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szervezett támadásaiban "
+                     f"{rec_rps['verdict']} — a letámadás címzettje "
+                     "tehát adott.")
+    except Exception:
+        pass
     # Poszt-állás: melyik poszton keresztül fejeznek be hátrányban.
     try:
         from .roles import role_share_by_score

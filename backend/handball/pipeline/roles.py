@@ -750,3 +750,81 @@ def role_share_by_score(match: Match,
                      "trailing_total": n1, "rest_total": n2,
                      "shift": shift, "verdict": verdict}
     return out
+
+
+# Poszt-birtoklás: ennyi mért labdás kocka kell az ítélethez, és
+# ekkora részarány fölött nevezzük egy posztra épülő játéknak.
+RPS_MIN_FRAMES = 250
+RPS_DOMINANT_PCT = 55.0
+
+
+def role_possession_share(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-birtoklás: MELYIK POSZTNÁL van a labda a szervezett
+    támadásaikban.
+
+    A játékmester-függés (playmaker_dependency) és a tartás-idők
+    (hold_time_players) a NEVEKET nézik — ez a posztot: a szervezett
+    támadás kockáin megnézzük, melyik poszt birtokolja a labdát, és
+    posztonként összegezzük. A poszt akkor is stabil, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg: ha a labda idejének több mint felét egyetlen poszt
+    tartja, arra a posztra érdemes nyomást tenni — a letámadás
+    címzettje adott, és a játékuk megakad; ha viszont megoszlik, a
+    nyomás nem térül meg, és inkább a falat kell rendezni.
+
+    LÉNYEGES: ez a réteg NEM a lövő-hozzárendelésből dolgozik (amely
+    kapu-felé torzít, lásd `event_detection._shooter_before`), hanem a
+    kockánkénti birtoklásból — ezért a poszt-bontása közvetlenül
+    mérhető.
+
+    Visszatérés csapatonként: {"frames" (poszthoz kötött labdás
+    kockák), "roles": {poszt: {"frames", "pct"}},
+    "top": {"poszt", "frames", "pct"} | None, "verdict": str | None} —
+    a top/verdict None RPS_MIN_FRAMES alatt, vagy ha a vezető poszt
+    részaránya nem éri el az RPS_DOMINANT_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .tactics import Phase, classify_phase
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    attack_phase = {"home": Phase.HOME_ATTACK, "away": Phase.AWAY_ATTACK}
+
+    tally: dict = {"home": {}, "away": {}}
+    totals: dict = {"home": 0, "away": 0}
+    for fr in match.frames:
+        phase = classify_phase(fr, config)
+        holder = ball_holder(fr, config)
+        if holder is None or holder.role == "kapus":
+            continue
+        side = holder.team.value
+        if phase != attack_phase[side]:
+            continue  # csak a szervezett támadás számít
+        rec_role = roles[side].get(holder.track_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        tally[side][poszt] = tally[side].get(poszt, 0) + 1
+        totals[side] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n = totals[side]
+        rows = {}
+        for poszt, cnt in sorted(tally[side].items(), key=lambda kv: -kv[1]):
+            rows[poszt] = {"frames": cnt,
+                           "pct": round(100.0 * cnt / n, 1) if n else None}
+        top = verdict = None
+        items = list(rows.items())
+        if n >= RPS_MIN_FRAMES and items:
+            poszt, r = items[0]
+            if r["pct"] is not None and r["pct"] >= RPS_DOMINANT_PCT:
+                top = {"poszt": poszt, "frames": r["frames"],
+                       "pct": r["pct"]}
+                verdict = (f"a labda idejének {r['pct']:.0f}%-át a(z) "
+                           f"{poszt} tartja")
+        out[side] = {"frames": n, "roles": rows, "top": top,
+                     "verdict": verdict}
+    return out

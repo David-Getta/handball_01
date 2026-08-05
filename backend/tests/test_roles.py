@@ -628,3 +628,34 @@ def test_role_share_by_score_silent_without_both_buckets():
     rec = role_share_by_score(_role_goal_match([2, 2, 1, 1, 1]))["home"]
     assert rec["trailing_total"] == 0, rec
     assert rec["shift"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-birtoklás ---------------------------------------------------------
+
+def _rps_match(holder_id, frames_n=400):
+    """A megadott hazai játékos tartja a labdát szervezett támadásban."""
+    frames = []
+    for t in range(frames_n):
+        players, ball = _lineup(holder_id)
+        frames.append(Frame(t=t, players=players, ball=ball))
+    return Match(MatchMeta(match_id="rp", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_possession_share_names_the_dominant_post():
+    """Ha a labda végig az irányítónál van, őt kell letámadni."""
+    from handball.pipeline.roles import role_possession_share
+
+    rec = role_possession_share(_rps_match(3))["home"]
+    assert rec["frames"] >= 250, rec
+    assert rec["top"] is not None and rec["top"]["poszt"] == "irányító", rec
+    assert rec["top"]["pct"] >= 55.0, rec
+    assert rec["verdict"] and "irányító" in rec["verdict"], rec
+
+
+def test_role_possession_share_silent_with_few_frames():
+    """Rövid mintán nincs ítélet — nem találgatunk."""
+    from handball.pipeline.roles import role_possession_share
+
+    rec = role_possession_share(_rps_match(3, frames_n=200))["home"]
+    assert rec["top"] is None and rec["verdict"] is None, rec

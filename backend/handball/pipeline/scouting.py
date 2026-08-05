@@ -738,6 +738,7 @@ class ScoutingReport:
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
     arp_pairs: dict = field(default_factory=dict)
+    rps_frames_by_role: dict = field(default_factory=dict)
     rbs_trailing: dict = field(default_factory=dict)
     rbs_rest: dict = field(default_factory=dict)
     rtc_to_by_role: dict = field(default_factory=dict)
@@ -2950,6 +2951,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-birtoklás: melyik posztra érdemes nyomást tenni.
+    _rps_total = sum(rep.rps_frames_by_role.values())
+    if _rps_total >= 250:
+        _rps_p, _rps_n = max(rep.rps_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rps_pct = 100.0 * _rps_n / _rps_total
+        if _rps_pct >= 55.0:
+            keys.append(
+                f"A szervezett támadásaikban a labda idejének "
+                f"{_rps_pct:.0f}%-át a(z) {_rps_p} tartja — a "
+                "letámadás címzettje adott: rá tegyétek a nyomást, és "
+                "a játékuk megakad.")
 
     # Poszt-állás: melyik posztra épül a hátrány-befejezésük.
     _rbs_n1 = sum(rep.rbs_trailing.values())
@@ -7144,6 +7158,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_possession_share as _rps
+        rep.rps_frames_by_role = {
+            p: r["frames"]
+            for p, r in _rps(match, config)[team.value]["roles"].items()}
         from .roles import role_share_by_score as _rbs
         rbsrec = _rbs(match, config)[team.value]
         rep.rbs_trailing = dict(rbsrec["trailing"])
@@ -9639,6 +9657,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 258) Az ő labdatartó posztjuk × a ti letámadásotok: a nyomásnak
+    # kijelölt címzettje legyen.
+    _rps258_total = sum(opp.rps_frames_by_role.values())
+    if _rps258_total >= 250:
+        _p258, _n258 = max(opp.rps_frames_by_role.items(),
+                           key=lambda kv: kv[1])
+        _pct258 = 100.0 * _n258 / _rps258_total
+        _fwd258 = (100.0 * own.stl_fwd / own.stl_steals
+                   if own.stl_steals >= 5 else 0.0)
+        if _pct258 >= 55.0 and _fwd258 >= 40.0:
+            plan.append(
+                f"A szervezett támadásaikban a labda idejének "
+                f"{_pct258:.0f}%-át a(z) {_p258} tartja — a "
+                "letámadásnak legyen kijelölt címzettje: rá menjen a "
+                "második ember, a többiek pedig a passzsávokat zárják; "
+                f"a szerzéseitek {_fwd258:.0f}%-át amúgy is azonnal "
+                "előre viszitek.")
 
     # 257) Az ő hátrány-befejezésük × a ti hajrátok: szoros végjátékban
     # előre tudható, melyik vonal jön.
@@ -13854,6 +13890,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rps_frames_by_role=_merge_count_dicts(
+            r.rps_frames_by_role for r in reports),
         rbs_trailing=_merge_count_dicts(r.rbs_trailing for r in reports),
         rbs_rest=_merge_count_dicts(r.rbs_rest for r in reports),
         rtc_to_by_role=_merge_count_dicts(

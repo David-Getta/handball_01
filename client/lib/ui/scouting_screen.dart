@@ -1896,6 +1896,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-birtoklás: melyik poszt tartja a labdát (250+ kocka, 55%-os
+  // részarány — a backenddel azonos küszöbök).
+  String? _possessionRole(Map<String, dynamic> r) {
+    final byRole = (r["rps_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      total += n;
+      if (n > topN) {
+        topN = n;
+        top = k;
+      }
+    });
+    if (total < 250 || top == null) return null;
+    final pct = (100.0 * topN / total).round();
+    if (pct < 55) return null;
+    return "szervezett támadásban a labda idejének $pct%-át a(z) $top "
+        "tartja · a letámadásnak legyen kijelölt címzettje";
+  }
+
   // Poszt-állás: melyik posztra szűkül a hátrány-befejezésük (mindkét
   // oldalon 4+ gól, 20 százalékpont eltérés — a backenddel azonos
   // küszöbök).
@@ -6528,6 +6551,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_possessionRole(r) != null)
+        ["Poszt-birtoklás", _possessionRole(r)!],
       if (_trailingFinisher(r) != null)
         ["Hátrány-befejezés", _trailingFinisher(r)!],
       if (_turnoverCostRole(r) != null)

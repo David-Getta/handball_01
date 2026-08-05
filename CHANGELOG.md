@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-birtoklás** (`role_possession_share`): melyik posztnál van a
+  labda a szervezett támadásaikban. A játékmester-függés és a
+  tartás-idők a NEVEKET nézik — ez a posztot, ami akkor is stabil, ha
+  a nevek meccsről meccsre cserélődnek. Edzői olvasat: ha a labda
+  idejének több mint felét egyetlen poszt tartja, a letámadás
+  címzettje adott, és a játékuk megakad; ha megoszlik, a nyomás nem
+  térül meg, inkább a falat kell rendezni. **Lényeges: ez a réteg nem
+  a lövő-hozzárendelésből dolgozik** (amely kapu-felé torzít), hanem a
+  kockánkénti birtoklásból — a poszt-bontása közvetlenül mérhető.
+  250 labdás kocka és 55%-os részarány alatt nincs ítélet. Felületek:
+  `/matches/{id}/attacks` + meccs-csomag (`role_possession_share`),
+  edzői összefoglaló, meccs-jelentés Poszt-lencséje, felderítés
+  (poszt-bontású kocka-számlálók meccsek közt összegezve + edzői kulcs
+  + 258-as meccsterv-szabály), 279-es edzés-szabály
+  ("Labdatartás-megosztás"), kliens-csempe ("Poszt-birtoklás").
+
 - **Mért, dokumentált korlát: a lövő-hozzárendelés kapu-felé
   torzítása.** A lövés-eseményt a labda kapu-megközelítésekor jelöljük
   (nem az elengedéskor), ezért a visszakeresési ablakban a labda már a

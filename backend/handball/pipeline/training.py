@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 279) Poszt-birtoklás: ha a labda idejének több mint felét egy
+    # poszt tartja, a játékunk egy emberen áll.
+    try:
+        from .roles import RPS_DOMINANT_PCT, role_possession_share
+        rps279 = role_possession_share(match, config)
+        for side in ("home", "away"):
+            rec279 = rps279[side]
+            top279 = rec279.get("top")
+            if top279 is None:
+                continue
+            add(side, "támadás", "Labdatartás-megosztás",
+                f"a szervezett támadásainkban a labda idejének "
+                f"{top279['pct']:.0f}%-át a(z) {top279['poszt']} tartja "
+                f"({RPS_DOMINANT_PCT:.0f}% fölött már egy emberen áll a "
+                "játék) — egy felkészült ellenfél kijelölt emberrel "
+                "támadja le, és a támadásunk megakad",
+                "labdatartás-megosztás: támadás-gyakorlat szabállyal — "
+                "a domináns poszt legfeljebb két érintésig tarthatja a "
+                "labdát, a felépítést a többi vonalnak kell vinnie; "
+                "aztán szabad játék, letámadó védelem ellen")
+    except Exception:
+        pass
     # 278) Poszt-állás: ha hátrányban egyetlen posztra szűkül a
     # befejezésünk, azt az ellenfél lezárja.
     try:
