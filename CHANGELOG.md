@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Ugrás a jelentés szekciójára — tartalomjegyzék a felderítéshez.** A
+  felderítő jelentés kilenc nagy kártyából áll, és képernyőkön át
+  gördül; egy edző viszont a meccs előtt jellemzően EGY dolgot keres
+  ("mit csinálnak hetesnél?"). Mostantól a jelentés tetején ugró-sáv
+  áll: koppintásra odagördít ("Így játszanak", "Hogyan játssz
+  ellenük", "Erősségek / gyengeségek", "Mutatók", "Honnan lőnek",
+  "Honnan kapják a lövéseket", "Ismert figuráik", "Védekezésük",
+  "Kulcsjátékosok"). A sávban csak a ténylegesen meglévő szekciók
+  jelennek meg — üresbe ugró gomb rosszabb, mint a hiánya. Őr-teszt
+  párosítja a csipeket a szekciókkal, hogy egy elgépelés ne adjon
+  néma, semmit nem csináló gombot.
+
 - **A várakozás megmondja, mire várunk.** Hét képernyőn néma pörgettyű
   pörgött: a felderítő jelentés több meccsen PERCEKIG fut, és közben
   semmi nem árulta el, hogy a program dolgozik-e vagy megakadt — aki

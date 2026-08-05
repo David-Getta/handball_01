@@ -652,3 +652,33 @@ def test_kliens_varakozas_felirattal():
     assert not offenders, (
         "felirat nélküli teljes képernyős pörgettyű — használd a "
         f"`WaitingView`-t (mire várunk, meddig tart): {offenders}")
+
+
+def test_kliens_szekcio_ugras_celba_er():
+    """A felderítő jelentés ugró-csipjei létező szekcióra mutatnak.
+
+    A sáv címkéi és a kártyák `_sectionKey(...)` hívásai KÜLÖN helyen
+    állnak; egy elgépelés néma hibát adna (a csip nem csinál semmit,
+    mert nincs ilyen kulcs). Ezért itt párosítjuk őket.
+    """
+    import re
+    path = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not path.exists():
+        pytest.skip("nincs kliens a fában")
+    src = path.read_text(encoding="utf-8")
+
+    bar = re.search(r"final jumps = <\(String, IconData\)>\[(.*?)\n    \];",
+                    src, flags=re.S)
+    assert bar, "nem találom az ugró-sáv listáját"
+    labels = re.findall(r'\("([^"]+)",\s*Icons\.', bar.group(1))
+    keys = set(re.findall(r'_sectionKey\("([^"]+)"\)', src))
+
+    assert len(labels) >= 8, labels
+    assert len(set(labels)) == len(labels), f"ismétlődő címke: {labels}"
+    missing = [lab for lab in labels if lab not in keys]
+    assert not missing, (
+        f"ezek a csipek nem találnak szekciót (nincs _sectionKey): {missing}")
+    unused = sorted(keys - set(labels))
+    assert not unused, (
+        f"ezekre a szekciókra egyetlen csip sem mutat: {unused}")

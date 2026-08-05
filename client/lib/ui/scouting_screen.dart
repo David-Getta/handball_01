@@ -67,6 +67,11 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   /// Ennyi tétel látszik alapból a hosszú felsorolásokból.
   static const int _listPreview = 6;
 
+  /// Szekció-ugráshoz: címke → a kártya kulcsa. A gördítést a
+  /// `Scrollable.ensureVisible` intézi, ezért nem kell külön vezérlő
+  /// (és nincs mit felszabadítani sem).
+  final Map<String, GlobalKey> _sectionKeys = <String, GlobalKey>{};
+
   /// "Mind a N megjelenítése" / "Rövidítve" kapcsoló a hosszú listákhoz.
   /// Szándékosan kimondja, hogy a rövidítés a jelentés SORRENDJÉBŐL vág,
   /// nem fontossági rangsorból — rangsort a rendszer itt nem állít.
@@ -264,37 +269,128 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       );
     }
     final r = _report!;
-    return ListView(
+    final hasNarrative =
+        ((r["narrative"] as List?) ?? const []).isNotEmpty;
+    // A sávban CSAK a ténylegesen megjelenő szekciók szerepelnek —
+    // egy üresbe ugró gomb rosszabb, mint a hiánya.
+    final jumps = <(String, IconData)>[
+      if (hasNarrative) ("Így játszanak", Icons.menu_book_outlined),
+      ("Hogyan játssz ellenük", Icons.gps_fixed),
+      ("Erősségek / gyengeségek", Icons.compare_arrows),
+      ("Mutatók", Icons.grid_view),
+      ("Honnan lőnek", Icons.sports_handball),
+      ("Honnan kapják a lövéseket", Icons.shield_outlined),
+      if (_playbookMatch != null) ("Ismert figuráik", Icons.route_outlined),
+      ("Védekezésük", Icons.security),
+      ("Kulcsjátékosok", Icons.person_outline),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (((r["narrative"] as List?) ?? const []).isNotEmpty) ...[
-          _narrativeCard(r),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        _keysCard(r),
-        if (_matchup.isNotEmpty) _matchupCard(),
-        const SizedBox(height: AppSpacing.lg),
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: _listCard("ERŐSSÉGEK", r["strengths"], AppColors.accent, Icons.trending_up)),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(child: _listCard("GYENGESÉGEK", r["weaknesses"], AppColors.away, Icons.trending_down)),
-        ]),
-        const SizedBox(height: AppSpacing.lg),
-        _metricsCard(r),
-        const SizedBox(height: AppSpacing.lg),
-        _shotZonesCard(r),
-        const SizedBox(height: AppSpacing.lg),
-        _defZonesCard(r),
-        const SizedBox(height: AppSpacing.lg),
-        if (_playbookMatch != null) ...[
-          _playbookCard(_playbookMatch!),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        _defenseCard(r),
-        const SizedBox(height: AppSpacing.lg),
-        _keyPlayersCard(r),
-        const SizedBox(height: AppSpacing.xl),
+        _jumpBar(jumps),
+        const SizedBox(height: AppSpacing.md),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (hasNarrative) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Így játszanak"),
+                      child: _narrativeCard(r)),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                KeyedSubtree(
+                    key: _sectionKey("Hogyan játssz ellenük"),
+                    child: _keysCard(r)),
+                if (_matchup.isNotEmpty) _matchupCard(),
+                const SizedBox(height: AppSpacing.lg),
+                KeyedSubtree(
+                  key: _sectionKey("Erősségek / gyengeségek"),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: _listCard("ERŐSSÉGEK", r["strengths"],
+                                AppColors.accent, Icons.trending_up)),
+                        const SizedBox(width: AppSpacing.lg),
+                        Expanded(
+                            child: _listCard("GYENGESÉGEK", r["weaknesses"],
+                                AppColors.away, Icons.trending_down)),
+                      ]),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                KeyedSubtree(
+                    key: _sectionKey("Mutatók"), child: _metricsCard(r)),
+                const SizedBox(height: AppSpacing.lg),
+                KeyedSubtree(
+                    key: _sectionKey("Honnan lőnek"),
+                    child: _shotZonesCard(r)),
+                const SizedBox(height: AppSpacing.lg),
+                KeyedSubtree(
+                    key: _sectionKey("Honnan kapják a lövéseket"),
+                    child: _defZonesCard(r)),
+                const SizedBox(height: AppSpacing.lg),
+                if (_playbookMatch != null) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Ismert figuráik"),
+                      child: _playbookCard(_playbookMatch!)),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                KeyedSubtree(
+                    key: _sectionKey("Védekezésük"), child: _defenseCard(r)),
+                const SizedBox(height: AppSpacing.lg),
+                KeyedSubtree(
+                    key: _sectionKey("Kulcsjátékosok"),
+                    child: _keyPlayersCard(r)),
+                const SizedBox(height: AppSpacing.xl),
+              ],
+            ),
+          ),
+        ),
       ],
     );
+  }
+
+  /// Szekció-ugró sáv: a jelentés kártyáira ugrik egy koppintással.
+  ///
+  /// A jelentés nyolc-kilenc nagy kártyából áll, képernyőkön át gördül.
+  /// Egy edző a meccs előtt jellemzően EGY dolgot keres ("mit csinálnak
+  /// hetesnél?"), és nem akar addig görgetni — ez a sáv a tartalomjegyzék.
+  Widget _jumpBar(List<(String, IconData)> jumps) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: jumps.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+        itemBuilder: (context, i) {
+          final (label, icon) = jumps[i];
+          return ActionChip(
+            avatar: Icon(icon, size: 16, color: AppColors.textSecondary),
+            label: Text(label),
+            tooltip: "Ugrás ide: $label",
+            onPressed: () => _jumpTo(label),
+          );
+        },
+      ),
+    );
+  }
+
+  /// A szekcióhoz tartozó kulcs (igény szerint jön létre).
+  GlobalKey _sectionKey(String label) =>
+      _sectionKeys.putIfAbsent(label, () => GlobalKey());
+
+  /// Odagördít a szekcióhoz. Ha a kártya épp nincs kirakva (nem lehet
+  /// megtalálni), NEM csinálunk semmit — ugrás helyett soha ne rántsuk
+  /// el a jelentést egy rossz helyre.
+  void _jumpTo(String label) {
+    final ctx = _sectionKeys[label]?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(ctx,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+        alignment: 0.02);
   }
 
   /// Szöveges bevezető: hogyan játszanak — mondatokban, a számok elé.
