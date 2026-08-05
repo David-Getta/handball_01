@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A sorrend-mérés kimondja, mit NEM tud.** A sorrend-függés
+  jelentése szimulált meccsen dolgozik, az viszont mozgást modellez és
+  lövés-eseményt nem termel. A lövés-alapú rétegek ezért üres
+  bemenettel futnak: mindkét ágon ugyanazt a semmit adják, tehát "nem
+  sorrend-függőnek" LÁTSZANAK — holott a mérés róluk nem mond semmit.
+  Ez a legkönnyebben félreolvasható pont a jelentésben, ezért mostantól
+  külön szakasz mondja ki, őr-teszttel rögzítve. A jelentés újra is
+  generálva: 313 réteg összevetve, 38 sorrend-függő.
+
 - **A demó góljainak van lövőjük.** A demó meccs gól-epizódjaiban a
   labda a semmiből indult a kapu felé — elengedés-pillanat nélkül. A
   javított lövő-felismerés ezért a demóban a négy gólból kettőnél nem

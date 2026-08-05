@@ -121,6 +121,17 @@ def build_report(res: dict, seconds: float, seed: int) -> str:
         f"**{res['checked']} réteg** összevetve, ebből "
         f"**{len(res['sensitive'])} sorrend-függő**.",
         "",
+        "## A mérés korlátja",
+        "",
+        "A szimulált meccs (`simulate_ground_truth`) MOZGÁST modellez,",
+        "lövés-eseményt nem termel — a szimulált lövések a demó-epizódokból",
+        "jönnek, amelyeket ez a mérés nem használ. Ezért a LÖVÉS-ALAPÚ",
+        "rétegek itt üres bemenettel futnak: mindkét ágon ugyanazt a",
+        "semmit adják, tehát \"nem sorrend-függőnek\" látszanak. Ez nem",
+        "bizonyíték — csak annyit jelent, hogy ezekről a rétegekről a",
+        "mérés NEM MOND SEMMIT. Valós (vagy lövéseket is tartalmazó)",
+        "felvételen újra kell mérni.",
+        "",
     ]
     if res["sensitive"]:
         lines += ["## Sorrend-függő rétegek", "", "| Réteg |", "|---|"]

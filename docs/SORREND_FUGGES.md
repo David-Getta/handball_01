@@ -10,7 +10,18 @@ lefutnak — egy nagy összeállításban tehát a kiértékelés
 sorrendjétől. Ez a lista a döntés alapja: hol érdemes kimondott,
 determinisztikus szerep-jelöléssel indítani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7); **312 réteg** összevetve, ebből **38 sorrend-függő**.
+Mérés: 240 mp-es szimulált meccs (mag: 7); **313 réteg** összevetve, ebből **38 sorrend-függő**.
+
+## A mérés korlátja
+
+A szimulált meccs (`simulate_ground_truth`) MOZGÁST modellez,
+lövés-eseményt nem termel — a szimulált lövések a demó-epizódokból
+jönnek, amelyeket ez a mérés nem használ. Ezért a LÖVÉS-ALAPÚ
+rétegek itt üres bemenettel futnak: mindkét ágon ugyanazt a
+semmit adják, tehát "nem sorrend-függőnek" látszanak. Ez nem
+bizonyíték — csak annyit jelent, hogy ezekről a rétegekről a
+mérés NEM MOND SEMMIT. Valós (vagy lövéseket is tartalmazó)
+felvételen újra kell mérni.
 
 ## Sorrend-függő rétegek
 

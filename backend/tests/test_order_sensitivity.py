@@ -36,6 +36,20 @@ def test_report_lists_the_sensitive_layers():
     assert "Nem mérhető" not in text  # üres lista → nincs szekció
 
 
+def test_report_spells_out_the_measurement_limit():
+    """A jelentés kimondja, mit NEM tud: a szimulált meccs nem termel
+    lövést, tehát a lövés-alapú rétegekről a mérés nem mond semmit.
+
+    Ez a legkönnyebben félreolvasható pont: egy "nem sorrend-függő"
+    sor bizonyítéknak látszana, holott üres bemenetből jön.
+    """
+    text = build_report({"checked": 5, "sensitive": [], "failed": []},
+                        120.0, 1)
+    assert "A mérés korlátja" in text
+    assert "lövés-eseményt nem termel" in text
+    assert "NEM MOND SEMMIT" in text
+
+
 def test_report_says_when_nothing_is_sensitive():
     """Ha egy réteg sem sorrend-függő, azt is kimondjuk — nem hallgatunk."""
     text = build_report({"checked": 5, "sensitive": [], "failed": ["x"]},
