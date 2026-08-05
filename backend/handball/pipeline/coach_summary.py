@@ -883,6 +883,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-labdatartás: melyik posztnál áll meg a labda.
+    try:
+        from .roles import role_hold_time
+        rht = role_hold_time(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rht = rht[side]
+            if rec_rht["verdict"] is None:
+                continue
+            sl = rec_rht["slowest"]
+            body += (f" A(z) {name} labdajáratásában "
+                     f"{rec_rht['verdict']} — a csapat-átlaguk "
+                     f"{rec_rht['team_avg_s']:.1f} mp, tehát "
+                     f"{sl['gap_s']:.1f} mp-cel tovább; ő a kettőzés "
+                     "célpontja.")
+    except Exception:
+        pass
     # Poszt-átvételi zóna: hol kapja meg a labdát az egyes posztjuk.
     try:
         from .roles import role_receive_zones

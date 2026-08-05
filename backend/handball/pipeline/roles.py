@@ -1015,3 +1015,109 @@ def role_receive_zones(match: Match,
                      "roles": rows, "closest": closest,
                      "farthest": farthest, "verdict": verdict}
     return out
+
+
+# Poszt-labdatartás: ennél rövidebb birtoklás csak érintés (zaj, a
+# névre szóló hold_time_players-szel azonos küszöb), posztonként
+# ennyi labdás szakasz kell az ítélethez, és ennyi másodperccel a
+# csapat-átlag felett labdatartó egy poszt.
+RHT_MIN_FRAMES = 5
+RHT_MIN_HOLDS = 8
+RHT_GAP_S = 0.7
+
+
+def role_hold_time(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-labdatartás: MELYIK POSZTNÁL áll meg a labda.
+
+    A poszt-birtoklás (role_possession_share) az össz-időt osztja
+    posztokra — ez az EGY ÉRINTÉSRE jutó időt: minden labdás szakasz
+    hosszát a birtokos posztjához írjuk. A kettő különbözik: egy poszt
+    sok rövid érintéssel is vihet nagy össz-időt (az a labdajáratás),
+    és kevés hosszú tartással is (az a megállás).
+
+    A névre szóló változat (decisions.hold_time_players) a JÁTÉKOST
+    nevezi meg; a poszt akkor is stabil, ha a nevek cserélődnek.
+
+    Edzőileg: a hosszan tartó poszt a kettőzés célpontja — nála van
+    idő odaérni, és nála lassul a támadásuk. Saját oldalon ugyanez a
+    gyorsabb továbbítás témája: egy-két tizeddel korábbi passz egy
+    egész átrendeződést ér.
+
+    A réteg a kockánkénti birtoklásból dolgozik (nem a kapu-felé
+    torzító lövő-hozzárendelésből), az érintésnyi (RHT_MIN_FRAMES
+    alatti) birtoklás pedig zaj — azt nem számoljuk.
+
+    Visszatérés csapatonként: {"holds", "team_avg_s",
+    "roles": {poszt: {"holds", "avg_s"}},
+    "slowest": {"poszt", "holds", "avg_s", "gap_s"} | None,
+    "verdict": str | None} — a slowest/verdict None, ha a poszt nem
+    érte el az RHT_MIN_HOLDS szakaszt, vagy a csapat-átlagot nem
+    haladja meg RHT_GAP_S-szel.
+    """
+    from .decisions import ball_holder
+    from .tactics import Phase, classify_phase
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    attack_phase = {"home": Phase.HOME_ATTACK, "away": Phase.AWAY_ATTACK}
+
+    tally: dict = {"home": {}, "away": {}}
+    totals: dict = {"home": [0, 0], "away": [0, 0]}  # [szakasz, kocka]
+    cur_side = cur_poszt = None
+    run = 0
+
+    def _flush():
+        nonlocal cur_side, cur_poszt, run
+        if cur_side is not None and cur_poszt is not None \
+                and run >= RHT_MIN_FRAMES:
+            rec = tally[cur_side].setdefault(cur_poszt, [0, 0])
+            rec[0] += 1
+            rec[1] += run
+            totals[cur_side][0] += 1
+            totals[cur_side][1] += run
+        cur_side = cur_poszt = None
+        run = 0
+
+    for fr in match.frames:
+        holder = ball_holder(fr, config)
+        poszt = side = None
+        if holder is not None and holder.role != "kapus":
+            side = holder.team.value
+            if classify_phase(fr, config) == attack_phase[side]:
+                rec_role = roles[side].get(holder.track_id)
+                poszt = rec_role["poszt"] if rec_role else None
+        if poszt is None or side != cur_side or poszt != cur_poszt:
+            _flush()
+            cur_side, cur_poszt = side, poszt
+        if poszt is not None:
+            run += 1
+    _flush()
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_holds, n_frames = totals[side]
+        team_avg = (n_frames / n_holds / fps) if n_holds else None
+        rows = {}
+        for poszt, (h, f_) in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1][0]):
+            rows[poszt] = {"holds": h, "avg_s": round(f_ / h / fps, 2)}
+        slowest = verdict = None
+        if team_avg is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["holds"] >= RHT_MIN_HOLDS]
+            if eligible:
+                poszt, r = max(eligible, key=lambda pr: pr[1]["avg_s"])
+                gap = r["avg_s"] - team_avg
+                if gap >= RHT_GAP_S:
+                    slowest = {"poszt": poszt, "holds": r["holds"],
+                               "avg_s": r["avg_s"], "gap_s": round(gap, 2)}
+                    verdict = (f"a(z) {poszt} tartja legtovább a labdát "
+                               f"({r['avg_s']:.1f} mp/érintés)")
+        out[side] = {"holds": n_holds,
+                     "team_avg_s": round(team_avg, 2)
+                     if team_avg is not None else None,
+                     "roles": rows, "slowest": slowest,
+                     "verdict": verdict}
+    return out

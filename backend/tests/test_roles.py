@@ -741,3 +741,53 @@ def test_role_receive_zones_silent_with_few_receptions():
     rec = role_receive_zones(_rpm_match([(3, 1)] * 2))["home"]
     assert rec["closest"] is None and rec["farthest"] is None, rec
     assert rec["verdict"] is None, rec
+
+
+# ---- Poszt-labdatartás -------------------------------------------------------
+
+def _rht_match(cycles=10, long_frames=50, short_frames=10, warmup=150):
+    """Az irányító hosszan, a beálló röviden tartja a labdát."""
+    frames = []
+    t = 0
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_arp_players(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):
+        _add(28.0, 10.0)
+    for _ in range(cycles):
+        for _ in range(long_frames):     # irányító: hosszú tartás
+            _add(28.0, 10.0)
+        for i in range(1, 6):            # gyors átadás (érintésnyi zaj)
+            _add(28.0 + 6.0 * (i / 5.0), 10.0)
+        for _ in range(short_frames):    # beálló: rövid tartás
+            _add(34.0, 10.0)
+        for i in range(1, 6):
+            _add(34.0 - 6.0 * (i / 5.0), 10.0)
+    return Match(MatchMeta(match_id="ht", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_hold_time_names_the_slowest_post():
+    """Az irányítójuknál áll meg a labda — ő a kettőzés célpontja."""
+    from handball.pipeline.roles import RHT_MIN_HOLDS, role_hold_time
+
+    rec = role_hold_time(_rht_match())["home"]
+    assert rec["holds"] >= 2 * RHT_MIN_HOLDS, rec
+    assert rec["roles"]["irányító"]["avg_s"] > \
+        rec["roles"]["beálló"]["avg_s"], rec
+    assert rec["slowest"] is not None, rec
+    assert rec["slowest"]["poszt"] == "irányító", rec
+    assert rec["slowest"]["gap_s"] >= 0.7, rec
+    assert rec["verdict"] and "irányító" in rec["verdict"], rec
+
+
+def test_role_hold_time_silent_with_few_holds():
+    """Kevés labdás szakaszból nincs ítélet."""
+    from handball.pipeline.roles import role_hold_time
+
+    rec = role_hold_time(_rht_match(cycles=3))["home"]
+    assert rec["slowest"] is None and rec["verdict"] is None, rec

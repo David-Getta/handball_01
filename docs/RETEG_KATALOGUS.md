@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **308 réteg**, modulonként csoportosítva; a
+Összesen **309 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (69)
@@ -273,7 +273,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `confidence` | Réteg-megbízhatóság: mely elemzési rétegeknek van elég mintája |
 
-## roles (13)
+## roles (14)
 
 | Réteg | Mit mér |
 |---|---|
@@ -282,6 +282,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `goals_by_role` | Poszt szerinti gólmegoszlás: MELYIK POSZTRÓL jönnek a góljaik. |
 | `phase_specialists` | Egyirányú játékosok: KI JÁTSZIK CSAK VÉDEKEZNI vagy CSAK TÁMADNI. |
 | `positions` | Poszt-becslés a támadó-fázis átlag-pozícióiból. |
+| `role_hold_time` | Poszt-labdatartás: MELYIK POSZTNÁL áll meg a labda. |
 | `role_pass_map` | Poszt-passzháló: MELYIK VONALON jár a labda a támadásaikban. |
 | `role_possession_share` | Poszt-birtoklás: MELYIK POSZTNÁL van a labda a szervezett |
 | `role_receive_zones` | Poszt-átvételi zóna: MILYEN MESSZE a kaputól veszi át a labdát |

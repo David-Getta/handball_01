@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 282) Poszt-labdatartás: ha egy posztunknál megáll a labda, az
+    # ellenfél oda küldi a második embert.
+    try:
+        from .roles import RHT_GAP_S, role_hold_time
+        rht282 = role_hold_time(match, config)
+        for side in ("home", "away"):
+            rec282 = rht282[side]
+            slow282 = rec282.get("slowest")
+            if slow282 is None:
+                continue
+            add(side, "támadás", "Továbbítás-tempó",
+                f"a(z) {slow282['poszt']} posztunknál áll meg a labda: "
+                f"{slow282['avg_s']:.1f} mp/érintés a csapat-átlagunk "
+                f"{rec282['team_avg_s']:.1f} mp helyett "
+                f"({RHT_GAP_S:.1f} mp fölötti eltérés már érdemi) — "
+                "egy felkészült ellenfél pont oda küldi a második "
+                "embert",
+                "továbbítás-tempó: labdajáratás időkorláttal — a "
+                "domináns poszt legfeljebb egy másodpercig tarthatja "
+                "a labdát, a döntést előre kell meghozni; aztán "
+                "ugyanez kettőző védelem ellen, sorozatban")
+    except Exception:
+        pass
     # 281) Poszt-átvételi zóna: ha egy posztunk messze veszi át a
     # labdát, onnan nehéz befejezni.
     try:

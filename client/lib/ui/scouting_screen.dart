@@ -1896,6 +1896,38 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-labdatartás: melyik posztnál áll meg a labda (16+ szakasz,
+  // posztonként 8+, 0,7 mp eltérés — a backenddel azonos küszöbök).
+  String? _holdTimeRole(Map<String, dynamic> r) {
+    final holds = (r["rht_holds_by_role"] as Map?)?.cast<String, dynamic>();
+    final frames = (r["rht_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (holds == null || holds.isEmpty || frames == null) return null;
+    var totalHolds = 0;
+    var totalFrames = 0;
+    holds.forEach((k, v) => totalHolds += (v as num).toInt());
+    frames.forEach((k, v) => totalFrames += (v as num).toInt());
+    if (totalHolds < 16) return null;
+    final teamAvg = totalFrames / totalHolds / 25.0;
+    String? slow;
+    var slowAvg = 0.0;
+    var slowN = 0;
+    holds.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 8) return;
+      final avg = ((frames[k] as num?) ?? 0).toInt() / n / 25.0;
+      if (avg > slowAvg) {
+        slowAvg = avg;
+        slow = k;
+        slowN = n;
+      }
+    });
+    if (slow == null || slowAvg - teamAvg < 0.7) return null;
+    return "a(z) $slow posztjuknál áll meg a labda "
+        "(${slowAvg.toStringAsFixed(1)} mp/érintés, csapat-átlag "
+        "${teamAvg.toStringAsFixed(1)} mp, $slowN szakasz) · ő a "
+        "kettőzés célpontja";
+  }
+
   // Poszt-átvételi zóna: hol veszi át a labdát az egyes posztjuk
   // (16+ átvétel, posztonként 8+, 1,5 m eltérés — a backenddel azonos
   // küszöbök).
@@ -6606,6 +6638,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_holdTimeRole(r) != null)
+        ["Poszt-labdatartás", _holdTimeRole(r)!],
       if (_receiveZone(r) != null)
         ["Poszt-átvételi zóna", _receiveZone(r)!],
       if (_passLane(r) != null)

@@ -738,6 +738,8 @@ class ScoutingReport:
     kot_targets: dict = field(default_factory=dict)
     ser_shots_by_role: dict = field(default_factory=dict)
     arp_pairs: dict = field(default_factory=dict)
+    rht_holds_by_role: dict = field(default_factory=dict)
+    rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
     rrz_dist_sum_by_role: dict = field(default_factory=dict)
     rpm_lanes: dict = field(default_factory=dict)
@@ -2954,6 +2956,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-labdatartás: melyik posztjuk a kettőzés célpontja.
+    _rht_h = sum(rep.rht_holds_by_role.values())
+    if _rht_h >= 16:
+        _rht_avg = (sum(rep.rht_frames_by_role.values()) / _rht_h / 25.0)
+        _rht_rows = [(p, h, rep.rht_frames_by_role.get(p, 0) / h / 25.0)
+                     for p, h in rep.rht_holds_by_role.items() if h >= 8]
+        if _rht_rows:
+            _rht_p, _rht_n, _rht_s = max(_rht_rows, key=lambda r: r[2])
+            if _rht_s - _rht_avg >= 0.7:
+                keys.append(
+                    f"A(z) {_rht_p} posztjuknál áll meg a labda: "
+                    f"{_rht_s:.1f} mp/érintés a csapat-átlag "
+                    f"{_rht_avg:.1f} mp helyett ({_rht_n} labdás "
+                    "szakaszból) — ő a kettőzés célpontja, nála van idő "
+                    "odaérni.")
 
     # Poszt-átvételi zóna: hol kapja meg a labdát az egyes posztjuk.
     _rrz_n = sum(rep.rrz_recv_by_role.values())
@@ -7189,6 +7207,14 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_hold_time as _rht
+        rhtrec = _rht(match, config)[team.value]
+        rep.rht_holds_by_role = {p: r["holds"]
+                                 for p, r in rhtrec["roles"].items()}
+        # KOCKA-összeg (nem átlag): meccsek közt pontosan összegződik.
+        rep.rht_frames_by_role = {
+            p: round(r["holds"] * r["avg_s"] * 25.0)
+            for p, r in rhtrec["roles"].items()}
         from .roles import role_receive_zones as _rrz
         rrzrec = _rrz(match, config)[team.value]
         rep.rrz_recv_by_role = {p: r["receptions"]
@@ -9699,6 +9725,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 261) Az ő labdatartó posztjuk × a ti kettőzésetek: nála van idő
+    # odaérni, tehát ott térül meg a második ember.
+    _rht261_h = sum(opp.rht_holds_by_role.values())
+    if _rht261_h >= 16:
+        _rht261_avg = (sum(opp.rht_frames_by_role.values())
+                       / _rht261_h / 25.0)
+        _rht261_rows = [(p, h, opp.rht_frames_by_role.get(p, 0) / h / 25.0)
+                        for p, h in opp.rht_holds_by_role.items() if h >= 8]
+        if _rht261_rows:
+            _p261, _n261, _s261 = max(_rht261_rows, key=lambda r: r[2])
+            if (_s261 - _rht261_avg >= 0.7
+                    and own.dbl_doubled_frames >= 50):
+                plan.append(
+                    f"A(z) {_p261} posztjuknál áll meg a labda "
+                    f"({_s261:.1f} mp/érintés a csapat-átlag "
+                    f"{_rht261_avg:.1f} mp helyett), ti pedig tudtok "
+                    "kettőzni — a második ember ODA menjen: nála van "
+                    "idő odaérni, és ott lassul a támadásuk amúgy is.")
 
     # 260) Az ő közeli átvételi zónájuk × a ti beálló-őrzésetek: az
     # elé állás helyett a bejátszás vonalát kell zárni.
@@ -13967,6 +14012,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rht_holds_by_role=_merge_count_dicts(
+            r.rht_holds_by_role for r in reports),
+        rht_frames_by_role=_merge_count_dicts(
+            r.rht_frames_by_role for r in reports),
         rrz_recv_by_role=_merge_count_dicts(
             r.rrz_recv_by_role for r in reports),
         rrz_dist_sum_by_role=_merge_count_dicts(

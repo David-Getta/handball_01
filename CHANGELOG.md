@@ -5,6 +5,24 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.23 óta)
 
+- **Poszt-labdatartás** (`role_hold_time`): melyik posztnál áll meg a
+  labda. A poszt-birtoklás (`role_possession_share`) az össz-időt
+  osztja posztokra — ez az EGY ÉRINTÉSRE jutó időt; a kettő
+  különbözik, mert egy poszt sok rövid érintéssel is vihet nagy
+  össz-időt (az a labdajáratás) és kevés hosszú tartással is (az a
+  megállás). A névre szóló változat (`hold_time_players`) a játékost
+  nevezi meg; a poszt akkor is stabil, ha a nevek cserélődnek. Edzői
+  olvasat: a hosszan tartó poszt a kettőzés célpontja — nála van idő
+  odaérni, és nála lassul a támadásuk; saját oldalon ugyanez a
+  gyorsabb továbbítás témája. Az érintésnyi (5 kockánál rövidebb)
+  birtoklás zaj, azt nem számoljuk; posztonként 8 szakasz és 0,7 mp
+  eltérés alatt nincs ítélet. A felderítésben szakasz-darabszám ÉS
+  kocka-összeg tárolódik (átlag sose). Felületek:
+  `/matches/{id}/attacks` + meccs-csomag (`role_hold_time`), edzői
+  összefoglaló, meccs-jelentés Poszt-lencséje, felderítés (+ edzői
+  kulcs + 261-es meccsterv-szabály), 282-es edzés-szabály
+  ("Továbbítás-tempó"), kliens-csempe ("Poszt-labdatartás").
+
 - **Poszt-átvételi zóna** (`role_receive_zones`): milyen messze a
   kaputól veszi át a labdát az egyes posztjuk. A poszt-passzháló
   (`role_pass_map`) azt mondja meg, ki kinek ad — ez azt, HOL kapja
