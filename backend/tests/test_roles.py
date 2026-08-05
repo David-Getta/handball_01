@@ -927,3 +927,68 @@ def test_role_shot_distance_silent_with_few_shots():
     rec = role_shot_distance(_rsd_match([1, 2]))["home"]
     assert rec["closest"] is None and rec["farthest"] is None, rec
     assert rec["verdict"] is None, rec
+
+
+# ---- Poszt-lövésidőzítés (melyik posztjuk mikor fejez be) -------------------
+
+def _rst_match(plan, warmup=200):
+    """`plan` = (lövő-azonosító, a támadás hányadik másodpercében lő) párok.
+
+    Minden támadás a saját térfélről indul (hogy a szakasz kezdete
+    egyértelmű legyen), majd a megadott idő után jön az elengedés és a
+    lövés a +x kapuba.
+    """
+    frames = []
+    t = 0
+
+    def _add(bx, by, players):
+        nonlocal t
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    def _cast():
+        return [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RSD.items()] + \
+            [_pl(20, Team.AWAY, 5.0, 10.0)]
+
+    for _ in range(warmup):      # poszt-minta: a beálló birtokol
+        _add(34.0, 10.0, _cast())
+    for (tid, delay_s) in plan:
+        sx, sy = _RSD[tid]
+        # A támadás indulása: a labda a lövőnél áll `delay_s` ideig.
+        for _ in range(max(1, int(delay_s * 25.0))):
+            _add(sx + 0.2, sy, _cast())
+        x = sx + 0.2
+        while x < 40.5:          # lövés a kapuba
+            x += 1.0
+            _add(min(x, 40.5), 10.0, _cast())
+        for _ in range(40):      # visszaáll: a labda a saját térfélen
+            _add(5.0, 10.0, _cast())
+    return Match(MatchMeta(match_id="st", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_shot_timing_separates_early_and_late_posts():
+    """A beálló másfél másodperc után fejez be, az irányító tizenöt
+    után — a fal nem tud egyszerre mindkettőre készülni."""
+    from handball.pipeline.roles import RST_MIN_SHOTS, role_shot_timing
+
+    rec = role_shot_timing(
+        _rst_match([(1, 1.5)] * 5 + [(2, 15.0)] * 5))["home"]
+    assert rec["shots"] >= 2 * RST_MIN_SHOTS, rec
+    avgs = sorted(r["avg_s"] for r in rec["roles"].values())
+    assert avgs[1] - avgs[0] >= 8.0, rec
+    assert rec["earliest"] is not None and rec["latest"] is not None, rec
+    assert rec["earliest"]["avg_s"] < rec["latest"]["avg_s"], rec
+    # A korai befejezőre a visszarendeződésnél kell ember — ez az
+    # elsődleges ítélet.
+    assert rec["verdict"] and "visszarendeződés" in rec["verdict"], rec
+
+
+def test_role_shot_timing_silent_with_few_shots():
+    """Két lövésből nincs ítélet."""
+    from handball.pipeline.roles import role_shot_timing
+
+    rec = role_shot_timing(_rst_match([(1, 1.5), (2, 15.0)]))["home"]
+    assert rec["earliest"] is None and rec["latest"] is None, rec
+    assert rec["verdict"] is None, rec

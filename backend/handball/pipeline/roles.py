@@ -1328,3 +1328,109 @@ def role_shot_distance(match: Match,
                      "roles": rows, "farthest": farthest,
                      "closest": closest, "verdict": verdict}
     return out
+
+
+# Poszt-lövésidőzítés: posztonként ennyi mért lövés kell az ítélethez,
+# és ekkora (másodperces) eltérés a csapat-átlagtól számít érdeminek.
+# A 4 mp nagyjából egy támadás-fázisnyi különbség (első hullám vs.
+# felállt támadás), tehát más védekezési készenlétet kíván.
+RST_MIN_SHOTS = 4
+RST_GAP_S = 4.0
+
+
+def role_shot_timing(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-lövésidőzítés: MELYIK POSZTJUK MIKOR fejez be a támadáson
+    belül.
+
+    A csapat-szintű lövés-időzítés (attack_types.shot_timing) azt
+    mondja meg, korán vagy kivárva lőnek — ez azt, KI lő korán és ki
+    kivárva. Minden lövéshez megkeressük a támadás-szakasz kezdetét, és
+    az addig eltelt időt az ELENGEDŐ játékos posztjához írjuk.
+
+    Edzőileg ez a KÉSZENLÉT beosztása. Aki az első pár másodpercben
+    fejez be, az a visszarendeződés hibájából él: ellene a
+    visszafutásnál kell embert rendelni hozzá. Aki a támadás végén lő,
+    az a felállt fal megfáradását várja ki: ellene a húsz másodperc
+    utáni koncentráció és a passzív-jel előtti utolsó labda a kérdés.
+    Ugyanaz a fal nem tud mindkettőre egyszerre készülni — ezért kell
+    tudni, melyik posztjuk melyik.
+
+    Visszatérés csapatonként: {"shots" (mért lövés), "team_avg_s",
+    "roles": {poszt: {"shots", "avg_s"}}, "earliest": {"poszt",
+    "shots", "avg_s", "gap_s"} | None, "latest": {...} | None,
+    "verdict": str | None} — az earliest/latest/verdict None, ha a
+    poszt nem érte el az RST_MIN_SHOTS lövést, vagy a csapat-átlagtól
+    való eltérése kisebb RST_GAP_S-nél.
+    """
+    from .attack_types import ATTACK_TAIL_S, segment_attacks
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    roles = estimate_positions(match, config)
+    segs = segment_attacks(match, config)
+
+    tally: dict = {"home": {}, "away": {}}     # poszt → [db, összeg mp]
+    totals: dict = {"home": [0, 0.0], "away": [0, 0.0]}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        # A lövés a szakaszon belül vagy közvetlenül utána csapódik le
+        # (mint a csapat-szintű lövés-időzítésnél).
+        seg = next((s_ for s_ in segs
+                    if s_.team == e.team
+                    and s_.start_t <= e.t <= s_.end_t + tail), None)
+        if seg is None:
+            continue
+        dt = (e.t - seg.start_t) / fps
+        rec = tally[side].setdefault(rec_role["poszt"], [0, 0.0])
+        rec[0] += 1
+        rec[1] += dt
+        totals[side][0] += 1
+        totals[side][1] += dt
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_all, sum_all = totals[side]
+        team_avg = (sum_all / n_all) if n_all else None
+        rows = {}
+        for poszt, (n, s_s) in sorted(tally[side].items(),
+                                      key=lambda kv: -kv[1][0]):
+            rows[poszt] = {"shots": n, "avg_s": round(s_s / n, 1)}
+        earliest = latest = verdict = None
+        if team_avg is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["shots"] >= RST_MIN_SHOTS]
+            if eligible:
+                p_e, r_e = min(eligible, key=lambda pr: pr[1]["avg_s"])
+                if team_avg - r_e["avg_s"] >= RST_GAP_S:
+                    earliest = {"poszt": p_e, "shots": r_e["shots"],
+                                "avg_s": r_e["avg_s"],
+                                "gap_s": round(team_avg - r_e["avg_s"], 1)}
+                p_l, r_l = max(eligible, key=lambda pr: pr[1]["avg_s"])
+                if r_l["avg_s"] - team_avg >= RST_GAP_S:
+                    latest = {"poszt": p_l, "shots": r_l["shots"],
+                              "avg_s": r_l["avg_s"],
+                              "gap_s": round(r_l["avg_s"] - team_avg, 1)}
+                if earliest is not None:
+                    verdict = (f"a(z) {earliest['poszt']} korán fejez be "
+                               f"(átl. {earliest['avg_s']:.1f} mp) — a "
+                               "visszarendeződésnél kell rá ember")
+                elif latest is not None:
+                    verdict = (f"a(z) {latest['poszt']} a támadás végén "
+                               f"lő (átl. {latest['avg_s']:.1f} mp) — a "
+                               "kivárt labdára kell koncentrálni")
+        out[side] = {"shots": n_all,
+                     "team_avg_s": round(team_avg, 1)
+                     if team_avg is not None else None,
+                     "roles": rows, "earliest": earliest,
+                     "latest": latest, "verdict": verdict}
+    return out

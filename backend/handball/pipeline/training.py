@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 285) Poszt-lövésidőzítés: ha egy posztunk a támadás végén lő, az
+    # a passzív-jel kockázata és a kifáradt befejezés.
+    try:
+        from .roles import RST_GAP_S, role_shot_timing
+        rst285 = role_shot_timing(match, config)
+        for side in ("home", "away"):
+            rec285 = rst285[side]
+            late285 = rec285.get("latest")
+            if late285 is None:
+                continue
+            add(side, "befejezés", "Túl későn fejezünk be",
+                f"a(z) {late285['poszt']} posztunk átlag "
+                f"{late285['avg_s']:.1f} másodperccel a támadás kezdete "
+                f"után lő ({late285['shots']} lövés), a csapat-átlagunk "
+                f"{rec285['team_avg_s']:.1f} mp — a különbség "
+                f"{late285['gap_s']:.1f} mp "
+                f"({RST_GAP_S:.0f} mp fölött már mintázat), és a kivárt "
+                "labda a passzív-jel kockázatát is hozza",
+                "időre játszott támadás-gyakorlat: a posztra érkező "
+                "labda után KÖTÖTT idő (pl. 12 mp) a befejezésig — a "
+                "cél nem a kapkodás, hanem hogy a döntés ne csússzon a "
+                "fal megfáradásának kivárásáig")
+    except Exception:
+        pass
     # 284) Poszt-lövéstávolság: ha egy posztunk rendre messziről lő,
     # az a kapusnak dolgozik — a befejezést közelebb kell hozni.
     try:

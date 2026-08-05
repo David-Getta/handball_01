@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Poszt-lövésidőzítés: ki lő korán, ki vár ki.** Új elemző réteg.
+  Minden lövéshez megkeressük a támadás-szakasz kezdetét, és az addig
+  eltelt időt az elengedő játékos posztjához írjuk. Edzői olvasat: ez a
+  KÉSZENLÉT beosztása. Aki az első pár másodpercben fejez be, az a
+  visszarendeződés hibájából él — rá a visszafutásnál kell embert
+  rendelni, mert a felállt fal már nem éri el. Aki a támadás végén lő,
+  az a fal megfáradását várja ki — ott a húsz másodperc utáni
+  koncentráció és a passzív-jel előtti utolsó labda a kérdés. Ugyanaz a
+  fal nem tud mindkettőre egyszerre készülni. Négy lövés alatt,
+  illetve 4 másodpercnél kisebb eltérésnél nincs ítélet. Felületek:
+  elemzés-végpont, meccs-csomag, edzői összefoglaló, felderítő kulcsok,
+  meccsterv (264. szabály: az ő korai befejezőjük × a ti lassú
+  visszarendeződésetek), edzés-fókusz (285. szabály: kötött idejű
+  befejezés-gyakorlat), felderítés-képernyő csempéje.
+
 - **Poszt-lövéstávolság: kire lépj ki, kire lehet ráengedni.** Új
   elemző réteg. Minden felismert lövéshez megkeressük az ELENGEDŐ
   játékost és a helyét az elengedés pillanatában, majd a kaputól mért

@@ -2040,6 +2040,52 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-lövésidőzítés: melyik posztjuk mikor fejez be a támadáson
+  // belül (8+ lövés, posztonként 4+, 4 mp eltérés — a backenddel
+  // azonos küszöbök: RST_MIN_SHOTS, RST_GAP_S).
+  String? _shotTimingRole(Map<String, dynamic> r) {
+    final shots = (r["rst_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final sums = (r["rst_time_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || sums == null) return null;
+    var total = 0;
+    var totalS = 0.0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    sums.forEach((k, v) => totalS += (v as num).toDouble());
+    if (total < 8) return null;
+    final teamAvg = totalS / total;
+    String? early, late;
+    var earlyAvg = 0.0, lateAvg = 0.0;
+    var earlyN = 0, lateN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 4) return;
+      final avg = ((sums[k] as num?) ?? 0).toDouble() / n;
+      if (early == null || avg < earlyAvg) {
+        early = k;
+        earlyAvg = avg;
+        earlyN = n;
+      }
+      if (late == null || avg > lateAvg) {
+        late = k;
+        lateAvg = avg;
+        lateN = n;
+      }
+    });
+    if (early != null && teamAvg - earlyAvg >= 4.0) {
+      return "a(z) $early posztjuk fejez be a leghamarabb: átlag "
+          "${earlyAvg.toStringAsFixed(1)} mp ($earlyN lövés, csapat-átlag "
+          "${teamAvg.toStringAsFixed(1)} mp) · a visszarendeződésnél kell "
+          "rá ember";
+    }
+    if (late != null && lateAvg - teamAvg >= 4.0) {
+      return "a(z) $late posztjuk a támadás végén lő: átlag "
+          "${lateAvg.toStringAsFixed(1)} mp ($lateN lövés, csapat-átlag "
+          "${teamAvg.toStringAsFixed(1)} mp) · a kivárt labdára kell "
+          "koncentrálni";
+    }
+    return null;
+  }
+
   // Poszt-lövéstávolság: melyik posztjuk milyen messziről fejez be
   // (8+ lövés, posztonként 4+, 2 m eltérés — a backenddel azonos
   // küszöbök: RSD_MIN_SHOTS, RSD_GAP_M).
@@ -6861,6 +6907,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_shotTimingRole(r) != null)
+        ["Poszt-lövésidőzítés", _shotTimingRole(r)!],
       if (_shotDistanceRole(r) != null)
         ["Poszt-lövéstávolság", _shotDistanceRole(r)!],
       if (_turnoverZoneRole(r) != null)

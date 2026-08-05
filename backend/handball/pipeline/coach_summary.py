@@ -885,6 +885,29 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-lövésidőzítés: ki lő korán, ki vár ki.
+    try:
+        from .roles import role_shot_timing
+        rst = role_shot_timing(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rst = rst[side]
+            if rec_rst["verdict"] is None:
+                continue
+            early, late = rec_rst["earliest"], rec_rst["latest"]
+            if early is not None:
+                body += (f" A(z) {name} befejezéseiből a(z) "
+                         f"{early['poszt']} jön a leghamarabb "
+                         f"(átl. {early['avg_s']:.1f} mp {early['shots']} "
+                         f"lövésen, a csapat-átlaguk "
+                         f"{rec_rst['team_avg_s']:.1f} mp) — rá a "
+                         "visszarendeződésnél kell embert rendelni.")
+            elif late is not None:
+                body += (f" A(z) {name} legkésőbbi befejezője a(z) "
+                         f"{late['poszt']} (átl. {late['avg_s']:.1f} mp "
+                         f"{late['shots']} lövésen) — az ő labdája a "
+                         "kivárás végén jön, ott kell a koncentráció.")
+    except Exception:
+        pass
     # Poszt-lövéstávolság: kire lépj ki, kire lehet ráengedni.
     try:
         from .roles import role_shot_distance

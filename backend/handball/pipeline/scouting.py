@@ -742,6 +742,8 @@ class ScoutingReport:
     rtz_front_by_role: dict = field(default_factory=dict)
     rsd_shots_by_role: dict = field(default_factory=dict)
     rsd_dist_sum_by_role: dict = field(default_factory=dict)
+    rst_shots_by_role: dict = field(default_factory=dict)
+    rst_time_sum_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -2960,6 +2962,32 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-lövésidőzítés: ki lő korán, ki vár ki.
+    _rst_n = sum(rep.rst_shots_by_role.values())
+    if _rst_n >= 8:
+        _rst_team = sum(rep.rst_time_sum_by_role.values()) / _rst_n
+        _rst_rows = [(p, n, rep.rst_time_sum_by_role.get(p, 0.0) / n)
+                     for p, n in rep.rst_shots_by_role.items() if n >= 4]
+        if _rst_rows:
+            _rst_p, _rst_c, _rst_avg = min(_rst_rows, key=lambda r: r[2])
+            if _rst_team - _rst_avg >= 4.0:
+                keys.append(
+                    f"A(z) {_rst_p} posztjuk fejez be a leghamarabb: "
+                    f"átlag {_rst_avg:.1f} mp-cel a támadás kezdete után "
+                    f"({_rst_c} lövés, a csapat-átlaguk "
+                    f"{_rst_team:.1f} mp) — a visszarendeződésnél kell rá "
+                    "kijelölt ember, mert a felállt fal már nem éri el.")
+            else:
+                _rst_p2, _rst_c2, _rst_avg2 = max(_rst_rows,
+                                                  key=lambda r: r[2])
+                if _rst_avg2 - _rst_team >= 4.0:
+                    keys.append(
+                        f"A(z) {_rst_p2} posztjuk a támadás VÉGÉN lő: "
+                        f"átlag {_rst_avg2:.1f} mp ({_rst_c2} lövés, a "
+                        f"csapat-átlaguk {_rst_team:.1f} mp) — a húsz "
+                        "másodperc utáni koncentráció és a passzív-jel "
+                        "előtti utolsó labda az ő kezében van.")
 
     # Poszt-lövéstávolság: kire lépj ki, kire lehet ráengedni.
     _rsd_n = sum(rep.rsd_shots_by_role.values())
@@ -7253,6 +7281,13 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_shot_timing as _rst
+        rstrec = _rst(match, config)[team.value]
+        rep.rst_shots_by_role = {p: r["shots"]
+                                 for p, r in rstrec["roles"].items()}
+        # MÁSODPERC-ÖSSZEG (nem átlag): meccsek közt pontosan összegződik.
+        rep.rst_time_sum_by_role = {p: round(r["shots"] * r["avg_s"], 1)
+                                    for p, r in rstrec["roles"].items()}
         from .roles import role_shot_distance as _rsd
         rsdrec = _rsd(match, config)[team.value]
         rep.rsd_shots_by_role = {p: r["shots"]
@@ -9784,6 +9819,31 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 264) Az ő korai befejező posztjuk × a ti visszaéréstek: aki a
+    # támadás első másodperceiben lő, azt a felállt fal már nem éri el
+    # — csak a visszafutás.
+    _rst264_n = sum(opp.rst_shots_by_role.values())
+    if _rst264_n >= 8:
+        _rst264_team = sum(opp.rst_time_sum_by_role.values()) / _rst264_n
+        _rst264_rows = [(p, n, opp.rst_time_sum_by_role.get(p, 0.0) / n)
+                        for p, n in opp.rst_shots_by_role.items() if n >= 4]
+        if _rst264_rows:
+            _p264, _n264, _avg264 = min(_rst264_rows, key=lambda r: r[2])
+            # A ti visszarendeződésetek: a lassú (5 mp+) átmenetek
+            # aránya — ha ez magas, a korai befejezőjük ellen épp
+            # nincs falatok, amikor lő.
+            _slow264 = (100.0 * own.rec_slow / own.rec_transitions
+                        if own.rec_transitions >= 5 else 0.0)
+            if _rst264_team - _avg264 >= 4.0 and _slow264 >= 30.0:
+                plan.append(
+                    f"A(z) {_p264} posztjuk átlag {_avg264:.1f} "
+                    f"másodperccel a támadás kezdete után befejez "
+                    f"({_n264} lövés; a csapat-átlaguk "
+                    f"{_rst264_team:.1f} mp), a ti visszarendeződésetek "
+                    f"pedig az átmenetek {_slow264:.0f}%-ában lassú "
+                    f"(5 mp+) — rá kijelölt visszafutó embert adjatok, "
+                    "mert a felállt fal az ő befejezését már nem éri el.")
 
     # 263) Az ő közeli befejező posztjuk × a ti kettőzésetek: aki
     # rendre 6-7 méterről fejez be, ott a kapusnak alig van esélye —
@@ -14113,6 +14173,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rst_shots_by_role=_merge_count_dicts(
+            r.rst_shots_by_role for r in reports),
+        rst_time_sum_by_role=_merge_count_dicts(
+            r.rst_time_sum_by_role for r in reports),
         rsd_shots_by_role=_merge_count_dicts(
             r.rsd_shots_by_role for r in reports),
         rsd_dist_sum_by_role=_merge_count_dicts(
