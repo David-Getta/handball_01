@@ -7100,16 +7100,55 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     );
   }
 
+  /// Ennyi karakterig számít az érték "számnak" (nagy betű, keskeny
+  /// csempe). Fölötte mondat — annak olvasható méret és szélesebb hely
+  /// kell.
+  static const int _shortValueChars = 12;
+
+  /// A mondat-értékek ennyi sor után elvágódnak (a teljes szöveg a
+  /// súgóbuborékban marad meg).
+  static const int _metricValueMaxLines = 3;
+
+  /// Egy mutató-csempe.
+  ///
+  /// A csempék értéke NEM szám: a 283 csempe-mutató 371 lehetséges
+  /// visszatérési szövegéből 369 hosszabb 12 karakternél — jellemzően
+  /// egész mondat ("62% elöl · területi nyomás"). A régi csempe ezt
+  /// 20 pontos betűvel, 150 pixeles dobozban rajzolta, így négy-öt
+  /// sorba tört: a fal ragadozott lett, és a szem nem találta meg,
+  /// hol ér véget az egyik csempe és hol kezdődik a másik.
+  ///
+  /// Mostantól a csempe az érték HOSSZÁHOZ igazodik:
+  ///   - rövid érték → a régi, nagy szám-kinézet,
+  ///   - mondat → olvasható törzsméret, szélesebb doboz, három sor
+  ///     után elvágva; a teljes szöveg a súgóbuborékban.
+  /// A címke KERÜL ELŐRE: a fal átfutásakor azt keresi az edző, nem az
+  /// értéket.
   Widget _metricTile(String label, String value) {
+    final short = value.length <= _shortValueChars;
     return SizedBox(
-      width: 150,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: AppText.value.copyWith(fontSize: 20, color: AppColors.accent)),
-          const SizedBox(height: 2),
-          Text(label, style: AppText.label.copyWith(fontSize: 11)),
-        ],
+      width: short ? 150 : 240,
+      child: Tooltip(
+        message: "$label — $value",
+        waitDuration: const Duration(milliseconds: 400),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: AppText.label
+                    .copyWith(fontSize: 11, color: AppColors.textFaint),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 3),
+            Text(value,
+                style: AppText.value.copyWith(
+                    fontSize: short ? 20 : 13,
+                    height: short ? 1.0 : 1.35,
+                    color: AppColors.accent),
+                maxLines: short ? 1 : _metricValueMaxLines,
+                overflow: TextOverflow.ellipsis),
+          ],
+        ),
       ),
     );
   }

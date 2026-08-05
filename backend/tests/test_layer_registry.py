@@ -682,3 +682,41 @@ def test_kliens_szekcio_ugras_celba_er():
     unused = sorted(keys - set(labels))
     assert not unused, (
         f"ezekre a szekciókra egyetlen csip sem mutat: {unused}")
+
+
+def test_kliens_mutato_csempe_birja_a_mondatot():
+    """A mutató-csempe mondat-hosszú értékre is olvasható marad.
+
+    A csempék értéke NEM szám: a mutató-helyerek visszatérési szövegei
+    túlnyomórészt egész mondatok ("62% elöl · területi nyomás"). Ha a
+    csempe ezt szám-méretű betűvel, keskeny dobozban rajzolja, öt sorba
+    törik és a fal olvashatatlan lesz. A védelem: sor-korlát,
+    elvágás, és súgóbuborék a teljes szöveggel.
+    """
+    import re
+    path = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "scouting_screen.dart")
+    if not path.exists():
+        pytest.skip("nincs kliens a fában")
+    src = path.read_text(encoding="utf-8")
+
+    m = re.search(r"Widget _metricTile\(String label, String value\) \{"
+                  r"(.*?)\n  \}", src, flags=re.S)
+    assert m, "nem találom a _metricTile-t"
+    body = m.group(1)
+    for needed, why in [
+        ("maxLines:", "sor-korlát nélkül a mondat szétnyomja a csempét"),
+        ("TextOverflow.ellipsis", "a levágott szöveget jelölni kell"),
+        ("Tooltip(", "a teljes szövegnek elérhetőnek kell maradnia"),
+    ]:
+        assert needed in body, f"hiányzik a `{needed}` — {why}"
+
+    # A mutató-helyerek tényleg mondatot adnak: ezt itt is rögzítjük,
+    # hogy a csempe soha ne váljon vissza "csak szám" feltevésűvé.
+    values = re.findall(r'return\s+("(?:[^"\\]|\\.)*"'
+                        r'(?:\s*\n?\s*"(?:[^"\\]|\\.)*")*)\s*;', src)
+    texts = ["".join(re.findall(r'"((?:[^"\\]|\\.)*)"', v)) for v in values]
+    long_ = [t for t in texts if len(re.sub(r"\$\{[^}]*\}", "0000", t)) > 12]
+    assert len(long_) > 100, (
+        "a mutató-szövegek túlnyomó része mondat — ha ez megváltozott, "
+        f"a csempe méretezését is gondold újra ({len(long_)} hosszú)")

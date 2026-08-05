@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A mutató-csempék végre olvashatók.** A csempék "értéke" nem szám: a
+  283 csempe-mutató 371 lehetséges szövegéből **369 hosszabb 12
+  karakternél** — jellemzően egész mondat ("62% elöl · területi
+  nyomás"). A csempe viszont 20 pontos szám-betűvel, 150 pixeles
+  dobozban rajzolta őket, így négy-öt sorba törtek: a fal ragadozott
+  lett, és a szem nem találta, hol ér véget az egyik csempe. Mostantól
+  a csempe az érték hosszához igazodik (rövidnél marad a nagy szám,
+  mondatnál olvasható törzsméret és szélesebb doboz, három sor után
+  elvágva), a CÍMKE kerül előre — a fal átfutásakor azt keresi az edző
+  —, a teljes szöveg pedig a súgóbuborékban marad meg. Őr-teszt
+  rögzíti a sor-korlátot, az elvágást és a súgóbuborékot.
+
 - **Ugrás a jelentés szekciójára — tartalomjegyzék a felderítéshez.** A
   felderítő jelentés kilenc nagy kártyából áll, és képernyőkön át
   gördül; egy edző viszont a meccs előtt jellemzően EGY dolgot keres
