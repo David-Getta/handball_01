@@ -20,6 +20,7 @@ import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "shell/app_shell.dart";
+import "error_text.dart";
 
 /// A kalibráció eredménye — a feltöltő képernyő ezt kapja vissza, és adja
 /// tovább a feldolgozásnak (POST /matches/process).
@@ -183,7 +184,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _loadError = "$e";
+        _loadError = "${humanError(e)}";
         _loading = false;
       });
     }

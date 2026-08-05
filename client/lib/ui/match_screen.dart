@@ -32,6 +32,7 @@ import "stats_panel.dart";
 import "story_timeline.dart";
 import "summary_panel.dart";
 import "video_panel.dart";
+import "error_text.dart";
 
 enum ViewMode { players, heatmap, shots, passes }
 
@@ -970,7 +971,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Klip-export hiba: $e")));
+          SnackBar(content: Text("Klip-export hiba: ${humanError(e)}")));
     } finally {
       if (mounted) setState(() => _exportingClips = false);
     }
@@ -1000,7 +1001,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Játékos-lap hiba: $e")));
+          SnackBar(content: Text("Játékos-lap hiba: ${humanError(e)}")));
     }
   }
 
@@ -1042,7 +1043,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Csomag-export hiba: $e")));
+          SnackBar(content: Text("Csomag-export hiba: ${humanError(e)}")));
     } finally {
       if (mounted) setState(() => _exportingPackage = false);
     }
@@ -1271,7 +1272,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Nem sikerült a jegyzet: $e")));
+          content: Text("Nem sikerült a jegyzet: ${humanError(e)}")));
     }
   }
 
@@ -1290,7 +1291,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Nem sikerült menteni a jegyzetet: $e")));
+          SnackBar(content: Text("Nem sikerült menteni a jegyzetet: ${humanError(e)}")));
     } finally {
       if (mounted) setState(() => _savingNote = false);
     }
@@ -1306,7 +1307,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Nem sikerült törölni a jegyzetet: $e")));
+          SnackBar(content: Text("Nem sikerült törölni a jegyzetet: ${humanError(e)}")));
     }
   }
 
@@ -1445,7 +1446,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Export-hiba: $e")));
+          SnackBar(content: Text("Export-hiba: ${humanError(e)}")));
     }
   }
 
@@ -1471,7 +1472,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Jelentés-hiba: $e")));
+          SnackBar(content: Text("Jelentés-hiba: ${humanError(e)}")));
     }
   }
 
@@ -1513,7 +1514,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Csere-hiba: $e")));
+          SnackBar(content: Text("Csere-hiba: ${humanError(e)}")));
     }
   }
 
@@ -1592,7 +1593,7 @@ class _MatchScreenState extends State<MatchScreen> {
               "${r["estimated_added"]} becsült pozíció újraszámolva")));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mentési hiba: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mentési hiba: ${humanError(e)}")));
     }
   }
 
@@ -2341,7 +2342,7 @@ class _MatchScreenState extends State<MatchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Mezszám-mentés hiba: $e")));
+          SnackBar(content: Text("Mezszám-mentés hiba: ${humanError(e)}")));
     }
   }
 

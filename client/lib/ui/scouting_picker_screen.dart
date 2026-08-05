@@ -12,6 +12,7 @@ import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "scouting_screen.dart";
 import "shell/app_shell.dart";
+import "error_text.dart";
 
 class ScoutingPickerScreen extends StatefulWidget {
   const ScoutingPickerScreen({super.key});
@@ -45,7 +46,7 @@ class _ScoutingPickerScreenState extends State<ScoutingPickerScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = "A meccs-könyvtár nem érhető el: $e";
+        _error = "A meccs-könyvtár nem érhető el: ${humanError(e)}";
         _loading = false;
       });
     }

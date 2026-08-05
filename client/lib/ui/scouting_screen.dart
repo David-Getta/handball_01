@@ -15,6 +15,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
+import "error_text.dart";
 
 class ScoutingScreen extends StatefulWidget {
   final String matchId;
@@ -137,7 +138,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = "$e";
+        _error = "${humanError(e)}";
         _loading = false;
       });
     }
@@ -167,7 +168,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Export hiba: $e")));
+          SnackBar(content: Text("Export hiba: ${humanError(e)}")));
     }
   }
 

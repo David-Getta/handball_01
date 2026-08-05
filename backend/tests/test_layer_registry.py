@@ -586,3 +586,39 @@ def test_kliens_ikongombok_kapnak_sugobuborekot():
     assert not offenders, (
         "tooltip nélküli ikongombok (a felhasználó nem tudja, mit "
         f"csinálnak): {offenders}")
+
+
+def test_kliens_nem_ir_ki_nyers_kivetelt():
+    """A felületen ne jelenjen meg nyers kivétel-szöveg.
+
+    A `SocketException: Connection refused (OS Error: ..., errno = 111),
+    address = 127.0.0.1, port = 8000` egy edzőnek semmit nem mond — sem
+    azt, mi történt, sem azt, mit tegyen. A kiírás ezért a
+    `humanError(e)`-n megy át (`ui/error_text.dart`).
+
+    Kivétel csak ott van, ahol a nyers szöveg LOGIKÁHOZ kell (pl.
+    "404"/"401" keresése a hozzáférési hiba felismeréséhez) — az ilyen
+    sort a `nyers-hiba-szándékos` megjegyzés jelöli.
+    """
+    import re
+    root = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui")
+    if not root.exists():
+        pytest.skip("nincs kliens a fában")
+    assert (root / "error_text.dart").exists(), "hiányzik a fordító modul"
+
+    offenders = []
+    for path in sorted(root.rglob("*.dart")):
+        if path.name == "error_text.dart":
+            continue  # maga a fordító — ott a nyers szöveg a bemenet
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(),
+                                 1):
+            if not re.search(r"\$e\b|\$\{e\}", line):
+                continue
+            if "nyers-hiba-szándékos" in line:
+                continue
+            offenders.append(f"{path.name}:{i}: {line.strip()}")
+    assert not offenders, (
+        "nyers kivétel-szöveg a felületen — tedd `humanError(e)`-be, vagy "
+        "ha tényleg logikához kell, jelöld a `nyers-hiba-szándékos` "
+        f"megjegyzéssel: {offenders}")

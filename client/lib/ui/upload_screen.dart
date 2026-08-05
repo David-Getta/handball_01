@@ -20,6 +20,7 @@ import "../theme/app_theme.dart";
 import "calibration_screen.dart";
 import "match_screen.dart";
 import "shell/app_shell.dart";
+import "error_text.dart";
 
 /// A pipeline-lépések sorrendje (a backend ezeket a kódokat adja a job stage-ében).
 const List<List<String>> _pipelineSteps = [
@@ -183,7 +184,7 @@ class _UploadScreenState extends State<UploadScreen> {
       if (!mounted) return;
       setState(() => _uploading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Feltöltési hiba: $e")),
+        SnackBar(content: Text("Feltöltési hiba: ${humanError(e)}")),
       );
     }
   }
@@ -319,7 +320,7 @@ class _UploadScreenState extends State<UploadScreen> {
           } catch (e) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text("Nem sikerült sorba állítani: ${p.split("/").last} — $e")));
+                content: Text("Nem sikerült sorba állítani: ${p.split("/").last} — ${humanError(e)}")));
           }
         }
         if (queued > 0 && mounted) {
@@ -331,7 +332,7 @@ class _UploadScreenState extends State<UploadScreen> {
     } catch (e) {
       setState(() {
         _status = "error";
-        _error = "$e";
+        _error = "${humanError(e)}";
         _message = "nem sikerült elindítani";
       });
     }
@@ -363,7 +364,7 @@ class _UploadScreenState extends State<UploadScreen> {
       if (!mounted) return;
       setState(() {
         _status = "error";
-        _error = "$e";
+        _error = "${humanError(e)}";
       });
       _poll?.cancel();
     }
@@ -380,7 +381,7 @@ class _UploadScreenState extends State<UploadScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Megszakítási hiba: $e")));
+          .showSnackBar(SnackBar(content: Text("Megszakítási hiba: ${humanError(e)}")));
     }
   }
 
@@ -499,7 +500,7 @@ class _UploadScreenState extends State<UploadScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Közvetítés-ellenőrzés hiba: $e")));
+          SnackBar(content: Text("Közvetítés-ellenőrzés hiba: ${humanError(e)}")));
     } finally {
       if (mounted) setState(() => _checkingBroadcast = false);
     }
@@ -581,7 +582,7 @@ class _UploadScreenState extends State<UploadScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Detektálás-próba hiba: $e")));
+          SnackBar(content: Text("Detektálás-próba hiba: ${humanError(e)}")));
     } finally {
       if (mounted) setState(() => _previewing = false);
     }

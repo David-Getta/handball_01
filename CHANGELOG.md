@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hibaüzenetek emberi nyelven — a teendővel együtt.** Eddig a
+  felület a nyers kivételt írta ki, például: `SocketException:
+  Connection refused (OS Error: Connection refused, errno = 111),
+  address = 127.0.0.1, port = 8000`. Ebből egy edző sem azt nem tudta
+  meg, MI történt, sem azt, mit tegyen. Mostantól a felismert esetek
+  egy mondatot kapnak a teendővel ("Nem érem el a háttérmotort. Fut a
+  Sport Machine motor? A program újraindítása magától elindítja."):
+  elérhetetlen motor, időtúllépés, betelt lemez, jogosultság, 404,
+  401/403, 500. Amit a fordító nem ismer fel, azt VÁLTOZATLANUL adja
+  vissza — jobb egy nyers üzenet, mint egy félrevezető tipp. 45
+  kiírási hely tíz képernyőn; őr-teszt tiltja, hogy új nyers `$e`
+  kerüljön a felületre (logikai illesztéshez jelöléssel maradhat).
+
 - **Gyorsbillentyű-súgó mindenhonnan, egy listából.** Eddig csak a
   meccs-elemzőben létezett súgó (rejtett `?`/F1 gombra), és az
   app-szintű navigációs billentyűket (Cmd/Ctrl + 1..7) nem is

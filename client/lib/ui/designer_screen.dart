@@ -17,6 +17,7 @@ import "../theme/app_theme.dart";
 import "court_geometry.dart";
 import "shell/app_shell.dart";
 import "court_painter.dart";
+import "error_text.dart";
 
 class DesignerScreen extends StatefulWidget {
   final Match match; // ebből tanuljuk a védelmet
@@ -269,7 +270,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Szimulációs hiba: $e")));
+          .showSnackBar(SnackBar(content: Text("Szimulációs hiba: ${humanError(e)}")));
     }
   }
 
@@ -326,7 +327,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
           SnackBar(content: Text("Figura mentve: $name")));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mentési hiba: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mentési hiba: ${humanError(e)}")));
     }
   }
 
@@ -338,7 +339,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("A könyvtár nem érhető el: $e")));
+          SnackBar(content: Text("A könyvtár nem érhető el: ${humanError(e)}")));
       return;
     }
     if (!mounted) return;
@@ -408,7 +409,7 @@ class _DesignerScreenState extends State<DesignerScreen> {
           SnackBar(content: Text("Betöltve: ${play["name"]}")));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Betöltési hiba: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Betöltési hiba: ${humanError(e)}")));
     }
   }
 

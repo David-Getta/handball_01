@@ -20,6 +20,7 @@ import "player_trend_screen.dart";
 import "scouting_screen.dart";
 import "shell/app_shell.dart";
 import "trend_screen.dart";
+import "error_text.dart";
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -115,7 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Mentés-hiba: $e")));
+          SnackBar(content: Text("Mentés-hiba: ${humanError(e)}")));
     }
   }
 
@@ -141,7 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Visszaállítás-hiba: $e")));
+          SnackBar(content: Text("Visszaállítás-hiba: ${humanError(e)}")));
     }
   }
 
@@ -252,14 +253,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      final s = "$e";
+      final s = "$e"; // nyers-hiba-szándékos: ILLESZTÉSHEZ kell, nem kiíráshoz
       // 404: nincs kiadás VAGY privát a repó; 401/403: rossz/lejárt token.
       final authIssue = s.contains("404") || s.contains("401") || s.contains("403");
       messenger.showSnackBar(SnackBar(
         content: Text(authIssue
             ? "Nem érem el a kiadásokat — privát repónál add meg a "
                 "GitHub-kulcsot (token)."
-            : "Frissítés-ellenőrzési hiba: $e"),
+            : "Frissítés-ellenőrzési hiba: ${humanError(e)}"),
         action: authIssue
             ? SnackBarAction(label: "Kulcs megadása", onPressed: _updateTokenDialog)
             : null,
@@ -367,7 +368,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop(); // folyamat-ablak be
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Frissítési hiba: $e")));
+          .showSnackBar(SnackBar(content: Text("Frissítési hiba: ${humanError(e)}")));
     }
   }
 
@@ -642,7 +643,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Nézet-egyesítés hiba: $e")));
+          SnackBar(content: Text("Nézet-egyesítés hiba: ${humanError(e)}")));
     }
   }
 
@@ -985,7 +986,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Nem sikerült az összefűzés: $e")));
+          .showSnackBar(SnackBar(content: Text("Nem sikerült az összefűzés: ${humanError(e)}")));
     }
   }
 
@@ -1085,10 +1086,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("$e".contains("400")
+          content: Text("${humanError(e)}".contains("400")
               ? "Hibás dátum-formátum — ÉÉÉÉ-HH-NN alakban add meg "
                   "(pl. 2024-11-20)."
-              : "Átnevezési hiba: $e")));
+              : "Átnevezési hiba: ${humanError(e)}")));
     }
   }
 
@@ -1114,7 +1115,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Törlési hiba: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Törlési hiba: ${humanError(e)}")));
     }
   }
 
@@ -1126,7 +1127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("$e")));
+          .showSnackBar(SnackBar(content: Text("${humanError(e)}")));
       return;
     }
     if (!mounted) return;
@@ -1206,7 +1207,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("$e")));
+          .showSnackBar(SnackBar(content: Text("${humanError(e)}")));
     }
   }
 
@@ -1224,7 +1225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Nem sikerült az összefűzés: $e")));
+          SnackBar(content: Text("Nem sikerült az összefűzés: ${humanError(e)}")));
     }
   }
 
@@ -1242,7 +1243,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("$e")));
+          .showSnackBar(SnackBar(content: Text("${humanError(e)}")));
     }
   }
 
@@ -1679,7 +1680,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Demó-hiba: $e")));
+          SnackBar(content: Text("Demó-hiba: ${humanError(e)}")));
     }
   }
 
@@ -2257,7 +2258,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Egymás ellen hiba: $e — csak közös meccsel "
+          content: Text("Egymás ellen hiba: ${humanError(e)} — csak közös meccsel "
               "rendelkező pároshoz készül riport")));
     }
   }
@@ -2284,7 +2285,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Szezon-riport hiba: $e — legalább 2 meccs "
+          content: Text("Szezon-riport hiba: ${humanError(e)} — legalább 2 meccs "
               "kell a csapattól")));
     }
   }

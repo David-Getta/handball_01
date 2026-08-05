@@ -14,6 +14,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
+import "error_text.dart";
 
 class PlayerTrendScreen extends StatefulWidget {
   /// A csapatnevek a meccs-könyvtárból (a választóhoz). Üresen hagyva a
@@ -94,7 +95,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = "$e";
+        _error = "${humanError(e)}";
         _loading = false;
       });
     }
@@ -125,7 +126,7 @@ class _PlayerTrendScreenState extends State<PlayerTrendScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Szezon-lap hiba: $e")));
+          .showSnackBar(SnackBar(content: Text("Szezon-lap hiba: ${humanError(e)}")));
     }
   }
 

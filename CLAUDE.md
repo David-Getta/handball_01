@@ -14,7 +14,7 @@ pipeline-rétegek a `Tracking`/`Match` adatmodellen) + Flutter kliens
 ## Parancsok
 
 ```bash
-# Teljes backend teszt (kb. 80 mp) — commit előtt kötelező:
+# Teljes backend teszt (kb. 5 perc, 1200+ teszt) — commit előtt kötelező:
 cd backend && python3 -m pytest -q
 
 # Gyors kör fejlesztés közben (csak az érintett fájlok):

@@ -15,6 +15,7 @@ import "package:flutter/material.dart";
 import "package:video_player/video_player.dart";
 
 import "../theme/app_theme.dart";
+import "error_text.dart";
 
 class VideoPanel extends StatefulWidget {
   /// Az eredeti videófájl útja (a Tracking meta.video_path mezőjéből).
@@ -70,7 +71,7 @@ class VideoPanelState extends State<VideoPanel> {
         await seekTo(pending);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = "A videó nem játszható le: $e");
+      if (mounted) setState(() => _error = "A videó nem játszható le: ${humanError(e)}");
     }
   }
 

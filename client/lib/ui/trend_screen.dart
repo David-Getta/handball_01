@@ -14,6 +14,7 @@ import "package:flutter/material.dart";
 import "../services/api_client.dart";
 import "../theme/app_theme.dart";
 import "shell/app_shell.dart";
+import "error_text.dart";
 
 class TrendScreen extends StatefulWidget {
   final List<Map<String, String>> older; // a korábbi időszak meccsei
@@ -52,7 +53,7 @@ class _TrendScreenState extends State<TrendScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = "$e";
+        _error = "${humanError(e)}";
         _loading = false;
       });
     }
@@ -129,7 +130,7 @@ class _TrendScreenState extends State<TrendScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Riport-hiba: $e")));
+          .showSnackBar(SnackBar(content: Text("Riport-hiba: ${humanError(e)}")));
     }
   }
 
