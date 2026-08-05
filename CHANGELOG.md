@@ -3,7 +3,31 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.23 óta)
+## Kiadatlan (a v0.1.24 óta)
+
+*(még nincs benne semmi)*
+
+## v0.1.24 — kiadva (2026-08-05)
+
+> Kiadás-jegyzet: a v0.1.23 óta a fejlesztés három szálon futott.
+> **(1) Sebesség**: a rétegek addig hívták újra ugyanazokat az
+> alap-méréseket, hogy egy teljes meccs-csomag ~10 percig futott; a
+> hatókörös gyorsítótár és a kocka-szintű memoizálás ezt bitre azonos
+> kimenet mellett 2,4–3,2×-esére gyorsította. **(2) Poszt-lencse**: a
+> posztok akkor is stabilak, ha a nevek meccsről meccsre cserélődnek,
+> ezért a felkészülés gerince lett — tíz új réteg (hatékonyság,
+> gólpassz-tengely, birtoklás, passzháló, átvételi zóna, labdatartás,
+> eladási zóna, eladás-ár, szünet- és állás-váltás), egy közös
+> Poszt-lencse szekcióval a jelentésben. **(3) Használhatóság**: a
+> felderítés-képernyő 297 mérőszáma kereshető, csoportosított fallá
+> lett, az edzői összefoglaló 43 mondatos bekezdése felsorolássá, a
+> kezdőlap nyolc néma ikonja pedig nevesített művelet + egy menü.
+>
+> Külön érdemes kiemelni, ami NEM került be: egy tervezett
+> poszt-lövőtávolság réteg mérése a lövő-hozzárendelés kapu-felé
+> torzításán bukott volna. A réteg helyett a KORLÁT került be —
+> dokumentálva, jellemző-teszttel leszögezve, és az EIC-terv TRL-4
+> feladatai közé felvéve.
 
 - **Kezdőlap: nyolc néma ikon helyett nevesített műveletek.** A
   fejlécben nyolc egyforma szürke ikon sorakozott (játékos-fejlődés,
