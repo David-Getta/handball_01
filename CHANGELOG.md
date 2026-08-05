@@ -17,7 +17,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   közt; javítása az elengedés-pillanat külön felismerését igényli, és
   a valós-videós validáció kiemelt tétele. (Emiatt egy tervezett
   poszt-lövőtávolság réteg NEM került be — a mérése ezen a torzításon
-  bukott volna.)
+  bukott volna.) **Jellemző-teszt** rögzíti a jelenlegi viselkedést:
+  ha valaki bevezeti az elengedés-pillanat felismerését, a teszt
+  elbukik, és a hozzá tartozó dokumentációt is frissíteni kell.
 
 - **A README száma is a szinkron alá került**: a nyitólap "Minőség"
   sora 1103 automata tesztet állított, miközben a valóság 1246 — épp

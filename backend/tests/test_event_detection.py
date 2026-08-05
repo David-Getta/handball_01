@@ -649,3 +649,47 @@ def test_pass_length_by_score_few_passes_none():
     frames, t = _pls_pass_frames(0, 15.0, 27.0, 5)
     pls = pass_length_by_score(Match(_meta(), frames))
     assert pls["home"]["verdict"] is None
+
+
+def test_shooter_attribution_is_biased_toward_the_goal():
+    """JELLEMZŐ-TESZT: a lövő-hozzárendelés kapu-felé torzít.
+
+    Ez NEM a kívánt viselkedést rögzíti, hanem egy MÉRT, ismert
+    korlátot (lásd `_shooter_before` docstring és
+    docs/PALYAZAT_EIC_PRE_ACCELERATOR.md TRL-4 pontja): a lövés-
+    eseményt a labda KAPU-MEGKÖZELÍTÉSEKOR jelöljük, nem az elengedés
+    pillanatában, ezért a visszakeresés a kapuhoz KÖZELI játékost
+    találja meg.
+
+    A teszt célja, hogy a torzítás ne változhasson észrevétlenül: ha
+    valaki bevezeti az elengedés-pillanat felismerését, ez a teszt
+    elbukik — akkor ITT kell átírni a várt lövőt a távoli játékosra,
+    és a fenti dokumentációt is frissíteni.
+    """
+    # A távoli játékos (id 3) 12 m-ről engedi el; a közeli (id 1) a
+    # kapu előtt, 6 m-en áll, és nem nyúl a labdához.
+    frames = []
+    t = 0
+    players = [
+        PlayerPosition(track_id=3, team=Team.HOME, x=28.0, y=10.0,
+                       source=PositionSource.MEASURED, confidence=1.0),
+        PlayerPosition(track_id=1, team=Team.HOME, x=34.0, y=10.0,
+                       source=PositionSource.MEASURED, confidence=1.0),
+    ]
+    for _ in range(30):          # a távoli játékos birtokol
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+        t += 1
+    for i in range(1, 14):       # a lövés a kapuba (~1 m/kocka)
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=28.0 + 12.5 * (i / 13.0), y=10.0,
+                                      confidence=1.0)))
+        t += 1
+    match = Match(MatchMeta(match_id="sb", home_team="H", away_team="A",
+                            fps=25.0), frames)
+    goals = [e for e in detect_shots(match) if e.type == EventType.GOAL]
+    assert goals, "a mintajeleneten van gól"
+    # A LÖVŐ a 3-as volt — a felismerés mégis az 1-est nevezi meg.
+    assert goals[0].player_id == 1, (
+        "megváltozott a lövő-hozzárendelés: ha ez már a tényleges "
+        "elengedőt (3) adja, frissítsd a dokumentált korlátot is")
