@@ -10,42 +10,46 @@ lefutnak — egy nagy összeállításban tehát a kiértékelés
 sorrendjétől. Ez a lista a döntés alapja: hol érdemes kimondott,
 determinisztikus szerep-jelöléssel indítani.
 
-Mérés: 240 mp-es szimulált meccs (mag: 7); **313 réteg** összevetve, ebből **38 sorrend-függő**.
+Mérés: 240 mp-es szimulált meccs (mag: 7); **313 réteg** összevetve, ebből **50 sorrend-függő**.
 
-## A mérés korlátja
+## A mérés köre
 
-A szimulált meccs (`simulate_ground_truth`) MOZGÁST modellez,
-lövés-eseményt nem termel — a szimulált lövések a demó-epizódokból
-jönnek, amelyeket ez a mérés nem használ. Ezért a LÖVÉS-ALAPÚ
-rétegek itt üres bemenettel futnak: mindkét ágon ugyanazt a
-semmit adják, tehát "nem sorrend-függőnek" látszanak. Ez nem
-bizonyíték — csak annyit jelent, hogy ezekről a rétegekről a
-mérés NEM MOND SEMMIT. Valós (vagy lövéseket is tartalmazó)
-felvételen újra kell mérni.
+A szimuláció ebben a futásban LŐ is (6
+lövés/perc, a hazai mezőnyjátékosok körbejárva), tehát a
+lövés-alapú rétegek valódi bemenetet kaptak. A szimuláció
+alapértelmezésben csak mozgást modellez — enélkül ezek a
+rétegek üres bemeneten futnának, és a mérés róluk nem
+mondana semmit.
 
 ## Sorrend-függő rétegek
 
 | Réteg |
 |---|
 | `advanced_defender` |
+| `ball_winners` |
+| `beaten_defenders` |
 | `block_recoveries` |
 | `blocked_by_role` |
 | `blocked_shooters` |
 | `blocked_shot_rate` |
 | `blocks` |
+| `clutch_ball_hogs` |
 | `clutch_lineup` |
 | `coach_summary` |
+| `corridor_goals` |
 | `defensive_aggression` |
 | `defensive_line_height` |
 | `distance_battle` |
 | `double_punishment` |
 | `doubling_defenders` |
 | `gk_positioning` |
+| `gk_shorthanded_saves` |
 | `key_moments` |
 | `key_players` |
 | `line_height_by_score` |
 | `marking` |
 | `match_card_en` |
+| `momentum` |
 | `opening_lineup` |
 | `pass_security` |
 | `phase_specialists` |
@@ -53,15 +57,21 @@ felvételen újra kell mérni.
 | `post_powerplay` |
 | `powerplay_defense` |
 | `powerplay_pace` |
+| `powerplay_shooters` |
 | `pressure_sensitive_players` |
-| `priority_findings` |
 | `recovery_discipline` |
 | `rotation` |
 | `rules` |
 | `shorthanded_attack` |
 | `sprint_threats` |
+| `steal_launch` |
+| `steal_types` |
 | `susp_earner_roles` |
 | `susp_earners` |
 | `suspensions_by_score` |
+| `targeted_defenders` |
 | `training` |
+| `transition_offense` |
+| `unpressured_assists` |
 | `wall_gaps` |
+| `wrongfooted_keeper` |

@@ -121,9 +121,42 @@ def _ball_xy(positions: dict[int, tuple[float, float]], t: int, fps: float) -> t
     return bx, by
 
 
+# Lövés-epizód a szimulációban. A labda előbb a lövő KEZÉBEN van (enélkül
+# nincs elengedés-pillanat, és a lövő azonosítatlan marad — lásd
+# `event_detection._shooter_before`), majd a kapuba repül.
+SHOT_HOLD_FRAMES = 5
+SHOT_FLIGHT_FRAMES = 9
+
+# A lövők sorrendje: a hazai mezőnyjátékosok körbe. Így a
+# JÁTÉKOS- és POSZT-bontású lövés-rétegeknek van mit szétválasztaniuk.
+_SHOOTER_ROTATION = [3, 2, 6, 4, 1, 5]
+
+
+def _shot_episode(t: int, fps: float, period_frames: int) -> tuple | None:
+    """Lövés-epizód a `t` kockán, vagy None.
+
+    Visszatérés: (lövő track_id, 0..1 haladás a repülésben, tartás-e).
+    Az epizód minden `period_frames` ciklus VÉGÉRE esik, hogy a
+    passz-útvonal érintetlen maradjon előtte.
+    """
+    if period_frames <= 0:
+        return None
+    span = SHOT_HOLD_FRAMES + SHOT_FLIGHT_FRAMES
+    pos = t % period_frames
+    start = period_frames - span
+    if pos < start:
+        return None
+    k = pos - start
+    who = _SHOOTER_ROTATION[(t // period_frames) % len(_SHOOTER_ROTATION)]
+    if k < SHOT_HOLD_FRAMES:
+        return (who, 0.0, True)
+    return (who, (k - SHOT_HOLD_FRAMES + 1) / SHOT_FLIGHT_FRAMES, False)
+
+
 def simulate_ground_truth(duration_s: float = 8.0, fps: float = 25.0,
                           seed: int = 0,
-                          halftime_break_s: float = 0.0) -> Match:
+                          halftime_break_s: float = 0.0,
+                          shots_per_min: float = 0.0) -> Match:
     """A "földi igazság": mind a 14 játékos + labda valósághű mozgása.
 
     Minden játékos MÉRT (a kamera-korlát nélkül). Ez a referencia, amiből a
@@ -134,6 +167,13 @@ def simulate_ground_truth(duration_s: float = 8.0, fps: float = 25.0,
     épülő rétegek (félidei állás, kondíció-mutató, félidő-minta) is
     demózhatók/tesztelhetők szimulált meccsen. A szünet a duration_s-en
     FELÜL adódik hozzá.
+
+    shots_per_min > 0 esetén a hazai csapat rendszeresen LŐ is a +x
+    kapura (a lövők körbejárnak a mezőnyjátékosok közt). Alapból KI van
+    kapcsolva: a szimuláció eredetileg csak mozgást modellezett, és a
+    meglévő mérések erre a viselkedésre épülnek. Bekapcsolva a
+    lövés-alapú rétegek (több mint száz) is valódi bemenetet kapnak —
+    ezért hasznos a sorrend-mérésnek és a felület-demóknak.
     """
     rng = random.Random(seed)
     specs = _roster_specs()
@@ -144,6 +184,11 @@ def simulate_ground_truth(duration_s: float = 8.0, fps: float = 25.0,
     match = Match(meta=meta, frames=[])
     n_frames = int(duration_s * fps)
     break_frames = int(halftime_break_s * fps)
+    # A lövés-ciklus hossza kockában; 0 = nincs lövés (alapértelmezés).
+    shot_period = (int(fps * 60.0 / shots_per_min)
+                   if shots_per_min > 0 else 0)
+    if shot_period and shot_period < SHOT_HOLD_FRAMES + SHOT_FLIGHT_FRAMES:
+        shot_period = SHOT_HOLD_FRAMES + SHOT_FLIGHT_FRAMES
     half_at = n_frames // 2 if break_frames else n_frames + 1
 
     out_t = 0
@@ -163,6 +208,17 @@ def simulate_ground_truth(duration_s: float = 8.0, fps: float = 25.0,
             for s in specs
         ]
         bx, by = _ball_xy(positions, t, fps)
+        if shot_period > 0:
+            episode = _shot_episode(t, fps, shot_period)
+            if episode is not None:
+                who, progress, holding = episode
+                sx, sy = positions[who]
+                if holding:
+                    bx, by = sx + 0.3, sy
+                else:
+                    # Elengedés → a kapu közepe (x=40, y=10).
+                    bx = sx + 0.3 + (40.3 - sx - 0.3) * progress
+                    by = sy + (10.0 - sy) * progress
         match.frames.append(Frame(t=out_t, players=players,
                                   ball=Ball(x=bx, y=by)))
         out_t += 1

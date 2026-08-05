@@ -36,18 +36,45 @@ def test_report_lists_the_sensitive_layers():
     assert "Nem mérhető" not in text  # üres lista → nincs szekció
 
 
-def test_report_spells_out_the_measurement_limit():
-    """A jelentés kimondja, mit NEM tud: a szimulált meccs nem termel
-    lövést, tehát a lövés-alapú rétegekről a mérés nem mond semmit.
+def test_report_states_whether_shots_were_measured():
+    """A jelentés kimondja, kapott-e a mérés lövéseket.
 
-    Ez a legkönnyebben félreolvasható pont: egy "nem sorrend-függő"
-    sor bizonyítéknak látszana, holott üres bemenetből jön.
+    Ez a legkönnyebben félreolvasható pont: lövés nélkül egy "nem
+    sorrend-függő" sor bizonyítéknak látszana, holott üres bemenetből
+    jön. A két eset szövege ezért különbözik.
     """
-    text = build_report({"checked": 5, "sensitive": [], "failed": []},
-                        120.0, 1)
-    assert "A mérés korlátja" in text
-    assert "lövés-eseményt nem termel" in text
-    assert "NEM MOND SEMMIT" in text
+    res = {"checked": 5, "sensitive": [], "failed": []}
+    with_shots = build_report(res, 120.0, 1, 6.0)
+    assert "A mérés köre" in with_shots
+    assert "valódi bemenetet kaptak" in with_shots
+
+    without = build_report(res, 120.0, 1, 0.0)
+    assert "NEM MOND SEMMIT" in without
+    assert "valódi bemenetet kaptak" not in without
+
+
+def test_simulation_can_produce_shots():
+    """A szimuláció bekapcsolva LŐ, és a lövéseknek van lövőjük.
+
+    A mérés létjogosultsága ezen áll: enélkül a lövés-alapú rétegek
+    üres bemenettel futnának.
+    """
+    from handball.pipeline.event_detection import EventType, detect_shots
+    from handball.sim.match_simulator import simulate_ground_truth
+
+    plain = simulate_ground_truth(duration_s=120.0, seed=7)
+    assert not [e for e in detect_shots(plain)
+                if e.type in (EventType.SHOT, EventType.GOAL)], \
+        "alapból NEM termel lövést (a meglévő mérések erre épülnek)"
+
+    m = simulate_ground_truth(duration_s=120.0, seed=7, shots_per_min=6.0)
+    shots = [e for e in detect_shots(m)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+    assert len(shots) >= 8, len(shots)
+    assert all(e.player_id is not None for e in shots), \
+        "minden lövéshez tartozik lövő (van elengedés-fázis)"
+    assert len({e.player_id for e in shots}) >= 4, \
+        "a lövők körbejárnak — a játékos-bontásnak legyen mit bontania"
 
 
 def test_report_says_when_nothing_is_sensitive():

@@ -41,6 +41,11 @@ _OUT = _BACKEND.parent / "docs" / "SORREND_FUGGES.md"
 # a szám a futásidő és a lefedettség kompromisszuma.
 DEFAULT_SECONDS = 240.0
 DEFAULT_SEED = 7
+# A szimuláció alapból NEM termel lövést (csak mozgást). Enélkül a
+# lövés-alapú rétegek üres bemenettel futnak, és a mérés róluk nem mond
+# semmit — ezért itt bekapcsoljuk. A 6 lövés/perc nagyjából valós
+# meccstempó (két csapatra ~50-60 lövés egy meccsen).
+DEFAULT_SHOTS_PER_MIN = 6.0
 
 
 def _layer_functions() -> list[tuple[str, str, str]]:
@@ -57,9 +62,11 @@ def _layer_functions() -> list[tuple[str, str, str]]:
     return out
 
 
-def _fresh_match(seconds: float, seed: int):
+def _fresh_match(seconds: float, seed: int,
+                 shots_per_min: float = DEFAULT_SHOTS_PER_MIN):
     from handball.sim.match_simulator import simulate_ground_truth
-    return simulate_ground_truth(duration_s=seconds, seed=seed)
+    return simulate_ground_truth(duration_s=seconds, seed=seed,
+                                 shots_per_min=shots_per_min)
 
 
 def _dump(value) -> str:
@@ -67,7 +74,8 @@ def _dump(value) -> str:
 
 
 def measure(seconds: float = DEFAULT_SECONDS,
-            seed: int = DEFAULT_SEED) -> dict:
+            seed: int = DEFAULT_SEED,
+            shots_per_min: float = DEFAULT_SHOTS_PER_MIN) -> dict:
     """A sorrend-függő rétegek felmérése.
 
     Visszatérés: {"checked", "sensitive": [réteg-név, ...],
@@ -87,8 +95,8 @@ def measure(seconds: float = DEFAULT_SECONDS,
             failed.append(name)
             continue
         try:
-            plain = fn(_fresh_match(seconds, seed))
-            marked_match = _fresh_match(seconds, seed)
+            plain = fn(_fresh_match(seconds, seed, shots_per_min))
+            marked_match = _fresh_match(seconds, seed, shots_per_min)
             detect_goalkeepers(marked_match)
             marked = fn(marked_match)
         except TypeError:
@@ -103,7 +111,8 @@ def measure(seconds: float = DEFAULT_SECONDS,
     return {"checked": checked, "sensitive": sensitive, "failed": failed}
 
 
-def build_report(res: dict, seconds: float, seed: int) -> str:
+def build_report(res: dict, seconds: float, seed: int,
+                 shots_per_min: float = DEFAULT_SHOTS_PER_MIN) -> str:
     lines = [
         "# Sorrend-függés — mely rétegre hat a kapus-jelölés",
         "",
@@ -121,18 +130,28 @@ def build_report(res: dict, seconds: float, seed: int) -> str:
         f"**{res['checked']} réteg** összevetve, ebből "
         f"**{len(res['sensitive'])} sorrend-függő**.",
         "",
-        "## A mérés korlátja",
-        "",
-        "A szimulált meccs (`simulate_ground_truth`) MOZGÁST modellez,",
-        "lövés-eseményt nem termel — a szimulált lövések a demó-epizódokból",
-        "jönnek, amelyeket ez a mérés nem használ. Ezért a LÖVÉS-ALAPÚ",
-        "rétegek itt üres bemenettel futnak: mindkét ágon ugyanazt a",
-        "semmit adják, tehát \"nem sorrend-függőnek\" látszanak. Ez nem",
-        "bizonyíték — csak annyit jelent, hogy ezekről a rétegekről a",
-        "mérés NEM MOND SEMMIT. Valós (vagy lövéseket is tartalmazó)",
-        "felvételen újra kell mérni.",
+        "## A mérés köre",
         "",
     ]
+    if shots_per_min > 0:
+        lines += [
+            f"A szimuláció ebben a futásban LŐ is ({shots_per_min:.0f}",
+            "lövés/perc, a hazai mezőnyjátékosok körbejárva), tehát a",
+            "lövés-alapú rétegek valódi bemenetet kaptak. A szimuláció",
+            "alapértelmezésben csak mozgást modellez — enélkül ezek a",
+            "rétegek üres bemeneten futnának, és a mérés róluk nem",
+            "mondana semmit.",
+            "",
+        ]
+    else:
+        lines += [
+            "Ebben a futásban a szimuláció NEM termelt lövést, ezért a",
+            "lövés-alapú rétegek üres bemenettel futottak: mindkét ágon",
+            "ugyanazt a semmit adják, tehát \"nem sorrend-függőnek\"",
+            "LÁTSZANAK. Ez nem bizonyíték — csak annyit jelent, hogy",
+            "ezekről a rétegekről a mérés NEM MOND SEMMIT.",
+            "",
+        ]
     if res["sensitive"]:
         lines += ["## Sorrend-függő rétegek", "", "| Réteg |", "|---|"]
         lines += [f"| `{n}` |" for n in res["sensitive"]]
@@ -161,11 +180,15 @@ def main(argv=None) -> int:
                     help="a szimulált meccs hossza másodpercben")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED,
                     help="a szimuláció magja")
+    ap.add_argument("--shots-per-min", type=float,
+                    default=DEFAULT_SHOTS_PER_MIN,
+                    help="hazai lövés/perc a szimulációban (0 = nincs)")
     args = ap.parse_args(argv)
 
-    res = measure(args.seconds, args.seed)
-    _OUT.write_text(build_report(res, args.seconds, args.seed),
-                    encoding="utf-8")
+    res = measure(args.seconds, args.seed, args.shots_per_min)
+    _OUT.write_text(
+        build_report(res, args.seconds, args.seed, args.shots_per_min),
+        encoding="utf-8")
     print(f"Sorrend-függés kiírva: {_OUT}")
     print(f"  összevetve: {res['checked']} réteg")
     print(f"  sorrend-függő: {len(res['sensitive'])}")

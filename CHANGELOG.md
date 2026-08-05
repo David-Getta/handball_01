@@ -5,6 +5,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A szimuláció tud lőni — és ezzel száz réteg került mérés alá.** A
+  `simulate_ground_truth` eddig CSAK mozgást modellezett: egyetlen
+  lövés-eseményt sem termelt. Emiatt a lövés-alapú rétegek (több mint
+  száz) minden szimulációs mérésben üres bemenettel futottak — a
+  sorrend-mérés például "nem sorrend-függőnek" LÁTTA őket, holott
+  semmit nem mért rajtuk. Mostantól opcionálisan (`shots_per_min`) a
+  hazai csapat rendszeresen lő is, a mezőnyjátékosok körbejárva, és a
+  labda a lövő kezéből indul, tehát minden lövésnek van azonosított
+  lövője. Az alapértelmezés KIKAPCSOLT: a meglévő mérések és tesztek
+  erre a viselkedésre épülnek. A sorrend-mérés viszont bekapcsolva
+  fut, és rögtön **13 újabb sorrend-függő réteget** talált
+  (38 → 50): `ball_winners`, `beaten_defenders`, `clutch_ball_hogs`,
+  `corridor_goals`, `gk_shorthanded_saves`, `momentum`,
+  `powerplay_shooters`, `steal_launch`, `steal_types`,
+  `targeted_defenders`, `transition_offense`, `unpressured_assists`,
+  `wrongfooted_keeper` — ezekről eddig egyszerűen nem volt adat.
+
 - **A sorrend-mérés kimondja, mit NEM tud.** A sorrend-függés
   jelentése szimulált meccsen dolgozik, az viszont mozgást modellez és
   lövés-eseményt nem termel. A lövés-alapú rétegek ezért üres
