@@ -87,6 +87,14 @@ ezért NINCS őr-tesztje — kiadás előtt futtasd:
 cd backend && python3 -m scripts.order_sensitivity
 ```
 
+A lista jelenleg ÜRES, és annak is kell maradnia. A sorrend-függés oka
+a kapus-jelölés volt: a `primitive_cache` hatókör nyitása azóta
+elvégzi (tehát a termék minden összeállítása sorrend-független), a
+felismerés pedig holtversenynél a kaputól mért távolság alapján dönt
+(korábban a beolvasás sorrendje szerint, ami a fal védőjét jelölte
+kapusnak). Ha a jelentésben mégis megjelenik egy réteg, az REGRESSZIÓ
+— ne a listát fogadd el, hanem keresd meg, mi írja felül a szerepeket.
+
 ## Commit-stílus
 
 - Cím: `<Réteg magyar neve>: egy réteg, sok felület`.

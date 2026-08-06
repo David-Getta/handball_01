@@ -3,6 +3,14 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
+## Kiadatlan (a v0.1.24 óta)
+
+- **A fejlesztési recept igazodott a sorrend-függés lezárásához.** A
+  `CLAUDE.md` eddig úgy írta le a sorrend-mérést, mint amiből még
+  DÖNTENI kell; a döntés azóta megszületett és be is épült. Mostantól
+  kimondja, hogy a lista üres, és hogy egy megjelenő réteg
+  REGRESSZIÓ — nem elfogadandó állapot.
+
 ## v0.1.24 — kiadva (2026-08-06)
 
 > Kiadás-jegyzet: a v0.1.23 óta a fejlesztés négy szálon futott.
