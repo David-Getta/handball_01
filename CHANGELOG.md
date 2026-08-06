@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Az új-elemzés varázsló magyarázata őrzés alá került.** A "Tovább"
+  gomb letiltva marad, amíg a lépés nincs kész — magyarázat nélkül ez
+  néma zsákutca lenne (a felhasználó egy szürke gombot néz, és nem
+  tudja, mit kellene tennie). A varázsló ma mindhárom lépésnél
+  megmondja, mi hiányzik vagy mivel jár a kihagyása; új őr-teszt
+  rögzíti, hogy ez így is maradjon.
+
 - **A sorrend-jelentés a másik vakfoltját is kimondja.** A szimuláció
   EGY állóképet modellez: a hazai csapat támad, a vendég 6-0-ban véd.
   Nincs birtoklás-váltás, tehát a vendég TÁMADÓ oldaláról és minden

@@ -404,3 +404,42 @@ def test_kliens_mutato_csempe_birja_a_mondatot():
     assert len(long_) > 100, (
         "a mutató-szövegek túlnyomó része mondat — ha ez megváltozott, "
         f"a csempe méretezését is gondold újra ({len(long_)} hosszú)")
+
+
+def test_kliens_varazslo_lepesei_megmondjak_mi_hianyzik():
+    """A varázsló "Tovább" gombja mellett mindig van magyarázat.
+
+    A gomb letiltva marad, amíg a lépés nincs kész (pl. nincs kiválasztva
+    videó). Magyarázat nélkül ez néma zsákutca: a felhasználó egy szürke
+    gombot néz, és nem tudja, mit kellene tennie. A `_stepNav` ezért
+    `hint`-et kap minden hívásnál — vagy azt mondja meg, mi hiányzik,
+    vagy azt, mivel jár, ha kihagyja a lépést.
+    """
+    path = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui" / "upload_screen.dart")
+    if not path.exists():
+        pytest.skip("nincs kliens a fában")
+    src = path.read_text(encoding="utf-8")
+
+    # A definíciót kihagyjuk — csak a HÍVÁSOKAT nézzük.
+    calls = [m for m in re.finditer(r"_stepNav\(", src)
+             if "Widget _stepNav(" not in src[max(0, m.start() - 20):m.end()]]
+    assert len(calls) >= 3, f"a varázsló-lépések olvasása elromlott: {calls}"
+    missing = []
+    for m in calls:
+        # A hívás a kiegyensúlyozott zárójelig tart.
+        depth, i = 0, m.end() - 1
+        while i < len(src):
+            if src[i] == "(":
+                depth += 1
+            elif src[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        body = src[m.end():i]
+        if "hint:" not in body:
+            missing.append(src[:m.start()].count(chr(10)) + 1)
+    assert not missing, (
+        "varázsló-lépés magyarázat nélkül — a letiltott 'Tovább' így néma "
+        f"zsákutca (sorok): {missing}")
