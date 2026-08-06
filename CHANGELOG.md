@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A frissítés megmondja, mi változik — letöltés előtt.** A
+  frissítés-ajánló eddig csak egy verziószámot mutatott, holott egy
+  frissítés 200–300 MB letöltés ÉS az app újraindítása. A felhasználó
+  így vakon döntött, vagy inkább nem frissített. Mostantól az ajánló
+  kiírja a csomag méretét, és a **"Mi változik?"** gomb megnyitja a
+  kiadás jegyzetét (a GitHub-kiadás leírását), ahonnan egyből
+  frissíteni is lehet. Őr-teszt rögzíti, hogy a jegyzet eljut a
+  felületig.
+
 - **A fejlesztési recept igazodott a sorrend-függés lezárásához.** A
   `CLAUDE.md` eddig úgy írta le a sorrend-mérést, mint amiből még
   DÖNTENI kell; a döntés azóta megszületett és be is épült. Mostantól

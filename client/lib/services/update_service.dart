@@ -47,6 +47,13 @@ class UpdateInfo {
   /// A csomag várt sha256-a ("sha256:..." a GitHub API-ból; üres = ismeretlen).
   final String digest;
 
+  /// A kiadás jegyzete (a GitHub release leírása; üres = nincs).
+  ///
+  /// Egy frissítés 200-300 MB letöltés és újraindítás — a felhasználó
+  /// joggal várja el, hogy előtte megtudja, MI változik. Enélkül csak
+  /// egy verziószámot lát.
+  final String notes;
+
   const UpdateInfo({
     required this.version,
     required this.url,
@@ -54,6 +61,7 @@ class UpdateInfo {
     required this.assetName,
     this.size = 0,
     this.digest = "",
+    this.notes = "",
   });
 }
 
@@ -170,6 +178,7 @@ class UpdateService {
           assetName: asset,
           size: (map["size"] as num?)?.toInt() ?? 0,
           digest: (map["digest"] as String?) ?? "",
+          notes: ((body["body"] as String?) ?? "").trim(),
         );
       }
     }

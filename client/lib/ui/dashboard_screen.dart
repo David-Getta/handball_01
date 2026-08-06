@@ -395,11 +395,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Text("Új verzió érhető el: ${info.version}",
                   style: AppText.value.copyWith(color: AppColors.gold)),
               const SizedBox(height: 2),
-              Text("Egy kattintás — az app letölti, telepíti és újraindul.",
+              Text(
+                  info.size > 0
+                      ? "Egy kattintás — az app letölti "
+                          "(${(info.size / (1024 * 1024)).round()} MB), "
+                          "telepíti és újraindul."
+                      : "Egy kattintás — az app letölti, telepíti és "
+                          "újraindul.",
                   style: AppText.label.copyWith(fontSize: 12)),
             ],
           ),
         ),
+        // A kiadás jegyzete: 200-300 MB letöltés és újraindítás előtt a
+        // felhasználó tudja meg, MI változik.
+        if (info.notes.isNotEmpty) ...[
+          TextButton.icon(
+            onPressed: () => _showUpdateNotes(info),
+            icon: const Icon(Icons.description_outlined, size: 18),
+            label: const Text("Mi változik?"),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
         TextButton(
           onPressed: () => setState(() => _updateDismissed = true),
           child: const Text("Később"),
@@ -414,6 +430,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
           label: const Text("Frissítés most"),
         ),
       ]),
+    );
+  }
+
+  /// A kiadás jegyzetének megjelenítése a frissítés előtt.
+  void _showUpdateNotes(UpdateInfo info) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text("Mi változik a ${info.version} verzióban?",
+            style: AppText.value),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: SelectableText(info.notes, style: AppText.label),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text("Bezár"),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _installUpdate(info);
+            },
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text("Frissítés most"),
+          ),
+        ],
+      ),
     );
   }
 

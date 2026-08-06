@@ -730,6 +730,25 @@ def test_kliens_varakozas_felirattal():
         f"`WaitingView`-t (mire várunk, meddig tart): {offenders}")
 
 
+def test_kliens_frissites_megmondja_mi_valtozik():
+    """A frissítés-ajánló mutassa a kiadás jegyzetét.
+
+    Egy frissítés 200-300 MB letöltés ÉS újraindítás. Ha az ajánló csak
+    egy verziószámot mutat, a felhasználó vakon dönt — vagy inkább nem
+    frissít. A jegyzet a GitHub-kiadás leírásából jön.
+    """
+    root = (Path(__file__).resolve().parent.parent.parent / "client" / "lib")
+    if not root.exists():
+        pytest.skip("nincs kliens a fában")
+    svc = (root / "services" / "update_service.dart").read_text("utf-8")
+    assert "final String notes;" in svc, "az UpdateInfo-ból hiányzik a jegyzet"
+    assert 'body["body"]' in svc, "a jegyzetet a kiadás leírásából kell venni"
+
+    dash = (root / "ui" / "dashboard_screen.dart").read_text("utf-8")
+    assert "info.notes" in dash, "az ajánló nem használja a jegyzetet"
+    assert "Mi változik?" in dash, "nincs mód megnézni, mi változik"
+
+
 def test_kliens_ures_panel_megszolal():
     """Panel ne váljon némán üres dobozzá.
 
