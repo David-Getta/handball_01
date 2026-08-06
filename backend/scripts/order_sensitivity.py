@@ -150,6 +150,12 @@ def build_report(res: dict, seconds: float, seed: int,
             "rétegek üres bemeneten futnának, és a mérés róluk nem",
             "mondana semmit.",
             "",
+            "A szimuláció viszont EGY állóképet modellez: a hazai csapat",
+            "támad, a vendég 6-0-ban véd. Nincs birtoklás-váltás, tehát a",
+            "VENDÉG TÁMADÓ oldaláról (és minden átmenet-rétegről) ez a",
+            "mérés sem mond semmit — azokat valós felvételen kell",
+            "ellenőrizni.",
+            "",
         ]
     else:
         lines += [

@@ -48,6 +48,10 @@ def test_report_states_whether_shots_were_measured():
     assert "A mérés köre" in with_shots
     assert "valódi bemenetet kaptak" in with_shots
 
+    # A szimuláció csak hazai támadást modellez — ezt is ki kell mondani,
+    # különben a lista teljes körű mérésnek látszik.
+    assert "VENDÉG TÁMADÓ oldaláról" in with_shots
+
     without = build_report(res, 120.0, 1, 0.0)
     assert "NEM MOND SEMMIT" in without
     assert "valódi bemenetet kaptak" not in without

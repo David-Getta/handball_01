@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A sorrend-jelentés a másik vakfoltját is kimondja.** A szimuláció
+  EGY állóképet modellez: a hazai csapat támad, a vendég 6-0-ban véd.
+  Nincs birtoklás-váltás, tehát a vendég TÁMADÓ oldaláról és minden
+  átmenet-rétegről ez a mérés sem mond semmit — akkor sem, ha lövések
+  vannak benne. A jelentés "A mérés köre" szakasza mostantól ezt is
+  leírja, őr-teszttel rögzítve.
+
 - **A kliens-őrzések külön fájlba kerültek.** A réteg-regisztry
   füstteszt mostanra 28 tesztből 14-gyel a Flutter-felületről szólt
   (elgépelt kulcs, néma pörgettyű, nyers kivétel a képernyőn, célt nem
