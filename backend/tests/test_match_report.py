@@ -523,9 +523,13 @@ def test_report_team_pace_row():
     sort kap (üres meccsen 0.0 / 0.0)."""
     from handball.models.tracking import Frame, Match, MatchMeta
 
-    n = int(12 * 60 * 25)
+    # A "támadás / perc" sorhoz elég hosszú felvétel kell — a hosszt
+    # MÁSODPERCBEN méri a réteg, tehát alacsony fps-sel ugyanaz a
+    # tizenkét perc ötödannyi kockából kijön.
+    fps = 5.0
+    n = int(12 * 60 * fps)
     m = Match(MatchMeta(match_id="pcr", home_team="H", away_team="A",
-                        fps=25.0),
+                        fps=fps),
               [Frame(t=i, players=[], ball=None) for i in range(n)])
     html = match_report_html(m, {}, [], None)
     assert "Támadás / perc" in html
@@ -788,9 +792,12 @@ def test_report_drought_row():
                               source=PositionSource.MEASURED,
                               confidence=1.0)
 
+    # A gólcsendet a réteg MÁSODPERCBEN méri, tehát alacsony fps-sel
+    # ugyanaz a hat perc ötödannyi kockából kijön.
+    fps = 5.0
     frames = []
     t = 0
-    for _ in range(4400):  # ~3 perc játék gól nélkül
+    for _ in range(880):   # ~3 perc játék gól nélkül
         frames.append(Frame(t=t, players=[pl()],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
@@ -799,12 +806,12 @@ def test_report_drought_row():
                             ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
                                       confidence=1.0)))
         t += 1
-    for _ in range(4400):  # ~3 perc újra gól nélkül
+    for _ in range(880):   # ~3 perc újra gól nélkül
         frames.append(Frame(t=t, players=[pl()],
                             ball=Ball(x=20.0, y=10.0, confidence=1.0)))
         t += 1
     m = Match(MatchMeta(match_id="drr", home_team="H", away_team="A",
-                        fps=25.0), frames)
+                        fps=fps), frames)
     html = match_report_html(m, {}, [], None)
     assert "Leghosszabb gólcsend" in html
     # A vendég egyszer sem szerzett gólt → a teljes felvétel a csendje.
@@ -836,7 +843,11 @@ def test_report_goal_timeline_halftime_marker():
                                           confidence=1.0)))
         return frames
 
-    frames = play(0, 60)
+    # A kitöltő szakaszok RÖVIDEBBEK, az arányok viszont maradnak: a
+    # szünet-felismerésnek 60-90 mp-es üres rész kell a felvétel
+    # középső 20-80%-ában. 30 mp-es szakaszokkal a 90 mp-es szünet a
+    # 29-71% sávba esik — a jelenet ugyanaz, a kocka-szám fele.
+    frames = play(0, 30)
     t = len(frames)
     for i in range(8):  # hazai gól az 1. félidőben
         frames.append(Frame(t=t + i,
@@ -844,12 +855,12 @@ def test_report_goal_timeline_halftime_marker():
                             ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
                                       confidence=1.0)))
     t += 8
-    frames += play(t, 60)
+    frames += play(t, 30)
     t = len(frames)
     frames += [Frame(t=t + i, players=[], ball=None)
                for i in range(int(90 * 25))]  # szünet
     t = len(frames)
-    frames += play(t, 60)
+    frames += play(t, 30)
     t = len(frames)
     for i in range(8):  # vendég gól a 2. félidőben (a -x kapuba)
         frames.append(Frame(t=t + i,
@@ -857,7 +868,7 @@ def test_report_goal_timeline_halftime_marker():
                             ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
                                       confidence=1.0)))
     t += 8
-    frames += play(t, 60)
+    frames += play(t, 30)
     m = Match(MatchMeta(match_id="htm", home_team="H", away_team="A",
                         fps=25.0), frames)
     html = match_report_html(m, {}, detect_events(m), None)
@@ -1313,15 +1324,21 @@ def test_report_faradas_kep_section_lists_verdicts():
     from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
                                           PlayerPosition, Team)
 
+    # ALACSONY képkocka-sebesség: a jelenet MÁSODPERCEKBEN van
+    # megfogalmazva (60 mp létszám, 120 mp szünet), a rétegek pedig az
+    # fps-ből számolnak időt — ugyanaz a tizenhárom perc így ötödannyi
+    # kockából kijön. A teljes jelentés minden réteget végigfuttat, és
+    # a kocka-szám a fő költség.
+    FPS = 5.0
     meta = MatchMeta(match_id="rep-df", home_team="Hazai",
-                     away_team="Vendég", fps=25.0)
+                     away_team="Vendég", fps=FPS)
 
     def pl(tid, team, x, y):
         return PlayerPosition(track_id=tid, team=team, x=x, y=y)
 
     def roster(t0, seconds, home_n):
         out = []
-        for i in range(int(seconds * 25)):
+        for i in range(int(seconds * FPS)):
             players = [pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
                        for k in range(home_n)]
             players += [pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
@@ -1337,7 +1354,7 @@ def test_report_faradas_kep_section_lists_verdicts():
     frames += roster(frames[-1].t + 1, 60, 5)
     frames += roster(frames[-1].t + 1, 60, 6)
     t = frames[-1].t + 1
-    for i in range(int(120 * 25)):
+    for i in range(int(120 * FPS)):
         frames.append(Frame(t=t + i, players=[], ball=None))
     t = frames[-1].t + 1
     for _ in range(3):

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A teszt-csomag negyedével gyorsabb (8:20 → 6:10).** A recept
+  minden commit előtt teljes futást ír elő, a csomag viszont nyolc perc
+  fölé nőtt — ez már elriaszt a futtatástól, és pont az őrzés vész el
+  vele. A mérés (`--durations`) szerint négy meccsjelentés-teszt vitte
+  az idő negyedét: 12-20 perces jeleneteket építettek 25 fps-sel, és a
+  teljes jelentés minden réteget végigfuttat rajtuk. A jelenetek
+  MÁSODPERCEKBEN vannak megfogalmazva (a rétegek is abból számolnak),
+  ezért ahol nem kellett lövés-fizika, ötödére csökkent a
+  képkocka-sebesség; ahol igen, ott a kitöltő szakaszok rövidültek az
+  arányok megtartásával. A leglassabb teszt 65 → 12 másodperc, a
+  jelenetek jelentése változatlan.
+
 - **A TRL-4 bizonyíték-út őrzés alá került.** A pontosság-mérés
   útja — annotációs sablon → kézi javítás → mérés → dátumozott,
   verziózott naplósor — a pályázat egyik fő bizonyítéka, de a
