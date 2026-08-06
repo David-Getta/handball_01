@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A frissítés-jegyzet olvashatóan jelenik meg.** A jegyzet a
+  CHANGELOG-ból jön, tehát markdown (`**félkövér**`, `> idézet`,
+  `## cím`, `- felsorolás`) — egy sima szövegdobozban ezek NYERSEN
+  látszottak volna: a felhasználó csillagokat és kettőskereszteket
+  olvasott volna éppen abban az ablakban, amit azért nyitott meg, hogy
+  megértse, mi változik. Markdown-megjelenítő csomagot nem húztunk be
+  emiatt (az app offline működik, a szöveg pedig felsorolás és
+  bekezdés): a jelölők eltűnnek, a felsorolás pontot kap, a hármas
+  üres sorok összevonódnak. Őr-teszt rögzíti.
+
 - **A kiadás leírása a CHANGELOG-ból épül.** Az előző pont után az app
   megmutatja a GitHub-kiadás leírását a frissítés előtt — csakhogy ott
   eddig sablonszöveg állt ("Újdonságok: lásd a CHANGELOG.md-t"). A

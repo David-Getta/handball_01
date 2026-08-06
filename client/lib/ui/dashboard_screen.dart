@@ -22,6 +22,7 @@ import "shell/app_shell.dart";
 import "trend_screen.dart";
 import "error_text.dart";
 import "waiting.dart";
+import "notes_text.dart";
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -444,7 +445,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         content: SizedBox(
           width: 560,
           child: SingleChildScrollView(
-            child: SelectableText(info.notes, style: AppText.label),
+            // A jegyzet markdown (a CHANGELOG-ból jön) — jelölők nélkül
+            // olvasható, lásd notes_text.dart.
+            child: SelectableText(plainMarkdown(info.notes),
+                style: AppText.label),
           ),
         ),
         actions: [

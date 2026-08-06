@@ -749,6 +749,27 @@ def test_kliens_frissites_megmondja_mi_valtozik():
     assert "Mi változik?" in dash, "nincs mód megnézni, mi változik"
 
 
+def test_kliens_jegyzet_nem_nyers_markdown():
+    """A frissítés-jegyzet ne nyers markdownként jelenjen meg.
+
+    A jegyzet a CHANGELOG-ból jön, tehát `**félkövér**`, `> idézet`,
+    `## cím`, `- felsorolás`. Egy Flutter `Text` ezeket NYERSEN
+    rajzolja ki: a felhasználó csillagokat és kettőskereszteket olvas
+    éppen abban az ablakban, amit azért nyitott meg, hogy megértse, mi
+    változik.
+    """
+    root = (Path(__file__).resolve().parent.parent.parent
+            / "client" / "lib" / "ui")
+    if not root.exists():
+        pytest.skip("nincs kliens a fában")
+    assert (root / "notes_text.dart").exists(), "hiányzik a formázó"
+
+    dash = (root / "dashboard_screen.dart").read_text(encoding="utf-8")
+    assert "plainMarkdown(info.notes)" in dash, (
+        "a jegyzet formázatlanul kerül a felületre")
+    assert 'import "notes_text.dart";' in dash
+
+
 def test_kliens_ures_panel_megszolal():
     """Panel ne váljon némán üres dobozzá.
 
