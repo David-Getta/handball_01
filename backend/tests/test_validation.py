@@ -189,6 +189,58 @@ def test_validate_match_cli(tmp_path, capsys):
     assert main([str(tmp_path / "nincs.json"), str(csv)]) == 2
 
 
+def test_validate_match_cli_writes_template(tmp_path, capsys):
+    """A `--sablon` kiírja az annotációs sablont, és KILÉP.
+
+    Ez a TRL-4 bizonyíték-út első lépése: az annotátor ezt a fájlt
+    javítja kézzel. Ha ez elromlik, a valós felvétel érkezésekor
+    derülne ki — amikor már drága.
+    """
+    import json as _json
+
+    from scripts.validate_match import main
+
+    m = _match_one_goal()
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+    sablon = tmp_path / "sablon.csv"
+
+    assert main([str(mj), "--sablon", str(sablon)]) == 0
+    assert sablon.exists(), "nem készült sablon"
+    text = sablon.read_text(encoding="utf-8")
+    assert text.startswith("#"), "hiányzik a magyarázó fejléc"
+    assert "gól" in text, "a felismert gól nincs a sablonban"
+
+
+def test_validate_match_cli_appends_to_ledger(tmp_path):
+    """A `--jegyzokonyv` a naplóhoz FŰZ egy dátumozott sort.
+
+    Ez a bizonyíték-út utolsó lépése: a mérés eredménye
+    verziószámmal, meccsel és P/R értékekkel a naplóba kerül. A
+    meglévő tartalom nem veszhet el.
+    """
+    import json as _json
+
+    from scripts.validate_match import main
+
+    m = _match_one_goal()
+    mj = tmp_path / "match.json"
+    mj.write_text(_json.dumps(m.to_dict()), encoding="utf-8")
+    csv = tmp_path / "truth.csv"
+    csv.write_text("ido,tipus,csapat\n0:00, gól, hazai\n", encoding="utf-8")
+    log = tmp_path / "naplo.md"
+    log.write_text("# Napló\n\n| Dátum | Verzió |\n|---|---|\n",
+                   encoding="utf-8")
+
+    assert main([str(mj), str(csv), "--jegyzokonyv", str(log)]) == 0
+    text = log.read_text(encoding="utf-8")
+    assert "# Napló" in text, "a meglévő tartalom elveszett"
+    rows = [ln for ln in text.splitlines()
+            if ln.startswith("|") and "Dátum" not in ln and "---" not in ln]
+    assert rows, "nem került új sor a naplóba"
+    assert rows[-1].count("|") >= 7, rows[-1]   # dátum..ítélet oszlopok
+
+
 def test_validation_ledger_row_formats_markdown():
     """A jegyzőkönyv-sor dátumot, verziót, meccset és P/R értékeket
     tartalmaz Markdown-táblázatsorként."""

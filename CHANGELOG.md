@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A TRL-4 bizonyíték-út őrzés alá került.** A pontosság-mérés
+  útja — annotációs sablon → kézi javítás → mérés → dátumozott,
+  verziózott naplósor — a pályázat egyik fő bizonyítéka, de a
+  parancssori eszköznek eddig csak a riport-ága volt tesztelve. A
+  `--sablon` és a `--jegyzokonyv` kapcsoló fedetlen maradt: ha
+  elromlanak, az a valós felvétel érkezésekor derült volna ki, amikor
+  a legdrágább. Végigpróbáltam a teljes utat egy szimulált meccsen
+  (működik), és mindkét ágra teszt került — a napló-írásnál arra is,
+  hogy a meglévő tartalom ne vesszen el.
+
 - **A fejlődés-követés végre látja a befejezést is.** A trend eddig
   csak SKALÁR mezőket tudott követni, a poszt-lencse viszont
   darabszám/összeg szótárakban áll (hogy meccsek közt pontosan
