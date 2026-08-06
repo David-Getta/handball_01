@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kapus-felismerés: a fal középső védőjét jelölte kapusnak.** A
+  felismerés kapunként egy játékost választ, a kapuelőtérben töltött
+  idő aránya alapján — holtversenynél viszont a beolvasás SORRENDJE
+  döntött. A szimulált meccsen ez konkrétan azt jelentette, hogy a 6-0
+  fal középső védője (13) kapta meg a kapus szerepet a valódi kapus
+  (17) helyett: mindketten 100%-ban a kapuelőtérben voltak. A védő így
+  kiesett minden védekező számításból. Mostantól azonos aránynál a
+  KAPUHOZ KÖZELEBBI nyer — a kapus a gólvonalon áll, a fal embere hat
+  méterrel kijjebb.
+  Ez volt a sorrend-függés valódi oka: a mérés **313 rétegből 48-at**
+  talált érintettnek, a javítás után **egyet sem**. A
+  `docs/SORREND_FUGGES.md` listája üres.
+
 - **A kiértékelés sorrendje már nem befolyásolja az eredményt.** A
   kapus-jelölés (`role = "kapus"`) eddig CSAK akkor történt meg, ha épp
   lefutott egy kapus-réteg — több mint ötven réteg viszont a szerepből

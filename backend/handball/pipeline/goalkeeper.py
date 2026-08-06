@@ -51,18 +51,28 @@ def detect_goalkeepers(match: Match,
     fps = match.meta.fps if match.meta.fps > 0 else 25.0
     goals = ((0.0, COURT_WIDTH_M / 2.0), (COURT_LENGTH_M, COURT_WIDTH_M / 2.0))
 
-    # Trackenként: mért kockák + kapunkénti "bent volt" kockák.
+    # Trackenként: mért kockák + kapunkénti "bent volt" kockák és a
+    # kaputól mért TÁVOLSÁG-ÖSSZEG (a holtverseny eldöntéséhez).
     total: dict[int, int] = {}
     in_area: dict[int, list[int]] = {}
+    dist_sum: dict[int, list[float]] = {}
     for frame in match.frames:
         for p in frame.players:
             if p.source != PositionSource.MEASURED:
                 continue
             total[p.track_id] = total.get(p.track_id, 0) + 1
             rec = in_area.setdefault(p.track_id, [0, 0])
+            drec = dist_sum.setdefault(p.track_id, [0.0, 0.0])
             for gi, (gx, gy) in enumerate(goals):
-                if math.hypot(p.x - gx, p.y - gy) <= radius_m:
+                d = math.hypot(p.x - gx, p.y - gy)
+                if d <= radius_m:
                     rec[gi] += 1
+                    drec[gi] += d
+
+    def _mean_dist(tid: int, gi: int) -> float:
+        """A kapuelőtérben töltött kockák átlagos kapu-távolsága."""
+        n = in_area.get(tid, [0, 0])[gi]
+        return (dist_sum.get(tid, [0.0, 0.0])[gi] / n) if n else radius_m
 
     min_frames = max(1, round(min_seconds * fps))
     chosen: dict[int, float] = {}
@@ -73,7 +83,15 @@ def detect_goalkeepers(match: Match,
             if n < min_frames:
                 continue
             share = in_area.get(tid, [0, 0])[gi] / n
-            if share >= min_share and share > best_share:
+            if share < min_share:
+                continue
+            # Azonos hányadnál a KAPUHOZ KÖZELEBBI nyer. A kapus a
+            # gólvonalon áll, a beálló hat méterrel kijjebb — enélkül a
+            # beolvasás sorrendje döntene, és egy hatoson posztoló
+            # mezőnyjátékos megelőzhetné a valódi kapust.
+            if share > best_share or (
+                    best_tid is not None and share == best_share
+                    and _mean_dist(tid, gi) < _mean_dist(best_tid, gi)):
                 best_tid, best_share = tid, share
         if best_tid is not None:
             # Ha ugyanaz a track mindkét kapunál "nyerne" (nem életszerű),

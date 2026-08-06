@@ -2155,3 +2155,39 @@ def test_gk_assists_few_samples_none():
     gka = gk_assists(_gka_match(1))
     assert gka["away"]["assists"] == 1
     assert gka["away"]["verdict"] is None
+
+
+def test_goalkeeper_wins_the_tie_against_a_camping_pivot():
+    """Azonos kapuelőtér-hányadnál a KAPUHOZ KÖZELEBBI nyer.
+
+    Egy beálló, aki a támadás alatt végig a hatoson posztol, ugyanúgy
+    100%-ban a kapuelőtérben van, mint a kapus. Ilyenkor korábban a
+    beolvasás sorrendje döntött — így egy mezőnyjátékos kaphatta meg a
+    kapus szerepet, és a rá épülő ötven réteg őt hagyta ki a
+    számításból.
+    """
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition, PositionSource,
+                                          Team)
+    from handball.pipeline.goalkeeper import detect_goalkeepers
+
+    def pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    for t in range(300):
+        frames.append(Frame(t=t, players=[
+            # A BEÁLLÓ a hatoson (6 m-re a kaputól) — előbb olvassuk be.
+            pl(5, Team.HOME, 34.0, 10.0),
+            # A KAPUS a gólvonalon (1 m-re a kaputól).
+            pl(29, Team.AWAY, 39.0, 10.0),
+        ], ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+    m = Match(MatchMeta(match_id="tie", home_team="H", away_team="A",
+                        fps=25.0), frames)
+
+    chosen = detect_goalkeepers(m)
+    assert 29 in chosen, ("a gólvonalon álló kapust kell választani, "
+                          f"nem a hatoson posztoló beállót: {chosen}")
+    assert 5 not in chosen, chosen

@@ -85,22 +85,37 @@ def test_report_says_when_nothing_is_sensitive():
     assert "Nem mérhető (1)" in text
 
 
-def test_goalkeeper_marking_really_changes_a_layer():
-    """A mérés létjogosultsága: a kapus-jelölés tényleg számot módosít.
+def test_detection_picks_the_real_goalkeepers():
+    """A felismerés a VALÓDI kapusokat választja, nem a fal emberét.
 
-    A `double_punishment` a kettőzött kockákat számolja; kapus-jelölés
-    nélkül a kapus is beszámít második védőként. Ez a teszt rögzíti,
-    hogy a jelenség VALÓS — nem a mérőeszköz hibája.
+    Ez a mérés eredeti létjogosultsága volt megfordítva: korábban a
+    kapus-jelölés tényleg módosított számokat — de nem azért, mert a
+    jelölés hasznos információt adott hozzá, hanem mert a felismerés
+    holtversenyben a 6-0 fal középső VÉDŐJÉT (13) jelölte kapusnak a
+    valódi kapus (17) helyett. A védő így kikerült minden védekező
+    számításból, és a rá épülő rétegek mást adtak.
+
+    A holtversenyt azóta a kaputól mért távolság dönti el. A
+    szimulált meccsen a kapusok szerepe eleve jelölt, tehát a
+    felismerésnek pontosan őket kell visszaadnia — és a jelölés
+    ilyenkor semmit nem változtat.
     """
     from handball.pipeline.defense import double_punishment
     from handball.pipeline.goalkeeper import detect_goalkeepers
     from handball.sim.match_simulator import simulate_ground_truth
 
-    plain = double_punishment(simulate_ground_truth(duration_s=60.0, seed=7))
-    marked_match = simulate_ground_truth(duration_s=60.0, seed=7)
+    m = simulate_ground_truth(duration_s=60.0, seed=7, shots_per_min=6.0)
+    chosen = detect_goalkeepers(m)
+    assert set(chosen) == {7, 17}, (
+        f"a valódi kapusokat kell megtalálni (7, 17), nem: {chosen}")
+
+    plain = double_punishment(
+        simulate_ground_truth(duration_s=60.0, seed=7, shots_per_min=6.0))
+    marked_match = simulate_ground_truth(duration_s=60.0, seed=7,
+                                         shots_per_min=6.0)
     detect_goalkeepers(marked_match)
-    marked = double_punishment(marked_match)
-    assert plain != marked, (plain, marked)
+    assert plain == double_punishment(marked_match), (
+        "a helyes jelölés után a sorrend már nem módosít számot")
 
 
 def test_scope_makes_the_listed_layers_order_independent():
