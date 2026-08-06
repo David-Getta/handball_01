@@ -162,19 +162,26 @@ jobs:
           path: dist/installer/SportMachine-Setup.exe
           retention-days: 7
 
+      # A kiadás leírása a CHANGELOG adott verziójú szakaszából épül —
+      # az app MEGMUTATJA ezt a szöveget a frissítés előtt, tehát itt a
+      # tényleges változás-listának kell állnia, nem sablonnak.
+      - name: Kiadás-jegyzet összeállítása a CHANGELOG-ból
+        if: env.RELEASE_TAG != ''
+        shell: bash
+        run: |
+          cd backend
+          python -m scripts.release_notes "${RELEASE_TAG#v}" \
+            > ../release_notes.md
+          echo "--- a kiadás leírása ---"
+          head -40 ../release_notes.md
+
       - name: Kiadás a Releases oldalra
         if: env.RELEASE_TAG != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           files: dist/installer/SportMachine-Setup.exe
-          body: |
-            **Sport Machine — Windows telepítő**
-
-            Letöltés után dupla kattintás a `SportMachine-Setup.exe`-re, majd
-            Tovább → Telepítés. Részletes (laikus) útmutató: TELEPITES.md.
-
-            Újdonságok e kiadásban: lásd a CHANGELOG.md-t a repó gyökerében.
+          body_path: release_notes.md
 
   # A teljes macOS-alkalmazás legyártása (app + beágyazott motor, zip-ben).
   # FIGYELEM: a macOS futtató 10x szorzóval fogyasztja az Actions-percet —

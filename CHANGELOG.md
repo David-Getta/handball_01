@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A kiadás leírása a CHANGELOG-ból épül.** Az előző pont után az app
+  megmutatja a GitHub-kiadás leírását a frissítés előtt — csakhogy ott
+  eddig sablonszöveg állt ("Újdonságok: lásd a CHANGELOG.md-t"). A
+  felhasználó tehát pont ott olvasta volna el, mi változik, és pont ott
+  nem kapott választ. Mostantól a kiadási workflow a
+  `scripts.release_notes` szkriptből veszi a leírást: az kiszedi a
+  CHANGELOG adott verziójú szakaszát, elé teszi a telepítési
+  tudnivalót mindkét platformra, és túl hosszú listát vág (a vágást ki
+  is mondva). Hiányzó szakasznál a telepítési rész akkor is kimegy —
+  egy elfelejtett changelog-bejegyzés miatt nem maradhat el a kiadás.
+  Őr-teszt rögzíti, hogy a workflow tényleg ezt a szkriptet hívja, és
+  hogy a régi sablon eltűnt.
+
 - **A frissítés megmondja, mi változik — letöltés előtt.** A
   frissítés-ajánló eddig csak egy verziószámot mutatott, holott egy
   frissítés 200–300 MB letöltés ÉS az app újraindítása. A felhasználó
