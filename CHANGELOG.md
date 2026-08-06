@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kiadás-jegyzet: a Windows-futtató kódolása elhasalt rajta.** Az
+  első éles futás megbukott: a Windows-gépen a Python alapértelmezett
+  kimeneti kódolása cp1252, és a magyar szöveg nyilai (→)
+  `UnicodeEncodeError`-t adtak — a kiadás lépése emiatt kimaradt (a
+  telepítő és a macOS-csomag addigra már fent volt, tehát a kiadás nem
+  sérült). A szkript mostantól FÁJLBA ír, kimondott UTF-8 kódolással
+  (`--out`), és stdout-ra íráskor is beállítja azt. Két őr-teszt
+  rögzíti: a fájl-írás nem-ASCII szöveggel is működik, és a workflow a
+  `--out` kapcsolót használja, nem átirányítást.
+
 - **A frissítés-jegyzet olvashatóan jelenik meg.** A jegyzet a
   CHANGELOG-ból jön, tehát markdown (`**félkövér**`, `> idézet`,
   `## cím`, `- felsorolás`) — egy sima szövegdobozban ezek NYERSEN

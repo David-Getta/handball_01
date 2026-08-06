@@ -170,8 +170,11 @@ jobs:
         shell: bash
         run: |
           cd backend
+          # FÁJLBA íratjuk (--out), nem átirányítással: a Windows-futtatón
+          # a Python kimeneti kódolása cp1252, és a magyar szöveg nyilai
+          # ott UnicodeEncodeError-t adnának.
           python -m scripts.release_notes "${RELEASE_TAG#v}" \
-            > ../release_notes.md
+            --out ../release_notes.md
           echo "--- a kiadás leírása ---"
           head -40 ../release_notes.md
 

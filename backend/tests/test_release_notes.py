@@ -9,7 +9,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scripts.release_notes import MAX_CHARS, build, section
+from scripts.release_notes import MAX_CHARS, build, main, section
 
 _SAMPLE = """# Változásnapló (CHANGELOG)
 
@@ -112,3 +112,36 @@ def test_a_workflow_a_szkriptbol_veszi_a_leirast():
         "a kiadás nem a generált fájlt kapja")
     assert "Újdonságok e kiadásban: lásd a CHANGELOG.md-t" not in text, (
         "a régi sablonszöveg még bent van a workflow-ban")
+
+
+def test_fajlba_iras_utf8(tmp_path):
+    """A kimenet FÁJLBA, kimondott UTF-8 kódolással megy.
+
+    A Windows-futtatón a Python alapértelmezett kimeneti kódolása
+    cp1252, és a magyar szöveg nyilai (→) ott UnicodeEncodeError-t
+    adnak — a kiadás emiatt bukott el egyszer. A fájl-írás kódolása
+    ezért kimondott.
+    """
+    out = tmp_path / "notes.md"
+    assert main(["0.1.24", "--out", str(out)]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert "Mi változott a v0.1.24-ben" in text
+    # Van benne nem-ASCII (magyar ékezet és/vagy nyíl) — ez a lényeg.
+    assert any(ord(ch) > 127 for ch in text)
+
+
+def test_a_workflow_fajlba_irat():
+    """A workflow a --out kapcsolót használja, nem átirányítást.
+
+    Átirányításnál a Windows-futtató kódolása döntene, és a magyar
+    szöveg elhasalna.
+    """
+    import pathlib
+
+    wf = (pathlib.Path(__file__).resolve().parent.parent.parent
+          / ".github" / "workflows" / "release.yml")
+    if not wf.exists():
+        import pytest
+        pytest.skip("nincs kiadási workflow a fában")
+    text = wf.read_text(encoding="utf-8")
+    assert "--out" in text, "a workflow nem fájlba íratja a jegyzetet"

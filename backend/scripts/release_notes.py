@@ -10,7 +10,12 @@ elé teszi a telepítési tudnivalót. A workflow ezt a fájlt adja át a
 kiadásnak.
 
 Használat:
-    cd backend && python -m scripts.release_notes 0.1.24 > notes.md
+    cd backend && python -m scripts.release_notes 0.1.24 --out notes.md
+
+A kimenetet FÁJLBA írjuk, nem az stdout-ra: a Windows-futtatón a Python
+alapértelmezett kimeneti kódolása cp1252, és a magyar szöveg nyilai
+(→) ott `UnicodeEncodeError`-t adnak. A fájl-írás kódolása kimondott
+UTF-8, tehát platform-független.
 """
 
 from __future__ import annotations
@@ -75,8 +80,19 @@ def build(version: str, changelog: str | None = None) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("version", help="a kiadás verziója, v nélkül (0.1.24)")
+    ap.add_argument("--out", help="a kimeneti fájl (alapból az stdout)")
     args = ap.parse_args(argv)
-    sys.stdout.write(build(args.version))
+    text = build(args.version)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        return 0
+    # stdout-ra írásnál is kimondjuk az UTF-8-at: a Windows-futtatón az
+    # alapértelmezés cp1252, ami a magyar szövegen elhasal.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    sys.stdout.write(text)
     return 0
 
 
