@@ -223,7 +223,10 @@ def test_season_report_leaders_section():
     matches_dir = Path(tmp2) / "data" / "matches"
     matches_dir.mkdir(parents=True, exist_ok=True)
     for seed in (2, 3):
-        m = simulate_ground_truth(duration_s=120, fps=25.0, seed=seed)
+        # 10 fps: a toplista másodperc-alapú (labdaszerzés/perc), a
+        # rétegek az fps-ből számolnak — a ritkább mintavétel a
+        # jelentést nem, a futásidőt viszont a felére viszi.
+        m = simulate_ground_truth(duration_s=120, fps=10.0, seed=seed)
         (matches_dir / f"{m.meta.match_id}.json").write_text(
             json.dumps(m.to_dict()), encoding="utf-8")
     client = TestClient(create_app())

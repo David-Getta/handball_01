@@ -767,11 +767,13 @@ def test_report_suspension_row_with_offender():
 
     full = [100, 101, 102, 103, 104, 105]
     down = [100, 101, 102, 103, 104]
-    frames = [mk(t, full) for t in range(750)]
-    frames += [mk(t, down) for t in range(750, 2250)]
-    frames += [mk(t, full) for t in range(2250, 3000)]
+    # 5 fps: a kiállítás-felismerés másodpercekben számol (az fps-ből),
+    # a jelenet így ugyanaz a 30 / 60 / 30 mp — ötödannyi kockából.
+    frames = [mk(t, full) for t in range(150)]
+    frames += [mk(t, down) for t in range(150, 450)]
+    frames += [mk(t, full) for t in range(450, 600)]
     m = Match(MatchMeta(match_id="ppr", home_team="H", away_team="A",
-                        fps=25.0), frames)
+                        fps=5.0), frames)
     html = match_report_html(m, {}, [], None)
     assert "Kiállítás (2 perc)" in html
     assert "1 (105.)" in html
@@ -831,9 +833,14 @@ def test_report_goal_timeline_halftime_marker():
                               source=PositionSource.MEASURED,
                               confidence=1.0)
 
+    # 10 fps: a lövés-fizika m/s-ban számol, ezért a labda kockánként
+    # 2.5 m-t lép (25 m/s, mint 25 fps mellett kockánként 1 m) — a
+    # jelenet ugyanaz, a kocka-szám a 40%-a.
+    fps, step = 10.0, 2.5
+
     def play(t0, seconds):
         frames = []
-        for i in range(int(seconds * 25)):
+        for i in range(int(seconds * fps)):
             players = [pl(100 + k, Team.HOME, 12.0 + k, 4.0 + k)
                        for k in range(6)]
             players += [pl(200 + k, Team.AWAY, 26.0 + k, 4.0 + k)
@@ -849,28 +856,28 @@ def test_report_goal_timeline_halftime_marker():
     # 29-71% sávba esik — a jelenet ugyanaz, a kocka-szám fele.
     frames = play(0, 30)
     t = len(frames)
-    for i in range(8):  # hazai gól az 1. félidőben
+    for i in range(4):  # hazai gól az 1. félidőben
         frames.append(Frame(t=t + i,
                             players=[pl(101, Team.HOME, 33.5, 10.0)],
-                            ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                            ball=Ball(x=min(34.0 + step * i, 40.0), y=10.0,
                                       confidence=1.0)))
-    t += 8
+    t += 4
     frames += play(t, 30)
     t = len(frames)
     frames += [Frame(t=t + i, players=[], ball=None)
-               for i in range(int(90 * 25))]  # szünet
+               for i in range(int(90 * fps))]  # szünet
     t = len(frames)
     frames += play(t, 30)
     t = len(frames)
-    for i in range(8):  # vendég gól a 2. félidőben (a -x kapuba)
+    for i in range(4):  # vendég gól a 2. félidőben (a -x kapuba)
         frames.append(Frame(t=t + i,
                             players=[pl(201, Team.AWAY, 6.5, 10.0)],
-                            ball=Ball(x=max(6.0 - i, 0.0), y=10.0,
+                            ball=Ball(x=max(6.0 - step * i, 0.0), y=10.0,
                                       confidence=1.0)))
-    t += 8
+    t += 4
     frames += play(t, 30)
     m = Match(MatchMeta(match_id="htm", home_team="H", away_team="A",
-                        fps=25.0), frames)
+                        fps=fps), frames)
     html = match_report_html(m, {}, detect_events(m), None)
     assert "— FÉLIDŐ (1 – 0) —" in html
 
@@ -1449,8 +1456,11 @@ def test_report_szunet_lencse_section_lists_verdicts():
     from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
                                           PlayerPosition, Team)
 
+    # 5 fps: a fal-felismerés és a félidő-keresés is másodpercekben
+    # számol (az fps-ből) — a jelenet ugyanaz, ötödannyi kockából.
+    fps = 5.0
     meta = MatchMeta(match_id="rep-dfs", home_team="Hazai",
-                     away_team="Vendég", fps=25.0)
+                     away_team="Vendég", fps=fps)
 
     def pl(tid, team, x, y):
         return PlayerPosition(track_id=tid, team=team, x=x, y=y)
@@ -1459,7 +1469,7 @@ def test_report_szunet_lencse_section_lists_verdicts():
         out = []
         t = t0
         for _ in range(5):
-            for _ in range(int(8 * 25)):
+            for _ in range(int(8 * fps)):
                 players = [pl(1, Team.HOME, 30.0, 10.0)]
                 for k in range(6):
                     if advanced_one and k == 0:
@@ -1471,7 +1481,7 @@ def test_report_szunet_lencse_section_lists_verdicts():
                                  ball=Ball(x=30.0, y=10.0,
                                            confidence=1.0)))
                 t += 1
-            for _ in range(10):
+            for _ in range(2):
                 out.append(Frame(t=t, players=[],
                                  ball=Ball(x=18.0, y=10.0,
                                            confidence=1.0)))
@@ -1479,7 +1489,7 @@ def test_report_szunet_lencse_section_lists_verdicts():
         return out, t
 
     frames, t = half(0, False)          # 1. félidő: 6-0
-    for _ in range(int(90 * 25)):
+    for _ in range(int(90 * fps)):
         frames.append(Frame(t=t, players=[], ball=None))
         t += 1
     sh, t = half(t, True)               # 2. félidő: 5-1

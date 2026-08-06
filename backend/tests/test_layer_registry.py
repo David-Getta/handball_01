@@ -82,18 +82,20 @@ def _wait_job(client, job_id, timeout_s=120):
     raise AssertionError("a csomag-job nem fejeződött be időben")
 
 
-def _registered_package_layers() -> list[str]:
-    src = _APP_PY.read_text(encoding="utf-8")
-    return re.findall(r'_layer\(\s*"([a-z0-9_]+)"', src)
+# A drága lépések (csomag-export, végpont-söprés) MODUL-hatókörű
+# fixtúrákban futnak: a füstteszt több őre ugyanazt a mintameccset
+# nézi más szemszögből, és a kimenet előállítása másodpercekbe kerül.
+# Egyszer állítjuk elő, aztán mindegyik őr a saját állítását teszi rá.
+@pytest.fixture(scope="module")
+def sample_match():
+    """A lövéses mintameccs és a rá nyitott kliens — egyszer épül."""
+    return _client_with_match()
 
 
-def test_package_minden_regisztralt_reteg_elkeszul():
-    """A csomag elemzés-JSON-jában MINDEN `_layer(...)`-rel regisztrált
-    réteg ott van — egy kivétellel elhasaló motor itt bukna ki, mert a
-    `_layer` a hibát lenyeli, a kulcs pedig hiányozna."""
-    names = _registered_package_layers()
-    assert len(names) > 200, "a regisztry-olvasás elromlott"
-    client, mid = _client_with_match()
+@pytest.fixture(scope="module")
+def package_analyses(sample_match):
+    """A meccs-csomag elemzés-JSON-ja — egyszer exportálva."""
+    client, mid = sample_match
     r = client.post(f"/matches/{mid}/package/export",
                     json={"clip_types": []})
     job = _wait_job(client, r.json()["job_id"])
@@ -101,12 +103,64 @@ def test_package_minden_regisztralt_reteg_elkeszul():
     pkg = client.get(f"/matches/{mid}/package/download")
     assert pkg.status_code == 200
     z = zipfile.ZipFile(io.BytesIO(pkg.content))
-    analyses = json.loads(z.read("elemzesek.json").decode("utf-8"))
-    missing = sorted(set(names) - set(analyses))
+    return json.loads(z.read("elemzesek.json").decode("utf-8"))
+
+
+@pytest.fixture(scope="module")
+def get_answers(sample_match):
+    """Minden GET /matches/{id}/... végpont válasza — egyszer lekérve.
+
+    {útvonal-sablon: (HTTP-kód, törzs)}. A paraméteres játékos-
+    végpontok az első valódi track_id-vel hívódnak; ha nincs ilyen,
+    kimaradnak.
+    """
+    client, mid = sample_match
+    src = _APP_PY.read_text(encoding="utf-8")
+    paths = sorted(set(re.findall(
+        r'@app\.get\("(/matches/\{match_id\}[^"]*)"\)', src)))
+    body = client.get(f"/matches/{mid}/positions")
+    tid = None
+    if body.status_code == 200 and isinstance(body.json(), dict):
+        for side in ("home", "away"):
+            ids = list((body.json().get(side) or {}).keys())
+            if ids:
+                tid = ids[0]
+                break
+    out: dict[str, tuple[int, object]] = {}
+    for path in paths:
+        url = path.replace("{match_id}", mid)
+        if "{track_id}" in url or "{player_id}" in url:
+            if tid is None:
+                continue
+            url = (url.replace("{track_id}", str(tid))
+                      .replace("{player_id}", str(tid)))
+        if "{" in url:
+            continue  # egyéb paraméteres útvonal kimarad
+        r = client.get(url)
+        try:
+            payload = r.json()
+        except ValueError:
+            payload = None
+        out[path] = (r.status_code, payload)
+    return out
+
+
+def _registered_package_layers() -> list[str]:
+    src = _APP_PY.read_text(encoding="utf-8")
+    return re.findall(r'_layer\(\s*"([a-z0-9_]+)"', src)
+
+
+def test_package_minden_regisztralt_reteg_elkeszul(package_analyses):
+    """A csomag elemzés-JSON-jában MINDEN `_layer(...)`-rel regisztrált
+    réteg ott van — egy kivétellel elhasaló motor itt bukna ki, mert a
+    `_layer` a hibát lenyeli, a kulcs pedig hiányozna."""
+    names = _registered_package_layers()
+    assert len(names) > 200, "a regisztry-olvasás elromlott"
+    missing = sorted(set(names) - set(package_analyses))
     assert not missing, f"némán elbukott rétegek a csomagban: {missing}"
 
 
-def test_loves_retegek_valodi_adatot_kapnak():
+def test_loves_retegek_valodi_adatot_kapnak(package_analyses):
     """A lövés-alapú rétegek NEM üresen jönnek vissza.
 
     A "kulcs ott van" őrzés önmagában gyenge: egy lövés nélküli
@@ -115,18 +169,10 @@ def test_loves_retegek_valodi_adatot_kapnak():
     mintameccs ezért LŐ is — itt pedig megköveteljük, hogy a
     lövés-rétegek lássák is a lövéseket.
     """
-    client, mid = _client_with_match()
-    r = client.post(f"/matches/{mid}/package/export", json={"clip_types": []})
-    job = _wait_job(client, r.json()["job_id"])
-    assert job["status"] == "done", job
-    pkg = client.get(f"/matches/{mid}/package/download")
-    z = zipfile.ZipFile(io.BytesIO(pkg.content))
-    analyses = json.loads(z.read("elemzesek.json").decode("utf-8"))
-
     empty = []
     for name in ("role_shot_distance", "role_shot_timing",
                  "role_shot_power", "shot_speeds", "xg"):
-        rec = analyses.get(name)
+        rec = package_analyses.get(name)
         if rec is None:
             empty.append(f"{name}: hiányzik")
             continue
@@ -165,7 +211,7 @@ def _endpoint_registries() -> dict[str, set[str]]:
     return out
 
 
-def test_vegpontok_minden_regisztralt_kulcs_elkeszul():
+def test_vegpontok_minden_regisztralt_kulcs_elkeszul(get_answers):
     """Minden elemzés-végpont válaszában ott van minden
     `res["..."]`-ként bekötött kulcs — a félidő-feltételes (_fh és
     first_half_close) kulcsok kivételével, amelyek a rövid szimulált
@@ -174,14 +220,12 @@ def test_vegpontok_minden_regisztralt_kulcs_elkeszul():
     assert len(registries) >= 4, "a végpont-olvasás elromlott"
     assert sum(len(k) for k in registries.values()) > 200, \
         "a kulcs-olvasás elromlott"
-    client, mid = _client_with_match()
     problems = []
     for path, registered in sorted(registries.items()):
-        r = client.get(path.replace("{match_id}", mid))
-        if r.status_code != 200:
-            problems.append(f"{path}: HTTP {r.status_code}")
+        status, body = get_answers[path]
+        if status != 200:
+            problems.append(f"{path}: HTTP {status}")
             continue
-        body = r.json()
         missing = registered - set(body if isinstance(body, dict) else {})
         unexpected = sorted(
             k for k in missing
@@ -287,38 +331,16 @@ def test_felido_kulcsok_elkeszulnek_felidos_meccsen():
         f"hiányzó félidő-kulcsok felismert félidő mellett: {problems}"
 
 
-def test_minden_get_vegpont_tulel():
+def test_minden_get_vegpont_tulel(get_answers):
     """Minden GET /matches/{id}/... végpont — a paraméteres
     játékos-végpontokkal együtt — 5xx nélkül fut le egy érvényes
     szimulált meccsen. A kulcs-őrök a regisztrált rétegeket nézik;
     ez azt, hogy EGYIK végpont sem omlik össze (a 404 pl. csomag-
     letöltésnél export előtt jogos, az 500 sosem az)."""
-    src = _APP_PY.read_text(encoding="utf-8")
-    paths = sorted(set(re.findall(
-        r'@app\.get\("(/matches/\{match_id\}[^"]*)"\)', src)))
-    assert len(paths) > 30, "az útvonal-olvasás elromlott"
-    client, mid = _client_with_match()
-    body = client.get(f"/matches/{mid}/positions")
-    tid = None
-    if body.status_code == 200 and isinstance(body.json(), dict):
-        for side in ("home", "away"):
-            ids = list((body.json().get(side) or {}).keys())
-            if ids:
-                tid = ids[0]
-                break
-    problems = []
-    for path in paths:
-        url = path.replace("{match_id}", mid)
-        if "{track_id}" in url or "{player_id}" in url:
-            if tid is None:
-                continue
-            url = (url.replace("{track_id}", str(tid))
-                      .replace("{player_id}", str(tid)))
-        if "{" in url:
-            continue  # egyéb paraméteres útvonal kimarad
-        r = client.get(url)
-        if r.status_code >= 500:
-            problems.append(f"{path}: HTTP {r.status_code}")
+    assert len(get_answers) > 30, "az útvonal-olvasás elromlott"
+    problems = [f"{path}: HTTP {status}"
+                for path, (status, _) in sorted(get_answers.items())
+                if status >= 500]
     assert not problems, f"összeomló végpontok: {problems}"
 
 
