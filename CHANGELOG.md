@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A kliens-őrzések külön fájlba kerültek.** A réteg-regisztry
+  füstteszt mostanra 28 tesztből 14-gyel a Flutter-felületről szólt
+  (elgépelt kulcs, néma pörgettyű, nyers kivétel a képernyőn, célt nem
+  találó ugró-gomb) — a fájl neve és leírása viszont a backend
+  réteg-regisztrációjáról. A kliens-őrzések átkerültek a
+  `tests/test_client_ui.py`-ba: azok a Dart forrásból olvasnak, nem
+  kell hozzájuk se FastAPI, se szimulált meccs, ezért **0,2 másodperc
+  alatt** lefutnak a regisztry 35 másodperce helyett. Aki a felületen
+  dolgozik, mostantól ezt az egy fájlt futtatja.
+
 - **Kiadás-jegyzet: a Windows-futtató kódolása elhasalt rajta.** Az
   első éles futás megbukott: a Windows-gépen a Python alapértelmezett
   kimeneti kódolása cp1252, és a magyar szöveg nyilai (→)
