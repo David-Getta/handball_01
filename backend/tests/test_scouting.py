@@ -2346,3 +2346,56 @@ def test_transition_offense_merge_and_key():
                           trans_steals=10, trans_quick_goals=2)
     _, _, k2 = _coach_keys(weak)
     assert not any("gyorsan gólra váltják" in k for k in k2)
+
+
+def _trend_rep(matches, shots_by_role, dist_sum, kmh_shots=None,
+               kmh_sum=None):
+    """Minimális jelentés a származtatott trend-mutatók teszteléséhez."""
+    from handball.pipeline.scouting import ScoutingReport
+    return ScoutingReport(
+        team="home", team_name="Mi", matches=matches,
+        attack_share_pct=60.0, fast_break_pct=10.0, avg_ball_speed_ms=4.0,
+        avg_attack_duration_s=8.0, defense_main="6-0",
+        defense_distribution={"6-0": 100.0},
+        attack_centroid_x=30.0, attack_centroid_y=10.0, num_figures=0,
+        attacks=10, shots=10, goals=5, turnovers=2,
+        shot_efficiency_pct=50.0, key_players=[], strengths=[],
+        weaknesses=[], keys_to_game=[],
+        rsd_shots_by_role=shots_by_role, rsd_dist_sum_by_role=dist_sum,
+        rsp_shots_by_role=kmh_shots or {}, rsp_kmh_sum_by_role=kmh_sum or {})
+
+
+def test_trend_kozelebbi_befejezes_javulas():
+    """A befejezés-távolság csökkenése JAVULÁS — közelebbről lőni jobb."""
+    from handball.pipeline.scouting import trend_report
+
+    older = _trend_rep(3, {"irányító": 10}, {"irányító": 120.0})   # 12,0 m
+    newer = _trend_rep(3, {"irányító": 10}, {"irányító": 90.0})    # 9,0 m
+    tr = trend_report(older, newer)
+    rec = next(m for m in tr["metrics"] if m["metric"] == "shot_distance_m")
+    assert rec["older"] == 12.0 and rec["newer"] == 9.0
+    assert rec["better"] is True, rec
+    assert any("befejezés-távolság" in s_ for s_ in tr["summary"]), tr
+
+
+def test_trend_kimarad_ha_keves_a_loves():
+    """Kevés mért lövésnél a mutató KIMARAD — nem látszik nulla-esésnek."""
+    from handball.pipeline.scouting import trend_report
+
+    older = _trend_rep(1, {"irányító": 3}, {"irányító": 36.0})
+    newer = _trend_rep(1, {"irányító": 10}, {"irányító": 90.0})
+    tr = trend_report(older, newer)
+    assert not [m for m in tr["metrics"]
+                if m["metric"] == "shot_distance_m"], tr["metrics"]
+
+
+def test_trend_loveserobol_is_lesz_mutato():
+    """A lövéserő növekedése javulás."""
+    from handball.pipeline.scouting import trend_report
+
+    older = _trend_rep(3, {}, {}, {"átlövő": 10}, {"átlövő": 900.0})
+    newer = _trend_rep(3, {}, {}, {"átlövő": 10}, {"átlövő": 1100.0})
+    tr = trend_report(older, newer)
+    rec = next(m for m in tr["metrics"] if m["metric"] == "shot_power_kmh")
+    assert rec["older"] == 90.0 and rec["newer"] == 110.0
+    assert rec["better"] is True, rec

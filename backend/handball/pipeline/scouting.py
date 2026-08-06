@@ -15123,6 +15123,37 @@ _TREND_METRICS = [
 ]
 
 
+# Ennyi mért lövés kell egy időszakban ahhoz, hogy a származtatott
+# befejezés-mutatót értelmezzük (a poszt-lencse küszöbe posztonként 4;
+# csapat-szinten ennél többet várunk el).
+TREND_DERIVED_MIN_SHOTS = 8
+
+
+def _avg_from_sums(counts: dict, sums: dict) -> Optional[float]:
+    """Súlyozott átlag két darabszám/összeg szótárból, vagy None.
+
+    A poszt-lencse mezői SZÁNDÉKOSAN darabszám és összeg formában
+    állnak (hogy meccsek közt pontosan összegződjenek) — az átlag
+    ebből mindig frissen számolódik.
+    """
+    n = sum((counts or {}).values())
+    if n < TREND_DERIVED_MIN_SHOTS:
+        return None
+    return sum((sums or {}).values()) / n
+
+
+# Származtatott trend-mutatók: nem egyetlen mezőből jönnek, hanem a
+# poszt-lencse darabszám/összeg szótáraiból. (mező-kulcs, címke,
+# egység, jobb-e ha nő, számoló) — a számoló None-t ad, ha az időszak
+# nem mérhető, és akkor a mutató KIMARAD (nem látszik nulla-esésnek).
+_TREND_DERIVED = [
+    ("shot_distance_m", "Befejezés-távolság", " m", False,
+     lambda r: _avg_from_sums(r.rsd_shots_by_role, r.rsd_dist_sum_by_role)),
+    ("shot_power_kmh", "Lövéserő", " km/h", True,
+     lambda r: _avg_from_sums(r.rsp_shots_by_role, r.rsp_kmh_sum_by_role)),
+]
+
+
 def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
     """Két időszak jelentésének összevetése — fejlődés-követés edzői nyelven.
 
@@ -15161,6 +15192,33 @@ def trend_report(older: ScoutingReport, newer: ScoutingReport) -> dict:
         if better is not None and abs(delta) / base >= 0.10:
             word = "Javult" if better else "Romlott"
             summary.append(f"{word}: {label.lower()} {a:.1f}{unit} → {b:.1f}{unit}.")
+
+    # Származtatott mutatók (poszt-lencse): a befejezés HELYE és EREJE
+    # csapat-szinten. Ezek szezon-kérdések ("közelebbről fejezünk-e be,
+    # mint ősszel?"), és a dict-alapú tárolás miatt nem fértek be a
+    # mező-alapú listába.
+    for key, label, unit, up_is_better, calc in _TREND_DERIVED:
+        try:
+            a = calc(older)
+            b = calc(newer)
+        except Exception:
+            continue
+        if a is None or b is None:
+            continue  # valamelyik időszak nem mérhető — nem találgatunk
+        delta = b - a
+        better = None
+        if abs(delta) > 1e-9:
+            better = (delta > 0) == up_is_better
+        metrics.append({
+            "metric": key, "label": label, "unit": unit,
+            "older": round(a, 2), "newer": round(b, 2),
+            "delta": round(delta, 2), "better": better,
+        })
+        base = max(abs(a), 1e-9)
+        if better is not None and abs(delta) / base >= 0.10:
+            word = "Javult" if better else "Romlott"
+            summary.append(
+                f"{word}: {label.lower()} {a:.1f}{unit} → {b:.1f}{unit}.")
 
     if not summary:
         summary.append("Nincs jelentős változás a két időszak között.")

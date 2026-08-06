@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A fejlődés-követés végre látja a befejezést is.** A trend eddig
+  csak SKALÁR mezőket tudott követni, a poszt-lencse viszont
+  darabszám/összeg szótárakban áll (hogy meccsek közt pontosan
+  összegződjön) — így egy tipikus szezon-kérdés megválaszolhatatlan
+  volt: "közelebbről fejezünk-e be, mint ősszel?". Mostantól két
+  SZÁRMAZTATOTT mutató is bekerül: **befejezés-távolság** (a csökkenés
+  a javulás — közelebbről lőni jobb) és **lövéserő**. Az átlag mindig
+  frissen számolódik az összegekből. Ha valamelyik időszakban nincs
+  elég mért lövés (nyolc alatt), a mutató KIMARAD — nem látszik
+  nulla-esésnek.
+
 - **A poszt-lencse ítéletei eljutnak a teendő-rangsorba.** A rangsor
   háromszáz rétegből ötöt emel ki, öt kimondott család szerint (ár →
   ember → szünet → fáradás → állás). A poszt-lencse lövés-rétegei
