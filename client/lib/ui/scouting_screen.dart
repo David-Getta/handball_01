@@ -271,6 +271,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     final r = _report!;
     final hasNarrative =
         ((r["narrative"] as List?) ?? const []).isNotEmpty;
+    // Egyszer építjük fel: a sáv, a feltétel és a tartalom is ezt nézi.
+    final keeperCard = _keeperPrepCard(r);
     // A sávban CSAK a ténylegesen megjelenő szekciók szerepelnek —
     // egy üresbe ugró gomb rosszabb, mint a hiánya.
     final jumps = <(String, IconData)>[
@@ -282,6 +284,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       ("Honnan kapják a lövéseket", Icons.shield_outlined),
       if (_playbookMatch != null) ("Ismert figuráik", Icons.route_outlined),
       ("Védekezésük", Icons.security),
+      if (keeperCard != null)
+        ("Kapus-felkészítés", Icons.sports_kabaddi),
       ("Kulcsjátékosok", Icons.person_outline),
     ];
     return Column(
@@ -340,6 +344,12 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                 KeyedSubtree(
                     key: _sectionKey("Védekezésük"), child: _defenseCard(r)),
                 const SizedBox(height: AppSpacing.lg),
+                if (keeperCard != null) ...[
+                  KeyedSubtree(
+                      key: _sectionKey("Kapus-felkészítés"),
+                      child: keeperCard),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 KeyedSubtree(
                     key: _sectionKey("Kulcsjátékosok"),
                     child: _keyPlayersCard(r)),
@@ -7501,6 +7511,103 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         SizedBox(width: 44, child: Text("${pct.toStringAsFixed(0)}%",
             textAlign: TextAlign.right, style: AppText.label.copyWith(fontSize: 12))),
       ]),
+    );
+  }
+
+  /// Kapus-felkészítés posztonként: a poszt-lencse három lövés-rétege
+  /// EGY táblában — milyen messziről, milyen keményen, merre lő az adott
+  /// poszt. Külön csempeként a kapusedző háromszor keresi meg ugyanazt a
+  /// posztot; itt egy pillantás.
+  ///
+  /// Küszöbök a backenddel azonosak: posztonként 4 mért lövés, az oldal
+  /// pedig 60% részaránytól szólal meg.
+  Widget? _keeperPrepCard(Map<String, dynamic> r) {
+    final shots = (r["rsd_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final dists = (r["rsd_dist_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    final pShots = (r["rsp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final kmh = (r["rsp_kmh_sum_by_role"] as Map?)?.cast<String, dynamic>();
+    final sidesRaw =
+        (r["rgp_goals_by_role_side"] as Map?)?.cast<String, dynamic>();
+
+    final sides = <String, Map<String, int>>{};
+    sidesRaw?.forEach((k, v) {
+      final i = k.indexOf("|");
+      if (i <= 0) return;
+      sides.putIfAbsent(k.substring(0, i), () => {})[k.substring(i + 1)] =
+          (v as num).toInt();
+    });
+
+    final posts = <String>{
+      ...?shots?.keys, ...?pShots?.keys, ...sides.keys
+    }.toList()
+      ..sort();
+
+    final rows = <List<String>>[];
+    for (final post in posts) {
+      final nd = ((shots?[post] as num?) ?? 0).toInt();
+      final dist = nd >= 4
+          ? "${(((dists?[post] as num?) ?? 0).toDouble() / nd).toStringAsFixed(1)} m"
+          : "—";
+      final np = ((pShots?[post] as num?) ?? 0).toInt();
+      final power = np >= 4
+          ? "${(((kmh?[post] as num?) ?? 0).toDouble() / np).round()} km/h"
+          : "—";
+      var side = "—";
+      final sm = sides[post];
+      if (sm != null) {
+        final tot = sm.values.fold(0, (a, b) => a + b);
+        if (tot >= 4) {
+          final dom = sm.keys.reduce((a, b) => sm[a]! >= sm[b]! ? a : b);
+          final pct = 100.0 * sm[dom]! / tot;
+          if (pct >= 60.0) side = "$dom (${pct.round()}%)";
+        }
+      }
+      if (dist == "—" && power == "—" && side == "—") continue;
+      rows.add([post, dist, power, side]);
+    }
+    if (rows.isEmpty) return null;   // adat nélkül nincs kártya
+
+    Widget cell(String t, {bool head = false, int flex = 1}) => Expanded(
+          flex: flex,
+          child: Text(t,
+              style: head
+                  ? AppText.label.copyWith(fontSize: 11)
+                  : AppText.value.copyWith(fontSize: 13)),
+        );
+
+    return Container(
+      decoration: AppTheme.card(),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("KAPUS-FELKÉSZÍTÉS POSZTONKÉNT", style: AppText.sectionLabel),
+          const SizedBox(height: AppSpacing.sm),
+          Row(children: [
+            cell("Poszt", head: true, flex: 2),
+            cell("Honnan lő", head: true),
+            cell("Milyen keményen", head: true),
+            cell("Merre lő", head: true),
+          ]),
+          const Divider(height: 12),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                cell(row[0], flex: 2),
+                cell(row[1]),
+                cell(row[2]),
+                cell(row[3]),
+              ]),
+            ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+              "A „—” azt jelenti, hogy abból a bontásból még nincs elég "
+              "mért lövés (posztonként 4 kell). A „merre” csak 60% "
+              "részaránytól szólal meg.",
+              style: AppText.label.copyWith(fontSize: 11)),
+        ],
+      ),
     );
   }
 

@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kapus-felkészítés posztonként: egy tábla három réteg helyett.** A
+  poszt-lencse kapus-hármasa (honnan lő, milyen keményen, merre lő)
+  három külön csempeként szóródott szét a 300-as mutató-falon — a
+  kapusedző háromszor kereste meg ugyanazt a posztot. Mostantól a
+  felderítő jelentés kap egy külön szakaszt (képernyőn kártya, papíron
+  táblázat), ahol posztonként egy sorban áll mind a három. Ahol még
+  nincs elég mért lövés, ott KIMONDOTT hiány-jel ("—") áll, nem nulla
+  vagy üres cella, és a lábjegyzet megmondja, mennyi kellene. Adat
+  nélkül a szakasz elmarad — üres fejléc rosszabb, mint a hiánya. A
+  jelentés ugró-sávjába is bekerült.
+
 - **Poszt-kapuoldal: melyik sarokra állhat rá a kapus.** Új elemző
   réteg, és a poszt-lencse kapus-hármasának harmadik darabja: a
   lövéstávolság megmondja, MEDDIG lépj ki, a lövéserő azt, MIKOR

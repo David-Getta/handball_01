@@ -350,3 +350,33 @@ def test_scouting_report_break_lanes_table():
                                                    {"entries": 3,
                                                     "goals": 1}}))
     assert "Betörés-sávjaik" not in html2
+
+
+def test_kapus_felkeszites_tabla():
+    """A poszt-lencse három lövés-rétege EGY táblában.
+
+    Külön csempeként a kapusedző háromszor keresi meg ugyanazt a
+    posztot; együtt egy pillantás: milyen messziről, milyen keményen,
+    merre lő.
+    """
+    import re
+
+    html = scouting_report_html(_rep(
+        rsd_shots_by_role={"irányító": 6, "beálló": 5},
+        rsd_dist_sum_by_role={"irányító": 72.0, "beálló": 32.5},
+        rsp_shots_by_role={"irányító": 6},
+        rsp_kmh_sum_by_role={"irányító": 780.0},
+        rgp_goals_by_role_side={"irányító|bal": 4, "irányító|jobb": 1}))
+    m = re.search(r"<h2[^>]*>Kapus-felkészítés posztonként</h2>(.*?)</table>",
+                  html, re.S)
+    assert m, "hiányzik a kapus-tábla"
+    body = m.group(1)
+    assert "12.0 m" in body and "130 km/h" in body and "bal (80%)" in body
+    # A beállónál nincs erő- és oldal-adat: ott KIMONDOTT hiány-jel áll,
+    # nem nulla vagy üres cella.
+    assert "6.5 m" in body and "—" in body
+
+
+def test_kapus_tabla_elmarad_ha_nincs_adat():
+    """Adat nélkül nincs tábla — üres fejléc rosszabb, mint a hiánya."""
+    assert "Kapus-felkészítés posztonként" not in scouting_report_html(_rep())

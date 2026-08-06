@@ -326,6 +326,52 @@ def scouting_report_html(rep: ScoutingReport,
                 and ot[0]["n"] / rep.gk_outlets >= 0.5):
             _role("Indítás-célpont", ot[0]["player_id"],
                   f"{ot[0]['n']}/{rep.gk_outlets} indítás")
+        # Kapus-felkészítés posztonként: a poszt-lencse három
+        # lövés-rétege EGY táblában. Külön csempeként szétszórva a
+        # kapusedző háromszor keresi meg ugyanazt a posztot; együtt egy
+        # pillantás: milyen messziről, milyen keményen, merre.
+        keeper_rows = []
+        _rsd = rep.rsd_shots_by_role or {}
+        _rsp = rep.rsp_shots_by_role or {}
+        _rgp = rep.rgp_goals_by_role_side or {}
+        _sides: dict = {}
+        for _key, _n in _rgp.items():
+            _p, _, _side = _key.partition("|")
+            _sides.setdefault(_p, {})[_side] = _n
+        for poszt in sorted(set(_rsd) | set(_rsp) | set(_sides)):
+            n_d = _rsd.get(poszt, 0)
+            dist = (f"{(rep.rsd_dist_sum_by_role or {}).get(poszt, 0.0) / n_d:.1f} m"
+                    if n_d >= 4 else "—")
+            n_p = _rsp.get(poszt, 0)
+            power = (f"{(rep.rsp_kmh_sum_by_role or {}).get(poszt, 0.0) / n_p:.0f} km/h"
+                     if n_p >= 4 else "—")
+            side_txt = "—"
+            row_sides = _sides.get(poszt) or {}
+            tot = sum(row_sides.values())
+            if tot >= 4:
+                dom = max(row_sides, key=lambda k: row_sides[k])
+                pct = 100.0 * row_sides[dom] / tot
+                if pct >= 60.0:
+                    side_txt = f"{dom} ({pct:.0f}%)"
+            if dist == "—" and power == "—" and side_txt == "—":
+                continue
+            keeper_rows.append(
+                f"<tr><td>{escape(poszt)}</td>"
+                f'<td class="num">{dist}</td>'
+                f'<td class="num">{power}</td>'
+                f"<td>{escape(side_txt)}</td></tr>")
+        if keeper_rows:
+            roles_html += (
+                "<h2>Kapus-felkészítés posztonként</h2><table>"
+                "<tr><th>Poszt</th><th class=\"num\">Honnan lő</th>"
+                "<th class=\"num\">Milyen keményen</th>"
+                "<th>Merre lő</th></tr>"
+                + "".join(keeper_rows) + "</table>"
+                '<p class="note">A \u201e—\u201d azt jelenti, hogy abból '
+                "a bontásból még nincs elég mért lövés (posztonként 4 "
+                "kell). A \u201emerre\u201d csak akkor szólal meg, ha a "
+                "gólok legalább 60%-a ugyanarra az oldalra ment.</p>")
+
         if role_rows:
             roles_html = ("<h2>Kikre készülj (szerepek)</h2><table>"
                           "<tr><th>Szerep</th><th>Játékos</th>"
