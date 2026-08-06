@@ -15,7 +15,12 @@ sorrend — épp ez a magyarázható lánc lényege:
    döntést írja felül, tehát előre kell tudni;
 4. **fáradás** — időfüggő romlás; az utolsó húsz perc tervezése;
 5. **állás** — eredményjelző-függő minta; feltételes, csak akkor él,
-   ha az adott állás előáll.
+   ha az adott állás előáll;
+6. **felkészülés** — poszt-profil: nem hiba és nem is romlás, hanem
+   állandó tulajdonság ("a beállójuk hat méterről fejez be"). Ezért
+   van a sor VÉGÉN: sürgősség nélkül, de kiosztható feladatként — és
+   ha a fenti öt család hallgat (rövid felvétel, kevés esemény),
+   akkor legalább ez a lista nem marad üresen.
 
 Családon belül a nyilvántartás sorrendje dönt (stabil, determinisztikus
 kimenet). A modul csak olvassa a többi réteget — mindegyiket külön
@@ -32,7 +37,8 @@ from ..models.tracking import Match
 PRF_TOP_N = 5
 
 # A családok sorrendje = a rangsor sorrendje (lásd a modul-docstringet).
-PRF_FAMILY_ORDER = ("ár", "ember", "szünet", "fáradás", "állás")
+PRF_FAMILY_ORDER = ("ár", "ember", "szünet", "fáradás", "állás",
+                    "felkészülés")
 
 
 def _registry() -> list[tuple[str, str, str, str]]:
@@ -86,6 +92,15 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("állás", "7a6-állás", "goalkeeper", "empty_net_by_score"),
         ("állás", "Sprint-állás", "stats", "sprints_by_score"),
         ("állás", "Poszt-állás", "roles", "role_share_by_score"),
+        # --- felkészülés: poszt-profil (állandó tulajdonság) ---------
+        ("felkészülés", "Poszt-lövéstávolság", "roles",
+         "role_shot_distance"),
+        ("felkészülés", "Poszt-kapuoldal", "roles", "role_goal_placement"),
+        ("felkészülés", "Poszt-lövéserő", "roles", "role_shot_power"),
+        ("felkészülés", "Poszt-lövésidőzítés", "roles", "role_shot_timing"),
+        ("felkészülés", "Poszt-eladási zóna", "roles",
+         "role_turnover_zones"),
+        ("felkészülés", "Poszt-labdatartás", "roles", "role_hold_time"),
     ]
 
 

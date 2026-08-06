@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A poszt-lencse ítéletei eljutnak a teendő-rangsorba.** A rangsor
+  háromszáz rétegből ötöt emel ki, öt kimondott család szerint (ár →
+  ember → szünet → fáradás → állás). A poszt-lencse lövés-rétegei
+  egyikbe sem tartoztak, így az ítéletük ("őt ki kell zárni", "a kapus
+  arra állhat rá") csak böngészéssel volt megtalálható. Új, HATODIK
+  család: **felkészülés** — poszt-profil, ami nem hiba és nem romlás,
+  hanem állandó tulajdonság. Szándékosan a sor VÉGÉN áll: nem tolja el
+  a sürgősebb jelzéseket, viszont ha azok hallgatnak (rövid felvétel,
+  kevés esemény), a lista nem marad üresen. Őr-teszt rögzíti a család
+  helyét és azt, hogy minden nyilvántartott család szerepel a
+  sorrendben.
+
 - **Kapus-felkészítés posztonként: egy tábla három réteg helyett.** A
   poszt-lencse kapus-hármasa (honnan lő, milyen keményen, merre lő)
   három külön csempeként szóródott szét a 300-as mutató-falon — a

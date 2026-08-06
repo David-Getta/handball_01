@@ -68,3 +68,36 @@ def test_priority_findings_silent_without_evidence():
         assert prf[side]["top"] == []
         assert prf[side]["total"] == 0
         assert prf[side]["families"] == {}
+
+
+def test_felkeszules_csalad_a_sor_vegen_all():
+    """A poszt-profil jelzések a rangsor VÉGÉRE kerülnek.
+
+    A poszt-profil nem hiba és nem romlás, hanem állandó tulajdonság
+    ("a beállójuk hat méterről fejez be") — sürgősség nélkül. Ezért nem
+    tolhatja el az árat, az embert vagy a fáradást; viszont ha azok
+    hallgatnak (rövid felvétel, kevés esemény), legalább a lista nem
+    marad üresen.
+    """
+    from handball.pipeline.priorities import (PRF_FAMILY_ORDER, _registry)
+
+    assert PRF_FAMILY_ORDER[-1] == "felkészülés", PRF_FAMILY_ORDER
+    fams = {f for f, _, _, _ in _registry()}
+    assert "felkészülés" in fams, fams
+    # Minden nyilvántartott család szerepel a sorrendben — különben a
+    # rendezés némán a lista elejére dobná.
+    assert fams <= set(PRF_FAMILY_ORDER), fams - set(PRF_FAMILY_ORDER)
+
+
+def test_a_poszt_lencse_eljut_a_rangsorba():
+    """A poszt-lencse lövés-rétegei rangsorba vont rétegek.
+
+    Enélkül az ítéletük ("őt ki kell zárni", "a kapus arra állhat rá")
+    csak böngészéssel lenne megtalálható a háromszáz réteg közt.
+    """
+    from handball.pipeline.priorities import _registry
+
+    names = {fn for _, _, _, fn in _registry()}
+    for layer in ("role_shot_distance", "role_shot_power",
+                  "role_shot_timing", "role_goal_placement"):
+        assert layer in names, f"{layer} nincs a rangsorban"
