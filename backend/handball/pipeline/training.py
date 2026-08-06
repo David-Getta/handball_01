@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 287) Poszt-kapuoldal: ha egy posztunk mindig ugyanoda lő, az
+    # ellenfél kapusa ráállhat — a kapuoldal-váltás gyakorlandó.
+    try:
+        from .roles import RGP_SHARE_PCT, role_goal_placement
+        rgp287 = role_goal_placement(match, config)
+        for side in ("home", "away"):
+            rec287 = rgp287[side]
+            pred287 = rec287.get("predictable")
+            if pred287 is None:
+                continue
+            add(side, "befejezés", "Kiszámítható kapuoldal",
+                f"a(z) {pred287['poszt']} posztunk a góljai "
+                f"{pred287['share_pct']:.0f}%-át {pred287['dominant']} "
+                f"oldalra lövi ({pred287['goals']} gólból; "
+                f"{RGP_SHARE_PCT:.0f}% fölött már mintázat) — egy "
+                "felkészült kapus erre rááll",
+                "kapuoldal-váltás gyakorlása: ugyanabból a helyzetből "
+                "váltakozó sarok, a kapus MOZDULATÁRA döntve — a cél "
+                "nem a másik sarok begyakorlása, hanem hogy a döntés az "
+                "utolsó pillanatban szülessen")
+    except Exception:
+        pass
     # 286) Poszt-lövéserő: ha az egyik posztunk lövése kiugróan
     # kemény, a többié viszont nem, a befejezés egy emberre szűkül.
     try:

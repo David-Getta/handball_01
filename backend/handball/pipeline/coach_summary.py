@@ -885,6 +885,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-kapuoldal: melyik sarokra állhat rá a kapus.
+    try:
+        from .roles import role_goal_placement
+        rgp = role_goal_placement(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rgp = rgp[side]
+            pred = rec_rgp["predictable"]
+            if pred is None:
+                continue
+            body += (f" A(z) {name} legkiszámíthatóbb befejezője a(z) "
+                     f"{pred['poszt']} posztjuk: a góljaik "
+                     f"{pred['share_pct']:.0f}%-át {pred['dominant']} "
+                     f"oldalra lövik ({pred['goals']} gólból) — a kapus "
+                     "arra az oldalra állhat rá, a fal a másikat zárja.")
+    except Exception:
+        pass
     # Poszt-lövéserő: melyik posztra készüljön a kapus.
     try:
         from .roles import role_shot_power

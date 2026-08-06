@@ -2040,6 +2040,44 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vadászd a kapus-indításaikat";
   }
 
+  // Poszt-kapuoldal: melyik posztjuk melyik sarkot keresi (6+ gól,
+  // posztonként 4+, 60% részarány — a backenddel azonos küszöbök:
+  // RGP_MIN_GOALS, RGP_SHARE_PCT).
+  String? _goalPlacementRole(Map<String, dynamic> r) {
+    final raw =
+        (r["rgp_goals_by_role_side"] as Map?)?.cast<String, dynamic>();
+    if (raw == null || raw.isEmpty) return null;
+    var total = 0;
+    final byPost = <String, Map<String, int>>{};
+    raw.forEach((k, v) {
+      final n = (v as num).toInt();
+      final i = k.indexOf("|");
+      if (i <= 0) return;
+      byPost.putIfAbsent(k.substring(0, i), () => {})[k.substring(i + 1)] = n;
+      total += n;
+    });
+    if (total < 6) return null;
+    String? best, bestSide;
+    var bestPct = 0.0;
+    var bestGoals = 0;
+    byPost.forEach((post, sides) {
+      final sum = sides.values.fold(0, (a, b) => a + b);
+      if (sum < 4) return;
+      final dom = sides.keys.reduce((a, b) => sides[a]! >= sides[b]! ? a : b);
+      final pct = 100.0 * sides[dom]! / sum;
+      if (pct >= 60.0 && pct > bestPct) {
+        best = post;
+        bestSide = dom;
+        bestPct = pct;
+        bestGoals = sum;
+      }
+    });
+    if (best == null) return null;
+    return "a(z) $best posztjuk a góljai ${bestPct.round()}%-át $bestSide "
+        "oldalra lövi ($bestGoals gól) · a kapus arra állhat rá, a fal a "
+        "másikat zárja";
+  }
+
   // Poszt-lövéserő: melyik posztjuk lő keményen (8+ lövés,
   // posztonként 4+, 12 km/h eltérés — a backenddel azonos küszöbök:
   // RSP_MIN_SHOTS, RSP_GAP_KMH).
@@ -6940,6 +6978,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_goalPlacementRole(r) != null)
+        ["Poszt-kapuoldal", _goalPlacementRole(r)!],
       if (_shotPowerRole(r) != null)
         ["Poszt-lövéserő", _shotPowerRole(r)!],
       if (_shotTimingRole(r) != null)

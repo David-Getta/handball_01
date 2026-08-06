@@ -1515,3 +1515,87 @@ def role_shot_power(match: Match,
                      if team_avg is not None else None,
                      "roles": rows, "hardest": hardest, "verdict": verdict}
     return out
+
+
+# Poszt-kapuoldal: posztonként ennyi mért gól kell az ítélethez, és
+# ekkora részarány számít kiszámíthatónak. A 60% azt jelenti, hogy
+# minden ötödik-hatodik gólból három-négy ugyanoda megy — a kapus
+# ennyiből már érdemben ráállhat az oldalra.
+RGP_MIN_GOALS = 4
+RGP_SHARE_PCT = 60.0
+
+
+def role_goal_placement(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-kapuoldal: MELYIK POSZTJUK MELYIK SARKOT keresi.
+
+    A lövő-kapuoldal (attack_types.shooter_placement) NÉVRE mondja meg,
+    ki kiszámítható — ez posztra. A név cserélődhet (sérülés, csere, más
+    felállás), a poszt viszont marad: a kapus felkészítése ezért
+    poszt-alapon tart, akkor is, ha az ellenfél mást állít be.
+
+    Edzőileg: ha egy posztjuk a góljainak nagy részét ugyanabba a
+    sarokba lövi, a kapus arra az oldalra állhat rá, a fal pedig a
+    másikat zárja. Ez a poszt-lencse utolsó darabja a kapus-felkészítés
+    három kérdésében: MILYEN MESSZIRŐL (role_shot_distance), MILYEN
+    KEMÉNYEN (role_shot_power) és MOST MÁR: HOVA.
+
+    Az oldalt a LÖVŐ szemszögéből adjuk meg (a két kaput tükrözzük),
+    ahogy a lövő-kapuoldal réteg is — így a két réteg olvasata azonos.
+
+    Visszatérés csapatonként: {"goals" (mért gól), "roles": {poszt:
+    {"goals", "bal", "közép", "jobb", "dominant", "share_pct"}},
+    "predictable": {"poszt", "goals", "dominant", "share_pct"} | None,
+    "verdict": str | None} — a predictable/verdict None, ha a poszt nem
+    érte el az RGP_MIN_GOALS gólt, vagy egyik oldal sem éri el az
+    RGP_SHARE_PCT részarányt.
+    """
+    from .attack_types import shooter_placement
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    placement = shooter_placement(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        tally: dict = {}
+        total = 0
+        for p in placement[side]["players"]:
+            rec_role = roles[side].get(p["player_id"])
+            if rec_role is None:
+                continue
+            row = tally.setdefault(rec_role["poszt"],
+                                   {"bal": 0, "közép": 0, "jobb": 0})
+            for k in ("bal", "közép", "jobb"):
+                row[k] += p[k]
+                total += p[k]
+
+        rows = {}
+        for poszt, row in sorted(tally.items(),
+                                 key=lambda kv: -(kv[1]["bal"]
+                                                  + kv[1]["közép"]
+                                                  + kv[1]["jobb"])):
+            goals = row["bal"] + row["közép"] + row["jobb"]
+            dom = max(("bal", "közép", "jobb"), key=lambda k: row[k])
+            rows[poszt] = {
+                "goals": goals, **row,
+                "dominant": dom if goals >= RGP_MIN_GOALS else None,
+                "share_pct": (round(100.0 * row[dom] / goals, 1)
+                              if goals >= RGP_MIN_GOALS else None),
+            }
+
+        predictable = verdict = None
+        best = [(p, r) for p, r in rows.items()
+                if r["share_pct"] is not None
+                and r["share_pct"] >= RGP_SHARE_PCT]
+        if best:
+            poszt, r = max(best, key=lambda pr: pr[1]["share_pct"])
+            predictable = {"poszt": poszt, "goals": r["goals"],
+                           "dominant": r["dominant"],
+                           "share_pct": r["share_pct"]}
+            verdict = (f"a(z) {poszt} a góljai {r['share_pct']:.0f}%-át "
+                       f"{r['dominant']} oldalra lövi — a kapus arra "
+                       "állhat rá, a fal a másikat zárja")
+        out[side] = {"goals": total, "roles": rows,
+                     "predictable": predictable, "verdict": verdict}
+    return out

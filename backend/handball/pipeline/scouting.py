@@ -746,6 +746,9 @@ class ScoutingReport:
     rst_time_sum_by_role: dict = field(default_factory=dict)
     rsp_shots_by_role: dict = field(default_factory=dict)
     rsp_kmh_sum_by_role: dict = field(default_factory=dict)
+    # Poszt-kapuoldal: "poszt|oldal" → gólszám. Darabszám, meccsek közt
+    # pontosan összegződik (részarány = oldal / a poszt összes gólja).
+    rgp_goals_by_role_side: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -2964,6 +2967,30 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-kapuoldal: melyik sarokra állhat rá a kapusunk.
+    _rgp = rep.rgp_goals_by_role_side
+    if sum(_rgp.values()) >= 6:
+        _rgp_by_post: dict = {}
+        for _key, _n in _rgp.items():
+            _p, _, _side = _key.partition("|")
+            _rgp_by_post.setdefault(_p, {})[_side] = _n
+        _rgp_best = None
+        for _p, _sides in _rgp_by_post.items():
+            _tot = sum(_sides.values())
+            if _tot < 4:
+                continue
+            _dom = max(_sides, key=lambda k: _sides[k])
+            _pct = 100.0 * _sides[_dom] / _tot
+            if _pct >= 60.0 and (_rgp_best is None or _pct > _rgp_best[2]):
+                _rgp_best = (_p, _dom, _pct, _tot)
+        if _rgp_best is not None:
+            _p, _dom, _pct, _tot = _rgp_best
+            keys.append(
+                f"A(z) {_p} posztjuk kiszámítható a kapu előtt: a "
+                f"góljaik {_pct:.0f}%-át {_dom} oldalra lövik "
+                f"({_tot} gólból) — a kapusunk arra az oldalra állhat "
+                "rá, a fal pedig a másikat zárja.")
 
     # Poszt-lövéserő: melyik posztra készüljön a kapusunk.
     _rsp_n = sum(rep.rsp_shots_by_role.values())
@@ -7299,6 +7326,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import priority_findings as _prf
         rep.prf_families = dict(
             _prf(match, config)[team.value]["families"])
+        from .roles import role_goal_placement as _rgp
+        rgprec = _rgp(match, config)[team.value]
+        rep.rgp_goals_by_role_side = {
+            f"{p}|{side}": r[side]
+            for p, r in rgprec["roles"].items()
+            for side in ("bal", "közép", "jobb") if r[side]}
         from .roles import role_shot_power as _rsp
         rsprec = _rsp(match, config)[team.value]
         rep.rsp_shots_by_role = {p: r["shots"]
@@ -9844,6 +9877,34 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 266) Az ő kiszámítható posztjuk × a ti kapusotok oldal-profilja:
+    # ha a kapusunk épp azon az oldalon véd jobban, amerre lőnek, a
+    # párosítás nekünk dolgozik — ezt ki kell használni.
+    _rgp266 = opp.rgp_goals_by_role_side
+    if sum(_rgp266.values()) >= 6:
+        _by_post266: dict = {}
+        for _k, _n in _rgp266.items():
+            _p, _, _sd = _k.partition("|")
+            _by_post266.setdefault(_p, {})[_sd] = _n
+        _best266 = None
+        for _p, _sides in _by_post266.items():
+            _tot = sum(_sides.values())
+            if _tot < 4:
+                continue
+            _dom = max(_sides, key=lambda k: _sides[k])
+            _pct = 100.0 * _sides[_dom] / _tot
+            if _pct >= 60.0 and (_best266 is None or _pct > _best266[2]):
+                _best266 = (_p, _dom, _pct, _tot)
+        if _best266 is not None:
+            _p266, _dom266, _pct266, _tot266 = _best266
+            plan.append(
+                f"A(z) {_p266} posztjuk a góljaik {_pct266:.0f}%-át "
+                f"{_dom266} oldalra lövi ({_tot266} gólból) — a "
+                "kapusunk erre az oldalra álljon rá, a fal pedig a "
+                "másikat zárja. Ez a poszt-lencse kapus-hármasának "
+                "harmadik darabja: a távolság megmondja, meddig lépj "
+                "ki, az erő azt, mikor indulj, ez pedig azt, MERRE.")
 
     # 265) Az ő kemény lövő posztjuk × a ti kapusotok tempó-profilja:
     # ha a kapusunk épp a kemény lövéseknél gyengébb, ott kell a fal
@@ -14224,6 +14285,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         prf_families=_merge_count_dicts(
             r.prf_families for r in reports),
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
+        rgp_goals_by_role_side=_merge_count_dicts(
+            r.rgp_goals_by_role_side for r in reports),
         rsp_shots_by_role=_merge_count_dicts(
             r.rsp_shots_by_role for r in reports),
         rsp_kmh_sum_by_role=_merge_count_dicts(

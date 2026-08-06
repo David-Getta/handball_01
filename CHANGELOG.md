@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Poszt-kapuoldal: melyik sarokra állhat rá a kapus.** Új elemző
+  réteg, és a poszt-lencse kapus-hármasának harmadik darabja: a
+  lövéstávolság megmondja, MEDDIG lépj ki, a lövéserő azt, MIKOR
+  indulj, ez pedig azt, MERRE. A lövő-kapuoldal eddig névre mondta meg,
+  ki kiszámítható — ez posztra, tehát akkor is használható, ha az
+  ellenfél mást állít be. Ha egy posztjuk a góljainak 60%-át ugyanabba
+  a sarokba lövi, a kapus arra állhat rá, a fal pedig a másikat zárja.
+  Négy gól alatt, illetve szétszórt oldalaknál nincs ítélet. Felületek:
+  elemzés-végpont, meccs-csomag, edzői összefoglaló, felderítő kulcsok,
+  meccsterv (266. szabály), edzés-fókusz (287. szabály:
+  kapuoldal-váltás a kapus MOZDULATÁRA döntve), felderítés-képernyő
+  csempéje.
+
 - **Az új-elemzés varázsló magyarázata őrzés alá került.** A "Tovább"
   gomb letiltva marad, amíg a lépés nincs kész — magyarázat nélkül ez
   néma zsákutca lenne (a felhasználó egy szürke gombot néz, és nem

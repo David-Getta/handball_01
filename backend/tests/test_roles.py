@@ -1053,3 +1053,71 @@ def test_role_shot_power_silent_with_few_shots():
 
     rec = role_shot_power(_rsp_match([(2, 1.5), (1, 0.7)]))["home"]
     assert rec["hardest"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-kapuoldal (melyik posztjuk melyik sarkot keresi) -----------------
+
+def _rgp_match(plan, warmup=200):
+    """`plan` = (lövő-azonosító, cél y a kapuban) párok.
+
+    A +x kapunál a nagyobb y a lövő BAL oldala. A labda előbb a lövő
+    kezében van (elengedés-pillanat), majd a megadott magasságba megy.
+    """
+    frames = []
+    t = 0
+
+    def _cast():
+        return [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RSD.items()] + \
+            [_pl(20, Team.AWAY, 5.0, 10.0)]
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_cast(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):      # poszt-minta: a beálló birtokol
+        _add(34.0, 10.0)
+    for (tid, goal_y) in plan:
+        sx, sy = _RSD[tid]
+        for _ in range(6):       # a lövő kezében a labda
+            _add(sx + 0.2, sy)
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            _add(sx + 0.2 + (40.4 - sx - 0.2) * f, sy + (goal_y - sy) * f)
+        for _ in range(30):
+            _add(5.0, 10.0)
+    return Match(MatchMeta(match_id="gp", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_goal_placement_finds_the_predictable_post():
+    """Az irányítójuk öt góljából négy ugyanabba a sarokba megy — a
+    kapus ráállhat, a fal a másik oldalt zárja."""
+    from handball.pipeline.roles import RGP_MIN_GOALS, role_goal_placement
+
+    rec = role_goal_placement(_rgp_match(
+        [(2, 11.2)] * 4 + [(2, 8.8)]))["home"]
+    assert rec["goals"] >= RGP_MIN_GOALS, rec
+    assert rec["predictable"] is not None, rec
+    assert rec["predictable"]["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "a fal a másikat zárja" in rec["verdict"], rec
+
+
+def test_role_goal_placement_silent_when_spread():
+    """Szétszórt oldalaknál nincs ítélet — nincs mire ráállni."""
+    from handball.pipeline.roles import role_goal_placement
+
+    rec = role_goal_placement(_rgp_match(
+        [(2, 11.2), (2, 8.8), (2, 10.0), (2, 11.2), (2, 8.8),
+         (2, 10.0)]))["home"]
+    assert rec["predictable"] is None and rec["verdict"] is None, rec
+
+
+def test_role_goal_placement_silent_with_few_goals():
+    """Két gólból nincs ítélet."""
+    from handball.pipeline.roles import role_goal_placement
+
+    rec = role_goal_placement(_rgp_match([(2, 11.2), (2, 11.2)]))["home"]
+    assert rec["predictable"] is None and rec["verdict"] is None, rec
