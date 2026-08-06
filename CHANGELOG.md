@@ -3,7 +3,42 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.24 óta)
+## v0.1.24 — kiadva (2026-08-06)
+
+> Kiadás-jegyzet: a v0.1.23 óta a fejlesztés négy szálon futott.
+>
+> **(1) Sebesség**: a rétegek addig hívták újra ugyanazokat az
+> alap-méréseket, hogy egy teljes meccs-csomag ~10 percig futott; a
+> hatókörös gyorsítótár és a kocka-szintű memoizálás ezt bitre azonos
+> kimenet mellett 2,4–3,2×-esére gyorsította.
+>
+> **(2) Poszt-lencse**: a posztok akkor is stabilak, ha a nevek
+> meccsről meccsre cserélődnek, ezért a felkészülés gerince lett —
+> tizenhárom új réteg (hatékonyság, gólpassz-tengely, birtoklás,
+> passzháló, átvételi zóna, labdatartás, eladási zóna, eladás-ár,
+> szünet- és állás-váltás, majd lövéstávolság, lövésidőzítés és
+> lövéserő), egy közös Poszt-lencse szekcióval a jelentésben.
+>
+> **(3) Használhatóság**: a felderítés-képernyő 297 mérőszáma
+> kereshető, csoportosított fallá lett, az edzői összefoglaló 43
+> mondatos bekezdése felsorolássá, a kezdőlap nyolc néma ikonja
+> nevesített művelet + egy menü. Ide tartozik a hibaüzenetek emberi
+> nyelvre fordítása, a "mire várunk és meddig" várakozó nézet, a
+> jelentés-ugrósáv, az olvasható mutató-csempék és a megszólaló üres
+> panelek is.
+>
+> **(4) Mérési igazság**: ez a kör hozta a legfontosabb javításokat. A
+> lövő-hozzárendelés kapu-felé torzítása — amely az előző jegyzet
+> szerint még NYITOTT korlát volt, és emiatt maradt ki a tervezett
+> poszt-lövéstávolság réteg — MEGSZŰNT: a felismerés az elengedés
+> pillanatát keresi meg, a réteg pedig (két testvérével együtt)
+> leszállt. Kiderült továbbá, hogy a szimuláció egyáltalán nem termelt
+> lövést, tehát száznál több réteg üres bemenettel futott minden
+> mérésben; és hogy a kapus-felismerés holtversenynél a fal középső
+> védőjét jelölte kapusnak a valódi kapus helyett. Ez utóbbi volt a
+> sorrend-függés valódi oka: a mérés 313 rétegből 48-at talált
+> érintettnek, a javítás után egyet sem.
+
 
 - **Kapus-felismerés: a fal középső védőjét jelölte kapusnak.** A
   felismerés kapunként egy játékost választ, a kapuelőtérben töltött
@@ -251,28 +286,6 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   felső sáv ikonja megnyitja, és a `?`/F1 az egész alkalmazásban
   működik. A meccs-elemző ugyanezt a listát hívja — két külön lista
   előbb-utóbb széttartott volna.
-
-## v0.1.24 — kiadva (2026-08-05)
-
-> Kiadás-jegyzet: a v0.1.23 óta a fejlesztés három szálon futott.
-> **(1) Sebesség**: a rétegek addig hívták újra ugyanazokat az
-> alap-méréseket, hogy egy teljes meccs-csomag ~10 percig futott; a
-> hatókörös gyorsítótár és a kocka-szintű memoizálás ezt bitre azonos
-> kimenet mellett 2,4–3,2×-esére gyorsította. **(2) Poszt-lencse**: a
-> posztok akkor is stabilak, ha a nevek meccsről meccsre cserélődnek,
-> ezért a felkészülés gerince lett — tíz új réteg (hatékonyság,
-> gólpassz-tengely, birtoklás, passzháló, átvételi zóna, labdatartás,
-> eladási zóna, eladás-ár, szünet- és állás-váltás), egy közös
-> Poszt-lencse szekcióval a jelentésben. **(3) Használhatóság**: a
-> felderítés-képernyő 297 mérőszáma kereshető, csoportosított fallá
-> lett, az edzői összefoglaló 43 mondatos bekezdése felsorolássá, a
-> kezdőlap nyolc néma ikonja pedig nevesített művelet + egy menü.
->
-> Külön érdemes kiemelni, ami NEM került be: egy tervezett
-> poszt-lövőtávolság réteg mérése a lövő-hozzárendelés kapu-felé
-> torzításán bukott volna. A réteg helyett a KORLÁT került be —
-> dokumentálva, jellemző-teszttel leszögezve, és az EIC-terv TRL-4
-> feladatai közé felvéve.
 
 - **Kezdőlap: nyolc néma ikon helyett nevesített műveletek.** A
   fejlécben nyolc egyforma szürke ikon sorakozott (játékos-fejlődés,
