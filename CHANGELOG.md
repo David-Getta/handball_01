@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Fáradt-fal poszt: a második félidőben melyik poszt jár át
+  rajtuk.** A kapott gólok poszt-térképe a teljes meccset nézi — az
+  új réteg a fáradást: a kapott gólokat félidőnként a lövő
+  posztjához írja, és megkeresi, melyik poszt góljai ugranak meg
+  ellenük a másodikra. Edzőileg a szünet utáni támadás-terv: a faluk
+  leülő sávjából kell nyitni — ott fáradnak, ott nyílik a rés. Saját
+  oldalon a sáv-frissítés (tervezett védő-csere, kondíció) az
+  edzés-téma. Felismert szünet nélkül, 3 második félidei kapott gól
+  és kétszeres ugrás alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`tired_conceder_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 325. meccsterv-szabály), edzés-fókusz
+  (346. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Fáradt-lövő poszt: kinek megy szét a lövése a második
   félidőben.** A pazarló-poszt a teljes meccset nézi — az új réteg a
   fáradást: a kaput elkerülő lövéseket félidőnként a lövő posztjához

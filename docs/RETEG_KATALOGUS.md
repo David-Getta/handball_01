@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **372 réteg**, modulonként csoportosítva; a
+Összesen **373 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (76)
@@ -109,7 +109,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (65)
+## defense (66)
 
 | Réteg | Mit mér |
 |---|---|
@@ -168,6 +168,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `steal_types` | Labdaszerzés-típus: ELFOGJÁK vagy LESZERELIK a labdát. |
 | `stepout_punishment` | Kilépés-büntetés: A KILÉPÉSÜK MÖGÉ betalálnak-e. |
 | `targeted_defenders` | Célba vett védő: KIRE lőnek, és kinél lesz belőle gól. |
+| `tired_conceder_roles` | Fáradt-fal poszt: a 2. félidőben MELYIK POSZT jár át rajtuk. |
 | `turnover_clusters` | Hiba-sorozatok: EGYMÁS UTÁN jönnek-e az eladott labdák. |
 | `turnover_fade` | Labdabiztonság-esés: az eladás-ütem változása az 1. és a 2. félidő |
 | `turnover_players` | Labdaeladók: KI veszíti el a legtöbbször a labdát — a labdabiztonság |

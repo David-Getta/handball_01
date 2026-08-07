@@ -2141,6 +2141,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Fáradt-fal poszt: a 2. félidőben melyik poszt jár át rajtuk
+  // (3+ 2. félidei kapott gól, az 1. félidei legalább kétszerese —
+  // a backenddel azonos küszöbök: TCR_MIN_SH, TCR_FACTOR).
+  String? _tiredConcederRole(Map<String, dynamic> r) {
+    final fh =
+        (r["tcr_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["tcr_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? post;
+    var postSh = 0;
+    var postFh = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final f = ((fh?[k] as num?) ?? 0).toInt();
+      final base = f < 1 ? 1 : f;
+      if (n >= 3 && n >= 2 * base && n > postSh) {
+        post = k;
+        postSh = n;
+        postFh = f;
+      }
+    });
+    if (post == null) return null;
+    return "a faluk a 2. félidőre a(z) $post poszt ellen ül le "
+        "($postFh → $postSh kapott gól) · a szünet után onnan kell "
+        "nyitni";
+  }
+
   // Fáradt-lövő poszt: kinek megy szét a lövése a 2. félidőben (3+
   // 2. félidei mellé, az 1. félidei legalább kétszerese — a
   // backenddel azonos küszöbök: FSA_MIN_SH, FSA_FACTOR).
@@ -8564,6 +8592,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_tiredConcederRole(r) != null)
+        ["Fáradt-fal poszt", _tiredConcederRole(r)!],
       if (_tiredShooterRole(r) != null)
         ["Fáradt-lövő poszt", _tiredShooterRole(r)!],
       if (_tiredTurnoverRole(r) != null)

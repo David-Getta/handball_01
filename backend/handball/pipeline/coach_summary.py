@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Fáradt-fal poszt: a 2. félidőben melyik poszt jár át rajtuk.
+    try:
+        from .defense import tired_conceder_roles
+        tcr = tired_conceder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tcr = tcr[side]
+            if rec_tcr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} falán a második félidőre a(z) "
+                     f"{rec_tcr['main_role']} poszt jár át "
+                     f"({rec_tcr['fh']} → {rec_tcr['sh']} kapott "
+                     "gól) — a szünet után onnan kell nyitni "
+                     "ellenük.")
+    except Exception:
+        pass
     # Fáradt-lövő poszt: kinek megy szét a lövése a 2. félidőben.
     try:
         from .xg import tired_shooter_roles

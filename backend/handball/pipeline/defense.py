@@ -4612,3 +4612,76 @@ def pivot_guard_roles(match, config=None) -> dict:
                     " őt húzza ki, és a beálló felszabadul, a belső"
                     " biztosításuk pedig borul")
     return out
+
+
+# Fáradt-fal poszt: legalább ennyi 2. félidei kapott gól kell egy
+# posztról, és ennyiszerese az első félideinek, hogy a falat ott
+# fáradónak mondjuk ki.
+TCR_MIN_SH = 3
+TCR_FACTOR = 2.0
+
+
+def tired_conceder_roles(match, config=None) -> dict:
+    """Fáradt-fal poszt: a 2. félidőben MELYIK POSZT jár át rajtuk.
+
+    A kapott gólok poszt-térképe (conceded_by_role) a teljes meccset
+    nézi — ez a fáradást: a kapott gólokat félidőnként a LÖVŐ
+    posztjához írja, és megkeresi, melyik poszt góljai ugranak meg
+    ellenük a második félidőre. Így látszik, hol ül le fáradtan a
+    faluk.
+
+    Edzőileg ez a szünet utáni támadás-terv: amelyik poszt a második
+    félidőben rendre átjár rajtuk, onnan kell nyitni a szünet után —
+    a fal ott fárad, és a friss támadó ott talál rést. Saját
+    csapatra: a falunk fáradó sávja csere- és kondíció-téma.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"fh_roles": {poszt:
+    darab}, "sh_roles": {poszt: darab}, "main_role", "fh", "sh",
+    "verdict"} — az ítélet None, ha nincs felismert szünet, vagy
+    egyik poszt sem éri el a TCR_MIN_SH-t a TCR_FACTOR-os ugrással.
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh_roles": {}, "sh_roles": {},
+                        "main_role": None, "fh": None, "sh": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    roles = estimate_positions(match, config)
+
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        atk = e.team.value
+        deff = "away" if atk == "home" else "home"
+        key = "fh_roles" if e.t <= ht else "sh_roles"
+        rec_role = roles[atk].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        out[deff][key][poszt] = out[deff][key].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fader = None
+        for poszt, sh in sorted(rec["sh_roles"].items(),
+                                key=lambda kv: -kv[1]):
+            fh = rec["fh_roles"].get(poszt, 0)
+            if sh >= TCR_MIN_SH and sh >= TCR_FACTOR * max(1, fh):
+                fader = (poszt, fh, sh)
+                break
+        if fader is not None:
+            poszt, fh, sh = fader
+            rec["main_role"] = poszt
+            rec["fh"], rec["sh"] = fh, sh
+            rec["verdict"] = (
+                f"a második félidőre a(z) {poszt} poszt jár át "
+                f"rajtuk ({fh} → {sh} kapott gól) — a faluk ott ül "
+                "le fáradtan: a szünet után onnan kell nyitni")
+    return out

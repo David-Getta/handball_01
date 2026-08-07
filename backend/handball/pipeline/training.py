@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 346) Fáradt-fal poszt: ha a falunk a második félidőre egy poszt
+    # ellen leül, csere- és kondíció-terv kell arra a sávra.
+    try:
+        from .defense import tired_conceder_roles
+        tcr346 = tired_conceder_roles(match, config)
+        for side in ("home", "away"):
+            rec346 = tcr346[side]
+            if rec346.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Második félidőre leülő sáv",
+                f"a falunk a második félidőre a(z) "
+                f"{rec346['main_role']} poszt ellen ül le "
+                f"({rec346['fh']} → {rec346['sh']} kapott gól) — a "
+                "felkészült ellenfél a szünet után pont oda fog "
+                "nyitni",
+                "sáv-frissítés a második félidőre: tervezett "
+                "védő-csere a leülő sávban a 40. perc körül, "
+                "kondicionális blokk a belső védőknek, és a "
+                "besegítés-rend fáradt lábakkal is videóról",
+                )
+    except Exception:
+        pass
+
     # 345) Fáradt-lövő poszt: ha egy posztunk lövései a második
     # félidőre szétmennek, fáradt célzás-blokk és átosztás kell.
     try:

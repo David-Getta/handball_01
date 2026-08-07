@@ -3346,3 +3346,71 @@ def test_pivot_guard_roles_silent_with_little_guarding():
 
     rec = pivot_guard_roles(_pgr_match(200))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Fáradt-fal poszt (a 2. félidőben melyik poszt jár át rajtuk) ----------
+
+
+def _tcr_match(fh_scorers, sh_scorers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + hazai gólok félidőnként a
+    +x kapura; a félidőket 90 mp-es üres szakasz választja el — az
+    ítélet a VENDÉG (védő) oldalon születik."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    def goal(frames, t, tid):
+        sx, sy = spos[tid]
+        for _ in range(20):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        x = sx
+        while x < 40.5:
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in fh_scorers:
+        t = goal(frames, t, tid)
+    for _ in range(int(90 * fps)):   # félidei szünet: üres kockák
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for tid in sh_scorers:
+        t = goal(frames, t, tid)
+    return Match(_meta(fps), frames)
+
+
+def test_tired_conceder_roles_names_the_sagging_lane():
+    """A vendég fal ellen a beálló góljai 1-ről 3-ra ugranak → ott ül
+    le a faluk."""
+    from handball.pipeline.defense import tired_conceder_roles
+
+    rec = tired_conceder_roles(_tcr_match([7, 9], [7, 7, 7]))["away"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["fh"] == 1 and rec["sh"] == 3, rec
+    assert rec["verdict"] and "onnan kell nyitni" in rec["verdict"], rec
+
+
+def test_tired_conceder_roles_silent_without_jump():
+    """Egyenletes kapott-gól eloszlásnál nincs ítélet."""
+    from handball.pipeline.defense import tired_conceder_roles
+
+    rec = tired_conceder_roles(_tcr_match([7, 7], [7, 7]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
