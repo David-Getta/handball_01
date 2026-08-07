@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 321) Hajráhiba-poszt: ha a hajrában mindig ugyanannál a
+    # posztunknál megy el a labda, az ellenfél záró pressze oda jön.
+    try:
+        from .momentum import CTR_SHARE_PCT, clutch_turnover_roles
+        ctr321 = clutch_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec321 = ctr321[side]
+            if rec321.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztnál elmenő hajrá-labda",
+                f"a hajrá-eladásaink {rec321['share_pct']:.0f}%-a "
+                f"a(z) {rec321['main_role']} posztnál történik "
+                f"({rec321['turnovers']} eladás az utolsó öt "
+                f"percben; {CTR_SHARE_PCT:.0f}% fölött már minta) — "
+                "az ellenfél záró pressze pontosan oda fog jönni",
+                "hajrá-labdabiztonság: a záró öt perc figuráiban a "
+                "poszt tehermentesítése (korai leadás, kettős "
+                "kijátszási irány), pressz elleni 6-6 fáradtan a "
+                "edzés végén, és időkérés-terv a beszorult labdára",
+                )
+    except Exception:
+        pass
+
     # 320) Eltűnő-poszt: ha egy posztunk termelése a második félidőre
     # elhal, a terhelés-menedzsment és a kondíció a téma.
     try:

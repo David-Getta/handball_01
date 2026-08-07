@@ -1858,3 +1858,63 @@ def test_fading_scorer_roles_silent_without_pattern():
 
     rec = fading_scorer_roles(_fdp_match([7, 7], [9, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hajráhiba-poszt (melyik posztjuk adja el a labdát a hajrában) ---------
+
+
+def _ctr_match(losers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + az utolsó öt percben a
+    `losers` játékosok eladják a labdát a 30-as védőnek."""
+    from handball.pipeline.momentum import CLUTCH_MIN_DURATION_S
+
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + [_pl(30, Team.AWAY, 15.0, 10.0)])
+
+    frames = []
+    t = 0
+    for _ in range(int((CLUTCH_MIN_DURATION_S + 30) * fps)):
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in losers:
+        sx, sy = spos[tid]
+        for _ in range(10):          # a labda a vesztesnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # a labda az ellenfélhez kerül
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda a két eset közt
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_clutch_turnover_roles_names_the_leaky_post():
+    """Négy hajrá-eladásból három a beállóé → oda jön a záró pressz."""
+    from handball.pipeline.momentum import (CTR_MIN_TO,
+                                            clutch_turnover_roles)
+
+    rec = clutch_turnover_roles(_ctr_match([7, 7, 7, 9]))["home"]
+    assert rec["turnovers"] >= CTR_MIN_TO, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsáv" in rec["verdict"], rec
+
+
+def test_clutch_turnover_roles_silent_with_few_losses():
+    """Néhány hajrá-eladásból nincs ítélet."""
+    from handball.pipeline.momentum import clutch_turnover_roles
+
+    rec = clutch_turnover_roles(_ctr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában
+  // (3+ hajrá-eladás, 60% részarány — a backenddel azonos küszöbök:
+  // CTR_MIN_TO, CTR_SHARE_PCT).
+  String? _clutchTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ctr_to_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a hajrá-eladásaik ${pct.round()}%-a a(z) $top posztnál "
+        "történik ($total eladás az utolsó öt percben) · a záró "
+        "percekben oda jön a pressz";
+  }
+
   // Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre (3+
   // első félidei gól-részvétel, legfeljebb 1 második félidei — a
   // backenddel azonos küszöbök: FDP_MIN_FH, FDP_MAX_SH).
@@ -7879,6 +7906,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_clutchTurnoverRole(r) != null)
+        ["Hajráhiba-poszt", _clutchTurnoverRole(r)!],
       if (_fadingRole(r) != null)
         ["Eltűnő-poszt", _fadingRole(r)!],
       if (_droughtBreakRole(r) != null)

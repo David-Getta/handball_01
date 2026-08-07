@@ -2510,3 +2510,68 @@ def fading_scorer_roles(match: Match, config=None) -> dict:
                 "cserével frissen tartott őrzővel; a második "
                 "félidőre a termelése magától elhal")
     return out
+
+
+# Hajráhiba-poszt: ennyi poszthoz kötött hajrá-eladás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a záró
+# szakasz eladásai egy posztnál történnek.
+CTR_MIN_TO = 3
+CTR_SHARE_PCT = 60.0
+
+
+def clutch_turnover_roles(match: Match, config=None) -> dict:
+    """Hajráhiba-poszt: MELYIK POSZTJUK adja el a labdát a hajrában.
+
+    A hajrá-hibázók rétege (clutch_turnover_players) az embert nevezi
+    meg — ez a posztot: az utolsó öt perc labdaeladásait a vesztes
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a záró percek pressz-terve: amelyik posztjuknál a
+    végén rendre elmegy a labda, oda a hajrában kettőzés és
+    passzsáv-zárás jön — ott a legolcsóbb a labdaszerzés, amikor a
+    legtöbbet ér. Saját csapatra: a hajrá-figurákban az a poszt ne
+    kapjon kényszerhelyzetet, vagy tehermentesíteni kell.
+
+    Visszatérés csapatonként: {"turnovers" (poszthoz kötött
+    hajrá-eladás), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    CTR_MIN_TO, vagy egyik poszt sem éri el a CTR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ctp = clutch_turnover_players(match, config)
+
+    out: dict = {side: {"turnovers": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ctp[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["turnovers"])
+            rec["turnovers"] += row["turnovers"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= CTR_MIN_TO:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= CTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a hajrá-eladásaik {share:.0f}%-a a(z) {poszt} "
+                    f"posztnál történik ({rec['turnovers']} eladás "
+                    "az utolsó öt percben) — a záró percekben rá "
+                    "jöjjön a kettőzés és a passzsáv-zárás: nála a "
+                    "legolcsóbb a labdaszerzés, amikor a legtöbbet "
+                    "ér")
+    return out

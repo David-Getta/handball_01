@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában.**
+  A hajrá-hibázók rétege az embert nevezi meg — az új réteg a
+  posztot: az utolsó öt perc labdaeladásait a vesztes posztjához
+  írja. Edzőileg a záró percek pressz-terve: amelyik posztjuknál a
+  végén rendre elmegy a labda, oda a hajrában kettőzés és
+  passzsáv-zárás jön — ott a legolcsóbb a labdaszerzés, amikor a
+  legtöbbet ér. Saját oldalon a hajrá-figurák tehermentesítése a
+  téma. Legalább 3 hajrá-eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`clutch_turnover_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 300. meccsterv-szabály), edzés-fókusz (321. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre.** Az
   eltűnő ember rétege az embert nevezi meg — az új réteg a posztot:
   a gól-részvételeket (gól + gólpassz) félidőnként a játékos

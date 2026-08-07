@@ -857,6 +857,9 @@ class ScoutingReport:
     # félidőnként. Darabszám, pontosan összegződik.
     fdp_fh_by_role: dict = field(default_factory=dict)
     fdp_sh_by_role: dict = field(default_factory=dict)
+    # Hajráhiba-poszt: az utolsó öt perc labdaeladásai posztonként.
+    # Darabszám, pontosan összegződik.
+    ctr_to_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3183,6 +3186,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "cserével frissen tartott őrzővel; a második "
                 "félidőre a termelése magától elhal.")
             break
+
+    # Hajráhiba-poszt: a záró percek pressz-terve.
+    _ctr_n = sum(rep.ctr_to_by_role.values())
+    if _ctr_n >= 3:
+        _ctr_p, _ctr_c = max(rep.ctr_to_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ctr_pct = 100.0 * _ctr_c / _ctr_n
+        if _ctr_pct >= 60.0:
+            keys.append(
+                f"A hajrá-eladásaik {_ctr_pct:.0f}%-a a(z) {_ctr_p} "
+                f"posztnál történik ({_ctr_n} eladás az utolsó öt "
+                "percben) — a záró percekben oda kettőzés és "
+                "passzsáv-zárás: ott a legolcsóbb a labdaszerzés.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -7980,6 +7996,9 @@ def _scout_team_cached(match: Match, team: Team,
         fdprec = _fdp(match, config)[team.value]
         rep.fdp_fh_by_role = dict(fdprec["fh_roles"])
         rep.fdp_sh_by_role = dict(fdprec["sh_roles"])
+        from .momentum import clutch_turnover_roles as _ctr
+        ctrrec = _ctr(match, config)[team.value]
+        rep.ctr_to_by_role = dict(ctrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10560,6 +10579,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 300) Az ő hajráhiba-posztjuk × a ti hajrá-gólposztotok: a záró
+    # percekben tőlük elvett labda nálatok gólra váltható.
+    _ctr300_n = sum(opp.ctr_to_by_role.values())
+    _csr300_n = sum(own.csr_goals_by_role.values())
+    if _ctr300_n >= 3 and _csr300_n >= 3:
+        _ctr300_p, _ctr300_c = max(opp.ctr_to_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ctr300_pct = 100.0 * _ctr300_c / _ctr300_n
+        if _ctr300_pct >= 60.0:
+            plan.append(
+                f"A hajrá-eladásaik {_ctr300_pct:.0f}%-a a(z) "
+                f"{_ctr300_p} posztnál történik ({_ctr300_n} eladás "
+                "az utolsó öt percben), és nektek van kijátszott "
+                f"hajrá-megoldásotok ({_csr300_n} hajrá-gól a "
+                "mérésben) — a záró percekben az ő posztjára menjen "
+                "a kettőzés és a passzsáv-zárás: az ott szerzett "
+                "labda a ti hajrá-figurátokkal gólra váltható.")
 
     # 299) Az ő eltűnő-posztjuk × a ti mély padotok: friss, cserélt
     # őrzővel az első félidejük is megfogható — a második magától
@@ -15661,6 +15698,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.fdp_fh_by_role for r in reports),
         fdp_sh_by_role=_merge_count_dicts(
             r.fdp_sh_by_role for r in reports),
+        ctr_to_by_role=_merge_count_dicts(
+            r.ctr_to_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

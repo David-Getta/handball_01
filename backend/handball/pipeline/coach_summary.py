@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában.
+    try:
+        from .momentum import clutch_turnover_roles
+        ctr = clutch_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ctr = ctr[side]
+            if rec_ctr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hajrá-eladásai a(z) "
+                     f"{rec_ctr['main_role']} posztnál történnek "
+                     f"({rec_ctr['share_pct']:.0f}%, "
+                     f"{rec_ctr['turnovers']} eladás az utolsó öt "
+                     "percben) — a záró percekben oda jön a pressz.")
+    except Exception:
+        pass
     # Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre.
     try:
         from .momentum import fading_scorer_roles
