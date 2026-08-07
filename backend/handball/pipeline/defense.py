@@ -4549,3 +4549,66 @@ def advanced_defender_roles(match, config=None) -> dict:
                 "háta mögé befutóval 2 az 1-et: a kilépő mögött "
                 "nyílik a tér")
     return out
+
+
+# Beállóőr-poszt: ennyi poszthoz kötött őrzés-kocka kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# beálló-őrzésük egy poszton áll.
+PGR_MIN_FRAMES = 300
+PGR_SHARE_PCT = 60.0
+
+
+def pivot_guard_roles(match, config=None) -> dict:
+    """Beállóőr-poszt: MELYIK POSZTJUK őrzi az ellenfél beállóját.
+
+    A beálló-őr rétege (pivot_guards) az embert nevezi meg — ez a
+    posztot: az őrzés-kockákat az őrző (támadó-fázisból becsült)
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez az elzárás-terv magja: ha a beálló-őrzésük egy
+    poszton áll, az elzárás pont őt húzza ki — a beálló
+    felszabadul, és a belső biztosításuk rendje borul. Saját
+    csapatra: a beálló-őrzés ne egyetlen posztunk magánügye legyen,
+    kell a váltás-szabály.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"frames"
+    (poszthoz kötött őrzés-kocka), "roles": {poszt: kocka},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg a PGR_MIN_FRAMES, vagy egyik poszt sem éri el a
+    PGR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    pg = pivot_guards(match, config)
+
+    out: dict = {side: {"frames": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in pg[side]["guards"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["frames"])
+            rec["frames"] += row["frames"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["frames"] >= PGR_MIN_FRAMES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["frames"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PGR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a beálló-őrzésük a(z) {poszt} posztjukon áll "
+                    f"({share:.0f}%-a az őrzött időnek) — az elzárás"
+                    " őt húzza ki, és a beálló felszabadul, a belső"
+                    " biztosításuk pedig borul")
+    return out

@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Beállóőr-poszt: melyik posztjuk őrzi a beállót (300+
+  // őrzés-kocka, 60% részarány — a backenddel azonos küszöbök:
+  // PGR_MIN_FRAMES, PGR_SHARE_PCT).
+  String? _pivotGuardRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pgr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 300) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a beálló-őrzésük a(z) $top posztjukon áll "
+        "(${pct.round()}% az őrzött időből) · az elzárás őt húzza "
+        "ki, és a beálló felszabadul";
+  }
+
   // Kilépő-poszt: melyik posztjuk lép ki a falból (posztonként
   // 100+ kocka, 3+ mért poszt, 2,5 m mélység-többlet — a backenddel
   // azonos küszöbök: ADR_MIN_FRAMES, ADR_MIN_ROLES, ADR_GAP_M).
@@ -8348,6 +8375,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_pivotGuardRole(r) != null)
+        ["Beállóőr-poszt", _pivotGuardRole(r)!],
       if (_advancedDefRole(r) != null)
         ["Kilépő-poszt", _advancedDefRole(r)!],
       if (_missedChanceRole(r) != null)

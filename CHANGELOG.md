@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Beállóőr-poszt: melyik posztjuk őrzi a beállót.** A beálló-őr
+  rétege az embert nevezi meg — az új réteg a posztot: az
+  őrzés-kockákat az őrző (támadó-fázisból becsült) posztjához írja.
+  Edzőileg az elzárás-terv magja: ha a beálló-őrzésük egy poszton
+  áll, az elzárás pont őt húzza ki — a beálló felszabadul, és a
+  belső biztosításuk borul. Saját oldalon a váltás-szabály az
+  edzés-téma. Legalább 300 őrzés-kocka és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`pivot_guard_roles`), edzői összefoglaló, felderítés (edzői kulcs
+  + 317. meccsterv-szabály), edzés-fókusz (338. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Kilépő-poszt: melyik posztjuk lép ki a falból.** A kilépő védő
   rétege az embert nevezi meg — az új réteg a posztot: a felállt
   védekezés mért kockáit és kapu-távolságait a védő posztjához

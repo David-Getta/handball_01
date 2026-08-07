@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 338) Beállóőr-poszt: ha a beálló-őrzésünk egy posztunkon áll,
+    # egy elzárással kihúzható — kell a váltás-szabály.
+    try:
+        from .defense import PGR_SHARE_PCT, pivot_guard_roles
+        pgr338 = pivot_guard_roles(match, config)
+        for side in ("home", "away"):
+            rec338 = pgr338[side]
+            if rec338.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen álló beálló-őrzés",
+                f"a beálló-őrzésünk {rec338['share_pct']:.0f}%-ban "
+                f"a(z) {rec338['main_role']} posztunkon áll "
+                f"({PGR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "elzárással kihúzható, és a beálló felszabadul",
+                "beálló-őrzés váltás-szabállyal: elzárásnál a "
+                "szomszéd védő veszi át a beállót (hangos jelzéssel),"
+                " 2-2 elleni elzárás-védés kisjátékban, és a "
+                "besegítés rendje videóról",
+                )
+    except Exception:
+        pass
+
     # 337) Kilépő-poszt: ha a falunk mindig ugyanannál a posztnál
     # lép ki, a mögötte nyíló teret a felkészült ellenfél bejátssza.
     try:

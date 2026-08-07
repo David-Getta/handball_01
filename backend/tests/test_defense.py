@@ -3292,3 +3292,57 @@ def test_advanced_defender_roles_silent_with_flat_wall():
 
     rec = advanced_defender_roles(_adr_match(4.5))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Beállóőr-poszt (melyik posztjuk őrzi a beállót) -----------------------
+
+
+def _pgr_match(guard_frames=350, fps=25.0):
+    """Hazai és vendég támadó poszt-minta, majd felállt hazai
+    védekezés: a vendég beállót (21) a hazai beálló (7) őrzi."""
+    frames = []
+    t = 0
+    for _ in range(150):             # hazai támadó fázis: poszt-minta
+        frames.append(Frame(
+            t=t,
+            players=[_pl(7, Team.HOME, 34.0, 10.0),
+                     _pl(9, Team.HOME, 35.0, 3.0)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(150):             # vendég támadó fázis: 21 beálló
+        frames.append(Frame(
+            t=t,
+            players=[_pl(21, Team.AWAY, 6.0, 10.0),
+                     _pl(22, Team.AWAY, 5.0, 3.0)],
+            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(guard_frames):    # felállt hazai védekezés
+        frames.append(Frame(
+            t=t,
+            players=[_pl(22, Team.AWAY, 15.0, 10.0),   # labdás
+                     _pl(21, Team.AWAY, 5.0, 10.0),    # beálló
+                     _pl(7, Team.HOME, 6.0, 10.0),     # őrző (1 m)
+                     _pl(9, Team.HOME, 3.0, 3.0)],
+            ball=Ball(x=15.1, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_pivot_guard_roles_names_the_guarding_post():
+    """A beálló-őrzés a hazai beállón áll → az elzárás őt húzza ki."""
+    from handball.pipeline.defense import (PGR_MIN_FRAMES,
+                                           pivot_guard_roles)
+
+    rec = pivot_guard_roles(_pgr_match(350))["home"]
+    assert rec["frames"] >= PGR_MIN_FRAMES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "elzárás" in rec["verdict"], rec
+
+
+def test_pivot_guard_roles_silent_with_little_guarding():
+    """Kevés mért őrzés-kockából nincs ítélet."""
+    from handball.pipeline.defense import pivot_guard_roles
+
+    rec = pivot_guard_roles(_pgr_match(200))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

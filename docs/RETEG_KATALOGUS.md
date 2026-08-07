@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **364 réteg**, modulonként csoportosítva; a
+Összesen **365 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (74)
@@ -105,7 +105,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `soft_pass_roles` | Lágypassz-poszt: MELYIK POSZTJUK passzol lágyan. |
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 
-## defense (64)
+## defense (65)
 
 | Réteg | Mit mér |
 |---|---|
@@ -146,6 +146,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `line_height_by_score` | Védekezési mélység állás szerint: ELŐNYBEN vagy HÁTRÁNYBAN |
 | `marking` | Őrzési párok: ki kit fogott a védekezésben. |
 | `pivot_defense` | Beálló-védekezés: mennyire bírja a fal az ellenfél beállóját. |
+| `pivot_guard_roles` | Beállóőr-poszt: MELYIK POSZTJUK őrzi az ellenfél beállóját. |
 | `pivot_guards` | Beálló-őr: KI ŐRZI az ellenfél beállóját. |
 | `press_after_goal` | Gól utáni letámadás: SAJÁT GÓL UTÁN feljebb megy-e a fal. |
 | `pressure_fade` | Védekezés-fellazulás: a védekezési nyomás változása az 1. és a 2. |

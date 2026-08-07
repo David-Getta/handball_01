@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Beállóőr-poszt: melyik posztjuk őrzi a beállót.
+    try:
+        from .defense import pivot_guard_roles
+        pgr = pivot_guard_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pgr = pgr[side]
+            if rec_pgr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} beálló-őrzése a(z) "
+                     f"{rec_pgr['main_role']} posztján áll "
+                     f"({rec_pgr['share_pct']:.0f}%-a az őrzött "
+                     "időnek) — az elzárás őt húzza ki.")
+    except Exception:
+        pass
     # Kilépő-poszt: melyik posztjuk lép ki a falból.
     try:
         from .defense import advanced_defender_roles
