@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **324 réteg**, modulonként csoportosítva; a
+Összesen **325 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (70)
@@ -175,7 +175,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_speed_fade` | Lövőerő-esés: a lövés-sebesség változása az 1. és a 2. félidő között — |
 | `shot_speeds` | Lövés-sebességek a labda-kinematikából. |
 
-## goalkeeper (32)
+## goalkeeper (33)
 
 | Réteg | Mit mér |
 |---|---|
@@ -210,6 +210,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `outlets` | Kapus-indítás: védés után mennyi idő alatt ér a labda a felezőig |
 | `reading_keeper` | Olvasó kapus: ELŐRE OLVASSA-E a lövéseket a kapusuk. |
 | `seven_keeper_swaps` | Hetesre cserélt kapus: HOZNAK-E SPECIALISTÁT a büntetőkre. |
+| `seven_six_finisher_roles` | 7a6-befejező poszt: KIRE FUT KI a hetedik ember játéka. |
 | `wrongfooted_keeper` | Becsapott kapus: ELMOZDÍTJÁK-E a kapusukat a gólok előtt. |
 
 ## halftime (2)

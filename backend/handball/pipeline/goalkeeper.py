@@ -2450,3 +2450,78 @@ def outlet_punishment(match: Match, config=None) -> dict:
             rec["verdict"] = "az indítás-hibáikat megússzák"
         out[side] = rec
     return out
+
+
+# 7a6-befejező poszt: ennyi 7 a 6-os lövés kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a hetedik ember játéka egy
+# posztra fut ki.
+EN7_MIN_SHOTS = 3
+EN7_SHARE_PCT = 60.0
+
+
+def seven_six_finisher_roles(match: Match, config=None) -> dict:
+    """7a6-befejező poszt: KIRE FUT KI a hetedik ember játéka.
+
+    A 7 a 6 (lehozott kapus) szakaszok rétege azt mondja meg, MIKOR és
+    MENNYIT játsszák — ez azt, KIRE: a felismert üres-kapus szakaszok
+    alatt leadott lövéseiket (lövés és gól egyaránt) a lövő posztjához
+    írja.
+
+    Edzőileg a 7 a 6 értelme a túlterhelés: a plusz mezőnyjátékos
+    tipikusan a második beállót vagy egy beforduló átlövőt szabadítja
+    fel. Ha a 7 a 6-os lövéseik rendre ugyanarról a posztról jönnek,
+    a szakasz felismerésekor a védekezés első dolga oda sűríteni — a
+    hetedik ember játéka kiszámíthatóvá vált, és minden megvárt
+    másodperc nekik kockázat (üres a kapujuk).
+
+    Visszatérés csapatonként (a 7 a 6-ot JÁTSZÓ oldal): {"shots"
+    (poszthoz kötött 7a6-lövés), "roles": {poszt: lövés}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    EN7_MIN_SHOTS, vagy egyik poszt sem éri el az EN7_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    windows = detect_empty_net(match, config)
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not windows:
+        return out
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        if not any(w["team"] == side
+                   and w["start_frame"] <= e.t <= w["end_frame"]
+                   for w in windows):
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["shots"] += 1
+    for rec in out.values():
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= EN7_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= EN7_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a 7 a 6-uk a(z) {poszt} posztra fut ki "
+                    f"({share:.0f}%, {rec['shots']} lövésből) — a "
+                    "lehozott kapus felismerésekor a védekezés első "
+                    "dolga az ő sávját besűríteni, és minden megvárt "
+                    "másodperc nekik kockázat")
+    return out

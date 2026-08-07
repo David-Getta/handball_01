@@ -2115,6 +2115,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // 7a6-befejező poszt: kire fut ki a hetedik ember játéka (3+
+  // 7a6-lövés, 60% részarány — a backenddel azonos küszöbök:
+  // EN7_MIN_SHOTS, EN7_SHARE_PCT).
+  String? _sevenSixRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["en7_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a 7 a 6-uk a(z) $top posztra fut ki (${pct.round()}%, "
+        "$total lövés) · a lehozott kapusnál oda kell sűríteni";
+  }
+
   // Blokk-poszt: melyik posztjuk blokkolja a lövéseket (3+ poszthoz
   // kötött blokk, 60% részarány — a backenddel azonos küszöbök:
   // RBK_MIN_BLOCKS, RBK_SHARE_PCT).
@@ -7271,6 +7297,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_sevenSixRole(r) != null)
+        ["7a6-befejező", _sevenSixRole(r)!],
       if (_blockRole(r) != null)
         ["Blokk-poszt", _blockRole(r)!],
       if (_stealRole(r) != null)

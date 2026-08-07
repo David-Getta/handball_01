@@ -1815,6 +1815,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     try:
         from .attack_types import second_chance_roles
         from .defense import role_block_sources, role_steal_sources
+        from .goalkeeper import seven_six_finisher_roles
         from .roles import (role_assist_sources, role_fast_breaks,
                             role_pressure_finish)
         from .rules import seven_shot_directions
@@ -1829,7 +1830,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 ("Gólpassz-poszt", role_assist_sources),
                 ("Labdaszerző-poszt", role_steal_sources),
                 ("Lepattanó-poszt", second_chance_roles),
-                ("Blokk-poszt", role_block_sources)):
+                ("Blokk-poszt", role_block_sources),
+                ("7a6-befejező", seven_six_finisher_roles)):
             try:
                 rec_fin = fn(match)
             except Exception:

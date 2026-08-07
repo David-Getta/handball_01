@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # 7a6-befejező poszt: kire fut ki a hetedik ember játéka.
+    try:
+        from .goalkeeper import seven_six_finisher_roles
+        en7 = seven_six_finisher_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_en7 = en7[side]
+            if rec_en7["verdict"] is None:
+                continue
+            body += (f" A(z) {name} 7 a 6-a kiszámítható: a lövéseik "
+                     f"{rec_en7['share_pct']:.0f}%-a a(z) "
+                     f"{rec_en7['main_role']} posztról jön "
+                     f"({rec_en7['shots']} lövésből) — a lehozott "
+                     "kapus felismerésekor oda kell sűríteni.")
+    except Exception:
+        pass
     # Blokk-poszt: melyik posztjuk blokkolja a lövéseket.
     try:
         from .defense import role_block_sources

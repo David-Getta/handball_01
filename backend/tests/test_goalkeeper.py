@@ -2191,3 +2191,75 @@ def test_goalkeeper_wins_the_tie_against_a_camping_pivot():
     assert 29 in chosen, ("a gólvonalon álló kapust kell választani, "
                           f"nem a hatoson posztoló beállót: {chosen}")
     assert 5 not in chosen, chosen
+
+
+def _en7_match(shooters):
+    """`shooters` = 7a6-lövésenként a lövő HAZAI játékos (2: beálló,
+    3: irányító). A hazai kapus (1-es) végig elöl játszik, a labda a
+    hazaiaknál van → az egész felvétel egyetlen üres-kapus szakasz,
+    benne a megadott lövésekkel a +x kapura."""
+    from handball.models.tracking import Ball
+
+    # A 2-es a kaputól 6 m-re áll (beálló), és a labda a kezében már
+    # kívül van a lövés-zóna visszaállási sávján (>5 m a kaputól).
+    pos = {2: (34.0, 10.0), 3: (28.0, 13.0)}
+    frames = []
+    t = 0
+
+    def _players():
+        return [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=14.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0, role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME,
+                           x=pos[2][0], y=pos[2][1],
+                           source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=3, team=Team.HOME,
+                           x=pos[3][0], y=pos[3][1],
+                           source=PositionSource.MEASURED,
+                           confidence=1.0),
+        ]
+
+    def _hold(n, holder):
+        nonlocal t
+        hx, hy = pos[holder]
+        for _ in range(n):
+            frames.append(Frame(t=t, players=_players(),
+                                ball=Ball(x=hx + 0.2, y=hy,
+                                          confidence=1.0)))
+            t += 1
+
+    _hold(100, 2)                    # poszt-minta + a szakasz eleje
+    for pid in shooters:
+        _hold(20, pid)
+        sx, sy = pos[pid]
+        x = sx + 0.2
+        while x < 39.0:              # lövés: 1,6 m/kocka a +x kapura
+            x = min(x + 1.6, 39.4)
+            frames.append(Frame(t=t, players=_players(),
+                                ball=Ball(x=x, y=sy, confidence=1.0)))
+            t += 1
+    _hold(20, 2)
+    return _match(frames)
+
+
+def test_seven_six_finisher_roles_names_the_target_post():
+    """Ha a 7 a 6-os lövések zöme ugyanarról a posztról jön, a lehozott
+    kapusnál oda kell sűríteni."""
+    from handball.pipeline.goalkeeper import (EN7_MIN_SHOTS,
+                                              seven_six_finisher_roles)
+
+    rec = seven_six_finisher_roles(_en7_match([2, 2, 2, 3]))["home"]
+    assert rec["shots"] >= EN7_MIN_SHOTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "sűríteni" in rec["verdict"], rec
+
+
+def test_seven_six_finisher_roles_silent_with_few_shots():
+    """Néhány 7 a 6-os lövésből nincs ítélet."""
+    from handball.pipeline.goalkeeper import seven_six_finisher_roles
+
+    rec = seven_six_finisher_roles(_en7_match([2, 3]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

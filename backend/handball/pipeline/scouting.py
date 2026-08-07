@@ -785,6 +785,9 @@ class ScoutingReport:
     # Blokk-poszt: a poszthoz kötött blokkok darabszáma posztonként.
     # Darabszám, meccsek közt pontosan összegződik.
     rbk_blocks_by_role: dict = field(default_factory=dict)
+    # 7a6-befejező poszt: a 7 a 6 alatti lövések darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    en7_shots_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3021,6 +3024,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # 7a6-befejező poszt: a lehozott kapusnál hova kell sűríteni.
+    _en7_n = sum(rep.en7_shots_by_role.values())
+    if _en7_n >= 3:
+        _en7_p, _en7_c = max(rep.en7_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _en7_pct = 100.0 * _en7_c / _en7_n
+        if _en7_pct >= 60.0:
+            keys.append(
+                f"A 7 a 6-uk a(z) {_en7_p} posztra fut ki "
+                f"({_en7_pct:.0f}%, {_en7_n} lövésből) — a lehozott "
+                "kapus felismerésekor az ő sávját kell besűríteni, és "
+                "minden labdaszerzés üres kapura támadható.")
 
     # Blokk-poszt: melyik sávba nem szabad előkészítés nélkül lőni.
     _rbk_n = sum(rep.rbk_blocks_by_role.values())
@@ -7537,6 +7553,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import role_block_sources as _rbk
         rbkrec = _rbk(match, config)[team.value]
         rep.rbk_blocks_by_role = dict(rbkrec["roles"])
+        from .goalkeeper import seven_six_finisher_roles as _en7
+        en7rec = _en7(match, config)[team.value]
+        rep.en7_shots_by_role = dict(en7rec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10111,6 +10130,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 277) Az ő 7a6-befejező posztjuk × a ti labdaszerzésetek: ha a
+    # hetedik ember játéka kiszámítható, a besűrítés labdát terem — és
+    # a szerzés mögött üres a kapujuk.
+    _en7277_n = sum(opp.en7_shots_by_role.values())
+    if _en7277_n >= 3 and own.trans_steals >= 4:
+        _en7277_p, _en7277_c = max(opp.en7_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _en7277_pct = 100.0 * _en7277_c / _en7277_n
+        if _en7277_pct >= 60.0:
+            plan.append(
+                f"A 7 a 6-uk a(z) {_en7277_p} posztra fut ki "
+                f"({_en7277_pct:.0f}%, {_en7277_n} lövésből), ti "
+                f"pedig jó labdaszerzők vagytok ({own.trans_steals} "
+                "szerzés) — a lehozott kapus felismerésekor az ő "
+                "sávját sűrítsétek be: a szerzés mögött ÜRES a "
+                "kapujuk, az első pontos hosszú labda gól.")
 
     # 276) Az ő blokk-posztjuk × a ti falba lövésetek: ha a lövéseitek
     # amúgy is sokszor akadnak el a falban, és náluk tudni lehet, KI
@@ -14737,6 +14773,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.scr_shots_by_role for r in reports),
         rbk_blocks_by_role=_merge_count_dicts(
             r.rbk_blocks_by_role for r in reports),
+        en7_shots_by_role=_merge_count_dicts(
+            r.en7_shots_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

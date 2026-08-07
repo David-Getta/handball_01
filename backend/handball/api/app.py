@@ -3660,6 +3660,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import seven_six_finisher_roles
+            res["seven_six_finisher_roles"] = seven_six_finisher_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.goalkeeper import gk_save_streaks
             res["gk_save_streaks"] = gk_save_streaks(match)
         except Exception:
@@ -4905,7 +4910,8 @@ def create_app():
                                                      match_pace)
                 from ..pipeline.goalkeeper import (empty_net_context,
                                                    empty_net_goals,
-                                                   outlet_speed)
+                                                   outlet_speed,
+                                                   seven_six_finisher_roles)
                 from ..pipeline.scouting import match_key_players
                 from ..pipeline.substitutions import late_sub_flags
                 from ..pipeline.xg import big_saves, missed_big_chances
@@ -4913,6 +4919,8 @@ def create_app():
                 _layer("empty_net_goals", lambda: empty_net_goals(match))
                 _layer("empty_net_context",
                        lambda: empty_net_context(match))
+                _layer("seven_six_finisher_roles",
+                       lambda: seven_six_finisher_roles(match))
                 _layer("fast_break_finishers",
                        lambda: fast_break_finishers(match))
                 _layer("key_players", lambda: match_key_players(match))

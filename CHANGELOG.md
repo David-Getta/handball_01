@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **7a6-befejező poszt: kire fut ki a hetedik ember játéka.** A
+  7 a 6 rétegei eddig azt mondták meg, MIKOR és MENNYIT játsszák a
+  lehozott kapust — az új réteg azt, KIRE: az üres-kapus szakaszok
+  alatti lövéseiket a lövő posztjához írja. Edzőileg a 7 a 6 értelme
+  a túlterhelés; ha a lövéseik rendre ugyanarról a posztról jönnek, a
+  hetedik ember játéka kiszámíthatóvá vált — a lehozott kapus
+  felismerésekor a védekezés első dolga oda sűríteni, és minden
+  labdaszerzés üres kapura támadható. Felületek: `/analyze` és
+  meccs-csomag (`seven_six_finisher_roles`), edzői összefoglaló,
+  felderítő edzői kulcs, meccsterv-szabály (277: az ő kiszámítható
+  7 a 6-uk × a ti labdaszerzésetek → besűrítés, a szerzés mögött üres
+  a kapu), edzés-fókusz (298: 7 a 6 két kijátszási úttal),
+  teendő-rangsor és a meccs-jelentés Befejező-lencse táblája,
+  kliens-csempe.
+
 - **Blokk-poszt: melyik posztjuk blokkol.** A blokkolt lövések
   rétege az embert nevezi meg — az új réteg a posztot: a blokkokat a
   blokkoló játékos posztjához írja. Edzőileg ez a lövés-előkészítés

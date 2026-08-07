@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 298) 7a6-befejező poszt: ha a hetedik emberrel is mindig
+    # ugyanoda lyukadunk ki, az emberelőnyünk kiszámítható.
+    try:
+        from .goalkeeper import EN7_SHARE_PCT, seven_six_finisher_roles
+        en7_298 = seven_six_finisher_roles(match, config)
+        for side in ("home", "away"):
+            rec298 = en7_298[side]
+            if rec298.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható 7 a 6",
+                f"a 7 a 6-os lövéseink {rec298['share_pct']:.0f}%-a "
+                f"a(z) {rec298['main_role']} posztról jön "
+                f"({rec298['shots']} lövésből; {EN7_SHARE_PCT:.0f}% "
+                "fölött már minta) — az ellenfél besűríti a sávot, és "
+                "a szerzése mögött üres a kapunk",
+                "7 a 6 két kijátszási úttal: minden gyakorlat-körben "
+                "kötelező a másodlagos befejezés is (átemelés a "
+                "túloldali beállóra, szélső-visszazárás) — a hetedik "
+                "ember akkor ér valamit, ha KÉT helyen fáj")
+    except Exception:
+        pass
+
     # 297) Blokk-poszt: ha a blokk-munkánk egy emberen áll, az
     # elmozgatása után a faltól nincs védelmünk az átlövés ellen.
     try:
