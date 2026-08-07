@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 299) Hetes-okozó poszt: ha a heteseink egy sávban szakadnak be,
+    # ott a védőnk kézzel áll meg — az ellenfél oda fog betörni.
+    try:
+        from .rules import SVR_SHARE_PCT, seven_conceder_roles
+        svr299 = seven_conceder_roles(match, config)
+        for side in ("home", "away"):
+            rec299 = svr299[side]
+            if rec299.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy sávban beszakadó hetesek",
+                f"az okozott heteseink {rec299['share_pct']:.0f}%-a "
+                f"a(z) {rec299['main_role']} poszté "
+                f"({rec299['sevens']} hetesből; {SVR_SHARE_PCT:.0f}% "
+                "fölött már minta) — az ellenfél tudatosan oda fogja "
+                "vezetni a betöréseket",
+                "lábmunka-gyakorlat a beszakadó sávra: 1v1 betörés "
+                "ellen tilos a kézhasználat (síppal fújva), a "
+                "megállítás csak elcsúszással és testtel érvényes — "
+                "mögötte besegítő ér, hogy ne kelljen szabálytalankodni")
+    except Exception:
+        pass
+
     # 298) 7a6-befejező poszt: ha a hetedik emberrel is mindig
     # ugyanoda lyukadunk ki, az emberelőnyünk kiszámítható.
     try:

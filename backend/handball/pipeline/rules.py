@@ -1040,6 +1040,67 @@ def seven_meter_conceders(match: Match,
     return out
 
 
+# Hetes-okozó poszt: ennyi poszthoz kötött okozott hetes kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a heteseik
+# egy sávban szakadnak be.
+SVR_MIN_SEVENS = 3
+SVR_SHARE_PCT = 60.0
+
+
+def seven_conceder_roles(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-okozó poszt: MELYIK SÁVJUK szakad be hetessel.
+
+    A hetes-okozó védők rétege az embert nevezi meg — ez a posztot:
+    az okozott heteseket az okozó védő posztjához írja. Így akkor is
+    látszik a minta, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a betörés-térkép: ha a heteseik rendre ugyanazon a
+    poszton szakadnak be, az a sáv kézzel véd a lábmunka helyett —
+    oda ÉRDEMES betörést vezetni, mert vagy gól lesz belőle, vagy
+    hetes (és idővel kiállítás). Ha a hetes-okozásuk szórt, nincs
+    kitüntetett sáv — a betörést a mozgó fal réseihez kell igazítani.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"sevens" (poszthoz
+    kötött okozott hetes), "roles": {poszt: hetes}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SVR_MIN_SEVENS, vagy egyik poszt sem éri el az SVR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    conc = seven_meter_conceders(match, config)
+
+    out: dict = {side: {"sevens": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in conc[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["conceded"])
+            rec["sevens"] += row["conceded"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sevens"] >= SVR_MIN_SEVENS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["sevens"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SVR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a heteseik a(z) {poszt} poszton szakadnak be "
+                    f"({share:.0f}%, {rec['sevens']} okozott hetesből)"
+                    " — abba a sávba érdemes betörést vezetni: kézzel"
+                    " véd, gól vagy hetes lesz belőle")
+    return out
+
+
 # Emberelőny-tempó: ennyi mért támadás kell emberelőnyben és egyenlő
 # létszámnál, és ekkora (másodperces) eltérés számít érdemi jelnek.
 PP_PACE_MIN_PP = 3

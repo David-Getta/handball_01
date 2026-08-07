@@ -3059,6 +3059,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_conceder_roles
+            res["seven_conceder_roles"] = seven_conceder_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import pivot_feeders
             res["pivot_feeders"] = pivot_feeders(match)
         except Exception:
@@ -4430,6 +4435,9 @@ def create_app():
                 from ..pipeline.rules import seven_meter_conceders
                 _layer("seven_meter_conceders",
                        lambda: seven_meter_conceders(match))
+                from ..pipeline.rules import seven_conceder_roles
+                _layer("seven_conceder_roles",
+                       lambda: seven_conceder_roles(match))
                 from ..pipeline.attack_types import pivot_feeders
                 _layer("pivot_feeders", lambda: pivot_feeders(match))
                 from ..pipeline.decisions import pass_speed

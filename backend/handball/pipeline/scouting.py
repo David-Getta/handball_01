@@ -788,6 +788,9 @@ class ScoutingReport:
     # 7a6-befejező poszt: a 7 a 6 alatti lövések darabszáma
     # posztonként. Darabszám, meccsek közt pontosan összegződik.
     en7_shots_by_role: dict = field(default_factory=dict)
+    # Hetes-okozó poszt: az okozott hetesek darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    svr_sevens_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3024,6 +3027,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Hetes-okozó poszt: melyik sávjukba érdemes betörést vezetni.
+    _svr_n = sum(rep.svr_sevens_by_role.values())
+    if _svr_n >= 3:
+        _svr_p, _svr_c = max(rep.svr_sevens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _svr_pct = 100.0 * _svr_c / _svr_n
+        if _svr_pct >= 60.0:
+            keys.append(
+                f"A heteseik a(z) {_svr_p} posztjukon szakadnak be "
+                f"({_svr_pct:.0f}%, {_svr_n} okozott hetesből) — abba "
+                "a sávba érdemes betörést vezetni: kézzel véd, gól "
+                "vagy hetes lesz belőle.")
 
     # 7a6-befejező poszt: a lehozott kapusnál hova kell sűríteni.
     _en7_n = sum(rep.en7_shots_by_role.values())
@@ -7556,6 +7572,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .goalkeeper import seven_six_finisher_roles as _en7
         en7rec = _en7(match, config)[team.value]
         rep.en7_shots_by_role = dict(en7rec["roles"])
+        from .rules import seven_conceder_roles as _svr
+        svrrec = _svr(match, config)[team.value]
+        rep.svr_sevens_by_role = dict(svrrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10130,6 +10149,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 278) Az ő hetes-okozó posztjuk × a ti hetes-lövőtök: ha az egyik
+    # sávjuk kézzel véd, és nálatok van, aki a kiharcolt hetest be is
+    # lövi, a betörés oda kétszeresen kifizetődő.
+    _svr278_n = sum(opp.svr_sevens_by_role.values())
+    _own7_278 = own.seven_takers or []
+    _att278 = sum(p.get("attempts", 0) for p in _own7_278)
+    _gol278 = sum(p.get("goals", 0) for p in _own7_278)
+    if _svr278_n >= 3 and _att278 >= 3:
+        _svr278_p, _svr278_c = max(opp.svr_sevens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _svr278_pct = 100.0 * _svr278_c / _svr278_n
+        _conv278 = 100.0 * _gol278 / _att278
+        if _svr278_pct >= 60.0 and _conv278 >= 70.0:
+            plan.append(
+                f"A heteseik a(z) {_svr278_p} posztjukon szakadnak be "
+                f"({_svr278_pct:.0f}%), a ti hetesetek pedig kész gól "
+                f"({_gol278}/{_att278}, {_conv278:.0f}%) — vezessétek "
+                "a betöréseket az ő sávjába: kézzel véd, minden "
+                "leszakított hetes nálatok gólt ér, és idővel a "
+                "kiállítását is hozza.")
 
     # 277) Az ő 7a6-befejező posztjuk × a ti labdaszerzésetek: ha a
     # hetedik ember játéka kiszámítható, a besűrítés labdát terem — és
@@ -14775,6 +14815,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rbk_blocks_by_role for r in reports),
         en7_shots_by_role=_merge_count_dicts(
             r.en7_shots_by_role for r in reports),
+        svr_sevens_by_role=_merge_count_dicts(
+            r.svr_sevens_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

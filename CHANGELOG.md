@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hetes-okozó poszt: melyik sávjuk szakad be hetessel.** A
+  hetes-okozó védők rétege az embert nevezi meg — az új réteg a
+  posztot: az okozott heteseket az okozó védő posztjához írja, így a
+  minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+  Edzőileg ez a betörés-térkép: ha a heteseik rendre ugyanazon a
+  poszton szakadnak be, az a sáv kézzel véd a lábmunka helyett — oda
+  érdemes betörést vezetni, mert gól vagy hetes lesz belőle (idővel
+  kiállítás). Felületek: `/analyze` és meccs-csomag
+  (`seven_conceder_roles`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (278: az ő beszakadó sávjuk × a ti biztos
+  hetes-lövőtök → a betörés kétszeresen fizet), edzés-fókusz (299:
+  lábmunka-gyakorlat tiltott kézhasználattal), teendő-rangsor és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
 - **7a6-befejező poszt: kire fut ki a hetedik ember játéka.** A
   7 a 6 rétegei eddig azt mondták meg, MIKOR és MENNYIT játsszák a
   lehozott kapust — az új réteg azt, KIRE: az üres-kapus szakaszok

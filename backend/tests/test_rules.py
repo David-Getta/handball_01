@@ -1500,3 +1500,52 @@ def test_seven_shot_directions_silent_with_few_attempts():
 
     rec = seven_shot_directions(_svd_match([8.8, 8.8]))["home"]
     assert rec["dominant"] is None and rec["verdict"] is None, rec
+
+
+def _svr_match(defenders):
+    """`defenders` = okozott hetesenként a kiharcoló mellett álló
+    VENDÉG védő (21: beálló, 23: szélső). Első szakasz: vendég-
+    birtoklás a -x kapu felé, ebből áll össze a poszt-becslés; utána
+    a hetesek a meglévő okozó-minta szerint, 12 mp-es szünetekkel."""
+    pos = {21: (6.0, 10.0), 23: (6.0, 1.0)}
+    frames = []
+    t = 0
+    for _ in range(120):             # vendég-birtoklás: poszt-minta
+        frames.append(Frame(
+            t=t,
+            players=[_pl(9, Team.HOME, 20.0, 10.0),
+                     _pl(21, Team.AWAY, *pos[21]),
+                     _pl(23, Team.AWAY, *pos[23])],
+            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in defenders:
+        frames += _seven_conceder_frames(t, tid)
+        t = frames[-1].t + 1
+        for i in range(300):         # szünet a hetes-debounce miatt
+            frames.append(Frame(t=t, players=[_pl(9, Team.HOME, 20.0,
+                                                  10.0)],
+                                ball=Ball(x=20.0 + 0.01 * i, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_seven_conceder_roles_names_the_soft_lane():
+    """Ha az okozott hetesek zöme ugyanannak a posztnak a sávjában
+    szakad be, oda érdemes betörést vezetni."""
+    from handball.pipeline.rules import (SVR_MIN_SEVENS,
+                                         seven_conceder_roles)
+
+    rec = seven_conceder_roles(_svr_match([21] * 3 + [23]))["away"]
+    assert rec["sevens"] >= SVR_MIN_SEVENS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "betörést" in rec["verdict"], rec
+
+
+def test_seven_conceder_roles_silent_with_few_sevens():
+    """Néhány okozott hetesből nincs ítélet."""
+    from handball.pipeline.rules import seven_conceder_roles
+
+    rec = seven_conceder_roles(_svr_match([21, 23]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

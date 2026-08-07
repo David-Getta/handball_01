@@ -2115,6 +2115,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Hetes-okozó poszt: melyik sávjuk szakad be hetessel (3+ okozott
+  // hetes, 60% részarány — a backenddel azonos küszöbök:
+  // SVR_MIN_SEVENS, SVR_SHARE_PCT).
+  String? _sevenConcederRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["svr_sevens_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a heteseik a(z) $top poszton szakadnak be "
+        "(${pct.round()}%, $total hetes) · oda érdemes betörést "
+        "vezetni";
+  }
+
   // 7a6-befejező poszt: kire fut ki a hetedik ember játéka (3+
   // 7a6-lövés, 60% részarány — a backenddel azonos küszöbök:
   // EN7_MIN_SHOTS, EN7_SHARE_PCT).
@@ -7297,6 +7324,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_sevenConcederRole(r) != null)
+        ["Hetes-okozó poszt", _sevenConcederRole(r)!],
       if (_sevenSixRole(r) != null)
         ["7a6-befejező", _sevenSixRole(r)!],
       if (_blockRole(r) != null)
