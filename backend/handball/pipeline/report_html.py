@@ -1863,7 +1863,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                                clutch_turnover_roles,
                                comeback_carrier_roles,
                                drought_breaker_roles,
-                               fading_scorer_roles, hot_hand_roles)
+                               fading_scorer_roles, hot_hand_roles,
+                               restart_taker_roles)
         from .xg import big_chance_roles, wasteful_shooter_roles
         from .decisions import (hold_time_roles,
                                 press_sensitive_roles)
@@ -1909,7 +1910,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Csendtörő-poszt", drought_breaker_roles),
             ("Eltűnő-poszt", fading_scorer_roles),
             ("Hajráhiba-poszt", clutch_turnover_roles),
-            ("Forró-poszt", hot_hand_roles)))
+            ("Forró-poszt", hot_hand_roles),
+            ("Középkezdő-poszt", restart_taker_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"

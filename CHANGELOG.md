@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Középkezdő-poszt: melyik posztjuknál indul a középkezdés.** A
+  középkezdés-átvevő rétege az embert nevezi meg — az új réteg a
+  posztot: a kapott gól utáni első felező-környéki labdaátvételeket
+  az átvevő posztjához írja. Edzőileg a gól utáni letámadás terve:
+  ha a középkezdésük rendre ugyanannál a posztnál indul, a
+  letámadásnak posztra szóló célpontja van — őt kell lefogni, és a
+  középkezdésük megáll. Saját oldalon a kiszámítható átvevő
+  variálandó. Legalább 3 átvétel és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`restart_taker_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 302. meccsterv-szabály), edzés-fókusz (323. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Forró-poszt: melyik posztjuk lövi a gólsorozatokat.** A forró
   kéz rétege az embert nevezi meg — az új réteg a posztot: a
   sorozatban (két vagy több szomszédos csapatgól ugyanattól a

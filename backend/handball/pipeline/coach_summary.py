@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Középkezdő-poszt: melyik posztjuknál indul a középkezdés.
+    try:
+        from .momentum import restart_taker_roles
+        rtr = restart_taker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtr = rtr[side]
+            if rec_rtr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} középkezdése a(z) "
+                     f"{rec_rtr['main_role']} posztnál indul "
+                     f"({rec_rtr['share_pct']:.0f}%, "
+                     f"{rec_rtr['takes']} átvételből) — a gól utáni "
+                     "letámadásnak posztra szóló célpontja van.")
+    except Exception:
+        pass
     # Forró-poszt: melyik posztjuk lövi a gólsorozatokat.
     try:
         from .momentum import hot_hand_roles

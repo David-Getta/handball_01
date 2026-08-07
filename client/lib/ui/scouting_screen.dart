@@ -2141,6 +2141,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Középkezdő-poszt: melyik posztjuknál indul a középkezdés (3+
+  // átvétel, 60% részarány — a backenddel azonos küszöbök:
+  // RTR_MIN_TAKES, RTR_SHARE_PCT).
+  String? _restartTakerRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rtr_takes_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a középkezdésük ${pct.round()}%-ban a(z) $top posztnál "
+        "indul ($total átvétel) · a gól utáni letámadás őt fogja le";
+  }
+
   // Forró-poszt: melyik posztjuk lövi a gólsorozatokat (3+
   // sorozat-gól, 60% részarány — a backenddel azonos küszöbök:
   // HHR_MIN_GOALS, HHR_SHARE_PCT).
@@ -7933,6 +7959,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_restartTakerRole(r) != null)
+        ["Középkezdő-poszt", _restartTakerRole(r)!],
       if (_hotHandRole(r) != null)
         ["Forró-poszt", _hotHandRole(r)!],
       if (_clutchTurnoverRole(r) != null)

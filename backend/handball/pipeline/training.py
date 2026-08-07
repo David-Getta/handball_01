@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 323) Középkezdő-poszt: ha a középkezdésünk mindig ugyanannál a
+    # posztnál indul, a felkészült ellenfél letámadása pont őt fogja.
+    try:
+        from .momentum import RTR_SHARE_PCT, restart_taker_roles
+        rtr323 = restart_taker_roles(match, config)
+        for side in ("home", "away"):
+            rec323 = rtr323[side]
+            if rec323.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható középkezdés",
+                f"a kapott gól utáni középkezdésünk "
+                f"{rec323['share_pct']:.0f}%-ban a(z) "
+                f"{rec323['main_role']} posztnál indul "
+                f"({rec323['takes']} átvételből; "
+                f"{RTR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél letámadása pont őt fogja le",
+                "középkezdés-variációk: legalább két begyakorolt "
+                "átvevő (poszt szerint is más), hátrafelé induló "
+                "első passz letámadás ellen, és gyors középkezdés "
+                "mint fegyver, ha az ellenfél lassan áll vissza",
+                )
+    except Exception:
+        pass
+
     # 322) Forró-poszt: ha a sorozatainkat mindig ugyanaz a posztunk
     # lövi, az ellenfél az első gól után rá fog állni — kell a
     # második lendület-vivő.

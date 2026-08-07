@@ -1982,3 +1982,73 @@ def test_hot_hand_roles_silent_without_streaks():
 
     rec = hot_hand_roles(_hhr_match([7, 9, 7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Középkezdő-poszt (melyik posztjuknál indul a középkezdés) -------------
+
+
+def _rtr_match(takers, fps=25.0):
+    """Vendég poszt-minta (21: beálló, 22: szélső a -x kapunál) +
+    hazai gólok; a kapott gól után a `takers` szerinti vendég veszi
+    át a labdát a felezőnél."""
+    spos = {21: (6.0, 10.0), 22: (5.0, 3.0)}
+
+    def away_cast(mid_tid=None):
+        out = []
+        for tid, (x, y) in spos.items():
+            if tid == mid_tid:
+                out.append(_pl(tid, Team.AWAY, 20.0, 10.0))
+            else:
+                out.append(_pl(tid, Team.AWAY, x, y))
+        return out
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: vendég birtoklás elöl
+        frames.append(Frame(t=t, players=away_cast(),
+                            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(40):              # semleges szakasz a lövés-zónán kívül
+        frames.append(Frame(t=t, players=[],
+                            ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+        t += 1
+    for tid in takers:
+        for i in range(7):           # hazai gól a +x kapuba
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(20):          # az átvevő a felezőnél kapja
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 33.0, 10.0)]
+                + away_cast(mid_tid=tid),
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(120):         # szünet: üres középpálya
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=8.0, y=4.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_restart_taker_roles_names_the_taker_post():
+    """Négy átvételből három a beállóé → posztra szóló letámadás."""
+    from handball.pipeline.momentum import (RTR_MIN_TAKES,
+                                            restart_taker_roles)
+
+    rec = restart_taker_roles(_rtr_match([21, 21, 21, 22]))["away"]
+    assert rec["takes"] >= RTR_MIN_TAKES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "letámadás" in rec["verdict"], rec
+
+
+def test_restart_taker_roles_silent_with_few_takes():
+    """Néhány átvételből nincs ítélet."""
+    from handball.pipeline.momentum import restart_taker_roles
+
+    rec = restart_taker_roles(_rtr_match([21, 22]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -2639,3 +2639,66 @@ def hot_hand_roles(match: Match, config=None) -> dict:
                     "őrzés-váltás vagy kettőzés rá, mielőtt a "
                     "második-harmadik jönne")
     return out
+
+
+# Középkezdő-poszt: ennyi poszthoz kötött középkezdés-átvétel kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# középkezdésük egy posztnál indul.
+RTR_MIN_TAKES = 3
+RTR_SHARE_PCT = 60.0
+
+
+def restart_taker_roles(match: Match, config=None) -> dict:
+    """Középkezdő-poszt: MELYIK POSZTJUKNÁL indul a középkezdés.
+
+    A középkezdés-átvevő rétege (restart_targets) az embert nevezi
+    meg — ez a posztot: a kapott gól utáni első felező-környéki
+    labdaátvételeket az átvevő posztjához írja. Így a minta akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a gól utáni letámadás terve: ha a középkezdésük
+    rendre ugyanannál a posztnál indul, a letámadásnak posztra szóló
+    célpontja van — őt kell lefogni, és a középkezdésük megáll.
+    Saját csapatra: a kiszámítható átvevő variálandó, mert a
+    felkészült ellenfél pont őt fogja le.
+
+    Visszatérés csapatonként (a gólt KAPÓ oldal): {"takes"
+    (poszthoz kötött átvétel), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    RTR_MIN_TAKES, vagy egyik poszt sem éri el az RTR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    rt = restart_targets(match, config)
+
+    out: dict = {side: {"takes": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in rt[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["takes"])
+            rec["takes"] += row["takes"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["takes"] >= RTR_MIN_TAKES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["takes"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kapott gól utáni középkezdésük {share:.0f}"
+                    f"%-ban a(z) {poszt} posztnál indul "
+                    f"({rec['takes']} átvételből) — a gól utáni "
+                    "letámadásnak posztra szóló célpontja van: őt "
+                    "kell lefogni, és a középkezdésük megáll")
+    return out
