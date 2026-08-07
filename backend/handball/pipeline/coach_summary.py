@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kettőzött-poszt: melyik posztjukra érkezik a kettőzés.
+    try:
+        from .defense import doubled_target_roles
+        dtr = doubled_target_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dtr = dtr[side]
+            if rec_dtr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ellen a kettőzések a(z) "
+                     f"{rec_dtr['main_role']} posztra járnak "
+                     f"({rec_dtr['share_pct']:.0f}%-a a kettőzött "
+                     "labdás időnek) — a minta bevált recept.")
+    except Exception:
+        pass
     # Fáradó-poszt: melyik posztjuk esik vissza a második félidőre.
     try:
         from .stats import fatigue_roles

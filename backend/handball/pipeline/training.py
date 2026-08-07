@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 331) Kettőzött-poszt: ha egy posztunkat rendre kettőzik, neki
+    # lekapcsolódó társ és kettőzés-elleni leadás kell.
+    try:
+        from .defense import DTR_SHARE_PCT, doubled_target_roles
+        dtr331 = doubled_target_roles(match, config)
+        for side in ("home", "away"):
+            rec331 = dtr331[side]
+            if rec331.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra járó kettőzés",
+                f"az ellenfél kettőzései {rec331['share_pct']:.0f}"
+                f"%-ban a(z) {rec331['main_role']} posztunkra "
+                f"érkeznek ({DTR_SHARE_PCT:.0f}% fölött már minta) "
+                "— a következő ellenfél is ezt a receptet fogja "
+                "követni",
+                "kettőzés-elleni csomag a posztnak: lekapcsolódó "
+                "társ (mindig legyen leadási irány), egyérintős "
+                "kijátszás kettőzés ellen 3-3-ban, és a kettőzés "
+                "mögötti üres ember tudatos keresése videóról",
+                )
+    except Exception:
+        pass
+
     # 330) Fáradó-poszt: ha egy posztunk tempója a második félidőre
     # rendre visszaesik, kondicionális blokk és korábbi pihentetés
     # kell neki.

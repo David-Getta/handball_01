@@ -4206,3 +4206,83 @@ def doubling_defender_roles(match, config=None) -> dict:
                     "pillanatában az ő elhagyott embere felé menjen "
                     "az első passz: ő az üres ember")
     return out
+
+
+# Kettőzött-poszt: ennyi poszthoz kötött kettőzött labdás kocka kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# kettőzések egy posztjukra érkeznek.
+DTR_MIN_FRAMES = 100
+DTR_SHARE_PCT = 60.0
+
+
+def doubled_target_roles(match, config=None) -> dict:
+    """Kettőzött-poszt: MELYIK POSZTJUKRA érkezik a kettőzés.
+
+    A kettőzés-réteg (double_teams) a védő oldalt minősíti — ez a
+    megtámadott posztot: a kettőzött (két védővel szorongatott)
+    labdás kockákat a birtokos posztjához írja a TÁMADÓ oldalon. Így
+    látszik, kire járnak rá az ellenfelek kettőzései.
+
+    Edzőileg ez kollektív felderítés: ha az ellenfelek kettőzései
+    rendre ugyanarra a posztjukra érkeznek, a minta bevált recept —
+    érdemes követni, és oda küldeni a kettőzést. A kettőzött poszt
+    mögött viszont üres ember marad: a kettőzés mögötti kilépő
+    passzsáv zárása a másik fele a tervnek. Saját csapatra: ha egy
+    posztunkat rendre kettőzik, neki lekapcsolódó társ és begyakorolt
+    kettőzés-elleni leadás kell.
+
+    Visszatérés csapatonként (a KETTŐZÖTT, támadó oldal): {"frames"
+    (poszthoz kötött kettőzött kocka), "roles": {poszt: kocka},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg a DTR_MIN_FRAMES, vagy egyik poszt sem éri el a
+    DTR_SHARE_PCT-t.
+    """
+    import math
+
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"frames": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None \
+                or holder.role == "kapus":
+            continue
+        near = sum(1 for p in f.players
+                   if p.team is not None and p.team != holder.team
+                   and p.role != "kapus"
+                   and math.hypot(p.x - holder.x, p.y - holder.y)
+                   <= DOUBLE_TEAM_M)
+        if near < 2:
+            continue
+        side = holder.team.value
+        rec_role = roles[side].get(holder.track_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["frames"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["frames"] >= DTR_MIN_FRAMES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["frames"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= DTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az ellenfelek kettőzései {share:.0f}%-ban a(z)"
+                    f" {poszt} posztjukra érkeznek — a minta bevált "
+                    "recept: oda küldjétek a kettőzést, és zárjátok "
+                    "a mögötte kilépő passzsávot")
+    return out

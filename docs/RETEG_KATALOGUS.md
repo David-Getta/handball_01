@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **357 réteg**, modulonként csoportosítva; a
+Összesen **358 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (74)
@@ -105,7 +105,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `soft_pass_roles` | Lágypassz-poszt: MELYIK POSZTJUK passzol lágyan. |
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 
-## defense (60)
+## defense (61)
 
 | Réteg | Mit mér |
 |---|---|
@@ -136,6 +136,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `defensive_width` | Védelmi tömörség (fal-szélesség): milyen szélesen áll a védőfal. |
 | `double_punishment` | Kettőzés-büntetés: MÖGÉ BETALÁLNAK-E a kettőzésüknek. |
 | `double_teams` | Kettőzés: rálép-e a második védő is a labdásra. |
+| `doubled_target_roles` | Kettőzött-poszt: MELYIK POSZTJUKRA érkezik a kettőzés. |
 | `doubling_defender_roles` | Kettőző-poszt: MELYIK POSZTJUK lép ki kettőzni. |
 | `doubling_defenders` | Kettőző emberek: KI JÖN MÁSODIKNAK a labdásra. |
 | `fading_defenders` | Eltűnő védő: KI viszi a védekezést az első félidőben — és áll le. |

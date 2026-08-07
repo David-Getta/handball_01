@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kettőzött-poszt: melyik posztjukra érkezik a kettőzés.** A
+  kettőzés-réteg a védő oldalt minősíti — az új réteg a megtámadott
+  posztot: a két védővel szorongatott labdás kockákat a birtokos
+  posztjához írja a támadó oldalon. Edzőileg kollektív felderítés:
+  ha az ellenfelek kettőzései rendre ugyanarra a posztjukra
+  érkeznek, a minta bevált recept — követni kell, és zárni a
+  kettőzés mögött kilépő passzsávot. Saját oldalon a kettőzött
+  posztnak lekapcsolódó társ és kettőzés-elleni leadás kell.
+  Legalább 100 kettőzött labdás kocka és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`doubled_target_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 310. meccsterv-szabály), edzés-fókusz (331. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Fáradó-poszt: melyik posztjuk esik vissza a második félidőre.**
   A játékos-fáradás rétege az embert nevezi meg — az új réteg a
   posztot: a félidőnkénti átlagsebességeket a játékos posztjához

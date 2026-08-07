@@ -1849,6 +1849,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                                    screen_setter_roles,
                                    second_chance_roles)
         from .defense import (beaten_defender_roles,
+                              doubled_target_roles,
                               doubling_defender_roles,
                               role_block_sources, role_steal_sources,
                               slow_retreat_roles)
@@ -1924,7 +1925,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Kiszolgált-poszt", assisted_scorer_roles),
             ("Rajt-poszt", opening_scorer_roles),
             ("Passzív-poszt", passive_holder_roles),
-            ("Fáradó-poszt", fatigue_roles)))
+            ("Fáradó-poszt", fatigue_roles),
+            ("Kettőzött-poszt", doubled_target_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"
