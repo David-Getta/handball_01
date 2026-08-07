@@ -880,6 +880,9 @@ class ScoutingReport:
     # Kiszolgált-poszt: az asszisztos gólok darabszáma a befejező
     # posztja szerint. Darabszám, pontosan összegződik.
     asr_assisted_by_role: dict = field(default_factory=dict)
+    # Rajt-poszt: a meccs első tíz percének góljai posztonként.
+    # Darabszám, pontosan összegződik.
+    osr_goals_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3297,6 +3300,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_asr_p} posztjuk fejezi be ({_asr_n} asszisztos "
                 "gólból) — őt nem fogni kell, hanem éheztetni: a "
                 "felé futó passz elvágásával magától elhal.")
+
+    # Rajt-poszt: a meccs eleji párosítás terve.
+    _osr_n = sum(rep.osr_goals_by_role.values())
+    if _osr_n >= 3:
+        _osr_p, _osr_c = max(rep.osr_goals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _osr_pct = 100.0 * _osr_c / _osr_n
+        if _osr_pct >= 60.0:
+            keys.append(
+                f"A rajtjuk a(z) {_osr_p} posztra épül "
+                f"({_osr_pct:.0f}%, {_osr_n} gól az első tíz "
+                "percben) — a meccs elején őt fogja a legjobb "
+                "védőtök, és a korai elhúzásuk elmarad.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8115,6 +8131,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .roles import assisted_scorer_roles as _asr2
         asr2rec = _asr2(match, config)[team.value]
         rep.asr_assisted_by_role = dict(asr2rec["roles"])
+        from .momentum import opening_scorer_roles as _osr
+        osrrec = _osr(match, config)[team.value]
+        rep.osr_goals_by_role = dict(osrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10695,6 +10714,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 307) Az ő rajt-posztjuk × a ti félidő-nyitásotok: ha ti jól
+    # nyittok, az ő nyitó-motorjuk kivételével a rajt a tiétek.
+    _osr307_n = sum(opp.osr_goals_by_role.values())
+    _ho307 = own.ho_for - own.ho_against
+    if _osr307_n >= 3 and _ho307 >= 2:
+        _osr307_p, _osr307_c = max(opp.osr_goals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _osr307_pct = 100.0 * _osr307_c / _osr307_n
+        if _osr307_pct >= 60.0:
+            plan.append(
+                f"A rajtjuk a(z) {_osr307_p} posztra épül "
+                f"({_osr307_pct:.0f}%, {_osr307_n} gól az első tíz "
+                f"percben), ti pedig jól nyittok (+{_ho307} a "
+                "félidő-nyitások mérlege) — a meccs elején a "
+                "legjobb védőtök őt fogja: a nyitó-motorjuk nélkül "
+                "a rajt a tiétek.")
 
     # 306) Az ő kiszolgált-posztjuk × a ti labdaszerzésetek: a felé
     # futó passz elvágása nálatok azonnal labdaszerzés.
@@ -15934,6 +15970,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.chr_frames_by_role for r in reports),
         asr_assisted_by_role=_merge_count_dicts(
             r.asr_assisted_by_role for r in reports),
+        osr_goals_by_role=_merge_count_dicts(
+            r.osr_goals_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

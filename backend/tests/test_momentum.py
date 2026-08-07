@@ -2112,3 +2112,27 @@ def test_clutch_hog_roles_silent_with_little_holding():
 
     rec = clutch_hog_roles(_chr_match([(7, 60), (9, 40)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Rajt-poszt (melyik posztjuk viszi a meccs elejét) ---------------------
+
+
+def test_opening_scorer_roles_names_the_starting_post():
+    """A meccs eleji gólokból három a beállóé → az első tíz percben
+    őt kell megfogni."""
+    from handball.pipeline.momentum import (OSR_MIN_GOALS,
+                                            opening_scorer_roles)
+
+    rec = opening_scorer_roles(_hhr_match([7, 9, 7, 7]))["home"]
+    assert rec["goals"] >= OSR_MIN_GOALS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "első tíz percben" in rec["verdict"], rec
+
+
+def test_opening_scorer_roles_silent_with_few_goals():
+    """Néhány meccs eleji gólból nincs ítélet."""
+    from handball.pipeline.momentum import opening_scorer_roles
+
+    rec = opening_scorer_roles(_hhr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

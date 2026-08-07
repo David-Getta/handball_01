@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Rajt-poszt: melyik posztjuk viszi a meccs elejét.** A
+  nyitás-profil csapat-szinten mondja meg, hogyan rajtolnak — az új
+  réteg a posztot: a meccs első tíz percének góljait a lövő
+  posztjához írja. Edzőileg a meccs eleji párosítás terve: ha a
+  rajtjuk rendre ugyanarról a posztról indul, az első tíz percben őt
+  kell a legjobb védővel megfogni — a nyitó-motorjuk nélkül a korai
+  elhúzásuk elmarad. Saját oldalon a második nyitó-megoldás a téma.
+  Legalább 3 meccs eleji gól és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`opening_scorer_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 307. meccsterv-szabály), edzés-fókusz (328. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Kiszolgált-poszt: melyik posztjuk fejezi be a bejátszásokat.**
   A gólpassz-poszt azt mondja meg, kinek a kezéből indul a gól — az
   új réteg azt, hova érkezik: az asszisztos gólokat a befejező

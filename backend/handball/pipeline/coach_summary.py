@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Rajt-poszt: melyik posztjuk viszi a meccs elejét.
+    try:
+        from .momentum import opening_scorer_roles
+        osr = opening_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_osr = osr[side]
+            if rec_osr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} rajtja a(z) "
+                     f"{rec_osr['main_role']} posztra épül "
+                     f"({rec_osr['share_pct']:.0f}%, "
+                     f"{rec_osr['goals']} gól az első tíz percben) —"
+                     " a meccs elején őt kell megfogni.")
+    except Exception:
+        pass
     # Kiszolgált-poszt: melyik posztjuk fejezi be a bejátszásokat.
     try:
         from .roles import assisted_scorer_roles

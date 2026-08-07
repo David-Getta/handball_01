@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 328) Rajt-poszt: ha a meccs-nyitásunk egy posztra épül, a
+    # felkészült ellenfél az első perctől rá áll — kell a második
+    # nyitó-megoldás.
+    try:
+        from .momentum import OSR_SHARE_PCT, opening_scorer_roles
+        osr328 = opening_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec328 = osr328[side]
+            if rec328.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő rajt",
+                f"a meccs eleji góljaink {rec328['share_pct']:.0f}"
+                f"%-a a(z) {rec328['main_role']} posztról jön "
+                f"({rec328['goals']} gól az első tíz percben; "
+                f"{OSR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél az első perctől rá áll",
+                "nyitó-forgatókönyv B-vel: az első öt figura előre "
+                "megbeszélve két különböző befejező posztra, és a "
+                "rajt-emberünk tehermentesítése elzárásokkal, ha "
+                "kiemelt fogást kap",
+                )
+    except Exception:
+        pass
+
     # 327) Kiszolgált-poszt: ha egy posztunk csak kiszolgálásból él,
     # a passzsáv-zárás ellen tervre van szüksége.
     try:

@@ -2765,3 +2765,76 @@ def clutch_hog_roles(match: Match, config=None) -> dict:
                     " hanem ezt a kezet: ha ő nem kap labdát, a záró"
                     " figuráik el sem indulnak")
     return out
+
+
+# Rajt-poszt: a meccs eleji ablak, ennyi poszthoz kötött nyitó-gól
+# kell az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# rajtjuk egy posztra épül.
+OSR_WINDOW_S = 600.0
+OSR_MIN_GOALS = 3
+OSR_SHARE_PCT = 60.0
+
+
+def opening_scorer_roles(match: Match, config=None) -> dict:
+    """Rajt-poszt: MELYIK POSZTJUK viszi a meccs elejét.
+
+    A nyitás-profil (opening_profile) csapat-szinten mondja meg,
+    hogyan rajtolnak — ez a posztot: a meccs első OSR_WINDOW_S
+    másodpercének góljait a lövő posztjához írja. Így a minta akkor
+    is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a meccs eleji párosítás terve: ha a rajtjuk rendre
+    ugyanarról a posztról indul, az első tíz percben őt kell a
+    legjobb védővel megfogni — a korai elhúzásuk motorja nélkül a
+    meccs nyitása kiegyenlített marad. Saját csapatra: az egy
+    posztra épülő rajt kockázat, kell a második nyitó-megoldás.
+
+    Visszatérés csapatonként: {"goals" (poszthoz kötött nyitó-gól),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az OSR_MIN_GOALS, vagy egyik poszt
+    sem éri el az OSR_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    roles = estimate_positions(match, config)
+    t0 = match.frames[0].t if match.frames else 0
+    cut = t0 + OSR_WINDOW_S * fps
+
+    out: dict = {side: {"goals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        if e.t > cut:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["goals"] >= OSR_MIN_GOALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["goals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= OSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a rajtjuk a(z) {poszt} posztra épül "
+                    f"({share:.0f}%, {rec['goals']} gól a meccs "
+                    "első tíz percében) — az első tíz percben őt "
+                    "kell a legjobb védővel megfogni, és a nyitásuk "
+                    "kiegyenlített marad")
+    return out
