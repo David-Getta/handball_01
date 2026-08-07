@@ -932,6 +932,10 @@ class ScoutingReport:
     # Hátrapassz-poszt: a hátra-passzok darabszáma a passzoló
     # posztja szerint. Darabszám, pontosan összegződik.
     bpr_passes_by_role: dict = field(default_factory=dict)
+    # Fáradt-eladó poszt: labdaeladások posztonként, félidőnként.
+    # Darabszám, pontosan összegződik.
+    fto_fh_by_role: dict = field(default_factory=dict)
+    fto_sh_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3566,6 +3570,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztnál fordul vissza ({_bpr_n} hátra-passz) — "
                 "nyomás alatt hátrafelé menekül: presszeljétek, és "
                 "a hátra-passza után toljátok feljebb a falat.")
+
+    # Fáradt-eladó poszt: a második félidei pressz-terv.
+    for _fto_p, _fto_sh in sorted(rep.fto_sh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fto_fh = rep.fto_fh_by_role.get(_fto_p, 0)
+        if _fto_sh >= 3 and _fto_sh >= 2.0 * max(1, _fto_fh):
+            keys.append(
+                f"A(z) {_fto_p} posztjuk eladásai a második "
+                f"félidőre megugranak ({_fto_fh} → {_fto_sh}) — "
+                "fáradtan nála nyílik ki a kéz: a szünet után friss"
+                " védővel őt nyomjátok, rajta olcsó a labdaszerzés.")
+            break
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8434,6 +8450,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import backward_pass_roles as _bpr
         bprrec = _bpr(match, config)[team.value]
         rep.bpr_passes_by_role = dict(bprrec["roles"])
+        from .decisions import tired_turnover_roles as _fto
+        ftorec = _fto(match, config)[team.value]
+        rep.fto_fh_by_role = dict(ftorec["fh_roles"])
+        rep.fto_sh_by_role = dict(ftorec["sh_roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11014,6 +11034,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 323) Az ő fáradt-eladó posztjuk × a ti mély padotok: a szünet
+    # után friss védő rajta olcsó labdákat szerez.
+    _rot323 = (own.rotation_used_sum / max(1, own.rotation_matches)
+               if own.rotation_matches else 0.0)
+    if _rot323 >= 9.0:
+        for _fto323_p, _fto323_sh in sorted(
+                opp.fto_sh_by_role.items(), key=lambda kv: -kv[1]):
+            _fto323_fh = opp.fto_fh_by_role.get(_fto323_p, 0)
+            if _fto323_sh >= 3 \
+                    and _fto323_sh >= 2.0 * max(1, _fto323_fh):
+                plan.append(
+                    f"A(z) {_fto323_p} posztjuk eladásai a második "
+                    f"félidőre megugranak ({_fto323_fh} → "
+                    f"{_fto323_sh}), ti pedig mély paddal forogtok "
+                    f"(átlag {_rot323:.0f} bevetett játékos) — a "
+                    "szünet után friss védő menjen rá: fáradtan "
+                    "nála nyílik ki a kéz, és olcsó a labdaszerzés.")
+                break
 
     # 322) Az ő hátrapassz-posztjuk × a ti magas labdaszerzésetek: a
     # hátrafelé menekülő posztra a pressz jutalmat hoz.
@@ -16572,6 +16611,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.tnr_meters_by_role for r in reports),
         bpr_passes_by_role=_merge_count_dicts(
             r.bpr_passes_by_role for r in reports),
+        fto_fh_by_role=_merge_count_dicts(
+            r.fto_fh_by_role for r in reports),
+        fto_sh_by_role=_merge_count_dicts(
+            r.fto_sh_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

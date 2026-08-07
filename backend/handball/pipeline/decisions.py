@@ -1033,3 +1033,76 @@ def ball_carrier_roles(match: Match,
                     "felezőtől hátrálva kell fogadni: lendületbe "
                     "engedni tilos")
     return out
+
+
+# Fáradt-eladó poszt: legalább ennyi 2. félidei eladás kell, és
+# ennyiszerese az első félideinek, hogy a posztot fáradt-eladónak
+# mondjuk ki.
+FTO_MIN_SH = 3
+FTO_FACTOR = 2.0
+
+
+def tired_turnover_roles(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan.
+
+    Az eladás-rétegek a teljes meccset nézik — ez a fáradást: a
+    labdaeladásokat félidőnként a vesztes posztjához írja, és
+    megkeresi, melyik posztjuk eladásai ugranak meg a második
+    félidőre. Így látszik, kinél nyílik ki fáradtan a kéz.
+
+    Edzőileg ez a második félidei pressz-terv: akinek az eladásai
+    fáradtan megugranak, azt a szünet után kell nyomás alá tenni — a
+    friss védő rajta olcsó labdákat szerez. Saját csapatra: a poszt
+    terhelés-menedzsmentje és fáradt labdabiztonság-edzése a téma.
+
+    Visszatérés csapatonként: {"fh_roles": {poszt: darab},
+    "sh_roles": {poszt: darab}, "main_role", "fh", "sh", "verdict"}
+    — az ítélet None, ha nincs felismert szünet, vagy egyik poszt
+    sem éri el az FTO_MIN_SH-t az FTO_FACTOR-os ugrással.
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh_roles": {}, "sh_roles": {},
+                        "main_role": None, "fh": None, "sh": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    roles = estimate_positions(match, config)
+
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        key = "fh_roles" if e.t <= ht else "sh_roles"
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        out[side][key][poszt] = out[side][key].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fader = None
+        for poszt, sh in sorted(rec["sh_roles"].items(),
+                                key=lambda kv: -kv[1]):
+            fh = rec["fh_roles"].get(poszt, 0)
+            if sh >= FTO_MIN_SH and sh >= FTO_FACTOR * max(1, fh):
+                fader = (poszt, fh, sh)
+                break
+        if fader is not None:
+            poszt, fh, sh = fader
+            rec["main_role"] = poszt
+            rec["fh"], rec["sh"] = fh, sh
+            rec["verdict"] = (
+                f"a(z) {poszt} posztjuk eladásai a második félidőre"
+                f" megugranak ({fh} → {sh}) — fáradtan nála nyílik "
+                "ki a kéz: a szünet után friss védővel őt kell "
+                "nyomás alá tenni, rajta olcsó a labdaszerzés")
+    return out

@@ -1885,7 +1885,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .decisions import (ball_carrier_roles,
                                 hold_time_roles,
                                 press_sensitive_roles,
-                                soft_pass_roles)
+                                soft_pass_roles,
+                                tired_turnover_roles)
         from .stats import (fatigue_roles, iron_man_roles,
                             sprint_threat_roles)
         from .stoppages import timeout_finisher
@@ -1944,6 +1945,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Előnyben-poszt", lead_scorer_roles),
             ("Térnyerő-poszt", ball_carrier_roles),
             ("Hátrapassz-poszt", backward_pass_roles),
+            ("Fáradt-eladó poszt", tired_turnover_roles),
             ("Blokkolt-poszt", blocked_shooter_roles),
             ("Ziccerhagyó-poszt", missed_chance_roles),
             ("Fáradó-poszt", fatigue_roles),

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 344) Fáradt-eladó poszt: ha egy posztunk eladásai a második
+    # félidőre megugranak, terhelés-menedzsment és fáradt
+    # labdabiztonság kell.
+    try:
+        from .decisions import tired_turnover_roles
+        fto344 = tired_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec344 = fto344[side]
+            if rec344.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Fáradtan kinyíló kéz",
+                f"a(z) {rec344['main_role']} posztunk eladásai a "
+                f"második félidőre megugranak ({rec344['fh']} → "
+                f"{rec344['sh']}) — fáradtan nála nyílik ki a kéz, "
+                "és az ellenfél pressze pontosan őt fogja keresni",
+                "fáradt labdabiztonság a posztnak: passz- és "
+                "átvétel-gyakorlat magas pulzuson (kör-edzés után), "
+                "korábbi pihentetés-blokk a második félidőben, és "
+                "eladás utáni azonnali visszatámadás-szabály",
+                )
+    except Exception:
+        pass
+
     # 343) Hátrapassz-poszt: ha a játékunk mindig ugyanannál a
     # posztnál fordul vissza, a pressz ellenünk jutalmat hoz.
     try:

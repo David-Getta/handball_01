@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Fáradt-eladó poszt: kinek a labdái vesznek el a második
+  félidőben.** Az eladás-rétegek a teljes meccset nézik — az új
+  réteg a fáradást: a labdaeladásokat félidőnként a vesztes
+  posztjához írja, és megkeresi, melyik posztjuk eladásai ugranak
+  meg a másodikra. Edzőileg a második félidei pressz-terv: fáradtan
+  nála nyílik ki a kéz — a szünet után friss védővel őt kell nyomás
+  alá tenni. Saját oldalon a terhelés-menedzsment és a fáradt
+  labdabiztonság az edzés-téma. Felismert szünet nélkül, 3 második
+  félidei eladás és kétszeres ugrás alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`tired_turnover_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 323. meccsterv-szabály),
+  edzés-fókusz (344. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék.** A
   passz-irány rétege csapat-szinten mondja meg, mennyit játszanak
   hátrafelé — az új réteg posztonként: a kaputól legalább 1 méterrel

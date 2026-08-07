@@ -737,3 +737,74 @@ def test_ball_carrier_roles_silent_with_little_carrying():
     rec = ball_carrier_roles(
         _tnr_match([(7, 20.0), (9, 8.0)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Fáradt-eladó poszt (kinek a labdái vesznek el a 2. félidőben) ---------
+
+
+def _fto_match(fh_losers, sh_losers, with_break=True, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + eladások félidőnként: a
+    vesztes labdája a 30-as vendég védőhöz kerül; a félidőket 90
+    mp-es üres (szünet-) szakasz választja el."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + [_pl(30, Team.AWAY, 15.0, 10.0)])
+
+    def lose(frames, t, tid):
+        sx, sy = spos[tid]
+        for _ in range(10):          # a labda a vesztesnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # a labda az ellenfélhez kerül
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in fh_losers:
+        t = lose(frames, t, tid)
+    if with_break:
+        for _ in range(int(90 * fps)):   # félidei szünet: üres kockák
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    for tid in sh_losers:
+        t = lose(frames, t, tid)
+    return Match(MatchMeta(match_id="fto", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_tired_turnover_roles_names_the_tiring_post():
+    """A beálló eladásai 1-ről 4-re ugranak a 2. félidőre → fáradtan
+    nála nyílik ki a kéz."""
+    from handball.pipeline.decisions import tired_turnover_roles
+
+    rec = tired_turnover_roles(
+        _fto_match([7, 9], [7, 7, 7, 7]))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["fh"] == 1 and rec["sh"] == 4, rec
+    assert rec["verdict"] and "olcsó a labdaszerzés" in rec["verdict"], rec
+
+
+def test_tired_turnover_roles_silent_without_jump():
+    """Egyenletes eladás-eloszlásnál nincs ítélet."""
+    from handball.pipeline.decisions import tired_turnover_roles
+
+    rec = tired_turnover_roles(
+        _fto_match([7, 7], [7, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

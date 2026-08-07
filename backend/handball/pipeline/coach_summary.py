@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Fáradt-eladó poszt: kinek a labdái vesznek el a 2. félidőben.
+    try:
+        from .decisions import tired_turnover_roles
+        fto = tired_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fto = fto[side]
+            if rec_fto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_fto['main_role']} "
+                     f"posztjának eladásai a második félidőre "
+                     f"megugranak ({rec_fto['fh']} → {rec_fto['sh']})"
+                     " — a szünet után őt kell nyomás alá tenni.")
+    except Exception:
+        pass
     # Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék.
     try:
         from .attack_types import backward_pass_roles
