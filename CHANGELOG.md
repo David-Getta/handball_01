@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kontra-poszt: melyik posztjukon zárul a lerohanás.** A
+  kontra-befejezők rétege a gólt szerző EMBERT nevezi meg — ez a
+  posztot, és nemcsak a gólnál: a lerohanás-szakaszok minden lövését az
+  elengedő játékos posztjához írja. Edzőileg ez a visszafutás
+  sorrendje: visszarendeződéskor nem lehet mindenkit egyszerre
+  felvenni — azt kell először, aki a kontrát ténylegesen befejezi. Ha
+  szórt a befejezésük, a labdát kell késleltetni, nem a befejezőt
+  keresni. Felületek: `/analyze` és meccs-csomag (`role_fast_breaks`),
+  edzői összefoglaló, felderítő edzői kulcs, meccsterv-szabály (271: az
+  ő egy-csatornás kontrájuk × a ti lassú visszarendeződésetek → egy
+  kijelölt ember, nem a labda), edzés-fókusz (292: kétsávos
+  kontra-gyakorlat), teendő-rangsor ("felkészülés" család),
+  kliens-csempe.
+
 - **Lövésválasztás: volt-e jobb helyzet a pályán.** A
   helyzetminőség (xG) eddig megmondta, MILYEN helyzetekből lőnek — azt
   viszont nem, hogy a lövés pillanatában volt-e JOBB. Az új réteg

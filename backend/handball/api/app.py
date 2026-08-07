@@ -2502,6 +2502,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.roles import role_fast_breaks
+            res["role_fast_breaks"] = role_fast_breaks(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_turnover_zones
             res["role_turnover_zones"] = role_turnover_zones(match)
         except Exception:
@@ -4955,6 +4960,9 @@ def create_app():
                 from ..pipeline.setplays import setplay_finishers
                 _layer("setplay_finishers",
                        lambda: setplay_finishers(match))
+                from ..pipeline.roles import role_fast_breaks
+                _layer("role_fast_breaks",
+                       lambda: role_fast_breaks(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

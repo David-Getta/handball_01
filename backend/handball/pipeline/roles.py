@@ -1733,3 +1733,84 @@ def role_pressure_finish(match: Match,
                      "roles": rows, "coldblooded": cold,
                      "pressure_shy": shy, "verdict": verdict}
     return out
+
+
+# Kontra-poszt: ennyi poszthoz kötött kontra-lövés kell az ítélethez,
+# és ekkora részarány számít kiszámíthatónak. A lerohanás ritkább, mint
+# a felállt támadás, ezért a küszöb alacsonyabb — a felderítésben
+# meccsek közt összegződik.
+RFB_MIN_SHOTS = 3
+RFB_SHARE_PCT = 60.0
+
+
+def role_fast_breaks(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Kontra-poszt: MELYIK POSZTJUK FUT KI a lerohanásokon.
+
+    A kontra-befejezők rétege (attack_types.fast_break_finishers) a
+    GÓLT szerző EMBERT nevezi meg — ez a posztot, és nemcsak a gólnál:
+    a lerohanás-szakaszokra eső MINDEN lövést az elengedő játékos
+    posztjához írja.
+
+    Edzőileg ez a visszafutás sorrendje. Visszarendeződéskor nem lehet
+    mindenkit egyszerre felvenni — azt kell először, aki a kontrát
+    ténylegesen befejezi. Ha a lerohanásaik rendre ugyanarról a
+    posztról záródnak (tipikusan a szélső), a visszafutásnál őt kell
+    kijelölt embernek adni, a többiek ráérnek egy ütemmel később. Ha a
+    kontra-befejezésük szórt, a visszafutásban a LABDÁT kell késleltetni
+    (a felhozó emberre ráállni), nem a befejezőt keresni.
+
+    Visszatérés csapatonként: {"breaks" (lerohanás-szakasz), "shots"
+    (poszthoz kötött kontra-lövés), "roles": {poszt: lövés},
+    "main_role", "share_pct", "verdict"} — a main_role/share_pct/
+    verdict None, ha nincs meg az RFB_MIN_SHOTS lövés, vagy egyik poszt
+    sem éri el az RFB_SHARE_PCT részarányt.
+    """
+    from .attack_types import (ATTACK_TAIL_S, AttackType,
+                               classify_attacks)
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)
+             and e.player_id is not None]
+
+    out: dict = {side: {"breaks": 0, "shots": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        side = a["team"]
+        rec = out[side]
+        rec["breaks"] += 1
+        for e in shots:
+            if e.team.value != side or not (
+                    a["start_frame"] <= e.t <= a["end_frame"] + tail):
+                continue
+            rec_role = roles[side].get(e.player_id)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["shots"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= RFB_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RFB_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lerohanásaik a(z) {poszt} poszton záródnak "
+                    f"({share:.0f}%, {rec['shots']} kontra-lövésből) — "
+                    "visszafutásnál őt kell először felvenni, a "
+                    "többiek egy ütemmel ráérnek")
+    return out

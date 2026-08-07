@@ -2088,6 +2088,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Kontra-poszt: melyik posztjukon zárul a lerohanás (3+ kontra-lövés,
+  // 60% részarány — a backenddel azonos küszöbök: RFB_MIN_SHOTS,
+  // RFB_SHARE_PCT).
+  String? _fastBreakRole(Map<String, dynamic> r) {
+    final shots =
+        (r["rfb_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty) return null;
+    var total = 0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lerohanásaik a(z) $top poszton záródnak (${pct.round()}%, "
+        "$total kontra-lövés) · visszafutásnál őt kell először felvenni";
+  }
+
   // Lövésválasztás: felnéznek-e a lövés előtt (6+ mért lövés, 45%
   // felett "nem néznek fel", 15% alatt fegyelmezett — a backenddel
   // azonos küszöbök: SCQ_MIN_SHOTS, SCQ_HIGH_PCT, SCQ_LOW_PCT).
@@ -7111,6 +7137,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_fastBreakRole(r) != null)
+        ["Kontra-poszt", _fastBreakRole(r)!],
       if (_shotChoice(r) != null)
         ["Lövésválasztás", _shotChoice(r)!],
       if (_timeoutFinisher(r) != null)

@@ -766,6 +766,10 @@ class ScoutingReport:
     # összegződik (arány = better / shots).
     scq_shots: int = 0
     scq_better: int = 0
+    # Kontra-poszt: a lerohanás-szakaszokra eső, poszthoz kötött
+    # lövések darabszáma posztonként. Darabszám, meccsek közt
+    # pontosan összegződik.
+    rfb_shots_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -2989,6 +2993,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Kontra-poszt: visszafutásnál kit kell először felvenni.
+    _rfb_n = sum(rep.rfb_shots_by_role.values())
+    if _rfb_n >= 3:
+        _rfb_p, _rfb_c = max(rep.rfb_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rfb_pct = 100.0 * _rfb_c / _rfb_n
+        if _rfb_pct >= 60.0:
+            keys.append(
+                f"A lerohanásaik a(z) {_rfb_p} poszton záródnak "
+                f"({_rfb_pct:.0f}%, {_rfb_n} kontra-lövésből) — "
+                "visszafutásnál őt kell először felvenni, a többiek "
+                "egy ütemmel ráérnek.")
 
     # Lövésválasztás: felnéznek-e a lövés előtt.
     if rep.scq_shots >= 6:
@@ -7424,6 +7441,9 @@ def _scout_team_cached(match: Match, team: Team,
             f"{p}|{side}": r[side]
             for p, r in rgprec["roles"].items()
             for side in ("bal", "közép", "jobb") if r[side]}
+        from .roles import role_fast_breaks as _rfb
+        rfbrec = _rfb(match, config)[team.value]
+        rep.rfb_shots_by_role = dict(rfbrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -9998,6 +10018,28 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 271) Az ő kontra-posztjuk × a ti lassú visszarendeződésetek: ha
+    # amúgy is lassan értek vissza, mindenkit nem tudtok felvenni — de
+    # az EGY kijelölt embert igen, és náluk a kontra egy poszton zárul.
+    _rfb271_n = sum(opp.rfb_shots_by_role.values())
+    if (_rfb271_n >= 3 and opp.fast_break_pct >= 12.0
+            and own.rec_transitions >= 4
+            and own.rec_slow * 2 >= own.rec_transitions):
+        _rfb271_p, _rfb271_c = max(opp.rfb_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rfb271_pct = 100.0 * _rfb271_c / _rfb271_n
+        if _rfb271_pct >= 60.0:
+            plan.append(
+                f"A lerohanásaik ({opp.fast_break_pct:.0f}% a "
+                f"támadásaikból) a(z) {_rfb271_p} poszton záródnak "
+                f"({_rfb271_pct:.0f}%, {_rfb271_n} kontra-lövésből), a "
+                f"ti visszarendeződésetek pedig lassú "
+                f"({own.rec_slow}/{own.rec_transitions} lassú "
+                "visszaérés) — mindenkit nem tudtok felvenni, de EGY "
+                "embert igen: labdavesztésnél a hozzá legközelebbi "
+                "játékos NEM a labdára, hanem rá sprintel vissza. A "
+                "többi kontra-sáv másodlagos.")
 
     # 270) Az ő rossz lövésválasztásuk × a ti fal-szélességetek: aki
     # nem néz fel, azt tömör fallal lehet a rossz szögbe szorítani —
@@ -14494,6 +14536,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rgp_goals_by_role_side for r in reports),
         scq_shots=sum(r.scq_shots for r in reports),
         scq_better=sum(r.scq_better for r in reports),
+        rfb_shots_by_role=_merge_count_dicts(
+            r.rfb_shots_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

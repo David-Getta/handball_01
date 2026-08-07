@@ -103,5 +103,5 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   # A befejező-lencse: kire lépj ki, melyik figurájuk
                   # kire fut ki, és időkérés után kit fogj.
                   "role_pressure_finish", "setplay_finishers",
-                  "timeout_finisher"):
+                  "timeout_finisher", "role_fast_breaks"):
         assert layer in names, f"{layer} nincs a rangsorban"

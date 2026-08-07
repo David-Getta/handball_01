@@ -1194,3 +1194,68 @@ def test_role_pressure_finish_silent_with_few_shots():
         [(2, True, True), (1, True, False)]))["home"]
     assert rec["coldblooded"] is None, rec
     assert rec["pressure_shy"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kontra-poszt (melyik posztjukon zárul a lerohanás) ---------------------
+
+def _rfb_match(n_breaks, finisher_y=2.0, fps=25.0):
+    """`n_breaks` lerohanás, mindet ugyanaz a (szélen futó) ember
+    fejezi be: a labda 4 mp alatt 22→35 m-t halad vele (lerohanás-jel),
+    majd a kezéből a +x kapuba repül."""
+    frames = []
+    t = 0
+    for _ in range(n_breaks):
+        n = int(4 * fps)
+        for i in range(n):       # a kontra: a befejező viszi a labdát
+            x = 22.0 + (35.0 - 22.0) * i / max(1, n - 1)
+            players = [
+                _pl(1, Team.HOME, x - 4.0, 10.0),
+                _pl(2, Team.HOME, x, finisher_y),
+                _pl(20, Team.AWAY, 1.0, 10.0),
+            ]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=finisher_y,
+                                          confidence=1.0)))
+            t += 1
+        cast = [_pl(1, Team.HOME, 31.0, 10.0),
+                _pl(2, Team.HOME, 35.0, finisher_y),
+                _pl(20, Team.AWAY, 1.0, 10.0)]
+        for _ in range(6):       # a lövő kezében a labda
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=35.2, y=finisher_y,
+                                          confidence=1.0)))
+            t += 1
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            frames.append(Frame(
+                t=t, players=cast,
+                ball=Ball(x=35.2 + (40.4 - 35.2) * f,
+                          y=finisher_y + (10.0 - finisher_y) * f,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(int(4 * fps)):    # szünet: nincs támadó fázis
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    return Match(MatchMeta(match_id="rfb", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_role_fast_breaks_finds_the_break_channel():
+    """Ha minden lerohanás ugyanazon a poszton zárul, a visszafutásnál
+    őt kell először felvenni."""
+    from handball.pipeline.roles import RFB_MIN_SHOTS, role_fast_breaks
+
+    rec = role_fast_breaks(_rfb_match(4))["home"]
+    assert rec["breaks"] >= 4, rec
+    assert rec["shots"] >= RFB_MIN_SHOTS, rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "először felvenni" in rec["verdict"], rec
+
+
+def test_role_fast_breaks_silent_with_few_shots():
+    """Két kontra-lövésből nincs ítélet."""
+    from handball.pipeline.roles import role_fast_breaks
+
+    rec = role_fast_breaks(_rfb_match(2))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

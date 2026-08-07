@@ -106,6 +106,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "setplay_finishers"),
         ("felkészülés", "Időkérés-befejező", "stoppages",
          "timeout_finisher"),
+        ("felkészülés", "Kontra-poszt", "roles", "role_fast_breaks"),
     ]
 
 

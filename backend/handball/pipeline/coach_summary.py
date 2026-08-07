@@ -885,6 +885,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Kontra-poszt: kit kell először felvenni visszafutásnál.
+    try:
+        from .roles import role_fast_breaks
+        rfb = role_fast_breaks(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rfb = rfb[side]
+            if rec_rfb["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lerohanásai a(z) "
+                     f"{rec_rfb['main_role']} poszton záródnak "
+                     f"({rec_rfb['share_pct']:.0f}%, "
+                     f"{rec_rfb['shots']} kontra-lövésből) — "
+                     "visszafutásnál őt kell először felvenni.")
+    except Exception:
+        pass
     # Lövésválasztás: felnéznek-e a lövés előtt.
     try:
         from .decisions import shot_choice_quality

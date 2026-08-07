@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 292) Kontra-poszt: ha a lerohanásaink egy poszton záródnak, az
+    # ellenfél egy emberrel hatástalanítja a leggyorsabb fegyverünket.
+    try:
+        from .roles import RFB_SHARE_PCT, role_fast_breaks
+        rfb292 = role_fast_breaks(match, config)
+        for side in ("home", "away"):
+            rec292 = rfb292[side]
+            if rec292.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy csatornás kontra",
+                f"a lerohanásaink {rec292['share_pct']:.0f}%-a a(z) "
+                f"{rec292['main_role']} poszton zárul "
+                f"({rec292['shots']} kontra-lövésből; "
+                f"{RFB_SHARE_PCT:.0f}% fölött már mintázat) — az "
+                "ellenfél egy kijelölt emberrel hatástalanítja",
+                "kétsávos kontra-gyakorlat: az indítás után a labda "
+                "kötelezően sávot vált, mielőtt kapura mehet — a "
+                "második hullám embere is kap befejezést, hogy a "
+                "kontránk ne egy emberen múljon")
+    except Exception:
+        pass
+
     # 291) Lövésválasztás: ha a lövéseink nagy részénél volt jobb
     # szabad helyzet a pályán, nem a lövéstechnika a gond — a fejet
     # kell felhozni a lövés előtt.
