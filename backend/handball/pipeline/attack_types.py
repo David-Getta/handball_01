@@ -5047,3 +5047,68 @@ def pivot_feeder_roles(match: Match,
                     "kezén kell a beálló-vonalba lépni, és az ő "
                     "oldalán induljon a kettőzés")
     return out
+
+
+# Kockáztató-poszt: ennyi poszthoz kötött hosszú-passz eladás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a hazárd
+# labdáik egy posztról jönnek.
+RPR_MIN_TO = 3
+RPR_SHARE_PCT = 60.0
+
+
+def risky_passer_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Kockáztató-poszt: MELYIK POSZTJUK szórja el a hosszú labdákat.
+
+    A kockázatos passzolók rétege (risky_passers) az embert nevezi
+    meg — ez a posztot: a hosszú passzokból lett eladásokat a
+    kiinduló játékos posztjához írja. Így a minta akkor is látszik,
+    ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a labdaszerzés-terv: ha a hazárd labdáik rendre
+    ugyanarról a posztról indulnak (tipikusan az irányítótól), az ő
+    hosszú passzsávjába kell beállni — a sávba lépés nála azonnal
+    labdát hoz, és minden szerzés mögött nyitott pálya van. Saját
+    csapatra: az egy poszton gyűlő eladás passz-technika edzés-téma.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"turnovers" (poszthoz
+    kötött hosszú-passz eladás), "roles": {poszt: eladás},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg az RPR_MIN_TO, vagy egyik poszt sem éri el az RPR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    rp = risky_passers(match, config)
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in rp[side]["players"]:
+            if not row["turnovers"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["turnovers"])
+            rec["turnovers"] += row["turnovers"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= RPR_MIN_TO:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a hazárd hosszú labdáik a(z) {poszt} posztról "
+                    f"indulnak ({share:.0f}%, {rec['turnovers']} "
+                    "elszórt hosszú passzból) — az ő passzsávjába "
+                    "kell beállni: a sávba lépés nála azonnal labdát "
+                    "hoz")
+    return out

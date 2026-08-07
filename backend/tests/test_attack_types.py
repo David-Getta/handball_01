@@ -3919,3 +3919,62 @@ def test_pivot_feeder_roles_silent_with_few_feeds():
 
     rec = pivot_feeder_roles(_pfr_match([2, 3]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _rpr_match(cases, fps=25.0):
+    """Mint a _risky_passer_match, de poszt-mintával: a 4-es átlövő
+    (9 m, közép), a 6-os szélső — a `cases` elemei (passzoló id,
+    elveszett?) párok."""
+    role_pos = {4: (30.0, 9.0), 6: (35.0, 3.0)}
+    frames = []
+    t = 0
+    for _ in range(150):             # hazai birtoklás: poszt-minta
+        players = [_pl(pid, Team.HOME, *xy)
+                   for pid, xy in role_pos.items()]
+        players.append(_pl(20, Team.AWAY, 20.0, 16.0))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=30.2, y=9.0, confidence=1.0)))
+        t += 1
+    for (pid, lost) in cases:
+        taker = (_pl(20, Team.AWAY, 30.0, 22.0) if lost
+                 else _pl(2, Team.HOME, 30.0, 22.0))
+        pls = [_pl(pid, Team.HOME, 30.0, 10.0), taker]
+        for _ in range(5):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(5):
+            frames.append(Frame(t=t, players=pls,
+                                ball=Ball(x=30.0, y=22.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(5):
+            frames.append(Frame(
+                t=t, players=[_pl(pid, Team.HOME, 30.0, 10.0)],
+                ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_risky_passer_roles_names_the_gambling_post():
+    """Ha az elszórt hosszú labdák zöme ugyanarról a posztról indul,
+    az ő passzsávjába kell beállni."""
+    from handball.pipeline.attack_types import (RPR_MIN_TO,
+                                                risky_passer_roles)
+
+    rec = risky_passer_roles(
+        _rpr_match([(4, True)] * 3 + [(6, True)]))["home"]
+    assert rec["turnovers"] >= RPR_MIN_TO, rec
+    assert rec["main_role"] == "átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsávjába" in rec["verdict"], rec
+
+
+def test_risky_passer_roles_silent_with_few_turnovers():
+    """Néhány elszórt hosszú labdából nincs ítélet."""
+    from handball.pipeline.attack_types import risky_passer_roles
+
+    rec = risky_passer_roles(
+        _rpr_match([(4, True), (6, True)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat.**
+  A kockázatos passzolók rétege az embert nevezi meg — az új réteg a
+  posztot: a hosszú passzokból lett eladásokat a kiinduló játékos
+  posztjához írja. Edzőileg ez a labdaszerzés-terv: ha a hazárd
+  labdáik rendre ugyanarról a posztról indulnak (tipikusan az
+  irányítótól), az ő passzsávjába kell beállni — a sávba lépés nála
+  azonnal labdát hoz, mögötte nyitott a pálya. Saját csapatra: az
+  egy poszton gyűlő eladás passz-technika edzés-téma. Felületek:
+  `/analyze` és meccs-csomag (`risky_passer_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (287: az ő
+  kockáztató-posztjuk × a ti kontra-játékotok → az ő sávja a
+  kontra-forrásotok), edzés-fókusz (308: passz-technika blokk sávba
+  lépő védővel), teendő-rangsor és a meccs-jelentés Befejező-lencse
+  táblája, kliens-csempe.
+
 - **Vasember-poszt: melyik posztjuk játszik végig csere nélkül.** A
   rotáció-mélység azt mondja meg, hány emberrel játszanak — az új
   réteg azt, HOL nincs váltás: posztonként a legtöbbet pályán lévő

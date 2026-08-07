@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 308) Kockáztató-poszt: ha a hosszú eladásaink egy posztról
+    # jönnek, az ellenfél a sávjába áll, és kontrát kap belőle.
+    try:
+        from .attack_types import RPR_SHARE_PCT, risky_passer_roles
+        rpr308 = risky_passer_roles(match, config)
+        for side in ("home", "away"):
+            rec308 = rpr308[side]
+            if rec308.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztról szórt hosszú labdák",
+                f"az elszórt hosszú passzaink "
+                f"{rec308['share_pct']:.0f}%-a a(z) "
+                f"{rec308['main_role']} posztról indul "
+                f"({rec308['turnovers']} eladásból; "
+                f"{RPR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a sávjába áll, és minden elszórt labdából "
+                "kontrát kapunk",
+                "passz-technika blokk a terhelt posztra: hosszú "
+                "indítás csak feszes, előre vezetett labdával, "
+                "nyomás alatt kötelező a rövid biztonsági megoldás — "
+                "sávba lépő védővel gyakorolva")
+    except Exception:
+        pass
+
     # 307) Vasember-poszt: ha egy posztunk csere nélkül végigmegy, a
     # hajrában ott fáradunk el — az ellenfél oda viszi majd a tempót.
     try:

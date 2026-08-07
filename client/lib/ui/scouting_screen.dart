@@ -2115,6 +2115,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat
+  // (3+ elszórt hosszú passz, 60% részarány — a backenddel azonos
+  // küszöbök: RPR_MIN_TO, RPR_SHARE_PCT).
+  String? _riskyPasserRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rpr_to_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a hazárd hosszú labdáik a(z) $top posztról indulnak "
+        "(${pct.round()}%, $total eladás) · az ő passzsávjába kell "
+        "beállni";
+  }
+
   // Vasember-poszt: melyik posztjuk játszik végig csere nélkül
   // (10+ percnyi kocka, 85% jelenlét és 15 százalékpontos előny — a
   // backenddel azonos küszöbök: IRM_MIN_MATCH_MIN, IRM_SHARE_PCT,
@@ -7530,6 +7557,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_riskyPasserRole(r) != null)
+        ["Kockáztató-poszt", _riskyPasserRole(r)!],
       if (_ironManRole(r) != null)
         ["Vasember-poszt", _ironManRole(r)!],
       if (_pivotFeederRole(r) != null)

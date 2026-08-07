@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat.
+    try:
+        from .attack_types import risky_passer_roles
+        rpr = risky_passer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rpr = rpr[side]
+            if rec_rpr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hazárd hosszú labdái egy posztról "
+                     f"jönnek: {rec_rpr['share_pct']:.0f}%-uk a(z) "
+                     f"{rec_rpr['main_role']} poszté "
+                     f"({rec_rpr['turnovers']} elszórt hosszúból) — az"
+                     " ő passzsávjába kell beállni.")
+    except Exception:
+        pass
     # Vasember-poszt: melyik posztjuk játszik végig csere nélkül.
     try:
         from .stats import iron_man_roles

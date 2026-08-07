@@ -3239,6 +3239,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import risky_passer_roles
+            res["risky_passer_roles"] = risky_passer_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import timeout_first_attack
             res["timeout_first_attack"] = timeout_first_attack(match)
         except Exception:
@@ -4572,6 +4577,9 @@ def create_app():
                 _layer("key_post", lambda: key_post(match))
                 from ..pipeline.attack_types import risky_passers
                 _layer("risky_passers", lambda: risky_passers(match))
+                from ..pipeline.attack_types import risky_passer_roles
+                _layer("risky_passer_roles",
+                       lambda: risky_passer_roles(match))
                 from ..pipeline.stoppages import timeout_first_attack
                 _layer("timeout_first_attack",
                        lambda: timeout_first_attack(match))
