@@ -1816,10 +1816,19 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         kp_rec = _kp_fn(match)
         kp_lines = []
         for side, name in (("home", home), ("away", away)):
-            v = (kp_rec.get(side) or {}).get("verdict")
-            if v:
-                kp_lines.append(f"<li><b>{escape(name)}</b>: "
-                                f"{escape(v)}</li>")
+            rec_kp = kp_rec.get(side) or {}
+            v = rec_kp.get("verdict")
+            if not v:
+                continue
+            # Indoklás: mely rétegek mutatnak a kulcs-posztra — a
+            # magyarázható lánc a jelentésben is látszik.
+            evidence = [n["layer"] for n in rec_kp.get("named", [])
+                        if n.get("poszt") == rec_kp.get("top")]
+            tail = (' <span class="note">(rétegek: '
+                    + escape(", ".join(evidence)) + ")</span>"
+                    if evidence else "")
+            kp_lines.append(f"<li><b>{escape(name)}</b>: "
+                            f"{escape(v)}{tail}</li>")
         if kp_lines:
             key_post_html = ("<h2>Kulcs-poszt</h2><ul>"
                              + "".join(kp_lines) + "</ul>")

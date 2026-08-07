@@ -5,6 +5,13 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kulcs-poszt indoklással a meccs-jelentésben.** A jelentés
+  Kulcs-poszt szekciója az ítélet mellé mostantól felsorolja, MELY
+  rétegek mutatnak a megnevezett posztra (pl. "rétegek:
+  Labdaszerző-poszt, Blokk-poszt, Átvert-poszt") — a magyarázható
+  lánc a papíron is követhető, az edző látja, miből áll össze a
+  meccsterv első lapja. Őr-teszt ellenőrzi.
+
 - **Kulcs-poszt: teljes lencse-lefedettség + őr-teszt.** A
   kulcs-poszt összegzés mostantól mind a 17 poszt-ítéletes réteget
   számolja (bekerült az Indítás-vadász, a Bejátszó-, a Kockáztató-

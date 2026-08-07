@@ -1678,3 +1678,13 @@ def test_vedo_lencse_a_jelentesben():
 
     empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
     assert "Védő-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_kulcs_poszt_indoklassal_a_jelentesben():
+    """A kulcs-poszt szekció felsorolja, mely rétegek mutatnak rá —
+    a magyarázható lánc a jelentésben is látszik."""
+    from tests.test_priorities import _kp_match
+
+    html = match_report_html(_kp_match(), {}, [], None)
+    assert "Kulcs-poszt" in html
+    assert "rétegek:" in html and "Blokk-poszt" in html
