@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Poszt-nyomás: melyik posztjuk fejez be fedezetten is.** Eddig
+  csapat-szinten tudtuk, mennyit ér a fedezés ellenük
+  (`pressure_finishing`) — azt viszont nem, KIN fog. Az új réteg minden
+  lövésnél megkeresi az elengedő játékost, és az elengedés kockáján a
+  legközelebbi mezőny-védő távolságát: a két méteren belüli lövés
+  fedezett. A fedezett lövések gólarányát a lövő posztjához írja.
+  Edzőileg ez a "kire lépj ki" döntés: aki fedezetten is belövi, azt ki
+  kell zárni (a kinyújtott kéz nála kevés), aki fedezetten beesik, arra
+  épp rá kell engedni — a fal nem tud mindenkire kilépni. Felületek:
+  `/analyze` és meccs-csomag (`role_pressure_finish`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (267: az ő
+  hidegvérű posztjuk × a ti amúgy is szoros falatok → kizárás, nem
+  kilépés), edzés-fókusz (288: a fedezetten beeső posztunknak kontakt
+  alatti befejezés gyakorlása), kliens-csempe.
+
 - **A teszt-csomag negyedével gyorsabb (8:20 → 6:10).** A recept
   minden commit előtt teljes futást ír elő, a csomag viszont nyolc perc
   fölé nőtt — ez már elriaszt a futtatástól, és pont az őrzés vész el

@@ -1121,3 +1121,76 @@ def test_role_goal_placement_silent_with_few_goals():
 
     rec = role_goal_placement(_rgp_match([(2, 11.2), (2, 11.2)]))["home"]
     assert rec["predictable"] is None and rec["verdict"] is None, rec
+
+
+# ---- Poszt-nyomás (melyik posztjuk fejez be fedezetten is) ------------------
+
+def _rpf_match(plan, warmup=200):
+    """`plan` = (lövő-azonosító, fedezett?, gól?) hármasok.
+
+    A fedezést a mezőny-védő TÁVOLSÁGA dönti el (FREE_DEF_RADIUS_M):
+    fedezett lövésnél fél méterre áll a lövőtől, szabadnál a pálya
+    másik felén. A vendég kapus külön játékos a saját kapujában — enélkül
+    az egyetlen vendég mezőnyjátékost jelölné a felismerés kapusnak, és
+    nem maradna, akihez a fedezést mérni lehet.
+    """
+    frames = []
+    t = 0
+    guard = [30.0, 4.0]          # a mezőny-védő helye (a plan írja át)
+
+    def _cast():
+        return [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RSD.items()] + \
+            [_pl(20, Team.AWAY, 0.5, 10.0),        # vendég kapus
+             _pl(21, Team.AWAY, guard[0], guard[1])]
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_cast(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for _ in range(warmup):      # poszt-minta: a beálló birtokol
+        _add(34.0, 10.0)
+    for (tid, covered, goal) in plan:
+        sx, sy = _RSD[tid]
+        guard[0], guard[1] = (sx - 0.5, sy) if covered else (5.0, 4.0)
+        for _ in range(6):       # a lövő kezében a labda
+            _add(sx + 0.2, sy)
+        # Gólnál a kapu közepébe, mellélövésnél a kapufa mellé.
+        target_y = 10.0 if goal else 14.5
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            _add(sx + 0.2 + (40.4 - sx - 0.2) * f, sy + (target_y - sy) * f)
+        guard[0], guard[1] = 5.0, 4.0
+        for _ in range(30):
+            _add(5.0, 10.0)
+    return Match(MatchMeta(match_id="pf", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_role_pressure_finish_finds_the_coldblooded_post():
+    """Az irányítójuk fedezetten is belövi a lövései négyötödét, a
+    beállójuk egyet sem — a falnak nem kilépnie kell rá, hanem kizárnia.
+    """
+    from handball.pipeline.roles import (RPF_MIN_SHOTS,
+                                         role_pressure_finish)
+
+    rec = role_pressure_finish(_rpf_match(
+        [(2, True, True)] * 4 + [(2, True, False)]
+        + [(1, True, False)] * 5))["home"]
+    assert rec["covered_shots"] >= 2 * RPF_MIN_SHOTS, rec
+    assert rec["coldblooded"] is not None, rec
+    assert rec["coldblooded"]["covered_pct"] >= 70.0, rec
+    assert rec["coldblooded"]["gap_pct"] >= 20.0, rec
+    assert rec["verdict"] and "ki kell zárni" in rec["verdict"], rec
+
+
+def test_role_pressure_finish_silent_with_few_shots():
+    """Két fedezett lövésből nincs ítélet."""
+    from handball.pipeline.roles import role_pressure_finish
+
+    rec = role_pressure_finish(_rpf_match(
+        [(2, True, True), (1, True, False)]))["home"]
+    assert rec["coldblooded"] is None, rec
+    assert rec["pressure_shy"] is None and rec["verdict"] is None, rec

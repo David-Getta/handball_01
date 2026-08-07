@@ -2492,6 +2492,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.roles import role_pressure_finish
+            res["role_pressure_finish"] = role_pressure_finish(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import role_turnover_zones
             res["role_turnover_zones"] = role_turnover_zones(match)
         except Exception:
@@ -4923,6 +4928,9 @@ def create_app():
                 from ..pipeline.roles import role_goal_placement
                 _layer("role_goal_placement",
                        lambda: role_goal_placement(match))
+                from ..pipeline.roles import role_pressure_finish
+                _layer("role_pressure_finish",
+                       lambda: role_pressure_finish(match))
                 analyses_json = json.dumps(analyses, ensure_ascii=False,
                                            indent=2)
                 summary_txt = ""

@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 288) Poszt-nyomás: ha egy posztunk fedezetten beesik, a nyomás
+    # alatti befejezést kell gyakorolnia — az ellenfél épp rá lép ki.
+    try:
+        from .roles import RPF_GAP_PCT, role_pressure_finish
+        rpf288 = role_pressure_finish(match, config)
+        for side in ("home", "away"):
+            rec288 = rpf288[side]
+            shy288 = rec288.get("pressure_shy")
+            if shy288 is None:
+                continue
+            add(side, "befejezés", "Fedezetten beeső poszt",
+                f"a(z) {shy288['poszt']} posztunk a fedezett lövései "
+                f"{shy288['covered_pct']:.0f}%-át lövi be "
+                f"({shy288['covered_shots']} lövésből; ez "
+                f"{shy288['gap_pct']:.0f} százalékponttal a csapat-átlag "
+                f"alatt van, {RPF_GAP_PCT:.0f} fölött már mintázat) — az "
+                "ellenfél épp rá fog kilépni",
+                "nyomás alatti befejezés: kontakt-lövés párnával és "
+                "kinyújtott kézzel a lövősávban, kényszerített "
+                "test-érintkezés után — a cél nem az erő, hanem hogy a "
+                "kar üteme ne változzon, amikor hozzáérnek")
+    except Exception:
+        pass
+
     # 287) Poszt-kapuoldal: ha egy posztunk mindig ugyanoda lő, az
     # ellenfél kapusa ráállhat — a kapuoldal-váltás gyakorlandó.
     try:

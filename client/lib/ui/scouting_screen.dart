@@ -2088,6 +2088,54 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Poszt-nyomás: melyik posztjuk fejez be fedezetten is (8+ fedezett
+  // lövés, posztonként 4+, 20 százalékpont eltérés — a backenddel
+  // azonos küszöbök: RPF_MIN_SHOTS, RPF_GAP_PCT).
+  String? _pressureFinishRole(Map<String, dynamic> r) {
+    final shots =
+        (r["rpf_covered_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    final goals =
+        (r["rpf_covered_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty || goals == null) return null;
+    var total = 0;
+    var totalG = 0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    goals.forEach((k, v) => totalG += (v as num).toInt());
+    if (total < 8) return null;
+    final teamPct = 100.0 * totalG / total;
+    String? cold, shy;
+    var coldPct = 0.0, shyPct = 0.0;
+    var coldN = 0, shyN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n < 4) return;
+      final pct = 100.0 * ((goals[k] as num?) ?? 0).toInt() / n;
+      if (cold == null || pct > coldPct) {
+        cold = k;
+        coldPct = pct;
+        coldN = n;
+      }
+      if (shy == null || pct < shyPct) {
+        shy = k;
+        shyPct = pct;
+        shyN = n;
+      }
+    });
+    if (cold != null && coldPct - teamPct >= 20.0) {
+      return "a(z) $cold posztjuk fedezetten is befejez: a fedezett "
+          "lövéseik ${coldPct.round()}%-át belövi ($coldN lövés, "
+          "csapat-átlag ${teamPct.round()}%) · őt ki kell zárni, a puszta "
+          "kilépés nála kevés";
+    }
+    if (shy != null && teamPct - shyPct >= 20.0) {
+      return "a(z) $shy posztjuk fedezetten beesik: a fedezett lövéseik "
+          "${shyPct.round()}%-át lövi be ($shyN lövés, csapat-átlag "
+          "${teamPct.round()}%) · rá érdemes kilépni, nála a nyomás "
+          "megoldja a helyzetet";
+    }
+    return null;
+  }
+
   // Poszt-lövéserő: melyik posztjuk lő keményen (8+ lövés,
   // posztonként 4+, 12 km/h eltérés — a backenddel azonos küszöbök:
   // RSP_MIN_SHOTS, RSP_GAP_KMH).
@@ -6988,6 +7036,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_pressureFinishRole(r) != null)
+        ["Poszt-nyomás", _pressureFinishRole(r)!],
       if (_goalPlacementRole(r) != null)
         ["Poszt-kapuoldal", _goalPlacementRole(r)!],
       if (_shotPowerRole(r) != null)

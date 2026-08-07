@@ -885,6 +885,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Poszt-nyomás: kire kell kilépni, kit kell kizárni.
+    try:
+        from .roles import role_pressure_finish
+        rpf = role_pressure_finish(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rpf = rpf[side]
+            cold_rpf = rec_rpf["coldblooded"]
+            if cold_rpf is None:
+                continue
+            body += (f" A(z) {name} nyomás alatt is befejező posztja a(z) "
+                     f"{cold_rpf['poszt']}: a fedezett lövéseik "
+                     f"{cold_rpf['covered_pct']:.0f}%-át belövi "
+                     f"({cold_rpf['covered_shots']} lövésből) — őt ki "
+                     "kell zárni, a puszta kilépés nála kevés.")
+    except Exception:
+        pass
     # Poszt-kapuoldal: melyik sarokra állhat rá a kapus.
     try:
         from .roles import role_goal_placement

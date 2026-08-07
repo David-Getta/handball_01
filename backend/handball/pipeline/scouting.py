@@ -749,6 +749,11 @@ class ScoutingReport:
     # Poszt-kapuoldal: "poszt|oldal" → gólszám. Darabszám, meccsek közt
     # pontosan összegződik (részarány = oldal / a poszt összes gólja).
     rgp_goals_by_role_side: dict = field(default_factory=dict)
+    # Poszt-nyomás: posztonként a FEDEZETT lövés és a belőtt fedezett
+    # lövés darabszáma. Csak darabszám — a gólarány meccsek közt az
+    # összegekből számolódik, sose átlagok átlagából.
+    rpf_covered_shots_by_role: dict = field(default_factory=dict)
+    rpf_covered_goals_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -2967,6 +2972,34 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Poszt-nyomás: kire lépjen ki a falunk, kit kell kizárni.
+    _rpf_cs = rep.rpf_covered_shots_by_role
+    _rpf_n = sum(_rpf_cs.values())
+    if _rpf_n >= 8:
+        _rpf_team = 100.0 * sum(rep.rpf_covered_goals_by_role.values()) / _rpf_n
+        _rpf_rows = [(p, n,
+                      100.0 * rep.rpf_covered_goals_by_role.get(p, 0) / n)
+                     for p, n in _rpf_cs.items() if n >= 4]
+        if _rpf_rows:
+            _rpf_p, _rpf_c, _rpf_pct = max(_rpf_rows, key=lambda r: r[2])
+            if _rpf_pct - _rpf_team >= 20.0:
+                keys.append(
+                    f"A(z) {_rpf_p} posztjuk fedezetten is befejez: a "
+                    f"fedezett lövéseik {_rpf_pct:.0f}%-át belövi "
+                    f"({_rpf_c} lövésből; a csapat-átlaguk "
+                    f"{_rpf_team:.0f}%) — őt KI KELL ZÁRNI, a puszta "
+                    "kilépés nála kevés.")
+            else:
+                _rpf_p2, _rpf_c2, _rpf_pct2 = min(_rpf_rows,
+                                                  key=lambda r: r[2])
+                if _rpf_team - _rpf_pct2 >= 20.0:
+                    keys.append(
+                        f"A(z) {_rpf_p2} posztjuk fedezetten beesik: a "
+                        f"fedezett lövéseik {_rpf_pct2:.0f}%-át lövi be "
+                        f"({_rpf_c2} lövésből; a csapat-átlaguk "
+                        f"{_rpf_team:.0f}%) — rá érdemes kilépni, nála a "
+                        "nyomás önmagában megoldja a helyzetet.")
 
     # Poszt-kapuoldal: melyik sarokra állhat rá a kapusunk.
     _rgp = rep.rgp_goals_by_role_side
@@ -7332,6 +7365,14 @@ def _scout_team_cached(match: Match, team: Team,
             f"{p}|{side}": r[side]
             for p, r in rgprec["roles"].items()
             for side in ("bal", "közép", "jobb") if r[side]}
+        from .roles import role_pressure_finish as _rpf
+        rpfrec = _rpf(match, config)[team.value]
+        rep.rpf_covered_shots_by_role = {
+            p: r["covered_shots"] for p, r in rpfrec["roles"].items()
+            if r["covered_shots"]}
+        rep.rpf_covered_goals_by_role = {
+            p: r["covered_goals"] for p, r in rpfrec["roles"].items()
+            if r["covered_shots"]}
         from .roles import role_shot_power as _rsp
         rsprec = _rsp(match, config)[team.value]
         rep.rsp_shots_by_role = {p: r["shots"]
@@ -9877,6 +9918,32 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 267) Az ő fedezetten is befejező posztjuk × a ti védekezési
+    # nyomásotok: ha a falunk amúgy is szorosan játszik a labdásra, a
+    # "lépj ki rá" utasítás nála nem hoz újat — a labdát kell elvenni
+    # tőle, nem a lövését zavarni.
+    _rpf267_cs = opp.rpf_covered_shots_by_role
+    _rpf267_n = sum(_rpf267_cs.values())
+    if _rpf267_n >= 8 and 0.0 < own.defensive_pressure_m <= 1.6:
+        _rpf267_team = (100.0 * sum(opp.rpf_covered_goals_by_role.values())
+                        / _rpf267_n)
+        _rpf267_rows = [
+            (p, n, 100.0 * opp.rpf_covered_goals_by_role.get(p, 0) / n)
+            for p, n in _rpf267_cs.items() if n >= 4]
+        if _rpf267_rows:
+            _p267, _n267, _pct267 = max(_rpf267_rows, key=lambda r: r[2])
+            if _pct267 - _rpf267_team >= 20.0:
+                plan.append(
+                    f"A(z) {_p267} posztjuk a fedezett lövései "
+                    f"{_pct267:.0f}%-át belövi ({_n267} lövésből; a "
+                    f"csapat-átlaguk {_rpf267_team:.0f}%), a ti falatok "
+                    f"pedig már most szorosan játszik (átlag "
+                    f"{own.defensive_pressure_m:.1f} m a labdásra) — "
+                    "nála a kilépés nem hoz újat: KIZÁRÁS kell, a "
+                    "passzsáv zárása és kettőzés MÉG A LABDA ELŐTT. Ez "
+                    "a poszt-lencse fal-párja: a távolság megmondja, "
+                    "meddig lépj ki, ez pedig azt, KIRE NE.")
 
     # 266) Az ő kiszámítható posztjuk × a ti kapusotok oldal-profilja:
     # ha a kapusunk épp azon az oldalon véd jobban, amerre lőnek, a
@@ -14287,6 +14354,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
         rgp_goals_by_role_side=_merge_count_dicts(
             r.rgp_goals_by_role_side for r in reports),
+        rpf_covered_shots_by_role=_merge_count_dicts(
+            r.rpf_covered_shots_by_role for r in reports),
+        rpf_covered_goals_by_role=_merge_count_dicts(
+            r.rpf_covered_goals_by_role for r in reports),
         rsp_shots_by_role=_merge_count_dicts(
             r.rsp_shots_by_role for r in reports),
         rsp_kmh_sum_by_role=_merge_count_dicts(

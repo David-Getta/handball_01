@@ -1599,3 +1599,137 @@ def role_goal_placement(match: Match,
         out[side] = {"goals": total, "roles": rows,
                      "predictable": predictable, "verdict": verdict}
     return out
+
+
+# Poszt-nyomás: posztonként ennyi FEDEZETT lövés kell az ítélethez, és
+# ekkora (százalékpontos) eltérés a csapat fedezett gólarányától
+# számít érdeminek. A 20 százalékpont nagyjából minden ötödik fedezett
+# lövés — ennyi már átírja, kire szabad rálépni és kit kell kizárni.
+RPF_MIN_SHOTS = 4
+RPF_GAP_PCT = 20.0
+
+
+def role_pressure_finish(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Poszt-nyomás: MELYIK POSZTJUK FEJEZ BE FEDEZETTEN IS.
+
+    A csapat-szintű nyomás alatti befejezés (defense.pressure_finishing)
+    azt mondja meg, mennyit ér a fedezés a csapat ellen — ez azt, KIN
+    fog. Minden felismert lövéshez megkeressük az ELENGEDŐ játékost, és
+    az elengedés kockáján a legközelebbi MEZŐNY-védő távolságát: a
+    FREE_DEF_RADIUS_M-en belüli lövés fedezett, a távolabbi szabad. A
+    fedezett lövések gólarányát a lövő posztjához írjuk.
+
+    Edzőileg ez a KIRE LÉPJ KI döntés. Aki fedezetten is belövi, azt
+    nem elég "megzavarni": ellene KIZÁRÁS kell — a labdát ne is kapja
+    meg, mert a kinyújtott kéz nála nem elég. Aki viszont fedezetten
+    beesik, azt épp rá kell engedni: nála a nyomás önmagában megoldja a
+    helyzetet, és a fal nem szakad szét egy fölösleges kettőzésben.
+    Ugyanaz a fal nem tud mindenkire kilépni — ez a réteg mondja meg,
+    kire érdemes.
+
+    Visszatérés csapatonként: {"shots" (mért lövés), "covered_shots",
+    "team_covered_pct", "roles": {poszt: {"covered_shots",
+    "covered_goals", "covered_pct", "free_shots", "free_goals"}},
+    "coldblooded": {"poszt", "covered_shots", "covered_pct",
+    "gap_pct"} | None, "pressure_shy": {...} | None, "verdict": str |
+    None} — a coldblooded/pressure_shy/verdict None, ha a poszt nem
+    érte el az RPF_MIN_SHOTS fedezett lövést, vagy az eltérése kisebb
+    RPF_GAP_PCT-nél.
+    """
+    import math
+
+    from ..models.tracking import Team
+    from .defense import FREE_DEF_RADIUS_M
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    by_frame = {f.t: f for f in match.frames}
+
+    # poszt → [fedezett lövés, fedezett gól, szabad lövés, szabad gól]
+    tally: dict = {"home": {}, "away": {}}
+    totals: dict = {"home": [0, 0, 0], "away": [0, 0, 0]}  # lövés, fed, fed-gól
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        frame = by_frame.get(e.t)
+        if frame is None:
+            continue
+        who = next((p for p in frame.players
+                    if p.track_id == e.player_id), None)
+        if who is None:
+            continue
+        defender_team = Team.AWAY if e.team == Team.HOME else Team.HOME
+        # A kapus nem számít fedezésnek: a mezőnyvédő közelsége az,
+        # ami a lövés szögét és a karmunkát zavarja.
+        dists = [math.hypot(p.x - who.x, p.y - who.y)
+                 for p in frame.players
+                 if p.team == defender_team and p.role != "kapus"]
+        if not dists:
+            continue
+        covered = min(dists) <= FREE_DEF_RADIUS_M
+        rec = tally[side].setdefault(rec_role["poszt"], [0, 0, 0, 0])
+        goal = e.type == EventType.GOAL
+        if covered:
+            rec[0] += 1
+            rec[1] += 1 if goal else 0
+            totals[side][1] += 1
+            totals[side][2] += 1 if goal else 0
+        else:
+            rec[2] += 1
+            rec[3] += 1 if goal else 0
+        totals[side][0] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        n_all, n_cov, g_cov = totals[side]
+        team_pct = (100.0 * g_cov / n_cov) if n_cov else None
+        rows = {}
+        for poszt, (cs, cg, fs, fg) in sorted(
+                tally[side].items(), key=lambda kv: -(kv[1][0] + kv[1][2])):
+            rows[poszt] = {
+                "covered_shots": cs, "covered_goals": cg,
+                "covered_pct": round(100.0 * cg / cs, 1) if cs else None,
+                "free_shots": fs, "free_goals": fg}
+        cold = shy = verdict = None
+        if team_pct is not None:
+            eligible = [(p, r) for p, r in rows.items()
+                        if r["covered_shots"] >= RPF_MIN_SHOTS]
+            if eligible:
+                p_c, r_c = max(eligible, key=lambda pr: pr[1]["covered_pct"])
+                if r_c["covered_pct"] - team_pct >= RPF_GAP_PCT:
+                    cold = {"poszt": p_c,
+                            "covered_shots": r_c["covered_shots"],
+                            "covered_pct": r_c["covered_pct"],
+                            "gap_pct": round(r_c["covered_pct"] - team_pct, 1)}
+                p_s, r_s = min(eligible, key=lambda pr: pr[1]["covered_pct"])
+                if team_pct - r_s["covered_pct"] >= RPF_GAP_PCT:
+                    shy = {"poszt": p_s,
+                           "covered_shots": r_s["covered_shots"],
+                           "covered_pct": r_s["covered_pct"],
+                           "gap_pct": round(team_pct - r_s["covered_pct"], 1)}
+                if cold is not None:
+                    verdict = (f"a(z) {cold['poszt']} fedezetten is "
+                               f"befejez ({cold['covered_pct']:.0f}% "
+                               f"{cold['covered_shots']} fedezett "
+                               "lövésből) — őt ki kell zárni, a puszta "
+                               "kilépés nála kevés")
+                elif shy is not None:
+                    verdict = (f"a(z) {shy['poszt']} fedezetten beesik "
+                               f"({shy['covered_pct']:.0f}% "
+                               f"{shy['covered_shots']} fedezett "
+                               "lövésből) — rá érdemes kilépni, a "
+                               "nyomás nála megoldja a helyzetet")
+        out[side] = {"shots": n_all, "covered_shots": n_cov,
+                     "team_covered_pct": round(team_pct, 1)
+                     if team_pct is not None else None,
+                     "roles": rows, "coldblooded": cold,
+                     "pressure_shy": shy, "verdict": verdict}
+    return out
