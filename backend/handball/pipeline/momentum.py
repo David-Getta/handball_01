@@ -2917,3 +2917,76 @@ def second_start_roles(match: Match, config=None) -> dict:
                     "után őt kell a legjobb védővel megfogni, és az"
                     " elhúzásuk elmarad")
     return out
+
+
+# Előnyben-poszt: ennyi poszthoz kötött, vezetésnél lőtt gól kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
+# előny-tartásuk egy posztra épül.
+LGR_MIN_GOALS = 3
+LGR_SHARE_PCT = 60.0
+
+
+def lead_scorer_roles(match: Match, config=None) -> dict:
+    """Előnyben-poszt: MELYIK POSZTJUK viszi a játékot vezetésnél.
+
+    A felzárkózás-poszt a hátrányt nézi, a hajrá-poszt a záró
+    perceket — ez a VEZETÉST: a saját vezetés közben lőtt gólokat a
+    lövő posztjához írja. Így látszik, kire épül az előny-tartásuk,
+    akkor is, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a lendület-törés terve hátrányban: ha vezetnek, és
+    az előny-tartásuk rendre ugyanarról a posztról jön, az ő
+    kivételével (szoros fogás, kettőzés) a lendület-tartásuk törik
+    meg — a felzárkózásra ez a leggyorsabb út. Saját csapatra: a
+    vezetés-tartás ne egy emberen álljon.
+
+    Visszatérés csapatonként: {"goals" (vezetésnél lőtt, poszthoz
+    kötött gól), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az LGR_MIN_GOALS,
+    vagy egyik poszt sem éri el az LGR_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"goals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    score = {"home": 0, "away": 0}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        side = e.team.value
+        other = "away" if side == "home" else "home"
+        leading = score[side] > score[other]   # állás a gól ELŐTT
+        score[side] += 1
+        if not leading or e.player_id is None:
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["goals"] >= LGR_MIN_GOALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["goals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= LGR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"vezetésnél a(z) {poszt} posztjuk viszi a "
+                    f"játékot ({share:.0f}%, {rec['goals']} "
+                    "előnyben lőtt gólból) — ha ők vezetnek, az ő "
+                    "kivétele (szoros fogás, kettőzés) töri meg a "
+                    "lendület-tartásukat")
+    return out

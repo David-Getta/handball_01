@@ -2162,3 +2162,28 @@ def test_second_start_roles_silent_without_break():
     rec = second_start_roles(
         _fdp_match([9, 9], [7, 7, 7], with_break=False))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Előnyben-poszt (vezetésnél melyik posztjuk viszi a játékot) -----------
+
+
+def test_lead_scorer_roles_names_the_lead_post():
+    """A vezetés közbeni gólok a beállótól jönnek → az ő kivétele
+    töri a lendület-tartást."""
+    from handball.pipeline.momentum import (LGR_MIN_GOALS,
+                                            lead_scorer_roles)
+
+    # Az első gól (9) még döntetlennél esik, a többi már vezetésnél.
+    rec = lead_scorer_roles(_hhr_match([9, 7, 7, 7]))["home"]
+    assert rec["goals"] >= LGR_MIN_GOALS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "lendület-tartásukat" in rec["verdict"], rec
+
+
+def test_lead_scorer_roles_silent_with_few_lead_goals():
+    """Kevés előnyben lőtt gólból nincs ítélet."""
+    from handball.pipeline.momentum import lead_scorer_roles
+
+    rec = lead_scorer_roles(_hhr_match([9, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

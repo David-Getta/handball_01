@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 341) Előnyben-poszt: ha a vezetés-tartásunk egy posztra épül,
+    # az ellenfél a kivételével gyorsan visszajön.
+    try:
+        from .momentum import LGR_SHARE_PCT, lead_scorer_roles
+        lgr341 = lead_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec341 = lgr341[side]
+            if rec341.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő előny-tartás",
+                f"vezetésnél a góljaink {rec341['share_pct']:.0f}"
+                f"%-a a(z) {rec341['main_role']} posztról jön "
+                f"({rec341['goals']} előnyben lőtt gólból; "
+                f"{LGR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél az ő kivételével gyorsan visszajöhet",
+                "előny-tartás két lábon: vezetésnél a figurák két "
+                "befejező posztra is kifuthassanak, időhúzás-figura "
+                "B-befejezővel, és a kulcs-emberünk tehermentesítése"
+                " elzárásokkal",
+                )
+    except Exception:
+        pass
+
     # 340) Előkészítő-poszt: ha a lövéseinket mindig ugyanaz a
     # posztunk készíti elő, egy sávzárás az egész lövő-játékunkat
     # lekapcsolja.

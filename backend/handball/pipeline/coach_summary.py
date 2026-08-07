@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot.
+    try:
+        from .momentum import lead_scorer_roles
+        lgr = lead_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lgr = lgr[side]
+            if rec_lgr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} előny-tartása a(z) "
+                     f"{rec_lgr['main_role']} posztra épül "
+                     f"({rec_lgr['share_pct']:.0f}%, "
+                     f"{rec_lgr['goals']} vezetésnél lőtt gólból) — "
+                     "hátrányban az ő kivétele a leggyorsabb út.")
+    except Exception:
+        pass
     # Előkészítő-poszt: melyik posztjuk készíti elő a lövéseket.
     try:
         from .attack_types import last_pass_roles

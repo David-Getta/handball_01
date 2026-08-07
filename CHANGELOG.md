@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot.** A
+  felzárkózás-poszt a hátrányt nézi, a hajrá-poszt a záró perceket —
+  az új réteg a vezetést: a saját vezetés közben lőtt gólokat a lövő
+  posztjához írja. Edzőileg a lendület-törés terve hátrányban: ha
+  vezetnek, az előny-vivőjük kivétele (szoros fogás, kettőzés) a
+  leggyorsabb visszaút. Saját oldalon a két lábon álló előny-tartás
+  az edzés-téma. Legalább 3 előnyben lőtt gól és 60% posztrészarány
+  alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`lead_scorer_roles`), edzői összefoglaló, felderítés (edzői kulcs
+  + 320. meccsterv-szabály), edzés-fókusz (341. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Előkészítő-poszt: melyik posztjuk készíti elő a lövéseket.** A
   gólpassz-poszt csak a gólok passzait nézi — az új réteg minden
   lövését: a lövés előtti utolsó passzt a passzoló posztjához írja.
