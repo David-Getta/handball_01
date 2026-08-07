@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Előkészítő-poszt: melyik posztjuk készíti elő a lövéseket.** A
+  gólpassz-poszt csak a gólok passzait nézi — az új réteg minden
+  lövését: a lövés előtti utolsó passzt a passzoló posztjához írja.
+  Edzőileg a passzsáv-zárás nagyobb képe: ha a lövéseik
+  előkészítése rendre egy posztról jön, az ő sávjának zárásával a
+  lövéseik előkészítetlenné válnak — a lövők maguktól elhalnak.
+  Saját oldalon a második előkészítő az edzés-téma. Legalább 5
+  előkészítő passz és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`last_pass_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 319. meccsterv-szabály),
+  edzés-fókusz (340. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Indító-poszt: melyik posztjuknál indul a támadás-szervezés.** A
   támadás-szakaszok a szakaszt adják — az új réteg a posztot: minden
   szakasz első labdabirtokosát megkeresi, és a szakaszt az ő

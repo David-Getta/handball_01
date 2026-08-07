@@ -3592,6 +3592,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import last_pass_roles
+            res["last_pass_roles"] = last_pass_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5198,6 +5203,9 @@ def create_app():
                 from ..pipeline.roles import attack_starter_roles
                 _layer("attack_starter_roles",
                        lambda: attack_starter_roles(match))
+                from ..pipeline.attack_types import last_pass_roles
+                _layer("last_pass_roles",
+                       lambda: last_pass_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

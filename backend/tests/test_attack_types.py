@@ -4037,3 +4037,68 @@ def test_kickout_target_roles_silent_with_few_kickouts():
         frames += chunk
     rec = kickout_target_roles(Match(_meta(), frames))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Előkészítő-poszt (melyik posztjuk készíti elő a lövéseket) ------------
+
+
+def _epr_match(feeders, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló, 9: szélső) + lövések: a
+    `feeders` szerinti játékos passza után a beálló (7) lő kapura."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for fid in feeders:
+        fx, fy = spos[fid]
+        for _ in range(10):          # az előkészítő passzolónál a labda
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=fx + 0.2, y=fy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(8):           # átvétel a lövőnél (7-es)
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=34.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = 34.0
+        while x < 40.5:              # lövés a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):          # semleges szakasz + debounce
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_last_pass_roles_names_the_preparing_post():
+    """Öt lövésből négyet az irányító készít elő → az ő sávját kell
+    zárni."""
+    from handball.pipeline.attack_types import (EPR_MIN_PASSES,
+                                                last_pass_roles)
+
+    rec = last_pass_roles(_epr_match([5, 5, 5, 5, 9]))["home"]
+    assert rec["passes"] >= EPR_MIN_PASSES, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "előkészítetlenné" in rec["verdict"], rec
+
+
+def test_last_pass_roles_silent_with_few_passes():
+    """Néhány előkészített lövésből nincs ítélet."""
+    from handball.pipeline.attack_types import last_pass_roles
+
+    rec = last_pass_roles(_epr_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

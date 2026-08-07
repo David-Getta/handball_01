@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 340) Előkészítő-poszt: ha a lövéseinket mindig ugyanaz a
+    # posztunk készíti elő, egy sávzárás az egész lövő-játékunkat
+    # lekapcsolja.
+    try:
+        from .attack_types import EPR_SHARE_PCT, last_pass_roles
+        epr340 = last_pass_roles(match, config)
+        for side in ("home", "away"):
+            rec340 = epr340[side]
+            if rec340.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézen futó előkészítés",
+                f"a lövéseinket {rec340['share_pct']:.0f}%-ban a(z)"
+                f" {rec340['main_role']} posztunk készíti elő "
+                f"({rec340['passes']} előkészítő passzból; "
+                f"{EPR_SHARE_PCT:.0f}% fölött már minta) — az ő "
+                "sávjának zárásával a lövőink előkészítés nélkül "
+                "maradnak",
+                "második előkészítő építése: a figurák utolsó "
+                "passza két posztról is jöhessen (szélső-visszatett,"
+                " beálló-kioldás), és sávzárás elleni kijátszás "
+                "gyakorlása 4-4-ben",
+                )
+    except Exception:
+        pass
+
     # 339) Indító-poszt: ha a támadásaink mindig ugyanannál a
     # posztnál indulnak, egy jó pressz az egész szervezésünket
     # megfojtja.

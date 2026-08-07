@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Előkészítő-poszt: melyik posztjuk készíti elő a lövéseket.
+    try:
+        from .attack_types import last_pass_roles
+        epr = last_pass_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_epr = epr[side]
+            if rec_epr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lövéseit {rec_epr['share_pct']:.0f}"
+                     f"%-ban a(z) {rec_epr['main_role']} posztja "
+                     f"készíti elő ({rec_epr['passes']} előkészítő "
+                     "passzból) — az ő sávjának zárásával a lövőik "
+                     "elhalnak.")
+    except Exception:
+        pass
     # Indító-poszt: melyik posztjuknál indul a támadás-szervezés.
     try:
         from .roles import attack_starter_roles

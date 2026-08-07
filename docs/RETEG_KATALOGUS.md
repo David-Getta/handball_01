@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **366 réteg**, modulonként csoportosítva; a
+Összesen **367 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (74)
+## attack_types (75)
 
 | Réteg | Mit mér |
 |---|---|
@@ -45,6 +45,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `goal_placement` | Kapu-sarok: a gólok a kapu MELYIK oldalára mennek (bal/közép/jobb), |
 | `kickout_target_roles` | Kiosztás-poszt: MELYIK POSZTRA jár a betörés utáni labda. |
 | `kickout_targets` | Kiosztás-célpont: HOVÁ megy a labda, ha a betörés nem lövéssel zárul. |
+| `last_pass_roles` | Előkészítő-poszt: MELYIK POSZTJUK készíti elő a lövéseket. |
 | `long_attack_outcomes` | Kivárás-csapda: MI LESZ A HOSSZÚ TÁMADÁSAIKBÓL. |
 | `overload_finishing` | Fölény-befejezés: fölényben vagy felállt fal ellen szereznek gólt. |
 | `pace` | Meccs-tempó: hány támadás jut egy percre. |

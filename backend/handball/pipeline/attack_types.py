@@ -5175,3 +5175,89 @@ def kickout_target_roles(match: Match,
                     "passzsávba, a betörésre pedig indulhat a "
                     "kettőzés")
     return out
+
+
+# Előkészítő-poszt: ennyi poszthoz kötött lövés-előkészítő passz kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# lövéseik előkészítése egy posztról jön.
+EPR_MIN_PASSES = 5
+EPR_SHARE_PCT = 60.0
+EPR_WINDOW_S = 4.0
+
+
+def last_pass_roles(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Előkészítő-poszt: MELYIK POSZTJUK készíti elő a lövéseket.
+
+    A gólpassz-poszt (role_assist_sources) csak a GÓLOK passzait
+    nézi — ez minden lövését: minden felismert lövéshez megkeresi a
+    lövő felé menő utolsó passzt az EPR_WINDOW_S ablakban, és a
+    lövést a PASSZOLÓ posztjához írja. Így a teljes előkészítő
+    munka látszik, nem csak a beérett gólok.
+
+    Edzőileg ez a passzsáv-zárás nagyobb képe: ha a lövéseik
+    előkészítése rendre egy posztról jön, az ő sávjának a zárásával
+    a lövéseik előkészítetlenné válnak — a lövők maguktól elhalnak.
+    Saját csapatra: a szervezés ne egy kézen fusson, kell a második
+    előkészítő.
+
+    Visszatérés csapatonként: {"passes" (poszthoz kötött
+    előkészítés), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az EPR_MIN_PASSES,
+    vagy egyik poszt sem éri el az EPR_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = EPR_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+
+    out: dict = {side: {"passes": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        side = e.team.value
+        rec_role = roles[side].get(best.passer_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["passes"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["passes"] >= EPR_MIN_PASSES:
+            poszt = max(rec["roles"], key=lambda p2: rec["roles"][p2])
+            share = 100.0 * rec["roles"][poszt] / rec["passes"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= EPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lövéseik előkészítése {share:.0f}%-ban a(z) "
+                    f"{poszt} posztról jön ({rec['passes']} "
+                    "előkészítő passzból) — az ő sávjának zárásával"
+                    " a lövéseik előkészítetlenné válnak, és a "
+                    "lövők maguktól elhalnak")
+    return out
