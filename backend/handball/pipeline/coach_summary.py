@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kiosztás-poszt: melyik posztra jár a betörés utáni labda.
+    try:
+        from .attack_types import kickout_target_roles
+        kor = kickout_target_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kor = kor[side]
+            if rec_kor["verdict"] is None:
+                continue
+            body += (f" A(z) {name} betörései utáni labda egy posztra "
+                     f"jár: {rec_kor['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_kor['main_role']} kapja "
+                     f"({rec_kor['kickouts']} kiosztásból) — a védője "
+                     "előre elmozdulhat a passzsávba.")
+    except Exception:
+        pass
     # Kettőző-poszt: melyik posztjuk lép ki kettőzni.
     try:
         from .defense import doubling_defender_roles

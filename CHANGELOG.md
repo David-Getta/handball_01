@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kiosztás-poszt: melyik posztra jár a betörés utáni labda.** A
+  kiosztás-célpont rétege az embert nevezi meg — az új réteg a
+  posztot: a betörés utáni kiosztásokat a fogadó posztjához írja.
+  Edzőileg ez a passzsáv-terv: ha a betöréseik után a labda rendre
+  ugyanarra a posztra megy, annak a védője előre elmozdulhat a
+  passzsávba, és a betörésre indulhat a kettőzés — a kiosztás
+  elveszti az értelmét. Felületek: `/analyze` és meccs-csomag
+  (`kickout_target_roles`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (289: az ő kiszámítható kiosztásuk × a ti
+  kettőzés-készségetek → a betörésük zsákutca), edzés-fókusz (310:
+  kiosztás-variációk két opcióval induló betörővel), teendő-rangsor,
+  a kulcs-poszt lencse és a meccs-jelentés Befejező-lencse táblája,
+  kliens-csempe.
+
 - **Kettőző-poszt: melyik posztjuk lép ki kettőzni.** A kettőző
   emberek rétege az embert nevezi meg — az új réteg a posztot: a
   kettőzött kockákat a másodiknak érkező védő posztjához írja.

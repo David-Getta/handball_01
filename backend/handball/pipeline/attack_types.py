@@ -5112,3 +5112,66 @@ def risky_passer_roles(match: Match,
                     "kell beállni: a sávba lépés nála azonnal labdát "
                     "hoz")
     return out
+
+
+# Kiosztás-poszt: ennyi poszthoz kötött kiosztás kell az ítélethez,
+# és ekkora részarány fölött mondjuk ki, hogy a betörés utáni labda
+# egy posztra jár.
+KOR_MIN_KICKOUTS = 4
+KOR_SHARE_PCT = 60.0
+
+
+def kickout_target_roles(match: Match,
+                         config: Optional[TacticsConfig] = None) -> dict:
+    """Kiosztás-poszt: MELYIK POSZTRA jár a betörés utáni labda.
+
+    A kiosztás-célpont rétege (kickout_targets) az embert nevezi meg
+    — ez a posztot: a betörés utáni kiosztásokat a fogadó játékos
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a passzsáv-terv: ha a betöréseik után a labda rendre
+    ugyanarra a posztra megy (tipikusan a túloldali átlövőre), annak
+    a posztnak a védője előre elmozdulhat a passzsávba, és a
+    betörésre indulhat a kettőzés — a kiosztás elveszti az értelmét.
+    Ha a célpont szórt, a betörést magát kell megállítani.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"kickouts" (poszthoz
+    kötött kiosztás), "roles": {poszt: kiosztás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    KOR_MIN_KICKOUTS, vagy egyik poszt sem éri el a KOR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ko = kickout_targets(match, config)
+
+    out: dict = {side: {"kickouts": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ko[side]["targets"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["count"])
+            rec["kickouts"] += row["count"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["kickouts"] >= KOR_MIN_KICKOUTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["kickouts"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= KOR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a betöréseik utáni labda a(z) {poszt} posztra "
+                    f"jár ({share:.0f}%, {rec['kickouts']} "
+                    "kiosztásból) — az ő védője előre elmozdulhat a "
+                    "passzsávba, a betörésre pedig indulhat a "
+                    "kettőzés")
+    return out

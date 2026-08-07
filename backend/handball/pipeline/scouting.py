@@ -823,6 +823,9 @@ class ScoutingReport:
     # Kettőző-poszt: a kettőzött kockák darabszáma posztonként.
     # Darabszám, meccsek közt pontosan összegződik.
     ddr_frames_by_role: dict = field(default_factory=dict)
+    # Kiosztás-poszt: a betörés utáni kiosztások darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    kor_kickouts_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3059,6 +3062,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Kiosztás-poszt: melyik passzsávot lehet előre elzárni.
+    _kor_n = sum(rep.kor_kickouts_by_role.values())
+    if _kor_n >= 4:
+        _kor_p, _kor_c = max(rep.kor_kickouts_by_role.items(),
+                             key=lambda kv: kv[1])
+        _kor_pct = 100.0 * _kor_c / _kor_n
+        if _kor_pct >= 60.0:
+            keys.append(
+                f"A betöréseik utáni labda a(z) {_kor_p} posztjukra "
+                f"jár ({_kor_pct:.0f}%, {_kor_n} kiosztásból) — az ő "
+                "védője előre elmozdulhat a passzsávba, a betörésre "
+                "pedig indulhat a kettőzés: a kiosztás így elveszti "
+                "az értelmét.")
 
     # Kettőző-poszt: hol nyílik ki a pálya a kettőzésükkor.
     _ddr_n = sum(rep.ddr_frames_by_role.values())
@@ -7769,6 +7786,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import doubling_defender_roles as _ddr
         ddrrec = _ddr(match, config)[team.value]
         rep.ddr_frames_by_role = dict(ddrrec["roles"])
+        from .attack_types import kickout_target_roles as _kor
+        korrec = _kor(match, config)[team.value]
+        rep.kor_kickouts_by_role = dict(korrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10349,6 +10369,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 289) Az ő kiosztás-posztjuk × a ti kettőzés-készségetek: ha a
+    # betörésük utáni labda kiszámítható, a betörőre bátran lehet
+    # kettőzni — a kiosztás sávja már zárva van.
+    _kor289_n = sum(opp.kor_kickouts_by_role.values())
+    _dbl289 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _kor289_n >= 4 and _dbl289 >= 20.0:
+        _kor289_p, _kor289_c = max(opp.kor_kickouts_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _kor289_pct = 100.0 * _kor289_c / _kor289_n
+        if _kor289_pct >= 60.0:
+            plan.append(
+                f"A betöréseik utáni labda a(z) {_kor289_p} "
+                f"posztjukra jár ({_kor289_pct:.0f}%), ti pedig "
+                "tudtok kettőzni — a betörőre bátran induljon a "
+                "második ember: a kiosztás sávját a kijelölt védő "
+                "előre zárja, így a betörésük zsákutca.")
 
     # 288) Az ő kettőző-posztjuk × a ti passz-fegyelmetek: ha a
     # kettőzésük kiolvasható, és a labdátok nyomás alatt is megmarad,
@@ -15227,6 +15265,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rpr_to_by_role for r in reports),
         ddr_frames_by_role=_merge_count_dicts(
             r.ddr_frames_by_role for r in reports),
+        kor_kickouts_by_role=_merge_count_dicts(
+            r.kor_kickouts_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

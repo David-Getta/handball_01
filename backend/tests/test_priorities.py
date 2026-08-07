@@ -112,7 +112,7 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   "screen_setter_roles", "key_post",
                   "outlet_hunter_roles", "pivot_feeder_roles",
                   "iron_man_roles", "risky_passer_roles",
-                  "doubling_defender_roles"):
+                  "doubling_defender_roles", "kickout_target_roles"):
         assert layer in names, f"{layer} nincs a rangsorban"
 
 

@@ -1843,7 +1843,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     finishers_html = ""
     defense_lens_html = ""
     try:
-        from .attack_types import (pivot_feeder_roles,
+        from .attack_types import (kickout_target_roles,
+                                   pivot_feeder_roles,
                                    risky_passer_roles,
                                    screen_setter_roles,
                                    second_chance_roles)
@@ -1886,7 +1887,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Elzáró-poszt", screen_setter_roles),
             ("Bejátszó-poszt", pivot_feeder_roles),
             ("Vasember-poszt", iron_man_roles),
-            ("Kockáztató-poszt", risky_passer_roles)))
+            ("Kockáztató-poszt", risky_passer_roles),
+            ("Kiosztás-poszt", kickout_target_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"

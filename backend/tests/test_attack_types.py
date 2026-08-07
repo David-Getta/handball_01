@@ -3978,3 +3978,62 @@ def test_risky_passer_roles_silent_with_few_turnovers():
     rec = risky_passer_roles(
         _rpr_match([(4, True), (6, True)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _kor_cycle(t, rid, fps=25.0):
+    """Mint a _kot_cycle, de két lehetséges fogadóval: a 2-es irányító
+    (28, 14), a 3-as szélső (28, 3) — a `rid` kapja a kiosztást."""
+    rpos = {2: (28.0, 14.0), 3: (28.0, 3.0)}
+    frames = []
+
+    def cast():
+        return [_pl(1, Team.HOME, 33.0, 10.0),
+                _pl(2, Team.HOME, *rpos[2]),
+                _pl(3, Team.HOME, *rpos[3]),
+                _pl(20, Team.AWAY, 35.0, 10.0)]
+
+    for _ in range(40):  # betörés
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+        t += 1
+    rx, ry = rpos[rid]
+    for _ in range(30):  # kiosztás
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=rx, y=ry, confidence=1.0)))
+        t += 1
+    for _ in range(30):  # ellenfél-birtoklás: szakasz-határ
+        frames.append(Frame(t=t, players=[
+            _pl(1, Team.HOME, 20.0, 10.0),
+            _pl(20, Team.AWAY, 10.0, 10.0)],
+            ball=Ball(x=10.0, y=10.0, confidence=1.0)))
+        t += 1
+    return frames, t
+
+
+def test_kickout_target_roles_names_the_target_post():
+    """Ha a betörés utáni labda rendre ugyanarra a posztra jár, annak
+    a védője előre elmozdulhat a passzsávba."""
+    from handball.pipeline.attack_types import (KOR_MIN_KICKOUTS,
+                                                kickout_target_roles)
+
+    frames, t = [], 0
+    for rid in [2, 2, 2, 2, 3]:
+        chunk, t = _kor_cycle(t, rid)
+        frames += chunk
+    rec = kickout_target_roles(Match(_meta(), frames))["home"]
+    assert rec["kickouts"] >= KOR_MIN_KICKOUTS, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzsávba" in rec["verdict"], rec
+
+
+def test_kickout_target_roles_silent_with_few_kickouts():
+    """Néhány kiosztásból nincs ítélet."""
+    from handball.pipeline.attack_types import kickout_target_roles
+
+    frames, t = [], 0
+    for rid in [2, 3]:
+        chunk, t = _kor_cycle(t, rid)
+        frames += chunk
+    rec = kickout_target_roles(Match(_meta(), frames))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

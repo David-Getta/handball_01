@@ -2567,6 +2567,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import kickout_target_roles
+            res["kickout_target_roles"] = kickout_target_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import pivot_usage
             res["pivot"] = pivot_usage(match)
         except Exception:
@@ -5046,6 +5051,9 @@ def create_app():
                 _layer("attack_width", lambda: attack_width(match))
                 from ..pipeline.attack_types import kickout_targets
                 _layer("kickout_targets", lambda: kickout_targets(match))
+                from ..pipeline.attack_types import kickout_target_roles
+                _layer("kickout_target_roles",
+                       lambda: kickout_target_roles(match))
                 from ..pipeline.roles import shot_efficiency_by_role
                 _layer("shot_efficiency_by_role",
                        lambda: shot_efficiency_by_role(match))

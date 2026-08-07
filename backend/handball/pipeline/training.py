@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 310) Kiosztás-poszt: ha a betörésünk utáni labda mindig
+    # ugyanoda megy, az ellenfél a sávot előre zárja.
+    try:
+        from .attack_types import KOR_SHARE_PCT, kickout_target_roles
+        kor310 = kickout_target_roles(match, config)
+        for side in ("home", "away"):
+            rec310 = kor310[side]
+            if rec310.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra járó kiosztás",
+                f"a betöréseink utáni labda {rec310['share_pct']:.0f}"
+                f"%-ban a(z) {rec310['main_role']} posztra megy "
+                f"({rec310['kickouts']} kiosztásból; "
+                f"{KOR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a sávot előre zárja, és a betörőnkre "
+                "bátran kettőzik",
+                "kiosztás-variációk: betörés után körönként más a "
+                "kijelölt fogadó (túloldali átlövő, visszazáró "
+                "szélső, second-line beálló) — a betörő fejben két "
+                "opcióval induljon")
+    except Exception:
+        pass
+
     # 309) Kettőző-poszt: ha a kettőzésünk mindig ugyanarról a
     # posztról érkezik, az ellenfél előre tudja, hol nyílik a pálya.
     try:
