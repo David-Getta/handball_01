@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Átvert-poszt: melyik posztjuk mögött esnek a kapott gólok.
+    try:
+        from .defense import beaten_defender_roles
+        btr = beaten_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_btr = btr[side]
+            if rec_btr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott góljai egy poszton esnek: "
+                     f"{rec_btr['share_pct']:.0f}%-uk a(z) "
+                     f"{rec_btr['main_role']} párharc-vereségéből jön "
+                     f"({rec_btr['goals']} védőhöz rendelt gólból) — "
+                     "oda kell vinni az 1v1-et.")
+    except Exception:
+        pass
     # Visszafutás-poszt: ki marad le a visszarendeződésben.
     try:
         from .defense import slow_retreat_roles

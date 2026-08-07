@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Átvert-poszt: melyik posztjuk mögött esnek a kapott gólok.** Az
+  átvert védők rétege az embert nevezi meg — az új réteg a posztot:
+  a védőhöz rendelt kapott gólokat az átvert játékos posztjához
+  írja. Edzőileg ez az 1v1-térkép: ha a kapott góljaik rendre
+  ugyanannak a posztnak a párharc-vereségéből esnek, oda kell vinni
+  az 1v1-et — a figura az ő emberét támadja, elzárás is hozzá
+  terelje a lövőt. Saját csapatra: a sokat átvert posztunk mellé
+  besegítő váltás és párharc-edzés kell. Felületek: `/analyze` és
+  meccs-csomag (`beaten_defender_roles`), edzői összefoglaló,
+  felderítő edzői kulcs, meccsterv-szabály (281: az ő átvert
+  posztjuk × a ti 1v1-erőtök → a figura célpontja adott),
+  edzés-fókusz (302: párharc-blokk besegítő váltással + videó),
+  teendő-rangsor és a meccs-jelentés Védő-lencse táblája,
+  kliens-csempe.
+
 - **Visszafutás-poszt: ki marad le a visszarendeződésben.** Az
   ellenfél kontráinak kifutásakor megnézi, a védekező csapat melyik
   mezőnyjátékosa van legmesszebb a saját kapujától, és a lemaradást

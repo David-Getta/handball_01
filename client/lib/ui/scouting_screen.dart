@@ -2115,6 +2115,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Átvert-poszt: melyik posztjuk mögött esnek a kapott gólok (3+
+  // védőhöz rendelt gól, 60% részarány — a backenddel azonos
+  // küszöbök: BTR_MIN_GOALS, BTR_SHARE_PCT).
+  String? _beatenRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["btr_beaten_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kapott góljaik a(z) $top posztjuk mögött esnek "
+        "(${pct.round()}%, $total gól) · oda kell vinni az 1v1-et";
+  }
+
   // Visszafutás-poszt: ki marad le a visszarendeződésben (3+ mért
   // ellenfél-kontra, 60% részarány — a backenddel azonos küszöbök:
   // RTR_MIN_BREAKS, RTR_SHARE_PCT).
@@ -7378,6 +7404,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_beatenRole(r) != null)
+        ["Átvert-poszt", _beatenRole(r)!],
       if (_slowRetreatRole(r) != null)
         ["Visszafutás-poszt", _slowRetreatRole(r)!],
       if (_suspendedRole(r) != null)

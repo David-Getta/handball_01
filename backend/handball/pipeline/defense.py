@@ -4080,3 +4080,66 @@ def slow_retreat_roles(match, config=None) -> dict:
                     "kontrából ő maradt elöl) — a saját kontrát az ő "
                     "sávjába kell vezetni: ott a pálya üres")
     return out
+
+
+# Átvert-poszt: ennyi poszthoz kötött átverés kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a párharc-vereségeik egy
+# poszton gyűlnek.
+BTR_MIN_GOALS = 3
+BTR_SHARE_PCT = 60.0
+
+
+def beaten_defender_roles(match, config=None) -> dict:
+    """Átvert-poszt: MELYIK POSZTJUK mögött esnek a kapott gólok.
+
+    Az átvert védők rétege (beaten_defenders) az embert nevezi meg —
+    ez a posztot: a védőhöz rendelt kapott gólokat az átvert játékos
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez az 1v1-térkép: ha a kapott góljaik rendre ugyanannak
+    a posztnak a párharc-vereségéből esnek, oda kell vinni az 1v1-et
+    — elzárással hozzá terelni a lövőt, és a figura az ő emberét
+    támadja. Saját csapatra: a sokat átvert posztunk mellé besegítő
+    váltás és párharc-edzés kell, mert az ellenfél is látja.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"goals" (poszthoz
+    kötött kapott gól), "roles": {poszt: gól}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    BTR_MIN_GOALS, vagy egyik poszt sem éri el a BTR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    btn = beaten_defenders(match, config)
+
+    out: dict = {side: {"goals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in btn[side]["defenders"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["beaten"])
+            rec["goals"] += row["beaten"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["goals"] >= BTR_MIN_GOALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["goals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kapott góljaik a(z) {poszt} posztjuk mögött "
+                    f"esnek ({share:.0f}%, {rec['goals']} védőhöz "
+                    "rendelt gólból) — oda kell vinni az 1v1-et: a "
+                    "figura az ő emberét támadja, elzárás is hozzá "
+                    "terelje a lövőt")
+    return out

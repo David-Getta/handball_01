@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 302) Átvert-poszt: ha a kapott góljaink egy poszt
+    # párharc-vereségéből esnek, az ellenfél is oda fogja vinni.
+    try:
+        from .defense import BTR_SHARE_PCT, beaten_defender_roles
+        btr302 = beaten_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec302 = btr302[side]
+            if rec302.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy poszton eső párharc-vereségek",
+                f"a védőhöz rendelt kapott góljaink "
+                f"{rec302['share_pct']:.0f}%-a a(z) "
+                f"{rec302['main_role']} posztunk mögött esik "
+                f"({rec302['goals']} gólból; {BTR_SHARE_PCT:.0f}% "
+                "fölött már minta) — az ellenfél tudatosan az ő "
+                "emberét fogja támadni",
+                "párharc-blokk a terhelt posztra: 1v1-sorozat "
+                "váltakozó támadókkal, mögötte kötelező besegítő "
+                "váltás — és videón közösen megnézni, MELYIK mozdulat "
+                "veri meg (lépés-előny, testcsel, elzárás)")
+    except Exception:
+        pass
+
     # 301) Visszafutás-poszt: ha a visszarendeződésünk mindig ugyanott
     # szakad el, az ellenfél kontrái menetrend szerint jönnek.
     try:

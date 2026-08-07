@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **328 réteg**, modulonként csoportosítva; a
+Összesen **329 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (70)
@@ -98,12 +98,13 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_choice_quality` | Lövésválasztás: LŐNEK-E, AMIKOR JOBB HELYZET VAN a pályán. |
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 
-## defense (58)
+## defense (59)
 
 | Réteg | Mit mér |
 |---|---|
 | `advanced_defender` | Kilépő védő: VAN-E ELŐRETOLT EMBERÜK a falban, és ki az. |
 | `ball_winners` | Labdaszerzők: birtokos-váltásnál (csapatváltás) az ÚJ birtokos |
+| `beaten_defender_roles` | Átvert-poszt: MELYIK POSZTJUK mögött esnek a kapott gólok. |
 | `beaten_defenders` | Átvert védők: KI MÖGÖTT esnek a kapott gólok. |
 | `block_recoveries` | Blokk-lepattanó: A BLOKK UTÁN ki szerzi meg a labdát. |
 | `blocked_by_role` | Falba lövő posztok: MELYIK POSZTJUK lő rendre a falba. |

@@ -3580,6 +3580,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import beaten_defender_roles
+            res["beaten_defender_roles"] = beaten_defender_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import unpressured_assists
             res["unpressured_assists"] = unpressured_assists(match)
         except Exception:
@@ -4739,6 +4744,9 @@ def create_app():
                 from ..pipeline.defense import beaten_defenders
                 _layer("beaten_defenders",
                        lambda: beaten_defenders(match))
+                from ..pipeline.defense import beaten_defender_roles
+                _layer("beaten_defender_roles",
+                       lambda: beaten_defender_roles(match))
                 from ..pipeline.defense import unpressured_assists
                 _layer("unpressured_assists",
                        lambda: unpressured_assists(match))

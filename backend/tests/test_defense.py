@@ -2940,3 +2940,68 @@ def test_slow_retreat_roles_silent_with_few_breaks():
 
     rec = slow_retreat_roles(_rtr_match([21, 22]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _btr_match(beaten, fps=25.0):
+    """`beaten` = kapott gólonként a lövő mellett álló VENDÉG védő
+    (21: beálló, 23: szélső). Első szakasz: vendég-birtoklás a -x kapu
+    felé (poszt-minta), utána hazai gólok a +x kapura — a megadott
+    védő a lövő mellett, a társa a radiuson kívül."""
+    from handball.models.tracking import Ball, Frame, Match
+
+    attack_pos = {21: (6.0, 10.0), 23: (6.0, 1.0)}
+    frames = []
+    t = 0
+    for _ in range(120):             # vendég-birtoklás: poszt-minta
+        frames.append(Frame(
+            t=t,
+            players=[_pl(1, Team.HOME, 30.0, 10.0),
+                     _pl(21, Team.AWAY, *attack_pos[21]),
+                     _pl(23, Team.AWAY, *attack_pos[23])],
+            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in beaten:
+        other = 23 if tid == 21 else 21
+
+        def cast():
+            return [_pl(1, Team.HOME, 33.0, 10.0),
+                    _pl(tid, Team.AWAY, 34.0, 10.0),
+                    _pl(other, Team.AWAY, 22.0, 16.0)]
+
+        for _ in range(10):          # a lövő birtokol
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):           # gól a +x kapura
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(33.0 + (i + 1), 40.5),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):          # szünet a gólok közt
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_beaten_defender_roles_names_the_beaten_post():
+    """Ha a kapott gólok zöme ugyanannak a posztnak a párharc-vereségéből
+    esik, oda kell vinni az 1v1-et."""
+    from handball.pipeline.defense import (BTR_MIN_GOALS,
+                                           beaten_defender_roles)
+
+    rec = beaten_defender_roles(_btr_match([21] * 3 + [23]))["away"]
+    assert rec["goals"] >= BTR_MIN_GOALS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "1v1" in rec["verdict"], rec
+
+
+def test_beaten_defender_roles_silent_with_few_goals():
+    """Néhány védőhöz rendelt gólból nincs ítélet."""
+    from handball.pipeline.defense import beaten_defender_roles
+
+    rec = beaten_defender_roles(_btr_match([21, 23]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
