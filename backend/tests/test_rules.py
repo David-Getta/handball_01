@@ -1673,3 +1673,98 @@ def test_powerplay_shooter_roles_silent_with_few_shots():
 
     rec = powerplay_shooter_roles(_ppr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _shr_match(shooter_windows, fps=25.0):
+    """A HAZAI van emberhátrányban; a `shooter_windows` elemei
+    (lövő, lövésszám) párok — ablakonként EGY lövő, hogy a
+    track-halmaz az ablakon belül ne változzon. A 4-es beálló
+    (33, 10), a 8-as szélső (35, 3); a poszt-mintát a teljes
+    létszámú szakaszok adják (a labda a lövőknél van)."""
+    spos = {4: (33.0, 10.0), 8: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _full(seconds, ball_at=4):
+        nonlocal t, frames
+        bx, by = spos[ball_at]
+        for _ in range(int(seconds * fps)):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(4)]
+            players += [_pl(tid, Team.HOME, *xy)
+                        for tid, xy in spos.items()]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(6)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx + 0.2, y=by,
+                                          confidence=1.0)))
+            t += 1
+
+    def _down(seconds, shooter):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(4)]
+            players.append(_pl(shooter, Team.HOME, *spos[shooter]))
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(6)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _shot(shooter):
+        nonlocal t, frames
+        sx, sy = spos[shooter]
+
+        def _cast():
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(4)]
+            players.append(_pl(shooter, Team.HOME, sx, sy))
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(6)]
+            return players
+
+        for _ in range(3):
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=min(sx + 1.0 + i, 40.0),
+                                          y=sy, confidence=1.0)))
+            t += 1
+
+    _full(20.0, ball_at=4)
+    for shooter, n_shots in shooter_windows:
+        _down(50.0, shooter)
+        for _ in range(n_shots):
+            _shot(shooter)
+            _down(4.0, shooter)
+        _down(10.0, shooter)   # ráhagyás: a lövés az ablakon belül marad
+        _full(20.0, ball_at=8)
+    return Match(_meta(fps), frames)
+
+
+def test_shorthanded_shooter_roles_names_the_brave_post():
+    """Ha öt emberrel mindig ugyanaz a poszt vállal be, emberelőnyben
+    az ő oldalán kell a labdabiztonság."""
+    from handball.pipeline.rules import (SHR_MIN_SHOTS,
+                                         shorthanded_shooter_roles)
+
+    rec = shorthanded_shooter_roles(
+        _shr_match([(4, 3), (8, 1)]))["home"]
+    assert rec["shots"] >= SHR_MIN_SHOTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "labdabiztonság" in rec["verdict"], rec
+
+
+def test_shorthanded_shooter_roles_silent_with_few_shots():
+    """Néhány hátrány-lövésből nincs ítélet."""
+    from handball.pipeline.rules import shorthanded_shooter_roles
+
+    rec = shorthanded_shooter_roles(
+        _shr_match([(4, 1), (8, 1)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

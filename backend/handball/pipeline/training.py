@@ -1355,6 +1355,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 312) Emberhátrány-poszt: ha öt emberrel mindig ugyanaz a
+    # posztunk vállal be, a hátrány-játékunk kiszámítható.
+    try:
+        from .rules import SHR_SHARE_PCT, shorthanded_shooter_roles
+        shr312 = shorthanded_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec312 = shr312[side]
+            if rec312.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó hátrány-játék",
+                f"öt emberrel a lövéseink {rec312['share_pct']:.0f}"
+                f"%-a a(z) {rec312['main_role']} posztról jön "
+                f"({rec312['shots']} hátrány-lövésből; "
+                f"{SHR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél emberelőnyben pontosan tudja, kit zárjon",
+                "hátrány-repertoár: öt emberre két megjátszható "
+                "befejezés (időhúzó körjáték után beálló-beadás VAGY "
+                "kilépő átlövés) — és jelre váltakozik, ki a vállaló")
+    except Exception:
+        pass
+
     # 311) Emberelőny-poszt: ha az emberelőnyünk mindig ugyanarra a
     # posztra fut ki, öt védő is elég ellene.
     try:

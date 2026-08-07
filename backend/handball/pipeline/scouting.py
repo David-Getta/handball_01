@@ -829,6 +829,9 @@ class ScoutingReport:
     # Emberelőny-poszt: az emberelőny-lövések darabszáma posztonként.
     # Darabszám, meccsek közt pontosan összegződik.
     ppr_shots_by_role: dict = field(default_factory=dict)
+    # Emberhátrány-poszt: a hátrány-lövések darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    shr_shots_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3065,6 +3068,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Emberhátrány-poszt: emberelőnyben kire kell vigyázni.
+    _shr_n = sum(rep.shr_shots_by_role.values())
+    if _shr_n >= 3:
+        _shr_p, _shr_c = max(rep.shr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _shr_pct = 100.0 * _shr_c / _shr_n
+        if _shr_pct >= 60.0:
+            keys.append(
+                f"Öt emberrel a(z) {_shr_p} posztjuk vállal be "
+                f"({_shr_pct:.0f}%, {_shr_n} hátrány-lövésből) — a "
+                "saját emberelőnyben az ő oldalán kell a "
+                "labdabiztonság: onnan indul az ellentámadásuk.")
 
     # Emberelőny-poszt: hátrányban melyik sávot kell tartani.
     _ppr_n = sum(rep.ppr_shots_by_role.values())
@@ -7808,6 +7824,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import powerplay_shooter_roles as _ppr
         pprrec = _ppr(match, config)[team.value]
         rep.ppr_shots_by_role = dict(pprrec["roles"])
+        from .rules import shorthanded_shooter_roles as _shr
+        shrrec = _shr(match, config)[team.value]
+        rep.shr_shots_by_role = dict(shrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10388,6 +10407,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 291) Az ő emberhátrány-posztjuk × a ti kiharcolt két perceitek:
+    # ha ti sok emberelőnyt szereztek, és tudni lehet, náluk ki
+    # vállal be öt emberrel, az emberelőnyötök biztonsági terve kész.
+    _shr291_n = sum(opp.shr_shots_by_role.values())
+    _earn291 = sum(p.get("earned", 0) for p in (own.susp_earners or []))
+    if _shr291_n >= 3 and _earn291 >= 2:
+        _shr291_p, _shr291_c = max(opp.shr_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _shr291_pct = 100.0 * _shr291_c / _shr291_n
+        if _shr291_pct >= 60.0:
+            plan.append(
+                f"Öt emberrel a(z) {_shr291_p} posztjuk vállal be "
+                f"({_shr291_pct:.0f}%), ti pedig hozzátok a két "
+                f"perceket ({_earn291} kiharcolt kiállítás) — az "
+                "emberelőnyötök biztonsági terve kész: az ő oldalán "
+                "kockázatmentes passz, a visszafutásnál pedig őt "
+                "veszi fel az első ember.")
 
     # 290) Az ő emberelőny-posztjuk × a ti fegyelmetek: ha sokat
     # vagytok emberhátrányban, és tudni lehet, kire fut ki az
@@ -15307,6 +15344,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.kor_kickouts_by_role for r in reports),
         ppr_shots_by_role=_merge_count_dicts(
             r.ppr_shots_by_role for r in reports),
+        shr_shots_by_role=_merge_count_dicts(
+            r.shr_shots_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

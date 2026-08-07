@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel.** Az
+  emberhátrány-lövők rétege az embert nevezi meg — az új réteg a
+  posztot: a kiállítás-ablakokban a hátrányban lévő csapat lövéseit
+  a lövő posztjához írja. Edzőileg ez az emberelőny-védelem terve:
+  az ő hátrány-lövő posztjuk a kontra-fenyegetés — a saját
+  emberelőnyben az ő oldalán kell a labdabiztonság, mert onnan indul
+  az ellentámadásuk. Saját csapatra: az egy posztra futó
+  hátrány-játékhoz második vállaló kell. Felületek: `/analyze` és
+  meccs-csomag (`shorthanded_shooter_roles`), edzői összefoglaló,
+  felderítő edzői kulcs, meccsterv-szabály (291: az ő
+  hátrány-posztjuk × a ti kiharcolt két perceitek → az emberelőnyötök
+  biztonsági terve), edzés-fókusz (312: hátrány-repertoár két
+  befejezéssel), teendő-rangsor, a kulcs-poszt lencse és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
 - **Emberelőny-poszt: melyik posztjuk fejez be a két perc alatt.**
   Az emberelőny-lövők rétege az embert nevezi meg — az új réteg a
   posztot: a kiállítás-ablakok lövéseit a lövő posztjához írja.

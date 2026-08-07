@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel.
+    try:
+        from .rules import shorthanded_shooter_roles
+        shr = shorthanded_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_shr = shr[side]
+            if rec_shr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} öt emberrel is kiszámítható: a "
+                     f"hátrány-lövéseik {rec_shr['share_pct']:.0f}%-a "
+                     f"a(z) {rec_shr['main_role']} poszté "
+                     f"({rec_shr['shots']} lövésből) — emberelőnyben "
+                     "az ő oldalán kell a labdabiztonság.")
+    except Exception:
+        pass
     # Emberelőny-poszt: melyik posztjuk fejez be a két perc alatt.
     try:
         from .rules import powerplay_shooter_roles

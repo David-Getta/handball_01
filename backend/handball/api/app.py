@@ -3219,6 +3219,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import shorthanded_shooter_roles
+            res["shorthanded_shooter_roles"] = (
+                shorthanded_shooter_roles(match))
+        except Exception:
+            pass
+        try:
             from ..pipeline.goalkeeper import gk_early_saves
             res["gk_early_saves"] = gk_early_saves(match)
         except Exception:
@@ -4584,6 +4590,9 @@ def create_app():
                 from ..pipeline.rules import shorthanded_shooters
                 _layer("shorthanded_shooters",
                        lambda: shorthanded_shooters(match))
+                from ..pipeline.rules import shorthanded_shooter_roles
+                _layer("shorthanded_shooter_roles",
+                       lambda: shorthanded_shooter_roles(match))
                 from ..pipeline.goalkeeper import gk_early_saves
                 _layer("gk_early_saves", lambda: gk_early_saves(match))
                 from ..pipeline.attack_types import screen_setters
