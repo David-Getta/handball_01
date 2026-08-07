@@ -782,6 +782,9 @@ class ScoutingReport:
     # Lepattanó-poszt: a poszthoz kötött második lövések darabszáma
     # posztonként. Darabszám, meccsek közt pontosan összegződik.
     scr_shots_by_role: dict = field(default_factory=dict)
+    # Blokk-poszt: a poszthoz kötött blokkok darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    rbk_blocks_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3018,6 +3021,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Blokk-poszt: melyik sávba nem szabad előkészítés nélkül lőni.
+    _rbk_n = sum(rep.rbk_blocks_by_role.values())
+    if _rbk_n >= 3:
+        _rbk_p, _rbk_c = max(rep.rbk_blocks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rbk_pct = 100.0 * _rbk_c / _rbk_n
+        if _rbk_pct >= 60.0:
+            keys.append(
+                f"A blokkjaik zöme a(z) {_rbk_p} posztjuktól jön "
+                f"({_rbk_pct:.0f}%, {_rbk_n} blokkból) — az ő sávjába "
+                "csak elmozgatás UTÁN szabad lőni: a figura először "
+                "őt húzza ki, és a lövés a megnyílt sávba megy.")
 
     # Labdaszerző-poszt: melyik sávot kell kerülni labdával.
     _rsw_n = sum(rep.rsw_steals_by_role.values())
@@ -7518,6 +7534,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import second_chance_roles as _scr
         scrrec = _scr(match, config)[team.value]
         rep.scr_shots_by_role = dict(scrrec["roles"])
+        from .defense import role_block_sources as _rbk
+        rbkrec = _rbk(match, config)[team.value]
+        rep.rbk_blocks_by_role = dict(rbkrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10092,6 +10111,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 276) Az ő blokk-posztjuk × a ti falba lövésetek: ha a lövéseitek
+    # amúgy is sokszor akadnak el a falban, és náluk tudni lehet, KI
+    # blokkol, a lövés-előkészítés első dolga az ő kihúzása.
+    _rbk276_n = sum(opp.rbk_blocks_by_role.values())
+    if _rbk276_n >= 3 and own.blk_for >= 4 and own.blk_attempts > 0:
+        _rbk276_p, _rbk276_c = max(opp.rbk_blocks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rbk276_pct = 100.0 * _rbk276_c / _rbk276_n
+        _blk276_pct = 100.0 * own.blk_for / own.blk_attempts
+        if _rbk276_pct >= 60.0 and _blk276_pct >= 20.0:
+            plan.append(
+                f"A blokkjaik zöme a(z) {_rbk276_p} posztjuktól jön "
+                f"({_rbk276_pct:.0f}%), ti pedig sokat lőttök falba "
+                f"(a kísérleteitek {_blk276_pct:.0f}%-a) — az ő "
+                "sávjába előkészítés nélkül NE lőjetek: a figura "
+                "először őt mozgassa el (beálló-felfutás, kereszt), "
+                "és a lövés a megnyílt sávba menjen.")
 
     # 275) Az ő lepattanó-posztjuk × a ti visszaengedett második
     # rohamaitok: ha amúgy is sok lepattanót engedtek vissza, és náluk
@@ -14698,6 +14735,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rsw_steals_by_role for r in reports),
         scr_shots_by_role=_merge_count_dicts(
             r.scr_shots_by_role for r in reports),
+        rbk_blocks_by_role=_merge_count_dicts(
+            r.rbk_blocks_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

@@ -105,5 +105,6 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   "role_pressure_finish", "setplay_finishers",
                   "timeout_finisher", "role_fast_breaks",
                   "role_assist_sources", "shot_choice_quality",
-                  "role_steal_sources", "second_chance_roles"):
+                  "role_steal_sources", "second_chance_roles",
+                  "role_block_sources"):
         assert layer in names, f"{layer} nincs a rangsorban"

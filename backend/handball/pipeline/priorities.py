@@ -115,6 +115,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "role_steal_sources"),
         ("felkészülés", "Lepattanó-poszt", "attack_types",
          "second_chance_roles"),
+        ("felkészülés", "Blokk-poszt", "defense",
+         "role_block_sources"),
     ]
 
 

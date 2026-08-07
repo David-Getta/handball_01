@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Blokk-poszt: melyik posztjuk blokkolja a lövéseket.
+    try:
+        from .defense import role_block_sources
+        rbk = role_block_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rbk = rbk[side]
+            if rec_rbk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} blokk-munkája egy poszton áll: a "
+                     f"blokkjaik {rec_rbk['share_pct']:.0f}%-a a(z) "
+                     f"{rec_rbk['main_role']} poszttól jön "
+                     f"({rec_rbk['blocks']} blokkból) — az ő sávjába "
+                     "csak elmozgatás után szabad lőni.")
+    except Exception:
+        pass
     # Gólpassz-poszt: kinek a kezéből indulnak a gólok.
     try:
         from .roles import role_assist_sources

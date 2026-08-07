@@ -2817,3 +2817,66 @@ def test_role_steal_sources_silent_with_few_steals():
 
     rec = role_steal_sources(_rsw_match([20, 21]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _rbk_match(blockers, fps=25.0):
+    """`blockers` = blokkonként a lövést lefogó VENDÉG játékos.
+
+    Első szakasz: hosszú vendég-birtoklás a -x kapu felé, amelyből a
+    poszt-becslés összeáll (20-as: beálló, 21-es: szélső). Utána
+    hazai lövések a +x kapura, amelyeket a megadott vendég játékos
+    fog le (a labda rajta fordul vissza).
+    """
+    from handball.models.tracking import Ball, Frame, Match
+
+    attack_pos = {20: (5.0, 10.0), 21: (5.0, 1.0)}
+    frames = []
+    t = 0
+    for _ in range(120):             # vendég-birtoklás: poszt-minta
+        frames.append(Frame(
+            t=t,
+            players=[_pl(1, Team.HOME, 20.0, 10.0),
+                     _pl(20, Team.AWAY, *attack_pos[20]),
+                     _pl(21, Team.AWAY, *attack_pos[21])],
+            ball=Ball(x=5.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in blockers:
+        other = 21 if tid == 20 else 20
+        for x in (29.0, 30.2, 31.4, 32.4, 31.0, 29.5, 28.0):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 28.0, 10.0),
+                         _pl(tid, Team.AWAY, 32.5, 10.0),
+                         _pl(other, Team.AWAY, 20.0, 5.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(15):          # szünet a blokk-hűtés miatt
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 28.0, 10.0),
+                         _pl(20, Team.AWAY, 20.0, 5.0),
+                         _pl(21, Team.AWAY, 20.0, 15.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_role_block_sources_finds_the_blocking_post():
+    """Ha a blokkok nagy része ugyanattól a poszttól jön, az ő sávjába
+    csak elmozgatás után szabad lőni."""
+    from handball.pipeline.defense import (RBK_MIN_BLOCKS,
+                                           role_block_sources)
+
+    rec = role_block_sources(_rbk_match([20] * 3 + [21]))["away"]
+    assert rec["blocks"] >= RBK_MIN_BLOCKS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "elmozgatás" in rec["verdict"], rec
+
+
+def test_role_block_sources_silent_with_few_blocks():
+    """Néhány blokkból nincs ítélet."""
+    from handball.pipeline.defense import role_block_sources
+
+    rec = role_block_sources(_rbk_match([20, 21]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

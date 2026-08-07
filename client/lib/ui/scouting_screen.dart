@@ -2115,6 +2115,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Blokk-poszt: melyik posztjuk blokkolja a lövéseket (3+ poszthoz
+  // kötött blokk, 60% részarány — a backenddel azonos küszöbök:
+  // RBK_MIN_BLOCKS, RBK_SHARE_PCT).
+  String? _blockRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rbk_blocks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a blokkjaik zöme a(z) $top poszttól jön (${pct.round()}%, "
+        "$total blokk) · az ő sávjába csak elmozgatás után szabad "
+        "lőni";
+  }
+
   // Labdaszerző-poszt: melyik posztjuk nyeri a labdákat (5+ poszthoz
   // kötött szerzés, 50% részarány — a backenddel azonos küszöbök:
   // RSW_MIN_STEALS, RSW_SHARE_PCT).
@@ -7244,6 +7271,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_blockRole(r) != null)
+        ["Blokk-poszt", _blockRole(r)!],
       if (_stealRole(r) != null)
         ["Labdaszerző-poszt", _stealRole(r)!],
       if (_assistRole(r) != null)

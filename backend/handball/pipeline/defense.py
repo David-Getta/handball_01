@@ -3938,3 +3938,65 @@ def role_steal_sources(match, config=None) -> dict:
                     "sávjába csak biztonsági passz mehet, a támadást a "
                     "másik oldalon kell átvezetni")
     return out
+
+
+# Blokk-poszt: ennyi poszthoz kötött blokk kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a faluk blokk-munkája egy
+# poszton áll.
+RBK_MIN_BLOCKS = 3
+RBK_SHARE_PCT = 60.0
+
+
+def role_block_sources(match, config=None) -> dict:
+    """Blokk-poszt: MELYIK POSZTJUK BLOKKOL.
+
+    A blokkolt lövések rétege (detect_blocks) az embert nevezi meg —
+    ez a posztot: a blokkokat a blokkoló játékos posztjához írja.
+
+    Edzőileg ez a lövés-előkészítés térképe. Ha a blokkjaik nagy része
+    ugyanarról a posztról jön (tipikusan a középső védőtől), az ő
+    sávjában átlövéssel próbálkozni ajándék labdavesztés — oda csak
+    elmozgatás UTÁN szabad lőni: a figura először őt húzza ki (beálló-
+    felfutás, keresztmozgás), és a lövés a megnyílt sávba megy. Ha a
+    blokk-munkájuk szórt, nincs kitüntetett sáv — a lövés-választást a
+    kapus-helyezkedés döntse.
+
+    Visszatérés csapatonként (a BLOKKOLÓ oldal): {"blocks" (poszthoz
+    kötött), "roles": {poszt: blokk}, "main_role", "share_pct",
+    "verdict"} — a main_role/share_pct/verdict None, ha nincs meg az
+    RBK_MIN_BLOCKS, vagy egyik poszt sem éri el az RBK_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    blk = detect_blocks(match, config)
+
+    out: dict = {side: {"blocks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in blk[side]["blockers"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["blocks"])
+            rec["blocks"] += row["blocks"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["blocks"] >= RBK_MIN_BLOCKS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["blocks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RBK_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a blokkjaik a(z) {poszt} posztról jönnek "
+                    f"({share:.0f}%, {rec['blocks']} blokkból) — az ő "
+                    "sávjába csak elmozgatás UTÁN szabad lőni, a "
+                    "figura először őt húzza ki")
+    return out

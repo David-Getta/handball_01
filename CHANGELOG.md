@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Blokk-poszt: melyik posztjuk blokkol.** A blokkolt lövések
+  rétege az embert nevezi meg — az új réteg a posztot: a blokkokat a
+  blokkoló játékos posztjához írja. Edzőileg ez a lövés-előkészítés
+  térképe: ha a blokkjaik zöme egy posztról jön (tipikusan a középső
+  védőtől), az ő sávjába átlövéssel próbálkozni ajándék labdavesztés
+  — oda csak elmozgatás UTÁN szabad lőni: a figura először őt húzza
+  ki, és a lövés a megnyílt sávba megy. Felületek: `/analyze` és
+  meccs-csomag (`role_block_sources`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (276: az ő blokk-posztjuk × a ti
+  falba lövésetek → előkészítés nélkül oda nem megy lövés),
+  edzés-fókusz (297: blokk-staféta, a blokk a falé legyen, ne egy
+  emberé), teendő-rangsor és a meccs-jelentés Befejező-lencse
+  táblája, kliens-csempe.
+
 - **Lepattanó-poszt: ki lő másodszor.** A második roham rétege
   csapat-szinten mondja meg, harcolnak-e a lepattanóért — az új réteg
   azt, KI: minden megnyert második rohamnál a második lövést az

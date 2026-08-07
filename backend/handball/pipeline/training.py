@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 297) Blokk-poszt: ha a blokk-munkánk egy emberen áll, az
+    # elmozgatása után a faltól nincs védelmünk az átlövés ellen.
+    try:
+        from .defense import RBK_SHARE_PCT, role_block_sources
+        rbk297 = role_block_sources(match, config)
+        for side in ("home", "away"):
+            rec297 = rbk297[side]
+            if rec297.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen álló blokk-munka",
+                f"a blokkjaink {rec297['share_pct']:.0f}%-a a(z) "
+                f"{rec297['main_role']} poszttól jön "
+                f"({rec297['blocks']} blokkból; "
+                f"{RBK_SHARE_PCT:.0f}% fölött már minta) — az ellenfél "
+                "egy beálló-felfutással kihúzza, és a fal mögötte "
+                "nyitva marad",
+                "blokk-staféta a falban: átlövés-sorozat ellen a "
+                "kilépő-blokkoló szerep jelre vándorol a belső hármas "
+                "között — a cél, hogy a blokk a FALÉ legyen, ne egy "
+                "emberé")
+    except Exception:
+        pass
+
     # 296) Lepattanó-poszt: ha a második rohamunk egy emberen múlik, a
     # kizárása után nincs második esélyünk.
     try:
