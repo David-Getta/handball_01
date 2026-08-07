@@ -761,6 +761,11 @@ class ScoutingReport:
     # Időkérés-befejező: az időkérések utáni ablakban leadott,
     # poszthoz kötött lövések darabszáma posztonként + az időkérések
     # száma. Darabszám, meccsek közt pontosan összegződik.
+    # Lövésválasztás: a mért lövések és azok darabszáma, ahol jobb
+    # SZABAD helyzet volt a pályán. Darabszám, meccsek közt pontosan
+    # összegződik (arány = better / shots).
+    scq_shots: int = 0
+    scq_better: int = 0
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -2984,6 +2989,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Lövésválasztás: felnéznek-e a lövés előtt.
+    if rep.scq_shots >= 6:
+        _scq_pct = 100.0 * rep.scq_better / rep.scq_shots
+        if _scq_pct >= 45.0:
+            keys.append(
+                f"A lövéseik {_scq_pct:.0f}%-ánál volt jobb SZABAD "
+                f"helyzet a pályán ({rep.scq_better}/{rep.scq_shots}) — "
+                "nem néznek fel: a rossz szögű lövést rájuk lehet "
+                "engedni, a szabadon álló társukat kell zárni.")
+        elif _scq_pct <= 15.0:
+            keys.append(
+                f"Fegyelmezett lövésválasztás (csak {_scq_pct:.0f}%-nál "
+                "volt jobb szabad helyzet) — ellenük a helyzet-teremtést "
+                "kell zárni, a lövés pillanatában már késő.")
 
     # Időkérés-befejező: az időkérésük utáni támadásra kit fogjunk.
     _tof_n = sum(rep.tof_shots_by_role.values())
@@ -7404,6 +7424,10 @@ def _scout_team_cached(match: Match, team: Team,
             f"{p}|{side}": r[side]
             for p, r in rgprec["roles"].items()
             for side in ("bal", "közép", "jobb") if r[side]}
+        from .decisions import shot_choice_quality as _scq
+        scqrec = _scq(match, config)[team.value]
+        rep.scq_shots = scqrec["shots"]
+        rep.scq_better = scqrec["better_options"]
         from .stoppages import timeout_finisher as _tof
         tofrec = _tof(match, config)[team.value]
         rep.tof_timeouts = tofrec["timeouts"]
@@ -9974,6 +9998,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 270) Az ő rossz lövésválasztásuk × a ti fal-szélességetek: aki
+    # nem néz fel, azt tömör fallal lehet a rossz szögbe szorítani —
+    # széles fal ellen viszont pont a szabad társ kapja a labdát.
+    _w270 = ((own.width_sum_m / own.width_frames)
+             if own.width_frames >= 100 else None)
+    if opp.scq_shots >= 6 and _w270 is not None:
+        _pct270 = 100.0 * opp.scq_better / opp.scq_shots
+        if _pct270 >= 45.0 and _w270 >= 12.0:
+            plan.append(
+                f"A lövéseik {_pct270:.0f}%-ánál volt jobb szabad "
+                f"helyzet a pályán ({opp.scq_better}/{opp.scq_shots}) — "
+                "nem néznek fel. A ti falatok viszont széles (átlag "
+                f"{_w270:.1f} m), és a széles fal épp a "
+                "szabad társat hagyja: TÖMÖRÍTSETEK. Ha a labdás nem "
+                "keresi a jobb helyzetet, a fal középre húzva a rossz "
+                "szögű lövést kényszeríti ki, és nem kell a passzt is "
+                "megjátszani hagyni.")
 
     # 269) Az ő időkérés-befejezőjük × a ti kettőzési szokásotok: ha
     # amúgy ritkán kettőztök, az időkérés utáni támadás a legjobb hely
@@ -14450,6 +14492,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
         rgp_goals_by_role_side=_merge_count_dicts(
             r.rgp_goals_by_role_side for r in reports),
+        scq_shots=sum(r.scq_shots for r in reports),
+        scq_better=sum(r.scq_better for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

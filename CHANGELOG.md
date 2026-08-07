@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lövésválasztás: volt-e jobb helyzet a pályán.** A
+  helyzetminőség (xG) eddig megmondta, MILYEN helyzetekből lőnek — azt
+  viszont nem, hogy a lövés pillanatában volt-e JOBB. Az új réteg
+  minden lövésnél összeveti az elengedő játékos helyzetértékét a
+  legjobb SZABADON álló csapattársáéval; ha a társé érdemben nagyobb, a
+  lövés "eldobott jobb helyzet". Edzőileg ez a támadó-játék fegyelme: a
+  magas arány nem azt jelenti, hogy rosszul lőnek, hanem hogy nem
+  néznek fel — a fal ellenük tudatosan hagyhatja a rossz szögű lövést,
+  a szabad társat viszont zárni kell. Felületek: `/analyze` és
+  meccs-csomag (`shot_choice_quality`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (270: az ő rossz lövésválasztásuk × a
+  ti széles falatok → tömörítés), edzés-fókusz (291: döntés-játék, ahol
+  a lövés csak a szabadabb társ megnevezése után érvényes),
+  kliens-csempe.
+
 - **A befejező-lencse eljut a teendő-rangsorba.** A három új
   befejező-réteg (poszt-nyomás, figura-befejező, időkérés-befejező)
   ítélete eddig csak a saját felületén látszott: a rangsor (a

@@ -2088,6 +2088,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Lövésválasztás: felnéznek-e a lövés előtt (6+ mért lövés, 45%
+  // felett "nem néznek fel", 15% alatt fegyelmezett — a backenddel
+  // azonos küszöbök: SCQ_MIN_SHOTS, SCQ_HIGH_PCT, SCQ_LOW_PCT).
+  String? _shotChoice(Map<String, dynamic> r) {
+    final shots = (r["scq_shots"] as num?)?.toInt() ?? 0;
+    final better = (r["scq_better"] as num?)?.toInt() ?? 0;
+    if (shots < 6) return null;
+    final pct = 100.0 * better / shots;
+    if (pct >= 45.0) {
+      return "a lövéseik ${pct.round()}%-ánál volt jobb SZABAD helyzet a "
+          "pályán ($better/$shots) · nem néznek fel: a rossz szögű lövést "
+          "rájuk lehet engedni, a szabad társukat kell zárni";
+    }
+    if (pct <= 15.0) {
+      return "fegyelmezett lövésválasztás: csak ${pct.round()}%-nál volt "
+          "jobb szabad helyzet ($better/$shots) · a helyzet-teremtést "
+          "kell zárni, a lövésnél már késő";
+    }
+    return null;
+  }
+
   // Időkérés-befejező: az időkérés után melyik posztra játszanak (3+
   // poszthoz kötött lövés, 60% részarány — a backenddel azonos
   // küszöbök: TOF_MIN_SHOTS, TOF_SHARE_PCT).
@@ -7090,6 +7111,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_shotChoice(r) != null)
+        ["Lövésválasztás", _shotChoice(r)!],
       if (_timeoutFinisher(r) != null)
         ["Időkérés-befejező", _timeoutFinisher(r)!],
       if (_setplayFinisher(r) != null)

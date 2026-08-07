@@ -632,3 +632,111 @@ def pressure_sensitive_players(match: Match,
                 break
         out[side] = {"players": rows, "top": top}
     return out
+
+
+# Lövésválasztás: ennyi mért lövés kell az ítélethez; ekkora
+# xG-különbség számít "érdemben jobb helyzetnek" (0.10 nagyjából minden
+# tizedik lövésnyi gólkülönbség); és e fölött/alatt mondunk ítéletet a
+# jobb helyzetet eldobó lövések arányára.
+SCQ_MIN_SHOTS = 6
+SCQ_GAP_XG = 0.10
+SCQ_HIGH_PCT = 45.0
+SCQ_LOW_PCT = 15.0
+
+
+def shot_choice_quality(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Lövésválasztás: LŐNEK-E, AMIKOR JOBB HELYZET VAN a pályán.
+
+    A helyzetminőség (xg) azt mondja meg, MILYEN helyzetekből lőnek —
+    ez azt, hogy a lövés pillanatában volt-e JOBB. Minden lövésnél
+    kiszámoljuk az elengedő játékos helyzetértékét, és összevetjük a
+    legjobb SZABAD csapattársáéval (szabad = a legközelebbi mezőny-védő
+    FREE_DEF_RADIUS_M-nél távolabb). Ha a társé legalább SCQ_GAP_XG-vel
+    nagyobb, a lövés "eldobott jobb helyzet".
+
+    Edzőileg ez a támadó-játék fegyelme. A magas arány nem azt jelenti,
+    hogy rosszul lőnek — hanem hogy NEM NÉZNEK FEL: a fal ellenük
+    tudatosan hagyhatja a rossz szögű lövést, mert úgyis elveszik. Ellene
+    a saját oldalon a labdás fejét kell felhozni (utolsó passz keresése
+    kényszerrel), a másikon a védekezés kap tervet: aki eldobja a jobb
+    helyzetet, arra RÁ LEHET engedni, a jobb helyzetben lévő társát
+    viszont zárni kell — az a lövés amúgy sem jönne meg.
+
+    Visszatérés csapatonként: {"shots" (mért lövés), "better_options"
+    (eldobott jobb helyzet), "pct", "avg_gap_xg", "verdict"} — a
+    pct/verdict None SCQ_MIN_SHOTS alatt; a verdict csak a magas
+    (SCQ_HIGH_PCT feletti) vagy a kifejezetten fegyelmezett
+    (SCQ_LOW_PCT alatti) esetben szólal meg.
+    """
+    from ..models.tracking import Team as _Team
+    from .defense import FREE_DEF_RADIUS_M
+    from .event_detection import EventType, detect_shots
+    from .xg import xg_of_position
+
+    config = config or TacticsConfig()
+    by_t = {f.t: f for f in match.frames}
+
+    out: dict = {side: {"shots": 0, "better_options": 0, "pct": None,
+                        "avg_gap_xg": None, "verdict": None}
+                 for side in ("home", "away")}
+    gaps: dict = {"home": [], "away": []}
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        f = by_t.get(e.t)
+        if f is None:
+            continue
+        shooter = next((p for p in f.players
+                        if p.track_id == e.player_id), None)
+        if shooter is None:
+            continue
+        goal_x = config.attacks_toward_x(e.team)
+        defender_team = (_Team.AWAY if e.team == _Team.HOME
+                         else _Team.HOME)
+        defenders = [p for p in f.players
+                     if p.team == defender_team and p.role != "kapus"]
+        if not defenders:
+            continue
+        own_xg = xg_of_position(shooter.x, shooter.y, goal_x)
+        best_alt = None
+        for p in f.players:
+            if p.team != e.team or p.track_id == shooter.track_id:
+                continue
+            if p.role == "kapus":
+                continue
+            near = min(math.hypot(d.x - p.x, d.y - p.y) for d in defenders)
+            if near <= FREE_DEF_RADIUS_M:
+                continue          # a társ sincs szabadon — nem opció
+            alt = xg_of_position(p.x, p.y, goal_x)
+            if best_alt is None or alt > best_alt:
+                best_alt = alt
+
+        rec = out[e.team.value]
+        rec["shots"] += 1
+        if best_alt is not None and best_alt - own_xg >= SCQ_GAP_XG:
+            rec["better_options"] += 1
+            gaps[e.team.value].append(best_alt - own_xg)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["shots"] < SCQ_MIN_SHOTS:
+            continue
+        pct = 100.0 * rec["better_options"] / rec["shots"]
+        rec["pct"] = round(pct, 1)
+        if gaps[side]:
+            rec["avg_gap_xg"] = round(sum(gaps[side]) / len(gaps[side]), 3)
+        if pct >= SCQ_HIGH_PCT:
+            rec["verdict"] = (
+                f"a lövéseik {pct:.0f}%-ánál volt jobb SZABAD helyzet a "
+                "pályán — nem néznek fel: rájuk lehet engedni a rossz "
+                "szögű lövést, a szabad társukat kell zárni")
+        elif pct <= SCQ_LOW_PCT:
+            rec["verdict"] = (
+                f"fegyelmezett lövésválasztás (csak {pct:.0f}%-nál volt "
+                "jobb szabad helyzet) — ellenük a helyzet-teremtést "
+                "kell zárni, a lövés-pillanatban már késő")
+    return out

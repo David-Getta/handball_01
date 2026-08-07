@@ -397,3 +397,80 @@ def test_pressure_sensitive_players_needs_enough_events():
     rec = pressure_sensitive_players(
         _pressure_match([(4, True), (4, True)]))["home"]
     assert rec["top"] is None
+
+
+# ---- Lövésválasztás (volt-e jobb szabad helyzet) ----------------------------
+
+def _scq_match(plan, warmup=120):
+    """`plan` = lövésenként (rossz_valasztas?) — ha igaz, a lövő élesen
+    kifelé áll, a társa pedig szabadon a kapu előtt (jobb helyzet); ha
+    hamis, fordítva.
+
+    A lövő mellett mindig áll egy vendég védő (különben a lövés is
+    "szabad" lenne), a kapu előtti társ mellett soha.
+    """
+    frames = []
+    t = 0
+
+    def _cast(shooter_xy, mate_xy, guard_xy):
+        return [
+            PlayerPosition(track_id=1, team=Team.HOME, x=shooter_xy[0],
+                           y=shooter_xy[1], source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=2, team=Team.HOME, x=mate_xy[0],
+                           y=mate_xy[1], source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=20, team=Team.AWAY, x=guard_xy[0],
+                           y=guard_xy[1], source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=21, team=Team.AWAY, x=0.5, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+
+    def _add(cast, bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=cast,
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for bad in plan:
+        # Rossz választás: a lövő 12 m-ről, élesen; a társ a 7 m-en.
+        # Jó választás: a lövő áll a 7 m-en, a "társ" messze kint.
+        shooter = (28.0, 1.5) if bad else (34.0, 10.0)
+        mate = (34.5, 10.0) if bad else (26.0, 1.0)
+        guard = (shooter[0] - 0.5, shooter[1])
+        cast = _cast(shooter, mate, guard)
+        for _ in range(warmup):
+            _add(cast, shooter[0] + 0.2, shooter[1])
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            _add(cast,
+                 shooter[0] + 0.2 + (40.4 - shooter[0] - 0.2) * f,
+                 shooter[1] + (10.0 - shooter[1]) * f)
+        for _ in range(30):
+            _add(cast, 5.0, 10.0)
+    return Match(MatchMeta(match_id="scq", home_team="H", away_team="A",
+                           fps=25.0), frames)
+
+
+def test_shot_choice_quality_flags_the_thrown_away_option():
+    """Ha minden lövésnél szabadon állt a jobb helyzetű társ, a réteg
+    kimondja: nem néznek fel."""
+    from handball.pipeline.decisions import (SCQ_MIN_SHOTS,
+                                             shot_choice_quality)
+
+    rec = shot_choice_quality(_scq_match([True] * 6))["home"]
+    assert rec["shots"] >= SCQ_MIN_SHOTS, rec
+    assert rec["better_options"] >= 5, rec
+    assert rec["pct"] >= 45.0, rec
+    assert rec["avg_gap_xg"] and rec["avg_gap_xg"] >= 0.10, rec
+    assert rec["verdict"] and "nem néznek fel" in rec["verdict"], rec
+
+
+def test_shot_choice_quality_silent_with_few_shots():
+    """Két lövésből nincs ítélet."""
+    from handball.pipeline.decisions import shot_choice_quality
+
+    rec = shot_choice_quality(_scq_match([True, True]))["home"]
+    assert rec["pct"] is None and rec["verdict"] is None, rec

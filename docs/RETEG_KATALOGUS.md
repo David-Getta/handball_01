@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **317 réteg**, modulonként csoportosítva; a
+Összesen **318 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (69)
@@ -86,7 +86,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `coach_summary` | A meccs automatikus edzői összefoglalója. |
 
-## decisions (5)
+## decisions (6)
 
 | Réteg | Mit mér |
 |---|---|
@@ -94,6 +94,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `pass_security` | Pressz-tűrés: labdabiztonság testközeli védő mellett vs szabadon. |
 | `pass_speed` | Passz-sebesség: ÉLES vagy LÁGY a labdajáratásuk. |
 | `pressure_sensitive_players` | Pressz-érzékeny játékosok: KI VESZÍTI EL a labdát szorításban. |
+| `shot_choice_quality` | Lövésválasztás: LŐNEK-E, AMIKOR JOBB HELYZET VAN a pályán. |
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 
 ## defense (55)

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 291) Lövésválasztás: ha a lövéseink nagy részénél volt jobb
+    # szabad helyzet a pályán, nem a lövéstechnika a gond — a fejet
+    # kell felhozni a lövés előtt.
+    try:
+        from .decisions import SCQ_HIGH_PCT, shot_choice_quality
+        scq291 = shot_choice_quality(match, config)
+        for side in ("home", "away"):
+            rec291 = scq291[side]
+            if rec291["pct"] is None or rec291["pct"] < SCQ_HIGH_PCT:
+                continue
+            add(side, "támadás", "Eldobott jobb helyzet",
+                f"a lövéseink {rec291['pct']:.0f}%-ánál volt jobb SZABAD "
+                f"helyzet a pályán ({rec291['better_options']}/"
+                f"{rec291['shots']} lövés; {SCQ_HIGH_PCT:.0f}% fölött "
+                "már mintázat) — nem a lövéstechnika a gond, hanem hogy "
+                "nem nézünk fel",
+                "DÖNTÉS-JÁTÉK: 4-4 a fél pályán, a lövés csak azután "
+                "érvényes, hogy a lövő megnevezte, ki állt szabadabban; "
+                "ha rosszul nevezi meg, a gól nem számít — a cél a "
+                "felnézés reflexe, nem a passz-kényszer")
+    except Exception:
+        pass
+
     # 290) Időkérés-befejező: ha az időkérés utáni támadásunk mindig
     # ugyanarra a posztra fut ki, az ellenfél elé áll — pont a
     # legfontosabb támadásunkat fogják meg.

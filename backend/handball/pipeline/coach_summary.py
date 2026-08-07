@@ -885,6 +885,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Lövésválasztás: felnéznek-e a lövés előtt.
+    try:
+        from .decisions import shot_choice_quality
+        scq = shot_choice_quality(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scq = scq[side]
+            if rec_scq["verdict"] is None or rec_scq["pct"] is None:
+                continue
+            body += (f" A(z) {name} lövésválasztásáról: "
+                     f"{rec_scq['verdict']} "
+                     f"({rec_scq['better_options']}/{rec_scq['shots']} "
+                     "lövés).")
+    except Exception:
+        pass
     # Időkérés-befejező: az időkérés után kire játszanak.
     try:
         from .stoppages import timeout_finisher
