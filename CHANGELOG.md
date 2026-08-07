@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Indítás-vadász poszt: melyik posztjuk vadássza az indítást.**
+  Az indítás-hiba ára réteg az indító oldalt nézi — az új réteg a
+  rabló oldalt: minden elveszett kapus-indításnál a labdát megszerző
+  játékos posztjához ír egy rablást. Edzőileg kétirányú. Ellenük: ha
+  a rablásaik rendre ugyanarról a posztról jönnek (tipikusan a
+  szélső ugrik az első passzra), a saját kapus a másik oldalon vagy
+  a feje fölött nyisson. Saját csapatra: az egy emberen futó
+  letámadást az ellenfél egy cserével hatástalanítja. Felületek:
+  `/analyze` és meccs-csomag (`outlet_hunter_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (284: az ő
+  vadász-posztjuk × a ti elszórt indításaitok → megbeszélt
+  indítás-terv), edzés-fókusz (305: letámadás-forgó jelre vándorló
+  vadásszal), teendő-rangsor és a meccs-jelentés Védő-lencse
+  táblája, kliens-csempe.
+
 - **Kulcs-poszt: hány réteg mutat ugyanarra a posztra.** A
   poszt-lencse rétegek (kire fut ki a játékuk, hol sebezhető a
   védekezésük) egyenként egy-egy mintát mondanak ki — az új réteg

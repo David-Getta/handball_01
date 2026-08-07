@@ -3650,6 +3650,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import outlet_hunter_roles
+            res["outlet_hunter_roles"] = outlet_hunter_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.tactics import slow_attack_cost
             res["slow_attack_cost"] = slow_attack_cost(match)
         except Exception:
@@ -4795,6 +4800,9 @@ def create_app():
                 from ..pipeline.goalkeeper import outlet_punishment
                 _layer("outlet_punishment",
                        lambda: outlet_punishment(match))
+                from ..pipeline.goalkeeper import outlet_hunter_roles
+                _layer("outlet_hunter_roles",
+                       lambda: outlet_hunter_roles(match))
                 from ..pipeline.tactics import slow_attack_cost
                 _layer("slow_attack_cost",
                        lambda: slow_attack_cost(match))

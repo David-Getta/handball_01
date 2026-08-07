@@ -2525,3 +2525,92 @@ def seven_six_finisher_roles(match: Match, config=None) -> dict:
                     "dolga az ő sávját besűríteni, és minden megvárt "
                     "másodperc nekik kockázat")
     return out
+
+
+# Indítás-vadász poszt: ennyi poszthoz kötött indítás-rablás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
+# indítás-vadászatuk egy poszton fut.
+OHR_MIN_STEALS = 3
+OHR_SHARE_PCT = 60.0
+
+
+def outlet_hunter_roles(match: Match, config=None) -> dict:
+    """Indítás-vadász poszt: MELYIK POSZTJUK vadássza az indítást.
+
+    Az indítás-hiba ára réteg (outlet_punishment) az indító oldalt
+    nézi — ez a rabló oldalt: minden elveszett kapus-indításnál a
+    labdát megszerző játékos posztjához ír egy rablást.
+
+    Edzőileg kétirányú. Ellenük: ha az indítás-rablásaik rendre
+    ugyanarról a posztról jönnek (tipikusan a szélső ugrik rá az első
+    passzra), a saját kapus indítása a MÁSIK oldalon vagy az ő feje
+    fölött nyisson — a vadász sávját el kell kerülni. Saját csapatra:
+    ha a letámadásunk egy emberen fut, az ellenfél egy cserével
+    hatástalanítja — a rablás a rendszeré legyen, ne egy emberé.
+
+    Visszatérés csapatonként (a RABLÓ oldal): {"steals" (poszthoz
+    kötött indítás-rablás), "roles": {poszt: rablás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    OHR_MIN_STEALS, vagy egyik poszt sem éri el az OHR_SHARE_PCT-t.
+    """
+    import math as _math
+
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    detect_goalkeepers(match)
+    follow = round(GK_OUTLET_FOLLOW_S * fps)
+    roles = estimate_positions(match, config)
+
+    def _holder(frame):
+        if frame.ball is None:
+            return None
+        best, best_d = None, GK_HOLD_RADIUS_M
+        for p in frame.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            d = _math.hypot(p.x - frame.ball.x, p.y - frame.ball.y)
+            if d < best_d:
+                best, best_d = p, d
+        return best
+
+    out: dict = {side: {"steals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    pending = None
+    for i, f in enumerate(match.frames):
+        h = _holder(f)
+        if h is not None and h.role == ROLE_GOALKEEPER:
+            pending = (h.team.value, i)
+            continue
+        if pending is None or h is None:
+            continue
+        side, i0 = pending
+        pending = None
+        if i - i0 > follow or h.team.value == side:
+            continue
+        hunter = h.team.value
+        rec_role = roles[hunter].get(h.track_id)
+        if rec_role is None:
+            continue
+        rec = out[hunter]
+        poszt = rec_role["poszt"]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["steals"] += 1
+    for rec in out.values():
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["steals"] >= OHR_MIN_STEALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["steals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= OHR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az indítás-vadászatuk a(z) {poszt} poszton fut "
+                    f"({share:.0f}%, {rec['steals']} elrabolt "
+                    "indításból) — a kapus-indítás a másik oldalon "
+                    "vagy az ő feje fölött nyisson")
+    return out

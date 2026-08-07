@@ -806,6 +806,9 @@ class ScoutingReport:
     # Kulcs-poszt: hány poszt-réteg ítélete futott ki az adott
     # posztra. Réteg-darabszám, meccsek közt pontosan összegződik.
     kp_layers_by_post: dict = field(default_factory=dict)
+    # Indítás-vadász poszt: az elrabolt kapus-indítások darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    ohr_steals_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3042,6 +3045,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Indítás-vadász poszt: melyik sávot kerülje a kapus-indításunk.
+    _ohr_n = sum(rep.ohr_steals_by_role.values())
+    if _ohr_n >= 3:
+        _ohr_p, _ohr_c = max(rep.ohr_steals_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ohr_pct = 100.0 * _ohr_c / _ohr_n
+        if _ohr_pct >= 60.0:
+            keys.append(
+                f"Az indítás-vadászatuk a(z) {_ohr_p} posztjukon fut "
+                f"({_ohr_pct:.0f}%, {_ohr_n} elrabolt indításból) — a "
+                "kapusunk indítása a másik oldalon vagy az ő feje "
+                "fölött nyisson, az első passz sávját ő ne érje el.")
 
     # Kulcs-poszt: kire fut ki az egész elemzés.
     if rep.kp_layers_by_post:
@@ -7671,6 +7687,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import key_post as _kp
         kprec = _kp(match, config)[team.value]
         rep.kp_layers_by_post = dict(kprec["posts"])
+        from .goalkeeper import outlet_hunter_roles as _ohr
+        ohrrec = _ohr(match, config)[team.value]
+        rep.ohr_steals_by_role = dict(ohrrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10245,6 +10264,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 284) Az ő indítás-vadász posztjuk × a ti gólba kerülő
+    # indítás-hibáitok: ha az indításaitok elvesznek ÉS tudni lehet,
+    # ki vadássza őket, a kapus-indítás terve poszt-szinten megírható.
+    _ohr284_n = sum(opp.ohr_steals_by_role.values())
+    if _ohr284_n >= 3 and own.olp_lost >= 3:
+        _ohr284_p, _ohr284_c = max(opp.ohr_steals_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ohr284_pct = 100.0 * _ohr284_c / _ohr284_n
+        if _ohr284_pct >= 60.0:
+            plan.append(
+                f"Az indítás-vadászatuk a(z) {_ohr284_p} posztjukon "
+                f"fut ({_ohr284_pct:.0f}%), ti pedig sok indítást "
+                f"veszítetek el ({own.olp_lost}) — a kapus indítása "
+                "előre megbeszélt: a vadász sávját kerüli, a másik "
+                "oldalon vagy a feje fölött nyit, szorításban pedig "
+                "rövid biztonsági passz jön, nem hosszú hazárd.")
 
     # 283) Az ő kulcs-posztjuk × a ti fegyelmezett tervkövetésetek: ha
     # az elemzés rétegei ugyanarra a posztra mutatnak, a meccsterv nem
@@ -15016,6 +15052,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sc2_screens_by_role for r in reports),
         kp_layers_by_post=_merge_count_dicts(
             r.kp_layers_by_post for r in reports),
+        ohr_steals_by_role=_merge_count_dicts(
+            r.ohr_steals_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

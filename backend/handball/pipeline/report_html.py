@@ -1838,7 +1838,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                                    second_chance_roles)
         from .defense import (beaten_defender_roles, role_block_sources,
                               role_steal_sources, slow_retreat_roles)
-        from .goalkeeper import seven_six_finisher_roles
+        from .goalkeeper import (outlet_hunter_roles,
+                                 seven_six_finisher_roles)
         from .roles import (role_assist_sources, role_fast_breaks,
                             role_pressure_finish)
         from .rules import (seven_conceder_roles, seven_shot_directions,
@@ -1884,7 +1885,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Hetes-okozó poszt", seven_conceder_roles),
             ("Kiülő-poszt", suspended_roles),
             ("Visszafutás-poszt", slow_retreat_roles),
-            ("Átvert-poszt", beaten_defender_roles)))
+            ("Átvert-poszt", beaten_defender_roles),
+            ("Indítás-vadász poszt", outlet_hunter_roles)))
         if def_rows:
             defense_lens_html = (
                 "<h2>Védő-lencse (hol sebezhető a védekezésük)</h2>"

@@ -2115,6 +2115,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Indítás-vadász poszt: melyik posztjuk vadássza a kapus-indítást
+  // (3+ elrabolt indítás, 60% részarány — a backenddel azonos
+  // küszöbök: OHR_MIN_STEALS, OHR_SHARE_PCT).
+  String? _outletHunterRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ohr_steals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az indítás-vadászatuk a(z) $top poszton fut "
+        "(${pct.round()}%, $total rablás) · a kapus-indítás a másik "
+        "oldalon nyisson";
+  }
+
   // Kulcs-poszt: hány poszt-réteg ítélete fut ki ugyanarra a posztra
   // (3+ egyező réteg, holtverseny nélkül — a backenddel azonos
   // küszöb: KP_MIN_LAYERS).
@@ -7455,6 +7482,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_outletHunterRole(r) != null)
+        ["Indítás-vadász poszt", _outletHunterRole(r)!],
       if (_keyPost(r) != null)
         ["Kulcs-poszt", _keyPost(r)!],
       if (_screenSetterRole(r) != null)

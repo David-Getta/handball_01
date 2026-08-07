@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 305) Indítás-vadász poszt: ha a letámadásunk egy emberen fut, az
+    # ellenfél az indítását egyszerűen a sávján kívül nyitja.
+    try:
+        from .goalkeeper import OHR_SHARE_PCT, outlet_hunter_roles
+        ohr305 = outlet_hunter_roles(match, config)
+        for side in ("home", "away"):
+            rec305 = ohr305[side]
+            if rec305.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen futó indítás-vadászat",
+                f"az elrabolt indításaink {rec305['share_pct']:.0f}%-a"
+                f" a(z) {rec305['main_role']} poszté "
+                f"({rec305['steals']} rablásból; "
+                f"{OHR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél kapusa a sávján kívül fog nyitni, és a "
+                "letámadásunk üresben fut",
+                "letámadás-forgó: a kapus-indítás vadásza jelre "
+                "vándorol (szélső, átlövő, beálló felváltva), a "
+                "második ember a visszapasszt zárja — a cél, hogy a "
+                "rablás a RENDSZERÉ legyen, ne egy emberé")
+    except Exception:
+        pass
+
     # 304) Kulcs-poszt: ha az elemzés rétegei ugyanarra a posztunkra
     # mutatnak, a játékunk egy emberen áll — az ellenfél is látja.
     try:

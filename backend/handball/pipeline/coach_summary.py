@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Indítás-vadász poszt: melyik posztjuk vadássza az indítást.
+    try:
+        from .goalkeeper import outlet_hunter_roles
+        ohr = outlet_hunter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ohr = ohr[side]
+            if rec_ohr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} indítás-vadászata egy poszton "
+                     f"fut: a rablásaik {rec_ohr['share_pct']:.0f}%-a "
+                     f"a(z) {rec_ohr['main_role']} poszté "
+                     f"({rec_ohr['steals']} elrabolt indításból) — a "
+                     "kapus-indítás a másik oldalon nyisson.")
+    except Exception:
+        pass
     # Kulcs-poszt: hány réteg mutat ugyanarra a posztra.
     try:
         from .priorities import key_post

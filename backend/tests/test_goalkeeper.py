@@ -2263,3 +2263,73 @@ def test_seven_six_finisher_roles_silent_with_few_shots():
 
     rec = seven_six_finisher_roles(_en7_match([2, 3]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _ohr_match(hunters):
+    """`hunters` = rablásonként az a HAZAI játékos, aki a vendég kapus
+    indítását elcsípi (2: beálló, 3: szélső). Első szakasz: hazai
+    birtoklás a +x kapu felé (poszt-minta), utána indítás-rablások."""
+    from handball.models.tracking import Ball
+
+    pos = {2: (34.0, 10.0), 3: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def cast():
+        return [
+            PlayerPosition(track_id=2, team=Team.HOME, x=pos[2][0],
+                           y=pos[2][1], source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=3, team=Team.HOME, x=pos[3][0],
+                           y=pos[3][1], source=PositionSource.MEASURED,
+                           confidence=1.0),
+            PlayerPosition(track_id=9, team=Team.HOME, x=0.5, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0, role="kapus"),
+            PlayerPosition(track_id=30, team=Team.AWAY, x=39.0, y=10.0,
+                           source=PositionSource.MEASURED,
+                           confidence=1.0, role="kapus"),
+        ]
+
+    for _ in range(150):             # hazai birtoklás: poszt-minta
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in hunters:
+        for _ in range(8):           # a vendég kapusnál a labda
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=39.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        hx, hy = pos[tid]
+        for _ in range(6):           # az indítást a hazai csípi el
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+        for _ in range(40):          # szünet
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return _match(frames)
+
+
+def test_outlet_hunter_roles_names_the_hunting_post():
+    """Ha az indítás-rablások zöme ugyanarról a posztról jön, a
+    kapus-indítás a másik oldalon nyisson."""
+    from handball.pipeline.goalkeeper import (OHR_MIN_STEALS,
+                                              outlet_hunter_roles)
+
+    rec = outlet_hunter_roles(_ohr_match([2, 2, 2, 3]))["home"]
+    assert rec["steals"] >= OHR_MIN_STEALS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "másik oldalon" in rec["verdict"], rec
+
+
+def test_outlet_hunter_roles_silent_with_few_steals():
+    """Néhány elrabolt indításból nincs ítélet."""
+    from handball.pipeline.goalkeeper import outlet_hunter_roles
+
+    rec = outlet_hunter_roles(_ohr_match([2, 3]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
