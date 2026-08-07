@@ -885,6 +885,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Hetes-oldal: merre dobják a heteseiket.
+    try:
+        from .rules import seven_shot_directions
+        svd = seven_shot_directions(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svd = svd[side]
+            if rec_svd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hetesei kiszámíthatók: "
+                     f"{rec_svd['share_pct']:.0f}%-uk "
+                     f"{rec_svd['dominant']} oldalra megy "
+                     f"({rec_svd['attempts']} mérhető dobásból) — "
+                     "hetesnél a kapus tudatosan arra vetődhet.")
+    except Exception:
+        pass
     # Kontra-poszt: kit kell először felvenni visszafutásnál.
     try:
         from .roles import role_fast_breaks

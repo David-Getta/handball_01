@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hetes-oldal: merre dobják a heteseiket.** A hetes-mérleg eddig
+  megmondta, hogyan konvertálnak — azt nem, HOVA: az új réteg a
+  hetes-kimenetelek irány-jelét (bal/közép/jobb a dobó szemszögéből)
+  csapatonként összegzi. Edzőileg ez a kapus-megbeszélés legolcsóbb
+  mondata: a hetes az egyetlen helyzet, ahol a kapusnak van ideje
+  DÖNTENI, merre vetődik, a dobók pedig nyomás alatt a begyakorolt
+  sarkukat keresik. Ha a heteseik jelentős része ugyanarra az oldalra
+  megy, a kapus tudatosan arra vetődhet; ha szórnak, a dobó
+  mozdulatából kell olvasnia. Felületek: `/analyze` és meccs-csomag
+  (`seven_shot_directions`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (272: az ő kiszámítható hetes-oldaluk × a ti
+  kapusotok gyenge mérlege → előre eldöntött vetődés), edzés-fókusz
+  (293: hetes-sorozat edzői jelre, fáradtan), kliens-csempe.
+
 - **Kontra-poszt: melyik posztjukon zárul a lerohanás.** A
   kontra-befejezők rétege a gólt szerző EMBERT nevezi meg — ez a
   posztot, és nemcsak a gólnál: a lerohanás-szakaszok minden lövését az

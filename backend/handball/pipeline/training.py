@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 293) Hetes-oldal: ha a heteseink mindig ugyanarra az oldalra
+    # mennek, egy felkészült kapus előre eldöntött vetődéssel fogja
+    # őket — a legtisztább helyzetünk válik kiszámíthatóvá.
+    try:
+        from .rules import SVD_SHARE_PCT, seven_shot_directions
+        svd293 = seven_shot_directions(match, config)
+        for side in ("home", "away"):
+            rec293 = svd293[side]
+            if rec293.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható hetes-oldal",
+                f"a heteseink {rec293['share_pct']:.0f}%-a "
+                f"{rec293['dominant']} oldalra megy "
+                f"({rec293['attempts']} mérhető dobásból; "
+                f"{SVD_SHARE_PCT:.0f}% fölött már mintázat) — egy "
+                "felkészült kapus előre eldöntött vetődéssel fogja",
+                "hetes-sorozat az edzés VÉGÉN, fáradtan: a dobó minden "
+                "dobás előtt kap egy oldalt (edzői jel), és oda kell "
+                "dobnia — a cél, hogy nyomás alatt se a begyakorolt "
+                "sarok jöjjön automatikusan, hanem döntés")
+    except Exception:
+        pass
+
     # 292) Kontra-poszt: ha a lerohanásaink egy poszton záródnak, az
     # ellenfél egy emberrel hatástalanítja a leggyorsabb fegyverünket.
     try:

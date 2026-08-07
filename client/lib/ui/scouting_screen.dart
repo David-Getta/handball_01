@@ -2088,6 +2088,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Hetes-oldal: merre dobják a heteseiket (3+ mérhető dobás, 60%
+  // részarány — a backenddel azonos küszöbök: SVD_MIN_ATTEMPTS,
+  // SVD_SHARE_PCT).
+  String? _sevenSide(Map<String, dynamic> r) {
+    final dirs = (r["svd_dirs"] as Map?)?.cast<String, dynamic>();
+    if (dirs == null || dirs.isEmpty) return null;
+    var total = 0;
+    dirs.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    dirs.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a heteseik ${pct.round()}%-a $top oldalra megy ($total "
+        "mérhető dobás) · hetesnél a kapus tudatosan arra vetődhet";
+  }
+
   // Kontra-poszt: melyik posztjukon zárul a lerohanás (3+ kontra-lövés,
   // 60% részarány — a backenddel azonos küszöbök: RFB_MIN_SHOTS,
   // RFB_SHARE_PCT).
@@ -7137,6 +7162,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_sevenSide(r) != null)
+        ["Hetes-oldal", _sevenSide(r)!],
       if (_fastBreakRole(r) != null)
         ["Kontra-poszt", _fastBreakRole(r)!],
       if (_shotChoice(r) != null)

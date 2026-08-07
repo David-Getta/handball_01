@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **319 réteg**, modulonként csoportosítva; a
+Összesen **320 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (69)
@@ -300,7 +300,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_efficiency_by_role` | Poszt szerinti befejezés-hatékonyság: MELYIK POSZTRÓL ÉRDEMES |
 | `turnovers_by_role` | Poszt-hibák: MELYIK POSZTJUK veszíti el a labdát. |
 
-## rules (22)
+## rules (23)
 
 | Réteg | Mit mér |
 |---|---|
@@ -318,6 +318,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `seven_earners` | Ki harcolja ki a hétméterseket: a hetes-jel előtt a támadott |
 | `seven_meter_conceders` | Hetes-okozó védők: KINÉL szakad meg a védekezés hetessel. |
 | `seven_meter_defense` | Hetes-védés: a kapus mérlege a RÁ dobott hetesekből. |
+| `seven_shot_directions` | Hetes-oldal: MERRE DOBJÁK a heteseiket. |
 | `sevens_by_score` | Hetes-állás: MIKOR harcolják ki a heteseiket — állás szerint. |
 | `sevens_fade` | Hetes-fáradás: MIKOR ADJÁK a heteseket. |
 | `shorthanded_attack` | Hátrány-támadás: mit támadnak a kiállítás alatt. |

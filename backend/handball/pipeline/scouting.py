@@ -770,6 +770,9 @@ class ScoutingReport:
     # lövések darabszáma posztonként. Darabszám, meccsek közt
     # pontosan összegződik.
     rfb_shots_by_role: dict = field(default_factory=dict)
+    # Hetes-oldal: az irány-mérhető hetesek darabszáma oldalanként
+    # ("bal"/"közép"/"jobb"). Darabszám, meccsek közt összegződik.
+    svd_dirs: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -2993,6 +2996,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Hetes-oldal: hetesnél merre vetődjön a kapusunk.
+    _svd_n = sum(rep.svd_dirs.values())
+    if _svd_n >= 3:
+        _svd_d, _svd_c = max(rep.svd_dirs.items(), key=lambda kv: kv[1])
+        _svd_pct = 100.0 * _svd_c / _svd_n
+        if _svd_pct >= 60.0:
+            keys.append(
+                f"A heteseik {_svd_pct:.0f}%-a {_svd_d} oldalra megy "
+                f"({_svd_n} mérhető dobásból) — hetesnél a kapus "
+                "tudatosan arra az oldalra vetődhet.")
 
     # Kontra-poszt: visszafutásnál kit kell először felvenni.
     _rfb_n = sum(rep.rfb_shots_by_role.values())
@@ -7444,6 +7458,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .roles import role_fast_breaks as _rfb
         rfbrec = _rfb(match, config)[team.value]
         rep.rfb_shots_by_role = dict(rfbrec["roles"])
+        from .rules import seven_shot_directions as _svd
+        svdrec = _svd(match, config)[team.value]
+        rep.svd_dirs = {d: n for d, n in svdrec["dirs"].items() if n}
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10018,6 +10035,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 272) Az ő kiszámítható hetes-oldaluk × a ti kapusotok gyenge
+    # mérlege: a hetes az egyetlen helyzet, ahol a kapus előre
+    # eldöntheti a vetődést — a gyenge mérlegű kapusnak ez ingyen
+    # javulás, mert nem reflexet, hanem döntést kér.
+    _svd272_n = sum(opp.svd_dirs.values())
+    if _svd272_n >= 3 and own.gk_on_target >= 10:
+        _svd272_d, _svd272_c = max(opp.svd_dirs.items(),
+                                   key=lambda kv: kv[1])
+        _svd272_pct = 100.0 * _svd272_c / _svd272_n
+        _gk272 = 100.0 * own.gk_saves / own.gk_on_target
+        if _svd272_pct >= 60.0 and _gk272 <= 25.0:
+            plan.append(
+                f"A heteseik {_svd272_pct:.0f}%-a {_svd272_d} oldalra "
+                f"megy ({_svd272_n} mérhető dobásból), a ti kapusotok "
+                f"mérlege pedig gyenge ({_gk272:.0f}% védés) — a hetes "
+                "az a helyzet, ahol ezen ingyen lehet javítani: nem "
+                "reflex kell hozzá, hanem előre eldöntött vetődés a(z) "
+                f"{_svd272_d} oldalra. A megbeszélésen mondjátok ki, és "
+                "a kapus ne váltson menet közben.")
 
     # 271) Az ő kontra-posztjuk × a ti lassú visszarendeződésetek: ha
     # amúgy is lassan értek vissza, mindenkit nem tudtok felvenni — de
@@ -14538,6 +14575,7 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         scq_better=sum(r.scq_better for r in reports),
         rfb_shots_by_role=_merge_count_dicts(
             r.rfb_shots_by_role for r in reports),
+        svd_dirs=_merge_count_dicts(r.svd_dirs for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

@@ -1660,3 +1660,64 @@ def susp_earner_roles(match: Match,
                 rec["top"] = {"poszt": poszt, "count": n,
                               "share_pct": round(share, 1)}
     return out
+
+
+# Hetes-oldal: ennyi irány-mérhető hetes kell az ítélethez, és ekkora
+# részarány számít kiszámíthatónak. A hetes ritka, de a legtisztább
+# helyzet a meccsen — három mérhető dobásból kirajzolódó oldal-szokás
+# már megéri a kapus-megbeszélés egy mondatát.
+SVD_MIN_ATTEMPTS = 3
+SVD_SHARE_PCT = 60.0
+
+
+def seven_shot_directions(match: Match,
+                          config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-oldal: MERRE DOBJÁK a heteseiket.
+
+    A hetes-mérleg (seven_meter_summary) azt mondja meg, hogyan
+    konvertálnak — ez azt, HOVA: a hetes-kimenetelek irány-jelét
+    (bal/közép/jobb a dobó szemszögéből) csapatonként összegezzük.
+
+    Edzőileg ez a kapus-megbeszélés legolcsóbb mondata. A hetes az
+    egyetlen helyzet, ahol a kapusnak van ideje DÖNTENI, merre vetődik —
+    és a dobók szokás-állatok: nyomás alatt a begyakorolt sarkukat
+    keresik. Ha a heteseik jelentős része ugyanarra az oldalra megy, a
+    kapus arra az oldalra vetődhet tudatosan; ha szórnak, a kapusnak a
+    dobó mozdulatából kell olvasnia, nem előre eldöntenie.
+
+    Visszatérés csapatonként: {"attempts" (irány-mérhető hetes),
+    "goals", "dirs": {"bal","közép","jobb"}, "goal_dirs": {...},
+    "dominant", "share_pct", "verdict"} — a dominant/share_pct/verdict
+    None, ha nincs meg az SVD_MIN_ATTEMPTS, vagy egyik oldal sem éri el
+    az SVD_SHARE_PCT részarányt.
+    """
+    config = config or TacticsConfig()
+    out: dict = {side: {"attempts": 0, "goals": 0,
+                        "dirs": {"bal": 0, "közép": 0, "jobb": 0},
+                        "goal_dirs": {"bal": 0, "közép": 0, "jobb": 0},
+                        "dominant": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        if sm["irany"] is None:
+            continue
+        rec = out[sm["team"]]
+        rec["attempts"] += 1
+        rec["dirs"][sm["irany"]] += 1
+        if sm["outcome"] == "gól":
+            rec["goals"] += 1
+            rec["goal_dirs"][sm["irany"]] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["attempts"] < SVD_MIN_ATTEMPTS:
+            continue
+        dom = max(rec["dirs"], key=lambda k: rec["dirs"][k])
+        share = 100.0 * rec["dirs"][dom] / rec["attempts"]
+        if share >= SVD_SHARE_PCT:
+            rec["dominant"] = dom
+            rec["share_pct"] = round(share, 1)
+            rec["verdict"] = (
+                f"a heteseik {share:.0f}%-a {dom} oldalra megy "
+                f"({rec['attempts']} mérhető dobásból) — hetesnél a "
+                "kapus tudatosan arra az oldalra vetődhet")
+    return out

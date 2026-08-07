@@ -1453,3 +1453,50 @@ def test_double_shorthand_fatal():
     dsh = double_shorthand(Match(_meta(), frames))
     assert dsh["home"]["conceded"] >= 2
     assert dsh["home"]["verdict"] == "a kettős emberhátrány végzetes nekik"
+
+
+# ---- Hetes-oldal (merre dobják a heteseiket) --------------------------------
+
+def _svd_match(ys, fps=25.0):
+    """`ys` = hetesenként a lövés cél-y-ja a +x kapun (8.8 = bal sáv,
+    10.0 = közép, 11.2 = jobb). Minden hetes: 1 mp álló labda a 7 m-es
+    ponton, lövés, majd szünet, hogy a hetesek külön eseményként
+    látszódjanak."""
+    frames = []
+    t = 0
+    for y in ys:
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                                ball=Ball(x=min(34.0 + i, 40.0), y=y,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(4 * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_seven_shot_directions_finds_the_habit_side():
+    """Ha a hetesek négyötöde a bal sávba megy, a kapus előre eldöntött
+    vetődéssel készülhet."""
+    from handball.pipeline.rules import (SVD_MIN_ATTEMPTS,
+                                         seven_shot_directions)
+
+    rec = seven_shot_directions(_svd_match([8.8, 8.8, 8.8, 8.8, 11.2]))["home"]
+    assert rec["attempts"] >= SVD_MIN_ATTEMPTS, rec
+    assert rec["dominant"] == "bal", rec
+    assert rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "vetődhet" in rec["verdict"], rec
+
+
+def test_seven_shot_directions_silent_with_few_attempts():
+    """Két mérhető hetesből nincs ítélet."""
+    from handball.pipeline.rules import seven_shot_directions
+
+    rec = seven_shot_directions(_svd_match([8.8, 8.8]))["home"]
+    assert rec["dominant"] is None and rec["verdict"] is None, rec
