@@ -65,8 +65,10 @@ def test_progress_cb_exception_aborts_processing():
 
 def test_yolo_stall_guard_saves_partial(tmp_path, monkeypatch):
     """Ha a kocka-generátor beragad (nem ad több kockát), az elakadás-védő
-    időkorláttal kilép, és a már feldolgozott kockák megmaradnak — a
-    visszatérési érték jelzi a beragadást."""
+    az elakadt kockát ÁTUGORJA, és a folytató-olvasóval megy tovább — a
+    már feldolgozott kockák megmaradnak. Itt a folytató sem talál több
+    kockát (nem létező fájl), így a menet tisztán, beragadás-jelzés
+    NÉLKÜL zárul: a feladás csak sok egymás utáni elakadásnál jár."""
     import sys
     import types
 
@@ -119,5 +121,5 @@ def test_yolo_stall_guard_saves_partial(tmp_path, monkeypatch):
     stalled = pv._process_yolo(
         "nem-letezo.mp4", str(w), stride=1, max_frames=100, imgsz=640,
         conf=0.2, raw_out=raw, colors_out=colors)
-    assert stalled is True
+    assert stalled is False  # átugrás után tisztán zárt, nem adta fel
     assert len(raw) == 3  # a beragadás előtti kockák megvannak

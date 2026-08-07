@@ -5,6 +5,16 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Javítás — az elakadt képkockát a feldolgozó átugorja.** Terepen
+  látott hiba: a videó-olvasás/detektálás natív szinten beragadt egy
+  fix képkockánál, és a feldolgozás örökre megállt rajta (a védő
+  eddig ilyenkor feladta, és csak az addig kész részt mentette). Az
+  új adagoló (StallSkippingFeed) az elakadt kockát átugorja, és egy
+  folytató-olvasóval a következő képkockától megy tovább — a
+  követési azonosítók megmaradnak (persist), feladás csak 20 egymást
+  követő elakadás után jár. Az első kockára türelmesebb az időkorlát
+  (dekóder- és modell-bemelegedés), az állapot-üzenet pedig jelzi,
+  hogy a rendszer magától folytatja.
 - **Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot.**
   A félidő-nyitások rétege csapat-szinten mondja meg, hogyan jönnek
   ki a szünetről — az új réteg a posztot: a második félidő első tíz

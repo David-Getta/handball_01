@@ -35,6 +35,119 @@ from handball.pipeline.calibration import COURT_LENGTH_M, COURT_WIDTH_M
 PROC_WIDTH = 960  # HOG feldolgozási szélesség
 
 
+class StallSkippingFeed:
+    """Időkorlátos kocka-adagoló: az ELAKADT képkockát átugorja.
+
+    Terepen látott hiba: a videó-olvasás/detektálás natív szinten
+    beragad EGY képkockánál, és a feldolgozás örökre megáll rajta. A
+    termelőt ezért külön szál futtatja, a fogyasztó időkorlátos
+    sorból olvas. Ha skip_timeout_s-ig nem érkezik új kocka, a
+    beragadt termelőt elengedjük (a szála árván marad — a natív
+    hívást nem lehet megszakítani), az elakadt kockát ÁTUGORJUK, és
+    a resume_factory(start_frame) által adott új termelővel a
+    KÖVETKEZŐ kockától folytatjuk. Legfeljebb max_skips átugrás után
+    (vagy resume_factory nélkül) feladjuk: a stalled jelzővel az
+    addig kész rész normál utómunkával mentődik.
+    """
+
+    _SENTINEL = object()
+
+    def __init__(self, producer, resume_factory=None, stride=1,
+                 start_pos=0, first_timeout_s=180.0,
+                 skip_timeout_s=60.0, max_skips=20):
+        import queue
+        import threading
+        self._queue_mod = queue
+        self._threading = threading
+        self._q = queue.Queue(maxsize=8)
+        self._resume_factory = resume_factory
+        self._stride = max(1, int(stride))
+        self._next_pos = start_pos   # a következő várt kocka kép-indexe
+        self._first_timeout_s = first_timeout_s
+        self._skip_timeout_s = skip_timeout_s
+        self._max_skips = max_skips
+        self._gen = 0
+        self.skips = 0
+        self.stalled = False
+        self._start(producer)
+
+    def _start(self, iterable):
+        gen = self._gen
+
+        def run():
+            try:
+                for item in iterable:
+                    if not self._put(gen, item):
+                        return
+            except Exception as e:  # az olvasó hibája nem dönti a folyamatot
+                print(f"FIGYELEM: a videó-olvasó hibával leállt: {e}")
+            finally:
+                try:
+                    self._q.put_nowait((gen, self._SENTINEL))
+                except self._queue_mod.Full:
+                    pass  # a fogyasztó már kilépett — nincs kinek jelezni
+
+        self._threading.Thread(target=run, daemon=True).start()
+
+    def _put(self, gen, item):
+        while gen == self._gen and not self.stalled:
+            try:
+                self._q.put((gen, item), timeout=1.0)
+                return True
+            except self._queue_mod.Full:
+                continue
+        return False
+
+    def abandon(self):
+        """A termelő elengedése (korai kilépéskor): jelzés+felébresztés."""
+        self._gen += 1
+        try:
+            self._q.get_nowait()
+        except self._queue_mod.Empty:
+            pass
+
+    def frames(self):
+        """A kockák időkorlátos, elakadás-átugró folyama."""
+        timeout = self._first_timeout_s
+        while True:
+            try:
+                gen, item = self._q.get(timeout=timeout)
+            except self._queue_mod.Empty:
+                bad = self._next_pos
+                if (self._resume_factory is None
+                        or self.skips >= self._max_skips):
+                    self.stalled = True
+                    print(f"FIGYELEM: {int(timeout)} mp-e nem érkezik új "
+                          "kocka a videó-olvasóból, és nincs több "
+                          "folytatási kísérlet — a feldolgozás elakadt; "
+                          "az addig kész rész feldolgozva mentődik.")
+                    return
+                self.skips += 1
+                self._gen += 1
+                self._next_pos = bad + self._stride
+                print(f"FIGYELEM: a feldolgozás elakadt a(z) {bad}. "
+                      "képkockánál — a kockát átugorjuk, és a "
+                      "következőtől folytatjuk "
+                      f"({self.skips}/{self._max_skips} átugrás).")
+                try:
+                    nxt = self._resume_factory(self._next_pos)
+                except Exception as e:
+                    self.stalled = True
+                    print("FIGYELEM: a folytató videó-olvasó nem indult "
+                          f"el: {e} — az addig kész rész mentődik.")
+                    return
+                self._start(nxt)
+                timeout = self._skip_timeout_s
+                continue
+            if gen != self._gen:
+                continue  # elavult (elengedett) termelő maradéka
+            if item is self._SENTINEL:
+                return
+            timeout = self._skip_timeout_s
+            self._next_pos += self._stride
+            yield item
+
+
 def _torso_bounds(x1, y1, x2, y2):
     h = y2 - y1
     return (max(0, y1 + int(0.20 * h)), max(0, y1 + int(0.55 * h)),
@@ -289,58 +402,54 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                           vid_stride=stride, tracker="bytetrack.yaml", verbose=False)
 
     # ELAKADÁS-VÉDŐ: a kocka-generátort külön szál húzza, a feldolgozó
-    # időkorlátos sorból olvas. Ha a videó-olvasás/detektálás natív szinten
-    # beragad egy pozíciónál (terepen látott hiba: a haladás egy fix kockánál
-    # örökre megáll), a várakozás STALL_ABORT_S után megszakad, és az addig
-    # kész rész normál utómunkával, RÉSZLEGES meccsként mentődik — a végtelen
-    # csendes állás helyett.
-    import queue as _queue_mod
-    import threading as _threading_mod
-    STALL_ABORT_S = 180.0
-    _frame_q = _queue_mod.Queue(maxsize=8)
-    _SENTINEL = object()
-    _abandon = {"x": False}
-    stall = {"hit": False}
+    # időkorlátos sorból olvas (StallSkippingFeed). Ha a videó-olvasás/
+    # detektálás natív szinten beragad egy képkockánál (terepen látott
+    # hiba: a haladás egy fix kockánál örökre megáll), az elakadt kockát
+    # ÁTUGORJUK, és egy folytató-olvasóval a következő kockától megyünk
+    # tovább — a feladás (részleges mentés) csak sok egymást követő
+    # elakadásnál marad. Az első kockára türelmesebb a korlát: abban a
+    # dekóder és a modell bemelegedése is benne van.
+    STALL_FIRST_S = 180.0
+    STALL_SKIP_S = 60.0
+    STALL_MAX_SKIPS = 20
 
-    def _produce():
-        try:
-            for _item in results:
-                while not _abandon["x"]:
-                    try:
-                        _frame_q.put(_item, timeout=1.0)
-                        break
-                    except _queue_mod.Full:
-                        continue
-                if _abandon["x"]:
-                    break
-        except Exception as _e:  # az olvasó hibája nem dönti a folyamatot
-            print(f"FIGYELEM: a videó-olvasó hibával leállt: {_e}")
-        finally:
+    def _resume_from(start_frame):
+        """Folytató-olvasó az elakadt kocka UTÁNI pozíciótól: saját
+        VideoCapture + kockánkénti track() hívás (persist=True: a
+        követési id-k tovább élnek)."""
+        def _iter():
+            cap = cv2.VideoCapture(video_path)
             try:
-                _frame_q.put_nowait(_SENTINEL)
-            except _queue_mod.Full:
-                pass  # a fogyasztó már kilépett — nincs kinek jelezni
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                pos = start_frame
+                while True:
+                    if not cap.grab():
+                        return
+                    if (pos - start_frame) % stride == 0:
+                        ok2, img = cap.retrieve()
+                        if ok2 and img is not None:
+                            rr = model.track(
+                                img, persist=True,
+                                classes=person_ids + ball_ids,
+                                imgsz=1920, conf=0.05, device=device,
+                                tracker="bytetrack.yaml",
+                                verbose=False)
+                            if rr:
+                                yield rr[0]
+                    pos += 1
+            finally:
+                cap.release()
+        return _iter()
 
-    _producer = _threading_mod.Thread(target=_produce, daemon=True)
-    _producer.start()
-
-    def _timed_frames():
-        while True:
-            try:
-                item = _frame_q.get(timeout=STALL_ABORT_S)
-            except _queue_mod.Empty:
-                stall["hit"] = True
-                print(f"FIGYELEM: {int(STALL_ABORT_S)} mp-e nem érkezik új "
-                      "kocka a videó-olvasóból — a feldolgozás elakadt; az "
-                      "addig kész rész feldolgozva mentődik.")
-                return
-            if item is _SENTINEL:
-                return
-            yield item
+    feed = StallSkippingFeed(results, resume_factory=_resume_from,
+                             stride=stride,
+                             first_timeout_s=STALL_FIRST_S,
+                             skip_timeout_s=STALL_SKIP_S,
+                             max_skips=STALL_MAX_SKIPS)
 
     kept = 0
     skipped_dark = 0
-    for fi, r in enumerate(_timed_frames()):
+    for fi, r in enumerate(feed.frames()):
         # Szelíd leállítás: a hívó (pl. a Megszakítás gomb) jelzésére a
         # detektálás megáll, de az ADDIG feldolgozott kockák megmaradnak —
         # az utómunka lefut rájuk, és az eredmény elmentődik.
@@ -428,14 +537,10 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     if pan_tracker is not None:
         tx, ty = pan_tracker.translation
         print(f"pásztázás-követés: össz-elmozdulás a végére: ({tx:.0f}, {ty:.0f}) px")
-    # A termelő-szál elengedése: ha még él (korai break / plafon), jelezzük,
-    # hogy nincs több fogyasztó, és kihúzunk egy elemet, hogy felébredjen.
-    _abandon["x"] = True
-    try:
-        _frame_q.get_nowait()
-    except _queue_mod.Empty:
-        pass
-    return stall["hit"]
+    # A termelő-szál elengedése: ha még él (korai break / plafon),
+    # jelezzük, hogy nincs több fogyasztó, és felébresztjük.
+    feed.abandon()
+    return feed.stalled
 
 
 class _SimpleTracker:

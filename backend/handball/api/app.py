@@ -708,8 +708,10 @@ def create_app():
                 base = (job.get("message") or "").split(" — FIGYELEM:")[0]
                 job["message"] = (
                     f"{base} — FIGYELEM: {mins} perce nincs előrelépés. A "
-                    "feldolgozás elakadhatott ennél a videó-résznél; a "
-                    "Megszakítás menti az addig kész részt.")
+                    "feldolgozás elakadhatott ennél a videó-résznél; az "
+                    "elakadt képkockát a rendszer hamarosan magától "
+                    "átugorja és folytatja. A Megszakítás menti az addig "
+                    "kész részt.")
         return job
 
     @app.post("/jobs/{job_id}/cancel")
