@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 332) Elzárt-poszt: ha egy védőnk rendre elakad az
+    # elzárásokban, oda fogja hozni a figuráit minden ellenfél.
+    try:
+        from .defense import SDR_SHARE_PCT, screened_defender_roles
+        sdr332 = screened_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec332 = sdr332[side]
+            if rec332.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Elzárásban elakadó védő",
+                f"az elzárások {rec332['share_pct']:.0f}%-ban a(z) "
+                f"{rec332['main_role']} posztunkon lévő védőt "
+                f"találják meg ({rec332['screens']} elakadásból; "
+                f"{SDR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél oda fogja hozni a figuráit",
+                "elzárás-elleni csomag a védőnek: átcsúszás- és "
+                "váltás-gyakorlat hangos kommunikációval, elzárás-"
+                "felismerés videóról, és korai testkontakt az "
+                "elzáróval, mielőtt beáll a pozíciója",
+                )
+    except Exception:
+        pass
+
     # 331) Kettőzött-poszt: ha egy posztunkat rendre kettőzik, neki
     # lekapcsolódó társ és kettőzés-elleni leadás kell.
     try:

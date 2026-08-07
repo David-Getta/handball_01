@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **358 réteg**, modulonként csoportosítva; a
+Összesen **359 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (74)
@@ -105,7 +105,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `soft_pass_roles` | Lágypassz-poszt: MELYIK POSZTJUK passzol lágyan. |
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 
-## defense (61)
+## defense (62)
 
 | Réteg | Mit mér |
 |---|---|
@@ -153,6 +153,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `role_block_sources` | Blokk-poszt: MELYIK POSZTJUK BLOKKOL. |
 | `role_steal_sources` | Labdaszerző-poszt: MELYIK POSZTJUK NYERI a labdákat. |
 | `screen_defense` | Elzárás-védekezés: bírja-e a fal az ellenfél elzárásait. |
+| `screened_defender_roles` | Elzárt-poszt: MELYIK VÉDŐJÜK akad el az elzárásokban. |
 | `second_chance_allowed` | Lepattanó-fal: hány második rohamot enged a védekezés. |
 | `slow_retreat_roles` | Visszafutás-poszt: KI MARAD LE a visszarendeződésben. |
 | `steal_height` | Labdaszerzés-magasság (letámadás-jel): HOL szerez labdát a csapat. |

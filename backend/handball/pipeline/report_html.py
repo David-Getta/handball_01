@@ -1851,6 +1851,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .defense import (beaten_defender_roles,
                               doubled_target_roles,
                               doubling_defender_roles,
+                              screened_defender_roles,
                               role_block_sources, role_steal_sources,
                               slow_retreat_roles)
         from .goalkeeper import (outlet_hunter_roles,
@@ -1944,7 +1945,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Visszafutás-poszt", slow_retreat_roles),
             ("Átvert-poszt", beaten_defender_roles),
             ("Indítás-vadász poszt", outlet_hunter_roles),
-            ("Kettőző-poszt", doubling_defender_roles)))
+            ("Kettőző-poszt", doubling_defender_roles),
+            ("Elzárt-poszt", screened_defender_roles)))
         if def_rows:
             defense_lens_html = (
                 "<h2>Védő-lencse (hol sebezhető a védekezésük)</h2>"

@@ -893,6 +893,9 @@ class ScoutingReport:
     # Kettőzött-poszt: a kettőzött (két védős) labdás kockák
     # darabszáma posztonként. Kocka-darabszám, pontosan összegződik.
     dtr_frames_by_role: dict = field(default_factory=dict)
+    # Elzárt-poszt: az elzárásban elakadt védések darabszáma a védő
+    # posztja szerint. Darabszám, pontosan összegződik.
+    sdr_screens_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3366,6 +3369,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f" {_dtr_p} posztjukra érkeznek — bevált recept: "
                 "oda a kettőzés, és a mögötte kilépő passzsáv "
                 "zárása.")
+
+    # Elzárt-poszt: hova kell vinni az elzárásokat.
+    _sdr_n = sum(rep.sdr_screens_by_role.values())
+    if _sdr_n >= 3:
+        _sdr_p, _sdr_c = max(rep.sdr_screens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sdr_pct = 100.0 * _sdr_c / _sdr_n
+        if _sdr_pct >= 60.0:
+            keys.append(
+                f"Az elzárások {_sdr_pct:.0f}%-ban a(z) {_sdr_p} "
+                f"posztjukon lévő védőt találják meg ({_sdr_n} "
+                "elakadásból) — az ő oldalára vigyétek a "
+                "figurákat: ott az elzárás tisztán hagyja a lövőt.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8197,6 +8213,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import doubled_target_roles as _dtr
         dtrrec = _dtr(match, config)[team.value]
         rep.dtr_frames_by_role = dict(dtrrec["roles"])
+        from .defense import screened_defender_roles as _sdr
+        sdrrec = _sdr(match, config)[team.value]
+        rep.sdr_screens_by_role = dict(sdrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10777,6 +10796,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 311) Az ő elzárt-posztjuk × a ti elzáró-játékotok: ha van
+    # kire építeni az elzárást, oda kell vinni, ahol a védőjük
+    # rendre elakad.
+    _sdr311_n = sum(opp.sdr_screens_by_role.values())
+    _sc2311_n = sum(own.sc2_screens_by_role.values())
+    if _sdr311_n >= 3 and _sc2311_n >= 3:
+        _sdr311_p, _sdr311_c = max(opp.sdr_screens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sdr311_pct = 100.0 * _sdr311_c / _sdr311_n
+        if _sdr311_pct >= 60.0:
+            plan.append(
+                f"Az elzárások {_sdr311_pct:.0f}%-ban a(z) "
+                f"{_sdr311_p} posztjukon lévő védőt találják meg "
+                f"({_sdr311_n} elakadás), nektek pedig él az "
+                f"elzáró-játékotok ({_sc2311_n} elzárás a mérésben)"
+                " — a figuráitok elzárása az ő oldalára menjen: ott"
+                " a lövőtök tisztán marad.")
 
     # 310) Az ő kettőzött-posztjuk × a ti kettőzésetek: a bevált
     # kettőzés-minta követése a legolcsóbb terv.
@@ -16099,6 +16136,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ftr_second_cms_by_role for r in reports),
         dtr_frames_by_role=_merge_count_dicts(
             r.dtr_frames_by_role for r in reports),
+        sdr_screens_by_role=_merge_count_dicts(
+            r.sdr_screens_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

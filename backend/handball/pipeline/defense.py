@@ -4286,3 +4286,105 @@ def doubled_target_roles(match, config=None) -> dict:
                     "recept: oda küldjétek a kettőzést, és zárjátok "
                     "a mögötte kilépő passzsávot")
     return out
+
+
+# Elzárt-poszt: ennyi poszthoz kötött elakadt védés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
+# elzárások rendre ugyanazt a védő-posztjukat találják meg.
+SDR_MIN_SCREENS = 3
+SDR_SHARE_PCT = 60.0
+
+
+def screened_defender_roles(match, config=None) -> dict:
+    """Elzárt-poszt: MELYIK VÉDŐJÜK akad el az elzárásokban.
+
+    Az elzárók rétege (attack_types.screen_setters) a támadó oldalt
+    nevezi meg — ez a megtalált VÉDŐT: lövésenként megkeressük a
+    lövő őrzőjét (SCREEN_MARKER_MAX_M-en belüli legközelebbi védő)
+    és a mellé állított elzárót (a lövő SCREEN_DIST_M-en belüli
+    társa az őrző mellett), és az elakadt őrző posztjához írjuk az
+    esetet. Így látszik, kire érdemes elzárást vinni.
+
+    Edzőileg ez az elzárás-célpont terve: amelyik védő-posztjuk
+    rendre elakad az elzárásokban, ellene oda kell vinni a
+    figurákat — az ő oldalán az elzárás tisztán hagyja a lövőt.
+    Saját csapatra: annak a védőnek átcsúszás- és váltás-gyakorlás
+    kell, hangos kommunikációval.
+
+    Visszatérés csapatonként (az ELAKADT, védő oldal): {"screens"
+    (poszthoz kötött elakadás), "roles": {poszt: darab},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg az SDR_MIN_SCREENS, vagy egyik poszt sem éri el az
+    SDR_SHARE_PCT-t.
+    """
+    import math
+
+    from .attack_types import SCREEN_DIST_M, SCREEN_MARKER_MAX_M
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    out: dict = {side: {"screens": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in f.players:
+            if d.team is None or d.team == shooter.team \
+                    or d.role == "kapus":
+                continue
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue
+        setter = None
+        best_s = SCREEN_DIST_M
+        for p in f.players:
+            if p.team != shooter.team or p.track_id == pid:
+                continue
+            d = math.hypot(p.x - marker.x, p.y - marker.y)
+            if d <= best_s:
+                setter, best_s = p, d
+        if setter is None:
+            continue
+        side = marker.team.value
+        rec_role = roles[side].get(marker.track_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["screens"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["screens"] >= SDR_MIN_SCREENS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["screens"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SDR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az elzárások {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjukon lévő védőt találják meg "
+                    f"({rec['screens']} elakadásból) — az ő oldalán"
+                    " az elzárás tisztán hagyja a lövőt: oda kell "
+                    "vinni a figurákat")
+    return out

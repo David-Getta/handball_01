@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Elzárt-poszt: melyik védőjük akad el az elzárásokban.** Az
+  elzárók rétege a támadó oldalt nevezi meg — az új réteg a
+  megtalált védőt: lövésenként az elzáróval elakasztott őrző
+  posztjához írja az esetet. Edzőileg az elzárás-célpont terve:
+  amelyik védő-posztjuk rendre elakad, ellene oda kell vinni a
+  figurákat — az ő oldalán az elzárás tisztán hagyja a lövőt. Saját
+  oldalon átcsúszás- és váltás-gyakorlás a téma. Legalább 3 elakadás
+  és 60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`screened_defender_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 311. meccsterv-szabály), edzés-fókusz
+  (332. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Kettőzött-poszt: melyik posztjukra érkezik a kettőzés.** A
   kettőzés-réteg a védő oldalt minősíti — az új réteg a megtámadott
   posztot: a két védővel szorongatott labdás kockákat a birtokos

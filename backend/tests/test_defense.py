@@ -3114,3 +3114,71 @@ def test_doubled_target_roles_silent_with_few_frames():
 
     rec = doubled_target_roles(_dtr_match([(7, 50), (9, 30)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Elzárt-poszt (melyik védőjük akad el az elzárásokban) -----------------
+
+
+def _sdr_match(victims, fps=25.0):
+    """Vendég poszt-minta (21: beálló, 22: szélső a -x kapunál) +
+    hazai lövések: a lövő őrzője a `victims` szerinti vendég, mellé
+    a hazai 6-os áll elzárásba."""
+    vpos = {21: (6.0, 10.0), 22: (5.0, 3.0)}
+
+    def away_cast():
+        return [_pl(tid, Team.AWAY, *xy) for tid, xy in vpos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # vendég poszt-minta a -x kapunál
+        frames.append(Frame(t=t, players=away_cast(),
+                            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for vid in victims:
+        far = [tid for tid in vpos if tid != vid][0]
+        shot_cast = [
+            _pl(5, Team.HOME, 34.0, 10.0),        # a lövő
+            _pl(6, Team.HOME, 34.6, 11.2),        # az elzáró
+            _pl(vid, Team.AWAY, 34.8, 10.5),      # az elakadó őrző
+            _pl(far, Team.AWAY, 20.0, 2.0),       # a társa messze
+        ]
+        for _ in range(10):          # a labda a lövőnél
+            frames.append(Frame(t=t, players=shot_cast,
+                                ball=Ball(x=34.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = 34.0
+        while x < 40.5:              # lövés a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=shot_cast,
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=away_cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_screened_defender_roles_names_the_screened_post():
+    """Négy elzárásból három a vendég beállóját találja meg → oda
+    kell vinni a figurákat."""
+    from handball.pipeline.defense import (SDR_MIN_SCREENS,
+                                           screened_defender_roles)
+
+    rec = screened_defender_roles(
+        _sdr_match([21, 21, 21, 22]))["away"]
+    assert rec["screens"] >= SDR_MIN_SCREENS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "tisztán hagyja" in rec["verdict"], rec
+
+
+def test_screened_defender_roles_silent_with_few_screens():
+    """Néhány elakadásból nincs ítélet."""
+    from handball.pipeline.defense import screened_defender_roles
+
+    rec = screened_defender_roles(_sdr_match([21, 22]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

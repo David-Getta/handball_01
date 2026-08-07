@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Elzárt-poszt: melyik védőjük akad el az elzárásokban.
+    try:
+        from .defense import screened_defender_roles
+        sdr = screened_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sdr = sdr[side]
+            if rec_sdr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védelmében az elzárások a(z) "
+                     f"{rec_sdr['main_role']} poszton lévő védőt "
+                     f"találják meg ({rec_sdr['share_pct']:.0f}%, "
+                     f"{rec_sdr['screens']} elakadásból) — az ő "
+                     "oldalán tisztán marad a lövő.")
+    except Exception:
+        pass
     # Kettőzött-poszt: melyik posztjukra érkezik a kettőzés.
     try:
         from .defense import doubled_target_roles
