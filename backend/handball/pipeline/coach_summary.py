@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre.
+    try:
+        from .momentum import fading_scorer_roles
+        fdp = fading_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fdp = fdp[side]
+            if rec_fdp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_fdp['main_role']} posztja "
+                     f"az első félidőben él ({rec_fdp['fh']} "
+                     f"gól-részvétel), a másodikra eltűnik "
+                     f"({rec_fdp['sh']}) — az első 30 percben kell "
+                     "megfogni.")
+    except Exception:
+        pass
     # Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet.
     try:
         from .momentum import drought_breaker_roles

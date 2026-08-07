@@ -2141,6 +2141,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre (3+
+  // első félidei gól-részvétel, legfeljebb 1 második félidei — a
+  // backenddel azonos küszöbök: FDP_MIN_FH, FDP_MAX_SH).
+  String? _fadingRole(Map<String, dynamic> r) {
+    final fh =
+        (r["fdp_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["fdp_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (fh == null || fh.isEmpty) return null;
+    String? post;
+    var postFh = 0;
+    fh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final s2 = ((sh?[k] as num?) ?? 0).toInt();
+      if (n >= 3 && s2 <= 1 && n > postFh) {
+        post = k;
+        postFh = n;
+      }
+    });
+    if (post == null) return null;
+    final postSh = ((sh?[post] as num?) ?? 0).toInt();
+    return "a(z) $post posztjuk az első félidőben él ($postFh "
+        "gól-részvétel), a másodikra eltűnik ($postSh) · az első 30 "
+        "percben kell megfogni";
+  }
+
   // Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet (3+
   // csend-törő gól, 60% részarány — a backenddel azonos küszöbök:
   // GCT_MIN_BREAKS, GCT_SHARE_PCT).
@@ -7853,6 +7879,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_fadingRole(r) != null)
+        ["Eltűnő-poszt", _fadingRole(r)!],
       if (_droughtBreakRole(r) != null)
         ["Csendtörő-poszt", _droughtBreakRole(r)!],
       if (_pressSensRole(r) != null)

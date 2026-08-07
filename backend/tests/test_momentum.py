@@ -1780,3 +1780,81 @@ def test_drought_breaker_roles_silent_with_few_breaks():
 
     rec = drought_breaker_roles(_gct_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Eltűnő-poszt (melyik posztjuk tűnik el a második félidőre) ------------
+
+
+def _fdp_match(fh_scorers, sh_scorers, with_break=True, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + első/második félidei
+    gólok, köztük 90 mp-es üres (szünet-) szakasszal."""
+    # 8: második szélső — a 2. félidei gólok passzolója, hogy a
+    # gólpassz-jóváírás ne a beállóhoz vándoroljon.
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0), 8: (34.0, 17.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    def goal(frames, t, tid, feeder=None):
+        if feeder is not None:       # a gólpassz a megadott társtól jön
+            fx, fy = spos[feeder]
+            for _ in range(15):
+                frames.append(Frame(t=t, players=cast(),
+                                    ball=Ball(x=fx + 0.2, y=fy,
+                                              confidence=1.0)))
+                t += 1
+        sx, sy = spos[tid]
+        for _ in range(20):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        x = sx
+        while x < 40.5:
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in fh_scorers:
+        t = goal(frames, t, tid)
+    if with_break:
+        for _ in range(int(90 * fps)):   # félidei szünet: üres kockák
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    for tid in sh_scorers:
+        t = goal(frames, t, tid, feeder=8)
+    return Match(_meta(fps), frames)
+
+
+def test_fading_scorer_roles_names_the_fading_post():
+    """A beálló 3 első félidei részvétel után eltűnik → őt az első
+    félidőben kell megfogni."""
+    from handball.pipeline.momentum import fading_scorer_roles
+
+    rec = fading_scorer_roles(
+        _fdp_match([7, 7, 7], [9, 9]))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["fh"] == 3 and rec["sh"] == 0, rec
+    assert rec["verdict"] and "első 30 percben" in rec["verdict"], rec
+
+
+def test_fading_scorer_roles_silent_without_pattern():
+    """Kevés első félidei részvételből nincs ítélet."""
+    from handball.pipeline.momentum import fading_scorer_roles
+
+    rec = fading_scorer_roles(_fdp_match([7, 7], [9, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

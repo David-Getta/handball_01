@@ -2432,3 +2432,81 @@ def drought_breaker_roles(match: Match, config=None) -> dict:
                     "legszorosabban fogni: hozzá menekül a labda, és"
                     " nélküle a csendjük tovább tart")
     return out
+
+
+# Eltűnő-poszt: ennyi első félidei poszthoz kötött gól-részvétel
+# kell, és legfeljebb ennyi második félidei ahhoz, hogy a posztot
+# első félidőben élő, másodikra eltűnő posztnak mondjuk ki.
+FDP_MIN_FH = 3
+FDP_MAX_SH = 1
+
+
+def fading_scorer_roles(match: Match, config=None) -> dict:
+    """Eltűnő-poszt: MELYIK POSZTJUK tűnik el a második félidőre.
+
+    Az eltűnő ember rétege (fading_scorers) az embert nevezi meg —
+    ez a posztot: a gól-részvételeket (gól + gólpassz) félidőnként a
+    játékos posztjához írja, és megkeresi, melyik posztjuk első
+    félidei termelése hal el a másodikra. Így a minta akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg: az eltűnő poszt ellen az első 30 perc a meccs — oda
+    duplán, cserével frissen tartott őrzővel kell ráállni, a második
+    félidő magától megoldódik. Saját csapatra: az elhaló posztunk a
+    terhelés-menedzsment témája (korábbi pihentetés, rövid blokkok).
+
+    Visszatérés csapatonként: {"fh_roles": {poszt: darab},
+    "sh_roles": {poszt: darab}, "main_role", "fh", "sh", "verdict"}
+    — az ítélet None, ha nincs felismert szünet, vagy egyik poszt
+    sem éri el az FDP_MIN_FH-t az FDP_MAX_SH melletti eltűnéssel.
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh_roles": {}, "sh_roles": {},
+                        "main_role": None, "fh": None, "sh": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    roles = estimate_positions(match, config)
+
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL:
+            continue
+        side = getattr(e.team, "value", e.team)
+        key = "fh_roles" if e.t <= ht else "sh_roles"
+        for pid in (e.player_id, (e.detail or {}).get("assist_id")):
+            if pid is None:
+                continue
+            rec_role = roles[side].get(pid)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            out[side][key][poszt] = (out[side][key].get(poszt, 0)
+                                     + 1)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fader = None
+        for poszt, fh in sorted(rec["fh_roles"].items(),
+                                key=lambda kv: -kv[1]):
+            sh = rec["sh_roles"].get(poszt, 0)
+            if fh >= FDP_MIN_FH and sh <= FDP_MAX_SH:
+                fader = (poszt, fh, sh)
+                break
+        if fader is not None:
+            poszt, fh, sh = fader
+            rec["main_role"] = poszt
+            rec["fh"], rec["sh"] = fh, sh
+            rec["verdict"] = (
+                f"a(z) {poszt} posztjuk az első félidőben él "
+                f"({fh} gól-részvétel), a másodikra eltűnik ({sh}) "
+                "— az első 30 percben kell megfogni, duplán és "
+                "cserével frissen tartott őrzővel; a második "
+                "félidőre a termelése magától elhal")
+    return out

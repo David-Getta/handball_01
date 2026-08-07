@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 320) Eltűnő-poszt: ha egy posztunk termelése a második félidőre
+    # elhal, a terhelés-menedzsment és a kondíció a téma.
+    try:
+        from .momentum import fading_scorer_roles
+        fdp320 = fading_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec320 = fdp320[side]
+            if rec320.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Második félidőre eltűnő poszt",
+                f"a(z) {rec320['main_role']} posztunk az első "
+                f"félidőben él ({rec320['fh']} gól-részvétel), a "
+                f"másodikra eltűnik ({rec320['sh']}) — a termelése "
+                "fáradással vagy az ellenfél átállásával elhal",
+                "terhelés-menedzsment a posztnak: korábbi, rövidebb "
+                "pihentetés-blokkok az első félidőben, kondicionális "
+                "blokk (ismételt sprint-állóképesség) az edzésen, és "
+                "B-megoldás a második félidei figurákba",
+                )
+    except Exception:
+        pass
+
     # 319) Csendtörő-poszt: ha a gólcsendjeinket mindig ugyanaz a
     # posztunk töri meg, a válság-megoldásunk kiszámítható és fogható.
     try:

@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Eltűnő-poszt: melyik posztjuk tűnik el a második félidőre.** Az
+  eltűnő ember rétege az embert nevezi meg — az új réteg a posztot:
+  a gól-részvételeket (gól + gólpassz) félidőnként a játékos
+  posztjához írja, és megkeresi, melyik posztjuk termelése hal el a
+  másodikra. Edzőileg az első 30 perc terve: az eltűnő posztra
+  duplán, cserével frissen tartott őrzővel kell ráállni — a második
+  félidő magától megoldódik. Saját oldalon a terhelés-menedzsment
+  témája. Legalább 3 első félidei részvétel és legfeljebb 1 második
+  félidei alatt szólal meg; felismert szünet nélkül hallgat (None).
+  Felületek: /analyze + meccs-csomag (`fading_scorer_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 299. meccsterv-szabály),
+  edzés-fókusz (320. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet.** A
   csend-törők rétege az embert nevezi meg — az új réteg a posztot: a
   300+ másodperces gólcsendet megtörő gólokat a lövő posztjához

@@ -853,6 +853,10 @@ class ScoutingReport:
     # Csendtörő-poszt: a 300+ mp-es gólcsendet megtörő gólok
     # darabszáma posztonként. Darabszám, pontosan összegződik.
     gct_breaks_by_role: dict = field(default_factory=dict)
+    # Eltűnő-poszt: gól-részvételek (gól+gólpassz) posztonként,
+    # félidőnként. Darabszám, pontosan összegződik.
+    fdp_fh_by_role: dict = field(default_factory=dict)
+    fdp_sh_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3166,6 +3170,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_gct_pct:.0f}%, {_gct_n} csend-törő gólból) — a "
                 "saját sorozatotok alatt őt fogjátok a "
                 "legszorosabban: hozzá menekül a labda.")
+
+    # Eltűnő-poszt: az első 30 perc terve.
+    for _fdp_p, _fdp_fh in sorted(rep.fdp_fh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fdp_sh = rep.fdp_sh_by_role.get(_fdp_p, 0)
+        if _fdp_fh >= 3 and _fdp_sh <= 1:
+            keys.append(
+                f"A(z) {_fdp_p} posztjuk az első félidőben él "
+                f"({_fdp_fh} gól-részvétel), a másodikra eltűnik "
+                f"({_fdp_sh}) — az első 30 percben duplán rá, "
+                "cserével frissen tartott őrzővel; a második "
+                "félidőre a termelése magától elhal.")
+            break
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -7959,6 +7976,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .momentum import drought_breaker_roles as _gct
         gctrec = _gct(match, config)[team.value]
         rep.gct_breaks_by_role = dict(gctrec["roles"])
+        from .momentum import fading_scorer_roles as _fdp
+        fdprec = _fdp(match, config)[team.value]
+        rep.fdp_fh_by_role = dict(fdprec["fh_roles"])
+        rep.fdp_sh_by_role = dict(fdprec["sh_roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10539,6 +10560,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 299) Az ő eltűnő-posztjuk × a ti mély padotok: friss, cserélt
+    # őrzővel az első félidejük is megfogható — a második magától
+    # megoldódik.
+    _rot299 = (own.rotation_used_sum / max(1, own.rotation_matches)
+               if own.rotation_matches else 0.0)
+    if _rot299 >= 9.0:
+        for _fdp299_p, _fdp299_fh in sorted(
+                opp.fdp_fh_by_role.items(), key=lambda kv: -kv[1]):
+            _fdp299_sh = opp.fdp_sh_by_role.get(_fdp299_p, 0)
+            if _fdp299_fh >= 3 and _fdp299_sh <= 1:
+                plan.append(
+                    f"A(z) {_fdp299_p} posztjuk az első félidőben él"
+                    f" ({_fdp299_fh} gól-részvétel), a másodikra "
+                    f"eltűnik ({_fdp299_sh}), ti pedig mély paddal "
+                    f"forogtok (átlag {_rot299:.0f} bevetett "
+                    "játékos) — az őrzőjét cserével tartsátok "
+                    "frissen az első 30 percben: ha ott megfogjátok,"
+                    " a második félidő magától megoldódik.")
+                break
 
     # 298) Az ő csendtörő-posztjuk × a ti nagyvédéses kapusotok: ha a
     # kapus csendet tud rájuk hozni, a csend a válság-posztjuk
@@ -15616,6 +15657,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.psr_to_by_role for r in reports),
         gct_breaks_by_role=_merge_count_dicts(
             r.gct_breaks_by_role for r in reports),
+        fdp_fh_by_role=_merge_count_dicts(
+            r.fdp_fh_by_role for r in reports),
+        fdp_sh_by_role=_merge_count_dicts(
+            r.fdp_sh_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

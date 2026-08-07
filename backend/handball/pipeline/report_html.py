@@ -1861,7 +1861,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             shorthanded_shooter_roles, suspended_roles)
         from .momentum import (clutch_scorer_roles,
                                comeback_carrier_roles,
-                               drought_breaker_roles)
+                               drought_breaker_roles,
+                               fading_scorer_roles)
         from .xg import big_chance_roles, wasteful_shooter_roles
         from .decisions import (hold_time_roles,
                                 press_sensitive_roles)
@@ -1904,7 +1905,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Ziccer-poszt", big_chance_roles),
             ("Labdatartó-poszt", hold_time_roles),
             ("Pressz-poszt", press_sensitive_roles),
-            ("Csendtörő-poszt", drought_breaker_roles)))
+            ("Csendtörő-poszt", drought_breaker_roles),
+            ("Eltűnő-poszt", fading_scorer_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"
