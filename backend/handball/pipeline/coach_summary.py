@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Lágypassz-poszt: melyik posztjuk passzol lágyan.
+    try:
+        from .decisions import soft_pass_roles
+        sps = soft_pass_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sps = sps[side]
+            if rec_sps["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lágy passzai a(z) "
+                     f"{rec_sps['main_role']} posztról jönnek "
+                     f"({rec_sps['share_pct']:.0f}%, "
+                     f"{rec_sps['soft']} lágy passzból) — az ő "
+                     "labdáiba bele lehet nyúlni.")
+    except Exception:
+        pass
     # Sprint-poszt: melyik posztjuk futja a sprinteket.
     try:
         from .stats import sprint_threat_roles

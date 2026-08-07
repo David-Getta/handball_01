@@ -3513,6 +3513,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import soft_pass_roles
+            res["soft_pass_roles"] = soft_pass_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5074,6 +5079,9 @@ def create_app():
                 from ..pipeline.stats import sprint_threat_roles
                 _layer("sprint_threat_roles",
                        lambda: sprint_threat_roles(match))
+                from ..pipeline.decisions import soft_pass_roles
+                _layer("soft_pass_roles",
+                       lambda: soft_pass_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

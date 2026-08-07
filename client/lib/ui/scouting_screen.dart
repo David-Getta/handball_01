@@ -2141,6 +2141,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Lágypassz-poszt: melyik posztjuk passzol lágyan (5+ lágy passz,
+  // 60% részarány — a backenddel azonos küszöbök: SPS_MIN_SOFT,
+  // SPS_SHARE_PCT).
+  String? _softPassRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sps_soft_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lágy passzaik ${pct.round()}%-a a(z) $top posztról "
+        "jön ($total lágy passz) · az ő labdáiba bele lehet nyúlni";
+  }
+
   // Sprint-poszt: melyik posztjuk futja a sprinteket (10+ sprint,
   // 60% részarány — a backenddel azonos küszöbök: SPR_MIN_SPRINTS,
   // SPR_SHARE_PCT).
@@ -7986,6 +8012,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_softPassRole(r) != null)
+        ["Lágypassz-poszt", _softPassRole(r)!],
       if (_sprintThreatRole(r) != null)
         ["Sprint-poszt", _sprintThreatRole(r)!],
       if (_restartTakerRole(r) != null)

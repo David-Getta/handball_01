@@ -591,3 +591,82 @@ def test_press_sensitive_roles_silent_with_few_losses():
 
     rec = press_sensitive_roles(_psr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Lágypassz-poszt (melyik posztjuk passzol lágyan) ----------------------
+
+
+def _sps_match(soft_passers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + passzok: a `soft_passers`
+    szerinti játékos lágy (lassú röptű) passzt ad a társának."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for pid in soft_passers:
+        rid = 9 if pid == 7 else 7
+        px, py = spos[pid]
+        rx, ry = spos[rid]
+        for _ in range(8):           # a labda a passzolónál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=px + 0.2, y=py,
+                                          confidence=1.0)))
+            t += 1
+        mx, my = (px + rx) / 2.0, (py + ry) / 2.0
+        for i in (0.4, 0.8):         # el a passzolótól
+            frames.append(Frame(
+                t=t, players=cast(),
+                ball=Ball(x=px + (mx - px) * i,
+                          y=py + (my - py) * i, confidence=1.0)))
+            t += 1
+        for _ in range(30):          # íves, lágy labda: lebeg középen
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=mx, y=my,
+                                          confidence=1.0)))
+            t += 1
+        for i in (0.4, 0.8):         # le a fogadóhoz
+            frames.append(Frame(
+                t=t, players=cast(),
+                ball=Ball(x=mx + (rx - mx) * i,
+                          y=my + (ry - my) * i, confidence=1.0)))
+            t += 1
+        for _ in range(8):           # átvétel a fogadónál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=rx + 0.2, y=ry,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda a két passz közt
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="sps", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_soft_pass_roles_names_the_soft_post():
+    """Hat lágy passzból öt a beállóé → az ő labdáiba bele lehet
+    nyúlni."""
+    from handball.pipeline.decisions import (SPS_MIN_SOFT,
+                                             soft_pass_roles)
+
+    rec = soft_pass_roles(_sps_match([7] * 5 + [9]))["home"]
+    assert rec["soft"] >= SPS_MIN_SOFT, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "bele lehet nyúlni" in rec["verdict"], rec
+
+
+def test_soft_pass_roles_silent_with_few_soft_passes():
+    """Néhány lágy passzból nincs ítélet."""
+    from handball.pipeline.decisions import soft_pass_roles
+
+    rec = soft_pass_roles(_sps_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

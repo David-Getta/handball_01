@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lágypassz-poszt: melyik posztjuk passzol lágyan.** A
+  passz-sebesség rétege csapat-szinten mondja meg, éles-e a
+  labdajáratás — az új réteg posztonként: a 8 m/s alatti röptű
+  (lágy, ívelt) passzokat a passzoló posztjához írja. Edzőileg a
+  beleérő védekezés iránya: amelyik posztjuk lágyan passzol, annak a
+  labdáiba bele lehet nyúlni — kilépés és passzsáv-támadás az ő
+  sávjában azonnal termel. Saját oldalon a passz-élesség az
+  edzés-téma. Legalább 5 lágy passz és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`soft_pass_roles`), edzői összefoglaló, felderítés (edzői kulcs +
+  304. meccsterv-szabály), edzés-fókusz (325. szabály), HTML-riport
+  (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Sprint-poszt: melyik posztjuk futja a sprinteket.** A
   sprint-veszély rétege az embert nevezi meg — az új réteg a
   posztot: a mért sprinteket a futó posztjához írja. Edzőileg a

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 325) Lágypassz-poszt: ha egy posztunk lágyan passzol, az ő
+    # labdáiba az ellenfél beleér — passz-élesség a téma.
+    try:
+        from .decisions import SPS_SHARE_PCT, soft_pass_roles
+        sps325 = soft_pass_roles(match, config)
+        for side in ("home", "away"):
+            rec325 = sps325[side]
+            if rec325.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztról jövő lágy passzok",
+                f"a lágy passzaink {rec325['share_pct']:.0f}%-a a(z)"
+                f" {rec325['main_role']} posztról jön "
+                f"({rec325['soft']} lágy passzból; "
+                f"{SPS_SHARE_PCT:.0f}% fölött már minta) — az ő "
+                "labdáiba az ellenfél beleér, és abból kontra indul",
+                "passz-élesség a posztnak: csuklós, feszes átadás "
+                "gyakorlása fáradtan is (kör-edzés után), pattintott"
+                " és test melletti passz a beleérő védő ellen, és "
+                "passzsáv-nyomás alatti 3-3",
+                )
+    except Exception:
+        pass
+
     # 324) Sprint-poszt: ha a sprint-teher egy posztunkon áll, a
     # kontránk kiszámítható, és az az ember hamarabb fárad el.
     try:
