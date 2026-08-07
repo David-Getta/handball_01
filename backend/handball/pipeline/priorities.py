@@ -222,6 +222,10 @@ KP_LAYERS: tuple = (
     ("Átvert-poszt", "defense", "beaten_defender_roles"),
     ("Hetes-okozó poszt", "rules", "seven_conceder_roles"),
     ("Kiülő-poszt", "rules", "suspended_roles"),
+    ("Indítás-vadász poszt", "goalkeeper", "outlet_hunter_roles"),
+    ("Bejátszó-poszt", "attack_types", "pivot_feeder_roles"),
+    ("Kockáztató-poszt", "attack_types", "risky_passer_roles"),
+    ("Vasember-poszt", "stats", "iron_man_roles"),
 )
 
 

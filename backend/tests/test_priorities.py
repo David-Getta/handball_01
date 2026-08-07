@@ -222,3 +222,32 @@ def test_key_post_silent_without_convergence():
 
     rec = key_post(_two_family_match())["away"]
     assert rec["top"] is None and rec["verdict"] is None, rec
+
+
+def test_kulcs_poszt_lefedi_a_poszt_iteletes_retegeket():
+    """Őr-teszt: minden pipeline-függvény, amely "main_role" ítéletet
+    ad (poszt-lencse réteg), szerepeljen a KP_LAYERS listában — így az
+    új poszt-réteg nem maradhat ki a kulcs-poszt összegzésből."""
+    import pathlib
+    import re
+
+    from handball.pipeline.priorities import KP_LAYERS
+
+    covered = {fn for _, _, fn in KP_LAYERS}
+    # A hetes-oldal (irány-ítélet) és a poszt-nyomás kivétel: nem
+    # posztot neveznek meg, vagy más a szerkezetük.
+    pipeline_dir = pathlib.Path("handball/pipeline")
+    missing = []
+    for mod in pipeline_dir.glob("*.py"):
+        if mod.name in ("scouting.py", "report_html.py",
+                        "priorities.py"):
+            continue
+        src = mod.read_text(encoding="utf-8")
+        for m in re.finditer(r"\ndef (\w+)\(", src):
+            fn = m.group(1)
+            end = src.find("\ndef ", m.end())
+            body = src[m.start():end if end > 0 else len(src)]
+            if '"main_role"' in body and fn not in covered:
+                missing.append(f"{mod.stem}.{fn}")
+    assert not missing, ("hiányzik a KP_LAYERS-ből: "
+                         + ", ".join(sorted(missing)))

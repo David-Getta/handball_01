@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kulcs-poszt: teljes lencse-lefedettség + őr-teszt.** A
+  kulcs-poszt összegzés mostantól mind a 17 poszt-ítéletes réteget
+  számolja (bekerült az Indítás-vadász, a Bejátszó-, a Kockáztató-
+  és a Vasember-poszt is), és őr-teszt figyeli, hogy minden
+  "main_role" ítéletet adó pipeline-függvény szerepeljen a
+  KP_LAYERS listában — új poszt-réteg többé nem maradhat ki az
+  összegzésből.
+
 - **Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat.**
   A kockázatos passzolók rétege az embert nevezi meg — az új réteg a
   posztot: a hosszú passzokból lett eladásokat a kiinduló játékos
