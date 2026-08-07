@@ -5261,3 +5261,86 @@ def last_pass_roles(match: Match,
                     " a lövéseik előkészítetlenné válnak, és a "
                     "lövők maguktól elhalnak")
     return out
+
+
+# Hátrapassz-poszt: e méternyi kapu-távolság-növekedés fölött hátra-
+# passz egy átadás; ennyi poszthoz kötött hátra-passz kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a játék egy
+# posztnál fordul vissza.
+BPR_BACK_M = 1.0
+BPR_MIN_PASSES = 5
+BPR_SHARE_PCT = 60.0
+
+
+def backward_pass_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hátrapassz-poszt: MELYIK POSZTJUKNÁL fordul vissza a játék.
+
+    A passz-irány rétege (pass_direction) csapat-szinten mondja meg,
+    mennyit játszanak hátrafelé — ez posztonként: a kaputól
+    BPR_BACK_M méterrel távolabbi társhoz menő passzokat a passzoló
+    posztjához írja. Így látszik, kinél fordul rendre vissza a
+    lendület.
+
+    Edzőileg ez a pressz-jutalom: amelyik posztjuk nyomás alatt
+    hátrafelé menekül, arra rá lehet menni — a hátra-passza után a
+    fal feljebb tolható, és a támadásuk újraindul nulláról. Saját
+    csapatra: a posztnak előre-játék bátorság kell (betörés vagy
+    beadás hátra-passz helyett).
+
+    Visszatérés csapatonként: {"passes" (poszthoz kötött
+    hátra-passz), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a BPR_MIN_PASSES, vagy
+    egyik poszt sem éri el a BPR_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"passes": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    frames_by_t = {f.t: f for f in match.frames}
+    for p in detect_passes(match, config):
+        if p.passer_pos is None:
+            continue
+        fr = frames_by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        goal_x = config.attacks_toward_x(p.team)
+        d_passer = abs(p.passer_pos.x - goal_x)
+        d_receiver = abs(receiver.x - goal_x)
+        if d_receiver - d_passer < BPR_BACK_M:
+            continue
+        side = p.team.value
+        rec_role = roles[side].get(p.passer_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["passes"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["passes"] >= BPR_MIN_PASSES:
+            poszt = max(rec["roles"], key=lambda p2: rec["roles"][p2])
+            share = 100.0 * rec["roles"][poszt] / rec["passes"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a játék {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjuknál fordul vissza ({rec['passes']} "
+                    "hátra-passzból) — nyomás alatt hátrafelé "
+                    "menekül: a pressz rá jutalmat hoz, a "
+                    "hátra-passza után a fal feljebb tolható")
+    return out

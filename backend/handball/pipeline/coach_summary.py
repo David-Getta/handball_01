@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék.
+    try:
+        from .attack_types import backward_pass_roles
+        bpr = backward_pass_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bpr = bpr[side]
+            if rec_bpr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} játéka {rec_bpr['share_pct']:.0f}"
+                     f"%-ban a(z) {rec_bpr['main_role']} posztnál "
+                     f"fordul vissza ({rec_bpr['passes']} "
+                     "hátra-passzból) — a pressz rá jutalmat hoz.")
+    except Exception:
+        pass
     # Térnyerő-poszt: melyik posztjuk viszi előre a labdát.
     try:
         from .decisions import ball_carrier_roles

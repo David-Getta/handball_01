@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék.** A
+  passz-irány rétege csapat-szinten mondja meg, mennyit játszanak
+  hátrafelé — az új réteg posztonként: a kaputól legalább 1 méterrel
+  távolabbi társhoz menő passzokat a passzoló posztjához írja.
+  Edzőileg a pressz-jutalom: amelyik posztjuk nyomás alatt hátrafelé
+  menekül, arra rá lehet menni — a hátra-passza után a fal feljebb
+  tolható. Saját oldalon az előre-játék bátorság az edzés-téma.
+  Legalább 5 hátra-passz és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`backward_pass_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 322. meccsterv-szabály),
+  edzés-fókusz (343. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Térnyerő-poszt: melyik posztjuk viszi előre a labdát.** A
   labdatartó-poszt azt méri, kinél áll a labda — az új réteg azt,
   kinél halad: a labdás játékos kockái közt a támadott kapu felé

@@ -929,6 +929,9 @@ class ScoutingReport:
     # Térnyerő-poszt: a labdával megtett előre-méterek posztonként.
     # Méter-összeg, pontosan összegződik.
     tnr_meters_by_role: dict = field(default_factory=dict)
+    # Hátrapassz-poszt: a hátra-passzok darabszáma a passzoló
+    # posztja szerint. Darabszám, pontosan összegződik.
+    bpr_passes_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3550,6 +3553,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_tnr_pct:.0f}%-a a labdával megtett "
                 f"{_tnr_n:.0f} előre-méternek) — őt a felezőtől "
                 "hátrálva fogadjátok: lendületbe engedni tilos.")
+
+    # Hátrapassz-poszt: a pressz-jutalom címzettje.
+    _bpr_n = sum(rep.bpr_passes_by_role.values())
+    if _bpr_n >= 5:
+        _bpr_p, _bpr_c = max(rep.bpr_passes_by_role.items(),
+                             key=lambda kv: kv[1])
+        _bpr_pct = 100.0 * _bpr_c / _bpr_n
+        if _bpr_pct >= 60.0:
+            keys.append(
+                f"A játékuk {_bpr_pct:.0f}%-ban a(z) {_bpr_p} "
+                f"posztnál fordul vissza ({_bpr_n} hátra-passz) — "
+                "nyomás alatt hátrafelé menekül: presszeljétek, és "
+                "a hátra-passza után toljátok feljebb a falat.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8415,6 +8431,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .decisions import ball_carrier_roles as _tnr
         tnrrec = _tnr(match, config)[team.value]
         rep.tnr_meters_by_role = dict(tnrrec["roles"])
+        from .attack_types import backward_pass_roles as _bpr
+        bprrec = _bpr(match, config)[team.value]
+        rep.bpr_passes_by_role = dict(bprrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10995,6 +11014,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 322) Az ő hátrapassz-posztjuk × a ti magas labdaszerzésetek: a
+    # hátrafelé menekülő posztra a pressz jutalmat hoz.
+    _bpr322_n = sum(opp.bpr_passes_by_role.values())
+    if _bpr322_n >= 5 and own.steal_high >= 3:
+        _bpr322_p, _bpr322_c = max(opp.bpr_passes_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _bpr322_pct = 100.0 * _bpr322_c / _bpr322_n
+        if _bpr322_pct >= 60.0:
+            plan.append(
+                f"A játékuk {_bpr322_pct:.0f}%-ban a(z) {_bpr322_p}"
+                f" posztnál fordul vissza ({_bpr322_n} hátra-passz)"
+                f", ti pedig tudtok magasan labdát szerezni "
+                f"({own.steal_high} magas szerzés) — presszeljétek "
+                "őt: nyomás alatt hátrafelé menekül, a hátra-passza"
+                " után pedig toljátok feljebb a falat, és a "
+                "támadásuk nulláról indul újra.")
 
     # 321) Az ő térnyerő-posztjuk × a ti kilépő faltok: a korai
     # kontakt megfogja a lendületet, mielőtt kialakulna.
@@ -16534,6 +16570,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.lgr_goals_by_role for r in reports),
         tnr_meters_by_role=_merge_count_dicts(
             r.tnr_meters_by_role for r in reports),
+        bpr_passes_by_role=_merge_count_dicts(
+            r.bpr_passes_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

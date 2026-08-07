@@ -4102,3 +4102,62 @@ def test_last_pass_roles_silent_with_few_passes():
 
     rec = last_pass_roles(_epr_match([5, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hátrapassz-poszt (melyik posztjuknál fordul vissza a játék) -----------
+
+
+def _bpr_match(passers, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló, 9: szélső) + hátra-
+    passzok: a `passers` szerinti játékos a kaputól távolabbi
+    irányítónak (5) adja vissza a labdát."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for pid in passers:
+        px, py = spos[pid]
+        for _ in range(8):           # a labda a passzolónál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=px + 0.2, y=py,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(8):           # átvétel hátul az irányítónál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=29.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda a passzok közt
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_backward_pass_roles_names_the_turning_post():
+    """Hat hátra-passzból öt a beállóé → a pressz rá jutalmat hoz."""
+    from handball.pipeline.attack_types import (BPR_MIN_PASSES,
+                                                backward_pass_roles)
+
+    rec = backward_pass_roles(
+        _bpr_match([7, 7, 7, 7, 7, 9]))["home"]
+    assert rec["passes"] >= BPR_MIN_PASSES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "feljebb tolható" in rec["verdict"], rec
+
+
+def test_backward_pass_roles_silent_with_few_passes():
+    """Néhány hátra-passzból nincs ítélet."""
+    from handball.pipeline.attack_types import backward_pass_roles
+
+    rec = backward_pass_roles(_bpr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

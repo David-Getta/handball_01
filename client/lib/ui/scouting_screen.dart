@@ -2141,6 +2141,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Hátrapassz-poszt: melyik posztjuknál fordul vissza a játék (5+
+  // hátra-passz, 60% részarány — a backenddel azonos küszöbök:
+  // BPR_MIN_PASSES, BPR_SHARE_PCT).
+  String? _backwardPassRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["bpr_passes_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a játékuk ${pct.round()}%-ban a(z) $top posztnál fordul"
+        " vissza ($total hátra-passz) · a pressz rá jutalmat hoz";
+  }
+
   // Térnyerő-poszt: melyik posztjuk viszi előre a labdát (50+
   // labdás előre-méter, 60% részarány — a backenddel azonos
   // küszöbök: TNR_MIN_M, TNR_SHARE_PCT).
@@ -8482,6 +8508,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_backwardPassRole(r) != null)
+        ["Hátrapassz-poszt", _backwardPassRole(r)!],
       if (_ballCarrierRole(r) != null)
         ["Térnyerő-poszt", _ballCarrierRole(r)!],
       if (_leadScorerRole(r) != null)

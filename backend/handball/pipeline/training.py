@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 343) Hátrapassz-poszt: ha a játékunk mindig ugyanannál a
+    # posztnál fordul vissza, a pressz ellenünk jutalmat hoz.
+    try:
+        from .attack_types import (BPR_SHARE_PCT,
+                                   backward_pass_roles)
+        bpr343 = backward_pass_roles(match, config)
+        for side in ("home", "away"):
+            rec343 = bpr343[side]
+            if rec343.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál visszaforduló játék",
+                f"a hátra-passzaink {rec343['share_pct']:.0f}%-a "
+                f"a(z) {rec343['main_role']} posztunknál történik "
+                f"({rec343['passes']} hátra-passzból; "
+                f"{BPR_SHARE_PCT:.0f}% fölött már minta) — nyomás "
+                "alatt nála fordul vissza a lendület, és az "
+                "ellenfél pressze jutalmat kap",
+                "előre-játék bátorság a posztnak: nyomás alatti "
+                "betörés-döntés gyakorlása (1-1 után passz előre), "
+                "hátra-passz csak kettős nyomásnál szabály a "
+                "kisjátékokban, és a lendület-megtartó átadások "
+                "videó-elemzése",
+                )
+    except Exception:
+        pass
+
     # 342) Térnyerő-poszt: ha a térnyerésünk egy poszt lábán van, a
     # felhozatal-teher aránytalan, és egy korai kontakt lefékez.
     try:

@@ -1843,7 +1843,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     finishers_html = ""
     defense_lens_html = ""
     try:
-        from .attack_types import (kickout_target_roles,
+        from .attack_types import (backward_pass_roles,
+                                   kickout_target_roles,
                                    last_pass_roles,
                                    pivot_feeder_roles,
                                    risky_passer_roles,
@@ -1942,6 +1943,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Előkészítő-poszt", last_pass_roles),
             ("Előnyben-poszt", lead_scorer_roles),
             ("Térnyerő-poszt", ball_carrier_roles),
+            ("Hátrapassz-poszt", backward_pass_roles),
             ("Blokkolt-poszt", blocked_shooter_roles),
             ("Ziccerhagyó-poszt", missed_chance_roles),
             ("Fáradó-poszt", fatigue_roles),
