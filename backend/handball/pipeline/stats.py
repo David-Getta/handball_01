@@ -1022,3 +1022,65 @@ def iron_man_roles(match, config=None) -> dict:
                 " cserélik) — a hajrában oda kell vinni a tempót: őt "
                 "kell futtatni, és vele szemben friss ember jöjjön")
     return out
+
+
+# Sprint-poszt: ennyi poszthoz kötött sprint kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a kontrájukat egy poszt
+# futja.
+SPR_MIN_SPRINTS = 10
+SPR_SHARE_PCT = 60.0
+
+
+def sprint_threat_roles(match: Match, config=None) -> dict:
+    """Sprint-poszt: MELYIK POSZTJUK futja a sprinteket.
+
+    A sprint-veszély rétege (sprint_threats) az embert nevezi meg —
+    ez a posztot: a mért sprinteket a futó posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kontra-fék terve: a kézilabdában a sprint szinte
+    mindig átmenet — ha a sprintek rendre ugyanarról a posztról
+    jönnek, labdavesztésnél először annak a posztnak az útját kell
+    lezárni, és tilos őt a fal mögé engedni. Saját csapatra: az egy
+    posztra jutó sprint-teher a rotáció-tervezés bemenete.
+
+    Visszatérés csapatonként: {"sprints" (poszthoz kötött sprint),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az SPR_MIN_SPRINTS, vagy egyik
+    poszt sem éri el az SPR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    st = sprint_threats(match, config)
+
+    out: dict = {side: {"sprints": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in st[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["sprints"])
+            rec["sprints"] += row["sprints"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sprints"] >= SPR_MIN_SPRINTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["sprints"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a sprintjeik {share:.0f}%-át a(z) {poszt} "
+                    f"posztjuk futja ({rec['sprints']} sprintből) — "
+                    "a kontra-fék posztra szóló: labdavesztésnél az "
+                    "ő útját kell először lezárni, és tilos a fal "
+                    "mögé engedni")
+    return out

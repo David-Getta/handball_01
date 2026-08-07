@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Sprint-poszt: melyik posztjuk futja a sprinteket.
+    try:
+        from .stats import sprint_threat_roles
+        spr = sprint_threat_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spr = spr[side]
+            if rec_spr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontráját a(z) "
+                     f"{rec_spr['main_role']} posztja futja "
+                     f"({rec_spr['share_pct']:.0f}%, "
+                     f"{rec_spr['sprints']} sprintből) — "
+                     "labdavesztésnél az ő útja zárandó először.")
+    except Exception:
+        pass
     # Középkezdő-poszt: melyik posztjuknál indul a középkezdés.
     try:
         from .momentum import restart_taker_roles

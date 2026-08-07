@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Sprint-poszt: melyik posztjuk futja a sprinteket.** A
+  sprint-veszély rétege az embert nevezi meg — az új réteg a
+  posztot: a mért sprinteket a futó posztjához írja. Edzőileg a
+  kontra-fék terve: a sprint a kézilabdában szinte mindig átmenet —
+  ha a sprintek rendre ugyanarról a posztról jönnek, labdavesztésnél
+  először annak az útját kell lezárni, és tilos a fal mögé engedni.
+  Saját oldalon a sprint-teher a rotáció-tervezés bemenete. Legalább
+  10 sprint és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`sprint_threat_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 303. meccsterv-szabály),
+  edzés-fókusz (324. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Középkezdő-poszt: melyik posztjuknál indul a középkezdés.** A
   középkezdés-átvevő rétege az embert nevezi meg — az új réteg a
   posztot: a kapott gól utáni első felező-környéki labdaátvételeket

@@ -3508,6 +3508,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stats import sprint_threat_roles
+            res["sprint_threat_roles"] = sprint_threat_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5066,6 +5071,9 @@ def create_app():
                 from ..pipeline.momentum import restart_taker_roles
                 _layer("restart_taker_roles",
                        lambda: restart_taker_roles(match))
+                from ..pipeline.stats import sprint_threat_roles
+                _layer("sprint_threat_roles",
+                       lambda: sprint_threat_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

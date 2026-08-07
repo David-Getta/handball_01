@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 324) Sprint-poszt: ha a sprint-teher egy posztunkon áll, a
+    # kontránk kiszámítható, és az az ember hamarabb fárad el.
+    try:
+        from .stats import SPR_SHARE_PCT, sprint_threat_roles
+        spr324 = sprint_threat_roles(match, config)
+        for side in ("home", "away"):
+            rec324 = spr324[side]
+            if rec324.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztra jutó sprint-teher",
+                f"a sprintjeink {rec324['share_pct']:.0f}%-át a(z) "
+                f"{rec324['main_role']} posztunk futja "
+                f"({rec324['sprints']} sprintből; "
+                f"{SPR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kontránk kiszámítható, és a motorunk hamarabb "
+                "elfárad",
+                "kontra-teher elosztása: második kifutó ember "
+                "kijelölése és gyakorlása (két sávos lerohanás), a "
+                "sprint-teher figyelése a cserék időzítésénél",
+                )
+    except Exception:
+        pass
+
     # 323) Középkezdő-poszt: ha a középkezdésünk mindig ugyanannál a
     # posztnál indul, a felkészült ellenfél letámadása pont őt fogja.
     try:
