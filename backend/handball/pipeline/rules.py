@@ -2050,3 +2050,72 @@ def passive_holder_roles(match: Match,
                     "jelzésnél őt kell nyomás alá tenni, nála jön a "
                     "kényszer-eladás")
     return out
+
+
+# Hetesdobó-poszt: ennyi poszthoz kötött hetes-kísérlet kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a heteseiket
+# egy poszt dobja.
+STK_MIN_ATTEMPTS = 3
+STK_SHARE_PCT = 60.0
+
+
+def seven_taker_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Hetesdobó-poszt: MELYIK POSZTJUK áll oda a hétméteresekhez.
+
+    A hetes-dobók listája az embert nevezi meg — ez a posztot: a
+    felismert hétméteresek kimenetel-lövéseit (seven_meter_outcomes)
+    a dobó posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kapus-felkészülés és a fárasztás terve: ha a
+    heteseiket rendre ugyanaz a poszt dobja, a kapus az ő
+    szokás-irányait tanulja (a Hetes-oldal réteggel együtt), a
+    meccsterv pedig tudja: ha ezt a posztot kivesszük (kiállítás,
+    fáradás, csere-kényszer), a hetes-rutinjuk is vele megy. Saját
+    csapatra: kell a második kijelölt dobó.
+
+    Visszatérés csapatonként: {"attempts" (poszthoz kötött hetes),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az STK_MIN_ATTEMPTS, vagy egyik
+    poszt sem éri el az STK_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"attempts": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None:
+            continue
+        side = sm["team"]
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["attempts"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["attempts"] >= STK_MIN_ATTEMPTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["attempts"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= STK_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a heteseiket {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjuk dobja ({rec['attempts']} hetesből) — "
+                    "a kapus az ő szokás-irányaira készüljön; ha ezt"
+                    " a posztot kiveszik, a hetes-rutinjuk is vele "
+                    "megy")
+    return out

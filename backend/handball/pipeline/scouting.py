@@ -899,6 +899,9 @@ class ScoutingReport:
     # Újrakezdő-poszt: a második félidő első tíz percének góljai
     # posztonként. Darabszám, pontosan összegződik.
     ssr_goals_by_role: dict = field(default_factory=dict)
+    # Hetesdobó-poszt: a hetes-kísérletek darabszáma a dobó posztja
+    # szerint. Darabszám, pontosan összegződik.
+    stk_attempts_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3398,6 +3401,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f" ({_ssr_pct:.0f}%, {_ssr_n} gól a második félidő "
                 "első tíz percében) — a szünet után őt fogja a "
                 "legjobb védőtök.")
+
+    # Hetesdobó-poszt: a kapus-felkészülés iránya.
+    _stk_n = sum(rep.stk_attempts_by_role.values())
+    if _stk_n >= 3:
+        _stk_p, _stk_c = max(rep.stk_attempts_by_role.items(),
+                             key=lambda kv: kv[1])
+        _stk_pct = 100.0 * _stk_c / _stk_n
+        if _stk_pct >= 60.0:
+            keys.append(
+                f"A heteseiket {_stk_pct:.0f}%-ban a(z) {_stk_p} "
+                f"posztjuk dobja ({_stk_n} hetesből) — a kapusotok "
+                "az ő szokás-irányait tanulja, és ha ezt a posztot "
+                "kiveszitek, a hetes-rutinjuk is vele megy.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8235,6 +8251,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .momentum import second_start_roles as _ssr
         ssrrec = _ssr(match, config)[team.value]
         rep.ssr_goals_by_role = dict(ssrrec["roles"])
+        from .rules import seven_taker_roles as _stk
+        stkrec = _stk(match, config)[team.value]
+        rep.stk_attempts_by_role = dict(stkrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10815,6 +10834,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 313) Az ő hetesdobó-posztjuk × a ti nagyvédéses kapusotok: egy
+    # dobó szokás-irányait meg lehet tanulni.
+    _stk313_n = sum(opp.stk_attempts_by_role.values())
+    if _stk313_n >= 3 and own.gk_big_saves >= 3:
+        _stk313_p, _stk313_c = max(opp.stk_attempts_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _stk313_pct = 100.0 * _stk313_c / _stk313_n
+        if _stk313_pct >= 60.0:
+            plan.append(
+                f"A heteseiket {_stk313_pct:.0f}%-ban a(z) "
+                f"{_stk313_p} posztjuk dobja ({_stk313_n} hetes), a"
+                f" kapusotok pedig hoz nagyvédést ({own.gk_big_saves}"
+                " a mérésben) — videóról tanulja meg ennek az EGY "
+                "dobónak a szokás-irányait: a hetes ellenük "
+                "kivédhető lövés.")
 
     # 312) Az ő újrakezdő-posztjuk × a ti félidő-nyitásotok: ha ti
     # jól jöttök ki a szünetről, az ő második rajt-motorjuk
@@ -16178,6 +16213,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sdr_screens_by_role for r in reports),
         ssr_goals_by_role=_merge_count_dicts(
             r.ssr_goals_by_role for r in reports),
+        stk_attempts_by_role=_merge_count_dicts(
+            r.stk_attempts_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

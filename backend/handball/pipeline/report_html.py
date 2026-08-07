@@ -1862,6 +1862,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .rules import (passive_holder_roles,
                             powerplay_shooter_roles,
                             seven_conceder_roles, seven_shot_directions,
+                            seven_taker_roles,
                             shorthanded_shooter_roles, suspended_roles)
         from .momentum import (clutch_hog_roles,
                                clutch_scorer_roles,
@@ -1928,6 +1929,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Rajt-poszt", opening_scorer_roles),
             ("Passzív-poszt", passive_holder_roles),
             ("Újrakezdő-poszt", second_start_roles),
+            ("Hetesdobó-poszt", seven_taker_roles),
             ("Fáradó-poszt", fatigue_roles),
             ("Kettőzött-poszt", doubled_target_roles)))
         if fin_rows:

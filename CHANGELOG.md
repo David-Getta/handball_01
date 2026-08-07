@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez.** A
+  hetes-dobók listája az embert nevezi meg — az új réteg a posztot:
+  a felismert hétméteresek kimenetel-lövéseit a dobó posztjához
+  írja. Edzőileg a kapus-felkészülés és a fárasztás terve: ha a
+  heteseiket rendre ugyanaz a poszt dobja, a kapus az ő
+  szokás-irányait tanulja, a meccsterv pedig tudja: ha ezt a posztot
+  kiveszik, a hetes-rutinjuk is vele megy. Saját oldalon a második
+  kijelölt dobó a téma. Legalább 3 hetes és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`seven_taker_roles`), edzői összefoglaló, felderítés (edzői kulcs
+  + 313. meccsterv-szabály), edzés-fókusz (334. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Javítás — az elakadt képkockát a feldolgozó átugorja.** Terepen
   látott hiba: a videó-olvasás/detektálás natív szinten beragadt egy
   fix képkockánál, és a feldolgozás örökre megállt rajta (a védő

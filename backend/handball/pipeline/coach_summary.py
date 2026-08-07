@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez.
+    try:
+        from .rules import seven_taker_roles
+        stk = seven_taker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_stk = stk[side]
+            if rec_stk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} heteseit {rec_stk['share_pct']:.0f}"
+                     f"%-ban a(z) {rec_stk['main_role']} posztja "
+                     f"dobja ({rec_stk['attempts']} hetesből) — a "
+                     "kapus az ő szokás-irányaira készüljön.")
+    except Exception:
+        pass
     # Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot.
     try:
         from .momentum import second_start_roles

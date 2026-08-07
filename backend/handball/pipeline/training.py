@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 334) Hetesdobó-poszt: ha a heteseinket mindig ugyanaz a posztunk
+    # dobja, az ellenfél kapusa egyetlen dobó szokásaira készülhet.
+    try:
+        from .rules import STK_SHARE_PCT, seven_taker_roles
+        stk334 = seven_taker_roles(match, config)
+        for side in ("home", "away"):
+            rec334 = stk334[side]
+            if rec334.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy dobóra épülő hetes",
+                f"a heteseinket {rec334['share_pct']:.0f}%-ban a(z) "
+                f"{rec334['main_role']} posztunk dobja "
+                f"({rec334['attempts']} hetesből; "
+                f"{STK_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél kapusa egyetlen dobó szokásaira készülhet",
+                "második kijelölt hetes-dobó: heti hetes-verseny a "
+                "kijelöléshez, a fő dobónak pedig irány-variálás "
+                "(kapus-mozgásra dobás gyakorlása) videó-visszajelzéssel",
+                )
+    except Exception:
+        pass
+
     # 333) Újrakezdő-poszt: ha a szünet utáni rajtunk egy posztra
     # épül, a felkészült ellenfél a második félidőt az ő fogásával
     # kezdi.
