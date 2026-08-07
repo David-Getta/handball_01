@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Felzárkózás-poszt: melyik posztjuk hozza őket vissza.
+    try:
+        from .momentum import comeback_carrier_roles
+        cbr = comeback_carrier_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cbr = cbr[side]
+            if rec_cbr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} mentőjátéka egy posztra épül: "
+                     f"hátrányból {rec_cbr['share_pct']:.0f}%-ban a(z)"
+                     f" {rec_cbr['main_role']} hozza őket vissza "
+                     f"({rec_cbr['trailing']} részvételből) — az ő "
+                     "kivétele a hátrányukat beragasztja.")
+    except Exception:
+        pass
     # Hajrá-poszt: melyik posztjuk viszi a végjátékot.
     try:
         from .momentum import clutch_scorer_roles

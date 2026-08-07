@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **340 réteg**, modulonként csoportosítva; a
+Összesen **341 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (74)
@@ -228,7 +228,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `first_half_close` | A félidő-zárás mérlege: ki üt utoljára a szünet előtt. |
 | `second_half_start` | A szünet utáni kezdés mérlege: ki üt először a 2. félidőben. |
 
-## momentum (36)
+## momentum (37)
 
 | Réteg | Mit mér |
 |---|---|
@@ -244,6 +244,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `clutch_shot_quality` | Hajrá-lövésválasztás: milyen helyzetekből lőnek a meccs végén. |
 | `clutch_turnover_players` | Hajrá-hibázók: KI ADJA EL a labdát a döntő szakaszban. |
 | `clutch_turnovers` | Hajrá-eladás: nyomás alatt megőrzik-e a labdát. |
+| `comeback_carrier_roles` | Felzárkózás-poszt: MELYIK POSZTJUK hozza őket vissza. |
 | `comeback_carriers` | Felzárkózás-húzó: KIN keresztül jönnek vissza hátrányból. |
 | `drought_anatomy` | Gólcsend-anatómia: a leghosszabb gólcsend alatt lőtt-e a csapat. |
 | `drought_breakers` | Csend-törők: KI DOBJA a gólcsendet megtörő gólt. |

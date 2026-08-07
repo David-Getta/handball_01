@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Felzárkózás-poszt: melyik posztjuk hozza őket vissza hátrányból.**
+  A felzárkózás-húzó rétege az embert nevezi meg — az új réteg a
+  posztot: a hátrányban lőtt gólok és gólpasszok részvételeit a
+  játékos posztjához írja. Edzőileg ez a vezetés megtartásának terve:
+  ha vezetünk, és tudjuk, melyik posztjukon keresztül szoktak
+  visszajönni, annak a kivétele (szoros fogás, korai kettőzés) a
+  hátrányukat beragasztja. Legalább 3 hátrány-gól-részvétel és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`comeback_carrier_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 293. meccsterv-szabály), edzés-fókusz
+  (314. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Hajrá-poszt: melyik posztjuk viszi a végjátékot.** A
   hajrá-emberek rétege az embert nevezi meg — az új réteg a posztot:
   a meccs utolsó öt percének góljait a lövő posztjához írja.

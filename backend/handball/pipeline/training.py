@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 314) Felzárkózás-poszt: ha hátrányból mindig ugyanaz a posztunk
+    # ment minket, egy jó fogással beragasztható a hátrányunk.
+    try:
+        from .momentum import CBR_SHARE_PCT, comeback_carrier_roles
+        cbr314 = comeback_carrier_roles(match, config)
+        for side in ("home", "away"):
+            rec314 = cbr314[side]
+            if rec314.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó felzárkózás",
+                f"hátrányból a gól-részvételeink {rec314['share_pct']:.0f}"
+                f"%-a a(z) {rec314['main_role']} posztról jön "
+                f"({rec314['trailing']} hátrány-gól-részvételből; "
+                f"{CBR_SHARE_PCT:.0f}% fölött már minta) — ha a "
+                "mentő-emberünket kiveszik, a hátrányunk beragad",
+                "hátrány-figurák második opcióval: a felzárkózó "
+                "játékainkban kötelező kijátszani a mentő-poszt "
+                "MELLETTI befejezőt is (bejátszás, hátoldali szélső), "
+                "és 2 perces hátrány-szituációs 6-6 minden edzésen",
+                )
+    except Exception:
+        pass
+
     # 313) Hajrá-poszt: ha a végjátékunk egy posztra fut ki, a záró
     # percekben egyetlen jó emberfogás megfojt minket.
     try:

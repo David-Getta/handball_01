@@ -1665,3 +1665,46 @@ def test_clutch_scorer_roles_silent_with_few_goals():
 
     rec = clutch_scorer_roles(_csr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _cbr_match(rescuers):
+    """`rescuers` = hátrány-gólonként a vendég lövő (9: átlövő, 8:
+    szélső). Először 3 hazai gól (vendég-hátrány), majd a megadott
+    lövők vendég-góljai; a poszt-mintát egy vendég-birtoklás szakasz
+    adja a gólok előtt."""
+    role_pos = {9: (10.0, 10.0), 8: (6.0, 1.0)}
+    frames = []
+    t = 0
+    for _ in range(150):             # vendég-birtoklás: poszt-minta
+        players = [_pl(1, Team.HOME, 30.0, 10.0)]
+        players += [_pl(tid, Team.AWAY, *xy)
+                    for tid, xy in role_pos.items()]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=10.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(3):
+        t = _cbc_home_goal(frames, t, 1)
+    for tid in rescuers:
+        t = _fdr_away_goal(frames, t, tid)
+    return Match(_meta(), frames)
+
+
+def test_comeback_carrier_roles_names_the_rescue_post():
+    """Ha a hátrány-gólok zöme ugyanarról a posztról jön, az ő
+    kivétele a hátrányukat beragasztja."""
+    from handball.pipeline.momentum import (CBR_MIN_TRAILING,
+                                            comeback_carrier_roles)
+
+    rec = comeback_carrier_roles(_cbr_match([9, 9, 9]))["away"]
+    assert rec["trailing"] >= CBR_MIN_TRAILING, rec
+    assert rec["main_role"] == "átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "beragasztja" in rec["verdict"], rec
+
+
+def test_comeback_carrier_roles_silent_with_few_goals():
+    """Néhány hátrány-gól-részvételből nincs ítélet."""
+    from handball.pipeline.momentum import comeback_carrier_roles
+
+    rec = comeback_carrier_roles(_cbr_match([9, 8]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

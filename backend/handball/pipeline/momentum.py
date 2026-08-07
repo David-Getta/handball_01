@@ -2304,3 +2304,68 @@ def clutch_scorer_roles(match: Match, config=None) -> dict:
                     "az utolsó öt percben őt kell fogni, és az ő "
                     "sávjára áll rá a kapus is")
     return out
+
+
+# Felzárkózás-poszt: ennyi poszthoz kötött hátrány-gól-részvétel kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# mentőjátékuk egy posztra épül.
+CBR_MIN_TRAILING = 3
+CBR_SHARE_PCT = 60.0
+
+
+def comeback_carrier_roles(match: Match, config=None) -> dict:
+    """Felzárkózás-poszt: MELYIK POSZTJUK hozza őket vissza.
+
+    A felzárkózás-húzó rétege (comeback_carriers) az embert nevezi
+    meg — ez a posztot: a hátrányban szerzett gól-részvételeket a
+    játékos posztjához írja. Így a minta akkor is látszik, ha a
+    nevek meccsről meccsre cserélődnek.
+
+    Edzőileg: ha vezettek ellenük, és a mentőjátékuk egy posztra
+    épül, annak a posztnak a kivétele (szoros fogás, korai kettőzés)
+    a hátrányukat beragasztja — a többiek nincsenek hozzászokva a
+    mentéshez. Saját csapatra: a hátrány-figuráinkat tudatosan a
+    valódi mentő-posztra kell építeni, de kell mögé második út is.
+
+    Visszatérés csapatonként: {"trailing" (poszthoz kötött hátrány-
+    részvétel), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a CBR_MIN_TRAILING,
+    vagy egyik poszt sem éri el a CBR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    cbc = comeback_carriers(match, config)
+
+    out: dict = {side: {"trailing": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in cbc[side]["players"]:
+            if not row["trailing"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["trailing"])
+            rec["trailing"] += row["trailing"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["trailing"] >= CBR_MIN_TRAILING:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["trailing"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= CBR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"hátrányból a(z) {poszt} posztjuk hozza őket "
+                    f"vissza ({share:.0f}%, {rec['trailing']} "
+                    "hátrány-gól-részvételből) — ha vezettek, az ő "
+                    "kivétele (szoros fogás, korai kettőzés) a "
+                    "hátrányukat beragasztja")
+    return out
