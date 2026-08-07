@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kilépő-poszt: melyik posztjuk lép ki a falból.** A kilépő védő
+  rétege az embert nevezi meg — az új réteg a posztot: a felállt
+  védekezés mért kockáit és kapu-távolságait a védő posztjához
+  összegzi, és megnézi, van-e a többieknél legalább 2,5 méterrel
+  előrébb álló poszt. Edzőileg: a kilépő mögött nyílik a tér —
+  elzárást rá, és a háta mögé befutóval 2 az 1-et. Saját oldalon a
+  kilépés mögötti biztosítás az edzés-téma. Posztonként 100 mért
+  kocka, 3 mért poszt és 2,5 m mélység-többlet alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`advanced_defender_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 316. meccsterv-
+  szabály), edzés-fókusz (337. szabály), HTML-riport (Védő-lencse
+  sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket.** A
   ziccer-befejezők rétege az embert nevezi meg — az új réteg a
   posztot: a nagy helyzet-értékű, gól nélkül záruló lövéseket a lövő

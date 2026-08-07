@@ -3243,3 +3243,52 @@ def test_blocked_shooter_roles_silent_with_few_blocks():
 
     rec = blocked_shooter_roles(_bsr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kilépő-poszt (melyik posztjuk lép ki a falból) ------------------------
+
+
+def _adr_match(bealo_depth=10.0, fps=25.0):
+    """Támadó poszt-minta (7: beálló, 9: szélső, 5: irányító), majd
+    felállt hazai védekezés: a 7-es a megadott mélységben (a többiek
+    3-4 m-en) áll, míg a vendég a hazai térfélen birtokol."""
+    aspos = {7: (34.0, 10.0), 9: (35.0, 3.0), 5: (29.0, 10.0)}
+    dspos = {7: (bealo_depth, 10.0), 9: (3.0, 4.0), 5: (4.0, 10.0)}
+
+    frames = []
+    t = 0
+    for _ in range(150):             # támadó fázis: poszt-minta
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in aspos.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(200):             # felállt védekezés: vendég labda
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in dspos.items()]
+            + [_pl(21, Team.AWAY, 15.0, 10.0)],
+            ball=Ball(x=15.1, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_advanced_defender_roles_names_the_stepping_post():
+    """A beálló 10 m-en, a társak 3-4 m-en → a fal a beállónál lép
+    ki."""
+    from handball.pipeline.defense import advanced_defender_roles
+
+    rec = advanced_defender_roles(_adr_match(10.0))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["gap_m"] and rec["gap_m"] >= 2.5, rec
+    assert rec["verdict"] and "2 az 1-et" in rec["verdict"], rec
+
+
+def test_advanced_defender_roles_silent_with_flat_wall():
+    """Lapos falnál (mindenki 3-4 m-en) nincs kilépő poszt."""
+    from handball.pipeline.defense import advanced_defender_roles
+
+    rec = advanced_defender_roles(_adr_match(4.5))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

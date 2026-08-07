@@ -909,6 +909,11 @@ class ScoutingReport:
     # helyzetek darabszáma posztonként. Darabszám, pontosan
     # összegződik.
     mcr_misses_by_role: dict = field(default_factory=dict)
+    # Kilépő-poszt: felállt-védekezéses mért kockák és kapu-távolság
+    # összegek posztonként. Darabszám/összeg, pontosan összegződik
+    # (átlag-mélység = adr_depthm / adr_frames posztonként).
+    adr_frames_by_role: dict = field(default_factory=dict)
+    adr_depthm_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3447,6 +3452,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_mcr_p} posztnál esik ({_mcr_n} kihagyásból) — "
                 "ha választani kell, őt engedjétek helyzetbe: a "
                 "besegítés a biztos kezű társakra menjen.")
+
+    # Kilépő-poszt: hol nyílik a tér a faluk mögött.
+    _adr_ok = {p: n for p, n in rep.adr_frames_by_role.items()
+               if n >= 100}
+    if len(_adr_ok) >= 3:
+        _adr_avg = {p: rep.adr_depthm_by_role.get(p, 0.0) / n
+                    for p, n in _adr_ok.items()}
+        _adr_p = max(_adr_avg, key=lambda p: _adr_avg[p])
+        _adr_tk = sum(n for p, n in _adr_ok.items() if p != _adr_p)
+        _adr_tt = sum(rep.adr_depthm_by_role.get(p, 0.0)
+                      for p in _adr_ok if p != _adr_p)
+        _adr_gap = _adr_avg[_adr_p] - _adr_tt / _adr_tk
+        if _adr_gap >= 2.5:
+            keys.append(
+                f"A faluk a(z) {_adr_p} posztnál lép ki (a "
+                f"társaknál {_adr_gap:.1f} m-rel előrébb) — "
+                "elzárást a kilépőre, és a háta mögé befutóval 2 az"
+                " 1-et: mögötte nyílik a tér.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8293,6 +8316,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .xg import missed_chance_roles as _mcr
         mcrrec = _mcr(match, config)[team.value]
         rep.mcr_misses_by_role = dict(mcrrec["roles"])
+        from .defense import advanced_defender_roles as _adr
+        adrrec = _adr(match, config)[team.value]
+        rep.adr_frames_by_role = dict(adrrec["roles"])
+        rep.adr_depthm_by_role = dict(adrrec["depth_m"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10873,6 +10900,29 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 316) Az ő kilépő-posztjuk × a ti elzáró-játékotok: a kilépőre
+    # tett elzárással a mögötte nyíló tér 2 az 1-re váltható.
+    _adr316_ok = {p: n for p, n in opp.adr_frames_by_role.items()
+                  if n >= 100}
+    if len(_adr316_ok) >= 3 and opp.matches >= 1 \
+            and own.scd_screened_shots >= 4:
+        _adr316_avg = {p: opp.adr_depthm_by_role.get(p, 0.0) / n
+                       for p, n in _adr316_ok.items()}
+        _adr316_p = max(_adr316_avg, key=lambda p: _adr316_avg[p])
+        _adr316_tk = sum(n for p, n in _adr316_ok.items()
+                         if p != _adr316_p)
+        _adr316_tt = sum(opp.adr_depthm_by_role.get(p, 0.0)
+                         for p in _adr316_ok if p != _adr316_p)
+        _adr316_gap = _adr316_avg[_adr316_p] - _adr316_tt / _adr316_tk
+        if _adr316_gap >= 2.5:
+            plan.append(
+                f"A faluk a(z) {_adr316_p} posztnál lép ki (a "
+                f"társaknál {_adr316_gap:.1f} m-rel előrébb), ti "
+                "pedig sokat játszotok elzárásból "
+                f"({own.scd_screened_shots} elzárásos lövés) — az "
+                "elzárás a kilépőre menjen, a háta mögé befutó "
+                "emberrel 2 az 1-et: mögötte nyílik a tér.")
 
     # 315) Az ő ziccerhagyó-posztjuk × a ti nagyvédéses kapusotok: a
     # bizonytalan befejezőt érdemes a kapusotokra engedni.
@@ -16290,6 +16340,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.bsr_blocks_by_role for r in reports),
         mcr_misses_by_role=_merge_count_dicts(
             r.mcr_misses_by_role for r in reports),
+        adr_frames_by_role=_merge_count_dicts(
+            r.adr_frames_by_role for r in reports),
+        adr_depthm_by_role=_merge_count_dicts(
+            r.adr_depthm_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

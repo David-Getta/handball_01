@@ -2141,6 +2141,46 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Kilépő-poszt: melyik posztjuk lép ki a falból (posztonként
+  // 100+ kocka, 3+ mért poszt, 2,5 m mélység-többlet — a backenddel
+  // azonos küszöbök: ADR_MIN_FRAMES, ADR_MIN_ROLES, ADR_GAP_M).
+  String? _advancedDefRole(Map<String, dynamic> r) {
+    final frames =
+        (r["adr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    final depth =
+        (r["adr_depthm_by_role"] as Map?)?.cast<String, dynamic>();
+    if (frames == null || frames.isEmpty || depth == null) return null;
+    final ok = <String, int>{};
+    frames.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n >= 100) ok[k] = n;
+    });
+    if (ok.length < 3) return null;
+    String? top;
+    var topAvg = 0.0;
+    ok.forEach((k, n) {
+      final avg = ((depth[k] as num?) ?? 0).toDouble() / n;
+      if (top == null || avg > topAvg) {
+        top = k;
+        topAvg = avg;
+      }
+    });
+    if (top == null) return null;
+    var restN = 0;
+    var restD = 0.0;
+    ok.forEach((k, n) {
+      if (k == top) return;
+      restN += n;
+      restD += ((depth[k] as num?) ?? 0).toDouble();
+    });
+    if (restN == 0) return null;
+    final gap = topAvg - restD / restN;
+    if (gap < 2.5) return null;
+    return "a faluk a(z) $top posztnál lép ki (a társaknál "
+        "${gap.toStringAsFixed(1)} m-rel előrébb) · elzárást rá, "
+        "mögötte nyílik a tér";
+  }
+
   // Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket (3+
   // kihagyott nagy helyzet, 60% részarány — a backenddel azonos
   // küszöbök: MCR_MIN_MISSES, MCR_SHARE_PCT).
@@ -8308,6 +8348,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_advancedDefRole(r) != null)
+        ["Kilépő-poszt", _advancedDefRole(r)!],
       if (_missedChanceRole(r) != null)
         ["Ziccerhagyó-poszt", _missedChanceRole(r)!],
       if (_blockedShooterRole(r) != null)

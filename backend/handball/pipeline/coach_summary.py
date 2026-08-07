@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kilépő-poszt: melyik posztjuk lép ki a falból.
+    try:
+        from .defense import advanced_defender_roles
+        adr = advanced_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_adr = adr[side]
+            if rec_adr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} fala a(z) "
+                     f"{rec_adr['main_role']} posztnál lép ki "
+                     f"(a társaknál {rec_adr['gap_m']:.1f} m-rel "
+                     "előrébb) — a kilépő mögött nyílik a tér.")
+    except Exception:
+        pass
     # Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket.
     try:
         from .xg import missed_chance_roles

@@ -4472,3 +4472,80 @@ def blocked_shooter_roles(match, config=None) -> dict:
                     "előkészítetlen lövése falba megy, és onnan "
                     "kontra indul")
     return out
+
+
+# Kilépő-poszt: posztonként ennyi mért felállt-védekezéses kocka
+# kell, legalább ennyi mért poszt, és ekkora mélység-többlet a
+# társakhoz képest, hogy kilépő posztot mondjunk.
+ADR_MIN_FRAMES = 100
+ADR_MIN_ROLES = 3
+ADR_GAP_M = 2.5
+
+
+def advanced_defender_roles(match, config=None) -> dict:
+    """Kilépő-poszt: MELYIK POSZTJUK lép ki a falból.
+
+    A kilépő védő rétege (advanced_defender) az embert nevezi meg —
+    ez a posztot: a felállt védekezés mért kockáit és kapu-távolság
+    összegét a védő (támadó-fázisból becsült) posztjához összegzi,
+    és megnézi, van-e a többi posztnál legalább ADR_GAP_M méterrel
+    előrébb álló poszt. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg: a kilépő poszt mögött nyílik a tér — elzárást kell rá
+    vinni, és a háta mögé befutóval 2 az 1-et játszani. Saját
+    csapatra: a kilépés mögötti biztosítás az edzés-téma.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"frames" (mért
+    kocka), "roles": {poszt: kocka}, "depth_m": {poszt:
+    távolság-összeg}, "main_role", "gap_m", "verdict"} — az ítélet
+    None, ha ADR_MIN_ROLES-nál kevesebb poszton van ADR_MIN_FRAMES
+    kocka, vagy nincs ADR_GAP_M-es kiugrás.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    adv = advanced_defender(match, config)
+
+    out: dict = {side: {"frames": 0, "roles": {}, "depth_m": {},
+                        "main_role": None, "gap_m": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in adv[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["frames"])
+            rec["depth_m"][poszt] = round(
+                rec["depth_m"].get(poszt, 0.0)
+                + row["avg_depth_m"] * row["frames"], 1)
+            rec["frames"] += row["frames"]
+
+        merhetok = {p: n for p, n in rec["roles"].items()
+                    if n >= ADR_MIN_FRAMES}
+        if len(merhetok) < ADR_MIN_ROLES:
+            continue
+        atlagok = {p: rec["depth_m"][p] / rec["roles"][p]
+                   for p in merhetok}
+        poszt = max(atlagok, key=lambda p: atlagok[p])
+        tarsak_kocka = sum(rec["roles"][p] for p in merhetok
+                           if p != poszt)
+        tarsak_tav = sum(rec["depth_m"][p] for p in merhetok
+                         if p != poszt)
+        base = tarsak_tav / tarsak_kocka
+        gap = round(atlagok[poszt] - base, 2)
+        rec["gap_m"] = gap
+        if gap >= ADR_GAP_M:
+            rec["main_role"] = poszt
+            rec["verdict"] = (
+                f"a faluk a(z) {poszt} posztnál lép ki (a társaknál "
+                f"{gap:.1f} m-rel előrébb áll) — elzárást rá, és a "
+                "háta mögé befutóval 2 az 1-et: a kilépő mögött "
+                "nyílik a tér")
+    return out

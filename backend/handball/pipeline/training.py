@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 337) Kilépő-poszt: ha a falunk mindig ugyanannál a posztnál
+    # lép ki, a mögötte nyíló teret a felkészült ellenfél bejátssza.
+    try:
+        from .defense import advanced_defender_roles
+        adr337 = advanced_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec337 = adr337[side]
+            if rec337.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Kilépő mögötti tér",
+                f"a falunk a(z) {rec337['main_role']} posztnál lép "
+                f"ki (a társaknál {rec337['gap_m']:.1f} m-rel "
+                "előrébb) — a kilépőnk mögötti teret a felkészült "
+                "ellenfél elzárással és befutóval bünteti",
+                "kilépés mögötti biztosítás: a kilépő melletti két "
+                "védő zárás-gyakorlata (csúszás a beálló elé), "
+                "elzárás-lekapcsolás a kilépőnek, és 2 az 1 elleni "
+                "helyzetek védése kisjátékban",
+                )
+    except Exception:
+        pass
+
     # 336) Ziccerhagyó-poszt: ha a ziccereinket mindig ugyanaz a
     # posztunk hagyja ki, a helyzeteink egy része kárba vész.
     try:
