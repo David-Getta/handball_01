@@ -916,6 +916,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Pazarló-poszt: melyik posztjuk lövi mellé a lövéseit.
+    try:
+        from .xg import wasteful_shooter_roles
+        wsr = wasteful_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_wsr = wsr[side]
+            if rec_wsr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} pontatlansága egy posztra "
+                     f"sűrűsödik: a kaput elkerülő lövéseik "
+                     f"{rec_wsr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_wsr['main_role']} posztról jön "
+                     f"({rec_wsr['off_target']} mellé/blokkolt "
+                     "lövésből) — az ő lövését rá lehet engedni.")
+    except Exception:
+        pass
     # Felzárkózás-poszt: melyik posztjuk hozza őket vissza.
     try:
         from .momentum import comeback_carrier_roles

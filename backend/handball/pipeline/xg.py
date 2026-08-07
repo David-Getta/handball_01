@@ -1028,3 +1028,69 @@ def defense_by_score(match: Match,
             elif diff <= DBS_TIGHT_XG:
                 buckets["verdict"] = "előnyben is feszes a faluk"
     return out
+
+
+# Pazarló-poszt: ennyi poszthoz kötött, kaput elkerülő lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a pontatlan
+# lövéseik egy posztra sűrűsödnek.
+WSR_MIN_OFF = 3
+WSR_SHARE_PCT = 60.0
+
+
+def wasteful_shooter_roles(match: Match,
+                           config: Optional[XGConfig] = None) -> dict:
+    """Pazarló-poszt: MELYIK POSZTJUK lövi mellé a lövéseit.
+
+    A pontatlan lövők rétege (wasteful_shooters) az embert nevezi
+    meg — ez a posztot: a kaput elkerülő (mellé/blokkolt) lövéseket
+    a lövő posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a védekezés-takarékosság terve: amelyik posztjuk
+    rendre mellé lő, arra rá lehet engedni a lövést — ott a kilépés
+    és a belemenés fölösleges kockázat, a mellé lövés utáni kidobás
+    pedig azonnali indítás nektek. Saját csapatra: célzás-gyakorlat
+    a posztnak, vagy a befejezés átosztása.
+
+    Visszatérés csapatonként: {"off_target" (poszthoz kötött, kaput
+    elkerülő lövés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    WSR_MIN_OFF, vagy egyik poszt sem éri el a WSR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    roles = estimate_positions(match, TacticsConfig())
+    ws = wasteful_shooters(match, config)
+
+    out: dict = {side: {"off_target": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ws[side]["players"]:
+            if not row["off_target"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["off_target"])
+            rec["off_target"] += row["off_target"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["off_target"] >= WSR_MIN_OFF:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["off_target"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= WSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kaput elkerülő lövéseik {share:.0f}%-a a(z) "
+                    f"{poszt} posztról jön ({rec['off_target']} mellé/"
+                    "blokkolt lövésből) — az ő lövését rá lehet "
+                    "engedni: kilépés helyett zárt sáv, a mellé lövés "
+                    "utáni kidobás azonnali indítás")
+    return out

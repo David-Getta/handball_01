@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Pazarló-poszt: melyik posztjuk lövi mellé a lövéseit.** A
+  pontatlan lövők rétege az embert nevezi meg — az új réteg a
+  posztot: a kaput elkerülő (mellé/blokkolt) lövéseket a lövő
+  posztjához írja. Edzőileg a védekezés-takarékosság terve: amelyik
+  posztjuk rendre mellé lő, arra rá lehet engedni a lövést — ott a
+  kilépés fölösleges kockázat, a mellé lövés utáni kidobás pedig
+  azonnali indítás. Legalább 3 kaput elkerülő lövés és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`wasteful_shooter_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 294. meccsterv-szabály), edzés-fókusz
+  (315. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Felzárkózás-poszt: melyik posztjuk hozza őket vissza hátrányból.**
   A felzárkózás-húzó rétege az embert nevezi meg — az új réteg a
   posztot: a hátrányban lőtt gólok és gólpasszok részvételeit a

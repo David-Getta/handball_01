@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 315) Pazarló-poszt: ha a mellé lövéseink egy posztra sűrűsödnek,
+    # az ellenfél ráengedi a lövést, és a kidobásból minket kontráz.
+    try:
+        from .xg import WSR_SHARE_PCT, wasteful_shooter_roles
+        wsr315 = wasteful_shooter_roles(match)
+        for side in ("home", "away"):
+            rec315 = wsr315[side]
+            if rec315.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra sűrűsödő pontatlanság",
+                f"a kaput elkerülő lövéseink {rec315['share_pct']:.0f}"
+                f"%-a a(z) {rec315['main_role']} posztról jön "
+                f"({rec315['off_target']} mellé/blokkolt lövésből; "
+                f"{WSR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél ráengedi a lövést, és a kidobásból kontráz",
+                "célzás-blokk a posztnak: kapura lövés fáradtan "
+                "(kör-edzés után), sarok-célzás kapussal, és "
+                "lövés-szelekció videóról — mellé lövés helyett "
+                "inkább újraszervezés vagy bejátszás",
+                )
+    except Exception:
+        pass
+
     # 314) Felzárkózás-poszt: ha hátrányból mindig ugyanaz a posztunk
     # ment minket, egy jó fogással beragasztható a hátrányunk.
     try:

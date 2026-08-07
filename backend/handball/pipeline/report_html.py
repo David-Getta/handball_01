@@ -1861,6 +1861,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             shorthanded_shooter_roles, suspended_roles)
         from .momentum import (clutch_scorer_roles,
                                comeback_carrier_roles)
+        from .xg import wasteful_shooter_roles
         from .stats import iron_man_roles
         from .stoppages import timeout_finisher
 
@@ -1895,7 +1896,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Emberelőny-poszt", powerplay_shooter_roles),
             ("Emberhátrány-poszt", shorthanded_shooter_roles),
             ("Hajrá-poszt", clutch_scorer_roles),
-            ("Felzárkózás-poszt", comeback_carrier_roles)))
+            ("Felzárkózás-poszt", comeback_carrier_roles),
+            ("Pazarló-poszt", wasteful_shooter_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"

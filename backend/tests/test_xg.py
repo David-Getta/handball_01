@@ -1042,3 +1042,66 @@ def test_finisher_rotation_flags_good_rotation_and_few_shots():
     frt2 = finisher_rotation(Match(meta, frames2))
     assert frt2["home"]["repeat_pct"] is None
     assert frt2["home"]["verdict"] is None
+
+
+# ---- Pazarló-poszt (melyik posztjuk lövi mellé) ----------------------------
+
+
+def _wsr_match(shooters, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + mellé lövések a megadott
+    hazai lövőktől — a mellé lövés a kapufa mellett (y=5) hagyja el
+    a pályát."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in shooters:
+        sx, sy = spos[tid]
+        for _ in range(3):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # mellé: y=5 mentén ki a pályáról
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 1.0 * (i + 1),
+                                                40.4),
+                                          y=5.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_wasteful_shooter_roles_names_the_wasteful_post():
+    """Négy mellé lövésből három a beállótól → a poszt pazarló."""
+    from handball.pipeline.xg import (WSR_MIN_OFF,
+                                      wasteful_shooter_roles)
+
+    rec = wasteful_shooter_roles(_wsr_match([7, 7, 7, 9]))["home"]
+    assert rec["off_target"] >= WSR_MIN_OFF, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "rá lehet engedni" in rec["verdict"], rec
+
+
+def test_wasteful_shooter_roles_silent_with_few_misses():
+    """Néhány mellé lövésből nincs ítélet."""
+    from handball.pipeline.xg import wasteful_shooter_roles
+
+    rec = wasteful_shooter_roles(_wsr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
