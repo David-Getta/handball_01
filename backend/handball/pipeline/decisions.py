@@ -802,3 +802,68 @@ def hold_time_roles(match: Match,
                     f"({rec['seconds']:.0f} mp-ből) — a kettőzést rá "
                     "kell időzíteni, nála lassul a támadásuk")
     return out
+
+
+# Pressz-poszt: ennyi poszthoz kötött nyomott eladás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy szorításban
+# egy posztjuk ejti a labdát.
+PSR_MIN_TO = 3
+PSR_SHARE_PCT = 60.0
+
+
+def press_sensitive_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Pressz-poszt: MELYIK POSZTJUK ejti a labdát szorításban.
+
+    A pressz-érzékeny játékosok rétege (pressure_sensitive_players)
+    az embert nevezi meg — ez a posztot: a nyomott (testközeli védő
+    melletti) eladásokat a labdavesztő posztjához írja. Így a minta
+    akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kettőzés iránya: amelyik posztjuk szorításban
+    rendre eladja a labdát, oda a kettőzés nem kockázat, hanem
+    labdaszerzés. Saját csapatra: annak a posztnak a nyomás alatti
+    kiadás a gyakorlandó.
+
+    Visszatérés csapatonként: {"press_to" (poszthoz kötött nyomott
+    eladás), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a PSR_MIN_TO, vagy
+    egyik poszt sem éri el a PSR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    psp = pressure_sensitive_players(match, config)
+
+    out: dict = {side: {"press_to": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in psp[side]["players"]:
+            if not row["press_to"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["press_to"])
+            rec["press_to"] += row["press_to"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["press_to"] >= PSR_MIN_TO:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["press_to"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"szorításban a(z) {poszt} posztjuk ejti a "
+                    f"labdát ({share:.0f}%, {rec['press_to']} nyomott"
+                    " eladásból) — a kettőzést rá kell küldeni: az ő "
+                    "szorítása nem kockázat, hanem labdaszerzés")
+    return out

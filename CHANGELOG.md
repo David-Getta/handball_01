@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Pressz-poszt: melyik posztjuk ejti a labdát szorításban.** A
+  pressz-érzékeny játékosok rétege az embert nevezi meg — az új
+  réteg a posztot: a nyomott (testközeli védő melletti) eladásokat a
+  labdavesztő posztjához írja. Edzőileg a kettőzés iránya: amelyik
+  posztjuk szorításban rendre eladja a labdát, oda a kettőzés nem
+  kockázat, hanem labdaszerzés; saját oldalon a nyomás alatti kiadás
+  a gyakorlandó. Legalább 3 nyomott eladás és 60% posztrészarány
+  alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`press_sensitive_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 297. meccsterv-szabály), edzés-fókusz (318. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Labdatartó-poszt: melyik posztjuknál áll meg a labda.** A
   labdatartás-idő rétege az embert nevezi meg — az új réteg a
   posztot: minden mért labdás szakasz idejét a birtokos posztjához

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 318) Pressz-poszt: ha szorításban mindig ugyanaz a posztunk
+    # veszíti a labdát, az ellenfél kettőzése oda fog érkezni.
+    try:
+        from .decisions import PSR_SHARE_PCT, press_sensitive_roles
+        psr318 = press_sensitive_roles(match, config)
+        for side in ("home", "away"):
+            rec318 = psr318[side]
+            if rec318.get("verdict") is None:
+                continue
+            add(side, "támadás", "Szorításban ejtett labda egy poszton",
+                f"a nyomott eladásaink {rec318['share_pct']:.0f}%-a "
+                f"a(z) {rec318['main_role']} posztnál történik "
+                f"({rec318['press_to']} nyomott eladásból; "
+                f"{PSR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél kettőzése pontosan oda fog érkezni",
+                "nyomás alatti kiadás a posztnak: 1+1 elleni "
+                "labdatartás szorításban, kettőzés elleni leadás "
+                "(bejátszás, visszajátszás) és test-test elleni "
+                "labdavédelem falra dolgozva",
+                )
+    except Exception:
+        pass
+
     # 317) Labdatartó-poszt: ha a labda egy posztunknál ragad, oda
     # időzíti az ellenfél a kettőzést, és ott lassul a támadásunk.
     try:

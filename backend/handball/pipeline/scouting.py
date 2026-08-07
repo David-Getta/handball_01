@@ -847,6 +847,9 @@ class ScoutingReport:
     # Labdatartó-poszt: a mért labdatartás másodpercei posztonként.
     # Másodperc-összeg, pontosan összegződik.
     htr_seconds_by_role: dict = field(default_factory=dict)
+    # Pressz-poszt: a nyomott (testközeli védő melletti) eladások
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    psr_to_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3135,6 +3138,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"labdatartásuk {_htr_pct:.0f}%-a nála telik "
                 f"({_htr_n:.0f} mp-ből) — a kettőzést rá kell "
                 "időzíteni, nála van idő odaérni.")
+
+    # Pressz-poszt: hova kell küldeni a kettőzést.
+    _psr_n = sum(rep.psr_to_by_role.values())
+    if _psr_n >= 3:
+        _psr_p, _psr_c = max(rep.psr_to_by_role.items(),
+                             key=lambda kv: kv[1])
+        _psr_pct = 100.0 * _psr_c / _psr_n
+        if _psr_pct >= 60.0:
+            keys.append(
+                f"Szorításban a(z) {_psr_p} posztjuk ejti a labdát "
+                f"({_psr_pct:.0f}%, {_psr_n} nyomott eladásból) — a "
+                "kettőzés oda nem kockázat, hanem labdaszerzés.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -7922,6 +7937,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .decisions import hold_time_roles as _htr
         htrrec = _htr(match, config)[team.value]
         rep.htr_seconds_by_role = dict(htrrec["roles"])
+        from .decisions import press_sensitive_roles as _psr
+        psrrec = _psr(match, config)[team.value]
+        rep.psr_to_by_role = dict(psrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10502,6 +10520,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 297) Az ő pressz-posztjuk × a ti kilépő faltok: ha amúgy is
+    # szorosan védekeztek, a nyomást az ő gyenge posztjukra irányítva
+    # az eladásaik labdaszerzéssé válnak.
+    _psr297_n = sum(opp.psr_to_by_role.values())
+    if (_psr297_n >= 3 and opp.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _psr297_p, _psr297_c = max(opp.psr_to_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _psr297_pct = 100.0 * _psr297_c / _psr297_n
+        if _psr297_pct >= 60.0:
+            plan.append(
+                f"Szorításban a(z) {_psr297_p} posztjuk ejti a "
+                f"labdát ({_psr297_pct:.0f}%, {_psr297_n} nyomott "
+                "eladás), ti pedig amúgy is szorosan, kilépve "
+                f"védekeztek (átlag {own.defensive_pressure_m:.1f} "
+                "m) — a kilépéseket és a kettőzést az ő posztjára "
+                "irányítsátok: ott a pressz labdaszerzést hoz.")
 
     # 296) Az ő labdatartó-posztjuk × a ti labdaszerzésetek: ahol a
     # labda megáll, oda időzített nyomással el is lehet venni.
@@ -15540,6 +15576,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.bcr_chances_by_role for r in reports),
         htr_seconds_by_role=_merge_count_dicts(
             r.htr_seconds_by_role for r in reports),
+        psr_to_by_role=_merge_count_dicts(
+            r.psr_to_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

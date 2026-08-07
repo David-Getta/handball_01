@@ -527,3 +527,67 @@ def test_hold_time_roles_silent_with_little_holding():
 
     rec = hold_time_roles(_htr_match([(7, 100), (9, 50)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Pressz-poszt (melyik posztjuk ejti a labdát szorításban) --------------
+
+
+def _psr_match(losers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + nyomott eladások: a
+    `losers` elemei a labdát szorításban elvesztő hazai játékosok."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(extra=()):
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + list(extra))
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for pid in losers:
+        for _ in range(10):          # gazdátlan labda: szakasz-határ
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        # A vizsgált ember a labdával, rászorító védővel (kb. 1 m) —
+        # a poszt-mintát nem zavarja: a kaputól 16+ m-re történik.
+        lx, ly = (24.0, 10.0) if pid == 7 else (24.0, 3.0)
+        deff = _pl(30, Team.AWAY, lx + 0.9, ly)
+        holder_cast = [_pl(pid, Team.HOME, lx, ly), deff] + [
+            _pl(tid, Team.HOME, *xy)
+            for tid, xy in spos.items() if tid != pid]
+        for _ in range(6):
+            frames.append(Frame(t=t, players=holder_cast,
+                                ball=Ball(x=lx, y=ly, confidence=1.0)))
+            t += 1
+        for _ in range(6):           # a labda a védőhöz kerül: eladás
+            frames.append(Frame(t=t, players=holder_cast,
+                                ball=Ball(x=lx + 0.9, y=ly,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="psr", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_press_sensitive_roles_names_the_pressed_post():
+    """Négy nyomott eladásból három a beállóé → oda megy a kettőzés."""
+    from handball.pipeline.decisions import (PSR_MIN_TO,
+                                             press_sensitive_roles)
+
+    rec = press_sensitive_roles(_psr_match([7, 7, 7, 9]))["home"]
+    assert rec["press_to"] >= PSR_MIN_TO, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "labdaszerzés" in rec["verdict"], rec
+
+
+def test_press_sensitive_roles_silent_with_few_losses():
+    """Néhány nyomott eladásból nincs ítélet."""
+    from handball.pipeline.decisions import press_sensitive_roles
+
+    rec = press_sensitive_roles(_psr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

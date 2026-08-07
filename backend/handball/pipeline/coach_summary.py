@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Pressz-poszt: melyik posztjuk ejti a labdát szorításban.
+    try:
+        from .decisions import press_sensitive_roles
+        psr = press_sensitive_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_psr = psr[side]
+            if rec_psr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szorításban a(z) "
+                     f"{rec_psr['main_role']} posztnál veszíti a "
+                     f"labdát ({rec_psr['share_pct']:.0f}%, "
+                     f"{rec_psr['press_to']} nyomott eladásból) — a "
+                     "kettőzést oda kell küldeni.")
+    except Exception:
+        pass
     # Labdatartó-poszt: melyik posztjuknál áll meg a labda.
     try:
         from .decisions import hold_time_roles
