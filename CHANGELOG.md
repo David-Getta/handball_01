@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kulcs-poszt: hány réteg mutat ugyanarra a posztra.** A
+  poszt-lencse rétegek (kire fut ki a játékuk, hol sebezhető a
+  védekezésük) egyenként egy-egy mintát mondanak ki — az új réteg
+  összeszámolja őket: ha a megszólaló ítéletek zöme (3+ réteg,
+  holtverseny nélkül) ugyanazt a posztot nevezi meg, az a csapat
+  KULCS-POSZTJA. Edzőileg ez a meccsterv első lapja: az ellenfélnél
+  egyetlen ember kezelése (fogás, zárás, kettőzés) több mintát
+  kapcsol ki egyszerre; saját csapatnál az egy emberre futó játék
+  kiszámíthatóság — tehermentesítés kell. Felületek: `/analyze` és
+  meccs-csomag (`key_post`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (283: a kulcs-posztjuk ismert → az ő
+  kezelése az első pont), edzés-fókusz (304: tehermentesítő hét
+  második felelősökkel), teendő-rangsor, a meccs-jelentés önálló
+  Kulcs-poszt szekciója a lencse-táblák előtt, kliens-csempe.
+
 - **Elzáró-poszt: melyik posztjuk áll elzárásba.** Az elzárók
   rétege az embert nevezi meg — az új réteg a posztot: az
   elzárásokat az elzáró játékos posztjához írja. Edzőileg ez a

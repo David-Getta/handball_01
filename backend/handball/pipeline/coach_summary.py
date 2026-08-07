@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kulcs-poszt: hány réteg mutat ugyanarra a posztra.
+    try:
+        from .priorities import key_post
+        kp = key_post(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kp = kp[side]
+            if rec_kp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kulcs-posztja a(z) "
+                     f"{rec_kp['top']}: "
+                     f"{rec_kp['posts'][rec_kp['top']]} réteg ítélete "
+                     "fut ki rá — az ő kezelése a meccsterv első "
+                     "lapja.")
+    except Exception:
+        pass
     # Elzáró-poszt: melyik posztjuk áll elzárásba.
     try:
         from .attack_types import screen_setter_roles

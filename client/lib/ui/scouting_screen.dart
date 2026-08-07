@@ -2115,6 +2115,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Kulcs-poszt: hány poszt-réteg ítélete fut ki ugyanarra a posztra
+  // (3+ egyező réteg, holtverseny nélkül — a backenddel azonos
+  // küszöb: KP_MIN_LAYERS).
+  String? _keyPost(Map<String, dynamic> r) {
+    final byPost =
+        (r["kp_layers_by_post"] as Map?)?.cast<String, dynamic>();
+    if (byPost == null || byPost.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var tie = false;
+    byPost.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+        tie = false;
+      } else if (n == topN) {
+        tie = true;
+      }
+    });
+    if (top == null || topN < 3 || tie) return null;
+    return "a kulcs-posztjuk a(z) $top: $topN poszt-réteg ítélete "
+        "fut ki rá · az ő kezelése a meccsterv első lapja";
+  }
+
   // Elzáró-poszt: melyik posztjuk áll elzárásba (3+ poszthoz kötött
   // elzárás, 60% részarány — a backenddel azonos küszöbök:
   // SCR2_MIN_SCREENS, SCR2_SHARE_PCT).
@@ -7430,6 +7455,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_keyPost(r) != null)
+        ["Kulcs-poszt", _keyPost(r)!],
       if (_screenSetterRole(r) != null)
         ["Elzáró-poszt", _screenSetterRole(r)!],
       if (_beatenRole(r) != null)

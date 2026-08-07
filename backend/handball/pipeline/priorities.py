@@ -129,6 +129,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "beaten_defender_roles"),
         ("felkészülés", "Elzáró-poszt", "attack_types",
          "screen_setter_roles"),
+        ("felkészülés", "Kulcs-poszt", "priorities", "key_post"),
     ]
 
 
@@ -191,4 +192,89 @@ def priority_findings(match: Match, config=None) -> dict:
             "total": len(items),
             "families": families,
         }
+    return out
+
+
+# Kulcs-poszt: ennyi rétegnek kell ugyanarra a posztra mutatnia, hogy
+# a posztot a meccsterv első lapjának mondjuk ki.
+KP_MIN_LAYERS = 3
+
+# A poszt-ítéletes rétegek: mindegyik csapatonkénti dictet ad
+# "main_role" és "verdict" kulccsal ("egy réteg, sok felület" minta).
+KP_LAYERS: tuple = (
+    ("Figura-befejező", "setplays", "setplay_finishers"),
+    ("Időkérés-befejező", "stoppages", "timeout_finisher"),
+    ("Kontra-poszt", "roles", "role_fast_breaks"),
+    ("Gólpassz-poszt", "roles", "role_assist_sources"),
+    ("Lepattanó-poszt", "attack_types", "second_chance_roles"),
+    ("Elzáró-poszt", "attack_types", "screen_setter_roles"),
+    ("7a6-befejező", "goalkeeper", "seven_six_finisher_roles"),
+    ("Labdaszerző-poszt", "defense", "role_steal_sources"),
+    ("Blokk-poszt", "defense", "role_block_sources"),
+    ("Visszafutás-poszt", "defense", "slow_retreat_roles"),
+    ("Átvert-poszt", "defense", "beaten_defender_roles"),
+    ("Hetes-okozó poszt", "rules", "seven_conceder_roles"),
+    ("Kiülő-poszt", "rules", "suspended_roles"),
+)
+
+
+def key_post(match: Match, config=None) -> dict:
+    """Kulcs-poszt: HÁNY RÉTEG mutat ugyanarra a posztra.
+
+    A poszt-lencse rétegek (kire fut ki a játékuk, hol sebezhető a
+    védekezésük) egyenként egy-egy mintát mondanak ki — ez a réteg
+    összeszámolja őket: ha a megszólaló ítéletek zöme ugyanazt a
+    posztot nevezi meg, az a csapat KULCS-POSZTJA.
+
+    Edzőileg ez a meccsterv első lapja. Az ellenfélnél: ha náluk a
+    beállóra mutat a lepattanó-, a blokk- és az elzáró-réteg is, nem
+    három külön feladat van, hanem EGY — az ő kezelése (fogás, zárás,
+    kettőzés) többet old meg, mint bármely részszabály. Saját
+    csapatnál: ha a mintáink egy emberre futnak ki, a játékunk
+    kiszámítható — tehermentesítés és variáció kell.
+
+    Visszatérés csapatonként: {"layers" (megszólaló poszt-réteg),
+    "posts": {poszt: réteg-darab}, "named": [{"layer", "poszt"}],
+    "top", "verdict"} — a top/verdict None, ha nincs KP_MIN_LAYERS
+    egyező réteg, vagy az élen holtverseny áll.
+    """
+    import importlib
+
+    from .primitive_cache import primitive_cache
+
+    out: dict = {side: {"layers": 0, "posts": {}, "named": [],
+                        "top": None, "verdict": None}
+                 for side in ("home", "away")}
+    with primitive_cache(match):
+        for label, mod_name, fn_name in KP_LAYERS:
+            try:
+                mod = importlib.import_module(f".{mod_name}", __package__)
+                rec_all = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side in ("home", "away"):
+                rec = rec_all.get(side) or {}
+                poszt = rec.get("main_role")
+                if rec.get("verdict") is None or poszt is None:
+                    continue
+                o = out[side]
+                o["layers"] += 1
+                o["posts"][poszt] = o["posts"].get(poszt, 0) + 1
+                o["named"].append({"layer": label, "poszt": poszt})
+    for o in out.values():
+        o["posts"] = dict(sorted(o["posts"].items(),
+                                 key=lambda kv: -kv[1]))
+        if not o["posts"]:
+            continue
+        vals = list(o["posts"].values())
+        top_n = vals[0]
+        tie = len(vals) > 1 and vals[1] == top_n
+        if top_n >= KP_MIN_LAYERS and not tie:
+            poszt = next(iter(o["posts"]))
+            o["top"] = poszt
+            o["verdict"] = (
+                f"a kulcs-posztjuk a(z) {poszt}: {top_n} réteg "
+                f"ítélete fut ki rá (a {o['layers']} megszólalóból) — "
+                "az ő kezelése nem részfeladat, hanem a meccsterv "
+                "első lapja")
     return out

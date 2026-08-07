@@ -109,5 +109,114 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   "role_block_sources", "seven_six_finisher_roles",
                   "seven_conceder_roles", "suspended_roles",
                   "slow_retreat_roles", "beaten_defender_roles",
-                  "screen_setter_roles"):
+                  "screen_setter_roles", "key_post"):
         assert layer in names, f"{layer} nincs a rangsorban"
+
+
+def _pl_kp(track_id, team, x, y, role=None):
+    from handball.models.tracking import PositionSource
+    return PlayerPosition(track_id=track_id, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED,
+                          confidence=1.0, role=role)
+
+
+def _kp_match():
+    """Három poszt-réteg ugyanarra fut ki: a vendég 21-es (beálló)
+    szedi a labdákat, blokkol ÉS mögötte esnek a kapott gólok — a
+    kulcs-poszt tehát a beálló. A 23-as (szélső) mindenből egyet kap,
+    hogy legyen szórás is."""
+    pos = {21: (6.0, 10.0), 23: (6.0, 1.0)}
+    frames = []
+    t = 0
+
+    def away_cast():
+        # Mindkét oldalon jelölt kapus áll a kapuban, hogy a
+        # kapus-felismerés ne a mezőnyvédőt jelölje meg.
+        return [_pl_kp(21, Team.AWAY, *pos[21]),
+                _pl_kp(23, Team.AWAY, *pos[23]),
+                _pl_kp(29, Team.AWAY, 39.5, 10.0, role="kapus"),
+                _pl_kp(9, Team.HOME, 0.5, 10.0, role="kapus")]
+
+    for _ in range(150):             # vendég-birtoklás: poszt-minta
+        frames.append(Frame(t=t, players=[
+            _pl_kp(1, Team.HOME, 30.0, 10.0)] + away_cast(),
+            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+
+    # Labdaszerzések: hazai birtoklás → a megadott vendég szerez.
+    for tid in [21] * 5 + [23]:
+        for _ in range(15):
+            frames.append(Frame(t=t, players=[
+                _pl_kp(1, Team.HOME, 25.0, 10.0)] + away_cast(),
+                ball=Ball(x=25.2, y=10.0, confidence=1.0)))
+            t += 1
+        sx, sy = pos[tid]
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[
+                _pl_kp(1, Team.HOME, 25.0, 10.0)] + away_cast(),
+                ball=Ball(x=sx + 0.2, y=sy, confidence=1.0)))
+            t += 1
+
+    # Blokkok: a hazai lövés a megadott vendég védőn fordul vissza.
+    for tid in [21] * 3 + [23]:
+        other = 23 if tid == 21 else 21
+        for x in (29.0, 30.2, 31.4, 32.4, 31.0, 29.5, 28.0):
+            frames.append(Frame(t=t, players=[
+                _pl_kp(1, Team.HOME, 28.0, 10.0),
+                _pl_kp(tid, Team.AWAY, 32.5, 10.0),
+                _pl_kp(other, Team.AWAY, 20.0, 5.0),
+                _pl_kp(29, Team.AWAY, 39.5, 10.0, role="kapus"),
+                _pl_kp(9, Team.HOME, 0.5, 10.0, role="kapus")],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(15):
+            frames.append(Frame(t=t, players=[
+                _pl_kp(1, Team.HOME, 28.0, 10.0)] ,
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    # Kapott gólok: a lövő mellett a megadott vendég védő áll.
+    for tid in [21] * 3 + [23]:
+        other = 23 if tid == 21 else 21
+
+        def goal_cast():
+            return [_pl_kp(1, Team.HOME, 33.0, 10.0),
+                    _pl_kp(tid, Team.AWAY, 34.0, 10.0),
+                    _pl_kp(other, Team.AWAY, 22.0, 16.0),
+                    _pl_kp(9, Team.HOME, 0.5, 10.0, role="kapus")]
+
+        for _ in range(10):
+            frames.append(Frame(t=t, players=goal_cast(),
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=goal_cast(),
+                                ball=Ball(x=min(33.0 + (i + 1), 40.5),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_key_post_names_the_convergent_post():
+    """Ha három poszt-réteg is ugyanarra a posztra fut ki, az a
+    kulcs-poszt — a meccsterv első lapja."""
+    from handball.pipeline.priorities import KP_MIN_LAYERS, key_post
+
+    rec = key_post(_kp_match())["away"]
+    assert rec["posts"].get("beálló", 0) >= KP_MIN_LAYERS, rec
+    assert rec["top"] == "beálló", rec
+    assert rec["verdict"] and "meccsterv első lapja" in rec["verdict"], rec
+
+
+def test_key_post_silent_without_convergence():
+    """Kevés vagy széttartó poszt-ítéletből nincs kulcs-poszt."""
+    from handball.pipeline.priorities import key_post
+
+    rec = key_post(_two_family_match())["away"]
+    assert rec["top"] is None and rec["verdict"] is None, rec

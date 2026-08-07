@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **330 réteg**, modulonként csoportosítva; a
+Összesen **331 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (71)
@@ -269,10 +269,11 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `playmaker` | Mindkét csapat irányító-függése. |
 
-## priorities (1)
+## priorities (2)
 
 | Réteg | Mit mér |
 |---|---|
+| `key_post` | Kulcs-poszt: HÁNY RÉTEG mutat ugyanarra a posztra. |
 | `priority_findings` | Teendő-rangsor: a megszólaló ítéletek fontossági sorrendben. |
 
 ## quality (1)

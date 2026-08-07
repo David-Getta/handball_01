@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 304) Kulcs-poszt: ha az elemzés rétegei ugyanarra a posztunkra
+    # mutatnak, a játékunk egy emberen áll — az ellenfél is látja.
+    try:
+        from .priorities import KP_MIN_LAYERS, key_post
+        kp304 = key_post(match, config)
+        for side in ("home", "away"):
+            rec304 = kp304[side]
+            if rec304.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó játék",
+                f"{rec304['posts'][rec304['top']]} poszt-réteg "
+                f"ítélete fut ki a(z) {rec304['top']} posztunkra "
+                f"({KP_MIN_LAYERS} egyező réteg fölött már minta) — "
+                "az ellenfél egyetlen ember kezelésével több "
+                "mintánkat kapcsolja ki egyszerre",
+                "tehermentesítő hét: a kulcs-poszt minden szerepére "
+                "(befejezés, lepattanó, elzárás) kijelölt második "
+                "felelős gyakorol — a cél, hogy a következő meccsen "
+                "egyik minta se egy emberen álljon")
+    except Exception:
+        pass
+
     # 303) Elzáró-poszt: ha az elzárás-játékunk egy emberre épül, a
     # kivétele után a lövőink fedve maradnak.
     try:

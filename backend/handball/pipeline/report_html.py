@@ -1808,6 +1808,24 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
 
+    # Kulcs-poszt: ha több poszt-réteg ugyanarra mutat, ez a
+    # meccsterv első lapja — a lencse-táblák elé kerül.
+    key_post_html = ""
+    try:
+        from .priorities import key_post as _kp_fn
+        kp_rec = _kp_fn(match)
+        kp_lines = []
+        for side, name in (("home", home), ("away", away)):
+            v = (kp_rec.get(side) or {}).get("verdict")
+            if v:
+                kp_lines.append(f"<li><b>{escape(name)}</b>: "
+                                f"{escape(v)}</li>")
+        if kp_lines:
+            key_post_html = ("<h2>Kulcs-poszt</h2><ul>"
+                             + "".join(kp_lines) + "</ul>")
+    except Exception:
+        pass
+
     # Befejező-lencse: a "kire fut ki a játékuk" ítéletek egy helyen —
     # kire lépj ki, időkérés után kit fogj, kontránál kit vegyél fel
     # először, hetesnél merre vetődj. A védő-oldali párja a Védő-lencse:
@@ -1893,8 +1911,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             "<ul>" + lis_km + "</ul>")
     except Exception:
         pass
-    rules_html = (moments_html + setplays_html + finishers_html
-                  + defense_lens_html + rules_html)
+    rules_html = (moments_html + setplays_html + key_post_html
+                  + finishers_html + defense_lens_html + rules_html)
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""

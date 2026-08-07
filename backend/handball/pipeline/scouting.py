@@ -803,6 +803,9 @@ class ScoutingReport:
     # Elzáró-poszt: az elzárások darabszáma posztonként. Darabszám,
     # meccsek közt pontosan összegződik.
     sc2_screens_by_role: dict = field(default_factory=dict)
+    # Kulcs-poszt: hány poszt-réteg ítélete futott ki az adott
+    # posztra. Réteg-darabszám, meccsek közt pontosan összegződik.
+    kp_layers_by_post: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3039,6 +3042,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Kulcs-poszt: kire fut ki az egész elemzés.
+    if rep.kp_layers_by_post:
+        _kp_items = sorted(rep.kp_layers_by_post.items(),
+                           key=lambda kv: -kv[1])
+        _kp_p, _kp_c = _kp_items[0]
+        _kp_tie = len(_kp_items) > 1 and _kp_items[1][1] == _kp_c
+        if _kp_c >= 3 and not _kp_tie:
+            keys.append(
+                f"A kulcs-posztjuk a(z) {_kp_p}: {_kp_c} poszt-réteg "
+                "ítélete fut ki rá — az ő kezelése (fogás, zárás, "
+                "kettőzés) nem részfeladat, hanem a meccsterv első "
+                "lapja.")
 
     # Elzáró-poszt: honnan érkezik a test, hol kell hangosan váltani.
     _sc2_n = sum(rep.sc2_screens_by_role.values())
@@ -7652,6 +7668,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import screen_setter_roles as _sc2
         sc2rec = _sc2(match, config)[team.value]
         rep.sc2_screens_by_role = dict(sc2rec["roles"])
+        from .priorities import key_post as _kp
+        kprec = _kp(match, config)[team.value]
+        rep.kp_layers_by_post = dict(kprec["posts"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10226,6 +10245,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 283) Az ő kulcs-posztjuk × a ti fegyelmezett tervkövetésetek: ha
+    # az elemzés rétegei ugyanarra a posztra mutatnak, a meccsterv nem
+    # sok részszabály, hanem EGY ember kezelése.
+    if opp.kp_layers_by_post:
+        _kp283 = sorted(opp.kp_layers_by_post.items(),
+                        key=lambda kv: -kv[1])
+        _kp283_p, _kp283_c = _kp283[0]
+        _kp283_tie = len(_kp283) > 1 and _kp283[1][1] == _kp283_c
+        if _kp283_c >= 3 and not _kp283_tie:
+            plan.append(
+                f"Az elemzés {_kp283_c} poszt-rétege ugyanarra mutat: "
+                f"a kulcs-posztjuk a(z) {_kp283_p} — a meccsterv első "
+                "lapja az ő kezelése (ki fogja, ki zár rá, mikor jön "
+                "a kettőzés), és csak utána jönnek a részszabályok: "
+                "ha őt kikapcsoljátok, több minta dől össze egyszerre.")
 
     # 282) Az ő elzáró-posztjuk × a ti elzárás-védekezésetek: ha az
     # elzárásaik kiszámíthatók, de a ti falatok eddig rosszul bírta az
@@ -14979,6 +15014,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.btr_beaten_by_role for r in reports),
         sc2_screens_by_role=_merge_count_dicts(
             r.sc2_screens_by_role for r in reports),
+        kp_layers_by_post=_merge_count_dicts(
+            r.kp_layers_by_post for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),
