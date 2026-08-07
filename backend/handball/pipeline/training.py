@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 316) Ziccer-poszt: ha a nagy helyzeteink egy posztnál alakulnak
+    # ki, a helyzet-teremtésünk egysíkú, és egy besegítéssel lezárható.
+    try:
+        from .xg import BCR_SHARE_PCT, big_chance_roles
+        bcr316 = big_chance_roles(match, config)
+        for side in ("home", "away"):
+            rec316 = bcr316[side]
+            if rec316.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egysíkú helyzet-teremtés",
+                f"a ziccereink {rec316['share_pct']:.0f}%-a a(z) "
+                f"{rec316['main_role']} posztnál alakul ki "
+                f"({rec316['chances']} nagy helyzetből; "
+                f"{BCR_SHARE_PCT:.0f}% fölött már minta) — egy jól "
+                "időzített besegítés az egész helyzet-teremtésünket "
+                "lezárja",
+                "helyzet-teremtő variációk más posztokra: szélső "
+                "befutások, második hullámos átlövés és hetes-"
+                "kiharcolás gyakorlása, hogy a ziccer ne csak egy "
+                "poszton születhessen",
+                )
+    except Exception:
+        pass
+
     # 315) Pazarló-poszt: ha a mellé lövéseink egy posztra sűrűsödnek,
     # az ellenfél ráengedi a lövést, és a kidobásból minket kontráz.
     try:

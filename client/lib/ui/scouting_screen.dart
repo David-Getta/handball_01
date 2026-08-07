@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Ziccer-poszt: melyik posztjuknál alakul ki a nagy helyzet (3+
+  // ziccer, 60% részarány — a backenddel azonos küszöbök:
+  // BCR_MIN_CHANCES, BCR_SHARE_PCT).
+  String? _bigChanceRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["bcr_chances_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a ziccereik ${pct.round()}%-a a(z) $top posztnál alakul "
+        "ki ($total nagy helyzet) · korábbi besegítés és szűkítés az "
+        "ő sávjában";
+  }
+
   // Pazarló-poszt: melyik posztjuk lövi mellé a lövéseit (3+ kaput
   // elkerülő lövés, 60% részarány — a backenddel azonos küszöbök:
   // WSR_MIN_OFF, WSR_SHARE_PCT).
@@ -7745,6 +7772,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_bigChanceRole(r) != null)
+        ["Ziccer-poszt", _bigChanceRole(r)!],
       if (_wastefulRole(r) != null)
         ["Pazarló-poszt", _wastefulRole(r)!],
       if (_comebackRole(r) != null)

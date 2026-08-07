@@ -1105,3 +1105,66 @@ def test_wasteful_shooter_roles_silent_with_few_misses():
 
     rec = wasteful_shooter_roles(_wsr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccer-poszt (melyik posztjuknál alakul ki a nagy helyzet) ------------
+
+
+def _bcr_match(shooters, fps=25.0):
+    """Poszt-minta (7: beálló a hatoson, 9: szélső) + lövések a
+    megadott hazai lövőktől — a beálló lövése a hatosról nagy
+    helyzet (xG >= BIG_CHANCE_XG), a szélsőé éles szögből nem az."""
+    spos = {7: (35.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=35.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in shooters:
+        sx, sy = spos[tid]
+        for _ in range(3):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # gól a +x kapura
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 0.8 * (i + 1),
+                                                40.0),
+                                          y=10.0 if tid == 7 else sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_big_chance_roles_names_the_chance_post():
+    """Három ziccer a beállónál → a nagy helyzeteik nála alakulnak."""
+    from handball.pipeline.xg import BCR_MIN_CHANCES, big_chance_roles
+
+    rec = big_chance_roles(_bcr_match([7, 7, 7, 9]))["home"]
+    assert rec["chances"] >= BCR_MIN_CHANCES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kialakulása előtt" in rec["verdict"], rec
+
+
+def test_big_chance_roles_silent_with_few_chances():
+    """Néhány ziccerből nincs ítélet."""
+    from handball.pipeline.xg import big_chance_roles
+
+    rec = big_chance_roles(_bcr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

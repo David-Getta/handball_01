@@ -1094,3 +1094,67 @@ def wasteful_shooter_roles(match: Match,
                     "engedni: kilépés helyett zárt sáv, a mellé lövés "
                     "utáni kidobás azonnali indítás")
     return out
+
+
+# Ziccer-poszt: ennyi poszthoz kötött nagy helyzet kell az ítélethez,
+# és ekkora részarány fölött mondjuk ki, hogy a ziccereik egy posztnál
+# alakulnak ki.
+BCR_MIN_CHANCES = 3
+BCR_SHARE_PCT = 60.0
+
+
+def big_chance_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Ziccer-poszt: MELYIK POSZTJUKNÁL alakul ki a nagy helyzet.
+
+    A ziccer-befejezők rétege (big_chance_finishers) az embert nevezi
+    meg — ez a posztot: a BIG_CHANCE_XG feletti helyzet-értékű
+    lövéseket a lövő posztjához írja. Így a minta akkor is látszik,
+    ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a megelőzés terve: ha a ziccereik rendre ugyanannál a
+    posztnál alakulnak ki, a helyzetet a kialakulása ELŐTT kell
+    megfogni — korábbi besegítés és szűkítés az ő sávjában, mert ami
+    ott már kialakult, az jó eséllyel gól. Saját csapatra: ha csak
+    egy posztunk jut ziccerbe, a helyzet-teremtésünk egysíkú.
+
+    Visszatérés csapatonként: {"chances" (poszthoz kötött nagy
+    helyzet), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a BCR_MIN_CHANCES,
+    vagy egyik poszt sem éri el a BCR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    roles = estimate_positions(match, config or TacticsConfig())
+    bcf = big_chance_finishers(match, config)
+
+    out: dict = {side: {"chances": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in bcf[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["chances"])
+            rec["chances"] += row["chances"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chances"] >= BCR_MIN_CHANCES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["chances"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BCR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a ziccereik {share:.0f}%-a a(z) {poszt} "
+                    f"posztnál alakul ki ({rec['chances']} nagy "
+                    "helyzetből) — a helyzetet a kialakulása előtt "
+                    "kell megfogni: korábbi besegítés és szűkítés "
+                    "az ő sávjában")
+    return out

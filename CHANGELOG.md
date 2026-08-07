@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Ziccer-poszt: melyik posztjuknál alakul ki a nagy helyzet.** A
+  ziccer-befejezők rétege az embert nevezi meg — az új réteg a
+  posztot: a BIG_CHANCE_XG feletti helyzet-értékű lövéseket a lövő
+  posztjához írja. Edzőileg a megelőzés terve: ha a ziccereik rendre
+  ugyanannál a posztnál alakulnak ki, a helyzetet a kialakulása
+  előtt kell megfogni — korábbi besegítés és szűkítés az ő sávjában.
+  Legalább 3 nagy helyzet és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`big_chance_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 295. meccsterv-
+  szabály), edzés-fókusz (316. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Pazarló-poszt: melyik posztjuk lövi mellé a lövéseit.** A
   pontatlan lövők rétege az embert nevezi meg — az új réteg a
   posztot: a kaput elkerülő (mellé/blokkolt) lövéseket a lövő
