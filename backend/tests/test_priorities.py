@@ -99,5 +99,9 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
 
     names = {fn for _, _, _, fn in _registry()}
     for layer in ("role_shot_distance", "role_shot_power",
-                  "role_shot_timing", "role_goal_placement"):
+                  "role_shot_timing", "role_goal_placement",
+                  # A befejező-lencse: kire lépj ki, melyik figurájuk
+                  # kire fut ki, és időkérés után kit fogj.
+                  "role_pressure_finish", "setplay_finishers",
+                  "timeout_finisher"):
         assert layer in names, f"{layer} nincs a rangsorban"

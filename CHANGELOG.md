@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A befejező-lencse eljut a teendő-rangsorba.** A három új
+  befejező-réteg (poszt-nyomás, figura-befejező, időkérés-befejező)
+  ítélete eddig csak a saját felületén látszott: a rangsor (a
+  háromszáz rétegből öt teendő) nem olvasta őket, így a legkonkrétabb
+  mondatok — "őt ki kell zárni", "a figura indulásakor csússz",
+  "időkérés után ő kapja az embert" — csak böngészéssel voltak
+  megtalálhatók. Most a "felkészülés" családban rangsorba kerülnek, és
+  az őr-teszt is számon kéri őket.
+
 - **Időkérés-befejező: az időkérés után kire játszanak.** Az időkérés
   utáni első támadás rétege eddig megmondta, van-e kész figurájuk — azt
   viszont nem, hogy a kész figura kire fut ki. Az új réteg az
