@@ -2088,6 +2088,34 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Időkérés-befejező: az időkérés után melyik posztra játszanak (3+
+  // poszthoz kötött lövés, 60% részarány — a backenddel azonos
+  // küszöbök: TOF_MIN_SHOTS, TOF_SHARE_PCT).
+  String? _timeoutFinisher(Map<String, dynamic> r) {
+    final shots =
+        (r["tof_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (shots == null || shots.isEmpty) return null;
+    var total = 0;
+    shots.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    shots.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    final timeouts = (r["tof_timeouts"] as num?)?.toInt() ?? 0;
+    return "időkérés után a(z) $top posztjuk fejez be: a lövéseik "
+        "${pct.round()}%-a onnan jött ($total lövés, $timeouts időkérés "
+        "után) · ő kapja az embert, elé kell állni";
+  }
+
   // Figura-befejező: hány figurájuk fut ki ugyanarra a posztra (2+
   // mérhető figura, 60% részarány — a backenddel azonos küszöb:
   // SPF_SHARE_PCT).
@@ -7062,6 +7090,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_timeoutFinisher(r) != null)
+        ["Időkérés-befejező", _timeoutFinisher(r)!],
       if (_setplayFinisher(r) != null)
         ["Figura-befejező", _setplayFinisher(r)!],
       if (_pressureFinishRole(r) != null)

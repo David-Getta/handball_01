@@ -547,3 +547,83 @@ def long_break_response(match: Match,
             elif diff <= -LBR_DIFF:
                 rec["verdict"] = "a hosszú állások kizökkentik őket"
     return out
+
+
+# Időkérés-befejező: ennyi poszthoz kötött lövés kell az ítélethez az
+# időkérések utáni ablakban, és ekkora részarány számít mintázatnak. Az
+# időkérés ritka esemény (meccsenként 3 db), ezért a küszöb alacsony —
+# a felderítésben viszont meccsek közt összegződik.
+TOF_MIN_SHOTS = 3
+TOF_SHARE_PCT = 60.0
+TOF_WINDOW_S = 40.0
+
+
+def timeout_finisher(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Időkérés-befejező: AZ IDŐKÉRÉS UTÁN KIRE JÁTSZANAK.
+
+    Az időkérés utáni első támadás (`timeout_first_attack`) azt mondja
+    meg, van-e kész figurájuk — ez azt, hogy a kész figura KIRE fut ki.
+    Az időkérést kérő csapat első TOF_WINDOW_S másodpercét nézzük az
+    újraindítás után, és a benne esett lövéseket az ELENGEDŐ játékos
+    posztjához írjuk.
+
+    Edzőileg ez a legolcsóbb felkészülés a meccsen belül. Az időkérés
+    után a fal TUDJA, hogy figura jön — csak azt nem, kire. Ha a
+    lövések nagy része ugyanarra a posztra megy, a megbeszélésben egy
+    mondat elég: "időkérés után rá figyelünk, elé állunk, a többit
+    hagyjuk". Ha szórt a befejezés, az időkérés utáni támadásra nem
+    érdemes külön embert rendelni — a szokásos fal a jobb.
+
+    Visszatérés csapatonként: {"timeouts", "shots" (poszthoz kötött),
+    "roles": {poszt: lövés}, "main_role", "share_pct", "verdict"} — a
+    main_role/share_pct/verdict None, ha nincs meg a TOF_MIN_SHOTS
+    lövés, vagy egyik poszt sem éri el a TOF_SHARE_PCT részarányt.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"timeouts": 0, "shots": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for s in detect_stoppages(match, config):
+        if s["kind"] != "időkérés" or s["likely_team"] is None:
+            continue
+        side = s["likely_team"]
+        rec = out[side]
+        rec["timeouts"] += 1
+        end = s["end_frame"]
+        for e in shots:
+            if e.team.value != side or not (end < e.t <= end + win):
+                continue
+            if e.player_id is None:
+                continue
+            rec_role = roles[side].get(e.player_id)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["shots"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= TOF_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= TOF_SHARE_PCT:
+                rec["verdict"] = (
+                    f"időkérés után a(z) {poszt} fejez be "
+                    f"({share:.0f}%, {rec['shots']} lövésből) — a "
+                    "megbeszélésen ő kapja az embert, elé kell állni")
+    return out

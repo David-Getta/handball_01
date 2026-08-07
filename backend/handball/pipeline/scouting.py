@@ -758,6 +758,11 @@ class ScoutingReport:
     # ezért NEM azokat tároljuk, hanem a DARABSZÁMOT: hány figurájuk
     # volt mérhető, ebből hány kiszámítható befejezésű, és a
     # kiszámítható figuráik melyik posztra futottak ki.
+    # Időkérés-befejező: az időkérések utáni ablakban leadott,
+    # poszthoz kötött lövések darabszáma posztonként + az időkérések
+    # száma. Darabszám, meccsek közt pontosan összegződik.
+    tof_timeouts: int = 0
+    tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
     spf_telegraphed: int = 0
     spf_telegraphed_by_role: dict = field(default_factory=dict)
@@ -2979,6 +2984,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Időkérés-befejező: az időkérésük utáni támadásra kit fogjunk.
+    _tof_n = sum(rep.tof_shots_by_role.values())
+    if _tof_n >= 3:
+        _tof_p, _tof_c = max(rep.tof_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _tof_pct = 100.0 * _tof_c / _tof_n
+        if _tof_pct >= 60.0:
+            keys.append(
+                f"Időkérés után a(z) {_tof_p} posztjuk fejez be: az "
+                f"újraindítás utáni lövéseik {_tof_pct:.0f}%-a onnan "
+                f"jött ({_tof_n} lövésből, {rep.tof_timeouts} időkérés "
+                "után) — a megbeszélésen egy mondat elég: ő kapja az "
+                "embert, elé állunk, a többit hagyjuk.")
 
     # Figura-befejező: melyik figurájukra hova kell csúszni.
     if rep.spf_figures >= 2 and rep.spf_telegraphed >= 1:
@@ -7385,6 +7404,10 @@ def _scout_team_cached(match: Match, team: Team,
             f"{p}|{side}": r[side]
             for p, r in rgprec["roles"].items()
             for side in ("bal", "közép", "jobb") if r[side]}
+        from .stoppages import timeout_finisher as _tof
+        tofrec = _tof(match, config)[team.value]
+        rep.tof_timeouts = tofrec["timeouts"]
+        rep.tof_shots_by_role = dict(tofrec["roles"])
         from .setplays import setplay_finishers as _spf
         spfrec = _spf(match, config)[team.value]
         _spf_rows = [r for r in spfrec["figures"]
@@ -9951,6 +9974,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 269) Az ő időkérés-befejezőjük × a ti kettőzési szokásotok: ha
+    # amúgy ritkán kettőztök, az időkérés utáni támadás a legjobb hely
+    # egy ELŐRE MEGBESZÉLT kettőzésre — tudjuk a pillanatot és az embert.
+    _tof269_n = sum(opp.tof_shots_by_role.values())
+    if _tof269_n >= 3 and own.dbl_holder_frames >= 250:
+        _p269, _c269 = max(opp.tof_shots_by_role.items(),
+                           key=lambda kv: kv[1])
+        _pct269 = 100.0 * _c269 / _tof269_n
+        _dbl269 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        if _pct269 >= 60.0 and _dbl269 <= 20.0:
+            plan.append(
+                f"Időkérés után az ő lövéseik {_pct269:.0f}%-a a(z) "
+                f"{_p269} posztról jön ({_tof269_n} lövésből, "
+                f"{opp.tof_timeouts} időkérés után), ti pedig ritkán "
+                f"kettőztök (a labdás-kockák {_dbl269:.0f}%-a) — épp "
+                "ezért éri meg: az időkérés utáni EGY támadásra "
+                "beszéljetek meg kettőzést rá. Ismeritek a pillanatot "
+                "is, az embert is; a meglepetés-érték egyszer a "
+                "tiétek.")
 
     # 268) Az ő kiszámítható befejezésű figuráik × a ti fal-csúszásotok:
     # ha a falunk amúgy is lassan igazodik, a figura felismerése az
@@ -14407,6 +14450,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
         rgp_goals_by_role_side=_merge_count_dicts(
             r.rgp_goals_by_role_side for r in reports),
+        tof_timeouts=sum(r.tof_timeouts for r in reports),
+        tof_shots_by_role=_merge_count_dicts(
+            r.tof_shots_by_role for r in reports),
         spf_figures=sum(r.spf_figures for r in reports),
         spf_telegraphed=sum(r.spf_telegraphed for r in reports),
         spf_telegraphed_by_role=_merge_count_dicts(

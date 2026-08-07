@@ -3199,6 +3199,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stoppages import timeout_finisher
+            res["timeout_finisher"] = timeout_finisher(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.rules import seven_earner_roles
             res["seven_earner_roles"] = seven_earner_roles(match)
         except Exception:
@@ -4468,6 +4473,9 @@ def create_app():
                 from ..pipeline.stoppages import timeout_first_attack
                 _layer("timeout_first_attack",
                        lambda: timeout_first_attack(match))
+                from ..pipeline.stoppages import timeout_finisher
+                _layer("timeout_finisher",
+                       lambda: timeout_finisher(match))
                 from ..pipeline.rules import seven_earner_roles
                 _layer("seven_earner_roles",
                        lambda: seven_earner_roles(match))

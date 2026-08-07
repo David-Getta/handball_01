@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **316 réteg**, modulonként csoportosítva; a
+Összesen **317 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (69)
@@ -352,13 +352,14 @@ leírás a réteg-függvény docstringjének első sora.
 | `sprint_threats` | Sprint-veszély: KI VISZI A KONTRÁT — a legtöbbet sprintelő ember. |
 | `sprints_by_score` | Sprint-állás: MIKOR sprintel a csapat — vezetésnél vagy hátrányban. |
 
-## stoppages (8)
+## stoppages (9)
 
 | Réteg | Mit mér |
 |---|---|
 | `long_break_response` | Hosszú állás utáni játék: KIZÖKKENTI-E ŐKET a hosszú megszakítás. |
 | `playing_time` | Effektív játékidő: MENNYI a tényleges játék a megszakításokhoz |
 | `stoppages` | MŰKÖDÖTT-E az időkérés? — a kérő csapat kapott góljai előtte/utána. |
+| `timeout_finisher` | Időkérés-befejező: AZ IDŐKÉRÉS UTÁN KIRE JÁTSZANAK. |
 | `timeout_first_attack` | Időkérés utáni első támadás: VAN-E KÉSZ FIGURÁJUK. |
 | `timeout_first_defense` | Időkérés utáni védekezés: MEGÁLL-E A FAL a megszakítás után. |
 | `timeout_record` | Időkérés-mérleg csapatonként: hányszor működött a "mentő" időkérés. |

@@ -621,3 +621,97 @@ def test_long_break_response_needs_enough_breaks():
 
     res = long_break_response(_lbr_match(["home"]))
     assert res["home"]["breaks"] == 1 and res["home"]["verdict"] is None
+
+
+# ---- Időkérés-befejező ------------------------------------------------------
+
+_TOF_HOME = {1: (30.0, 10.0), 2: (28.0, 4.0), 3: (32.0, 16.0)}
+
+
+def _tof_players(t, moving):
+    """3 hazai a támadó térfélen + 4 vendég védő (a leállás-felismerés
+    MIN_VISIBLE küszöbe miatt kell a hat látható ember)."""
+    out = []
+    for tid, (x, y) in _TOF_HOME.items():
+        bx, by = x, y
+        if moving:
+            bx += 1.5 * math.sin(t / 5.0 + tid)
+            by += 1.0 * math.cos(t / 4.0 + tid)
+        out.append(PlayerPosition(track_id=tid, team=Team.HOME, x=bx, y=by,
+                                  source=PositionSource.MEASURED,
+                                  confidence=1.0))
+    for k in range(4):
+        bx, by = 34.0 + 0.5 * k, 5.0 + 3.0 * k
+        if moving:
+            bx += 1.0 * math.sin(t / 6.0 + k)
+        out.append(PlayerPosition(track_id=20 + k, team=Team.AWAY, x=bx,
+                                  y=by, source=PositionSource.MEASURED,
+                                  confidence=1.0))
+    return out
+
+
+def _tof_match(shooters, fps=25.0):
+    """`shooters` = időkérésenként a lövést leadó hazai játékos.
+
+    Minden ciklus: hazai birtoklás → 20 mp állás (időkérés) → az
+    újraindítás utáni lövés → hosszabb játék.
+    """
+    frames = []
+    t = 0
+
+    def _play(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            players = _tof_players(t, moving=True)
+            hp = players[0]      # a hazai 1-es birtokol (ő kér időt)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y, confidence=1.0)))
+            t += 1
+
+    for tid in shooters:
+        _play(10)
+        for _ in range(int(20 * fps)):        # időkérés: 20 mp állás
+            frames.append(Frame(t=t, players=_tof_players(0, moving=False),
+                                ball=None))
+            t += 1
+        # A lövés MOZGÁSBAN történik: állóképnél a leállás-szakasz
+        # ráterjedne a lövésre, és az kiesne a szünet utáni ablakból.
+        sx, sy = _TOF_HOME[tid]
+        for _ in range(6):                    # a lövő kezében a labda
+            cast = _tof_players(t, moving=True)
+            who = next(p for p in cast if p.track_id == tid)
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=who.x + 0.2, y=who.y,
+                                          confidence=1.0)))
+            t += 1
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            frames.append(Frame(
+                t=t, players=_tof_players(t, moving=True),
+                ball=Ball(x=sx + 0.2 + (40.4 - sx - 0.2) * f,
+                          y=sy + (10.0 - sy) * f, confidence=1.0)))
+            t += 1
+        _play(60)
+    return Match(_meta(fps), frames)
+
+
+def test_timeout_finisher_finds_the_target_post():
+    """Ha az időkérések utáni lövések nagy része ugyanarról a posztról
+    jön, a megbeszélésen arra az emberre kell embert rendelni."""
+    from handball.pipeline.stoppages import (TOF_MIN_SHOTS,
+                                             timeout_finisher)
+
+    rec = timeout_finisher(_tof_match([1, 1, 1, 2]))["home"]
+    assert rec["timeouts"] >= 4, rec
+    assert rec["shots"] >= TOF_MIN_SHOTS, rec
+    assert rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "elé kell állni" in rec["verdict"], rec
+
+
+def test_timeout_finisher_needs_enough_shots():
+    """Két lövésből nincs ítélet — az időkérés ritka esemény."""
+    from handball.pipeline.stoppages import timeout_finisher
+
+    rec = timeout_finisher(_tof_match([1, 2]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

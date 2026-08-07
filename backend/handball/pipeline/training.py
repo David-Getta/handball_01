@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 290) Időkérés-befejező: ha az időkérés utáni támadásunk mindig
+    # ugyanarra a posztra fut ki, az ellenfél elé áll — pont a
+    # legfontosabb támadásunkat fogják meg.
+    try:
+        from .stoppages import TOF_SHARE_PCT, timeout_finisher
+        tof290 = timeout_finisher(match, config)
+        for side in ("home", "away"):
+            rec290 = tof290[side]
+            if rec290.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszámítható időkérés-befejezés",
+                f"időkérés után a lövéseink {rec290['share_pct']:.0f}%-a "
+                f"a(z) {rec290['main_role']} posztról jött "
+                f"({rec290['shots']} lövésből, {rec290['timeouts']} "
+                f"időkérés után; {TOF_SHARE_PCT:.0f}% fölött már "
+                "mintázat) — az ellenfél elé áll",
+                "KÉT időkérés-figura a táblára, azonos indítással: az "
+                "egyik a szokásos befejezőre, a másik a mögé érkezőre "
+                "fut ki — az edzés végén, fáradtan, egy hívó szóra "
+                "kell mennie mindkettőnek")
+    except Exception:
+        pass
+
     # 289) Figura-befejező: ha a figuránk mindig ugyanarra a posztra
     # fut ki, egy felkészült fal a figura indulásakor odacsúszik.
     try:

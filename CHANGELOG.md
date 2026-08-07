@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Időkérés-befejező: az időkérés után kire játszanak.** Az időkérés
+  utáni első támadás rétege eddig megmondta, van-e kész figurájuk — azt
+  viszont nem, hogy a kész figura kire fut ki. Az új réteg az
+  újraindítás utáni 40 másodperc lövéseit az elengedő játékos
+  posztjához írja. Edzőileg ez a legolcsóbb felkészülés a meccsen
+  belül: az időkérés után a fal TUDJA, hogy figura jön — csak azt nem,
+  kire. Ha a lövések nagy része ugyanarra a posztra megy, a
+  megbeszélésen egy mondat elég ("időkérés után rá figyelünk, elé
+  állunk, a többit hagyjuk"); ha szórt, arra a támadásra nem érdemes
+  külön embert rendelni. Felületek: `/analyze` és meccs-csomag
+  (`timeout_finisher`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (269: az ő időkérés-befejezőjük × a ti ritka
+  kettőzésetek → egy előre megbeszélt kettőzés arra az egy támadásra),
+  edzés-fókusz (290: két időkérés-figura azonos indítással),
+  kliens-csempe.
+
 - **Figura-befejező: melyik figurájuk kire fut ki.** A
   figura-hatékonyság eddig megmondta, melyik figurájuk veszélyes — azt
   viszont nem, hogy a veszélyes figura KIRE fut ki. Az új réteg minden

@@ -885,6 +885,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Időkérés-befejező: az időkérés után kire játszanak.
+    try:
+        from .stoppages import timeout_finisher
+        tof = timeout_finisher(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tof = tof[side]
+            if rec_tof["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérés után a(z) "
+                     f"{rec_tof['main_role']} posztra játszik: az "
+                     f"újraindítás utáni lövéseik "
+                     f"{rec_tof['share_pct']:.0f}%-a onnan jött "
+                     f"({rec_tof['shots']} lövésből, "
+                     f"{rec_tof['timeouts']} időkérés után) — a "
+                     "megbeszélésen ő kapja az embert.")
+    except Exception:
+        pass
     # Figura-befejező: melyik figurájuk kire fut ki.
     try:
         from .setplays import setplay_finishers
