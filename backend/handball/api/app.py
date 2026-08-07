@@ -3518,6 +3518,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import clutch_hog_roles
+            res["clutch_hog_roles"] = clutch_hog_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5082,6 +5087,9 @@ def create_app():
                 from ..pipeline.decisions import soft_pass_roles
                 _layer("soft_pass_roles",
                        lambda: soft_pass_roles(match))
+                from ..pipeline.momentum import clutch_hog_roles
+                _layer("clutch_hog_roles",
+                       lambda: clutch_hog_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 326) Hajrákéz-poszt: ha a végjátékunk egy kézen fut, egy jó
+    # kettőzés az egész záró tervünket megfojtja.
+    try:
+        from .momentum import CHR_SHARE_PCT, clutch_hog_roles
+        chr326 = clutch_hog_roles(match, config)
+        for side in ("home", "away"):
+            rec326 = chr326[side]
+            if rec326.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy kézen futó végjáték",
+                f"a végjátékunk labdás idejének "
+                f"{rec326['share_pct']:.0f}%-a a(z) "
+                f"{rec326['main_role']} posztunknál van "
+                f"({CHR_SHARE_PCT:.0f}% fölött már minta) — egy jó "
+                "hajrá-kettőzés az egész záró tervünket megfojtja",
+                "második labdakihozó a hajrára: a záró figurák "
+                "indítása két posztról is begyakorolva, kettőzés "
+                "elleni kijátszás (hátoldali felfutás, beálló-"
+                "leadás) a kulcs-kezünknek",
+                )
+    except Exception:
+        pass
+
     # 325) Lágypassz-poszt: ha egy posztunk lágyan passzol, az ő
     # labdáiba az ellenfél beleér — passz-élesség a téma.
     try:

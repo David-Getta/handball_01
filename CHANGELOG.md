@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk.** A
+  hajrá-labdabirtoklás rétege az embert nevezi meg — az új réteg a
+  posztot: az utolsó öt perc labdás kockáit a birtokos posztjához
+  írja. Edzőileg a hajrá-kettőzés címzettje: ha a végjátékuk egy
+  poszt kezén fut, nem a lövőket kell fogni, hanem A kezet — ha az
+  a poszt nem kap labdát, a záró figuráik el sem indulnak. Saját
+  oldalon a második labdakihozó kijelölése a téma. Legalább 200
+  hajrá-labdás kocka és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`clutch_hog_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 305. meccsterv-szabály),
+  edzés-fókusz (326. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Lágypassz-poszt: melyik posztjuk passzol lágyan.** A
   passz-sebesség rétege csapat-szinten mondja meg, éles-e a
   labdajáratás — az új réteg posztonként: a 8 m/s alatti röptű

@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk.
+    try:
+        from .momentum import clutch_hog_roles
+        chg = clutch_hog_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_chg = chg[side]
+            if rec_chg["verdict"] is None:
+                continue
+            body += (f" A(z) {name} végjátéka a(z) "
+                     f"{rec_chg['main_role']} poszt kezén fut "
+                     f"({rec_chg['share_pct']:.0f}%-a az utolsó öt "
+                     "perc labdás idejének) — a hajrá-kettőzés ezt a"
+                     " kezet fogja, nem a lövőt.")
+    except Exception:
+        pass
     # Lágypassz-poszt: melyik posztjuk passzol lágyan.
     try:
         from .decisions import soft_pass_roles

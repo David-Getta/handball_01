@@ -2052,3 +2052,63 @@ def test_restart_taker_roles_silent_with_few_takes():
 
     rec = restart_taker_roles(_rtr_match([21, 22]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hajrákéz-poszt (melyik poszt kezén fut a végjátékuk) ------------------
+
+
+def _chr_match(hold_plan, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső), majd holt szakasz, végül a
+    hajrá-ablakban a `hold_plan` szerinti (birtokos, kocka) tartások."""
+    from handball.pipeline.momentum import CLUTCH_MIN_DURATION_S
+
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(int(250 * fps)):  # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    while t < int((CLUTCH_MIN_DURATION_S + 60) * fps):
+        frames.append(Frame(t=t, players=cast(),   # holt szakasz
+                            ball=Ball(x=20.0, y=16.0, confidence=1.0)))
+        t += 1
+    for (tid, n) in hold_plan:       # a hajrá-ablak tartásai
+        sx, sy = spos[tid]
+        for _ in range(n):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_clutch_hog_roles_names_the_hand():
+    """A hajrá labdás idejének dandárja a beállónál van → őt kell
+    labdától elzárni."""
+    from handball.pipeline.momentum import (CHR_MIN_FRAMES,
+                                            clutch_hog_roles)
+
+    rec = clutch_hog_roles(
+        _chr_match([(7, 200), (9, 60), (7, 100)]))["home"]
+    assert rec["frames"] >= CHR_MIN_FRAMES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "el sem indulnak" in rec["verdict"], rec
+
+
+def test_clutch_hog_roles_silent_with_little_holding():
+    """Kevés hajrá-labdás kockából nincs ítélet."""
+    from handball.pipeline.momentum import clutch_hog_roles
+
+    rec = clutch_hog_roles(_chr_match([(7, 60), (9, 40)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

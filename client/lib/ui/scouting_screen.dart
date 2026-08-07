@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk (200+
+  // hajrá-labdás kocka, 60% részarány — a backenddel azonos
+  // küszöbök: CHR_MIN_FRAMES, CHR_SHARE_PCT).
+  String? _clutchHogRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["chr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 200) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a végjátékuk a(z) $top poszt kezén fut (${pct.round()}%"
+        " a hajrá labdás idejéből) · a hajrá-kettőzés őt fogja, nem"
+        " a lövőt";
+  }
+
   // Lágypassz-poszt: melyik posztjuk passzol lágyan (5+ lágy passz,
   // 60% részarány — a backenddel azonos küszöbök: SPS_MIN_SOFT,
   // SPS_SHARE_PCT).
@@ -8012,6 +8039,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_clutchHogRole(r) != null)
+        ["Hajrákéz-poszt", _clutchHogRole(r)!],
       if (_softPassRole(r) != null)
         ["Lágypassz-poszt", _softPassRole(r)!],
       if (_sprintThreatRole(r) != null)

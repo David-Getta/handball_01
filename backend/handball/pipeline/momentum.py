@@ -2702,3 +2702,66 @@ def restart_taker_roles(match: Match, config=None) -> dict:
                     "letámadásnak posztra szóló célpontja van: őt "
                     "kell lefogni, és a középkezdésük megáll")
     return out
+
+
+# Hajrákéz-poszt: ennyi poszthoz kötött hajrá-labdás kocka kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# végjátékuk egy poszt kezén fut.
+CHR_MIN_FRAMES = 200
+CHR_SHARE_PCT = 60.0
+
+
+def clutch_hog_roles(match: Match, config=None) -> dict:
+    """Hajrákéz-poszt: MELYIK POSZT KEZÉN fut a végjátékuk.
+
+    A hajrá-labdabirtoklás rétege (clutch_ball_hogs) az embert
+    nevezi meg — ez a posztot: az utolsó öt perc labdás kockáit a
+    birtokos posztjához írja. Így a minta akkor is látszik, ha a
+    nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a hajrá-kettőzés címzettje: ha a végjátékuk egy
+    poszt kezén fut, nem a lövőket kell fogni, hanem A kezet — ha
+    azt a posztot korán labdához sem engedjük, a záró figuráik el
+    sem indulnak. Saját csapatra: az egy kézre épülő végjáték
+    kockázat, kell a második labdakihozó.
+
+    Visszatérés csapatonként: {"frames" (poszthoz kötött hajrá-
+    labdás kocka), "roles": {poszt: kocka}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    CHR_MIN_FRAMES, vagy egyik poszt sem éri el a CHR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    cbh = clutch_ball_hogs(match, config)
+
+    out: dict = {side: {"frames": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in cbh[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["frames"])
+            rec["frames"] += row["frames"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["frames"] >= CHR_MIN_FRAMES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["frames"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= CHR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a végjátékuk a(z) {poszt} poszt kezén fut "
+                    f"({share:.0f}%-a az utolsó öt perc labdás "
+                    "idejének) — a hajrá-kettőzés nem a lövőt fogja,"
+                    " hanem ezt a kezet: ha ő nem kap labdát, a záró"
+                    " figuráik el sem indulnak")
+    return out

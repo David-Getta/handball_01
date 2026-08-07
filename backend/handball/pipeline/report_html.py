@@ -1859,7 +1859,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .rules import (powerplay_shooter_roles,
                             seven_conceder_roles, seven_shot_directions,
                             shorthanded_shooter_roles, suspended_roles)
-        from .momentum import (clutch_scorer_roles,
+        from .momentum import (clutch_hog_roles,
+                               clutch_scorer_roles,
                                clutch_turnover_roles,
                                comeback_carrier_roles,
                                drought_breaker_roles,
@@ -1914,7 +1915,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Forró-poszt", hot_hand_roles),
             ("Középkezdő-poszt", restart_taker_roles),
             ("Sprint-poszt", sprint_threat_roles),
-            ("Lágypassz-poszt", soft_pass_roles)))
+            ("Lágypassz-poszt", soft_pass_roles),
+            ("Hajrákéz-poszt", clutch_hog_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"
