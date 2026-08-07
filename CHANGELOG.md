@@ -5,6 +5,11 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **A lövésválasztás is a teendő-rangsorban.** A lövésválasztás
+  rétege ("volt-e jobb szabad helyzet a pályán") eddig kimaradt a
+  rangsorból — pedig az ítélete kiosztható feladat. Mostantól a
+  "felkészülés" családban rangsorolódik, és az őr-teszt számon kéri.
+
 - **Gólpassz-poszt: kinek a kezéből indulnak a góljaik.** A
   gólpassz-forrás a pálya-zónát nézi, a gólpassz-hálózat az embert — az
   új réteg a POSZTOT: a gólokhoz rendelt gólpasszokat az adó játékos
