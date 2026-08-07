@@ -1762,8 +1762,20 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     # Figura-hatékonyság: melyik begyakorolt támadás hozott gólt.
     setplays_html = ""
     try:
-        from .setplays import setplay_efficiency
+        from .setplays import setplay_efficiency, setplay_finishers
         eff_sp = setplay_efficiency(match)
+        # Befejező-oszlop: melyik posztra fut ki a figura (ha mérhető).
+        fin_sp: dict = {}
+        try:
+            _fin = setplay_finishers(match)
+            for _side in ("home", "away"):
+                for _r in _fin[_side]["figures"]:
+                    if _r["main_role"]:
+                        fin_sp[(_side, _r["figure"])] = (
+                            f'{_r["main_role"]} '
+                            f'({_r["share_pct"]:.0f}%)')
+        except Exception:
+            pass
         sp_rows = []
         for side, name in (("home", home), ("away", away)):
             for r_sp in (eff_sp.get(side) or [])[:4]:
@@ -1773,7 +1785,9 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                     f'<td class="num">{r_sp["attacks"]}</td>'
                     f'<td class="num">{r_sp["shots"]}</td>'
                     f'<td class="num">{r_sp["goals"]}</td>'
-                    f'<td class="num">{r_sp["goal_pct"]:.0f}%</td></tr>')
+                    f'<td class="num">{r_sp["goal_pct"]:.0f}%</td>'
+                    f'<td>{escape(fin_sp.get((side, r_sp["figure"]), "—"))}'
+                    "</td></tr>")
         if sp_rows:
             setplays_html = (
                 "<h2>Figurák (visszatérő támadás-minták)</h2>"
@@ -1782,11 +1796,15 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 '<th class="num">Támadás</th>'
                 '<th class="num">Lövés</th>'
                 '<th class="num">Gól</th>'
-                '<th class="num">Gól-arány</th></tr>'
+                '<th class="num">Gól-arány</th>'
+                "<th>Befejező poszt</th></tr>"
                 + "".join(sp_rows) + "</table>"
                 + '<p class="note">A figura: azonos mozgás-mintázatú, '
                   'legalább kétszer játszott támadás — a magas gól-arányú '
-                  'figura a csapat kenyere, arra érdemes készülni.</p>')
+                  'figura a csapat kenyere, arra érdemes készülni. A '
+                  'befejező poszt megmondja, MERRE fut ki a figura: a '
+                  'falnak már a figura indulásakor arra az oldalra kell '
+                  'csúsznia.</p>')
     except Exception:
         pass
 

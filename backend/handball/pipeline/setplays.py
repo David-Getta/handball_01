@@ -327,3 +327,109 @@ def setplay_efficiency(match: Match, config: TacticsConfig | None = None,
         rows.sort(key=lambda r: (-r["attacks"], -r["goals"]))
         out[team.value] = rows
     return out
+
+
+# Figura-befejező: egy figurához ennyi mért lövés kell az ítélethez, és
+# ekkora részarány számít kiszámíthatónak. A 60% azt jelenti, hogy öt
+# lövésből három ugyanarra a posztra fut ki — a falnak ennyiből már
+# érdemes a figura FELISMERÉSÉRE készülnie, nem a lövés pillanatára.
+SPF_MIN_SHOTS = 4
+SPF_SHARE_PCT = 60.0
+
+
+def setplay_finishers(match: Match, config: TacticsConfig | None = None,
+                      threshold: float = 0.15, min_length: int = 5,
+                      min_attacks: int = 2) -> dict:
+    """Figura-befejező: MELYIK FIGURÁJUKAT KI FEJEZI BE.
+
+    A figura-hatékonyság (`setplay_efficiency`) azt mondja meg, melyik
+    figurájuk veszélyes — ez azt, hogy a veszélyes figura KIRE FUT KI.
+    Minden figura-klaszterhez összegyűjtjük a benne (vagy 3 mp-en belül
+    utána) esett lövéseket, és az ELENGEDŐ játékos posztjához írjuk
+    őket.
+
+    Edzőileg ez a FELISMERÉS haszna. Egy figurát a fal a második-
+    harmadik ismétlésre megismer — de a felismerésből csak akkor lesz
+    védés, ha tudja, mire fut ki. Ha a figura lövéseinek nagy része
+    ugyanarra a posztra megy, a fal már a figura INDULÁSAKOR
+    elhelyezkedhet: a befejező oldalára csúszik, és a passzsávot zárja,
+    ahelyett hogy a lövés pillanatában reagálna. Ha a figura befejezése
+    szórt, a felismerés önmagában keveset ér — ott a labdát kell
+    üldözni, nem az embert.
+
+    Visszatérés csapatonként: {"figures": [{"figure", "attacks",
+    "shots", "roles": {poszt: lövés}, "main_role", "share_pct"}],
+    "telegraphed": {"figure", "shots", "poszt", "share_pct"} | None,
+    "verdict": str | None} — a main_role/share_pct None, ha a figura
+    nem érte el az SPF_MIN_SHOTS lövést; a telegraphed/verdict None, ha
+    egyik figura sem éri el az SPF_SHARE_PCT részarányt.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(3.0 * fps)
+    shots_ev = [e for e in detect_shots(match, config)
+                if e.type in (EventType.SHOT, EventType.GOAL)]
+    roles = estimate_positions(match, config)
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        labels = cluster_signatures([attack_signature(s_) for s_ in seqs],
+                                    threshold=threshold)
+        agg: dict = {}
+        for seq, lab in zip(seqs, labels):
+            rec = agg.setdefault(lab, {"attacks": 0, "shots": 0,
+                                       "roles": {}})
+            rec["attacks"] += 1
+            for e in shots_ev:
+                if e.team != team or not (seq.start_t <= e.t
+                                          <= seq.end_t + tail):
+                    continue
+                rec["shots"] += 1
+                if e.player_id is None:
+                    continue
+                rec_role = roles[team.value].get(e.player_id)
+                if rec_role is None:
+                    continue
+                poszt = rec_role["poszt"]
+                rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+
+        rows = []
+        for lab, rec in agg.items():
+            if rec["attacks"] < min_attacks:
+                continue
+            named = sum(rec["roles"].values())
+            main = share = None
+            if named >= SPF_MIN_SHOTS:
+                poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+                main = poszt
+                share = round(100.0 * rec["roles"][poszt] / named, 1)
+            rows.append({"figure": int(lab), "attacks": rec["attacks"],
+                         "shots": rec["shots"],
+                         "roles": dict(sorted(rec["roles"].items(),
+                                              key=lambda kv: -kv[1])),
+                         "main_role": main, "share_pct": share})
+        rows.sort(key=lambda r: (-r["attacks"], -r["shots"]))
+
+        telegraphed = verdict = None
+        best = [r for r in rows
+                if r["share_pct"] is not None
+                and r["share_pct"] >= SPF_SHARE_PCT]
+        if best:
+            r = max(best, key=lambda r_: (r_["share_pct"], r_["shots"]))
+            telegraphed = {"figure": r["figure"],
+                           "shots": sum(r["roles"].values()),
+                           "poszt": r["main_role"],
+                           "share_pct": r["share_pct"]}
+            verdict = (f"a(z) {r['figure']}. figurájuk lövéseinek "
+                       f"{r['share_pct']:.0f}%-a a(z) {r['main_role']} "
+                       "posztra fut ki — a figura INDULÁSAKOR arra az "
+                       "oldalra kell csúszni, nem a lövésnél")
+        out[team.value] = {"figures": rows, "telegraphed": telegraphed,
+                           "verdict": verdict}
+    return out

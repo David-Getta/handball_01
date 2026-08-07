@@ -2088,6 +2088,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Figura-befejező: hány figurájuk fut ki ugyanarra a posztra (2+
+  // mérhető figura, 60% részarány — a backenddel azonos küszöb:
+  // SPF_SHARE_PCT).
+  String? _setplayFinisher(Map<String, dynamic> r) {
+    final figures = (r["spf_figures"] as num?)?.toInt() ?? 0;
+    final tel = (r["spf_telegraphed"] as num?)?.toInt() ?? 0;
+    final byRole =
+        (r["spf_telegraphed_by_role"] as Map?)?.cast<String, dynamic>();
+    if (figures < 2 || tel < 1 || byRole == null || byRole.isEmpty) {
+      return null;
+    }
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    return "a figuráik $figures-ból $tel kiszámítható befejezésű, a "
+        "legtöbb ($topN) a(z) $top posztra fut ki · a figura "
+        "felismerésekor kell odacsúszni, nem a lövésnél";
+  }
+
   // Poszt-nyomás: melyik posztjuk fejez be fedezetten is (8+ fedezett
   // lövés, posztonként 4+, 20 százalékpont eltérés — a backenddel
   // azonos küszöbök: RPF_MIN_SHOTS, RPF_GAP_PCT).
@@ -7036,6 +7062,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_setplayFinisher(r) != null)
+        ["Figura-befejező", _setplayFinisher(r)!],
       if (_pressureFinishRole(r) != null)
         ["Poszt-nyomás", _pressureFinishRole(r)!],
       if (_goalPlacementRole(r) != null)

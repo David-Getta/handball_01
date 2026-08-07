@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Figura-befejező: melyik figurájuk kire fut ki.** A
+  figura-hatékonyság eddig megmondta, melyik figurájuk veszélyes — azt
+  viszont nem, hogy a veszélyes figura KIRE fut ki. Az új réteg minden
+  figura-klaszterhez összegyűjti a benne esett lövéseket, és az
+  elengedő játékos posztjához írja őket. Edzőileg ez a felismerés
+  haszna: egy figurát a fal a második-harmadik ismétlésre megismer, de
+  a felismerésből csak akkor lesz védés, ha tudja, mire fut ki. Ha a
+  lövések nagy része ugyanarra a posztra megy, a fal már a figura
+  INDULÁSAKOR arra az oldalra csúszhat, ahelyett hogy a lövés
+  pillanatában reagálna. A felderítésben a figura-azonosító nem
+  tárolható (meccsenként újra képződik), ezért a DARABSZÁM megy át:
+  hány figurájuk mérhető, ebből hány kiszámítható befejezésű, és
+  melyik posztra. Felületek: `/analyze` és meccs-csomag
+  (`setplay_finishers`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (268: az ő kiszámítható figuráik × a ti lassú
+  fal-csúszásotok → a csúszás a figura indulására induljon),
+  edzés-fókusz (289: második befejező a saját figuránkba),
+  kliens-csempe.
+
 - **Poszt-nyomás: melyik posztjuk fejez be fedezetten is.** Eddig
   csapat-szinten tudtuk, mennyit ér a fedezés ellenük
   (`pressure_finishing`) — azt viszont nem, KIN fog. Az új réteg minden

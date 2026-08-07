@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **315 réteg**, modulonként csoportosítva; a
+Összesen **316 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (69)
@@ -331,11 +331,12 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `key_players` | Kulcsemberek egy meccsből: kinél dől el a játék — szereponként a |
 
-## setplays (1)
+## setplays (2)
 
 | Réteg | Mit mér |
 |---|---|
 | `setplay_efficiency` | Melyik figura működik: klaszterenként támadás / lövés / gól. |
+| `setplay_finishers` | Figura-befejező: MELYIK FIGURÁJUKAT KI FEJEZI BE. |
 
 ## stats (9)
 

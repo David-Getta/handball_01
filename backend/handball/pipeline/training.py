@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 289) Figura-befejező: ha a figuránk mindig ugyanarra a posztra
+    # fut ki, egy felkészült fal a figura indulásakor odacsúszik.
+    try:
+        from .setplays import SPF_SHARE_PCT, setplay_finishers
+        spf289 = setplay_finishers(match, config)
+        for side in ("home", "away"):
+            tel289 = spf289[side].get("telegraphed")
+            if tel289 is None:
+                continue
+            add(side, "támadás", "Kiszámítható figura-befejezés",
+                f"a(z) {tel289['figure']}. figuránk lövéseinek "
+                f"{tel289['share_pct']:.0f}%-a a(z) {tel289['poszt']} "
+                f"posztra fut ki ({tel289['shots']} lövésből; "
+                f"{SPF_SHARE_PCT:.0f}% fölött már mintázat) — egy "
+                "felkészült fal a figura indulásakor odacsúszik",
+                "MÁSODIK BEFEJEZŐ a figurába: ugyanaz az indítás, de a "
+                "harmadik passz után választható két végpont — a "
+                "döntést a fal csúszása hozza, ne az edzői utasítás; "
+                "előbb lassítva, döntés-jelre, majd teljes tempóban")
+    except Exception:
+        pass
+
     # 288) Poszt-nyomás: ha egy posztunk fedezetten beesik, a nyomás
     # alatti befejezést kell gyakorolnia — az ellenfél épp rá lép ki.
     try:

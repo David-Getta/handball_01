@@ -754,6 +754,13 @@ class ScoutingReport:
     # összegekből számolódik, sose átlagok átlagából.
     rpf_covered_shots_by_role: dict = field(default_factory=dict)
     rpf_covered_goals_by_role: dict = field(default_factory=dict)
+    # Figura-befejező: a figura-azonosítók meccsenként újra képződnek,
+    # ezért NEM azokat tároljuk, hanem a DARABSZÁMOT: hány figurájuk
+    # volt mérhető, ebből hány kiszámítható befejezésű, és a
+    # kiszámítható figuráik melyik posztra futottak ki.
+    spf_figures: int = 0
+    spf_telegraphed: int = 0
+    spf_telegraphed_by_role: dict = field(default_factory=dict)
     rht_holds_by_role: dict = field(default_factory=dict)
     rht_frames_by_role: dict = field(default_factory=dict)
     rrz_recv_by_role: dict = field(default_factory=dict)
@@ -2972,6 +2979,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Figura-befejező: melyik figurájukra hova kell csúszni.
+    if rep.spf_figures >= 2 and rep.spf_telegraphed >= 1:
+        _spf_top = sorted(rep.spf_telegraphed_by_role.items(),
+                          key=lambda kv: -kv[1])
+        if _spf_top:
+            _spf_p, _spf_n = _spf_top[0]
+            keys.append(
+                f"A figuráik {rep.spf_figures}-ból "
+                f"{rep.spf_telegraphed} kiszámítható befejezésű, és a "
+                f"legtöbb ({_spf_n}) a(z) {_spf_p} posztra fut ki — a "
+                "figura FELISMERÉSEKOR kell arra az oldalra csúszni, "
+                "nem a lövésnél reagálni.")
 
     # Poszt-nyomás: kire lépjen ki a falunk, kit kell kizárni.
     _rpf_cs = rep.rpf_covered_shots_by_role
@@ -7365,6 +7385,19 @@ def _scout_team_cached(match: Match, team: Team,
             f"{p}|{side}": r[side]
             for p, r in rgprec["roles"].items()
             for side in ("bal", "közép", "jobb") if r[side]}
+        from .setplays import setplay_finishers as _spf
+        spfrec = _spf(match, config)[team.value]
+        _spf_rows = [r for r in spfrec["figures"]
+                     if r["share_pct"] is not None]
+        rep.spf_figures = len(_spf_rows)
+        rep.spf_telegraphed = sum(1 for r in _spf_rows
+                                  if r["share_pct"] >= 60.0)
+        _spf_hits: dict = {}
+        for r in _spf_rows:
+            if r["share_pct"] >= 60.0:
+                _spf_hits[r["main_role"]] = _spf_hits.get(
+                    r["main_role"], 0) + 1
+        rep.spf_telegraphed_by_role = _spf_hits
         from .roles import role_pressure_finish as _rpf
         rpfrec = _rpf(match, config)[team.value]
         rep.rpf_covered_shots_by_role = {
@@ -9918,6 +9951,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 268) Az ő kiszámítható befejezésű figuráik × a ti fal-csúszásotok:
+    # ha a falunk amúgy is lassan igazodik, a figura felismerése az
+    # egyetlen esély — a csúszásnak a figura INDULÁSÁRA kell indulnia.
+    _lag268 = (own.dsl_sum_s / own.dsl_frames) if own.dsl_frames else None
+    if (opp.spf_telegraphed >= 1 and opp.spf_figures >= 2
+            and _lag268 is not None and _lag268 >= 1.0):
+        _spf268 = sorted(opp.spf_telegraphed_by_role.items(),
+                         key=lambda kv: -kv[1])
+        if _spf268:
+            _p268, _n268 = _spf268[0]
+            plan.append(
+                f"A figuráik {opp.spf_figures}-ból "
+                f"{opp.spf_telegraphed} ugyanarra a posztra fut ki "
+                f"(a legtöbb, {_n268} a(z) {_p268}-ra), a ti falatok "
+                f"pedig lassan igazodik ({_lag268:.1f} mp a "
+                "fal-csúszás késése) — a reagálásra nincs időtök: a "
+                "csúszás a figura INDULÁSÁRA induljon. A videós "
+                "felkészülésen a figura első két másodpercét nézzétek "
+                "át, ne a befejezést.")
 
     # 267) Az ő fedezetten is befejező posztjuk × a ti védekezési
     # nyomásotok: ha a falunk amúgy is szorosan játszik a labdásra, a
@@ -14354,6 +14407,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         arp_pairs=_merge_count_dicts(r.arp_pairs for r in reports),
         rgp_goals_by_role_side=_merge_count_dicts(
             r.rgp_goals_by_role_side for r in reports),
+        spf_figures=sum(r.spf_figures for r in reports),
+        spf_telegraphed=sum(r.spf_telegraphed for r in reports),
+        spf_telegraphed_by_role=_merge_count_dicts(
+            r.spf_telegraphed_by_role for r in reports),
         rpf_covered_shots_by_role=_merge_count_dicts(
             r.rpf_covered_shots_by_role for r in reports),
         rpf_covered_goals_by_role=_merge_count_dicts(

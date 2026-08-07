@@ -885,6 +885,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Figura-befejező: melyik figurájuk kire fut ki.
+    try:
+        from .setplays import setplay_finishers
+        spf = setplay_finishers(match)
+        for side, name in (("home", home), ("away", away)):
+            tel_spf = spf[side]["telegraphed"]
+            if tel_spf is None:
+                continue
+            body += (f" A(z) {name} {tel_spf['figure']}. figurája "
+                     f"kiszámítható befejezésű: a lövéseinek "
+                     f"{tel_spf['share_pct']:.0f}%-a a(z) "
+                     f"{tel_spf['poszt']} posztra fut ki "
+                     f"({tel_spf['shots']} lövésből) — a falnak már a "
+                     "figura indulásakor arra az oldalra kell csúsznia.")
+    except Exception:
+        pass
     # Poszt-nyomás: kire kell kilépni, kit kell kizárni.
     try:
         from .roles import role_pressure_finish

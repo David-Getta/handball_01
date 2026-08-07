@@ -252,3 +252,67 @@ def test_setplay_efficiency_counts_goals_per_figure():
     assert len(top["starts"]) == top["attacks"]
     assert all(isinstance(t_, int) for t_ in top["starts"])
     assert eff["away"] == []
+
+
+def _spf_match(plan, ys=None):
+    """`plan` = a lövést leadó hazai játékos azonosítói, támadásonként.
+
+    Minden támadás UGYANAZZAL a mozgás-mintázattal indul (egy figura),
+    csak a befejező más. A labda előbb a lövő KEZÉBEN van (ez az
+    elengedés pillanata, innen jön a lövő-hozzárendelés), majd a +x
+    kapuba repül.
+    """
+    xs = [30.0, 28.0, 32.0]
+    ys = ys or [10.0, 4.0, 16.0]
+    pos = {i + 1: (xs[i], ys[i]) for i in range(3)}
+    frames = []
+    t = 0
+    for tid in plan:
+        for _ in range(20):      # a figura mozgás-mintázata
+            frames.append(_home_attack_frame(t, xs, ys))
+            t += 1
+        sx, sy = pos[tid]
+        cast = [_pl(i + 1, Team.HOME, xs[i], ys[i]) for i in range(3)]
+        for _ in range(6):       # a lövő kezében a labda
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            frames.append(Frame(
+                t=t, players=cast,
+                ball=Ball(x=sx + 0.2 + (40.4 - sx - 0.2) * f,
+                          y=sy + (10.0 - sy) * f, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=5.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spf", home_team="A", away_team="B",
+                           fps=25.0), frames)
+
+
+def test_setplay_finishers_finds_the_telegraphed_figure():
+    """Ha a figura lövéseinek négyötöde ugyanarra a posztra fut ki, a
+    falnak már a figura indulásakor arra az oldalra kell csúsznia."""
+    from handball.pipeline.setplays import (SPF_MIN_SHOTS,
+                                            setplay_finishers)
+
+    rec = setplay_finishers(_spf_match([1, 1, 1, 1, 2]))["home"]
+    assert rec["figures"], rec
+    top = rec["figures"][0]
+    assert sum(top["roles"].values()) >= SPF_MIN_SHOTS, rec
+    assert rec["telegraphed"] is not None, rec
+    assert rec["telegraphed"]["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "INDULÁSAKOR" in rec["verdict"], rec
+
+
+def test_setplay_finishers_silent_with_few_shots():
+    """Két lövésből nincs ítélet — a figura befejezője még nem minta."""
+    from handball.pipeline.setplays import setplay_finishers
+
+    rec = setplay_finishers(_spf_match([1, 2]))["home"]
+    assert rec["telegraphed"] is None and rec["verdict"] is None, rec
+    assert all(r["main_role"] is None for r in rec["figures"]), rec
