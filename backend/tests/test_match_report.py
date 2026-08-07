@@ -1663,3 +1663,18 @@ def test_befejezo_lencse_a_jelentesben():
 
     empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
     assert "Befejező-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_vedo_lencse_a_jelentesben():
+    """A védő-oldali poszt-ítéletek (pl. a hetes-okozó sáv) külön
+    Védő-lencse táblába kerülnek — a Befejező-lencse a támadó-oldali
+    "kire fut ki" ítéleteké marad."""
+    from tests.test_rules import _svr_match
+
+    match = _svr_match([21] * 3 + [23])
+    html = match_report_html(match, {}, [], None)
+    assert "Védő-lencse" in html
+    assert "Hetes-okozó poszt" in html and "betörést" in html
+
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Védő-lencse" not in match_report_html(empty, {}, [], None)

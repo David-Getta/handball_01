@@ -1808,10 +1808,13 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
 
-    # Befejező-lencse: a négy "kire fut ki" ítélet egy helyen — kire
-    # lépj ki, időkérés után kit fogj, kontránál kit vegyél fel
-    # először, hetesnél merre vetődj.
+    # Befejező-lencse: a "kire fut ki a játékuk" ítéletek egy helyen —
+    # kire lépj ki, időkérés után kit fogj, kontránál kit vegyél fel
+    # először, hetesnél merre vetődj. A védő-oldali párja a Védő-lencse:
+    # hol sebezhető a védekezésük (melyik sáv blokkol, hol szakad be a
+    # hetes, ki gyűjti a kétperceket, ki szedi a labdákat).
     finishers_html = ""
+    defense_lens_html = ""
     try:
         from .attack_types import second_chance_roles
         from .defense import role_block_sources, role_steal_sources
@@ -1822,29 +1825,29 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             suspended_roles)
         from .stoppages import timeout_finisher
 
-        fin_rows = []
-        for label, fn in (
-                ("Poszt-nyomás", role_pressure_finish),
-                ("Időkérés-befejező", timeout_finisher),
-                ("Kontra-poszt", role_fast_breaks),
-                ("Hetes-oldal", seven_shot_directions),
-                ("Gólpassz-poszt", role_assist_sources),
-                ("Labdaszerző-poszt", role_steal_sources),
-                ("Lepattanó-poszt", second_chance_roles),
-                ("Blokk-poszt", role_block_sources),
-                ("7a6-befejező", seven_six_finisher_roles),
-                ("Hetes-okozó poszt", seven_conceder_roles),
-                ("Kiülő-poszt", suspended_roles)):
-            try:
-                rec_fin = fn(match)
-            except Exception:
-                continue
-            for side, name in (("home", home), ("away", away)):
-                v = (rec_fin.get(side) or {}).get("verdict")
-                if v:
-                    fin_rows.append(f"<tr><td>{escape(name)}</td>"
+        def _lens_rows(layers):
+            rows = []
+            for label, fn in layers:
+                try:
+                    rec_fin = fn(match)
+                except Exception:
+                    continue
+                for side, name in (("home", home), ("away", away)):
+                    v = (rec_fin.get(side) or {}).get("verdict")
+                    if v:
+                        rows.append(f"<tr><td>{escape(name)}</td>"
                                     f"<td>{escape(label)}</td>"
                                     f"<td>{escape(v)}</td></tr>")
+            return rows
+
+        fin_rows = _lens_rows((
+            ("Poszt-nyomás", role_pressure_finish),
+            ("Időkérés-befejező", timeout_finisher),
+            ("Kontra-poszt", role_fast_breaks),
+            ("Hetes-oldal", seven_shot_directions),
+            ("Gólpassz-poszt", role_assist_sources),
+            ("Lepattanó-poszt", second_chance_roles),
+            ("7a6-befejező", seven_six_finisher_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"
@@ -1853,6 +1856,20 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 + '<p class="note">Ugyanazok az ítéletek, mint az app '
                   'felderítő-csempéin — itt egy helyen, a meccs '
                   'jelentésében.</p>')
+
+        def_rows = _lens_rows((
+            ("Labdaszerző-poszt", role_steal_sources),
+            ("Blokk-poszt", role_block_sources),
+            ("Hetes-okozó poszt", seven_conceder_roles),
+            ("Kiülő-poszt", suspended_roles)))
+        if def_rows:
+            defense_lens_html = (
+                "<h2>Védő-lencse (hol sebezhető a védekezésük)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Ítélet</th></tr>" + "".join(def_rows) + "</table>"
+                + '<p class="note">A támadás-tervezés térképe: melyik '
+                  'sávot kell kerülni, hová érdemes betörést vezetni, '
+                  'kit kell korán megjáratni.</p>')
     except Exception:
         pass
 
@@ -1871,7 +1888,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             "<ul>" + lis_km + "</ul>")
     except Exception:
         pass
-    rules_html = moments_html + setplays_html + finishers_html + rules_html
+    rules_html = (moments_html + setplays_html + finishers_html
+                  + defense_lens_html + rules_html)
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""

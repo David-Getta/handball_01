@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Védő-lencse a meccs-jelentésben.** A Befejező-lencse táblába
+  időközben védő-oldali ítéletek is kerültek — most szétválik: a
+  Befejező-lencse a támadó-oldali "kire fut ki a játékuk" ítéleteké
+  (poszt-nyomás, időkérés-, kontra-, lepattanó-, 7a6-befejező,
+  gólpassz-poszt, hetes-oldal), az új Védő-lencse pedig a "hol
+  sebezhető a védekezésük" térképe: melyik sáv blokkol
+  (Blokk-poszt), hol szakad be a hetes (Hetes-okozó poszt), ki
+  gyűjti a kétperceket (Kiülő-poszt), ki szedi a labdákat
+  (Labdaszerző-poszt). Edzői olvasat: az egyik tábla azt mondja, KIT
+  fogj, a másik azt, HOVÁ támadj — őr-teszt mindkettőre.
+
 - **Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.** A "ki ült
   ki" réteg az embert nevezi meg — az új réteg a posztot: a
   kiállításokat a kiülő játékos posztjához írja. Edzőileg két olvasat
