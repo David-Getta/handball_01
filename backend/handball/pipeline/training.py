@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 327) Kiszolgált-poszt: ha egy posztunk csak kiszolgálásból él,
+    # a passzsáv-zárás ellen tervre van szüksége.
+    try:
+        from .roles import ASR_SHARE_PCT, assisted_scorer_roles
+        asr327 = assisted_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec327 = asr327[side]
+            if rec327.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kiszolgálásból élő poszt",
+                f"a kiszolgált góljaink {rec327['share_pct']:.0f}%-a"
+                f" a(z) {rec327['main_role']} posztunkon fejeződik "
+                f"be ({rec327['assisted']} asszisztos gólból; "
+                f"{ASR_SHARE_PCT:.0f}% fölött már minta) — ha a "
+                "felé futó passzt elvágják, a fő befejezőnk elhal",
+                "önálló helyzet-teremtés a posztnak: 1-1 elleni "
+                "betörés-gyakorlat, második bejátszási útvonal "
+                "(hátoldali befutás, visszatett labda), és a "
+                "figurákba beépített csere-célpont",
+                )
+    except Exception:
+        pass
+
     # 326) Hajrákéz-poszt: ha a végjátékunk egy kézen fut, egy jó
     # kettőzés az egész záró tervünket megfojtja.
     try:

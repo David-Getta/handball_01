@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **353 réteg**, modulonként csoportosítva; a
+Összesen **354 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (74)
@@ -298,11 +298,12 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `confidence` | Réteg-megbízhatóság: mely elemzési rétegeknek van elég mintája |
 
-## roles (22)
+## roles (23)
 
 | Réteg | Mit mér |
 |---|---|
 | `assist_role_pairs` | Gólpassz-tengelyek poszt szerint: MELYIK VONALON esnek a góljaik. |
+| `assisted_scorer_roles` | Kiszolgált-poszt: MELYIK POSZTJUK fejezi be a bejátszásokat. |
 | `assists_by_role` | Gólpassz-posztok: MELYIK POSZTJUK készíti elő a góljaikat. |
 | `goals_by_role` | Poszt szerinti gólmegoszlás: MELYIK POSZTRÓL jönnek a góljaik. |
 | `phase_specialists` | Egyirányú játékosok: KI JÁTSZIK CSAK VÉDEKEZNI vagy CSAK TÁMADNI. |

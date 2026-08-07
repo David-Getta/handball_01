@@ -1324,3 +1324,74 @@ def test_role_assist_sources_silent_with_few_assists():
 
     rec = role_assist_sources(_ras_match([(1, 2), (2, 3)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kiszolgált-poszt (melyik posztjuk fejezi be a bejátszásokat) ----------
+
+
+def _asr_match(scored, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső, 8: második szélső mint
+    passzoló) + gólok: a `scored` elemei (befejező, asszisztos?)
+    párok — az asszisztos gól előtt a 8-as adja a passzt."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0), 8: (34.0, 17.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (tid, assisted) in scored:
+        if assisted:                 # a gólpassz a 8-astól jön
+            fx, fy = spos[8]
+            for _ in range(15):
+                frames.append(Frame(t=t, players=cast(),
+                                    ball=Ball(x=fx + 0.2, y=fy,
+                                              confidence=1.0)))
+                t += 1
+        sx, sy = spos[tid]
+        for _ in range(20):          # a labda a befejezőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        x = sx
+        while x < 40.5:              # gól a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(130):         # hosszú semleges szakasz
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="asr", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_assisted_scorer_roles_names_the_fed_post():
+    """Három asszisztos gólt a beálló fejez be → őt éheztetni kell."""
+    from handball.pipeline.roles import (ASR_MIN_ASSISTED,
+                                         assisted_scorer_roles)
+
+    rec = assisted_scorer_roles(
+        _asr_match([(7, True), (7, True), (7, True),
+                    (9, False)]))["home"]
+    assert rec["assisted"] >= ASR_MIN_ASSISTED, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "éheztetni" in rec["verdict"], rec
+
+
+def test_assisted_scorer_roles_silent_with_few_assisted():
+    """Néhány asszisztos gólból nincs ítélet."""
+    from handball.pipeline.roles import assisted_scorer_roles
+
+    rec = assisted_scorer_roles(
+        _asr_match([(7, True), (9, True)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

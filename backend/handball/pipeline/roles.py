@@ -1883,3 +1883,75 @@ def role_assist_sources(match: Match,
                     "elvenni: egy ember feljebb lép rá, a többiek "
                     "posztot tartanak")
     return out
+
+
+# Kiszolgált-poszt: ennyi poszthoz kötött asszisztos gól kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# kiszolgált gólokat egy poszt fejezi be.
+ASR_MIN_ASSISTED = 3
+ASR_SHARE_PCT = 60.0
+
+
+def assisted_scorer_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Kiszolgált-poszt: MELYIK POSZTJUK fejezi be a bejátszásokat.
+
+    A gólpassz-poszt (role_assist_sources) azt mondja meg, kinek a
+    kezéből INDUL a gól — ez azt, hova ÉRKEZIK: a gólpasszos
+    (asszisztált) gólokat a BEFEJEZŐ posztjához írja. Így a minta
+    akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a passzsáv-zárás címzettje: a kiszolgálásból élő
+    posztot nem fogni kell, hanem éheztetni — a felé futó passzt
+    elvágni (sávzárás, előrelépő védő), és ő magától elhal, mert
+    egyénileg nem teremt helyzetet. Saját csapatra: ha egy posztunk
+    csak kiszolgálásból él, a bejátszó emberének kiesésekor tervre
+    van szüksége.
+
+    Visszatérés csapatonként: {"assisted" (poszthoz kötött
+    asszisztos gól), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    ASR_MIN_ASSISTED, vagy egyik poszt sem éri el az
+    ASR_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"assisted": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        if not (e.detail or {}).get("assist_id"):
+            continue
+        side = getattr(e.team, "value", e.team)
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["assisted"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["assisted"] >= ASR_MIN_ASSISTED:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["assisted"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= ASR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kiszolgált góljaik {share:.0f}%-át a(z) "
+                    f"{poszt} posztjuk fejezi be ({rec['assisted']} "
+                    "asszisztos gólból) — őt nem fogni kell, hanem "
+                    "éheztetni: a felé futó passz elvágásával "
+                    "magától elhal")
+    return out

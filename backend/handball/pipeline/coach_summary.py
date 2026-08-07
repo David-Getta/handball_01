@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kiszolgált-poszt: melyik posztjuk fejezi be a bejátszásokat.
+    try:
+        from .roles import assisted_scorer_roles
+        asr = assisted_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_asr = asr[side]
+            if rec_asr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kiszolgált góljait a(z) "
+                     f"{rec_asr['main_role']} posztja fejezi be "
+                     f"({rec_asr['share_pct']:.0f}%, "
+                     f"{rec_asr['assisted']} asszisztos gólból) — őt"
+                     " a felé futó passz elvágásával kell éheztetni.")
+    except Exception:
+        pass
     # Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk.
     try:
         from .momentum import clutch_hog_roles

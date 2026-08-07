@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kiszolgált-poszt: melyik posztjuk fejezi be a bejátszásokat.**
+  A gólpassz-poszt azt mondja meg, kinek a kezéből indul a gól — az
+  új réteg azt, hova érkezik: az asszisztos gólokat a befejező
+  posztjához írja. Edzőileg a passzsáv-zárás címzettje: a
+  kiszolgálásból élő posztot nem fogni kell, hanem éheztetni — a
+  felé futó passzt elvágni, és magától elhal. Saját oldalon az
+  önálló helyzet-teremtés az edzés-téma. Legalább 3 asszisztos gól
+  és 60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`assisted_scorer_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 306. meccsterv-szabály), edzés-fókusz
+  (327. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Hajrákéz-poszt: melyik poszt kezén fut a végjátékuk.** A
   hajrá-labdabirtoklás rétege az embert nevezi meg — az új réteg a
   posztot: az utolsó öt perc labdás kockáit a birtokos posztjához
