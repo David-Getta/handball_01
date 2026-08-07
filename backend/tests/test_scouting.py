@@ -2399,3 +2399,29 @@ def test_trend_loveserobol_is_lesz_mutato():
     rec = next(m for m in tr["metrics"] if m["metric"] == "shot_power_kmh")
     assert rec["older"] == 90.0 and rec["newer"] == 110.0
     assert rec["better"] is True, rec
+
+
+def test_combine_merges_every_by_role_field():
+    """ŐR: minden *_by_role mező összegződik a combine_reports-ban.
+
+    A réteg-recept 4. lépésének gyakori hibája, hogy az új
+    posztonkénti mező kimarad az összevonásból — ilyenkor a több
+    meccses felderítés csendben elveszíti a mintát. Ez a teszt
+    minden posztonkénti számláló-mezőt kitölt, és megköveteli, hogy
+    két meccs összevonása után pontosan duplázódjon.
+    """
+    import dataclasses
+
+    role_fields = [f.name for f in dataclasses.fields(ScoutingReport)
+                   if f.name.endswith("_by_role")]
+    assert len(role_fields) >= 50, role_fields  # az olvasás elromlott
+
+    r1 = ScoutingReport(team="home", team_name="Teszt")
+    r2 = ScoutingReport(team="home", team_name="Teszt")
+    for name in role_fields:
+        setattr(r1, name, {"beálló": 1})
+        setattr(r2, name, {"beálló": 1})
+    comb = combine_reports([r1, r2])
+    rossz = [name for name in role_fields
+             if getattr(comb, name).get("beálló") != 2]
+    assert not rossz, f"nem összegzett posztonkénti mezők: {rossz}"
