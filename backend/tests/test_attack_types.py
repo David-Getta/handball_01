@@ -3812,3 +3812,61 @@ def test_second_chance_roles_silent_with_few_shots():
 
     rec = second_chance_roles(_scr_match([(1, 2), (2, 1)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _scs2_match(setters, fps=25.0):
+    """`setters` = elzárásonként az elzárásba álló HAZAI játékos (5:
+    beálló, 7: szélső). Első szakasz: hosszú hazai birtoklás a +x kapu
+    felé (poszt-minta), utána a meglévő elzáró-minta lövésenként."""
+    frames = []
+    t = 0
+    role_pos = {1: (28.0, 10.0), 5: (34.0, 10.0), 7: (35.0, 3.0)}
+    for _ in range(300):             # hazai birtoklás: poszt-minta
+        players = [_pl(pid, Team.HOME, *xy)
+                   for pid, xy in role_pos.items()]
+        players.append(_pl(20, Team.AWAY, 20.0, 16.0))
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for setter_id in setters:
+        players = [_pl(1, Team.HOME, 30.0, 10.0),          # a lövő
+                   _pl(20, Team.AWAY, 31.5, 10.0),         # az őrző
+                   _pl(setter_id, Team.HOME, 31.5, 11.0)]  # az elzáró
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(30.0 + 0.8 * (i + 1), 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=40.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_screen_setter_roles_names_the_screening_post():
+    """Ha az elzárások zöme ugyanarról a posztról jön, az ő oldalán
+    kell a hangos váltás."""
+    from handball.pipeline.attack_types import (SCR2_MIN_SCREENS,
+                                                screen_setter_roles)
+
+    rec = screen_setter_roles(_scs2_match([5, 5, 5, 7]))["home"]
+    assert rec["screens"] >= SCR2_MIN_SCREENS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "váltás" in rec["verdict"], rec
+
+
+def test_screen_setter_roles_silent_with_few_screens():
+    """Néhány poszthoz kötött elzárásból nincs ítélet."""
+    from handball.pipeline.attack_types import screen_setter_roles
+
+    rec = screen_setter_roles(_scs2_match([5, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

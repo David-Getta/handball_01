@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Elzáró-poszt: melyik posztjuk áll elzárásba.** Az elzárók
+  rétege az embert nevezi meg — az új réteg a posztot: az
+  elzárásokat az elzáró játékos posztjához írja. Edzőileg ez a
+  váltás-terv: ha az elzárásaik rendre ugyanarról a posztról jönnek
+  (tipikusan a beálló), a védekezés előre tudja, honnan érkezik a
+  test — az ő oldalán hangos váltás vagy átcsúszás kell, és őt
+  elölről kell fogni, mert nélküle a lövőjük nem marad tisztán.
+  Felületek: `/analyze` és meccs-csomag (`screen_setter_roles`),
+  edzői összefoglaló, felderítő edzői kulcs, meccsterv-szabály (282:
+  az ő elzáró-posztjuk × a ti gyenge elzárás-védekezésetek →
+  poszt-szintű váltás-terv), edzés-fókusz (303: elzárás-variációk
+  váltakozó elzáró-poszttal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
 - **Átvert-poszt: melyik posztjuk mögött esnek a kapott gólok.** Az
   átvert védők rétege az embert nevezi meg — az új réteg a posztot:
   a védőhöz rendelt kapott gólokat az átvert játékos posztjához

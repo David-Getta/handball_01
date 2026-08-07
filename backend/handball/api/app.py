@@ -3214,6 +3214,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import screen_setter_roles
+            res["screen_setter_roles"] = screen_setter_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.attack_types import risky_passers
             res["risky_passers"] = risky_passers(match)
         except Exception:
@@ -4537,6 +4542,9 @@ def create_app():
                 _layer("gk_early_saves", lambda: gk_early_saves(match))
                 from ..pipeline.attack_types import screen_setters
                 _layer("screen_setters", lambda: screen_setters(match))
+                from ..pipeline.attack_types import screen_setter_roles
+                _layer("screen_setter_roles",
+                       lambda: screen_setter_roles(match))
                 from ..pipeline.attack_types import risky_passers
                 _layer("risky_passers", lambda: risky_passers(match))
                 from ..pipeline.stoppages import timeout_first_attack

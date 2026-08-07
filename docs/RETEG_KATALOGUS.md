@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **329 réteg**, modulonként csoportosítva; a
+Összesen **330 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (70)
+## attack_types (71)
 
 | Réteg | Mit mér |
 |---|---|
@@ -60,6 +60,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `rebound_winners` | Lepattanó-szerzők: KI NYERI a kipattanókat. |
 | `risky_passers` | Kockázatos passzolók: KINEK a hosszú labdái foghatók el. |
 | `screen_pairs` | Elzárás-páros: KI ZÁR KINEK — a bejáratott elzáró-lövő kettős. |
+| `screen_setter_roles` | Elzáró-poszt: MELYIK POSZTJUK áll elzárásba. |
 | `screen_setters` | Elzárók: KI ÁLL ELZÁRÁSBA a lövőik előtt. |
 | `screen_usage` | Elzárás-használat: elzárásból lőnek, vagy tisztán, 1v1-ből. |
 | `second_chance` | Második roham / lepattanó-visszaszerzés: a saját, gólt NEM érő lövés |

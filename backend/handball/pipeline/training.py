@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 303) Elzáró-poszt: ha az elzárás-játékunk egy emberre épül, a
+    # kivétele után a lövőink fedve maradnak.
+    try:
+        from .attack_types import SCR2_SHARE_PCT, screen_setter_roles
+        sc2_303 = screen_setter_roles(match, config)
+        for side in ("home", "away"):
+            rec303 = sc2_303[side]
+            if rec303.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő elzárás-játék",
+                f"az elzárásaink {rec303['share_pct']:.0f}%-a a(z) "
+                f"{rec303['main_role']} posztról jön "
+                f"({rec303['screens']} elzárásból; "
+                f"{SCR2_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél előre tudja, honnan érkezik a test, és az "
+                "elzárónkat elölről fogja",
+                "elzárás-variációk: a figurákban az elzáró posztja "
+                "körönként váltakozik (beálló, átlövő, befutó szélső)"
+                " — a cél, hogy a váltás-kommunikációjukat minden "
+                "körben újra kelljen kezdeni")
+    except Exception:
+        pass
+
     # 302) Átvert-poszt: ha a kapott góljaink egy poszt
     # párharc-vereségéből esnek, az ellenfél is oda fogja vinni.
     try:

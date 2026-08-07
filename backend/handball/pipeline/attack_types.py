@@ -4923,3 +4923,65 @@ def second_chance_roles(match: Match,
                     "lövésből) — a lövésünk zárása után az ELSŐ dolog "
                     "őt kivenni a lepattanóból, nem a lövőt nézni")
     return out
+
+
+# Elzáró-poszt: ennyi poszthoz kötött elzárás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy az elzárás-játékuk egy
+# posztra épül.
+SCR2_MIN_SCREENS = 3
+SCR2_SHARE_PCT = 60.0
+
+
+def screen_setter_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Elzáró-poszt: MELYIK POSZTJUK áll elzárásba.
+
+    Az elzárók rétege (screen_setters) az embert nevezi meg — ez a
+    posztot: az elzárásokat az elzáró játékos posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a váltás-terv: ha az elzárásaik rendre ugyanarról a
+    posztról jönnek (tipikusan a beálló), a védekezés előre tudja,
+    honnan érkezik a test — az ő oldalán hangos váltás vagy átcsúszás
+    kell, és őt elölről kell fogni, mert nélküle a lövőjük nem marad
+    tisztán. Ha az elzáró-játékuk szórt, poszt-szintű terv helyett a
+    váltás-kommunikáció általános fegyelme véd.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"screens" (poszthoz
+    kötött elzárás), "roles": {poszt: elzárás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SCR2_MIN_SCREENS, vagy egyik poszt sem éri el az SCR2_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    scs = screen_setters(match, config)
+
+    out: dict = {side: {"screens": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in scs[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["screens"])
+            rec["screens"] += row["screens"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["screens"] >= SCR2_MIN_SCREENS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["screens"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SCR2_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az elzárásaik a(z) {poszt} posztról jönnek "
+                    f"({share:.0f}%, {rec['screens']} elzárásból) — az"
+                    " ő oldalán hangos váltás vagy átcsúszás kell, és"
+                    " őt elölről kell fogni")
+    return out

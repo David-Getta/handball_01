@@ -800,6 +800,9 @@ class ScoutingReport:
     # Átvert-poszt: a védőhöz rendelt kapott gólok darabszáma
     # posztonként. Darabszám, meccsek közt pontosan összegződik.
     btr_beaten_by_role: dict = field(default_factory=dict)
+    # Elzáró-poszt: az elzárások darabszáma posztonként. Darabszám,
+    # meccsek közt pontosan összegződik.
+    sc2_screens_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3036,6 +3039,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Elzáró-poszt: honnan érkezik a test, hol kell hangosan váltani.
+    _sc2_n = sum(rep.sc2_screens_by_role.values())
+    if _sc2_n >= 3:
+        _sc2_p, _sc2_c = max(rep.sc2_screens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sc2_pct = 100.0 * _sc2_c / _sc2_n
+        if _sc2_pct >= 60.0:
+            keys.append(
+                f"Az elzárásaik a(z) {_sc2_p} posztjukról jönnek "
+                f"({_sc2_pct:.0f}%, {_sc2_n} elzárásból) — az ő "
+                "oldalán hangos váltás vagy átcsúszás kell, és őt "
+                "elölről kell fogni: nélküle a lövőjük nem marad "
+                "tisztán.")
 
     # Átvert-poszt: melyik poszt ellen kell az 1v1-et vinni.
     _btr_n = sum(rep.btr_beaten_by_role.values())
@@ -7632,6 +7649,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import beaten_defender_roles as _btr
         btrrec = _btr(match, config)[team.value]
         rep.btr_beaten_by_role = dict(btrrec["roles"])
+        from .attack_types import screen_setter_roles as _sc2
+        sc2rec = _sc2(match, config)[team.value]
+        rep.sc2_screens_by_role = dict(sc2rec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10206,6 +10226,29 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 282) Az ő elzáró-posztjuk × a ti elzárás-védekezésetek: ha az
+    # elzárásaik kiszámíthatók, de a ti falatok eddig rosszul bírta az
+    # elzárást, a váltás-terv poszt-szinten megírható.
+    _sc2282_n = sum(opp.sc2_screens_by_role.values())
+    if (_sc2282_n >= 3 and own.scd_screened_shots >= 4
+            and own.scd_open_shots > 0):
+        _sc2282_p, _sc2282_c = max(opp.sc2_screens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sc2282_pct = 100.0 * _sc2282_c / _sc2282_n
+        _scd282_gap = (100.0 * own.scd_screened_goals
+                       / own.scd_screened_shots
+                       - 100.0 * own.scd_open_goals
+                       / own.scd_open_shots)
+        if _sc2282_pct >= 60.0 and _scd282_gap >= 15.0:
+            plan.append(
+                f"Az elzárásaik a(z) {_sc2282_p} posztjukról jönnek "
+                f"({_sc2282_pct:.0f}%), a ti falatok pedig eddig "
+                "rosszul bírta az elzárást (elzárásos lövésből "
+                f"{_scd282_gap:.0f} százalékponttal többször kaptok "
+                "gólt) — a váltás-terv kész: az ő sávjában előre "
+                "bemondott hangos váltás, és az elzáróját elölről "
+                "kell fogni.")
 
     # 281) Az ő átvert posztjuk × a ti 1v1-erőtök: ha a kapott góljaik
     # egy poszt párharc-vereségéből esnek, és nálatok van, aki az
@@ -14934,6 +14977,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rtr_lags_by_role for r in reports),
         btr_beaten_by_role=_merge_count_dicts(
             r.btr_beaten_by_role for r in reports),
+        sc2_screens_by_role=_merge_count_dicts(
+            r.sc2_screens_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),
