@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
+    try:
+        from .rules import suspended_roles
+        sup = suspended_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sup = sup[side]
+            if rec_sup["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kétpercei egy posztra járnak: a "
+                     f"kiállításaik {rec_sup['share_pct']:.0f}%-a a(z) "
+                     f"{rec_sup['main_role']} poszté "
+                     f"({rec_sup['suspensions']} kiállításból) — a "
+                     "meccs elején oda érdemes vezetni a játékot.")
+    except Exception:
+        pass
     # Hetes-okozó poszt: melyik sávjuk szakad be hetessel.
     try:
         from .rules import seven_conceder_roles

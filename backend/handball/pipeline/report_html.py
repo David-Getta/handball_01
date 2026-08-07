@@ -1818,7 +1818,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .goalkeeper import seven_six_finisher_roles
         from .roles import (role_assist_sources, role_fast_breaks,
                             role_pressure_finish)
-        from .rules import seven_conceder_roles, seven_shot_directions
+        from .rules import (seven_conceder_roles, seven_shot_directions,
+                            suspended_roles)
         from .stoppages import timeout_finisher
 
         fin_rows = []
@@ -1832,7 +1833,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 ("Lepattanó-poszt", second_chance_roles),
                 ("Blokk-poszt", role_block_sources),
                 ("7a6-befejező", seven_six_finisher_roles),
-                ("Hetes-okozó poszt", seven_conceder_roles)):
+                ("Hetes-okozó poszt", seven_conceder_roles),
+                ("Kiülő-poszt", suspended_roles)):
             try:
                 rec_fin = fn(match)
             except Exception:

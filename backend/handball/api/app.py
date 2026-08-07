@@ -3545,6 +3545,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import suspended_roles
+            res["suspended_roles"] = suspended_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import blocked_by_role
             res["blocked_by_role"] = blocked_by_role(match)
         except Exception:
@@ -4708,6 +4713,9 @@ def create_app():
                 from ..pipeline.rules import susp_earner_roles
                 _layer("susp_earner_roles",
                        lambda: susp_earner_roles(match))
+                from ..pipeline.rules import suspended_roles
+                _layer("suspended_roles",
+                       lambda: suspended_roles(match))
                 from ..pipeline.defense import blocked_by_role
                 _layer("blocked_by_role",
                        lambda: blocked_by_role(match))

@@ -1549,3 +1549,53 @@ def test_seven_conceder_roles_silent_with_few_sevens():
 
     rec = seven_conceder_roles(_svr_match([21, 23]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _sup_match(sitters):
+    """`sitters` = kiállításonként a hátrány alatt eltűnő HAZAI játékos
+    (105: beálló, 104: irányító). A teljes létszámú szakaszok hazai
+    támadó-birtoklások (ezekből áll össze a poszt-becslés), köztük
+    60 mp-es 5v6 hátrányok, amelyekből a megadott játékos hiányzik."""
+    home_pos = {100: (28.0, 10.0), 101: (30.0, 7.0), 102: (30.0, 13.0),
+                103: (35.0, 3.0), 104: (29.0, 13.0), 105: (34.0, 10.0)}
+
+    def mk(t, home_tracks):
+        players = [_pl(tid, Team.HOME, *home_pos[tid])
+                   for tid in home_tracks]
+        players += [_pl(200 + k, Team.AWAY, 20.0 + k, 4.0 + k)
+                    for k in range(6)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=34.2, y=10.0, confidence=1.0))
+
+    full = sorted(home_pos)
+    frames = []
+    t = 0
+    for tid in sitters:
+        for _ in range(750):         # teljes létszám: támadó-birtoklás
+            frames.append(mk(t, full)); t += 1
+        down = [x for x in full if x != tid]
+        for _ in range(1500):        # 60 mp hátrány a kiülő nélkül
+            frames.append(mk(t, down)); t += 1
+    for _ in range(750):
+        frames.append(mk(t, full)); t += 1
+    return Match(_meta(), frames)
+
+
+def test_suspended_roles_names_the_punished_post():
+    """Ha a kétpercek zöme ugyanarra a posztra jár, a meccs elején oda
+    kell vezetni a játékot."""
+    from handball.pipeline.rules import SUP_MIN_SUSP, suspended_roles
+
+    rec = suspended_roles(_sup_match([105] * 3 + [104]))["home"]
+    assert rec["suspensions"] >= SUP_MIN_SUSP, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "fékezve véd" in rec["verdict"], rec
+
+
+def test_suspended_roles_silent_with_few_suspensions():
+    """Néhány kiállításból nincs ítélet."""
+    from handball.pipeline.rules import suspended_roles
+
+    rec = suspended_roles(_sup_match([105, 104]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

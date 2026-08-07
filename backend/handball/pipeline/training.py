@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 300) Kiülő-poszt: ha a kétperceink egy posztra járnak, a
+    # létszámhátrányunk menetrend szerint érkezik.
+    try:
+        from .rules import SUP_SHARE_PCT, suspended_roles
+        sup300 = suspended_roles(match, config)
+        for side in ("home", "away"):
+            rec300 = sup300[side]
+            if rec300.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy posztra járó kétpercek",
+                f"a kiállításaink {rec300['share_pct']:.0f}%-a a(z) "
+                f"{rec300['main_role']} poszté "
+                f"({rec300['suspensions']} kiállításból; "
+                f"{SUP_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél tudatosan az ő sávjába fogja vezetni a "
+                "játékot, és a hátrányunk menetrend szerint érkezik",
+                "szituációs 1v1 a terhelt posztra: betörés-sorozat "
+                "ellen csak elcsúszás és testes megállítás ér, mögé "
+                "kötelező besegítő áll — és a videón együtt nézzék "
+                "meg, MELYIK mozdulat hozza a sípszót")
+    except Exception:
+        pass
+
     # 299) Hetes-okozó poszt: ha a heteseink egy sávban szakadnak be,
     # ott a védőnk kézzel áll meg — az ellenfél oda fog betörni.
     try:

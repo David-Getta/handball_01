@@ -791,6 +791,9 @@ class ScoutingReport:
     # Hetes-okozó poszt: az okozott hetesek darabszáma posztonként.
     # Darabszám, meccsek közt pontosan összegződik.
     svr_sevens_by_role: dict = field(default_factory=dict)
+    # Kiülő-poszt: a kiállítások darabszáma posztonként. Darabszám,
+    # meccsek közt pontosan összegződik.
+    sup_susp_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3027,6 +3030,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Kiülő-poszt: kinél jár hamar a két perc.
+    _sup_n = sum(rep.sup_susp_by_role.values())
+    if _sup_n >= 3:
+        _sup_p, _sup_c = max(rep.sup_susp_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sup_pct = 100.0 * _sup_c / _sup_n
+        if _sup_pct >= 60.0:
+            keys.append(
+                f"A kétperceik a(z) {_sup_p} posztjukra járnak "
+                f"({_sup_pct:.0f}%, {_sup_n} kiállításból) — a meccs "
+                "elején oda kell vezetni a játékot: az első két perc "
+                "után az az ember vagy hiányzik, vagy fékezve véd.")
 
     # Hetes-okozó poszt: melyik sávjukba érdemes betörést vezetni.
     _svr_n = sum(rep.svr_sevens_by_role.values())
@@ -7575,6 +7591,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import seven_conceder_roles as _svr
         svrrec = _svr(match, config)[team.value]
         rep.svr_sevens_by_role = dict(svrrec["roles"])
+        from .rules import suspended_roles as _sup
+        suprec = _sup(match, config)[team.value]
+        rep.sup_susp_by_role = dict(suprec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10149,6 +10168,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 279) Az ő kiülő-posztjuk × a ti kiállítás-kiharcolóitok: ha a
+    # kétperceik egy posztra járnak, és nálatok van, aki a kiállítást
+    # ki tudja harcolni, a meccs eleji párosítás megtervezhető.
+    _sup279_n = sum(opp.sup_susp_by_role.values())
+    _earn279 = sum(p.get("earned", 0) for p in (own.susp_earners or []))
+    if _sup279_n >= 3 and _earn279 >= 2:
+        _sup279_p, _sup279_c = max(opp.sup_susp_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sup279_pct = 100.0 * _sup279_c / _sup279_n
+        if _sup279_pct >= 60.0:
+            plan.append(
+                f"A kétperceik a(z) {_sup279_p} posztjukra járnak "
+                f"({_sup279_pct:.0f}%), nálatok pedig van, aki hozza "
+                f"a kiállításokat ({_earn279} kiharcolt két perc) — a "
+                "meccs ELEJÉN küldjétek a kiharcolótokat az ő "
+                "sávjába: az első két perce után az az ember vagy "
+                "hiányzik, vagy fékezve véd, és onnantól ott nyílik a "
+                "pálya.")
 
     # 278) Az ő hetes-okozó posztjuk × a ti hetes-lövőtök: ha az egyik
     # sávjuk kézzel véd, és nálatok van, aki a kiharcolt hetest be is
@@ -14817,6 +14855,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.en7_shots_by_role for r in reports),
         svr_sevens_by_role=_merge_count_dicts(
             r.svr_sevens_by_role for r in reports),
+        sup_susp_by_role=_merge_count_dicts(
+            r.sup_susp_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

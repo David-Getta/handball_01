@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.** A "ki ült
+  ki" réteg az embert nevezi meg — az új réteg a posztot: a
+  kiállításokat a kiülő játékos posztjához írja. Edzőileg két olvasat
+  egyszerre. Ellenük: ha a kétperceik rendre ugyanarról a posztról
+  jönnek, a meccs elején oda kell vezetni a játékot — az az ember
+  hamar behúzza az első kettőt, és onnantól vagy hiányzik, vagy
+  fékezve véd. Saját csapatra: az egy poszton gyűlő két perc
+  rendszer-hiba (hiányzó besegítés), nem pech. Felületek: `/analyze`
+  és meccs-csomag (`suspended_roles`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (279: az ő kiülő-posztjuk × a ti
+  kiállítás-kiharcolótok → meccs eleji párosítás-terv), edzés-fókusz
+  (300: szituációs 1v1 besegítővel + videó), teendő-rangsor és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
 - **Hetes-okozó poszt: melyik sávjuk szakad be hetessel.** A
   hetes-okozó védők rétege az embert nevezi meg — az új réteg a
   posztot: az okozott heteseket az okozó védő posztjához írja, így a

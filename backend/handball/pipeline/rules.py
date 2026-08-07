@@ -792,6 +792,71 @@ def suspended_players(match: Match,
             for side, rec in tally.items()}
 
 
+# Kiülő-poszt: ennyi poszthoz kötött kiállítás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a kétperceik egy posztra
+# járnak.
+SUP_MIN_SUSP = 3
+SUP_SHARE_PCT = 60.0
+
+
+def suspended_roles(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Kiülő-poszt: MELYIK POSZTJUK gyűjti a kétperceket.
+
+    A "ki ült ki" réteg (suspended_players) az embert nevezi meg — ez
+    a posztot: a kiállításokat a kiülő játékos posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg két olvasat egyszerre. Ellenük: ha a kétperceik rendre
+    ugyanarról a posztról jönnek, a meccs elején oda kell vezetni a
+    játékot — az az ember hamar behúzza az első kettőt, és onnantól
+    vagy hiányzik, vagy fékezve véd. Saját csapatra: ha a mi
+    kétperceink egy poszton gyűlnek, az az ember (vagy a mögötte lévő
+    besegítés-szabály) szorul rendezésre, mert a fegyelmezetlenség
+    rendszer-hiba, nem pech.
+
+    Visszatérés csapatonként (a BÜNTETETT oldal): {"suspensions"
+    (poszthoz kötött), "roles": {poszt: kiállítás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    SUP_MIN_SUSP, vagy egyik poszt sem éri el a SUP_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    susp = suspended_players(match, config)
+
+    out: dict = {side: {"suspensions": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in susp[side]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["suspensions"])
+            rec["suspensions"] += row["suspensions"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["suspensions"] >= SUP_MIN_SUSP:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["suspensions"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SUP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kétperceik a(z) {poszt} posztra járnak "
+                    f"({share:.0f}%, {rec['suspensions']} "
+                    "kiállításból) — a meccs elején oda kell vezetni "
+                    "a játékot: az első két perc után az az ember "
+                    "vagy hiányzik, vagy fékezve véd")
+    return out
+
+
 # Hátrány-támadás: ennyi emberhátrányban töltött másodperctől ítélünk,
 # és ennyi gól/perc eltérés választja el a "veszélyes" hátrányos
 # támadást a "megbénuló"-tól.
