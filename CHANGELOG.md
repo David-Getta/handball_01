@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Befejező-lencse a meccs-jelentésben.** A négy "kire fut ki"
+  ítélet (poszt-nyomás, időkérés-befejező, kontra-poszt, hetes-oldal)
+  eddig az app felderítő-csempéin és a teendő-rangsorban élt — a
+  nyomtatható HTML meccs-jelentésből hiányzott. Új szekció gyűjti őket
+  egy táblába, a figura-tábla mellé; üres meccsen a szekció el sem
+  készül. A figura-tábla emellett új "Befejező poszt" oszlopot kapott
+  (a figura-befejező rétegből): a magas gól-arányú figura mellett most
+  az is látszik, MERRE fut ki.
+
 - **Hetes-oldal: merre dobják a heteseiket.** A hetes-mérleg eddig
   megmondta, hogyan konvertálnak — azt nem, HOVA: az új réteg a
   hetes-kimenetelek irány-jelét (bal/közép/jobb a dobó szemszögéből)

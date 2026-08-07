@@ -1808,6 +1808,42 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
 
+    # Befejező-lencse: a négy "kire fut ki" ítélet egy helyen — kire
+    # lépj ki, időkérés után kit fogj, kontránál kit vegyél fel
+    # először, hetesnél merre vetődj.
+    finishers_html = ""
+    try:
+        from .roles import role_fast_breaks, role_pressure_finish
+        from .rules import seven_shot_directions
+        from .stoppages import timeout_finisher
+
+        fin_rows = []
+        for label, fn in (
+                ("Poszt-nyomás", role_pressure_finish),
+                ("Időkérés-befejező", timeout_finisher),
+                ("Kontra-poszt", role_fast_breaks),
+                ("Hetes-oldal", seven_shot_directions)):
+            try:
+                rec_fin = fn(match)
+            except Exception:
+                continue
+            for side, name in (("home", home), ("away", away)):
+                v = (rec_fin.get(side) or {}).get("verdict")
+                if v:
+                    fin_rows.append(f"<tr><td>{escape(name)}</td>"
+                                    f"<td>{escape(label)}</td>"
+                                    f"<td>{escape(v)}</td></tr>")
+        if fin_rows:
+            finishers_html = (
+                "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Ítélet</th></tr>" + "".join(fin_rows) + "</table>"
+                + '<p class="note">Ugyanazok az ítéletek, mint az app '
+                  'felderítő-csempéin — itt egy helyen, a meccs '
+                  'jelentésében.</p>')
+    except Exception:
+        pass
+
     # A meccs gerince: a kulcs-pillanatok időrendi listája — ugyanaz a
     # réteg, mint az app kártyája és a csomag kulcs_pillanatok.txt-je.
     moments_html = ""
@@ -1823,7 +1859,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             "<ul>" + lis_km + "</ul>")
     except Exception:
         pass
-    rules_html = moments_html + setplays_html + rules_html
+    rules_html = moments_html + setplays_html + finishers_html + rules_html
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""

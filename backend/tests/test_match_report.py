@@ -1649,3 +1649,17 @@ def test_report_shows_the_role_lens_when_a_post_layer_speaks():
     # Üres meccsen egyetlen poszt-réteg sem szólal meg → nincs szekció.
     empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
     assert "Poszt-lencse" not in match_report_html(empty, {}, [], None)
+
+
+def test_befejezo_lencse_a_jelentesben():
+    """A befejező-lencse ítéletei (pl. a hetes-oldal) a meccs-jelentés
+    táblájában is megjelennek — nem csak az app csempéin."""
+    from tests.test_rules import _svd_match
+
+    match = _svd_match([8.8, 8.8, 8.8, 8.8, 11.2])
+    html = match_report_html(match, {}, [], None)
+    assert "Befejező-lencse" in html
+    assert "Hetes-oldal" in html and "vetődhet" in html
+
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Befejező-lencse" not in match_report_html(empty, {}, [], None)
