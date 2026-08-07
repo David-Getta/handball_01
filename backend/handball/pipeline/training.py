@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 313) Hajrá-poszt: ha a végjátékunk egy posztra fut ki, a záró
+    # percekben egyetlen jó emberfogás megfojt minket.
+    try:
+        from .momentum import CSR_SHARE_PCT, clutch_scorer_roles
+        csr313 = clutch_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec313 = csr313[side]
+            if rec313.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztra futó végjáték",
+                f"a hajrá-góljaink {rec313['share_pct']:.0f}%-a a(z) "
+                f"{rec313['main_role']} posztról esik "
+                f"({rec313['goals']} hajrá-gólból; "
+                f"{CSR_SHARE_PCT:.0f}% fölött már minta) — egy jó "
+                "emberfogás a záró percekben megfojtja a támadásunkat",
+                "hajrá-forgatókönyv B-vel: a záró öt perc figuráiban "
+                "kötelező a másodlagos befejező is, és emberfogás "
+                "elleni lekapcsolódás-gyakorlat (elzárás-átfutás, "
+                "hátoldali befutás) a kulcs-emberünknek")
+    except Exception:
+        pass
+
     # 312) Emberhátrány-poszt: ha öt emberrel mindig ugyanaz a
     # posztunk vállal be, a hátrány-játékunk kiszámítható.
     try:

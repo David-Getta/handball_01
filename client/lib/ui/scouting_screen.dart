@@ -2115,6 +2115,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Hajrá-poszt: melyik posztjuk viszi a végjátékot (3+ hajrá-gól,
+  // 60% részarány — a backenddel azonos küszöbök: CSR_MIN_GOALS,
+  // CSR_SHARE_PCT).
+  String? _clutchRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["csr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a végjátékuk a(z) $top posztra fut ki (${pct.round()}%, "
+        "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
+  }
+
   // Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel (3+
   // hátrány-lövés, 60% részarány — a backenddel azonos küszöbök:
   // SHR_MIN_SHOTS, SHR_SHARE_PCT).
@@ -7665,6 +7691,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_clutchRole(r) != null)
+        ["Hajrá-poszt", _clutchRole(r)!],
       if (_shorthandedRole(r) != null)
         ["Emberhátrány-poszt", _shorthandedRole(r)!],
       if (_powerplayRole(r) != null)

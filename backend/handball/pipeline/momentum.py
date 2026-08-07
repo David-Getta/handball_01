@@ -2241,3 +2241,66 @@ def punished_misses(match: Match, config=None) -> dict:
             elif pct <= PMB_DIGEST_PCT:
                 rec["verdict"] = "jól emésztik a kihagyást"
     return out
+
+
+# Hajrá-poszt: ennyi poszthoz kötött hajrá-gól kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a végjátékuk egy posztra
+# fut ki.
+CSR_MIN_GOALS = 3
+CSR_SHARE_PCT = 60.0
+
+
+def clutch_scorer_roles(match: Match, config=None) -> dict:
+    """Hajrá-poszt: MELYIK POSZTJUK viszi a végjátékot.
+
+    A hajrá-emberek rétege (clutch_scorers) az embert nevezi meg —
+    ez a posztot: a meccs utolsó öt percének góljait a lövő
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez az utolsó öt perc terve: szoros állásnál nem kell
+    találgatni, kire fut ki a támadásuk — ha a hajrá-góljaik rendre
+    ugyanarról a posztról esnek, a záró percekben őt kell fogni
+    (akár emberfogással), és az ő sávjára áll rá a kapus is. Saját
+    csapatra: az egy emberre épülő hajrá kockázat — második megoldás
+    kell a záró percekre.
+
+    Visszatérés csapatonként: {"goals" (poszthoz kötött hajrá-gól),
+    "roles": {poszt: gól}, "main_role", "share_pct", "verdict"} — az
+    ítélet None, ha nincs meg a CSR_MIN_GOALS, vagy egyik poszt sem
+    éri el a CSR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    cs = clutch_scorers(match, config)
+
+    out: dict = {side: {"goals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in cs[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["goals"])
+            rec["goals"] += row["goals"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["goals"] >= CSR_MIN_GOALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["goals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= CSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a végjátékuk a(z) {poszt} posztra fut ki "
+                    f"({share:.0f}%, {rec['goals']} hajrá-gólból) — "
+                    "az utolsó öt percben őt kell fogni, és az ő "
+                    "sávjára áll rá a kapus is")
+    return out

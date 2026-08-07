@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hajrá-poszt: melyik posztjuk viszi a végjátékot.** A
+  hajrá-emberek rétege az embert nevezi meg — az új réteg a posztot:
+  a meccs utolsó öt percének góljait a lövő posztjához írja.
+  Edzőileg ez az utolsó öt perc terve: szoros állásnál nem kell
+  találgatni, kire fut ki a támadásuk — a záró percekben őt kell
+  fogni (akár emberfogással), és az ő sávjára áll rá a kapus is.
+  Saját csapatra: az egy emberre épülő hajrához B-forgatókönyv kell.
+  Felületek: `/analyze` és meccs-csomag (`clutch_scorer_roles`),
+  edzői összefoglaló, felderítő edzői kulcs, meccsterv-szabály (292:
+  az ő hajrá-posztjuk × a ti mély padotok → friss fogó ember a záró
+  percekre), edzés-fókusz (313: hajrá-forgatókönyv B-vel,
+  lekapcsolódás-gyakorlattal), teendő-rangsor, a kulcs-poszt lencse
+  és a meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
 - **Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel.** Az
   emberhátrány-lövők rétege az embert nevezi meg — az új réteg a
   posztot: a kiállítás-ablakokban a hátrányban lévő csapat lövéseit

@@ -3453,6 +3453,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import clutch_scorer_roles
+            res["clutch_scorer_roles"] = clutch_scorer_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -4978,6 +4983,9 @@ def create_app():
                 _layer("clutch", lambda: clutch_performance(match))
                 from ..pipeline.momentum import clutch_scorers
                 _layer("clutch_scorers", lambda: clutch_scorers(match))
+                from ..pipeline.momentum import clutch_scorer_roles
+                _layer("clutch_scorer_roles",
+                       lambda: clutch_scorer_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

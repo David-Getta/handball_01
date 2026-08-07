@@ -1601,3 +1601,67 @@ def test_comeback_carriers_few_samples_none():
         t = _fdr_away_goal(frames, t, 9)
     cbc = comeback_carriers(Match(_meta(), frames))
     assert cbc["away"]["verdict"] is None
+
+
+def _csr_match(scorers, fps=25.0):
+    """`scorers` = hajrá-gólonként a lövő HAZAI játékos (7: beálló,
+    9: szélső). A felvétel első ~10 perce hazai birtoklás a +x kapu
+    felé (poszt-minta), a gólok a záró öt percen belül esnek."""
+    from handball.pipeline.momentum import CLUTCH_MIN_DURATION_S
+
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def pl(tid, x, y):
+        return PlayerPosition(track_id=tid, team=Team.HOME, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    def cast():
+        return [pl(tid, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(int((CLUTCH_MIN_DURATION_S + 30) * fps)):
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in scorers:
+        sx, sy = spos[tid]
+        for _ in range(3):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # gól a +x kapura
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 1.6 * (i + 1),
+                                                40.0),
+                                          y=sy, confidence=1.0)))
+            t += 1
+        for _ in range(30):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_clutch_scorer_roles_names_the_endgame_post():
+    """Ha a hajrá-gólok zöme ugyanarról a posztról esik, az utolsó öt
+    percben őt kell fogni."""
+    from handball.pipeline.momentum import (CSR_MIN_GOALS,
+                                            clutch_scorer_roles)
+
+    rec = clutch_scorer_roles(_csr_match([7, 7, 7, 9]))["home"]
+    assert rec["goals"] >= CSR_MIN_GOALS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "utolsó öt percben" in rec["verdict"], rec
+
+
+def test_clutch_scorer_roles_silent_with_few_goals():
+    """Néhány hajrá-gólból nincs ítélet."""
+    from handball.pipeline.momentum import clutch_scorer_roles
+
+    rec = clutch_scorer_roles(_csr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

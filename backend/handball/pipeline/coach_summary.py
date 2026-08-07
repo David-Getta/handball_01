@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Hajrá-poszt: melyik posztjuk viszi a végjátékot.
+    try:
+        from .momentum import clutch_scorer_roles
+        csr = clutch_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_csr = csr[side]
+            if rec_csr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} végjátéka egy posztra fut ki: a "
+                     f"hajrá-góljaik {rec_csr['share_pct']:.0f}%-a "
+                     f"a(z) {rec_csr['main_role']} poszté "
+                     f"({rec_csr['goals']} hajrá-gólból) — az utolsó "
+                     "öt percben őt kell fogni.")
+    except Exception:
+        pass
     # Emberhátrány-poszt: melyik posztjuk vállal be öt emberrel.
     try:
         from .rules import shorthanded_shooter_roles
