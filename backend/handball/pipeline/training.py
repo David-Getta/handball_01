@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 311) Emberelőny-poszt: ha az emberelőnyünk mindig ugyanarra a
+    # posztra fut ki, öt védő is elég ellene.
+    try:
+        from .rules import PPR_SHARE_PCT, powerplay_shooter_roles
+        ppr311 = powerplay_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec311 = ppr311[side]
+            if rec311.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó emberelőny",
+                f"az emberelőny-lövéseink {rec311['share_pct']:.0f}"
+                f"%-a a(z) {rec311['main_role']} posztról jön "
+                f"({rec311['shots']} lövésből; {PPR_SHARE_PCT:.0f}% "
+                "fölött már minta) — a megfogyatkozott fal is tudja, "
+                "hova álljon",
+                "emberelőny-figurák két befejezési úttal: minden "
+                "gyakorlat-körben kötelező a másodlagos kifutás is "
+                "(túloldali átlövő, beálló-lecsorgás) — a hatodik "
+                "ember akkor ér valamit, ha KÉT helyen fáj")
+    except Exception:
+        pass
+
     # 310) Kiosztás-poszt: ha a betörésünk utáni labda mindig
     # ugyanoda megy, az ellenfél a sávot előre zárja.
     try:

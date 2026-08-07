@@ -1856,7 +1856,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                                  seven_six_finisher_roles)
         from .roles import (role_assist_sources, role_fast_breaks,
                             role_pressure_finish)
-        from .rules import (seven_conceder_roles, seven_shot_directions,
+        from .rules import (powerplay_shooter_roles,
+                            seven_conceder_roles, seven_shot_directions,
                             suspended_roles)
         from .stats import iron_man_roles
         from .stoppages import timeout_finisher
@@ -1888,7 +1889,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Bejátszó-poszt", pivot_feeder_roles),
             ("Vasember-poszt", iron_man_roles),
             ("Kockáztató-poszt", risky_passer_roles),
-            ("Kiosztás-poszt", kickout_target_roles)))
+            ("Kiosztás-poszt", kickout_target_roles),
+            ("Emberelőny-poszt", powerplay_shooter_roles)))
         if fin_rows:
             finishers_html = (
                 "<h2>Befejező-lencse (kire fut ki a játékuk)</h2>"

@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Emberelőny-poszt: melyik posztjuk fejez be a két perc alatt.
+    try:
+        from .rules import powerplay_shooter_roles
+        ppr = powerplay_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppr = ppr[side]
+            if rec_ppr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} emberelőnye egy posztra fut ki: "
+                     f"a lövéseik {rec_ppr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_ppr['main_role']} poszté "
+                     f"({rec_ppr['shots']} emberelőny-lövésből) — "
+                     "hátrányban az ő sávját kell tartani.")
+    except Exception:
+        pass
     # Kiosztás-poszt: melyik posztra jár a betörés utáni labda.
     try:
         from .attack_types import kickout_target_roles

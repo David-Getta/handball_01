@@ -1599,3 +1599,77 @@ def test_suspended_roles_silent_with_few_suspensions():
 
     rec = suspended_roles(_sup_match([105, 104]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _ppr_match(shooters, fps=25.0):
+    """Mint a _pp_shooter_match, de a lövők posztja eltér: a 7-es
+    beálló (33, 10), a 9-es szélső (35, 3)."""
+    spos = {7: (33.0, 10.0), 9: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _rosters(seconds, away_n, extra=()):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(6)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(away_n)]
+            players += [_pl(tid, Team.HOME, *spos[tid])
+                        for tid in extra]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _shot(shooter, away_n):
+        nonlocal t, frames
+        sx, sy = spos[shooter]
+
+        def _cast():
+            players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                       for k in range(6)]
+            players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                        for k in range(away_n)]
+            players.append(_pl(shooter, Team.HOME, sx, sy))
+            return players
+
+        for _ in range(3):
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=min(sx + 1.0 + i, 40.0),
+                                          y=sy, confidence=1.0)))
+            t += 1
+        _rosters(2.0, away_n)
+
+    _rosters(30.0, 6)
+    for shooter in shooters:
+        _rosters(15.0, 5, extra=(shooter,))
+        _shot(shooter, 5)
+    _rosters(30.0, 6)
+    return Match(_meta(fps), frames)
+
+
+def test_powerplay_shooter_roles_names_the_finishing_post():
+    """Ha az emberelőnyük rendre ugyanarra a posztra fut ki,
+    hátrányban az ő sávját kell tartani."""
+    from handball.pipeline.rules import (PPR_MIN_SHOTS,
+                                         powerplay_shooter_roles)
+
+    rec = powerplay_shooter_roles(_ppr_match([7, 7, 7, 9]))["home"]
+    assert rec["shots"] >= PPR_MIN_SHOTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "sávját kell tartani" in rec["verdict"], rec
+
+
+def test_powerplay_shooter_roles_silent_with_few_shots():
+    """Néhány emberelőny-lövésből nincs ítélet."""
+    from handball.pipeline.rules import powerplay_shooter_roles
+
+    rec = powerplay_shooter_roles(_ppr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

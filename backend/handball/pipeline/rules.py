@@ -1847,3 +1847,66 @@ def seven_shot_directions(match: Match,
                 f"({rec['attempts']} mérhető dobásból) — hetesnél a "
                 "kapus tudatosan arra az oldalra vetődhet")
     return out
+
+
+# Emberelőny-poszt: ennyi poszthoz kötött emberelőny-lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
+# emberelőnyük egy posztra fut ki.
+PPR_MIN_SHOTS = 3
+PPR_SHARE_PCT = 60.0
+
+
+def powerplay_shooter_roles(match: Match,
+                            config: Optional[TacticsConfig] = None
+                            ) -> dict:
+    """Emberelőny-poszt: MELYIK POSZTJUK fejez be a két perc alatt.
+
+    Az emberelőny-lövők rétege (powerplay_shooters) az embert nevezi
+    meg — ez a posztot: a kiállítás-ablakokban leadott lövéseiket a
+    lövő posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez az emberhátrány-terv: öt védővel a fal nem érhet
+    mindenhová — ha az emberelőnyük rendre ugyanarra a posztra fut
+    ki, a hátrányban az ő sávját kell tartani, és a többieket rá
+    lehet engedni. Saját csapatra: az egy posztra futó emberelőny
+    kiszámítható — második kifutási út kell.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"shots" (poszthoz
+    kötött emberelőny-lövés), "roles": {poszt: lövés}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PPR_MIN_SHOTS, vagy egyik poszt sem éri el a PPR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    pps = powerplay_shooters(match, config)
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in pps[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["shots"])
+            rec["shots"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= PPR_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PPR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az emberelőnyük a(z) {poszt} posztra fut ki "
+                    f"({share:.0f}%, {rec['shots']} emberelőny-"
+                    "lövésből) — hátrányban az ő sávját kell tartani,"
+                    " a többieket rá lehet engedni")
+    return out

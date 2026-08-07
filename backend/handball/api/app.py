@@ -3189,6 +3189,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import powerplay_shooter_roles
+            res["powerplay_shooter_roles"] = powerplay_shooter_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.goalkeeper import gk_shorthanded_saves
             res["gk_shorthanded_saves"] = gk_shorthanded_saves(match)
         except Exception:
@@ -4560,6 +4565,9 @@ def create_app():
                 from ..pipeline.rules import powerplay_shooters
                 _layer("powerplay_shooters",
                        lambda: powerplay_shooters(match))
+                from ..pipeline.rules import powerplay_shooter_roles
+                _layer("powerplay_shooter_roles",
+                       lambda: powerplay_shooter_roles(match))
                 from ..pipeline.goalkeeper import gk_shorthanded_saves
                 _layer("gk_shorthanded_saves",
                        lambda: gk_shorthanded_saves(match))
