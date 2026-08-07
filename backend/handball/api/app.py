@@ -3627,6 +3627,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.substitutions import substituted_roles
+            res["substituted_roles"] = substituted_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5254,6 +5259,9 @@ def create_app():
                 from ..pipeline.defense import tired_conceder_roles
                 _layer("tired_conceder_roles",
                        lambda: tired_conceder_roles(match))
+                from ..pipeline.substitutions import substituted_roles
+                _layer("substituted_roles",
+                       lambda: substituted_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

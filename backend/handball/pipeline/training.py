@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 347) Forgatott-poszt: ha a forgatásunk egy posztra jár, a többi
+    # poszton felhalmozódik a fáradtság.
+    try:
+        from .substitutions import SBR_SHARE_PCT, substituted_roles
+        sbr347 = substituted_roles(match, config)
+        for side in ("home", "away"):
+            rec347 = sbr347[side]
+            if rec347.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Egy posztra járó forgatás",
+                f"a cseréink {rec347['share_pct']:.0f}%-a a(z) "
+                f"{rec347['main_role']} posztot érinti "
+                f"({rec347['outs']} lecserélésből; "
+                f"{SBR_SHARE_PCT:.0f}% fölött már minta) — a többi "
+                "poszton felhalmozódik a fáradtság, és a hajrában "
+                "ott törik meg a játékunk",
+                "forgatás-terv kiegyenlítése: tervezett pihentetés "
+                "a nem forgatott posztoknak is (rövid blokkok), és "
+                "a második sor poszt-specifikus felkészítése, hogy "
+                "a csere ne jelentsen színvonal-esést",
+                )
+    except Exception:
+        pass
+
     # 346) Fáradt-fal poszt: ha a falunk a második félidőre egy poszt
     # ellen leül, csere- és kondíció-terv kell arra a sávra.
     try:

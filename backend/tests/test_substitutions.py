@@ -502,3 +502,90 @@ def test_gap_punishment_no_gaps_no_verdict():
 
     rec = gap_punishment(_gpn_match(False, gap_runs=0))["home"]
     assert rec["gap_s"] == 0.0 and rec["verdict"] is None
+
+
+# ---- Forgatott-poszt (melyik posztjukat cserélik) --------------------------
+
+
+def _sbr_match(out_plan, fps=25.0):
+    """Poszt-minta (7/17/27: beálló-tájék, 9: szélső), majd az
+    `out_plan` szerinti cserehullámok: a lecserélt a cserezónában
+    tűnik el, a beálló új track ott jelenik meg."""
+    spos = {7: (34.0, 10.0), 17: (33.5, 9.0), 27: (34.5, 11.0),
+            9: (35.0, 3.0)}
+    on_court = dict(spos)   # track_id -> aktuális hely
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (out_tid, in_tid) in out_plan:
+        spot = on_court[out_tid]
+        for i in range(50):          # a lecserélt a zóna felé tart
+            frac = (i + 1) / 50.0
+            x = spot[0] + (20.0 - spot[0]) * frac
+            y = spot[1] + (1.0 - spot[1]) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()
+                       if tid != out_tid] + [_pl(out_tid, Team.HOME,
+                                                 x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        del on_court[out_tid]        # eltűnik a zónában
+        for _ in range(10):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+        for i in range(50):          # az új track a zónából áll be
+            frac = (i + 1) / 50.0
+            x = 20.0 + (spot[0] - 20.0) * frac
+            y = 1.0 + (spot[1] - 1.0) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()] \
+                + [_pl(in_tid, Team.HOME, x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        on_court[in_tid] = spot
+        for _ in range(250):         # két hullám közt eltelik az idő
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_substituted_roles_names_the_rotated_post():
+    """Négy cseréből három a beálló-tájékot érinti → a fárasztást a
+    nem forgatott posztokra kell tenni."""
+    from handball.pipeline.substitutions import (SBR_MIN_OUTS,
+                                                 substituted_roles)
+
+    rec = substituted_roles(
+        _sbr_match([(7, 107), (17, 117), (27, 127),
+                    (9, 119)]))["home"]
+    assert rec["outs"] >= SBR_MIN_OUTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "friss ember" in rec["verdict"], rec
+
+
+def test_substituted_roles_silent_with_few_subs():
+    """Néhány cseréből nincs ítélet."""
+    from handball.pipeline.substitutions import substituted_roles
+
+    rec = substituted_roles(_sbr_match([(7, 107), (9, 119)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

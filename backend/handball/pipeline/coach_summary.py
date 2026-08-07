@@ -916,6 +916,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Forgatott-poszt: melyik posztjukat cserélik.
+    try:
+        from .substitutions import substituted_roles
+        sbr = substituted_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sbr = sbr[side]
+            if rec_sbr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} forgatása a(z) "
+                     f"{rec_sbr['main_role']} posztra jár "
+                     f"({rec_sbr['share_pct']:.0f}%, "
+                     f"{rec_sbr['outs']} lecserélésből) — a "
+                     "fárasztást a nem forgatott posztjaikra kell "
+                     "tervezni.")
+    except Exception:
+        pass
     # Fáradt-fal poszt: a 2. félidőben melyik poszt jár át rajtuk.
     try:
         from .defense import tired_conceder_roles

@@ -944,6 +944,9 @@ class ScoutingReport:
     # félidőnként. Darabszám, pontosan összegződik.
     tcr_fh_by_role: dict = field(default_factory=dict)
     tcr_sh_by_role: dict = field(default_factory=dict)
+    # Forgatott-poszt: a lecserélések darabszáma a lecserélt posztja
+    # szerint. Darabszám, pontosan összegződik.
+    sbr_outs_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3615,6 +3618,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "a szünet után onnan nyissatok: ott fáradnak, ott "
                 "nyílik a rés.")
             break
+
+    # Forgatott-poszt: hova NE tervezzetek fárasztást.
+    _sbr_n = sum(rep.sbr_outs_by_role.values())
+    if _sbr_n >= 3:
+        _sbr_p, _sbr_c = max(rep.sbr_outs_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sbr_pct = 100.0 * _sbr_c / _sbr_n
+        if _sbr_pct >= 60.0:
+            keys.append(
+                f"A forgatásuk a(z) {_sbr_p} posztra jár "
+                f"({_sbr_pct:.0f}%, {_sbr_n} lecserélés) — ott "
+                "mindig friss ember áll: a fárasztást a nem "
+                "forgatott posztjaikra tervezzétek.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8495,6 +8511,9 @@ def _scout_team_cached(match: Match, team: Team,
         tcrrec = _tcr(match, config)[team.value]
         rep.tcr_fh_by_role = dict(tcrrec["fh_roles"])
         rep.tcr_sh_by_role = dict(tcrrec["sh_roles"])
+        from .substitutions import substituted_roles as _sbr
+        sbrrec = _sbr(match, config)[team.value]
+        rep.sbr_outs_by_role = dict(sbrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11075,6 +11094,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 326) Az ő forgatott-posztjuk × a ti pörgetett tempótok: a
+    # fárasztás a nem forgatott posztjaikon fog beérni.
+    _sbr326_n = sum(opp.sbr_outs_by_role.values())
+    if _sbr326_n >= 3 and own.fast_break_pct >= 12.0:
+        _sbr326_p, _sbr326_c = max(opp.sbr_outs_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sbr326_pct = 100.0 * _sbr326_c / _sbr326_n
+        if _sbr326_pct >= 60.0:
+            plan.append(
+                f"A forgatásuk a(z) {_sbr326_p} posztra jár "
+                f"({_sbr326_pct:.0f}%, {_sbr326_n} lecserélés), ti "
+                "pedig pörgetett tempóval játszotok "
+                f"({own.fast_break_pct:.0f}% lerohanás-arány) — a "
+                "tempót tartsátok, de a fárasztás hasznát a NEM "
+                "forgatott posztjaikon keressétek: ott gyűlik a "
+                "fáradtság, oda menjenek a záró figurák.")
 
     # 325) Az ő fáradt-fal posztjuk × a ti jó félidő-nyitásotok: a
     # szünet után a leülő sávjukból kell nyitni.
@@ -16702,6 +16738,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.tcr_fh_by_role for r in reports),
         tcr_sh_by_role=_merge_count_dicts(
             r.tcr_sh_by_role for r in reports),
+        sbr_outs_by_role=_merge_count_dicts(
+            r.sbr_outs_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

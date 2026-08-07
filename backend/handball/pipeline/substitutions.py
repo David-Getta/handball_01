@@ -550,3 +550,66 @@ def gap_punishment(match: Match,
         elif rec["gap_s"] >= GPN_ESCAPE_MIN_S and rec["conceded"] == 0:
             rec["verdict"] = "a csere-lyukakat büntetlenül megússzák"
     return out
+
+
+# Forgatott-poszt: ennyi poszthoz kötött lecserélés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# forgatásuk egy posztra jár.
+SBR_MIN_OUTS = 3
+SBR_SHARE_PCT = 60.0
+
+
+def substituted_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Forgatott-poszt: MELYIK POSZTJUKAT cserélik.
+
+    A cserehullám-rétegek a hullámot nézik — ez a posztot: a
+    lecserélt játékosokat a posztjukhoz írja. Így látszik, melyik
+    posztjukon forognak (ott mindig friss ember áll), és melyiken
+    nem (ott a fáradás felhalmozódik).
+
+    Edzőileg ez a fárasztás-terv iránya: a sokat forgatott posztra
+    fárasztásra építeni hiba — oda mindig friss ember jön; a
+    terhelés-csapdát a NEM forgatott posztokra kell tenni. Saját
+    csapatra: a forgatás-térkép a terhelés-elosztás tükre.
+
+    Visszatérés csapatonként: {"outs" (poszthoz kötött lecserélés),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az SBR_MIN_OUTS, vagy egyik poszt
+    sem éri el az SBR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"outs": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for ev in detect_substitutions(match, config):
+        side = ev["team"]
+        for tid in ev["out_ids"]:
+            rec_role = roles[side].get(tid)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = out[side]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["outs"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["outs"] >= SBR_MIN_OUTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["outs"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SBR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a forgatásuk a(z) {poszt} posztra jár "
+                    f"({share:.0f}%, {rec['outs']} lecserélésből) — "
+                    "ott mindig friss ember áll: a fárasztást a NEM"
+                    " forgatott posztjaikra kell tervezni")
+    return out
