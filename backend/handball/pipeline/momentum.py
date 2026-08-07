@@ -2369,3 +2369,66 @@ def comeback_carrier_roles(match: Match, config=None) -> dict:
                     "kivétele (szoros fogás, korai kettőzés) a "
                     "hátrányukat beragasztja")
     return out
+
+
+# Csendtörő-poszt: ennyi poszthoz kötött csend-törő gól kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# gólcsendjeiket egy poszt töri meg.
+GCT_MIN_BREAKS = 3
+GCT_SHARE_PCT = 60.0
+
+
+def drought_breaker_roles(match: Match, config=None) -> dict:
+    """Csendtörő-poszt: MELYIK POSZTJUK töri meg a gólcsendet.
+
+    A csend-törők rétege (drought_breakers) az embert nevezi meg —
+    ez a posztot: a legalább DRB_GAP_S másodperces gólcsendet
+    megtörő gólokat a lövő posztjához írja. Így a minta akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a saját sorozat védelme: amikor áll a szekerük, a
+    labda a válság-posztjukhoz menekül — pont a mi sorozatunk alatt
+    őt kell a legszorosabban fogni, mert az ő kivételével a
+    csendjük tovább tart. Saját csapatra: ha a csend-törés egy
+    poszton áll, a válság-megoldásunk kiszámítható.
+
+    Visszatérés csapatonként: {"breaks" (poszthoz kötött csend-törő
+    gól), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a GCT_MIN_BREAKS,
+    vagy egyik poszt sem éri el a GCT_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    db = drought_breakers(match, config)
+
+    out: dict = {side: {"breaks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in db[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["breaks"])
+            rec["breaks"] += row["breaks"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["breaks"] >= GCT_MIN_BREAKS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["breaks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= GCT_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a gólcsendjüket a(z) {poszt} posztjuk töri meg"
+                    f" ({share:.0f}%, {rec['breaks']} csend-törő "
+                    "gólból) — a saját sorozatotok alatt őt kell a "
+                    "legszorosabban fogni: hozzá menekül a labda, és"
+                    " nélküle a csendjük tovább tart")
+    return out

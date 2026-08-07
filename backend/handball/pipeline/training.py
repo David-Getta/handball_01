@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 319) Csendtörő-poszt: ha a gólcsendjeinket mindig ugyanaz a
+    # posztunk töri meg, a válság-megoldásunk kiszámítható és fogható.
+    try:
+        from .momentum import GCT_SHARE_PCT, drought_breaker_roles
+        gct319 = drought_breaker_roles(match, config)
+        for side in ("home", "away"):
+            rec319 = gct319[side]
+            if rec319.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra futó válság-megoldás",
+                f"a gólcsendjeinket {rec319['share_pct']:.0f}%-ban "
+                f"a(z) {rec319['main_role']} posztunk töri meg "
+                f"({rec319['breaks']} csend-törő gólból; "
+                f"{GCT_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a csendünk alatt pontosan tudja, kit "
+                "fogjon",
+                "válság-forgatókönyv B-vel: gólcsend-szituációs 6-6 "
+                "(3 perc gól nélkül → kötelező figura), amelyben a "
+                "befejezés más-más posztra van kiosztva, plusz "
+                "hetes-kiharcolás mint biztonsági szelep",
+                )
+    except Exception:
+        pass
+
     # 318) Pressz-poszt: ha szorításban mindig ugyanaz a posztunk
     # veszíti a labdát, az ellenfél kettőzése oda fog érkezni.
     try:

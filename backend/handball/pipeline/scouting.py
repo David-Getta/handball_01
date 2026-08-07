@@ -850,6 +850,9 @@ class ScoutingReport:
     # Pressz-poszt: a nyomott (testközeli védő melletti) eladások
     # darabszáma posztonként. Darabszám, pontosan összegződik.
     psr_to_by_role: dict = field(default_factory=dict)
+    # Csendtörő-poszt: a 300+ mp-es gólcsendet megtörő gólok
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    gct_breaks_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3150,6 +3153,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Szorításban a(z) {_psr_p} posztjuk ejti a labdát "
                 f"({_psr_pct:.0f}%, {_psr_n} nyomott eladásból) — a "
                 "kettőzés oda nem kockázat, hanem labdaszerzés.")
+
+    # Csendtörő-poszt: kit kell fogni, amikor áll a szekerük.
+    _gct_n = sum(rep.gct_breaks_by_role.values())
+    if _gct_n >= 3:
+        _gct_p, _gct_c = max(rep.gct_breaks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _gct_pct = 100.0 * _gct_c / _gct_n
+        if _gct_pct >= 60.0:
+            keys.append(
+                f"A gólcsendjüket a(z) {_gct_p} posztjuk töri meg "
+                f"({_gct_pct:.0f}%, {_gct_n} csend-törő gólból) — a "
+                "saját sorozatotok alatt őt fogjátok a "
+                "legszorosabban: hozzá menekül a labda.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -7940,6 +7956,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .decisions import press_sensitive_roles as _psr
         psrrec = _psr(match, config)[team.value]
         rep.psr_to_by_role = dict(psrrec["roles"])
+        from .momentum import drought_breaker_roles as _gct
+        gctrec = _gct(match, config)[team.value]
+        rep.gct_breaks_by_role = dict(gctrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10520,6 +10539,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 298) Az ő csendtörő-posztjuk × a ti nagyvédéses kapusotok: ha a
+    # kapus csendet tud rájuk hozni, a csend a válság-posztjuk
+    # fogásával nyújtható meg.
+    _gct298_n = sum(opp.gct_breaks_by_role.values())
+    if _gct298_n >= 3 and own.gk_big_saves >= 3:
+        _gct298_p, _gct298_c = max(opp.gct_breaks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _gct298_pct = 100.0 * _gct298_c / _gct298_n
+        if _gct298_pct >= 60.0:
+            plan.append(
+                f"A gólcsendjüket a(z) {_gct298_p} posztjuk töri meg"
+                f" ({_gct298_pct:.0f}%, {_gct298_n} csend-törő gól),"
+                f" a kapusotok pedig hoz nagyvédést ({own.gk_big_saves}"
+                " a mérésben) — amikor beáll a csendjük, a válság-"
+                "posztjukat vegyétek ki (szoros fogás, korai "
+                "kettőzés): nélküle a csend sorozattá nyúlik.")
 
     # 297) Az ő pressz-posztjuk × a ti kilépő faltok: ha amúgy is
     # szorosan védekeztek, a nyomást az ő gyenge posztjukra irányítva
@@ -15578,6 +15614,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.htr_seconds_by_role for r in reports),
         psr_to_by_role=_merge_count_dicts(
             r.psr_to_by_role for r in reports),
+        gct_breaks_by_role=_merge_count_dicts(
+            r.gct_breaks_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet.
+    try:
+        from .momentum import drought_breaker_roles
+        gct = drought_breaker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gct = gct[side]
+            if rec_gct["verdict"] is None:
+                continue
+            body += (f" A(z) {name} válság-posztja a(z) "
+                     f"{rec_gct['main_role']}: a gólcsendjeik "
+                     f"{rec_gct['share_pct']:.0f}%-át ő töri meg "
+                     f"({rec_gct['breaks']} csend-törő gólból) — az "
+                     "ellenfél sorozata alatt őt kell fogni.")
+    except Exception:
+        pass
     # Pressz-poszt: melyik posztjuk ejti a labdát szorításban.
     try:
         from .decisions import press_sensitive_roles

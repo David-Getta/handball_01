@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet.** A
+  csend-törők rétege az embert nevezi meg — az új réteg a posztot: a
+  300+ másodperces gólcsendet megtörő gólokat a lövő posztjához
+  írja. Edzőileg a saját sorozat védelme: amikor áll a szekerük, a
+  labda a válság-posztjukhoz menekül — pont a sorozatunk alatt őt
+  kell a legszorosabban fogni. Saját oldalon az egy poszton álló
+  csend-törés kiszámítható válság-megoldás. Legalább 3 csend-törő
+  gól és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`drought_breaker_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 298. meccsterv-szabály),
+  edzés-fókusz (319. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Pressz-poszt: melyik posztjuk ejti a labdát szorításban.** A
   pressz-érzékeny játékosok rétege az embert nevezi meg — az új
   réteg a posztot: a nyomott (testközeli védő melletti) eladásokat a

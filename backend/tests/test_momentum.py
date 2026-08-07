@@ -1708,3 +1708,75 @@ def test_comeback_carrier_roles_silent_with_few_goals():
 
     rec = comeback_carrier_roles(_cbr_match([9, 8]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Csendtörő-poszt (melyik posztjuk töri meg a gólcsendet) ---------------
+
+
+def _gct_match(breakers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + gólok: egy nyitó gól után
+    a `breakers` lövői 300+ mp-es gólcsendek után találnak be."""
+    from handball.pipeline.momentum import DRB_GAP_S
+
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    def goal(frames, t, tid):
+        sx, sy = spos[tid]
+        for _ in range(20):          # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        x = sx
+        while x < 40.5:              # gól a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):          # zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    t = goal(frames, t, 7)           # nyitó gól (nem csend-törés)
+    for tid in breakers:
+        gap = int(DRB_GAP_S * fps) + 100
+        for _ in range(gap):         # gólcsend: a labda középen áll
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        t = goal(frames, t, tid)
+    return Match(_meta(fps), frames)
+
+
+def test_drought_breaker_roles_names_the_crisis_post():
+    """Négy csend-törő gólból három a beállóé → ő a válság-poszt."""
+    from handball.pipeline.momentum import (GCT_MIN_BREAKS,
+                                            drought_breaker_roles)
+
+    rec = drought_breaker_roles(_gct_match([7, 7, 7, 9]))["home"]
+    assert rec["breaks"] >= GCT_MIN_BREAKS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "legszorosabban" in rec["verdict"], rec
+
+
+def test_drought_breaker_roles_silent_with_few_breaks():
+    """Néhány csend-törő gólból nincs ítélet."""
+    from handball.pipeline.momentum import drought_breaker_roles
+
+    rec = drought_breaker_roles(_gct_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

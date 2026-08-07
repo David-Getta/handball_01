@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Csendtörő-poszt: melyik posztjuk töri meg a gólcsendet (3+
+  // csend-törő gól, 60% részarány — a backenddel azonos küszöbök:
+  // GCT_MIN_BREAKS, GCT_SHARE_PCT).
+  String? _droughtBreakRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["gct_breaks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a gólcsendjüket a(z) $top posztjuk töri meg "
+        "(${pct.round()}%, $total csend-törő gól) · a sorozatotok "
+        "alatt őt kell a legszorosabban fogni";
+  }
+
   // Pressz-poszt: melyik posztjuk ejti a labdát szorításban (3+
   // nyomott eladás, 60% részarány — a backenddel azonos küszöbök:
   // PSR_MIN_TO, PSR_SHARE_PCT).
@@ -7826,6 +7853,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_droughtBreakRole(r) != null)
+        ["Csendtörő-poszt", _droughtBreakRole(r)!],
       if (_pressSensRole(r) != null)
         ["Pressz-poszt", _pressSensRole(r)!],
       if (_holdShareRole(r) != null)
