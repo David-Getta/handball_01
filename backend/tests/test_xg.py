@@ -1232,3 +1232,73 @@ def test_missed_chance_roles_silent_with_few_misses():
 
     rec = missed_chance_roles(_mcr_match([7, 7]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Fáradt-lövő poszt (kinek megy szét a lövése a 2. félidőben) -----------
+
+
+def _fsa_match(fh_missers, sh_missers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + mellé lövések
+    félidőnként; a félidőket 90 mp-es üres szakasz választja el."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    def miss(frames, t, tid):
+        sx, sy = spos[tid]
+        for _ in range(3):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # mellé: y=5 mentén ki a pályáról
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 1.0 * (i + 1),
+                                                40.4),
+                                          y=5.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in fh_missers:
+        t = miss(frames, t, tid)
+    for _ in range(int(90 * fps)):   # félidei szünet: üres kockák
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for tid in sh_missers:
+        t = miss(frames, t, tid)
+    return Match(_meta(fps), frames)
+
+
+def test_tired_shooter_roles_names_the_fading_shooter_post():
+    """A beálló mellé lövései 1-ről 3-ra ugranak → fáradtan rá lehet
+    engedni."""
+    from handball.pipeline.xg import tired_shooter_roles
+
+    rec = tired_shooter_roles(_fsa_match([7, 9], [7, 7, 7]))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["fh"] == 1 and rec["sh"] == 3, rec
+    assert rec["verdict"] and "rá lehet" in rec["verdict"], rec
+
+
+def test_tired_shooter_roles_silent_without_jump():
+    """Egyenletes mellé-eloszlásnál nincs ítélet."""
+    from handball.pipeline.xg import tired_shooter_roles
+
+    rec = tired_shooter_roles(_fsa_match([7, 7], [7, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

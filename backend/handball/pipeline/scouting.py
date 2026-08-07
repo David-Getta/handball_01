@@ -936,6 +936,10 @@ class ScoutingReport:
     # Darabszám, pontosan összegződik.
     fto_fh_by_role: dict = field(default_factory=dict)
     fto_sh_by_role: dict = field(default_factory=dict)
+    # Fáradt-lövő poszt: kaput elkerülő lövések posztonként,
+    # félidőnként. Darabszám, pontosan összegződik.
+    fsa_fh_by_role: dict = field(default_factory=dict)
+    fsa_sh_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3581,6 +3585,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"félidőre megugranak ({_fto_fh} → {_fto_sh}) — "
                 "fáradtan nála nyílik ki a kéz: a szünet után friss"
                 " védővel őt nyomjátok, rajta olcsó a labdaszerzés.")
+            break
+
+    # Fáradt-lövő poszt: a szünet utáni fal-terv.
+    for _fsa_p, _fsa_sh in sorted(rep.fsa_sh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fsa_fh = rep.fsa_fh_by_role.get(_fsa_p, 0)
+        if _fsa_sh >= 3 and _fsa_sh >= 2.0 * max(1, _fsa_fh):
+            keys.append(
+                f"A(z) {_fsa_p} posztjuk kaput elkerülő lövései a "
+                f"második félidőre megugranak ({_fsa_fh} → "
+                f"{_fsa_sh}) — fáradtan szétmegy a lövése: a szünet"
+                " után rá lehet engedni, a kilépés nála fölösleges "
+                "kockázat.")
             break
 
     # Hajrá-poszt: az utolsó öt perc terve.
@@ -8454,6 +8471,10 @@ def _scout_team_cached(match: Match, team: Team,
         ftorec = _fto(match, config)[team.value]
         rep.fto_fh_by_role = dict(ftorec["fh_roles"])
         rep.fto_sh_by_role = dict(ftorec["sh_roles"])
+        from .xg import tired_shooter_roles as _fsa
+        fsarec = _fsa(match, config)[team.value]
+        rep.fsa_fh_by_role = dict(fsarec["fh_roles"])
+        rep.fsa_sh_by_role = dict(fsarec["sh_roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11034,6 +11055,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 324) Az ő fáradt-lövő posztjuk × a ti nagyvédéses kapusotok: a
+    # szünet után rá lehet engedni, és a kidobásból indítani.
+    if own.gk_big_saves >= 3:
+        for _fsa324_p, _fsa324_sh in sorted(
+                opp.fsa_sh_by_role.items(), key=lambda kv: -kv[1]):
+            _fsa324_fh = opp.fsa_fh_by_role.get(_fsa324_p, 0)
+            if _fsa324_sh >= 3 \
+                    and _fsa324_sh >= 2.0 * max(1, _fsa324_fh):
+                plan.append(
+                    f"A(z) {_fsa324_p} posztjuk lövései a második "
+                    f"félidőre szétmennek ({_fsa324_fh} → "
+                    f"{_fsa324_sh} kaput elkerülő lövés), a "
+                    f"kapusotok pedig hoz nagyvédést "
+                    f"({own.gk_big_saves} a mérésben) — a szünet "
+                    "után engedjétek rá: a kilépés nála fölösleges,"
+                    " a mellé lövése után a kidobás azonnali "
+                    "indítás.")
+                break
 
     # 323) Az ő fáradt-eladó posztjuk × a ti mély padotok: a szünet
     # után friss védő rajta olcsó labdákat szerez.
@@ -16615,6 +16655,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.fto_fh_by_role for r in reports),
         fto_sh_by_role=_merge_count_dicts(
             r.fto_sh_by_role for r in reports),
+        fsa_fh_by_role=_merge_count_dicts(
+            r.fsa_fh_by_role for r in reports),
+        fsa_sh_by_role=_merge_count_dicts(
+            r.fsa_sh_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

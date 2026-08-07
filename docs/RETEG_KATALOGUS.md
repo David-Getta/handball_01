@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **371 réteg**, modulonként csoportosítva; a
+Összesen **372 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (76)
@@ -460,7 +460,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `training` | Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}). |
 
-## xg (22)
+## xg (23)
 
 | Réteg | Mit mér |
 |---|---|
@@ -480,6 +480,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_concentration` | Lövő-koncentráció: mennyire egy emberre épül a lövés-terhelés. |
 | `shot_quality_by_score` | Lövés-választás állás szerint: HÁTRÁNYBAN ELKAPKODJÁK-E. |
 | `shot_release` | Elsütés-idő: kapásból lőnek, vagy sokáig fogják a labdát. |
+| `tired_shooter_roles` | Fáradt-lövő poszt: MELYIK POSZTJUK lövései mennek szét fáradtan. |
 | `wall_fade` | Fal-fáradás: MELYIK FÉLIDŐBEN nyílik ki a fal. |
 | `wasteful_shooter_roles` | Pazarló-poszt: MELYIK POSZTJUK lövi mellé a lövéseit. |
 | `wasteful_shooters` | Pontatlan lövők: KINEK a lövései mennek mellé. |

@@ -1228,3 +1228,77 @@ def missed_chance_roles(match: Match,
                     "kisebbik rossz: a besegítés a biztos kezű "
                     "társakra menjen")
     return out
+
+
+# Fáradt-lövő poszt: legalább ennyi 2. félidei kaput elkerülő lövés
+# kell, és ennyiszerese az első félideinek, hogy a posztot fáradt
+# lövőjűnek mondjuk ki.
+FSA_MIN_SH = 3
+FSA_FACTOR = 2.0
+
+
+def tired_shooter_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Fáradt-lövő poszt: MELYIK POSZTJUK lövései mennek szét fáradtan.
+
+    A pazarló-poszt a teljes meccset nézi — ez a fáradást: a kaput
+    elkerülő (mellé/blokkolt) lövéseket félidőnként a lövő
+    posztjához írja, és megkeresi, melyik posztjuk pontatlansága
+    ugrik meg a második félidőre. Így látszik, kinek megy szét
+    fáradtan a lövése.
+
+    Edzőileg ez a második félidei fal-terv: akinek fáradtan szétmegy
+    a lövése, arra a szünet után rá lehet engedni — a kilépés nála
+    már fölösleges kockázat. Saját csapatra: fáradt célzás-blokk és
+    a befejezés átosztása a második félidőben.
+
+    Visszatérés csapatonként: {"fh_roles": {poszt: darab},
+    "sh_roles": {poszt: darab}, "main_role", "fh", "sh", "verdict"}
+    — az ítélet None, ha nincs felismert szünet, vagy egyik poszt
+    sem éri el az FSA_MIN_SH-t az FSA_FACTOR-os ugrással.
+    """
+    from .halftime import detect_halftime
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    out: dict = {side: {"fh_roles": {}, "sh_roles": {},
+                        "main_role": None, "fh": None, "sh": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    roles = estimate_positions(match, _TC())
+    xg = match_xg(match, config)
+
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["outcome"] in ("goal", "save"):
+            continue
+        side = sh["team"]
+        key = "fh_roles" if sh["t"] <= ht else "sh_roles"
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        out[side][key][poszt] = out[side][key].get(poszt, 0) + 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fader = None
+        for poszt, n_sh in sorted(rec["sh_roles"].items(),
+                                  key=lambda kv: -kv[1]):
+            n_fh = rec["fh_roles"].get(poszt, 0)
+            if n_sh >= FSA_MIN_SH and n_sh >= FSA_FACTOR * max(1, n_fh):
+                fader = (poszt, n_fh, n_sh)
+                break
+        if fader is not None:
+            poszt, n_fh, n_sh = fader
+            rec["main_role"] = poszt
+            rec["fh"], rec["sh"] = n_fh, n_sh
+            rec["verdict"] = (
+                f"a(z) {poszt} posztjuk kaput elkerülő lövései a "
+                f"második félidőre megugranak ({n_fh} → {n_sh}) — "
+                "fáradtan szétmegy a lövése: a szünet után rá lehet"
+                " engedni, a kilépés nála fölösleges kockázat")
+    return out

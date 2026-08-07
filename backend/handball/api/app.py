@@ -3617,6 +3617,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import tired_shooter_roles
+            res["tired_shooter_roles"] = tired_shooter_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5238,6 +5243,9 @@ def create_app():
                 from ..pipeline.decisions import tired_turnover_roles
                 _layer("tired_turnover_roles",
                        lambda: tired_turnover_roles(match))
+                from ..pipeline.xg import tired_shooter_roles
+                _layer("tired_shooter_roles",
+                       lambda: tired_shooter_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

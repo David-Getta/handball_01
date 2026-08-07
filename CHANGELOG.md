@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Fáradt-lövő poszt: kinek megy szét a lövése a második
+  félidőben.** A pazarló-poszt a teljes meccset nézi — az új réteg a
+  fáradást: a kaput elkerülő lövéseket félidőnként a lövő posztjához
+  írja, és megkeresi, melyik posztjuk pontatlansága ugrik meg a
+  másodikra. Edzőileg a szünet utáni fal-terv: fáradtan szétmegy a
+  lövése — rá lehet engedni, a kilépés nála fölösleges kockázat.
+  Saját oldalon a fáradt célzás-blokk és a befejezés átosztása az
+  edzés-téma. Felismert szünet nélkül, 3 második félidei mellé és
+  kétszeres ugrás alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`tired_shooter_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 324. meccsterv-szabály), edzés-fókusz
+  (345. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Fáradt-eladó poszt: kinek a labdái vesznek el a második
   félidőben.** Az eladás-rétegek a teljes meccset nézik — az új
   réteg a fáradást: a labdaeladásokat félidőnként a vesztes

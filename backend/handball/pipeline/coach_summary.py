@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Fáradt-lövő poszt: kinek megy szét a lövése a 2. félidőben.
+    try:
+        from .xg import tired_shooter_roles
+        fsa = tired_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fsa = fsa[side]
+            if rec_fsa["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_fsa['main_role']} "
+                     "posztjának kaput elkerülő lövései a második "
+                     f"félidőre megugranak ({rec_fsa['fh']} → "
+                     f"{rec_fsa['sh']}) — fáradtan rá lehet engedni.")
+    except Exception:
+        pass
     # Fáradt-eladó poszt: kinek a labdái vesznek el a 2. félidőben.
     try:
         from .decisions import tired_turnover_roles

@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 345) Fáradt-lövő poszt: ha egy posztunk lövései a második
+    # félidőre szétmennek, fáradt célzás-blokk és átosztás kell.
+    try:
+        from .xg import tired_shooter_roles
+        fsa345 = tired_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec345 = fsa345[side]
+            if rec345.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Fáradtan szétmenő lövés",
+                f"a(z) {rec345['main_role']} posztunk kaput "
+                "elkerülő lövései a második félidőre megugranak "
+                f"({rec345['fh']} → {rec345['sh']}) — fáradtan "
+                "szétmegy a lövése, és az ellenfél rá fogja engedni",
+                "fáradt célzás-blokk a posztnak: kapura lövés magas "
+                "pulzuson (kör-edzés után), sarok-célzás kapussal, "
+                "és a második félidei figurákban a befejezés "
+                "átosztása frissebb posztra",
+                )
+    except Exception:
+        pass
+
     # 344) Fáradt-eladó poszt: ha egy posztunk eladásai a második
     # félidőre megugranak, terhelés-menedzsment és fáradt
     # labdabiztonság kell.
