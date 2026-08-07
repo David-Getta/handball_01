@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Passzív-poszt: melyik posztjuknál hal el a felállt támadás.
+    try:
+        from .rules import passive_holder_roles
+        pvr = passive_holder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pvr = pvr[side]
+            if rec_pvr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} terméketlen támadásai a(z) "
+                     f"{rec_pvr['main_role']} posztnál halnak el "
+                     f"({rec_pvr['share_pct']:.0f}%-a a lövés "
+                     "nélküli hosszú támadások labdás idejének) — "
+                     "passzív jelzésnél őt kell nyomás alá tenni.")
+    except Exception:
+        pass
     # Rajt-poszt: melyik posztjuk viszi a meccs elejét.
     try:
         from .momentum import opening_scorer_roles

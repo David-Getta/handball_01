@@ -3533,6 +3533,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import passive_holder_roles
+            res["passive_holder_roles"] = passive_holder_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5106,6 +5111,9 @@ def create_app():
                 from ..pipeline.momentum import opening_scorer_roles
                 _layer("opening_scorer_roles",
                        lambda: opening_scorer_roles(match))
+                from ..pipeline.rules import passive_holder_roles
+                _layer("passive_holder_roles",
+                       lambda: passive_holder_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

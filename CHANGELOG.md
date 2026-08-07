@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Passzív-poszt: melyik posztjuknál hal el a felállt támadás.** A
+  passzív-kockázat rétege a szakaszt nevezi meg — az új réteg a
+  posztot: a lövés nélküli, hosszú felállt támadások labdás kockáit
+  a birtokos posztjához írja. Edzőileg a passzív jelzés terve: ha a
+  terméketlen támadásaik ideje rendre ugyanannál a posztnál telik, a
+  jelzés alatt őt kell nyomás alá tenni — nála jön a kényszer-lövés
+  vagy az eladás. Saját oldalon a passzív-protokoll (kész befejező
+  megoldás) a téma. Legalább 250 passzív labdás kocka és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`passive_holder_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 308. meccsterv-szabály), edzés-fókusz
+  (329. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Rajt-poszt: melyik posztjuk viszi a meccs elejét.** A
   nyitás-profil csapat-szinten mondja meg, hogyan rajtolnak — az új
   réteg a posztot: a meccs első tíz percének góljait a lövő

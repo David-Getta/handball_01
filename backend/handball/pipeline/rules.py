@@ -1974,3 +1974,79 @@ def shorthanded_shooter_roles(match: Match,
                     " — emberelőnyben az ő oldalán kell a "
                     "labdabiztonság: onnan indul az ellentámadásuk")
     return out
+
+
+# Passzív-poszt: ennyi poszthoz kötött labdás kocka kell a passzív
+# (lövés nélküli, hosszú) támadásokból az ítélethez, és ekkora
+# részarány fölött mondjuk ki, hogy a támadásuk egy posztnál hal el.
+PVR_MIN_FRAMES = 250
+PVR_SHARE_PCT = 60.0
+
+
+def passive_holder_roles(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Passzív-poszt: MELYIK POSZTJUKNÁL hal el a felállt támadás.
+
+    A passzív-kockázat rétege (passive_play_risks) a szakaszt nevezi
+    meg — ez a posztot: a lövés nélküli, hosszú felállt támadások
+    labdás kockáit a birtokos posztjához írja. Így látszik, kinél
+    áll meg a játék, amikor a támadásuk nem jut el a lövésig.
+
+    Edzőileg ez a passzív jelzés terve: ha a terméketlen támadásaik
+    ideje rendre ugyanannál a posztnál telik, a passzív jelzés alatt
+    őt kell nyomás alá tenni — nála jön a kényszer-lövés vagy az
+    eladás. Saját csapatra: annál a posztnál kell a kész befejező
+    megoldás, mielőtt a játékvezető keze felmegy.
+
+    Visszatérés csapatonként: {"frames" (poszthoz kötött passzív
+    labdás kocka), "roles": {poszt: kocka}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PVR_MIN_FRAMES, vagy egyik poszt sem éri el a PVR_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    segments = [(a["start_frame"], a["end_frame"], a["team"])
+                for a in passive_play_risks(match, config)]
+
+    out: dict = {side: {"frames": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if segments:
+        for f in match.frames:
+            side = next((s for (a, b, s) in segments
+                         if a <= f.t <= b), None)
+            if side is None:
+                continue
+            h = ball_holder(f, config)
+            if h is None or h.team is None \
+                    or h.team.value != side or h.role == "kapus":
+                continue
+            rec_role = roles[side].get(h.track_id)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = out[side]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["frames"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["frames"] >= PVR_MIN_FRAMES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["frames"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PVR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lövés nélküli, hosszú támadásaik labdás "
+                    f"idejének {share:.0f}%-a a(z) {poszt} posztnál "
+                    "telik — ott hal el a támadásuk: passzív "
+                    "jelzésnél őt kell nyomás alá tenni, nála jön a "
+                    "kényszer-eladás")
+    return out

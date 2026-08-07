@@ -1768,3 +1768,49 @@ def test_shorthanded_shooter_roles_silent_with_few_shots():
     rec = shorthanded_shooter_roles(
         _shr_match([(4, 1), (8, 1)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Passzív-poszt (melyik posztjuknál hal el a felállt támadás) -----------
+
+
+def _pvr_match(hold_frames_7, hold_frames_9, fps=25.0):
+    """Egyetlen hosszú, lövés nélküli felállt hazai támadás: a labda
+    felváltva a 7-esnél (beálló) és a 9-esnél (szélső) áll."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    plan = [(7, hold_frames_7), (9, hold_frames_9)]
+    for (tid, n) in plan:
+        sx, sy = spos[tid]
+        for _ in range(n):
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_passive_holder_roles_names_the_stalling_post():
+    """A 40 mp-es, lövés nélküli támadás ideje a beállónál telik →
+    passzív jelzésnél őt kell nyomás alá tenni."""
+    from handball.pipeline.rules import (PVR_MIN_FRAMES,
+                                         passive_holder_roles)
+
+    rec = passive_holder_roles(_pvr_match(800, 200))["home"]
+    assert rec["frames"] >= PVR_MIN_FRAMES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kényszer-eladás" in rec["verdict"], rec
+
+
+def test_passive_holder_roles_silent_without_passive_attack():
+    """Rövid (35 mp alatti) támadásból nincs passzív szakasz, se
+    ítélet."""
+    from handball.pipeline.rules import passive_holder_roles
+
+    rec = passive_holder_roles(_pvr_match(400, 100))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

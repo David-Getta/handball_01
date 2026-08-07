@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 329) Passzív-poszt: ha a terméketlen támadásaink egy posztnál
+    # halnak el, oda kész befejező megoldás kell a passzív jelzés
+    # előttre.
+    try:
+        from .rules import PVR_SHARE_PCT, passive_holder_roles
+        pvr329 = passive_holder_roles(match, config)
+        for side in ("home", "away"):
+            rec329 = pvr329[side]
+            if rec329.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál elhaló támadás",
+                f"a lövés nélküli hosszú támadásaink labdás idejének"
+                f" {rec329['share_pct']:.0f}%-a a(z) "
+                f"{rec329['main_role']} posztnál telik "
+                f"({PVR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "passzív jelzés alatt nála ragad a labda, és onnan "
+                "jön a kényszer-eladás",
+                "passzív-protokoll: 25 másodperc után kötelező "
+                "figura-indítás, a posztnak kész befejező megoldás "
+                "(bejátszás vagy átlövés-elzárás), és 5-0-s "
+                "időhúzás-elleni gyakorlás sípszóra",
+                )
+    except Exception:
+        pass
+
     # 328) Rajt-poszt: ha a meccs-nyitásunk egy posztra épül, a
     # felkészült ellenfél az első perctől rá áll — kell a második
     # nyitó-megoldás.

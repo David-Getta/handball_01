@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Passzív-poszt: melyik posztjuknál hal el a felállt támadás
+  // (250+ passzív labdás kocka, 60% részarány — a backenddel azonos
+  // küszöbök: PVR_MIN_FRAMES, PVR_SHARE_PCT).
+  String? _passiveHolderRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pvr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 250) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a terméketlen támadásaik a(z) $top posztnál halnak el "
+        "(${pct.round()}% a passzív-gyanús labdás időből) · passzív"
+        " jelzésnél őt kell nyomás alá tenni";
+  }
+
   // Rajt-poszt: melyik posztjuk viszi a meccs elejét (3+ gól az
   // első tíz percben, 60% részarány — a backenddel azonos küszöbök:
   // OSR_MIN_GOALS, OSR_SHARE_PCT).
@@ -8093,6 +8120,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_passiveHolderRole(r) != null)
+        ["Passzív-poszt", _passiveHolderRole(r)!],
       if (_openingScorerRole(r) != null)
         ["Rajt-poszt", _openingScorerRole(r)!],
       if (_assistedScorerRole(r) != null)
