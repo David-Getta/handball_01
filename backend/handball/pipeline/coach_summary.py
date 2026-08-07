@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Blokkolt-poszt: melyik posztjuk lövéseit blokkolják.
+    try:
+        from .defense import blocked_shooter_roles
+        bsr = blocked_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bsr = bsr[side]
+            if rec_bsr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} falba lőtt labdái a(z) "
+                     f"{rec_bsr['main_role']} posztról jönnek "
+                     f"({rec_bsr['share_pct']:.0f}%, "
+                     f"{rec_bsr['blocks']} blokkból) — a fal ellene "
+                     "bátran zárhat.")
+    except Exception:
+        pass
     # Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez.
     try:
         from .rules import seven_taker_roles

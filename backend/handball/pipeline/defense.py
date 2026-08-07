@@ -4388,3 +4388,87 @@ def screened_defender_roles(match, config=None) -> dict:
                     " az elzárás tisztán hagyja a lövőt: oda kell "
                     "vinni a figurákat")
     return out
+
+
+# Blokkolt-poszt: ennyi poszthoz kötött blokkolt lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a falba
+# lőtt labdáik egy posztról jönnek.
+BSR_MIN_BLOCKS = 3
+BSR_SHARE_PCT = 60.0
+BSR_LOOKBACK_FRAMES = 25   # a lövő keresése a blokk előtti kockákon
+
+
+def blocked_shooter_roles(match, config=None) -> dict:
+    """Blokkolt-poszt: MELYIK POSZTJUK lövéseit blokkolják.
+
+    A blokk-réteg (detect_blocks) a védő oldalt nevezi meg — ez a
+    megakasztott lövőt: minden blokkhoz megkeresi a blokk előtti
+    utolsó támadó labdabirtokost, és a blokkot az ő posztjához írja.
+    Így látszik, kinek a lövése akad el rendre a falban.
+
+    Edzőileg ez a fal bátorsága: amelyik posztjuk rendre falba lő,
+    ellene a blokk nem szerencse, hanem terv — a védője bátran
+    zárhat elé. Saját csapatra: annál a posztnál lövés előtt
+    kötelező az elmozgatás (elzárás, csel) — az előkészítetlen
+    lövése ajándék labdavesztés.
+
+    Visszatérés csapatonként (a BLOKKOLT, támadó oldal): {"blocks"
+    (poszthoz kötött blokkolt lövés), "roles": {poszt: darab},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg a BSR_MIN_BLOCKS, vagy egyik poszt sem éri el a
+    BSR_SHARE_PCT-t.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    blk = detect_blocks(match, config)
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+
+    out: dict = {side: {"blocks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for def_side in ("home", "away"):
+        atk_side = "away" if def_side == "home" else "home"
+        atk_team = Team.HOME if atk_side == "home" else Team.AWAY
+        for ev in blk[def_side]["events"]:
+            i0 = idx_of.get(ev["t"])
+            if i0 is None:
+                continue
+            shooter = None
+            for j in range(i0, max(-1, i0 - BSR_LOOKBACK_FRAMES), -1):
+                h = ball_holder(match.frames[j], config)
+                if h is not None and h.team == atk_team \
+                        and h.role != "kapus":
+                    shooter = h.track_id
+                    break
+            if shooter is None:
+                continue
+            rec_role = roles[atk_side].get(shooter)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = out[atk_side]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["blocks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["blocks"] >= BSR_MIN_BLOCKS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["blocks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a blokkolt lövéseik {share:.0f}%-a a(z) "
+                    f"{poszt} posztról jön ({rec['blocks']} "
+                    "blokkból) — a fal ellene bátran zárhat: az ő "
+                    "előkészítetlen lövése falba megy, és onnan "
+                    "kontra indul")
+    return out

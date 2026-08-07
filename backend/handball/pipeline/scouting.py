@@ -902,6 +902,9 @@ class ScoutingReport:
     # Hetesdobó-poszt: a hetes-kísérletek darabszáma a dobó posztja
     # szerint. Darabszám, pontosan összegződik.
     stk_attempts_by_role: dict = field(default_factory=dict)
+    # Blokkolt-poszt: a blokkolt lövések darabszáma a lövő posztja
+    # szerint. Darabszám, pontosan összegződik.
+    bsr_blocks_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3414,6 +3417,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk dobja ({_stk_n} hetesből) — a kapusotok "
                 "az ő szokás-irányait tanulja, és ha ezt a posztot "
                 "kiveszitek, a hetes-rutinjuk is vele megy.")
+
+    # Blokkolt-poszt: ki ellen zárhat bátran a fal.
+    _bsr_n = sum(rep.bsr_blocks_by_role.values())
+    if _bsr_n >= 3:
+        _bsr_p, _bsr_c = max(rep.bsr_blocks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _bsr_pct = 100.0 * _bsr_c / _bsr_n
+        if _bsr_pct >= 60.0:
+            keys.append(
+                f"A blokkolt lövéseik {_bsr_pct:.0f}%-a a(z) "
+                f"{_bsr_p} posztról jön ({_bsr_n} blokkból) — a fal"
+                " ellene bátran zárhat: az előkészítetlen lövése "
+                "falba megy, és onnan kontra indul.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8254,6 +8270,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import seven_taker_roles as _stk
         stkrec = _stk(match, config)[team.value]
         rep.stk_attempts_by_role = dict(stkrec["roles"])
+        from .defense import blocked_shooter_roles as _bsr
+        bsrrec = _bsr(match, config)[team.value]
+        rep.bsr_blocks_by_role = dict(bsrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10834,6 +10853,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 314) Az ő blokkolt-posztjuk × a ti blokkoló falatok: a falba
+    # lövő poszt ellen a zárás nem szerencse, hanem terv.
+    _bsr314_n = sum(opp.bsr_blocks_by_role.values())
+    _rbk314_n = sum(own.rbk_blocks_by_role.values())
+    if _bsr314_n >= 3 and _rbk314_n >= 3:
+        _bsr314_p, _bsr314_c = max(opp.bsr_blocks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _bsr314_pct = 100.0 * _bsr314_c / _bsr314_n
+        if _bsr314_pct >= 60.0:
+            plan.append(
+                f"A blokkolt lövéseik {_bsr314_pct:.0f}%-a a(z) "
+                f"{_bsr314_p} posztról jön ({_bsr314_n} blokk), a "
+                f"ti falatok pedig blokkol ({_rbk314_n} blokk a "
+                "mérésben) — az ő sávjában bátran zárjatok elé: a "
+                "falba lőtt labdája azonnali kontra-indítás.")
 
     # 313) Az ő hetesdobó-posztjuk × a ti nagyvédéses kapusotok: egy
     # dobó szokás-irányait meg lehet tanulni.
@@ -16215,6 +16250,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ssr_goals_by_role for r in reports),
         stk_attempts_by_role=_merge_count_dicts(
             r.stk_attempts_by_role for r in reports),
+        bsr_blocks_by_role=_merge_count_dicts(
+            r.bsr_blocks_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

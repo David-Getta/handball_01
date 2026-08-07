@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 335) Blokkolt-poszt: ha egy posztunk lövéseit rendre blokkolják,
+    # a lövés-előkészítés hiányzik — elmozgatás nélkül falba lövünk.
+    try:
+        from .defense import BSR_SHARE_PCT, blocked_shooter_roles
+        bsr335 = blocked_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec335 = bsr335[side]
+            if rec335.get("verdict") is None:
+                continue
+            add(side, "támadás", "Falba lövő poszt",
+                f"a blokkolt lövéseink {rec335['share_pct']:.0f}%-a "
+                f"a(z) {rec335['main_role']} posztról jön "
+                f"({rec335['blocks']} blokkból; "
+                f"{BSR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "előkészítetlen lövésünk falba megy, és onnan "
+                "kontra indul",
+                "lövés-előkészítés a posztnak: elzárás-lövés "
+                "kombinációk, lövőcsel a záró védőre, és "
+                "lövés-szelekció videóról — zárt sávba nem lövünk, "
+                "hanem tovább járatjuk",
+                )
+    except Exception:
+        pass
+
     # 334) Hetesdobó-poszt: ha a heteseinket mindig ugyanaz a posztunk
     # dobja, az ellenfél kapusa egyetlen dobó szokásaira készülhet.
     try:

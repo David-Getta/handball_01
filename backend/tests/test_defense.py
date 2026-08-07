@@ -3182,3 +3182,64 @@ def test_screened_defender_roles_silent_with_few_screens():
 
     rec = screened_defender_roles(_sdr_match([21, 22]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Blokkolt-poszt (melyik posztjuk lövéseit blokkolják) ------------------
+
+
+def _bsr_match(shooters, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + blokkok: a lövő labdája
+    lövés-tempóban indul a kapu felé, majd a védőn visszafordul."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(extra=()):
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + list(extra))
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in shooters:
+        sx, sy = spos[tid]
+        deff = _pl(30, Team.AWAY, 34.3, sy)   # a blokkoló védő
+        for _ in range(8):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast((deff,)),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        # Lövés-tempójú indulás + visszapattanás a védőn (34.4-nél,
+        # a kaputól 5.6 m-re): f0 33.9 → f1 34.4 → f2 33.9.
+        for bx in (33.9, 34.4, 33.9, 33.0):
+            frames.append(Frame(t=t, players=cast((deff,)),
+                                ball=Ball(x=bx, y=sy, confidence=1.0)))
+            t += 1
+        for _ in range(25):          # semleges szakasz (blokk-cooldown)
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_blocked_shooter_roles_names_the_walled_post():
+    """Négy blokkolt lövésből három a beállóé → ellene bátran zárhat
+    a fal."""
+    from handball.pipeline.defense import (BSR_MIN_BLOCKS,
+                                           blocked_shooter_roles)
+
+    rec = blocked_shooter_roles(_bsr_match([7, 7, 7, 9]))["home"]
+    assert rec["blocks"] >= BSR_MIN_BLOCKS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "bátran zárhat" in rec["verdict"], rec
+
+
+def test_blocked_shooter_roles_silent_with_few_blocks():
+    """Néhány blokkból nincs ítélet."""
+    from handball.pipeline.defense import blocked_shooter_roles
+
+    rec = blocked_shooter_roles(_bsr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

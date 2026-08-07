@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Blokkolt-poszt: melyik posztjuk lövéseit blokkolják.** A
+  blokk-réteg a védő oldalt nevezi meg — az új réteg a megakasztott
+  lövőt: minden blokkhoz megkeresi a blokk előtti utolsó támadó
+  labdabirtokost, és a blokkot az ő posztjához írja. Edzőileg a fal
+  bátorsága: amelyik posztjuk rendre falba lő, ellene a blokk nem
+  szerencse, hanem terv — a védője bátran zárhat elé. Saját oldalon
+  a lövés-előkészítés (elzárás, lövőcsel, lövés-szelekció) az
+  edzés-téma. Legalább 3 blokkolt lövés és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`blocked_shooter_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 314. meccsterv-szabály), edzés-fókusz (335. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez.** A
   hetes-dobók listája az embert nevezi meg — az új réteg a posztot:
   a felismert hétméteresek kimenetel-lövéseit a dobó posztjához

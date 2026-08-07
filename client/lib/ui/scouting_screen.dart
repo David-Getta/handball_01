@@ -2141,6 +2141,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Blokkolt-poszt: melyik posztjuk lövéseit blokkolják (3+
+  // blokkolt lövés, 60% részarány — a backenddel azonos küszöbök:
+  // BSR_MIN_BLOCKS, BSR_SHARE_PCT).
+  String? _blockedShooterRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["bsr_blocks_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a blokkolt lövéseik ${pct.round()}%-a a(z) $top "
+        "posztról jön ($total blokk) · a fal ellene bátran zárhat";
+  }
+
   // Hetesdobó-poszt: melyik posztjuk áll oda a hetesekhez (3+
   // hetes-kísérlet, 60% részarány — a backenddel azonos küszöbök:
   // STK_MIN_ATTEMPTS, STK_SHARE_PCT).
@@ -8255,6 +8281,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_blockedShooterRole(r) != null)
+        ["Blokkolt-poszt", _blockedShooterRole(r)!],
       if (_sevenTakerRole(r) != null)
         ["Hetesdobó-poszt", _sevenTakerRole(r)!],
       if (_secondStartRole(r) != null)
