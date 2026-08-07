@@ -812,6 +812,11 @@ class ScoutingReport:
     # Bejátszó-poszt: a beálló-beadások darabszáma posztonként.
     # Darabszám, meccsek közt pontosan összegződik.
     pfr_feeds_by_role: dict = field(default_factory=dict)
+    # Vasember-poszt: posztonként a legtöbbet pályán lévő játékos
+    # mért kockái + az összes kocka. Darabszámok, pontosan
+    # összegződnek (arány = irm_on_by_role / irm_total_frames).
+    irm_on_by_role: dict = field(default_factory=dict)
+    irm_total_frames: int = 0
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3048,6 +3053,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Vasember-poszt: a hajrá-terv — melyik posztjuk fárad el.
+    if rep.irm_total_frames >= 15000 and rep.irm_on_by_role:
+        _irm_items = sorted(rep.irm_on_by_role.items(),
+                            key=lambda kv: -kv[1])
+        _irm_p, _irm_c = _irm_items[0]
+        _irm_pct = 100.0 * _irm_c / rep.irm_total_frames
+        _irm_2nd = (100.0 * _irm_items[1][1] / rep.irm_total_frames
+                    if len(_irm_items) > 1 else 0.0)
+        if _irm_pct >= 85.0 and _irm_pct - _irm_2nd >= 15.0:
+            keys.append(
+                f"A(z) {_irm_p} posztjuk végigjátssza a meccseket "
+                f"({_irm_pct:.0f}% jelenlét, miközben a többi posztot "
+                "cserélik) — a hajrában oda kell vinni a tempót: őt "
+                "kell futtatni, és vele szemben friss ember jöjjön.")
 
     # Bejátszó-poszt: kinek a kezén kell a beálló-vonalba lépni.
     _pfr_n = sum(rep.pfr_feeds_by_role.values())
@@ -7710,6 +7730,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import pivot_feeder_roles as _pfr
         pfrrec = _pfr(match, config)[team.value]
         rep.pfr_feeds_by_role = dict(pfrrec["roles"])
+        from .stats import iron_man_roles as _irm
+        irmrec = _irm(match, config)[team.value]
+        rep.irm_total_frames = len(match.frames)
+        rep.irm_on_by_role = {
+            p: round(v / 100.0 * len(match.frames))
+            for p, v in irmrec["roles"].items()}
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10284,6 +10310,30 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 286) Az ő vasember-posztjuk × a ti mély padotok: ha náluk egy
+    # poszt csere nélkül végigmegy, ti pedig sok emberrel forogtok, a
+    # hajrá a tiétek — csak oda kell vinni a tempót.
+    if (opp.irm_total_frames >= 15000 and opp.irm_on_by_role
+            and opp.rotation_matches > 0):
+        _irm286 = sorted(opp.irm_on_by_role.items(),
+                         key=lambda kv: -kv[1])
+        _irm286_p, _irm286_c = _irm286[0]
+        _irm286_pct = 100.0 * _irm286_c / opp.irm_total_frames
+        _irm286_2nd = (100.0 * _irm286[1][1] / opp.irm_total_frames
+                       if len(_irm286) > 1 else 0.0)
+        _rot286 = opp.rotation_matches and (
+            own.rotation_used_sum / max(1, own.rotation_matches))
+        if (_irm286_pct >= 85.0 and _irm286_pct - _irm286_2nd >= 15.0
+                and own.rotation_matches > 0 and _rot286 and
+                _rot286 >= 9.0):
+            plan.append(
+                f"A(z) {_irm286_p} posztjuk csere nélkül végigmegy "
+                f"({_irm286_pct:.0f}% jelenlét), ti pedig mély paddal "
+                f"forogtok (átlag {_rot286:.0f} bevetett játékos) — a "
+                "hajrában oda vigyétek a tempót: az ő sávjában jöjjön"
+                " a betörés és a futtatás, vele szemben pedig mindig "
+                "friss ember álljon.")
 
     # 285) Az ő bejátszó-posztjuk × a ti beálló-védekezésetek: ha a
     # beálló-játékuk egy posztról fut, és a ti falatok amúgy is
@@ -15095,6 +15145,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ohr_steals_by_role for r in reports),
         pfr_feeds_by_role=_merge_count_dicts(
             r.pfr_feeds_by_role for r in reports),
+        irm_on_by_role=_merge_count_dicts(
+            r.irm_on_by_role for r in reports),
+        irm_total_frames=sum(r.irm_total_frames for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

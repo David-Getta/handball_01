@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Vasember-poszt: melyik posztjuk játszik végig csere nélkül.** A
+  rotáció-mélység azt mondja meg, hány emberrel játszanak — az új
+  réteg azt, HOL nincs váltás: posztonként a legtöbbet pályán lévő
+  játékos jelenlét-aránya, és ítélet, ha egy poszt kilóg (85%+
+  jelenlét, 15 százalékponttal a mezőny fölött, 10+ perces
+  felvételen). Edzőileg ez a hajrá-terv: a végigjátszó poszt a meccs
+  végére elfárad — az utolsó tíz percben oda kell vinni a tempót, és
+  vele szemben friss ember jöjjön; saját cserétlen posztunk ugyanígy
+  figyelmeztetés. Felületek: `/analyze` és meccs-csomag
+  (`iron_man_roles`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (286: az ő vasember-posztjuk × a ti mély padotok
+  → a hajrá a tiétek), edzés-fókusz (307: váltóember-építés heti
+  játékperc-céllal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
 - **Bejátszó-poszt: melyik posztjuk játssza be a beállót.** A
   beálló-kiszolgálók rétege az embert nevezi meg — az új réteg a
   posztot: a beállóhoz futó beadásokat a passzoló posztjához írja.

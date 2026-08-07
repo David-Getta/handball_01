@@ -3224,6 +3224,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stats import iron_man_roles
+            res["iron_man_roles"] = iron_man_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.priorities import key_post
             res["key_post"] = key_post(match)
         except Exception:
@@ -4904,6 +4909,9 @@ def create_app():
                        lambda: outlet_pace_by_score(match))
                 from ..pipeline.stats import rotation_depth
                 _layer("rotation", lambda: rotation_depth(match))
+                from ..pipeline.stats import iron_man_roles
+                _layer("iron_man_roles",
+                       lambda: iron_man_roles(match))
                 from ..pipeline.defense import ball_winners
                 _layer("ball_winners", lambda: ball_winners(match))
                 from ..pipeline.defense import role_steal_sources

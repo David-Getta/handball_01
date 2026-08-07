@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 307) Vasember-poszt: ha egy posztunk csere nélkül végigmegy, a
+    # hajrában ott fáradunk el — az ellenfél oda viszi majd a tempót.
+    try:
+        from .stats import IRM_SHARE_PCT, iron_man_roles
+        irm307 = iron_man_roles(match, config)
+        for side in ("home", "away"):
+            rec307 = irm307[side]
+            if rec307.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Cserétlen poszt",
+                f"a(z) {rec307['main_role']} posztunk "
+                f"{rec307['share_pct']:.0f}%-os jelenléttel "
+                "végigjátssza a meccset, miközben a többi posztot "
+                f"cseréljük ({IRM_SHARE_PCT:.0f}% fölött már minta) — "
+                "az ellenfél a hajrában oda fogja vinni a tempót",
+                "váltóember-építés: a cserétlen posztra kijelölt "
+                "második ember kap heti játékperc-célt (edzőmeccsen "
+                "és sima meccs első félidejében), hogy a hajrára "
+                "legyen valódi váltás")
+    except Exception:
+        pass
+
     # 306) Bejátszó-poszt: ha a beálló-játékunk egy kézen fut, a
     # bejátszónk zárásával az egész belső játékunk leáll.
     try:

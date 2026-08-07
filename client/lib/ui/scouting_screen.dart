@@ -2115,6 +2115,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Vasember-poszt: melyik posztjuk játszik végig csere nélkül
+  // (10+ percnyi kocka, 85% jelenlét és 15 százalékpontos előny — a
+  // backenddel azonos küszöbök: IRM_MIN_MATCH_MIN, IRM_SHARE_PCT,
+  // IRM_GAP_PP; a kocka→perc váltás 25 fps-t feltételez).
+  String? _ironManRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["irm_on_by_role"] as Map?)?.cast<String, dynamic>();
+    final total = (r["irm_total_frames"] as num?)?.toInt() ?? 0;
+    if (byRole == null || byRole.isEmpty || total < 15000) return null;
+    final shares = byRole.entries
+        .map((e) => MapEntry(e.key, 100.0 * (e.value as num) / total))
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top = shares.first;
+    final second = shares.length > 1 ? shares[1].value : 0.0;
+    if (top.value < 85.0 || top.value - second < 15.0) return null;
+    return "a(z) ${top.key} posztjuk végigjátssza a meccset "
+        "(${top.value.round()}% jelenlét) · a hajrában oda kell "
+        "vinni a tempót";
+  }
+
   // Bejátszó-poszt: melyik posztjuk játssza be a beállót (4+
   // beálló-beadás, 60% részarány — a backenddel azonos küszöbök:
   // PFR_MIN_FEEDS, PFR_SHARE_PCT).
@@ -7509,6 +7530,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_ironManRole(r) != null)
+        ["Vasember-poszt", _ironManRole(r)!],
       if (_pivotFeederRole(r) != null)
         ["Bejátszó-poszt", _pivotFeederRole(r)!],
       if (_outletHunterRole(r) != null)

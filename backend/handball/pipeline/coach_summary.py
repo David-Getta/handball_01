@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Vasember-poszt: melyik posztjuk játszik végig csere nélkül.
+    try:
+        from .stats import iron_man_roles
+        irm = iron_man_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_irm = irm[side]
+            if rec_irm["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_irm['main_role']} posztja "
+                     f"végigjátssza a meccset "
+                     f"({rec_irm['share_pct']:.0f}% jelenlét) — a "
+                     "hajrában oda kell vinni a tempót.")
+    except Exception:
+        pass
     # Bejátszó-poszt: melyik posztjuk játssza be a beállót.
     try:
         from .attack_types import pivot_feeder_roles

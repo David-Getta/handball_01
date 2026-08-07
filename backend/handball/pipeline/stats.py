@@ -936,3 +936,89 @@ def distance_battle(match: Match, config=None) -> dict:
                 rec["verdict"] = "túlfutja őket az ellenfél"
         out[side] = rec
     return out
+
+
+# Vasember-poszt: legalább ennyi perces felvételtől ítélünk; ekkora
+# jelenlét-arány számít "végigjátszásnak", és ennyi százalékponttal
+# kell a többi poszt fölé nőnie (különben az egész csapat cserétlen,
+# és nincs kitüntetett poszt).
+IRM_MIN_MATCH_MIN = 10.0
+IRM_SHARE_PCT = 85.0
+IRM_GAP_PP = 15.0
+
+
+def iron_man_roles(match, config=None) -> dict:
+    """Vasember-poszt: MELYIK POSZTJUK játszik végig csere nélkül.
+
+    A rotáció-mélység (rotation_depth) azt mondja meg, hány emberrel
+    játszanak — ez azt, HOL nincs váltás: posztonként megnézi a
+    legtöbbet pályán lévő játékos jelenlét-arányát, és kimondja, ha
+    egy poszt kilóg: ott egy ember viszi az egész meccset, miközben a
+    többi posztot cserével frissítik.
+
+    Edzőileg ez a hajrá-terv: a végigjátszó poszt a meccs végére
+    elfárad — az utolsó tíz percben oda kell vinni a tempót (őt kell
+    futtatni, az ő sávjában jön a betörés), és a saját oldalon az ő
+    ellenfelére friss embert kell hozni. Saját csapatnál ugyanez
+    figyelmeztetés: a cserétlen posztunk a hajrában sebezhető.
+
+    Visszatérés csapatonként: {"minutes" (felvétel-hossz percben),
+    "roles": {poszt: jelenlét-%}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha a felvétel rövidebb az
+    IRM_MIN_MATCH_MIN-nél, a vezető poszt nem éri el az
+    IRM_SHARE_PCT-t, vagy nem nő ki a mezőnyből (IRM_GAP_PP).
+    """
+    from ..models.tracking import PositionSource
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    total = len(match.frames)
+    minutes = total / fps / 60.0
+    roles = estimate_positions(match, config)
+
+    presence: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        for p in f.players:
+            if p.source != PositionSource.MEASURED or p.role == "kapus":
+                continue
+            side = p.team.value
+            presence[side][p.track_id] = (
+                presence[side].get(p.track_id, 0) + 1)
+
+    out: dict = {side: {"minutes": round(minutes, 1), "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    if total == 0:
+        return out
+    for side in ("home", "away"):
+        rec = out[side]
+        best_by_post: dict = {}
+        for tid, n in presence[side].items():
+            rec_role = roles[side].get(tid)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            share = 100.0 * n / total
+            if share > best_by_post.get(poszt, 0.0):
+                best_by_post[poszt] = share
+        rec["roles"] = {p: round(v, 1) for p, v in
+                        sorted(best_by_post.items(),
+                               key=lambda kv: -kv[1])}
+        if not rec["roles"] or minutes < IRM_MIN_MATCH_MIN:
+            continue
+        vals = list(rec["roles"].values())
+        top_share = vals[0]
+        gap_ok = len(vals) == 1 or top_share - vals[1] >= IRM_GAP_PP
+        if top_share >= IRM_SHARE_PCT and gap_ok:
+            poszt = next(iter(rec["roles"]))
+            rec["main_role"] = poszt
+            rec["share_pct"] = top_share
+            rec["verdict"] = (
+                f"a(z) {poszt} posztjuk végigjátssza a meccset "
+                f"({top_share:.0f}% jelenlét, miközben a többi posztot"
+                " cserélik) — a hajrában oda kell vinni a tempót: őt "
+                "kell futtatni, és vele szemben friss ember jöjjön")
+    return out
