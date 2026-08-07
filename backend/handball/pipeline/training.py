@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 339) Indító-poszt: ha a támadásaink mindig ugyanannál a
+    # posztnál indulnak, egy jó pressz az egész szervezésünket
+    # megfojtja.
+    try:
+        from .roles import ATS_SHARE_PCT, attack_starter_roles
+        ats339 = attack_starter_roles(match, config)
+        for side in ("home", "away"):
+            rec339 = ats339[side]
+            if rec339.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál induló szervezés",
+                f"a támadásaink {rec339['share_pct']:.0f}%-a a(z) "
+                f"{rec339['main_role']} posztnál indul "
+                f"({rec339['attacks']} szakaszból; "
+                f"{ATS_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "korai pressz a felhozónkra az egész szervezésünket"
+                " megfojtja",
+                "második labdafelhozó: pressz elleni felhozatal "
+                "gyakorlása két indítóval, hátra-passz biztonsági "
+                "szelep a kapusnak, és a szélső-felhozatal mint "
+                "B-terv begyakorolva",
+                )
+    except Exception:
+        pass
+
     # 338) Beállóőr-poszt: ha a beálló-őrzésünk egy posztunkon áll,
     # egy elzárással kihúzható — kell a váltás-szabály.
     try:

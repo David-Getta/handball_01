@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Indító-poszt: melyik posztjuknál indul a támadás-szervezés.
+    try:
+        from .roles import attack_starter_roles
+        ats = attack_starter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ats = ats[side]
+            if rec_ats["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadásai a(z) "
+                     f"{rec_ats['main_role']} posztnál indulnak "
+                     f"({rec_ats['share_pct']:.0f}%, "
+                     f"{rec_ats['attacks']} szakaszból) — a "
+                     "felhozatalt őt presszingelve lehet borítani.")
+    except Exception:
+        pass
     # Beállóőr-poszt: melyik posztjuk őrzi a beállót.
     try:
         from .defense import pivot_guard_roles

@@ -1955,3 +1955,78 @@ def assisted_scorer_roles(match: Match,
                     "éheztetni: a felé futó passz elvágásával "
                     "magától elhal")
     return out
+
+
+# Indító-poszt: ennyi poszthoz kötött támadás-indítás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# szervezésük egy posztnál indul.
+ATS_MIN_ATTACKS = 5
+ATS_SHARE_PCT = 60.0
+
+
+def attack_starter_roles(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Indító-poszt: MELYIK POSZTJUKNÁL indul a támadás-szervezés.
+
+    A támadás-szakaszok (segment_attacks) a szakaszt adják — ez a
+    posztot: minden szakasz ELSŐ labdabirtokosát megkeresi, és a
+    szakaszt az ő posztjához írja. Így látszik, kinek a kezén indul
+    a szervezésük, akkor is, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a korai pressz címzettje: ha a támadásaik rendre
+    ugyanannál a posztnál indulnak, a felhozatalt őt presszingelve
+    lehet borítani — korai nyomás rá már a felezőnél, és a
+    szervezésük el sem kezdődik. Saját csapatra: kell a második
+    labdafelhozó, különben egy jó pressz megfojt minket.
+
+    Visszatérés csapatonként: {"attacks" (poszthoz kötött indítás),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az ATS_MIN_ATTACKS, vagy egyik
+    poszt sem éri el az ATS_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"attacks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        starter = None
+        for f in seq.frames:
+            h = ball_holder(f, config)
+            if h is not None and h.team == seq.team \
+                    and h.role != "kapus":
+                starter = h.track_id
+                break
+        if starter is None:
+            continue
+        rec_role = roles[side].get(starter)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["attacks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["attacks"] >= ATS_MIN_ATTACKS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["attacks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= ATS_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a támadásaik {share:.0f}%-a a(z) {poszt} "
+                    f"posztnál indul ({rec['attacks']} szakaszból) —"
+                    " a felhozatalt őt presszingelve lehet borítani:"
+                    " korai nyomás rá már a felezőnél, és a "
+                    "szervezésük el sem kezdődik")
+    return out

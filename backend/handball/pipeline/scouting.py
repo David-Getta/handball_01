@@ -917,6 +917,9 @@ class ScoutingReport:
     # Beállóőr-poszt: a beálló-őrzés kockái az őrző posztja szerint.
     # Kocka-darabszám, pontosan összegződik.
     pgr_frames_by_role: dict = field(default_factory=dict)
+    # Indító-poszt: a támadás-szakaszok darabszáma az első birtokos
+    # posztja szerint. Darabszám, pontosan összegződik.
+    ats_attacks_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3486,6 +3489,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_pgr_pct:.0f}%-a az őrzött időnek) — az elzárás"
                 " őt húzza ki: a beálló felszabadul, és a belső "
                 "biztosításuk borul.")
+
+    # Indító-poszt: a korai pressz címzettje.
+    _ats_n = sum(rep.ats_attacks_by_role.values())
+    if _ats_n >= 5:
+        _ats_p, _ats_c = max(rep.ats_attacks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ats_pct = 100.0 * _ats_c / _ats_n
+        if _ats_pct >= 60.0:
+            keys.append(
+                f"A támadásaik {_ats_pct:.0f}%-a a(z) {_ats_p} "
+                f"posztnál indul ({_ats_n} szakaszból) — korai "
+                "nyomás rá már a felezőnél, és a szervezésük el sem"
+                " kezdődik.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8339,6 +8355,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import pivot_guard_roles as _pgr
         pgrrec = _pgr(match, config)[team.value]
         rep.pgr_frames_by_role = dict(pgrrec["roles"])
+        from .roles import attack_starter_roles as _ats
+        atsrec = _ats(match, config)[team.value]
+        rep.ats_attacks_by_role = dict(atsrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10919,6 +10938,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 318) Az ő indító-posztjuk × a ti magas labdaszerzésetek: a
+    # felhozójukat presszingelve a szervezésük el sem kezdődik.
+    _ats318_n = sum(opp.ats_attacks_by_role.values())
+    if _ats318_n >= 5 and own.steal_high >= 3:
+        _ats318_p, _ats318_c = max(opp.ats_attacks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ats318_pct = 100.0 * _ats318_c / _ats318_n
+        if _ats318_pct >= 60.0:
+            plan.append(
+                f"A támadásaik {_ats318_pct:.0f}%-a a(z) {_ats318_p}"
+                f" posztnál indul ({_ats318_n} szakasz), ti pedig "
+                f"tudtok magasan labdát szerezni ({own.steal_high} "
+                "magas szerzés) — a korai presszetek őt kapja már a"
+                " felezőnél: a szervezésük el sem kezdődik, a "
+                "szerzett labda pedig rövid pályás kontra.")
 
     # 317) Az ő beállóőr-posztjuk × a ti beálló-játékotok: az őrző
     # kihúzásával a beállótok felszabadul.
@@ -16381,6 +16416,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.adr_depthm_by_role for r in reports),
         pgr_frames_by_role=_merge_count_dicts(
             r.pgr_frames_by_role for r in reports),
+        ats_attacks_by_role=_merge_count_dicts(
+            r.ats_attacks_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

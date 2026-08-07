@@ -1395,3 +1395,59 @@ def test_assisted_scorer_roles_silent_with_few_assisted():
     rec = assisted_scorer_roles(
         _asr_match([(7, True), (9, True)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Indító-poszt (melyik posztjuknál indul a támadás-szervezés) -----------
+
+
+def _ats_match(n_attacks, fps=25.0):
+    """`n_attacks` hazai támadás-szakasz: mindegyik az irányítónál
+    (5-ös, 12 m) indul, majd a beállóhoz (7-es) kerül a labda; a
+    szakaszokat vendég-birtoklás választja el."""
+    def home_cast():
+        return [_pl(5, Team.HOME, 29.0, 10.0),
+                _pl(7, Team.HOME, 34.0, 10.0),
+                _pl(9, Team.HOME, 35.0, 3.0)]
+
+    frames = []
+    t = 0
+    for _ in range(n_attacks):
+        for _ in range(20):          # az irányító indít
+            frames.append(Frame(t=t, players=home_cast(),
+                                ball=Ball(x=29.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):          # a labda a beállónál folytatódik
+            frames.append(Frame(t=t, players=home_cast(),
+                                ball=Ball(x=34.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):          # vendég-birtoklás: szakasz-határ
+            frames.append(Frame(
+                t=t,
+                players=[_pl(21, Team.AWAY, 15.0, 10.0)],
+                ball=Ball(x=15.1, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="ats", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_attack_starter_roles_names_the_starting_post():
+    """Öt támadásból mind az irányítónál indul → őt kell korán
+    presszingelni."""
+    from handball.pipeline.roles import (ATS_MIN_ATTACKS,
+                                         attack_starter_roles)
+
+    rec = attack_starter_roles(_ats_match(5))["home"]
+    assert rec["attacks"] >= ATS_MIN_ATTACKS, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "felezőnél" in rec["verdict"], rec
+
+
+def test_attack_starter_roles_silent_with_few_attacks():
+    """Néhány szakaszból nincs ítélet."""
+    from handball.pipeline.roles import attack_starter_roles
+
+    rec = attack_starter_roles(_ats_match(3))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Indító-poszt: melyik posztjuknál indul a támadás-szervezés.** A
+  támadás-szakaszok a szakaszt adják — az új réteg a posztot: minden
+  szakasz első labdabirtokosát megkeresi, és a szakaszt az ő
+  posztjához írja. Edzőileg a korai pressz címzettje: ha a
+  támadásaik rendre ugyanannál a posztnál indulnak, a felhozatalt őt
+  presszingelve lehet borítani — korai nyomás rá már a felezőnél.
+  Saját oldalon a második labdafelhozó az edzés-téma. Legalább 5
+  szakasz és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`attack_starter_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 318. meccsterv-szabály),
+  edzés-fókusz (339. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Beállóőr-poszt: melyik posztjuk őrzi a beállót.** A beálló-őr
   rétege az embert nevezi meg — az új réteg a posztot: az
   őrzés-kockákat az őrző (támadó-fázisból becsült) posztjához írja.
