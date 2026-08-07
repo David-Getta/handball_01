@@ -2115,6 +2115,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Visszafutás-poszt: ki marad le a visszarendeződésben (3+ mért
+  // ellenfél-kontra, 60% részarány — a backenddel azonos küszöbök:
+  // RTR_MIN_BREAKS, RTR_SHARE_PCT).
+  String? _slowRetreatRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rtr_lags_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a visszarendeződésük a(z) $top poszton szakad el "
+        "(${pct.round()}%, $total kontra) · a kontrát az ő sávjába "
+        "kell vezetni";
+  }
+
   // Kiülő-poszt: melyik posztjuk gyűjti a kétperceket (3+ poszthoz
   // kötött kiállítás, 60% részarány — a backenddel azonos küszöbök:
   // SUP_MIN_SUSP, SUP_SHARE_PCT).
@@ -7351,6 +7378,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_slowRetreatRole(r) != null)
+        ["Visszafutás-poszt", _slowRetreatRole(r)!],
       if (_suspendedRole(r) != null)
         ["Kiülő-poszt", _suspendedRole(r)!],
       if (_sevenConcederRole(r) != null)

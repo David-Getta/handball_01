@@ -123,6 +123,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "seven_conceder_roles"),
         ("felkészülés", "Kiülő-poszt", "rules",
          "suspended_roles"),
+        ("felkészülés", "Visszafutás-poszt", "defense",
+         "slow_retreat_roles"),
     ]
 
 

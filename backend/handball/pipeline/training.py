@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 301) Visszafutás-poszt: ha a visszarendeződésünk mindig ugyanott
+    # szakad el, az ellenfél kontrái menetrend szerint jönnek.
+    try:
+        from .defense import RTR_SHARE_PCT, slow_retreat_roles
+        rtr301 = slow_retreat_roles(match, config)
+        for side in ("home", "away"):
+            rec301 = rtr301[side]
+            if rec301.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy poszton elszakadó visszafutás",
+                f"az ellenfél-kontráknál {rec301['share_pct']:.0f}%-ban"
+                f" a(z) {rec301['main_role']} posztunk maradt elöl "
+                f"({rec301['breaks']} kontrából; "
+                f"{RTR_SHARE_PCT:.0f}% fölött már minta) — az ellenfél"
+                " az ő sávjába fogja vezetni a kontráit",
+                "visszafutás-staféta: minden lövésünk pillanatában "
+                "kijelölt első visszafutó van (jelre váltakozik, hogy "
+                "ne mindig ugyanaz maradjon elöl), a második hullám a "
+                "labdás sávot zárja — sípszóra mérve, hogy a hatodik "
+                "ember hány másodperc alatt ér a felezőn túlra")
+    except Exception:
+        pass
+
     # 300) Kiülő-poszt: ha a kétperceink egy posztra járnak, a
     # létszámhátrányunk menetrend szerint érkezik.
     try:

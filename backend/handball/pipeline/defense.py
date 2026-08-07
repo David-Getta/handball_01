@@ -4000,3 +4000,83 @@ def role_block_sources(match, config=None) -> dict:
                     "sávjába csak elmozgatás UTÁN szabad lőni, a "
                     "figura először őt húzza ki")
     return out
+
+
+# Visszafutás-poszt: ennyi poszthoz kötött lemaradás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# visszarendeződésük egy poszton szakad el.
+RTR_MIN_BREAKS = 3
+RTR_SHARE_PCT = 60.0
+
+
+def slow_retreat_roles(match, config=None) -> dict:
+    """Visszafutás-poszt: KI MARAD LE a visszarendeződésben.
+
+    Az ellenfél lerohanás-szakaszainak végén (a kontra kifutásának
+    pillanatában) megnézi, a VÉDEKEZŐ csapat melyik mezőnyjátékosa
+    van legmesszebb a saját kapujától, és a lemaradást a posztjához
+    írja.
+
+    Edzőileg két olvasat. Ellenük: ha a kontráknál rendre ugyanaz a
+    posztjuk marad elöl (tipikusan a beálló vagy egy átlövő), a saját
+    kontrát tudatosan az ő sávjába kell vezetni — ott a pálya üres.
+    Saját csapatra: a visszafutás sorrendje edzés-téma, nem alkat
+    kérdése — a lövés pillanatában kijelölt első visszafutó kell, és
+    az nem lehet mindig ugyanaz a lemaradó.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"breaks" (mért
+    ellenfél-kontra), "roles": {poszt: lemaradás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    RTR_MIN_BREAKS, vagy egyik poszt sem éri el az RTR_SHARE_PCT-t.
+    """
+    from ..models.tracking import Team
+    from .attack_types import AttackType, classify_attacks
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    frames_by_t = {f.t: f for f in match.frames}
+
+    out: dict = {side: {"breaks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        defending = "away" if a["team"] == "home" else "home"
+        fr = frames_by_t.get(a["end_frame"])
+        if fr is None:
+            continue
+        own_x = config.own_goal_x(Team(defending))
+        laggard = None
+        for p in fr.players:
+            if p.team.value != defending or p.role == "kapus":
+                continue
+            d = abs(p.x - own_x)
+            if laggard is None or d > laggard[1]:
+                laggard = (p.track_id, d)
+        if laggard is None:
+            continue
+        rec_role = roles[defending].get(laggard[0])
+        if rec_role is None:
+            continue
+        rec = out[defending]
+        poszt = rec_role["poszt"]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["breaks"] += 1
+    for rec in out.values():
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["breaks"] >= RTR_MIN_BREAKS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["breaks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a visszarendeződésük a(z) {poszt} poszton "
+                    f"szakad el ({share:.0f}%, {rec['breaks']} "
+                    "kontrából ő maradt elöl) — a saját kontrát az ő "
+                    "sávjába kell vezetni: ott a pálya üres")
+    return out

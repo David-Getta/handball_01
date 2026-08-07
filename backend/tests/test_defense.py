@@ -2880,3 +2880,63 @@ def test_role_block_sources_silent_with_few_blocks():
 
     rec = role_block_sources(_rbk_match([20, 21]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _rtr_match(laggards, fps=25.0):
+    """`laggards` = hazai kontránként az a VENDÉG játékos, aki elöl
+    marad (21: beálló, 22: irányító). A vendég-birtoklások (a -x kapu
+    felé) adják a poszt-mintát ÉS az elválasztókat; a kontráknál a
+    lemaradó a felezőnél ragad, a társa a kapu előtt van."""
+    from handball.models.tracking import Ball, Frame, Match
+
+    attack_pos = {21: (6.0, 10.0), 22: (11.0, 13.0)}
+
+    def _away_poss(n):
+        nonlocal t
+        for _ in range(n):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 30.0, 10.0),
+                         _pl(21, Team.AWAY, *attack_pos[21]),
+                         _pl(22, Team.AWAY, *attack_pos[22])],
+                ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+            t += 1
+
+    frames = []
+    t = 0
+    _away_poss(120)
+    for tid in laggards:
+        other = 22 if tid == 21 else 21
+        for i in range(int(4.0 * fps)):   # hazai lerohanás a +x kapura
+            x = 22.0 + 16.0 * i / (4.0 * fps)
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, x, 10.0),
+                         _pl(9, Team.HOME, 1.5, 10.0, role="kapus"),
+                         _pl(tid, Team.AWAY, 20.0, 4.0),
+                         _pl(other, Team.AWAY, 38.0, 12.0)],
+                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        _away_poss(50)                    # elválasztó vendég-birtoklás
+    return Match(_meta(fps), frames)
+
+
+def test_slow_retreat_roles_names_the_lagging_post():
+    """Ha a kontráknál rendre ugyanaz a poszt marad elöl, a saját
+    kontrát az ő sávjába kell vezetni."""
+    from handball.pipeline.defense import (RTR_MIN_BREAKS,
+                                           slow_retreat_roles)
+
+    rec = slow_retreat_roles(_rtr_match([21] * 3 + [22]))["away"]
+    assert rec["breaks"] >= RTR_MIN_BREAKS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "sávjába" in rec["verdict"], rec
+
+
+def test_slow_retreat_roles_silent_with_few_breaks():
+    """Néhány mért kontrából nincs ítélet."""
+    from handball.pipeline.defense import slow_retreat_roles
+
+    rec = slow_retreat_roles(_rtr_match([21, 22]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

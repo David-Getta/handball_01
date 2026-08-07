@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Visszafutás-poszt: ki marad le a visszarendeződésben.** Az
+  ellenfél kontráinak kifutásakor megnézi, a védekező csapat melyik
+  mezőnyjátékosa van legmesszebb a saját kapujától, és a lemaradást
+  a posztjához írja. Edzőileg két olvasat. Ellenük: ha rendre
+  ugyanaz a posztjuk marad elöl, a saját kontrát tudatosan az ő
+  sávjába kell vezetni — ott a pálya üres. Saját csapatra: a
+  visszafutás sorrendje edzés-téma — kijelölt első visszafutó kell,
+  és nem lehet mindig ugyanaz a lemaradó. Felületek: `/analyze` és
+  meccs-csomag (`slow_retreat_roles`), edzői összefoglaló, felderítő
+  edzői kulcs, meccsterv-szabály (280: az ő lemaradó posztjuk × a ti
+  kontra-játékotok → az indítás célzottan az ő sávjába), edzés-fókusz
+  (301: visszafutás-staféta sípszóra mérve), teendő-rangsor és a
+  meccs-jelentés Védő-lencse táblája, kliens-csempe.
+
 - **Védő-lencse a meccs-jelentésben.** A Befejező-lencse táblába
   időközben védő-oldali ítéletek is kerültek — most szétválik: a
   Befejező-lencse a támadó-oldali "kire fut ki a játékuk" ítéleteké

@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Visszafutás-poszt: ki marad le a visszarendeződésben.
+    try:
+        from .defense import slow_retreat_roles
+        rtr = slow_retreat_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtr = rtr[side]
+            if rec_rtr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} visszarendeződése a(z) "
+                     f"{rec_rtr['main_role']} poszton szakad el "
+                     f"({rec_rtr['share_pct']:.0f}%, {rec_rtr['breaks']}"
+                     " kontrából ő maradt elöl) — a kontrát az ő "
+                     "sávjába kell vezetni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

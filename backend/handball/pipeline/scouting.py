@@ -794,6 +794,9 @@ class ScoutingReport:
     # Kiülő-poszt: a kiállítások darabszáma posztonként. Darabszám,
     # meccsek közt pontosan összegződik.
     sup_susp_by_role: dict = field(default_factory=dict)
+    # Visszafutás-poszt: az ellenfél-kontráknál elöl maradások
+    # darabszáma posztonként. Darabszám, pontosan összegződik.
+    rtr_lags_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3030,6 +3033,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Visszafutás-poszt: kinek a sávjába fusson a saját kontra.
+    _rtr_n = sum(rep.rtr_lags_by_role.values())
+    if _rtr_n >= 3:
+        _rtr_p, _rtr_c = max(rep.rtr_lags_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rtr_pct = 100.0 * _rtr_c / _rtr_n
+        if _rtr_pct >= 60.0:
+            keys.append(
+                f"A visszarendeződésük a(z) {_rtr_p} posztjukon "
+                f"szakad el ({_rtr_pct:.0f}%, {_rtr_n} kontrából ő "
+                "maradt elöl) — a kontrát az ő sávjába kell vezetni: "
+                "ott a pálya üres.")
 
     # Kiülő-poszt: kinél jár hamar a két perc.
     _sup_n = sum(rep.sup_susp_by_role.values())
@@ -7594,6 +7610,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import suspended_roles as _sup
         suprec = _sup(match, config)[team.value]
         rep.sup_susp_by_role = dict(suprec["roles"])
+        from .defense import slow_retreat_roles as _rtr
+        rtrrec = _rtr(match, config)[team.value]
+        rep.rtr_lags_by_role = dict(rtrrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10168,6 +10187,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 280) Az ő lemaradó posztjuk × a ti kontra-játékotok: ha náluk
+    # kontránál rendre ugyanaz a poszt marad elöl, és ti amúgy is
+    # futtok, a kontráitokat az ő sávjába kell irányítani.
+    _rtr280_n = sum(opp.rtr_lags_by_role.values())
+    if _rtr280_n >= 3 and own.fbc_breaks >= 5:
+        _rtr280_p, _rtr280_c = max(opp.rtr_lags_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rtr280_pct = 100.0 * _rtr280_c / _rtr280_n
+        if _rtr280_pct >= 60.0:
+            plan.append(
+                f"A visszarendeződésük a(z) {_rtr280_p} posztjukon "
+                f"szakad el ({_rtr280_pct:.0f}%), ti pedig futó "
+                f"csapat vagytok ({own.fbc_breaks} kontra) — az "
+                "indításokat tudatosan az ő sávjába vezessétek: ott "
+                "a pálya üres, és a kontra kifutása előtt nem ér "
+                "vissza.")
 
     # 279) Az ő kiülő-posztjuk × a ti kiállítás-kiharcolóitok: ha a
     # kétperceik egy posztra járnak, és nálatok van, aki a kiállítást
@@ -14857,6 +14893,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.svr_sevens_by_role for r in reports),
         sup_susp_by_role=_merge_count_dicts(
             r.sup_susp_by_role for r in reports),
+        rtr_lags_by_role=_merge_count_dicts(
+            r.rtr_lags_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

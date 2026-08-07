@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **327 réteg**, modulonként csoportosítva; a
+Összesen **328 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (70)
@@ -98,7 +98,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_choice_quality` | Lövésválasztás: LŐNEK-E, AMIKOR JOBB HELYZET VAN a pályán. |
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 
-## defense (57)
+## defense (58)
 
 | Réteg | Mit mér |
 |---|---|
@@ -144,6 +144,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `role_steal_sources` | Labdaszerző-poszt: MELYIK POSZTJUK NYERI a labdákat. |
 | `screen_defense` | Elzárás-védekezés: bírja-e a fal az ellenfél elzárásait. |
 | `second_chance_allowed` | Lepattanó-fal: hány második rohamot enged a védekezés. |
+| `slow_retreat_roles` | Visszafutás-poszt: KI MARAD LE a visszarendeződésben. |
 | `steal_height` | Labdaszerzés-magasság (letámadás-jel): HOL szerez labdát a csapat. |
 | `steal_launch` | Szerzés utáni indítás: AZONNAL ELŐRE megy-e a szerzett labda. |
 | `steal_types` | Labdaszerzés-típus: ELFOGJÁK vagy LESZERELIK a labdát. |
