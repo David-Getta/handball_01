@@ -1813,7 +1813,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     # először, hetesnél merre vetődj.
     finishers_html = ""
     try:
-        from .roles import role_fast_breaks, role_pressure_finish
+        from .roles import (role_assist_sources, role_fast_breaks,
+                            role_pressure_finish)
         from .rules import seven_shot_directions
         from .stoppages import timeout_finisher
 
@@ -1822,7 +1823,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                 ("Poszt-nyomás", role_pressure_finish),
                 ("Időkérés-befejező", timeout_finisher),
                 ("Kontra-poszt", role_fast_breaks),
-                ("Hetes-oldal", seven_shot_directions)):
+                ("Hetes-oldal", seven_shot_directions),
+                ("Gólpassz-poszt", role_assist_sources)):
             try:
                 rec_fin = fn(match)
             except Exception:

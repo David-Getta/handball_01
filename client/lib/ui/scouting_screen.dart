@@ -2088,6 +2088,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Gólpassz-poszt: kinek a kezéből indulnak a góljaik (3+ poszthoz
+  // kötött gólpassz, 60% részarány — a backenddel azonos küszöbök:
+  // RAS_MIN_ASSISTS, RAS_SHARE_PCT).
+  String? _assistRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ras_assists_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a góljaik a(z) $top kezéből indulnak (${pct.round()}%, "
+        "$total gólpassz) · tőle a passzt kell elvenni, nem a lövést "
+        "zárni";
+  }
+
   // Hetes-oldal: merre dobják a heteseiket (3+ mérhető dobás, 60%
   // részarány — a backenddel azonos küszöbök: SVD_MIN_ATTEMPTS,
   // SVD_SHARE_PCT).
@@ -7162,6 +7189,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_assistRole(r) != null)
+        ["Gólpassz-poszt", _assistRole(r)!],
       if (_sevenSide(r) != null)
         ["Hetes-oldal", _sevenSide(r)!],
       if (_fastBreakRole(r) != null)

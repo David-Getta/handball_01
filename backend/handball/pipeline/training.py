@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 294) Gólpassz-poszt: ha a góljaink egy poszt kezéből indulnak, az
+    # ellenfél a passzt veszi el, és az egész támadásunk megáll.
+    try:
+        from .roles import RAS_SHARE_PCT, role_assist_sources
+        ras294 = role_assist_sources(match, config)
+        for side in ("home", "away"):
+            rec294 = ras294[side]
+            if rec294.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézből induló gólgyártás",
+                f"a góljaink {rec294['share_pct']:.0f}%-a a(z) "
+                f"{rec294['main_role']} kezéből indul "
+                f"({rec294['assists']} gólpasszból; "
+                f"{RAS_SHARE_PCT:.0f}% fölött már mintázat) — ha őt "
+                "kiveszik, megáll a támadásunk",
+                "MÁSODIK ELOSZTÓ gyakorlat: a fő elosztó posztja 5 "
+                "támadásonként tiltott (edzői jel), a szomszéd poszt "
+                "veszi át az utolsó passzt — előbb lassítva, majd "
+                "teljes tempóban, védőkkel")
+    except Exception:
+        pass
+
     # 293) Hetes-oldal: ha a heteseink mindig ugyanarra az oldalra
     # mennek, egy felkészült kapus előre eldöntött vetődéssel fogja
     # őket — a legtisztább helyzetünk válik kiszámíthatóvá.

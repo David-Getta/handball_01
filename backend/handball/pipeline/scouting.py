@@ -773,6 +773,9 @@ class ScoutingReport:
     # Hetes-oldal: az irány-mérhető hetesek darabszáma oldalanként
     # ("bal"/"közép"/"jobb"). Darabszám, meccsek közt összegződik.
     svd_dirs: dict = field(default_factory=dict)
+    # Gólpassz-poszt: a poszthoz kötött gólpasszok darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    ras_assists_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -2996,6 +2999,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Gólpassz-poszt: kitől kell a passzt elvenni.
+    _ras_n = sum(rep.ras_assists_by_role.values())
+    if _ras_n >= 3:
+        _ras_p, _ras_c = max(rep.ras_assists_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ras_pct = 100.0 * _ras_c / _ras_n
+        if _ras_pct >= 60.0:
+            keys.append(
+                f"A góljaik a(z) {_ras_p} kezéből indulnak "
+                f"({_ras_pct:.0f}%, {_ras_n} gólpasszból) — nem a "
+                "lövést kell zárni, hanem tőle a passzt elvenni: egy "
+                "ember feljebb lép rá, a többiek posztot tartanak.")
 
     # Hetes-oldal: hetesnél merre vetődjön a kapusunk.
     _svd_n = sum(rep.svd_dirs.values())
@@ -7461,6 +7477,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import seven_shot_directions as _svd
         svdrec = _svd(match, config)[team.value]
         rep.svd_dirs = {d: n for d, n in svdrec["dirs"].items() if n}
+        from .roles import role_assist_sources as _ras
+        rasrec = _ras(match, config)[team.value]
+        rep.ras_assists_by_role = dict(rasrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10035,6 +10054,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 273) Az ő gólpassz-posztjuk × a ti kettőzési hajlandóságotok: ha
+    # amúgy is szívesen kettőztök, a kettőzés célpontja ne a lövő
+    # legyen, hanem a posztjuk, akinek a kezéből a gólok indulnak.
+    _ras273_n = sum(opp.ras_assists_by_role.values())
+    if _ras273_n >= 3 and own.dbl_holder_frames >= 250:
+        _ras273_p, _ras273_c = max(opp.ras_assists_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ras273_pct = 100.0 * _ras273_c / _ras273_n
+        _dbl273 = 100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+        if _ras273_pct >= 60.0 and _dbl273 >= 25.0:
+            plan.append(
+                f"A góljaik a(z) {_ras273_p} kezéből indulnak "
+                f"({_ras273_pct:.0f}%, {_ras273_n} gólpasszból), ti "
+                f"pedig amúgy is sokat kettőztök (a labdás-kockák "
+                f"{_dbl273:.0f}%-a) — a kettőzés célpontját tegyétek "
+                "át: nem a lövőre, hanem RÁ menjen a második ember, "
+                "amikor nála a labda. A gólgyártásuk a passznál "
+                "törik meg, nem a lövésnél.")
 
     # 272) Az ő kiszámítható hetes-oldaluk × a ti kapusotok gyenge
     # mérlege: a hetes az egyetlen helyzet, ahol a kapus előre
@@ -14576,6 +14614,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
         rfb_shots_by_role=_merge_count_dicts(
             r.rfb_shots_by_role for r in reports),
         svd_dirs=_merge_count_dicts(r.svd_dirs for r in reports),
+        ras_assists_by_role=_merge_count_dicts(
+            r.ras_assists_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

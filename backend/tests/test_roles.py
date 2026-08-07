@@ -1259,3 +1259,68 @@ def test_role_fast_breaks_silent_with_few_shots():
 
     rec = role_fast_breaks(_rfb_match(2))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Gólpassz-poszt (kinek a kezéből indulnak a gólok) ----------------------
+
+_RAS = {1: (28.0, 10.0), 2: (33.0, 10.0), 3: (34.0, 2.0)}
+# 1: átlövő-táv (ő az elosztó), 2: beálló-táv (befejező), 3: szélső.
+
+
+def _ras_players():
+    return [_pl(tid, Team.HOME, x, y) for tid, (x, y) in _RAS.items()]
+
+
+def _ras_match(plan, fps=25.0):
+    """`plan` = gólonként (passzoló, lövő): a passzoló kezéből a labda a
+    lövőhöz kerül, aki a +x kapuba lő; a gólok közt szünet."""
+    frames = []
+    t = 0
+
+    def _add(bx, by):
+        nonlocal t
+        frames.append(Frame(t=t, players=_ras_players(),
+                            ball=Ball(x=bx, y=by, confidence=1.0)))
+        t += 1
+
+    for passer, shooter in plan:
+        px, py = _RAS[passer]
+        sx, sy = _RAS[shooter]
+        for _ in range(20):          # a passzoló birtokol
+            _add(px + 0.2, py)
+        steps = 6                    # a passz átér a lövőhöz
+        for i in range(1, steps + 1):
+            f = i / steps
+            _add(px + 0.2 + (sx - px - 0.2) * f, py + (sy - py) * f)
+        for _ in range(6):           # a lövő kezében a labda
+            _add(sx + 0.2, sy)
+        for i in range(1, 11):       # lövés a kapuba
+            f = i / 10
+            _add(sx + 0.2 + (40.4 - sx - 0.2) * f, sy + (10.0 - sy) * f)
+        for _ in range(int(4 * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=15.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="ras", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_role_assist_sources_finds_the_hub():
+    """Ha a gólok ugyanannak a posztnak a kezéből indulnak, tőle a
+    passzt kell elvenni, nem a lövést zárni."""
+    from handball.pipeline.roles import RAS_MIN_ASSISTS, role_assist_sources
+
+    rec = role_assist_sources(_ras_match([(1, 2), (1, 2), (1, 3),
+                                          (2, 3)]))["home"]
+    assert rec["assists"] >= RAS_MIN_ASSISTS, rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "passzt" in rec["verdict"], rec
+
+
+def test_role_assist_sources_silent_with_few_assists():
+    """Két gólpasszból nincs ítélet."""
+    from handball.pipeline.roles import role_assist_sources
+
+    rec = role_assist_sources(_ras_match([(1, 2), (2, 3)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

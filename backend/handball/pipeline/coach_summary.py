@@ -885,6 +885,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Gólpassz-poszt: kinek a kezéből indulnak a gólok.
+    try:
+        from .roles import role_assist_sources
+        ras = role_assist_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ras = ras[side]
+            if rec_ras["verdict"] is None:
+                continue
+            body += (f" A(z) {name} góljai a(z) {rec_ras['main_role']} "
+                     f"kezéből indulnak ({rec_ras['share_pct']:.0f}%, "
+                     f"{rec_ras['assists']} gólpasszból) — tőle a "
+                     "passzt kell elvenni, nem a lövést zárni.")
+    except Exception:
+        pass
     # Hetes-oldal: merre dobják a heteseiket.
     try:
         from .rules import seven_shot_directions

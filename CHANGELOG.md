@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Gólpassz-poszt: kinek a kezéből indulnak a góljaik.** A
+  gólpassz-forrás a pálya-zónát nézi, a gólpassz-hálózat az embert — az
+  új réteg a POSZTOT: a gólokhoz rendelt gólpasszokat az adó játékos
+  posztjához írja. Edzőileg ez a védekezés célpont-váltása: a
+  befejező-lencse megmondja, ki fejez be, de ha a gólok nagy része
+  ugyanannak a posztnak (tipikusan az irányítónak) a kezéből INDUL, a
+  lövés zárása késő — tőle a passzt kell elvenni, és a lövők maguktól
+  elhalkulnak. Felületek: `/analyze` és meccs-csomag
+  (`role_assist_sources`), edzői összefoglaló, felderítő edzői kulcs,
+  meccsterv-szabály (273: az ő elosztójuk × a ti kettőzési
+  hajlandóságotok → a kettőzés célpontja az elosztó, nem a lövő),
+  edzés-fókusz (294: második elosztó gyakorlat), teendő-rangsor és a
+  meccs-jelentés Befejező-lencse táblája, kliens-csempe.
+
 - **Befejező-lencse a meccs-jelentésben.** A négy "kire fut ki"
   ítélet (poszt-nyomás, időkérés-befejező, kontra-poszt, hetes-oldal)
   eddig az app felderítő-csempéin és a teendő-rangsorban élt — a
