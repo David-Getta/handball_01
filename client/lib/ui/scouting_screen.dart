@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket (3+
+  // kihagyott nagy helyzet, 60% részarány — a backenddel azonos
+  // küszöbök: MCR_MIN_MISSES, MCR_SHARE_PCT).
+  String? _missedChanceRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["mcr_misses_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kihagyott ziccereik ${pct.round()}%-a a(z) $top "
+        "posztnál esik ($total kihagyás) · az ő helyzetbe engedése "
+        "a kisebbik rossz";
+  }
+
   // Blokkolt-poszt: melyik posztjuk lövéseit blokkolják (3+
   // blokkolt lövés, 60% részarány — a backenddel azonos küszöbök:
   // BSR_MIN_BLOCKS, BSR_SHARE_PCT).
@@ -8281,6 +8308,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_missedChanceRole(r) != null)
+        ["Ziccerhagyó-poszt", _missedChanceRole(r)!],
       if (_blockedShooterRole(r) != null)
         ["Blokkolt-poszt", _blockedShooterRole(r)!],
       if (_sevenTakerRole(r) != null)

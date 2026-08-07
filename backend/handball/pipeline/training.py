@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 336) Ziccerhagyó-poszt: ha a ziccereinket mindig ugyanaz a
+    # posztunk hagyja ki, a helyzeteink egy része kárba vész.
+    try:
+        from .xg import MCR_SHARE_PCT, missed_chance_roles
+        mcr336 = missed_chance_roles(match, config)
+        for side in ("home", "away"):
+            rec336 = mcr336[side]
+            if rec336.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál kieső ziccerek",
+                f"a kihagyott ziccereink {rec336['share_pct']:.0f}"
+                f"%-a a(z) {rec336['main_role']} posztnál esik "
+                f"({rec336['misses']} kihagyásból; "
+                f"{MCR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kialakított helyzeteink egy része nála kárba vész",
+                "befejezés-gyakorlás a posztnak: ziccer-sorozatok "
+                "kapussal (fáradtan is, kör-edzés után), "
+                "hatosról-fordulós és ejtés-variációk, valamint "
+                "önbizalom-építés: sikeres sorozattal záruljon",
+                )
+    except Exception:
+        pass
+
     # 335) Blokkolt-poszt: ha egy posztunk lövéseit rendre blokkolják,
     # a lövés-előkészítés hiányzik — elmozgatás nélkül falba lövünk.
     try:

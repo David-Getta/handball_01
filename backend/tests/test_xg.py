@@ -1168,3 +1168,67 @@ def test_big_chance_roles_silent_with_few_chances():
 
     rec = big_chance_roles(_bcr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccerhagyó-poszt (melyik posztjuk hagyja ki a ziccereket) ------------
+
+
+def _mcr_match(missers, fps=25.0):
+    """Poszt-minta (7: beálló a hatoson, 9: szélső) + kihagyott
+    ziccerek: a beálló nagy helyzetből (xG >= BIG_CHANCE_XG) a kapu
+    mellé lő (y=5 mentén hagyja el a pályát)."""
+    spos = {7: (35.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=35.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in missers:
+        sx, sy = spos[tid]
+        for _ in range(3):           # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(9):           # mellé: y=5 mentén ki a pályáról
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(sx + 0.8 * (i + 1),
+                                                40.4),
+                                          y=5.0, confidence=1.0)))
+            t += 1
+        for _ in range(25):          # vissza középre: zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_missed_chance_roles_names_the_wasting_post():
+    """Három kihagyott ziccer a beállónál → az ő helyzetbe engedése a
+    kisebbik rossz."""
+    from handball.pipeline.xg import (MCR_MIN_MISSES,
+                                      missed_chance_roles)
+
+    rec = missed_chance_roles(_mcr_match([7, 7, 7]))["home"]
+    assert rec["misses"] >= MCR_MIN_MISSES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kisebbik rossz" in rec["verdict"], rec
+
+
+def test_missed_chance_roles_silent_with_few_misses():
+    """Néhány kihagyásból nincs ítélet."""
+    from handball.pipeline.xg import missed_chance_roles
+
+    rec = missed_chance_roles(_mcr_match([7, 7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -1158,3 +1158,73 @@ def big_chance_roles(match: Match,
                     "kell megfogni: korábbi besegítés és szűkítés "
                     "az ő sávjában")
     return out
+
+
+# Ziccerhagyó-poszt: ennyi poszthoz kötött kihagyott nagy helyzet
+# kell az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# ziccer-kihagyásaik egy posztra sűrűsödnek.
+MCR_MIN_MISSES = 3
+MCR_SHARE_PCT = 60.0
+
+
+def missed_chance_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Ziccerhagyó-poszt: MELYIK POSZTJUK hagyja ki a ziccereket.
+
+    A ziccer-befejezők rétege (big_chance_finishers) az embert nevezi
+    meg — ez a posztot: a BIG_CHANCE_XG feletti helyzet-értékű, gól
+    NÉLKÜL záruló lövéseket a lövő posztjához írja. Így a minta akkor
+    is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a fal kockázat-kezelése: amelyik posztjuk a ziccert
+    rendre kihagyja, annál a helyzetbe engedés a kisebbik rossz — a
+    besegítés inkább a biztos kezű társakra menjen, az ő ziccere
+    vállalható. Saját csapatra: a posztnak befejezés-gyakorlás kell
+    (ziccer-sorozatok kapussal, fáradtan is).
+
+    Visszatérés csapatonként: {"misses" (poszthoz kötött kihagyott
+    ziccer), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az MCR_MIN_MISSES,
+    vagy egyik poszt sem éri el az MCR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    roles = estimate_positions(match, _TC())
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"misses": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        if sh["outcome"] == "goal":
+            continue
+        side = sh["team"]
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["misses"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["misses"] >= MCR_MIN_MISSES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["misses"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= MCR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kihagyott ziccereik {share:.0f}%-a a(z) "
+                    f"{poszt} posztnál esik ({rec['misses']} "
+                    "kihagyásból) — az ő helyzetbe engedése a "
+                    "kisebbik rossz: a besegítés a biztos kezű "
+                    "társakra menjen")
+    return out

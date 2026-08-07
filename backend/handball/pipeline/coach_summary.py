@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket.
+    try:
+        from .xg import missed_chance_roles
+        mcr = missed_chance_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_mcr = mcr[side]
+            if rec_mcr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kihagyott ziccerei a(z) "
+                     f"{rec_mcr['main_role']} posztnál esnek "
+                     f"({rec_mcr['share_pct']:.0f}%, "
+                     f"{rec_mcr['misses']} kihagyásból) — az ő "
+                     "helyzetbe engedése a kisebbik rossz.")
+    except Exception:
+        pass
     # Blokkolt-poszt: melyik posztjuk lövéseit blokkolják.
     try:
         from .defense import blocked_shooter_roles

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Ziccerhagyó-poszt: melyik posztjuk hagyja ki a ziccereket.** A
+  ziccer-befejezők rétege az embert nevezi meg — az új réteg a
+  posztot: a nagy helyzet-értékű, gól nélkül záruló lövéseket a lövő
+  posztjához írja. Edzőileg a fal kockázat-kezelése: amelyik
+  posztjuk a ziccert rendre kihagyja, annál a helyzetbe engedés a
+  kisebbik rossz — a besegítés a biztos kezű társakra menjen. Saját
+  oldalon a befejezés-gyakorlás az edzés-téma. Legalább 3 kihagyott
+  ziccer és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`missed_chance_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 315. meccsterv-szabály),
+  edzés-fókusz (336. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Blokkolt-poszt: melyik posztjuk lövéseit blokkolják.** A
   blokk-réteg a védő oldalt nevezi meg — az új réteg a megakasztott
   lövőt: minden blokkhoz megkeresi a blokk előtti utolsó támadó

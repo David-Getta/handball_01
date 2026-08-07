@@ -905,6 +905,10 @@ class ScoutingReport:
     # Blokkolt-poszt: a blokkolt lövések darabszáma a lövő posztja
     # szerint. Darabszám, pontosan összegződik.
     bsr_blocks_by_role: dict = field(default_factory=dict)
+    # Ziccerhagyó-poszt: a kihagyott (gól nélkül záruló) nagy
+    # helyzetek darabszáma posztonként. Darabszám, pontosan
+    # összegződik.
+    mcr_misses_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3430,6 +3434,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_bsr_p} posztról jön ({_bsr_n} blokkból) — a fal"
                 " ellene bátran zárhat: az előkészítetlen lövése "
                 "falba megy, és onnan kontra indul.")
+
+    # Ziccerhagyó-poszt: kit lehet helyzetbe engedni.
+    _mcr_n = sum(rep.mcr_misses_by_role.values())
+    if _mcr_n >= 3:
+        _mcr_p, _mcr_c = max(rep.mcr_misses_by_role.items(),
+                             key=lambda kv: kv[1])
+        _mcr_pct = 100.0 * _mcr_c / _mcr_n
+        if _mcr_pct >= 60.0:
+            keys.append(
+                f"A kihagyott ziccereik {_mcr_pct:.0f}%-a a(z) "
+                f"{_mcr_p} posztnál esik ({_mcr_n} kihagyásból) — "
+                "ha választani kell, őt engedjétek helyzetbe: a "
+                "besegítés a biztos kezű társakra menjen.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8273,6 +8290,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import blocked_shooter_roles as _bsr
         bsrrec = _bsr(match, config)[team.value]
         rep.bsr_blocks_by_role = dict(bsrrec["roles"])
+        from .xg import missed_chance_roles as _mcr
+        mcrrec = _mcr(match, config)[team.value]
+        rep.mcr_misses_by_role = dict(mcrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10853,6 +10873,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 315) Az ő ziccerhagyó-posztjuk × a ti nagyvédéses kapusotok: a
+    # bizonytalan befejezőt érdemes a kapusotokra engedni.
+    _mcr315_n = sum(opp.mcr_misses_by_role.values())
+    if _mcr315_n >= 3 and own.gk_big_saves >= 3:
+        _mcr315_p, _mcr315_c = max(opp.mcr_misses_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _mcr315_pct = 100.0 * _mcr315_c / _mcr315_n
+        if _mcr315_pct >= 60.0:
+            plan.append(
+                f"A kihagyott ziccereik {_mcr315_pct:.0f}%-a a(z) "
+                f"{_mcr315_p} posztnál esik ({_mcr315_n} kihagyás),"
+                f" a kapusotok pedig hoz nagyvédést "
+                f"({own.gk_big_saves} a mérésben) — ha a fal "
+                "választásra kényszerül, őt engedjétek lőni: az ő "
+                "ziccere a kapusotok ellen vállalható kockázat.")
 
     # 314) Az ő blokkolt-posztjuk × a ti blokkoló falatok: a falba
     # lövő poszt ellen a zárás nem szerencse, hanem terv.
@@ -16252,6 +16288,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stk_attempts_by_role for r in reports),
         bsr_blocks_by_role=_merge_count_dicts(
             r.bsr_blocks_by_role for r in reports),
+        mcr_misses_by_role=_merge_count_dicts(
+            r.mcr_misses_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),
