@@ -954,3 +954,82 @@ def soft_pass_roles(match: Match,
                     "az ő labdáiba bele lehet nyúlni: kilépés és "
                     "passzsáv-támadás az ő sávjában azonnal termel")
     return out
+
+
+# Térnyerő-poszt: ennyi poszthoz kötött, labdával megtett előre-métert
+# kell mérni az ítélethez, és ekkora részarány fölött mondjuk ki,
+# hogy a térnyerésük egy poszt lábán van.
+TNR_MIN_M = 50.0
+TNR_SHARE_PCT = 60.0
+
+
+def ball_carrier_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Térnyerő-poszt: MELYIK POSZTJUK viszi előre a labdát.
+
+    A labdatartó-poszt azt méri, kinél ÁLL a labda — ez azt, kinél
+    HALAD: a labdás játékos egymást követő kockái közt a támadott
+    kapu felé megtett métereket a birtokos posztjához összegzi. Így
+    látszik, kinek a lábán van a térnyerésük.
+
+    Edzőileg ez a lendület-fék terve: amelyik posztjuk labdával
+    rendre teret nyer, azt nem a hatosnál kell fogadni, hanem a
+    felezőtől hátrálva — lendületbe engedni tilos, mert onnan már
+    csak szabálytalansággal állítható meg. Saját csapatra: a
+    felhozatal-teher eloszlása a rotáció-tervezés bemenete.
+
+    Visszatérés csapatonként: {"meters" (poszthoz kötött előre-
+    méter), "roles": {poszt: méter}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a TNR_MIN_M, vagy
+    egyik poszt sem éri el a TNR_SHARE_PCT-t.
+    """
+    import math
+
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"meters": 0.0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    prev = None   # (track_id, side, x, elore-irany)
+    for f in match.frames:
+        h = ball_holder(f, config)
+        if h is None or h.team is None or h.role == "kapus":
+            prev = None
+            continue
+        side = h.team.value
+        goal_x = config.attacks_toward_x(h.team)
+        ahead = 1.0 if goal_x > COURT_LENGTH_M / 2.0 else -1.0
+        if prev is not None and prev[0] == h.track_id \
+                and prev[1] == side:
+            dx = (h.x - prev[2]) * ahead
+            if 0.0 < dx < 2.0:   # előre-mozgás (követés-ugrás nélkül)
+                rec_role = roles[side].get(h.track_id)
+                if rec_role is not None:
+                    poszt = rec_role["poszt"]
+                    rec = out[side]
+                    rec["roles"][poszt] = round(
+                        rec["roles"].get(poszt, 0.0) + dx, 2)
+                    rec["meters"] = round(rec["meters"] + dx, 2)
+        prev = (h.track_id, side, h.x, ahead)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["meters"] >= TNR_MIN_M:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["meters"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= TNR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a térnyerésük a(z) {poszt} poszt lábán van "
+                    f"({share:.0f}%-a a labdával megtett "
+                    f"{rec['meters']:.0f} előre-méternek) — őt a "
+                    "felezőtől hátrálva kell fogadni: lendületbe "
+                    "engedni tilos")
+    return out

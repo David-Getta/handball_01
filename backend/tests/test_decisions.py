@@ -670,3 +670,70 @@ def test_soft_pass_roles_silent_with_few_soft_passes():
 
     rec = soft_pass_roles(_sps_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Térnyerő-poszt (melyik posztjuk viszi előre a labdát) -----------------
+
+
+def _tnr_match(runs, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + labdavezetések: a `runs`
+    elemei (vivő, előre-méter) párok — a vivő a labdával halad a +x
+    kapu felé, 0,2 m/kocka tempóban a saját sávjában."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in spos.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (tid, meters) in runs:
+        _sx, sy = spos[tid]
+        x = 20.0
+        steps = int(meters / 0.2)
+        for _ in range(steps):       # labdavezetés előre
+            others = [_pl(o, Team.HOME, *spos[o])
+                      for o in spos if o != tid]
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, x, sy)] + others,
+                ball=Ball(x=x + 0.2, y=sy, confidence=1.0)))
+            x += 0.2
+            t += 1
+        for _ in range(10):          # semleges labda a futások közt
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid2, Team.HOME, *spos[tid2])
+                         for tid2 in spos],
+                ball=Ball(x=15.0, y=16.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="tnr", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_ball_carrier_roles_names_the_carrying_post():
+    """A térnyerés dandárja a beálló lábán van → hátrálva kell
+    fogadni."""
+    from handball.pipeline.decisions import (TNR_MIN_M,
+                                             ball_carrier_roles)
+
+    rec = ball_carrier_roles(
+        _tnr_match([(7, 18.0), (7, 18.0), (7, 18.0),
+                    (9, 10.0)]))["home"]
+    assert rec["meters"] >= TNR_MIN_M, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "lendületbe engedni tilos" \
+        in rec["verdict"], rec
+
+
+def test_ball_carrier_roles_silent_with_little_carrying():
+    """Kevés labdával megtett méterből nincs ítélet."""
+    from handball.pipeline.decisions import ball_carrier_roles
+
+    rec = ball_carrier_roles(
+        _tnr_match([(7, 20.0), (9, 8.0)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -1881,7 +1881,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                                second_start_roles)
         from .xg import (big_chance_roles, missed_chance_roles,
                          wasteful_shooter_roles)
-        from .decisions import (hold_time_roles,
+        from .decisions import (ball_carrier_roles,
+                                hold_time_roles,
                                 press_sensitive_roles,
                                 soft_pass_roles)
         from .stats import (fatigue_roles, iron_man_roles,
@@ -1940,6 +1941,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Indító-poszt", attack_starter_roles),
             ("Előkészítő-poszt", last_pass_roles),
             ("Előnyben-poszt", lead_scorer_roles),
+            ("Térnyerő-poszt", ball_carrier_roles),
             ("Blokkolt-poszt", blocked_shooter_roles),
             ("Ziccerhagyó-poszt", missed_chance_roles),
             ("Fáradó-poszt", fatigue_roles),

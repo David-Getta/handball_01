@@ -926,6 +926,9 @@ class ScoutingReport:
     # Előnyben-poszt: a saját vezetés közben lőtt gólok darabszáma
     # posztonként. Darabszám, pontosan összegződik.
     lgr_goals_by_role: dict = field(default_factory=dict)
+    # Térnyerő-poszt: a labdával megtett előre-méterek posztonként.
+    # Méter-összeg, pontosan összegződik.
+    tnr_meters_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3534,6 +3537,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f" ({_lgr_pct:.0f}%, {_lgr_n} előnyben lőtt gól) — "
                 "ha ők vezetnek, az ő kivétele (szoros fogás, "
                 "kettőzés) töri meg a lendület-tartásukat.")
+
+    # Térnyerő-poszt: a lendület-fék címzettje.
+    _tnr_n = sum(rep.tnr_meters_by_role.values())
+    if _tnr_n >= 50.0:
+        _tnr_p, _tnr_c = max(rep.tnr_meters_by_role.items(),
+                             key=lambda kv: kv[1])
+        _tnr_pct = 100.0 * _tnr_c / _tnr_n
+        if _tnr_pct >= 60.0:
+            keys.append(
+                f"A térnyerésük a(z) {_tnr_p} poszt lábán van "
+                f"({_tnr_pct:.0f}%-a a labdával megtett "
+                f"{_tnr_n:.0f} előre-méternek) — őt a felezőtől "
+                "hátrálva fogadjátok: lendületbe engedni tilos.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8396,6 +8412,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .momentum import lead_scorer_roles as _lgr
         lgrrec = _lgr(match, config)[team.value]
         rep.lgr_goals_by_role = dict(lgrrec["roles"])
+        from .decisions import ball_carrier_roles as _tnr
+        tnrrec = _tnr(match, config)[team.value]
+        rep.tnr_meters_by_role = dict(tnrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10976,6 +10995,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 321) Az ő térnyerő-posztjuk × a ti kilépő faltok: a korai
+    # kontakt megfogja a lendületet, mielőtt kialakulna.
+    _tnr321_n = sum(opp.tnr_meters_by_role.values())
+    if (_tnr321_n >= 50.0 and opp.matches >= 1
+            and own.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _tnr321_p, _tnr321_c = max(opp.tnr_meters_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _tnr321_pct = 100.0 * _tnr321_c / _tnr321_n
+        if _tnr321_pct >= 60.0:
+            plan.append(
+                f"A térnyerésük a(z) {_tnr321_p} poszt lábán van "
+                f"({_tnr321_pct:.0f}%, {_tnr321_n:.0f} labdás "
+                "előre-méter), ti pedig amúgy is korán léptek ki "
+                f"(átlag {own.defensive_pressure_m:.1f} m) — a "
+                "korai kontakt őt kapja már a felezőnél: lendület "
+                "nélkül a térnyerésük elvész.")
 
     # 320) Az ő előnyben-posztjuk × a ti mentő-játékotok: hátrányban
     # az ő előny-vivőjük kivétele a leggyorsabb visszaút.
@@ -16495,6 +16532,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.epr_passes_by_role for r in reports),
         lgr_goals_by_role=_merge_count_dicts(
             r.lgr_goals_by_role for r in reports),
+        tnr_meters_by_role=_merge_count_dicts(
+            r.tnr_meters_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

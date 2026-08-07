@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 342) Térnyerő-poszt: ha a térnyerésünk egy poszt lábán van, a
+    # felhozatal-teher aránytalan, és egy korai kontakt lefékez.
+    try:
+        from .decisions import TNR_SHARE_PCT, ball_carrier_roles
+        tnr342 = ball_carrier_roles(match, config)
+        for side in ("home", "away"):
+            rec342 = tnr342[side]
+            if rec342.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy lábon álló térnyerés",
+                f"a térnyerésünk {rec342['share_pct']:.0f}%-a a(z) "
+                f"{rec342['main_role']} posztunk lábán van "
+                f"({rec342['meters']:.0f} labdás előre-méterből; "
+                f"{TNR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "korai kontakt rá az egész felhozatalunkat lefékezi",
+                "térnyerés-teher elosztása: második labdavivő "
+                "gyakorlása, korai kontakt elleni átadás (ütközés "
+                "előtti leadás), és a szélső-felhozatal mint B-út",
+                )
+    except Exception:
+        pass
+
     # 341) Előnyben-poszt: ha a vezetés-tartásunk egy posztra épül,
     # az ellenfél a kivételével gyorsan visszajön.
     try:

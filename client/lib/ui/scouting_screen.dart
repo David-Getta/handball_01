@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Térnyerő-poszt: melyik posztjuk viszi előre a labdát (50+
+  // labdás előre-méter, 60% részarány — a backenddel azonos
+  // küszöbök: TNR_MIN_M, TNR_SHARE_PCT).
+  String? _ballCarrierRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["tnr_meters_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0.0;
+    byRole.forEach((k, v) => total += (v as num).toDouble());
+    if (total < 50.0) return null;
+    String? top;
+    var topN = 0.0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toDouble();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a térnyerésük a(z) $top poszt lábán van "
+        "(${pct.round()}%, ${total.round()} labdás előre-méter) · "
+        "hátrálva kell fogadni, lendületbe engedni tilos";
+  }
+
   // Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot (3+
   // előnyben lőtt gól, 60% részarány — a backenddel azonos
   // küszöbök: LGR_MIN_GOALS, LGR_SHARE_PCT).
@@ -8455,6 +8482,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_ballCarrierRole(r) != null)
+        ["Térnyerő-poszt", _ballCarrierRole(r)!],
       if (_leadScorerRole(r) != null)
         ["Előnyben-poszt", _leadScorerRole(r)!],
       if (_lastPassRole(r) != null)

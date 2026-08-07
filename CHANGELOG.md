@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Térnyerő-poszt: melyik posztjuk viszi előre a labdát.** A
+  labdatartó-poszt azt méri, kinél áll a labda — az új réteg azt,
+  kinél halad: a labdás játékos kockái közt a támadott kapu felé
+  megtett métereket a birtokos posztjához összegzi. Edzőileg a
+  lendület-fék terve: a térnyerő posztot a felezőtől hátrálva kell
+  fogadni — lendületbe engedni tilos. Saját oldalon a második
+  labdavivő az edzés-téma. Legalább 50 labdás előre-méter és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`ball_carrier_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 321. meccsterv-szabály), edzés-fókusz
+  (342. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot.** A
   felzárkózás-poszt a hátrányt nézi, a hajrá-poszt a záró perceket —
   az új réteg a vezetést: a saját vezetés közben lőtt gólokat a lövő

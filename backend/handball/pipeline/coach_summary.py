@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Térnyerő-poszt: melyik posztjuk viszi előre a labdát.
+    try:
+        from .decisions import ball_carrier_roles
+        tnr = ball_carrier_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tnr = tnr[side]
+            if rec_tnr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} térnyerése a(z) "
+                     f"{rec_tnr['main_role']} poszt lábán van "
+                     f"({rec_tnr['share_pct']:.0f}%-a a labdával "
+                     f"megtett {rec_tnr['meters']:.0f} méternek) — "
+                     "őt hátrálva kell fogadni.")
+    except Exception:
+        pass
     # Előnyben-poszt: vezetésnél melyik posztjuk viszi a játékot.
     try:
         from .momentum import lead_scorer_roles
