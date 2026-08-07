@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Fáradó-poszt: melyik posztjuk esik vissza a második félidőre.**
+  A játékos-fáradás rétege az embert nevezi meg — az új réteg a
+  posztot: a félidőnkénti átlagsebességeket a játékos posztjához
+  összegzi, és megkeresi, melyik posztjuk tempója esik a
+  legnagyobbat. Edzőileg a második félidő terve: a visszaeső poszt
+  ellen a szünet után kell támadni — ott jön a tempó-fölény, és oda
+  éri meg a friss embert időzíteni. Saját oldalon kondicionális
+  blokk és korábbi pihentetés a téma. 100 cm/s tempó-alap és 20%
+  esés alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`fatigue_roles`), edzői összefoglaló, felderítés (edzői kulcs +
+  309. meccsterv-szabály), edzés-fókusz (330. szabály), HTML-riport
+  (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Passzív-poszt: melyik posztjuknál hal el a felállt támadás.** A
   passzív-kockázat rétege a szakaszt nevezi meg — az új réteg a
   posztot: a lövés nélküli, hosszú felállt támadások labdás kockáit

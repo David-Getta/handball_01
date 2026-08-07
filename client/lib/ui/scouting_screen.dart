@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Fáradó-poszt: melyik posztjuk esik vissza a 2. félidőre (100+
+  // cm/s tempó-alap, 20% esés — a backenddel azonos küszöbök:
+  // FTR_MIN_CMS, FTR_DROP_PCT).
+  String? _fatigueRole(Map<String, dynamic> r) {
+    final first =
+        (r["ftr_first_cms_by_role"] as Map?)?.cast<String, dynamic>();
+    final second =
+        (r["ftr_second_cms_by_role"] as Map?)?.cast<String, dynamic>();
+    if (first == null || first.isEmpty) return null;
+    String? worst;
+    var worstDrop = 0.0;
+    first.forEach((k, v) {
+      final f = (v as num).toDouble();
+      if (f < 100) return;
+      final s2 = ((second?[k] as num?) ?? 0).toDouble();
+      final drop = 100.0 * (f - s2) / f;
+      if (worst == null || drop > worstDrop) {
+        worst = k;
+        worstDrop = drop;
+      }
+    });
+    if (worst == null || worstDrop < 20.0) return null;
+    return "a második félidőre a(z) $worst posztjuk esik vissza a "
+        "legjobban (−${worstDrop.round()}% tempó) · a szünet után az"
+        " ő sávjában kell támadni";
+  }
+
   // Passzív-poszt: melyik posztjuknál hal el a felállt támadás
   // (250+ passzív labdás kocka, 60% részarány — a backenddel azonos
   // küszöbök: PVR_MIN_FRAMES, PVR_SHARE_PCT).
@@ -8120,6 +8147,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_fatigueRole(r) != null)
+        ["Fáradó-poszt", _fatigueRole(r)!],
       if (_passiveHolderRole(r) != null)
         ["Passzív-poszt", _passiveHolderRole(r)!],
       if (_openingScorerRole(r) != null)

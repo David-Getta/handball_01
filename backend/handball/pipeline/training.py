@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 330) Fáradó-poszt: ha egy posztunk tempója a második félidőre
+    # rendre visszaesik, kondicionális blokk és korábbi pihentetés
+    # kell neki.
+    try:
+        from .stats import FTR_DROP_PCT, fatigue_roles
+        ftr330 = fatigue_roles(match, config)
+        for side in ("home", "away"):
+            rec330 = ftr330[side]
+            if rec330.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Második félidőre visszaeső poszt",
+                f"a(z) {rec330['main_role']} posztunk tempója a "
+                f"második félidőre −{rec330['drop_pct']:.0f}%-ot "
+                f"esik ({FTR_DROP_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a szünet után pont az ő sávjában fog "
+                "támadni",
+                "kondicionális blokk a posztnak (ismételt sprint-"
+                "állóképesség, második félidőt szimuláló fáradt "
+                "játék-gyakorlat), és csere-terv: korábbi, rövidebb "
+                "pihentetés az első félidőben",
+                )
+    except Exception:
+        pass
+
     # 329) Passzív-poszt: ha a terméketlen támadásaink egy posztnál
     # halnak el, oda kész befejező megoldás kell a passzív jelzés
     # előttre.

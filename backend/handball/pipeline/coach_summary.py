@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Fáradó-poszt: melyik posztjuk esik vissza a második félidőre.
+    try:
+        from .stats import fatigue_roles
+        ftr = fatigue_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ftr = ftr[side]
+            if rec_ftr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} tempója a(z) "
+                     f"{rec_ftr['main_role']} poszton esik vissza a "
+                     f"második félidőre (−{rec_ftr['drop_pct']:.0f}"
+                     "%) — a szünet után az ő sávjában érdemes "
+                     "támadni.")
+    except Exception:
+        pass
     # Passzív-poszt: melyik posztjuknál hal el a felállt támadás.
     try:
         from .rules import passive_holder_roles

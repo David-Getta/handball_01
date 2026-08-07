@@ -1084,3 +1084,78 @@ def sprint_threat_roles(match: Match, config=None) -> dict:
                     "ő útját kell először lezárni, és tilos a fal "
                     "mögé engedni")
     return out
+
+
+# Fáradó-poszt: legalább ekkora összegzett első félidei tempó-alap
+# (cm/s) kell egy poszt ítéletéhez, és ekkora tempó-esés fölött
+# mondjuk ki, hogy a poszt a második félidőre visszaesik.
+FTR_MIN_CMS = 100
+FTR_DROP_PCT = 20.0
+
+
+def fatigue_roles(match: Match, config=None) -> dict:
+    """Fáradó-poszt: MELYIK POSZTJUK esik vissza a második félidőre.
+
+    A játékos-fáradás rétege (player_fatigue) az embert nevezi meg —
+    ez a posztot: a félidőnkénti átlagsebességeket a játékos
+    posztjához összegzi (cm/s-ban), és megkeresi, melyik posztjuk
+    tempója esik a legnagyobbat. Így a minta akkor is látszik, ha a
+    nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a második félidő terve: a visszaeső posztjuk ellen a
+    szünet után kell támadni — az ő sávjában jön a tempó-fölény, és
+    ott érdemes a friss embert bevetni. Saját csapatra: annak a
+    posztnak korábbi pihentetés és kondicionális blokk jár.
+
+    Visszatérés csapatonként: {"first_cms_roles": {poszt: cm/s
+    összeg}, "second_cms_roles": {poszt: cm/s összeg}, "main_role",
+    "drop_pct", "verdict"} — az ítélet None, ha nincs felismert
+    szünet/mért idő, a poszt alapja nem éri el az FTR_MIN_CMS-t,
+    vagy az esés az FTR_DROP_PCT alatt marad.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"first_cms_roles": {}, "second_cms_roles": {},
+                        "main_role": None, "drop_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for row in player_fatigue(match):
+        side = row["team"]
+        if side not in out:
+            continue
+        rec_role = roles[side].get(row["track_id"])
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["first_cms_roles"][poszt] = (
+            rec["first_cms_roles"].get(poszt, 0)
+            + round(row["first_ms"] * 100))
+        rec["second_cms_roles"][poszt] = (
+            rec["second_cms_roles"].get(poszt, 0)
+            + round(row["second_ms"] * 100))
+
+    for side in ("home", "away"):
+        rec = out[side]
+        worst = None
+        for poszt, first in rec["first_cms_roles"].items():
+            if first < FTR_MIN_CMS:
+                continue
+            second = rec["second_cms_roles"].get(poszt, 0)
+            drop = 100.0 * (first - second) / first
+            if worst is None or drop > worst[1]:
+                worst = (poszt, drop)
+        if worst is not None and worst[1] >= FTR_DROP_PCT:
+            poszt, drop = worst
+            rec["main_role"] = poszt
+            rec["drop_pct"] = round(drop, 1)
+            rec["verdict"] = (
+                f"a második félidőre a(z) {poszt} posztjuk esik "
+                f"vissza a legjobban (−{drop:.0f}% tempó) — a "
+                "szünet után az ő sávjában kell támadni, és ott "
+                "éri meg a friss embert bevetni")
+    return out

@@ -886,6 +886,10 @@ class ScoutingReport:
     # Passzív-poszt: a lövés nélküli, hosszú felállt támadások labdás
     # kockái posztonként. Kocka-darabszám, pontosan összegződik.
     pvr_frames_by_role: dict = field(default_factory=dict)
+    # Fáradó-poszt: félidőnkénti tempó-összegek posztonként (cm/s).
+    # Összeg, pontosan összegződik.
+    ftr_first_cms_by_role: dict = field(default_factory=dict)
+    ftr_second_cms_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3330,6 +3334,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "hosszú támadások labdás idejének) — passzív "
                 "jelzésnél őt nyomjátok meg: nála jön a "
                 "kényszer-eladás.")
+
+    # Fáradó-poszt: a második félidő terve.
+    _ftr_worst = None
+    for _ftr_p, _ftr_f in rep.ftr_first_cms_by_role.items():
+        if _ftr_f < 100:
+            continue
+        _ftr_s = rep.ftr_second_cms_by_role.get(_ftr_p, 0)
+        _ftr_d = 100.0 * (_ftr_f - _ftr_s) / _ftr_f
+        if _ftr_worst is None or _ftr_d > _ftr_worst[1]:
+            _ftr_worst = (_ftr_p, _ftr_d)
+    if _ftr_worst is not None and _ftr_worst[1] >= 20.0:
+        keys.append(
+            f"A második félidőre a(z) {_ftr_worst[0]} posztjuk esik"
+            f" vissza a legjobban (−{_ftr_worst[1]:.0f}% tempó) — a"
+            " szünet után az ő sávjában támadjatok, és oda "
+            "időzítsétek a friss embert.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8154,6 +8174,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import passive_holder_roles as _pvr
         pvrrec = _pvr(match, config)[team.value]
         rep.pvr_frames_by_role = dict(pvrrec["roles"])
+        from .stats import fatigue_roles as _ftr
+        ftrrec = _ftr(match, config)[team.value]
+        rep.ftr_first_cms_by_role = dict(ftrrec["first_cms_roles"])
+        rep.ftr_second_cms_by_role = dict(ftrrec["second_cms_roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -10734,6 +10758,27 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 309) Az ő fáradó-posztjuk × a ti mély padotok: a második
+    # félidőben friss emberrel az ő visszaeső sávjukban jön a fölény.
+    _ftr309 = None
+    for _ftr309_p, _ftr309_f in opp.ftr_first_cms_by_role.items():
+        if _ftr309_f < 100:
+            continue
+        _ftr309_s = opp.ftr_second_cms_by_role.get(_ftr309_p, 0)
+        _ftr309_d = 100.0 * (_ftr309_f - _ftr309_s) / _ftr309_f
+        if _ftr309 is None or _ftr309_d > _ftr309[1]:
+            _ftr309 = (_ftr309_p, _ftr309_d)
+    _rot309 = (own.rotation_used_sum / max(1, own.rotation_matches)
+               if own.rotation_matches else 0.0)
+    if (_ftr309 is not None and _ftr309[1] >= 20.0
+            and _rot309 >= 9.0):
+        plan.append(
+            f"A második félidőre a(z) {_ftr309[0]} posztjuk esik "
+            f"vissza (−{_ftr309[1]:.0f}% tempó), ti pedig mély "
+            f"paddal forogtok (átlag {_rot309:.0f} bevetett játékos)"
+            " — a szünet után az ő sávjába időzítsétek a friss "
+            "támadót: ott jön a tempó-fölény.")
 
     # 308) Az ő passzív-posztjuk × a ti labdaszerzésetek: a passzív
     # jelzés alatt megnyomott poszt eladása azonnali labdaszerzés.
@@ -16011,6 +16056,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.osr_goals_by_role for r in reports),
         pvr_frames_by_role=_merge_count_dicts(
             r.pvr_frames_by_role for r in reports),
+        ftr_first_cms_by_role=_merge_count_dicts(
+            r.ftr_first_cms_by_role for r in reports),
+        ftr_second_cms_by_role=_merge_count_dicts(
+            r.ftr_second_cms_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

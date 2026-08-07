@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **356 réteg**, modulonként csoportosítva; a
+Összesen **357 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (74)
@@ -373,11 +373,12 @@ leírás a réteg-függvény docstringjének első sora.
 | `setplay_efficiency` | Melyik figura működik: klaszterenként támadás / lövés / gól. |
 | `setplay_finishers` | Figura-befejező: MELYIK FIGURÁJUKAT KI FEJEZI BE. |
 
-## stats (11)
+## stats (12)
 
 | Réteg | Mit mér |
 |---|---|
 | `distance_battle` | Futás-mérleg: MELYIK CSAPAT FUTJA TÚL a másikat. |
+| `fatigue_roles` | Fáradó-poszt: MELYIK POSZTJUK esik vissza a második félidőre. |
 | `intensity_trend` | Kondíció-mutató: az ELSŐ és MÁSODIK félidőben mért átlagos |
 | `iron_man_roles` | Vasember-poszt: MELYIK POSZTJUK játszik végig csere nélkül. |
 | `pair_plus_minus` | Páros-mérleg: MELYIK KETTŐ megy jól EGYÜTT a pályán. |

@@ -3538,6 +3538,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stats import fatigue_roles
+            res["fatigue_roles"] = fatigue_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5114,6 +5119,9 @@ def create_app():
                 from ..pipeline.rules import passive_holder_roles
                 _layer("passive_holder_roles",
                        lambda: passive_holder_roles(match))
+                from ..pipeline.stats import fatigue_roles
+                _layer("fatigue_roles",
+                       lambda: fatigue_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score
