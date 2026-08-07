@@ -2575,3 +2575,67 @@ def clutch_turnover_roles(match: Match, config=None) -> dict:
                     "legolcsóbb a labdaszerzés, amikor a legtöbbet "
                     "ér")
     return out
+
+
+# Forró-poszt: ennyi poszthoz kötött, sorozatban lőtt gól kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# sorozataikat egy poszt lövi.
+HHR_MIN_GOALS = 3
+HHR_SHARE_PCT = 60.0
+
+
+def hot_hand_roles(match: Match, config=None) -> dict:
+    """Forró-poszt: MELYIK POSZTJUK lövi a gólsorozatokat.
+
+    A forró kéz rétege (hot_hands) az embert nevezi meg — ez a
+    posztot: a sorozatban (a csapat két vagy több szomszédos gólja
+    ugyanattól a lövőtől) lőtt gólokat a lövő posztjához írja. Így a
+    minta akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a lendület-törés terve: ha a sorozataik rendre
+    ugyanarról a posztról jönnek, az első gólja után azonnal
+    reagálni kell — őrzés-váltás vagy kettőzés, mielőtt a
+    második-harmadik jönne. Saját csapatra: a forró posztunkat
+    tudatosan kell játékban tartani, amíg tart a lendülete.
+
+    Visszatérés csapatonként: {"streak_goals" (poszthoz kötött,
+    sorozatban lőtt gól), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    HHR_MIN_GOALS, vagy egyik poszt sem éri el a HHR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    hh = hot_hands(match, config)
+
+    out: dict = {side: {"streak_goals": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for st in hh[side]["streaks"]:
+            rec_role = roles[side].get(st["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + st["length"])
+            rec["streak_goals"] += st["length"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["streak_goals"] >= HHR_MIN_GOALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["streak_goals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= HHR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a gólsorozataik {share:.0f}%-a a(z) {poszt} "
+                    f"posztról jön ({rec['streak_goals']} sorozatban"
+                    " lőtt gólból) — az első gólja után azonnal "
+                    "őrzés-váltás vagy kettőzés rá, mielőtt a "
+                    "második-harmadik jönne")
+    return out

@@ -3498,6 +3498,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import hot_hand_roles
+            res["hot_hand_roles"] = hot_hand_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5050,6 +5055,9 @@ def create_app():
                 from ..pipeline.momentum import clutch_turnover_roles
                 _layer("clutch_turnover_roles",
                        lambda: clutch_turnover_roles(match))
+                from ..pipeline.momentum import hot_hand_roles
+                _layer("hot_hand_roles",
+                       lambda: hot_hand_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

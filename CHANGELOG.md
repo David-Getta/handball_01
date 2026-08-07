@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Forró-poszt: melyik posztjuk lövi a gólsorozatokat.** A forró
+  kéz rétege az embert nevezi meg — az új réteg a posztot: a
+  sorozatban (két vagy több szomszédos csapatgól ugyanattól a
+  lövőtől) lőtt gólokat a lövő posztjához írja. Edzőileg a
+  lendület-törés terve: ha a sorozataik rendre ugyanarról a posztról
+  jönnek, az első gólja után azonnal reagálni kell — őrzés-váltás
+  vagy kettőzés, mielőtt a második-harmadik jönne. Saját oldalon a
+  második lendület-vivő kijelölése a téma. Legalább 3 sorozat-gól és
+  60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`hot_hand_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 301. meccsterv-szabály), edzés-fókusz (322.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában.**
   A hajrá-hibázók rétege az embert nevezi meg — az új réteg a
   posztot: az utolsó öt perc labdaeladásait a vesztes posztjához

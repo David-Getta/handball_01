@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 322) Forró-poszt: ha a sorozatainkat mindig ugyanaz a posztunk
+    # lövi, az ellenfél az első gól után rá fog állni — kell a
+    # második lendület-vivő.
+    try:
+        from .momentum import HHR_SHARE_PCT, hot_hand_roles
+        hhr322 = hot_hand_roles(match, config)
+        for side in ("home", "away"):
+            rec322 = hhr322[side]
+            if rec322.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő lendület",
+                f"a gólsorozataink {rec322['share_pct']:.0f}%-a a(z)"
+                f" {rec322['main_role']} posztról jön "
+                f"({rec322['streak_goals']} sorozat-gólból; "
+                f"{HHR_SHARE_PCT:.0f}% fölött már minta) — az első "
+                "gólunk után az ellenfél pontosan tudja, kire "
+                "álljon rá",
+                "lendület-átadás gyakorlása: a sorozatban lévő "
+                "emberről induló kijátszások (róla lekapcsolódó "
+                "társ, elzárás neki, hogy másnak nyíljon tér), és "
+                "második befejező kijelölése a forró szakaszokra",
+                )
+    except Exception:
+        pass
+
     # 321) Hajráhiba-poszt: ha a hajrában mindig ugyanannál a
     # posztunknál megy el a labda, az ellenfél záró pressze oda jön.
     try:

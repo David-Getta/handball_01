@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Forró-poszt: melyik posztjuk lövi a gólsorozatokat.
+    try:
+        from .momentum import hot_hand_roles
+        hhr = hot_hand_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_hhr = hhr[side]
+            if rec_hhr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gólsorozatait a(z) "
+                     f"{rec_hhr['main_role']} posztja lövi "
+                     f"({rec_hhr['share_pct']:.0f}%, "
+                     f"{rec_hhr['streak_goals']} sorozat-gólból) — az"
+                     " első gólja után azonnal reagálni kell.")
+    except Exception:
+        pass
     # Hajráhiba-poszt: melyik posztjuk adja el a labdát a hajrában.
     try:
         from .momentum import clutch_turnover_roles
