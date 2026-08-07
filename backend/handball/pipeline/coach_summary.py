@@ -916,6 +916,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot.
+    try:
+        from .momentum import second_start_roles
+        ssr = second_start_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ssr = ssr[side]
+            if rec_ssr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szünet utáni rajtja a(z) "
+                     f"{rec_ssr['main_role']} posztra épül "
+                     f"({rec_ssr['share_pct']:.0f}%, "
+                     f"{rec_ssr['goals']} gól a második félidő első"
+                     " tíz percében) — a szünet után őt kell "
+                     "megfogni.")
+    except Exception:
+        pass
     # Elzárt-poszt: melyik védőjük akad el az elzárásokban.
     try:
         from .defense import screened_defender_roles

@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot
+  // (3+ gól a 2. félidő első tíz percében, 60% részarány — a
+  // backenddel azonos küszöbök: SSR_MIN_GOALS, SSR_SHARE_PCT).
+  String? _secondStartRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ssr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a szünet utáni rajtjuk a(z) $top posztra épül "
+        "(${pct.round()}%, $total gól a 2. félidő első tíz "
+        "percében) · a szünet után őt fogja a legjobb védő";
+  }
+
   // Elzárt-poszt: melyik védőjük akad el az elzárásokban (3+
   // elakadás, 60% részarány — a backenddel azonos küszöbök:
   // SDR_MIN_SCREENS, SDR_SHARE_PCT).
@@ -8201,6 +8228,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_secondStartRole(r) != null)
+        ["Újrakezdő-poszt", _secondStartRole(r)!],
       if (_screenedDefRole(r) != null)
         ["Elzárt-poszt", _screenedDefRole(r)!],
       if (_doubledTargetRole(r) != null)

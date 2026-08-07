@@ -123,7 +123,8 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   "soft_pass_roles", "clutch_hog_roles",
                   "assisted_scorer_roles", "opening_scorer_roles",
                   "passive_holder_roles", "fatigue_roles",
-                  "doubled_target_roles", "screened_defender_roles"):
+                  "doubled_target_roles", "screened_defender_roles",
+                  "second_start_roles"):
         assert layer in names, f"{layer} nincs a rangsorban"
 
 

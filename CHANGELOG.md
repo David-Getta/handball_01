@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Újrakezdő-poszt: melyik posztjuk viszi a szünet utáni rajtot.**
+  A félidő-nyitások rétege csapat-szinten mondja meg, hogyan jönnek
+  ki a szünetről — az új réteg a posztot: a második félidő első tíz
+  percének góljait a lövő posztjához írja. Edzőileg a szünet utáni
+  párosítás terve: ha az újrakezdés rendre ugyanarra a posztra épül,
+  a második félidő első tíz percében őt kell a legjobb védővel
+  megfogni. Saját oldalon a B-s nyitó-forgatókönyv a téma. Felismert
+  szünet nélkül, 3 gól és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`second_start_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 312. meccsterv-szabály),
+  edzés-fókusz (333. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Elzárt-poszt: melyik védőjük akad el az elzárásokban.** Az
   elzárók rétege a támadó oldalt nevezi meg — az új réteg a
   megtalált védőt: lövésenként az elzáróval elakasztott őrző

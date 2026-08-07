@@ -2136,3 +2136,29 @@ def test_opening_scorer_roles_silent_with_few_goals():
 
     rec = opening_scorer_roles(_hhr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Újrakezdő-poszt (melyik posztjuk viszi a szünet utáni rajtot) ---------
+
+
+def test_second_start_roles_names_the_restart_post():
+    """A szünet utáni gólokból három a beállóé → a második félidő
+    elején őt kell megfogni."""
+    from handball.pipeline.momentum import (SSR_MIN_GOALS,
+                                            second_start_roles)
+
+    rec = second_start_roles(
+        _fdp_match([9, 9], [7, 7, 7, 9]))["home"]
+    assert rec["goals"] >= SSR_MIN_GOALS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "szünet után" in rec["verdict"], rec
+
+
+def test_second_start_roles_silent_without_break():
+    """Felismert szünet nélkül nincs ítélet."""
+    from handball.pipeline.momentum import second_start_roles
+
+    rec = second_start_roles(
+        _fdp_match([9, 9], [7, 7, 7], with_break=False))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

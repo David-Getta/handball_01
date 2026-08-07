@@ -184,6 +184,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "doubled_target_roles"),
         ("felkészülés", "Elzárt-poszt", "defense",
          "screened_defender_roles"),
+        ("felkészülés", "Újrakezdő-poszt", "momentum",
+         "second_start_roles"),
         ("felkészülés", "Kulcs-poszt", "priorities", "key_post"),
     ]
 
@@ -298,6 +300,7 @@ KP_LAYERS: tuple = (
     ("Fáradó-poszt", "stats", "fatigue_roles"),
     ("Kettőzött-poszt", "defense", "doubled_target_roles"),
     ("Elzárt-poszt", "defense", "screened_defender_roles"),
+    ("Újrakezdő-poszt", "momentum", "second_start_roles"),
 )
 
 

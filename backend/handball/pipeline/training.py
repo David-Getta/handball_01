@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 333) Újrakezdő-poszt: ha a szünet utáni rajtunk egy posztra
+    # épül, a felkészült ellenfél a második félidőt az ő fogásával
+    # kezdi.
+    try:
+        from .momentum import SSR_SHARE_PCT, second_start_roles
+        ssr333 = second_start_roles(match, config)
+        for side in ("home", "away"):
+            rec333 = ssr333[side]
+            if rec333.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő második rajt",
+                f"a szünet utáni góljaink {rec333['share_pct']:.0f}"
+                f"%-a a(z) {rec333['main_role']} posztról jön "
+                f"({rec333['goals']} gól a második félidő első tíz "
+                f"percében; {SSR_SHARE_PCT:.0f}% fölött már minta) "
+                "— az ellenfél a szünetben pontosan tudja, kire "
+                "álljon rá",
+                "második félidei nyitó-forgatókönyv B-vel: az "
+                "újrakezdés első három figurája két különböző "
+                "befejező posztra megbeszélve, és a rajt-emberünk "
+                "tehermentesítése elzárásokkal",
+                )
+    except Exception:
+        pass
+
     # 332) Elzárt-poszt: ha egy védőnk rendre elakad az
     # elzárásokban, oda fogja hozni a figuráit minden ellenfél.
     try:
