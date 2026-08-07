@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Labdatartó-poszt: melyik posztjuknál áll meg a labda.** A
+  labdatartás-idő rétege az embert nevezi meg — az új réteg a
+  posztot: minden mért labdás szakasz idejét a birtokos posztjához
+  írja. Edzőileg a kettőzés időzítése: amelyik posztjuknál rendre
+  megáll a labda, ott van idő odaérni a nyomással, és ott lassul a
+  támadásuk. Saját oldalon a gyorsabb továbbítás edzés-témája.
+  Legalább 60 mp mért tartás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`hold_time_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 296. meccsterv-
+  szabály), edzés-fókusz (317. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Ziccer-poszt: melyik posztjuknál alakul ki a nagy helyzet.** A
   ziccer-befejezők rétege az embert nevezi meg — az új réteg a
   posztot: a BIG_CHANCE_XG feletti helyzet-értékű lövéseket a lövő

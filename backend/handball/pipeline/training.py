@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 317) Labdatartó-poszt: ha a labda egy posztunknál ragad, oda
+    # időzíti az ellenfél a kettőzést, és ott lassul a támadásunk.
+    try:
+        from .decisions import HTR_SHARE_PCT, hold_time_roles
+        htr317 = hold_time_roles(match, config)
+        for side in ("home", "away"):
+            rec317 = htr317[side]
+            if rec317.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztnál ragadó labda",
+                f"a mért labdatartásunk {rec317['share_pct']:.0f}%-a "
+                f"a(z) {rec317['main_role']} posztnál telik "
+                f"({rec317['seconds']:.0f} mp-ből; "
+                f"{HTR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél oda időzíti a kettőzést, és ott lassul a "
+                "támadásunk",
+                "tempó-szabály a posztnak: két másodperces "
+                "továbbítási limit a figurákban, egyérintős "
+                "passz-körök és kettőzés elleni leadás-gyakorlat "
+                "(bejátszás a beállónak, visszajátszás az üresnek)",
+                )
+    except Exception:
+        pass
+
     # 316) Ziccer-poszt: ha a nagy helyzeteink egy posztnál alakulnak
     # ki, a helyzet-teremtésünk egysíkú, és egy besegítéssel lezárható.
     try:

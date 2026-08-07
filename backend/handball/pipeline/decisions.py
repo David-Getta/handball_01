@@ -740,3 +740,65 @@ def shot_choice_quality(match: Match,
                 "jobb szabad helyzet) — ellenük a helyzet-teremtést "
                 "kell zárni, a lövés-pillanatban már késő")
     return out
+
+
+# Labdatartó-poszt: ennyi poszthoz kötött labdatartás-másodperc kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a labda
+# egy posztnál áll meg.
+HTR_MIN_S = 60.0
+HTR_SHARE_PCT = 60.0
+
+
+def hold_time_roles(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Labdatartó-poszt: MELYIK POSZTJUKNÁL áll meg a labda.
+
+    A labdatartás-idő rétege (hold_time_players) az embert nevezi
+    meg — ez a posztot: minden mért labdás szakasz idejét a birtokos
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kettőzés időzítése: amelyik posztjuknál rendre
+    megáll a labda, ott van idő odaérni a kettőzéssel, és ott lassul
+    a támadásuk — a nyomást oda kell szervezni. Saját csapatra: ha a
+    labda egy posztunknál ragad, a gyorsabb továbbítás az edzés-téma.
+
+    Visszatérés csapatonként: {"seconds" (poszthoz kötött mért
+    tartás, mp), "roles": {poszt: mp}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a HTR_MIN_S, vagy
+    egyik poszt sem éri el a HTR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ht = hold_time_players(match, config)
+
+    out: dict = {side: {"seconds": 0.0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ht[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = round(
+                rec["roles"].get(poszt, 0.0) + row["seconds"], 1)
+            rec["seconds"] = round(rec["seconds"] + row["seconds"], 1)
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["seconds"] >= HTR_MIN_S:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["seconds"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= HTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a labda a(z) {poszt} posztjuknál áll meg: a "
+                    f"mért labdatartásuk {share:.0f}%-a nála telik "
+                    f"({rec['seconds']:.0f} mp-ből) — a kettőzést rá "
+                    "kell időzíteni, nála lassul a támadásuk")
+    return out

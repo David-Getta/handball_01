@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Labdatartó-poszt: melyik posztjuknál áll meg a labda.
+    try:
+        from .decisions import hold_time_roles
+        htr = hold_time_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_htr = htr[side]
+            if rec_htr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} játéka a(z) "
+                     f"{rec_htr['main_role']} posztnál lassul: a mért"
+                     f" labdatartásuk {rec_htr['share_pct']:.0f}%-a "
+                     f"nála telik ({rec_htr['seconds']:.0f} mp-ből) —"
+                     " a kettőzést rá kell időzíteni.")
+    except Exception:
+        pass
     # Ziccer-poszt: melyik posztjuknál alakul ki a nagy helyzet.
     try:
         from .xg import big_chance_roles

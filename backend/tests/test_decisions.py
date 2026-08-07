@@ -474,3 +474,56 @@ def test_shot_choice_quality_silent_with_few_shots():
 
     rec = shot_choice_quality(_scq_match([True, True]))["home"]
     assert rec["pct"] is None and rec["verdict"] is None, rec
+
+
+# ---- Labdatartó-poszt (melyik posztjuknál áll meg a labda) -----------------
+
+
+def _htr_match(hold_plan, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + labdás szakaszok: a
+    `hold_plan` elemei (birtokos id, hossz képkockában) párok."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (tid, n) in hold_plan:
+        for _ in range(10):          # gazdátlan labda: szakasz-határ
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        sx, sy = spos[tid]
+        for _ in range(n):           # a labda a birtokosnál áll
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="t", home_team="A", away_team="B",
+                           fps=fps), frames)
+
+
+def test_hold_time_roles_names_the_slow_post():
+    """A mért tartás dandárja a beállónál telik → nála áll a labda."""
+    from handball.pipeline.decisions import HTR_MIN_S, hold_time_roles
+
+    plan = [(7, 500)] * 3 + [(9, 100)]   # 60 mp beálló, 4 mp szélső
+    rec = hold_time_roles(_htr_match(plan))["home"]
+    assert rec["seconds"] >= HTR_MIN_S, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kettőzést" in rec["verdict"], rec
+
+
+def test_hold_time_roles_silent_with_little_holding():
+    """Kevés mért tartásból nincs ítélet."""
+    from handball.pipeline.decisions import hold_time_roles
+
+    rec = hold_time_roles(_htr_match([(7, 100), (9, 50)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
