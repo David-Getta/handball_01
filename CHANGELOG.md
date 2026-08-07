@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kettőző-poszt: melyik posztjuk lép ki kettőzni.** A kettőző
+  emberek rétege az embert nevezi meg — az új réteg a posztot: a
+  kettőzött kockákat a másodiknak érkező védő posztjához írja.
+  Edzőileg ez a kijátszás-terv: ha a kettőzésük rendre ugyanarról a
+  posztról érkezik, előre tudni, hol nyílik ki a pálya — a kettőzés
+  pillanatában az ő elhagyott embere felé megy az első passz, mert ő
+  szabadult fel. Saját csapatra: a kiolvasható kettőzést forgatni
+  kell. Felületek: `/analyze` és meccs-csomag
+  (`doubling_defender_roles`), edzői összefoglaló, felderítő edzői
+  kulcs, meccsterv-szabály (288: az ő kiolvasható kettőzésük × a ti
+  nyomásálló passzjátékotok → minden kilépésük emberelőny),
+  edzés-fókusz (309: kettőzés-forgó besegítővel), teendő-rangsor, a
+  kulcs-poszt lencse és a meccs-jelentés Védő-lencse táblája,
+  kliens-csempe.
+
 - **Kulcs-poszt indoklással a meccs-jelentésben.** A jelentés
   Kulcs-poszt szekciója az ítélet mellé mostantól felsorolja, MELY
   rétegek mutatnak a megnevezett posztra (pl. "rétegek:

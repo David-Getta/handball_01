@@ -2115,6 +2115,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Kettőző-poszt: melyik posztjuk lép ki kettőzni (40+ kettőzött
+  // kocka, 60% részarány — a backenddel azonos küszöbök:
+  // DDR_MIN_FRAMES, DDR_SHARE_PCT).
+  String? _doublingRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["ddr_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 40) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kettőzésük a(z) $top posztról érkezik "
+        "(${pct.round()}%) · az elhagyott embere felé menjen az "
+        "első passz";
+  }
+
   // Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat
   // (3+ elszórt hosszú passz, 60% részarány — a backenddel azonos
   // küszöbök: RPR_MIN_TO, RPR_SHARE_PCT).
@@ -7557,6 +7584,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_doublingRole(r) != null)
+        ["Kettőző-poszt", _doublingRole(r)!],
       if (_riskyPasserRole(r) != null)
         ["Kockáztató-poszt", _riskyPasserRole(r)!],
       if (_ironManRole(r) != null)

@@ -1355,6 +1355,26 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 309) Kettőző-poszt: ha a kettőzésünk mindig ugyanarról a
+    # posztról érkezik, az ellenfél előre tudja, hol nyílik a pálya.
+    try:
+        from .defense import DDR_SHARE_PCT, doubling_defender_roles
+        ddr309 = doubling_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec309 = ddr309[side]
+            if rec309.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Kiolvasható kettőzés",
+                f"a kettőzött időnk {rec309['share_pct']:.0f}%-ában "
+                f"a(z) {rec309['main_role']} posztunk lép ki "
+                f"({DDR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél előre tudja, kinek az embere marad üresen",
+                "kettőzés-forgó: a második ember jelre váltakozik "
+                "(nem mindig ugyanaz lép ki), és minden kettőzésnél "
+                "kijelölt besegítő zárja az elhagyott embert")
+    except Exception:
+        pass
+
     # 308) Kockáztató-poszt: ha a hosszú eladásaink egy posztról
     # jönnek, az ellenfél a sávjába áll, és kontrát kap belőle.
     try:

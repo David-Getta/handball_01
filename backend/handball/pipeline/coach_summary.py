@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kettőző-poszt: melyik posztjuk lép ki kettőzni.
+    try:
+        from .defense import doubling_defender_roles
+        ddr = doubling_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ddr = ddr[side]
+            if rec_ddr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kettőzése kiolvasható: "
+                     f"{rec_ddr['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_ddr['main_role']} posztról érkezik — a "
+                     "kettőzés pillanatában az ő elhagyott embere az "
+                     "üres ember.")
+    except Exception:
+        pass
     # Kockáztató-poszt: melyik posztjuk szórja el a hosszú labdákat.
     try:
         from .attack_types import risky_passer_roles

@@ -4143,3 +4143,66 @@ def beaten_defender_roles(match, config=None) -> dict:
                     "figura az ő emberét támadja, elzárás is hozzá "
                     "terelje a lövőt")
     return out
+
+
+# Kettőző-poszt: ennyi poszthoz kötött kettőzött kocka kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# kettőzésük egy posztról érkezik.
+DDR_MIN_FRAMES = 40
+DDR_SHARE_PCT = 60.0
+
+
+def doubling_defender_roles(match, config=None) -> dict:
+    """Kettőző-poszt: MELYIK POSZTJUK lép ki kettőzni.
+
+    A kettőző emberek rétege (doubling_defenders) az embert nevezi
+    meg — ez a posztot: a kettőzött kockákat a másodiknak érkező
+    védő posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kijátszás-terv: ha a kettőzésük rendre ugyanarról
+    a posztról érkezik, előre tudni, HOL nyílik ki a pálya — a
+    kettőzés pillanatában az ő elhagyott embere felé megy az első
+    passz, mert ő szabadult fel. Saját csapatra: a kiolvasható
+    kettőzést forgatni kell.
+
+    Visszatérés csapatonként (a KETTŐZŐ, védekező oldal): {"frames"
+    (poszthoz kötött kettőzött kocka), "roles": {poszt: kocka},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg a DDR_MIN_FRAMES, vagy egyik poszt sem éri el a
+    DDR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    dd = doubling_defenders(match, config)
+
+    out: dict = {side: {"frames": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in dd[side]["doublers"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["frames"])
+            rec["frames"] += row["frames"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["frames"] >= DDR_MIN_FRAMES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["frames"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= DDR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kettőzésük a(z) {poszt} posztról érkezik "
+                    f"({share:.0f}% a kettőzött időből) — a kettőzés "
+                    "pillanatában az ő elhagyott embere felé menjen "
+                    "az első passz: ő az üres ember")
+    return out

@@ -3005,3 +3005,53 @@ def test_beaten_defender_roles_silent_with_few_goals():
 
     rec = beaten_defender_roles(_btr_match([21, 23]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _ddr_match(second=22, n_frames=60, fps=25.0):
+    """Mint a _dtp_match, de poszt-mintával: a 22-es beálló, a 23-as
+    szélső, a 21-es irányító — a `second` érkezik másodiknak a
+    kettőzésbe."""
+    from handball.models.tracking import Ball, Frame, Match
+
+    attack_pos = {21: (11.0, 13.0), 22: (6.0, 10.0), 23: (6.0, 1.0)}
+    frames = []
+    t = 0
+    for _ in range(150):             # vendég-birtoklás: poszt-minta
+        players = [_pl(1, Team.HOME, 30.0, 10.0)]
+        players += [_pl(tid, Team.AWAY, *xy)
+                    for tid, xy in attack_pos.items()]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    others = [tid for tid in attack_pos if tid not in (21, second)]
+    for _ in range(n_frames):        # kettőzött kockák
+        players = [_pl(1, Team.HOME, 30.0, 10.0),
+                   _pl(21, Team.AWAY, 31.0, 10.0),
+                   _pl(second, Team.AWAY, 30.0, 12.0)]
+        players += [_pl(tid, Team.AWAY, 36.0, 10.0) for tid in others]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=30.0, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_doubling_defender_roles_names_the_doubling_post():
+    """Ha a kettőzés rendre ugyanarról a posztról érkezik, az ő
+    elhagyott embere felé megy az első passz."""
+    from handball.pipeline.defense import (DDR_MIN_FRAMES,
+                                           doubling_defender_roles)
+
+    rec = doubling_defender_roles(_ddr_match(second=22))["away"]
+    assert rec["frames"] >= DDR_MIN_FRAMES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "üres ember" in rec["verdict"], rec
+
+
+def test_doubling_defender_roles_silent_with_few_frames():
+    """Kevés kettőzött kockából nincs ítélet."""
+    from handball.pipeline.defense import doubling_defender_roles
+
+    rec = doubling_defender_roles(
+        _ddr_match(second=22, n_frames=30))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
