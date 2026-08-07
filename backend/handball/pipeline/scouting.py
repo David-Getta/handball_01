@@ -809,6 +809,9 @@ class ScoutingReport:
     # Indítás-vadász poszt: az elrabolt kapus-indítások darabszáma
     # posztonként. Darabszám, meccsek közt pontosan összegződik.
     ohr_steals_by_role: dict = field(default_factory=dict)
+    # Bejátszó-poszt: a beálló-beadások darabszáma posztonként.
+    # Darabszám, meccsek közt pontosan összegződik.
+    pfr_feeds_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3045,6 +3048,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
                 "lövésük zárása után az első dolog őt kivenni a "
                 "lepattanóból, nem a lövőt nézni.")
+
+    # Bejátszó-poszt: kinek a kezén kell a beálló-vonalba lépni.
+    _pfr_n = sum(rep.pfr_feeds_by_role.values())
+    if _pfr_n >= 4:
+        _pfr_p, _pfr_c = max(rep.pfr_feeds_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pfr_pct = 100.0 * _pfr_c / _pfr_n
+        if _pfr_pct >= 60.0:
+            keys.append(
+                f"A beálló-beadásaik a(z) {_pfr_p} posztjukról jönnek "
+                f"({_pfr_pct:.0f}%, {_pfr_n} beadásból) — az ő kezén "
+                "kell a beálló-vonalba lépni, és az ő oldalán "
+                "induljon a kettőzés: a bejátszó zárása többet ér, "
+                "mint a beálló birkózása.")
 
     # Indítás-vadász poszt: melyik sávot kerülje a kapus-indításunk.
     _ohr_n = sum(rep.ohr_steals_by_role.values())
@@ -7690,6 +7707,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .goalkeeper import outlet_hunter_roles as _ohr
         ohrrec = _ohr(match, config)[team.value]
         rep.ohr_steals_by_role = dict(ohrrec["roles"])
+        from .attack_types import pivot_feeder_roles as _pfr
+        pfrrec = _pfr(match, config)[team.value]
+        rep.pfr_feeds_by_role = dict(pfrrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10264,6 +10284,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 285) Az ő bejátszó-posztjuk × a ti beálló-védekezésetek: ha a
+    # beálló-játékuk egy posztról fut, és a ti falatok amúgy is
+    # szenved a beállóval, a bejátszó zárása a leggazdaságosabb terv.
+    _pfr285_n = sum(opp.pfr_feeds_by_role.values())
+    if (_pfr285_n >= 4 and own.pd_pivot_attacks >= 4
+            and own.pd_pivot_goals * 2 >= own.pd_pivot_attacks):
+        _pfr285_p, _pfr285_c = max(opp.pfr_feeds_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _pfr285_pct = 100.0 * _pfr285_c / _pfr285_n
+        if _pfr285_pct >= 60.0:
+            plan.append(
+                f"A beálló-beadásaik a(z) {_pfr285_p} posztjukról "
+                f"jönnek ({_pfr285_pct:.0f}%), a ti falatok pedig "
+                "eddig szenvedett a beállós támadásokkal "
+                f"({own.pd_pivot_goals}/{own.pd_pivot_attacks} gól "
+                "ellenetek) — ne a beállóval birkózzatok: a bejátszó "
+                "kezén lépjetek a vonalba, és az ő oldalán induljon "
+                "a kettőzés.")
 
     # 284) Az ő indítás-vadász posztjuk × a ti gólba kerülő
     # indítás-hibáitok: ha az indításaitok elvesznek ÉS tudni lehet,
@@ -15054,6 +15093,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.kp_layers_by_post for r in reports),
         ohr_steals_by_role=_merge_count_dicts(
             r.ohr_steals_by_role for r in reports),
+        pfr_feeds_by_role=_merge_count_dicts(
+            r.pfr_feeds_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

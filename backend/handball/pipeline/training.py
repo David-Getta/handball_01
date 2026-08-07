@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 306) Bejátszó-poszt: ha a beálló-játékunk egy kézen fut, a
+    # bejátszónk zárásával az egész belső játékunk leáll.
+    try:
+        from .attack_types import PFR_SHARE_PCT, pivot_feeder_roles
+        pfr306 = pivot_feeder_roles(match, config)
+        for side in ("home", "away"):
+            rec306 = pfr306[side]
+            if rec306.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézen futó beálló-játék",
+                f"a beálló-beadásaink {rec306['share_pct']:.0f}%-a "
+                f"a(z) {rec306['main_role']} posztról jön "
+                f"({rec306['feeds']} beadásból; "
+                f"{PFR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a bejátszónk zárásával az egész belső "
+                "játékunkat leállítja",
+                "beadás-forgó: a figurákban a beálló-bejátszás "
+                "felelőse körönként váltakozik (irányító, átlövő, "
+                "szélső-befutás után), és minden posztnak van "
+                "begyakorolt beadás-fajtája (pattintott, átemelt, "
+                "test mellől)")
+    except Exception:
+        pass
+
     # 305) Indítás-vadász poszt: ha a letámadásunk egy emberen fut, az
     # ellenfél az indítását egyszerűen a sávján kívül nyitja.
     try:

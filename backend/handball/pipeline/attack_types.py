@@ -4985,3 +4985,65 @@ def screen_setter_roles(match: Match,
                     " ő oldalán hangos váltás vagy átcsúszás kell, és"
                     " őt elölről kell fogni")
     return out
+
+
+# Bejátszó-poszt: ennyi poszthoz kötött beálló-beadás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# beálló-játékuk egy posztról fut.
+PFR_MIN_FEEDS = 4
+PFR_SHARE_PCT = 60.0
+
+
+def pivot_feeder_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Bejátszó-poszt: MELYIK POSZTJUK játssza be a beállót.
+
+    A beálló-kiszolgálók rétege (pivot_feeders) az embert nevezi meg
+    — ez a posztot: a beállóhoz futó beadásokat a passzoló játékos
+    posztjához írja. Így a minta akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a beálló-vonal zárásának térképe: ha a beadásaik
+    rendre ugyanarról a posztról jönnek (tipikusan az irányítótól),
+    az ő kezén kell a beálló-vonalba lépni, és az ő oldalán indul a
+    kettőzés — a bejátszó zárása többet ér, mint a beálló birkózása.
+    Ha a bejátszásuk szórt, a beállót magát kell elöl fogni.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"feeds" (poszthoz
+    kötött beadás), "roles": {poszt: beadás}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PFR_MIN_FEEDS, vagy egyik poszt sem éri el a PFR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    pf = pivot_feeders(match, config)
+
+    out: dict = {side: {"feeds": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in pf[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["feeds"])
+            rec["feeds"] += row["feeds"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["feeds"] >= PFR_MIN_FEEDS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["feeds"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PFR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a beálló-beadásaik a(z) {poszt} posztról jönnek "
+                    f"({share:.0f}%, {rec['feeds']} beadásból) — az ő "
+                    "kezén kell a beálló-vonalba lépni, és az ő "
+                    "oldalán induljon a kettőzés")
+    return out

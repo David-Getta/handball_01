@@ -2115,6 +2115,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "lepattanóból";
   }
 
+  // Bejátszó-poszt: melyik posztjuk játssza be a beállót (4+
+  // beálló-beadás, 60% részarány — a backenddel azonos küszöbök:
+  // PFR_MIN_FEEDS, PFR_SHARE_PCT).
+  String? _pivotFeederRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pfr_feeds_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 4) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a beálló-beadásaik a(z) $top posztról jönnek "
+        "(${pct.round()}%, $total beadás) · az ő kezén kell a "
+        "vonalba lépni";
+  }
+
   // Indítás-vadász poszt: melyik posztjuk vadássza a kapus-indítást
   // (3+ elrabolt indítás, 60% részarány — a backenddel azonos
   // küszöbök: OHR_MIN_STEALS, OHR_SHARE_PCT).
@@ -7482,6 +7509,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_pivotFeederRole(r) != null)
+        ["Bejátszó-poszt", _pivotFeederRole(r)!],
       if (_outletHunterRole(r) != null)
         ["Indítás-vadász poszt", _outletHunterRole(r)!],
       if (_keyPost(r) != null)

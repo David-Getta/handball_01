@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **332 réteg**, modulonként csoportosítva; a
+Összesen **333 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (71)
+## attack_types (72)
 
 | Réteg | Mit mér |
 |---|---|
@@ -52,6 +52,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `pass_direction` | Passz-irány: mennyire viszik ELŐRE a labdát (vertikális, penetráló |
 | `pass_direction_by_score` | Passz-irány-állás: MERRE jár a labda előnyben és hátrányban. |
 | `pass_risk` | Passz-kockázat: a hosszú passzok eladás-aránya a rövidekhez |
+| `pivot_feeder_roles` | Bejátszó-poszt: MELYIK POSZTJUK játssza be a beállót. |
 | `pivot_feeders` | Beálló-kiszolgálók: KI adja be a labdát a beállónak. |
 | `pivot_service` | Beálló-futtatás: MOZGÁSBÓL vagy ÁLLVA kapja-e a beálló a labdát. |
 | `pivot_side` | Beálló-oldal: MELYIK OLDALON dolgozik a beállójuk. |

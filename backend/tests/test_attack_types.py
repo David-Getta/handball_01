@@ -3870,3 +3870,52 @@ def test_screen_setter_roles_silent_with_few_screens():
 
     rec = screen_setter_roles(_scs2_match([5, 7]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _pfr_match(feeders, fps=25.0):
+    """Mint a _feeder_match, de a kiszolgálók posztja eltér: a 2-es
+    átlövő (9 m, közép), a 3-as szélső — a poszt-lencse így meg tudja
+    nevezni a bejátszó posztot."""
+    spots = {1: (34.0, 10.0), 2: (30.0, 9.0), 3: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _hold(holder_id, n):
+        nonlocal t, frames
+        for _ in range(n):
+            players = [_pl(tid, Team.HOME, x, y)
+                       for tid, (x, y) in spots.items()]
+            players.append(_pl(21, Team.AWAY, 38.0, 10.0))
+            hx, hy = spots[holder_id]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hx, y=hy, confidence=1.0)))
+            t += 1
+
+    _hold(1, 100)
+    _hold(2, 100)
+    _hold(3, 100)
+    for pid in feeders:
+        _hold(pid, 10)     # a kiszolgáló birtokol
+        _hold(1, 10)       # majd a beálló kapja (passz)
+    return Match(_meta(fps), frames)
+
+
+def test_pivot_feeder_roles_names_the_feeding_post():
+    """Ha a beálló-beadások zöme ugyanarról a posztról jön, az ő kezén
+    kell a beálló-vonalba lépni."""
+    from handball.pipeline.attack_types import (PFR_MIN_FEEDS,
+                                                pivot_feeder_roles)
+
+    rec = pivot_feeder_roles(_pfr_match([2] * 5 + [3]))["home"]
+    assert rec["feeds"] >= PFR_MIN_FEEDS, rec
+    assert rec["main_role"] == "átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kettőzés" in rec["verdict"], rec
+
+
+def test_pivot_feeder_roles_silent_with_few_feeds():
+    """Néhány beadásból nincs ítélet."""
+    from handball.pipeline.attack_types import pivot_feeder_roles
+
+    rec = pivot_feeder_roles(_pfr_match([2, 3]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

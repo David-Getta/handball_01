@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Bejátszó-poszt: melyik posztjuk játssza be a beállót.** A
+  beálló-kiszolgálók rétege az embert nevezi meg — az új réteg a
+  posztot: a beállóhoz futó beadásokat a passzoló posztjához írja.
+  Edzőileg ez a beálló-vonal zárásának térképe: ha a beadásaik
+  rendre ugyanarról a posztról jönnek (tipikusan az irányítótól), az
+  ő kezén kell a vonalba lépni, és az ő oldalán indul a kettőzés — a
+  bejátszó zárása többet ér, mint a beálló birkózása. Felületek:
+  `/analyze` és meccs-csomag (`pivot_feeder_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (285: az ő
+  bejátszó-posztjuk × a ti beállóval szenvedő falatok → a bejátszó
+  zárása a terv), edzés-fókusz (306: beadás-forgó posztonként
+  begyakorolt beadás-fajtákkal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
 - **Indítás-vadász poszt: melyik posztjuk vadássza az indítást.**
   Az indítás-hiba ára réteg az indító oldalt nézi — az új réteg a
   rabló oldalt: minden elveszett kapus-indításnál a labdát megszerző

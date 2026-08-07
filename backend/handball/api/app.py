@@ -3069,6 +3069,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import pivot_feeder_roles
+            res["pivot_feeder_roles"] = pivot_feeder_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.decisions import pass_speed
             res["pass_speed"] = pass_speed(match)
         except Exception:
@@ -4470,6 +4475,9 @@ def create_app():
                        lambda: seven_conceder_roles(match))
                 from ..pipeline.attack_types import pivot_feeders
                 _layer("pivot_feeders", lambda: pivot_feeders(match))
+                from ..pipeline.attack_types import pivot_feeder_roles
+                _layer("pivot_feeder_roles",
+                       lambda: pivot_feeder_roles(match))
                 from ..pipeline.decisions import pass_speed
                 _layer("pass_speed", lambda: pass_speed(match))
                 from ..pipeline.defense import defensive_shift_lag

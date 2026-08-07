@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Bejátszó-poszt: melyik posztjuk játssza be a beállót.
+    try:
+        from .attack_types import pivot_feeder_roles
+        pfr = pivot_feeder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pfr = pfr[side]
+            if rec_pfr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} beálló-játéka egy posztról fut: a "
+                     f"beadásaik {rec_pfr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_pfr['main_role']} poszté "
+                     f"({rec_pfr['feeds']} beadásból) — az ő kezén "
+                     "kell a beálló-vonalba lépni.")
+    except Exception:
+        pass
     # Indítás-vadász poszt: melyik posztjuk vadássza az indítást.
     try:
         from .goalkeeper import outlet_hunter_roles
