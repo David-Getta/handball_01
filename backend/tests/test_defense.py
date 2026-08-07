@@ -2762,3 +2762,58 @@ def test_fading_defenders_needs_halftime():
     fdd = fading_defenders(Match(_meta(), frames))
     assert fdd["home"]["verdict"] is None
     assert fdd["home"]["players"] == []
+
+
+# ---- Labdaszerző-poszt (melyik posztjuk nyeri a labdákat) -------------------
+
+def _rsw_match(stealers, fps=25.0):
+    """`stealers` = szerzésenként a labdát megszerző VENDÉG játékos.
+
+    Ciklus: hazai birtoklás → a vendég megadott játékosa megszerzi
+    (csapatváltásos birtokos-váltás) → rövid vendég-birtoklás a saját
+    posztján (ebből épül a poszt-minta a -x kapu felé támadva).
+    """
+    from handball.models.tracking import Ball, Frame, Match
+
+    pos = {20: (14.0, 2.0), 21: (8.0, 10.0)}
+    frames = []
+    t = 0
+
+    def cast():
+        return [_pl(1, Team.HOME, 25.0, 10.0),
+                _pl(20, Team.AWAY, *pos[20]),
+                _pl(21, Team.AWAY, *pos[21])]
+
+    for tid in stealers:
+        for _ in range(15):          # hazai birtoklás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=25.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        sx, sy = pos[tid]
+        for _ in range(40):          # a vendég szerző birtokol
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_role_steal_sources_finds_the_stealing_post():
+    """Ha a szerzések nagy része ugyanannak a posztnak a kezében köt
+    ki, az ő sávjába csak biztonsági passz mehet."""
+    from handball.pipeline.defense import (RSW_MIN_STEALS,
+                                           role_steal_sources)
+
+    rec = role_steal_sources(_rsw_match([20] * 5 + [21]))["away"]
+    assert rec["steals"] >= RSW_MIN_STEALS, rec
+    assert rec["share_pct"] and rec["share_pct"] >= 50.0, rec
+    assert rec["verdict"] and "biztonsági passz" in rec["verdict"], rec
+
+
+def test_role_steal_sources_silent_with_few_steals():
+    """Néhány szerzésből nincs ítélet."""
+    from handball.pipeline.defense import role_steal_sources
+
+    rec = role_steal_sources(_rsw_match([20, 21]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

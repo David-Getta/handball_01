@@ -3874,3 +3874,67 @@ def stepout_punishment(match, config=None) -> dict:
             if pct >= SOP_PUNISH_PCT:
                 rec["verdict"] = "a kilépésük mögé betalálnak"
     return out
+
+
+# Labdaszerző-poszt: ennyi poszthoz kötött labdaszerzés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a védekezésük
+# egy poszton nyeri a labdákat.
+RSW_MIN_STEALS = 5
+RSW_SHARE_PCT = 50.0
+
+
+def role_steal_sources(match, config=None) -> dict:
+    """Labdaszerző-poszt: MELYIK POSZTJUK NYERI a labdákat.
+
+    A labdaszerzők (ball_winners) az EMBERT nevezik meg — ez a posztot:
+    a birtokos-váltásokat a szerző játékos posztjához írja. A küszöb
+    itt 50% (nem 60), mert a labdaszerzés a legszórtabb esemény — ha
+    így is egy poszthoz kötődik a fele, az már erős minta.
+
+    Edzőileg mindkét irányban éles. Ellenük: ha a labdáik nagy részét
+    ugyanaz a poszt szedi (tipikusan a szélén letámadó védő), arra az
+    oldalra nem szabad odavezetni a támadást — az átadásoknak a másik
+    oldalon kell átmenniük, és az ő sávjában csak biztonsági passz
+    mehet. A saját oldalon: ha a szerzéseink egy emberen múlnak, a
+    letámadásunk egyetlen cserével hatástalanítható — a nyomás-váltást
+    (ki lép ki, ki szed) több posztra kell szétosztani.
+
+    Visszatérés csapatonként (a SZERZŐ oldal): {"steals" (poszthoz
+    kötött), "roles": {poszt: szerzés}, "main_role", "share_pct",
+    "verdict"} — a main_role/share_pct/verdict None, ha nincs meg az
+    RSW_MIN_STEALS, vagy egyik poszt sem éri el az RSW_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    bw = ball_winners(match, config)
+
+    out: dict = {side: {"steals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in bw[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["steals"])
+            rec["steals"] += row["steals"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["steals"] >= RSW_MIN_STEALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["steals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RSW_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a labdáik felét-többségét a(z) {poszt} szedi "
+                    f"({share:.0f}%, {rec['steals']} szerzésből) — az ő "
+                    "sávjába csak biztonsági passz mehet, a támadást a "
+                    "másik oldalon kell átvezetni")
+    return out

@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 295) Labdaszerző-poszt: ha a szerzéseink egy emberen múlnak, a
+    # letámadásunk egyetlen cserével hatástalanítható.
+    try:
+        from .defense import RSW_SHARE_PCT, role_steal_sources
+        rsw295 = role_steal_sources(match, config)
+        for side in ("home", "away"):
+            rec295 = rsw295[side]
+            if rec295.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy emberen álló labdaszerzés",
+                f"a szerzéseink {rec295['share_pct']:.0f}%-a a(z) "
+                f"{rec295['main_role']} posztról jön "
+                f"({rec295['steals']} szerzésből; "
+                f"{RSW_SHARE_PCT:.0f}% fölött már minta) — az ellenfél "
+                "egyszerűen elkerüli a sávját, vagy kivárja a cseréjét",
+                "nyomás-váltó gyakorlat: a letámadásban a kilépő ember "
+                "posztja jelre váltakozik (nem mindig ugyanaz lép ki) — "
+                "a cél, hogy a szerzés a RENDSZERÉ legyen, ne egy "
+                "emberé")
+    except Exception:
+        pass
+
     # 294) Gólpassz-poszt: ha a góljaink egy poszt kezéből indulnak, az
     # ellenfél a passzt veszi el, és az egész támadásunk megáll.
     try:

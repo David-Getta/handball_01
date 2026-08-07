@@ -885,6 +885,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Labdaszerző-poszt: melyik posztjuk nyeri a labdákat.
+    try:
+        from .defense import role_steal_sources
+        rsw = role_steal_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsw = rsw[side]
+            if rec_rsw["verdict"] is None:
+                continue
+            body += (f" A(z) {name} labdaszerzése egy poszton áll: a "
+                     f"szerzéseik {rec_rsw['share_pct']:.0f}%-a a(z) "
+                     f"{rec_rsw['main_role']} posztról jön "
+                     f"({rec_rsw['steals']} szerzésből) — az ő sávjába "
+                     "csak biztonsági passz mehet.")
+    except Exception:
+        pass
     # Gólpassz-poszt: kinek a kezéből indulnak a gólok.
     try:
         from .roles import role_assist_sources

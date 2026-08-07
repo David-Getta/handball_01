@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Labdaszerző-poszt: melyik posztjuk nyeri a labdákat.** A
+  labdaszerzők rétege az embert nevezi meg — az új réteg a posztot: a
+  birtokos-váltásokat a szerző játékos posztjához írja (a küszöb itt
+  50%, mert a labdaszerzés a legszórtabb esemény). Edzőileg mindkét
+  irányban éles: ellenük az ő szedő-posztjuk sávjába csak biztonsági
+  passz mehet, a támadást a másik oldalon kell átvezetni; a saját
+  oldalon az egy emberen álló letámadás egyetlen cserével
+  hatástalanítható — a nyomás-váltást több posztra kell szétosztani.
+  Felületek: `/analyze` és meccs-csomag (`role_steal_sources`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (274: az ő
+  szedő-posztjuk × a ti nyomás alatti eladásaitok → a sávját kerülő
+  labdavezetés), edzés-fókusz (295: nyomás-váltó gyakorlat),
+  teendő-rangsor és a meccs-jelentés Befejező-lencse táblája,
+  kliens-csempe.
+
 - **A lövésválasztás is a teendő-rangsorban.** A lövésválasztás
   rétege ("volt-e jobb szabad helyzet a pályán") eddig kimaradt a
   rangsorból — pedig az ítélete kiosztható feladat. Mostantól a

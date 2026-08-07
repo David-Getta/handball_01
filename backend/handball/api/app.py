@@ -3975,6 +3975,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import role_steal_sources
+            res["role_steal_sources"] = role_steal_sources(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -4823,6 +4828,9 @@ def create_app():
                 _layer("rotation", lambda: rotation_depth(match))
                 from ..pipeline.defense import ball_winners
                 _layer("ball_winners", lambda: ball_winners(match))
+                from ..pipeline.defense import role_steal_sources
+                _layer("role_steal_sources",
+                       lambda: role_steal_sources(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

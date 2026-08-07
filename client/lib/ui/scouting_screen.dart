@@ -2088,6 +2088,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "másikat zárja";
   }
 
+  // Labdaszerző-poszt: melyik posztjuk nyeri a labdákat (5+ poszthoz
+  // kötött szerzés, 50% részarány — a backenddel azonos küszöbök:
+  // RSW_MIN_STEALS, RSW_SHARE_PCT).
+  String? _stealRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rsw_steals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 50.0) return null;
+    return "a labdáik felét-többségét a(z) $top szedi (${pct.round()}%, "
+        "$total szerzés) · az ő sávjába csak biztonsági passz mehet";
+  }
+
   // Gólpassz-poszt: kinek a kezéből indulnak a góljaik (3+ poszthoz
   // kötött gólpassz, 60% részarány — a backenddel azonos küszöbök:
   // RAS_MIN_ASSISTS, RAS_SHARE_PCT).
@@ -7189,6 +7215,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Gól-minta", _goalPatterns(r)!],
       if (_finisherRotation(r) != null)
         ["Befejező-váltás", _finisherRotation(r)!],
+      if (_stealRole(r) != null)
+        ["Labdaszerző-poszt", _stealRole(r)!],
       if (_assistRole(r) != null)
         ["Gólpassz-poszt", _assistRole(r)!],
       if (_sevenSide(r) != null)
