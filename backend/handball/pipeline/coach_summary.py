@@ -885,6 +885,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban futott támadás zárult eladással).")
     except Exception:
         pass
+    # Lepattanó-poszt: ki viszi a második rohamot.
+    try:
+        from .attack_types import second_chance_roles
+        scr = second_chance_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scr = scr[side]
+            if rec_scr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} második rohamát a(z) "
+                     f"{rec_scr['main_role']} viszi "
+                     f"({rec_scr['share_pct']:.0f}%, "
+                     f"{rec_scr['second_shots']} második lövésből) — a "
+                     "lövés zárása után az első dolog őt kivenni a "
+                     "lepattanóból.")
+    except Exception:
+        pass
     # Labdaszerző-poszt: melyik posztjuk nyeri a labdákat.
     try:
         from .defense import role_steal_sources

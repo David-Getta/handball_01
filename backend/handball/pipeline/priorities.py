@@ -113,6 +113,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "shot_choice_quality"),
         ("felkészülés", "Labdaszerző-poszt", "defense",
          "role_steal_sources"),
+        ("felkészülés", "Lepattanó-poszt", "attack_types",
+         "second_chance_roles"),
     ]
 
 

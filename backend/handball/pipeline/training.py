@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 296) Lepattanó-poszt: ha a második rohamunk egy emberen múlik, a
+    # kizárása után nincs második esélyünk.
+    try:
+        from .attack_types import SCR_SHARE_PCT, second_chance_roles
+        scr296 = second_chance_roles(match, config)
+        for side in ("home", "away"):
+            rec296 = scr296[side]
+            if rec296.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy emberen álló második roham",
+                f"a második lövéseink {rec296['share_pct']:.0f}%-a a(z) "
+                f"{rec296['main_role']} posztról jön "
+                f"({rec296['second_shots']} második lövésből; "
+                f"{SCR_SHARE_PCT:.0f}% fölött már minta) — ha őt "
+                "kizárják a lepattanóból, nincs második esélyünk",
+                "lepattanó-játék 3v3-ban: minden lövés után KÉT "
+                "kijelölt érkező megy a lepattanóra (a lövő sosem) — a "
+                "második hullám posztja körönként váltakozik, hogy a "
+                "lepattanó-szerzés ne egy emberé legyen")
+    except Exception:
+        pass
+
     # 295) Labdaszerző-poszt: ha a szerzéseink egy emberen múlnak, a
     # letámadásunk egyetlen cserével hatástalanítható.
     try:

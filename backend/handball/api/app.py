@@ -2617,6 +2617,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import second_chance_roles
+            res["second_chance_roles"] = second_chance_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.event_detection import shot_speed_fade
             res["shot_speed_fade"] = shot_speed_fade(match)
         except Exception:
@@ -4196,6 +4201,9 @@ def create_app():
                 _layer("assist_sources", lambda: assist_sources(match))
                 from ..pipeline.attack_types import second_chance
                 _layer("second_chance", lambda: second_chance(match))
+                from ..pipeline.attack_types import second_chance_roles
+                _layer("second_chance_roles",
+                       lambda: second_chance_roles(match))
                 from ..pipeline.event_detection import shot_speed_fade
                 _layer("shot_speed_fade", lambda: shot_speed_fade(match))
                 from ..pipeline.event_detection import goal_concentration

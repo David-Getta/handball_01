@@ -3737,3 +3737,78 @@ def test_kickout_targets_silent_with_few_kickouts():
     assert h["kickouts"] <= 2, h
     assert h["top"] is None and h["top_pct"] is None, h
     assert h["verdict"] is None, h
+
+
+# ---- Lepattanó-poszt (ki lő másodszor) --------------------------------------
+
+def _scr_shot(t0, tid, sx, sy, goal=False):
+    """Egy hazai lövés a +x kapura a `tid` játékostól, (sx, sy)-ból; a
+    2-es fixen a 6 m-nél áll (beálló-minta), az 1-es kint (átlövő)."""
+    def cast():
+        return [_pl(1, Team.HOME, 29.0, 10.0),
+                _pl(2, Team.HOME, 34.0, 10.0)]
+    px, py = (29.0, 10.0) if tid == 1 else (34.0, 10.0)
+    assert (px, py) == (sx, sy)
+    frames = []
+    for i in range(3):
+        frames.append(Frame(t=t0 + i, players=cast(),
+                            ball=Ball(x=sx + 0.2, y=sy, confidence=1.0)))
+    t = t0 + 3
+    for i in range(8):
+        bx = min(sx + 1.5 * (i + 1), 40.0)
+        frames.append(Frame(t=t + i, players=cast(),
+                            ball=Ball(x=bx, y=(10.0 if goal else 5.0),
+                                      confidence=1.0)))
+    return frames
+
+
+def _scr_match(pairs):
+    """`pairs` = (első lövő, második lövő) — az első kimarad, a második
+    az ablakon belül újra lő; a párok közt hosszú szünet."""
+    frames = []
+    t = 0
+    for first, second in pairs:
+        # Birtoklás-bemelegítés: ebből épül a poszt-minta
+        # (ROLE_MIN_SAMPLES) — a labda az 1-esnél áll.
+        for i in range(40):
+            frames.append(Frame(t=t + i, players=[
+                _pl(1, Team.HOME, 29.0, 10.0),
+                _pl(2, Team.HOME, 34.0, 10.0)],
+                ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 40
+        frames += _scr_shot(t, first, 29.0 if first == 1 else 34.0, 10.0)
+        t = frames[-1].t + 1
+        for i in range(12):
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t = frames[-1].t + 1
+        frames += _scr_shot(t, second, 29.0 if second == 1 else 34.0,
+                            10.0, goal=True)
+        t = frames[-1].t + 1
+        for i in range(200):
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+        t = frames[-1].t + 1
+    return Match(_meta(), frames)
+
+
+def test_second_chance_roles_finds_the_rebound_post():
+    """Ha a második lövéseket rendre ugyanaz a poszt adja le, a zárás
+    után őt kell kivenni a lepattanóból."""
+    from handball.pipeline.attack_types import (SCR_MIN_SHOTS,
+                                                second_chance_roles)
+
+    rec = second_chance_roles(_scr_match([(1, 2)] * 3 + [(2, 1)]))["home"]
+    assert rec["second_shots"] >= SCR_MIN_SHOTS, rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "lepattanó" in rec["verdict"], rec
+
+
+def test_second_chance_roles_silent_with_few_shots():
+    """Két második lövésből nincs ítélet."""
+    from handball.pipeline.attack_types import second_chance_roles
+
+    rec = second_chance_roles(_scr_match([(1, 2), (2, 1)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

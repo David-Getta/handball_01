@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lepattanó-poszt: ki lő másodszor.** A második roham rétege
+  csapat-szinten mondja meg, harcolnak-e a lepattanóért — az új réteg
+  azt, KI: minden megnyert második rohamnál a második lövést az
+  elengedő játékos posztjához írja. Edzőileg ez a zárás sorrendje: a
+  lövés pillanatában a fal dolga nem ér véget — ha a második lövéseik
+  rendre ugyanarról a posztról jönnek (tipikusan a beálló), a zárás
+  utáni első mozdulat őt kivenni a lepattanóból, nem a lövőt nézni.
+  Felületek: `/analyze` és meccs-csomag (`second_chance_roles`), edzői
+  összefoglaló, felderítő edzői kulcs, meccsterv-szabály (275: az ő
+  lepattanó-posztjuk × a ti visszaengedett második rohamaitok → egy
+  kijelölt ember, egy mozdulat), edzés-fókusz (296: lepattanó-játék
+  váltakozó második hullámmal), teendő-rangsor és a meccs-jelentés
+  Befejező-lencse táblája, kliens-csempe.
+
 - **Labdaszerző-poszt: melyik posztjuk nyeri a labdákat.** A
   labdaszerzők rétege az embert nevezi meg — az új réteg a posztot: a
   birtokos-váltásokat a szerző játékos posztjához írja (a küszöb itt

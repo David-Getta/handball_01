@@ -779,6 +779,9 @@ class ScoutingReport:
     # Labdaszerző-poszt: a poszthoz kötött labdaszerzések darabszáma
     # posztonként. Darabszám, meccsek közt pontosan összegződik.
     rsw_steals_by_role: dict = field(default_factory=dict)
+    # Lepattanó-poszt: a poszthoz kötött második lövések darabszáma
+    # posztonként. Darabszám, meccsek közt pontosan összegződik.
+    scr_shots_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3002,6 +3005,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"Jól rotálják a befejezést ({_frt_pct:.0f}% "
                 "ismétlés) — személyre szabott védekezés ellenük nem "
                 "működik: sáv- és falmunka kell, nem emberfogás.")
+
+    # Lepattanó-poszt: a zárás után kit kell kivenni a lepattanóból.
+    _scr_n = sum(rep.scr_shots_by_role.values())
+    if _scr_n >= 3:
+        _scr_p, _scr_c = max(rep.scr_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _scr_pct = 100.0 * _scr_c / _scr_n
+        if _scr_pct >= 60.0:
+            keys.append(
+                f"A második rohamukat a(z) {_scr_p} viszi "
+                f"({_scr_pct:.0f}%, {_scr_n} második lövésből) — a "
+                "lövésük zárása után az első dolog őt kivenni a "
+                "lepattanóból, nem a lövőt nézni.")
 
     # Labdaszerző-poszt: melyik sávot kell kerülni labdával.
     _rsw_n = sum(rep.rsw_steals_by_role.values())
@@ -7499,6 +7515,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import role_steal_sources as _rsw
         rswrec = _rsw(match, config)[team.value]
         rep.rsw_steals_by_role = dict(rswrec["roles"])
+        from .attack_types import second_chance_roles as _scr
+        scrrec = _scr(match, config)[team.value]
+        rep.scr_shots_by_role = dict(scrrec["roles"])
         from .decisions import shot_choice_quality as _scq
         scqrec = _scq(match, config)[team.value]
         rep.scq_shots = scqrec["shots"]
@@ -10073,6 +10092,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 275) Az ő lepattanó-posztjuk × a ti visszaengedett második
+    # rohamaitok: ha amúgy is sok lepattanót engedtek vissza, és náluk
+    # tudni lehet, KI jön a második labdára, a zárás utáni első
+    # mozdulat adott.
+    _scr275_n = sum(opp.scr_shots_by_role.values())
+    if _scr275_n >= 3 and own.sca_opp_misses >= 6:
+        _scr275_p, _scr275_c = max(opp.scr_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _scr275_pct = 100.0 * _scr275_c / _scr275_n
+        _sca275 = 100.0 * own.sca_allowed / own.sca_opp_misses
+        if _scr275_pct >= 60.0 and _sca275 >= 35.0:
+            plan.append(
+                f"A második rohamukat a(z) {_scr275_p} viszi "
+                f"({_scr275_pct:.0f}%, {_scr275_n} második lövésből), "
+                f"ti pedig sok lepattanót engedtek vissza (a kimaradt "
+                f"lövéseik {_sca275:.0f}%-ánál újra lőhettek) — a "
+                "lövésük pillanatában a hozzá legközelebbi védő NE a "
+                "labdát nézze, hanem őt tolja ki a lepattanóból. Egy "
+                "kijelölt ember, egy mozdulat.")
 
     # 274) Az ő egy-posztos labdaszerzésük × a ti nyomás alatti
     # eladásaitok: ha a passzaitok nyomás alatt amúgy is potyognak, az
@@ -14657,6 +14696,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ras_assists_by_role for r in reports),
         rsw_steals_by_role=_merge_count_dicts(
             r.rsw_steals_by_role for r in reports),
+        scr_shots_by_role=_merge_count_dicts(
+            r.scr_shots_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

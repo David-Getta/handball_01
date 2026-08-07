@@ -4847,3 +4847,79 @@ def kickout_targets(match: Match,
         out[side] = {"kickouts": total, "targets": rows, "top": top,
                      "top_pct": top_pct, "verdict": verdict}
     return out
+
+
+# Lepattanó-poszt: ennyi poszthoz kötött második lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a második
+# rohamukat egy poszt viszi.
+SCR_MIN_SHOTS = 3
+SCR_SHARE_PCT = 60.0
+
+
+def second_chance_roles(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Lepattanó-poszt: KI LŐ MÁSODSZOR — melyik posztjuk viszi a
+    második rohamot.
+
+    A második roham rétege (second_chance) csapat-szinten mondja meg,
+    harcolnak-e a lepattanóért — ez azt, KI: minden megnyert második
+    rohamnál a MÁSODIK lövést az elengedő játékos posztjához írja.
+
+    Edzőileg ez a zárás sorrendje. A lövés pillanatában a fal dolga
+    nem ér véget: a lepattanónál dől el, jön-e második roham. Ha a
+    második lövéseik rendre ugyanarról a posztról jönnek (tipikusan a
+    beálló vagy a berobbanó átlövő), a zárásnál ŐT kell kivenni — a
+    lövő kizárása helyett a lepattanó-emberre kell fordulni. Ha szórt,
+    a szokásos poszt-tartás a jobb.
+
+    Visszatérés csapatonként: {"second_shots" (poszthoz kötött második
+    lövés), "roles": {poszt: lövés}, "main_role", "share_pct",
+    "verdict"} — a main_role/share_pct/verdict None, ha nincs meg az
+    SCR_MIN_SHOTS, vagy egyik poszt sem éri el az SCR_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = SECOND_CHANCE_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"second_shots": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for i, e in enumerate(shots):
+        if e.type == EventType.GOAL:
+            continue
+        for nxt in shots[i + 1:]:
+            if nxt.t - e.t > win:
+                break
+            if nxt.team != e.team:
+                break
+            if nxt.player_id is not None:
+                rec_role = roles[nxt.team.value].get(nxt.player_id)
+                if rec_role is not None:
+                    rec = out[nxt.team.value]
+                    poszt = rec_role["poszt"]
+                    rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+                    rec["second_shots"] += 1
+            break
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["second_shots"] >= SCR_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["second_shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SCR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a második rohamukat a(z) {poszt} viszi "
+                    f"({share:.0f}%, {rec['second_shots']} második "
+                    "lövésből) — a lövésünk zárása után az ELSŐ dolog "
+                    "őt kivenni a lepattanóból, nem a lövőt nézni")
+    return out

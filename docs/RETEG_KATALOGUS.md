@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **322 réteg**, modulonként csoportosítva; a
+Összesen **323 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (69)
+## attack_types (70)
 
 | Réteg | Mit mér |
 |---|---|
@@ -64,6 +64,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `screen_usage` | Elzárás-használat: elzárásból lőnek, vagy tisztán, 1v1-ből. |
 | `second_chance` | Második roham / lepattanó-visszaszerzés: a saját, gólt NEM érő lövés |
 | `second_chance_fade` | Lepattanó-esés: MELYIK FÉLIDŐBEN él a második roham. |
+| `second_chance_roles` | Lepattanó-poszt: KI LŐ MÁSODSZOR — melyik posztjuk viszi a |
 | `shooter_placement` | Lövő-kapuoldal: ki melyik sarokba lő. |
 | `shooter_ranges` | Lövő-távolság profil: KI LŐ TÁVOLRÓL és ki közelről. |
 | `shot_distance_fade` | Lövés-távolság esése: KIFELÉ SZORULNAK-E a hajrára. |
