@@ -5564,3 +5564,81 @@ def fast_break_pair_roles(match: Match,
                     "nyomás alá kell tenni, a befejező sávját a "
                     "visszarendeződés első embere zárja")
     return out
+
+
+# Lepattanópáros-poszt: ennyi párhoz kötött második roham kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# lepattanó-játékuk egy (lövő → érkező) posztpárra jár.
+RBP_MIN_SHOTS = 3
+RBP_SHARE_PCT = 60.0
+
+
+def rebound_pair_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Lepattanópáros-poszt: MELYIK LÖVÉSRE KI érkezik a lepattanóra.
+
+    A lepattanó-poszt az érkezőt nevezi meg — ez a párost: minden
+    megnyert második rohamnál az EREDETI lövő és az újra lövő
+    posztját párba állítja. Így látszik, melyik lövésük hozza
+    mozgásba melyik posztot.
+
+    Edzőileg ez a zárás sorrendje: ha az egyik posztjuk lövésére
+    rendre ugyanaz a másik poszt indul be, a lövés zárása UTÁN
+    azonnal az ő útját kell elállni — a lepattanó-harcban a
+    másodperc dönt. Saját csapatra: a lepattanó-érkezés ne egy
+    útvonalon fusson, mert kiszámítható és elzárható.
+
+    Visszatérés csapatonként: {"second_shots" (párhoz kötött második
+    roham), "roles": {"lövő→érkező": darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    RBP_MIN_SHOTS, vagy egyik pár sem éri el az RBP_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = SECOND_CHANCE_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"second_shots": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None} for side in ("home", "away")}
+    for i, e in enumerate(shots):
+        if e.type == EventType.GOAL or e.player_id is None:
+            continue
+        for nxt in shots[i + 1:]:
+            if nxt.t - e.t > win:
+                break
+            if nxt.team != e.team:
+                break
+            if nxt.player_id is not None:
+                side = nxt.team.value
+                r_first = roles[side].get(e.player_id)
+                r_next = roles[side].get(nxt.player_id)
+                if r_first is not None and r_next is not None:
+                    kulcs = f"{r_first['poszt']}→{r_next['poszt']}"
+                    rec = out[side]
+                    rec["roles"][kulcs] = (rec["roles"].get(kulcs, 0)
+                                           + 1)
+                    rec["second_shots"] += 1
+            break
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["second_shots"] >= RBP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["second_shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= RBP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lepattanó-játékuk a(z) {par} párra jár "
+                    f"({share:.0f}%, {rec['second_shots']} második "
+                    "rohamból) — az első lövés zárása UTÁN azonnal "
+                    "az érkező útját kell elállni")
+    return out

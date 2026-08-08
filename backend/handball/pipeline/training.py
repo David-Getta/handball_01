@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 362) Lepattanópáros-poszt: ha a lepattanó-érkezésünk egy
+    # útvonalon fut, a felkészült fal elzárja.
+    try:
+        from .attack_types import RBP_SHARE_PCT, rebound_pair_roles
+        rbp362 = rebound_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec362 = rbp362[side]
+            if rec362.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy útvonalon futó lepattanó",
+                f"a második rohamaink {rec362['share_pct']:.0f}%-a "
+                f"a(z) {rec362['main_role']} páron fut "
+                f"({rec362['second_shots']} második rohamból; "
+                f"{RBP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült fal a lövés zárása után pont ezt az "
+                "útvonalat állja el",
+                "lepattanó-útvonalak bővítése: minden lövéshez KÉT "
+                "kijelölt érkező (más-más oldalról), lepattanó-harc "
+                "kisjátékban zárás ellen, és a hosszú oldali "
+                "érkezés gyakorlása",
+                )
+    except Exception:
+        pass
+
     # 361) Kettőzőpáros-poszt: ha a kettőzésünk egy védő-pároson áll,
     # az elhagyott ember kiszámítható — a kioldó passz ingyen jön.
     try:

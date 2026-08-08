@@ -4364,3 +4364,28 @@ def test_fast_break_pair_roles_silent_with_few_breaks():
 
     rec = fast_break_pair_roles(_fbp_match([(5, 9), (7, 9)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Lepattanópáros-poszt (melyik lövésre ki érkezik) ----------------------
+
+
+def test_rebound_pair_roles_names_the_rebound_axis():
+    """Ha az irányító lövésére rendre a beálló érkezik, a zárás után
+    az ő útját kell elállni."""
+    from handball.pipeline.attack_types import (RBP_MIN_SHOTS,
+                                                rebound_pair_roles)
+
+    rec = rebound_pair_roles(
+        _scr_match([(1, 2)] * 3 + [(2, 1)]))["home"]
+    assert rec["second_shots"] >= RBP_MIN_SHOTS, rec
+    assert rec["main_role"] == "irányító→beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "útját kell elállni" in rec["verdict"], rec
+
+
+def test_rebound_pair_roles_silent_with_few_shots():
+    """Néhány második rohamból nincs ítélet."""
+    from handball.pipeline.attack_types import rebound_pair_roles
+
+    rec = rebound_pair_roles(_scr_match([(1, 2), (2, 1)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

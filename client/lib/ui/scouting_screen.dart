@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Lepattanópáros-poszt: melyik lövésükre ki érkezik (3+ második
+  // roham, 60% részarány — a backenddel azonos küszöbök:
+  // RBP_MIN_SHOTS, RBP_SHARE_PCT).
+  String? _reboundPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rbp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a lepattanó-játékuk a(z) $top párra jár "
+        "(${pct.round()}%, $total második roham) · a lövés zárása "
+        "után az érkező útját kell elállni";
+  }
+
   // Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt (100+
   // kettőzött kocka, 60% részarány — a backenddel azonos küszöbök:
   // DPP_MIN_FRAMES, DPP_SHARE_PCT).
@@ -8994,6 +9021,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_reboundPairRole(r) != null)
+        ["Lepattanópáros-poszt", _reboundPairRole(r)!],
       if (_doublingPairRole(r) != null)
         ["Kettőzőpáros-poszt", _doublingPairRole(r)!],
       if (_assistPairRole(r) != null)

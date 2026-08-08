@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lepattanópáros-poszt: melyik lövésükre ki érkezik.** A
+  lepattanó-poszt az érkezőt nevezi meg — az új réteg a párost:
+  minden megnyert második rohamnál az eredeti lövő és az újra lövő
+  posztját párba állítja. Edzőileg a zárás sorrendje: ha az egyik
+  posztjuk lövésére rendre ugyanaz a másik poszt indul be, a lövés
+  zárása UTÁN azonnal az ő útját kell elállni. Saját oldalon a
+  lepattanó-útvonalak bővítése az edzés-téma. Legalább 3 második
+  roham és 60% párrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`rebound_pair_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 341. meccsterv-szabály),
+  edzés-fókusz (362. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt.** A
   kettőző-poszt az egy védőt nevezi meg — az új réteg a párost: a
   kettőzött labdás kockákon a labdáshoz legközelebbi két védő

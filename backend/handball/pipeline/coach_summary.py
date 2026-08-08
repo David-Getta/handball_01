@@ -916,6 +916,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Lepattanópáros-poszt: melyik lövésükre ki érkezik.
+    try:
+        from .attack_types import rebound_pair_roles
+        rbp = rebound_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rbp = rbp[side]
+            if rec_rbp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lepattanó-játéka a(z) "
+                     f"{rec_rbp['main_role']} párra jár "
+                     f"({rec_rbp['share_pct']:.0f}%, "
+                     f"{rec_rbp['second_shots']} második rohamból) —"
+                     " a lövés zárása után az érkező útját kell "
+                     "elállni.")
+    except Exception:
+        pass
     # Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt.
     try:
         from .defense import doubling_pair_roles
