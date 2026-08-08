@@ -246,6 +246,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "rebound_pair_roles"),
         ("felkészülés", "Kulcs-poszt", "priorities", "key_post"),
         ("felkészülés", "Kulcs-páros", "priorities", "key_pair"),
+        ("felkészülés", "Specialista-poszt", "roles",
+         "specialist_roles"),
     ]
 
 
@@ -382,6 +384,7 @@ KP_LAYERS: tuple = (
     ("Célkereszt-poszt", "defense", "targeted_defender_roles"),
     ("Letámadó-poszt", "defense", "high_steal_roles"),
     ("Álló-poszt", "tactics", "static_attacker_roles"),
+    ("Specialista-poszt", "roles", "specialist_roles"),
 )
 
 
@@ -399,6 +402,8 @@ KP_PAIRS: tuple = (
     ("Kettőzőpáros-poszt", "defense", "doubling_pair_roles"),
     ("Lepattanópáros-poszt", "attack_types", "rebound_pair_roles"),
 )
+
+# A Specialista-poszt a KP_LAYERS-be tartozik (egy posztot nevez meg).
 
 
 def key_pair(match: Match, config=None) -> dict:

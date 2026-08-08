@@ -916,6 +916,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Specialista-poszt: melyik posztot játsszák váltott sorban.
+    try:
+        from .roles import specialist_roles
+        spc = specialist_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spc = spc[side]
+            if rec_spc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_spc['main_role']} posztját "
+                     "váltott sorban játssza — a csere-pillanatuk "
+                     "gyors középkezdéssel támadható.")
+    except Exception:
+        pass
     # Kulcs-páros: hány réteg mutat ugyanarra a posztpárra.
     try:
         from .priorities import key_pair

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 364) Specialista-poszt: ha egy posztunkat váltott sorban
+    # játsszuk, a csere-pillanatunk sebezhető.
+    try:
+        from .roles import specialist_roles
+        spc364 = specialist_roles(match, config)
+        for side in ("home", "away"):
+            rec364 = spc364[side]
+            if rec364.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Váltott sorban játszott poszt",
+                f"a(z) {rec364['main_role']} posztunk az idejét "
+                "szinte teljesen egy fázisban tölti (váltott sor) — "
+                "a csere-pillanatunkat a gyors középkezdés és a "
+                "szerzés utáni azonnali indítás bünteti",
+                "csere-fegyelem váltott sornál: a csere KÉSZ "
+                "helyzetben történjen (labda a kapusnál vagy "
+                "holtidő), gyors ellenfél ellen kétirányú ember "
+                "maradjon fent, és a csere-sorrend legyen "
+                "begyakorolva sípszóra",
+                )
+    except Exception:
+        pass
+
     # 363) Kulcs-páros: ha több páros-rétegünk ugyanarra a kettősre
     # mutat, a játékunk egyetlen tengelyen áll.
     try:

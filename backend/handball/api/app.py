@@ -3714,6 +3714,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.roles import specialist_roles
+            res["specialist_roles"] = specialist_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5392,6 +5397,9 @@ def create_app():
                        lambda: rebound_pair_roles(match))
                 from ..pipeline.priorities import key_pair
                 _layer("key_pair", lambda: key_pair(match))
+                from ..pipeline.roles import specialist_roles
+                _layer("specialist_roles",
+                       lambda: specialist_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

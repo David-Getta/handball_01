@@ -1477,3 +1477,73 @@ def test_assist_pair_roles_silent_with_few_goals():
 
     rec = assist_pair_roles(_asr_match([(7, True), (9, True)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Specialista-poszt (melyik posztot játsszák váltott sorban) ------------
+
+
+def _spc_match(def_frames=3200, atk_frames=3200, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + fázisok: a 7-es CSAK
+    védekezéskor (vendég birtokol), a 9-es CSAK támadáskor (hazai
+    birtokol) van a pályán — váltott sor."""
+    def home(tid, x, y):
+        return _pl(tid, Team.HOME, x, y)
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[home(7, 34.0, 10.0), home(9, 35.0, 3.0)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(def_frames):      # védekezés: a 7-es van fent
+        frames.append(Frame(
+            t=t,
+            players=[home(7, 8.0, 10.0),
+                     _pl(21, Team.AWAY, 12.0, 10.0)],
+            ball=Ball(x=12.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(atk_frames):      # támadás: a 9-es van fent
+        frames.append(Frame(
+            t=t,
+            players=[home(9, 35.0, 3.0),
+                     _pl(21, Team.AWAY, 33.0, 12.0)],
+            ball=Ball(x=35.2, y=3.0, confidence=1.0)))
+        t += 1
+    return Match(MatchMeta(match_id="spc", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_specialist_roles_names_the_platooned_post():
+    """A beálló csak védekezéskor van fent → váltott sor, és a
+    csere-pillanat sebezhető."""
+    from handball.pipeline.roles import SPC_MIN_S, specialist_roles
+
+    rec = specialist_roles(_spc_match())["home"]
+    assert rec["roles"]["beálló"]["seconds"] >= SPC_MIN_S, rec
+    assert rec["main_role"] in ("beálló", "szélső"), rec
+    assert rec["def_pct"] is not None
+    assert rec["verdict"] and "csere-pillanatuk" in rec["verdict"], rec
+
+
+def test_specialist_roles_silent_without_platooning():
+    """Ha minden poszt mindkét fázisban fent van, nincs ítélet."""
+    from handball.pipeline.roles import specialist_roles
+
+    frames = []
+    t = 0
+    for i in range(8000):
+        atk = (i // 100) % 2 == 0     # felváltva támad a két csapat
+        frames.append(Frame(
+            t=t,
+            players=[_pl(7, Team.HOME, 34.0, 10.0),
+                     _pl(9, Team.HOME, 35.0, 3.0),
+                     _pl(21, Team.AWAY, 20.0, 10.0)],
+            ball=Ball(x=34.2 if atk else 20.2,
+                      y=10.0, confidence=1.0)))
+        t += 1
+    m = Match(MatchMeta(match_id="spc2", home_team="H",
+                        away_team="A", fps=25.0), frames)
+    rec = specialist_roles(m)["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

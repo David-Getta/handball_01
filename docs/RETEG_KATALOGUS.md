@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **390 réteg**, modulonként csoportosítva; a
+Összesen **391 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (80)
@@ -322,7 +322,7 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `confidence` | Réteg-megbízhatóság: mely elemzési rétegeknek van elég mintája |
 
-## roles (25)
+## roles (26)
 
 | Réteg | Mit mér |
 |---|---|
@@ -350,6 +350,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `role_turnover_cost` | Eladás-ár poszt szerint: MELYIK POSZTJUK eladása kerül gólba. |
 | `role_turnover_zones` | Poszt-eladási zóna: MELYIK POSZTJUK adja el a labdát a TÁMADÓ |
 | `shot_efficiency_by_role` | Poszt szerinti befejezés-hatékonyság: MELYIK POSZTRÓL ÉRDEMES |
+| `specialist_roles` | Specialista-poszt: MELYIK POSZTOT játsszák váltott sorban. |
 | `turnovers_by_role` | Poszt-hibák: MELYIK POSZTJUK veszíti el a labdát. |
 
 ## rules (30)

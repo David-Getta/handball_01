@@ -999,6 +999,10 @@ class ScoutingReport:
     # Kulcs-páros: posztpáronként HÁNY páros-réteg ítélete mutat rá.
     # Réteg-darabszám, meccsek közt pontosan összegződik.
     kpr_layers_by_role: dict = field(default_factory=dict)
+    # Specialista-poszt: mért jelenlét (játékos-másodperc) és ebből a
+    # védekezésben töltött, posztonként. Összeg, pontosan összegződik.
+    spc_seconds_by_role: dict = field(default_factory=dict)
+    spc_def_seconds_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3902,6 +3906,29 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "páros-réteg ítélete mutat rá — a kettejük közti "
                 "sávot vágjátok szét, azzal több mintájuk hal el "
                 "egyszerre.")
+
+    # Specialista-poszt: a csere-pillanatuk kihasználása.
+    _spc_tot = sum(rep.spc_seconds_by_role.values())
+    _spc_dtot = sum(rep.spc_def_seconds_by_role.values())
+    for _spc_p, _spc_n in sorted(rep.spc_seconds_by_role.items(),
+                                 key=lambda kv: -kv[1]):
+        # Mindkét fázis legyen meg, különben egy fél-támadásnyi
+        # felvétel is 100%-ot mutatna.
+        if (_spc_n < 120.0 or _spc_dtot < 60.0
+                or _spc_tot - _spc_dtot < 60.0):
+            continue
+        _spc_d = rep.spc_def_seconds_by_role.get(_spc_p, 0.0)
+        _spc_pct = 100.0 * _spc_d / _spc_n
+        if _spc_pct >= 80.0 or _spc_pct <= 20.0:
+            _spc_ir = ("védekezésben" if _spc_pct >= 80.0
+                       else "támadásban")
+            keys.append(
+                f"A(z) {_spc_p} posztjukat váltott sorban játsszák "
+                f"(az idejük {max(_spc_pct, 100.0 - _spc_pct):.0f}"
+                f"%-át {_spc_ir} töltik) — gyors középkezdéssel és a"
+                " szerzés utáni azonnali indítással a "
+                "csere-pillanatukat támadjátok.")
+            break
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8838,6 +8865,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import key_pair as _kpr
         kprrec = _kpr(match, config)[team.value]
         rep.kpr_layers_by_role = dict(kprrec["pairs"])
+        from .roles import specialist_roles as _spc
+        spcrec = _spc(match, config)[team.value]
+        rep.spc_seconds_by_role = {
+            p: r["seconds"] for p, r in spcrec["roles"].items()}
+        rep.spc_def_seconds_by_role = {
+            p: r["def_seconds"] for p, r in spcrec["roles"].items()}
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11418,6 +11451,30 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 343) Az ő specialista-posztjuk × a ti gyors középkezdésetek: a
+    # csere-pillanat pont a váltott soros poszton sebezhető.
+    _spc343_tot = sum(opp.spc_seconds_by_role.values())
+    _spc343_dtot = sum(opp.spc_def_seconds_by_role.values())
+    for _spc343_p, _spc343_n in sorted(
+            opp.spc_seconds_by_role.items(), key=lambda kv: -kv[1]):
+        if (_spc343_n < 120.0 or own.trans_steals < 4
+                or _spc343_dtot < 60.0
+                or _spc343_tot - _spc343_dtot < 60.0):
+            continue
+        _spc343_d = opp.spc_def_seconds_by_role.get(_spc343_p, 0.0)
+        _spc343_pct = 100.0 * _spc343_d / _spc343_n
+        if _spc343_pct >= 80.0 or _spc343_pct <= 20.0:
+            plan.append(
+                f"A(z) {_spc343_p} posztjukat váltott sorban "
+                f"játsszák (az idejük "
+                f"{max(_spc343_pct, 100.0 - _spc343_pct):.0f}%-át "
+                "egy fázisban töltik), ti pedig sokat szereztek "
+                f"labdát átmenetben ({own.trans_steals} szerzés) — "
+                "a szerzés utáni azonnali indítás és a gyors "
+                "középkezdés pont a cseréjük közben ér oda: rossz "
+                "ember (vagy senki) lesz a helyén.")
+            break
 
     # 342) Az ő kulcs-párosuk × a ti kettőzésetek: a legtöbb réteg
     # által megnevezett kettőst szétválasztva több minta hal el.
@@ -17384,6 +17441,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rbp_shots_by_role for r in reports),
         kpr_layers_by_role=_merge_count_dicts(
             r.kpr_layers_by_role for r in reports),
+        spc_seconds_by_role=_merge_count_dicts(
+            r.spc_seconds_by_role for r in reports),
+        spc_def_seconds_by_role=_merge_count_dicts(
+            r.spc_def_seconds_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

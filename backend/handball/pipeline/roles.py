@@ -2100,3 +2100,106 @@ def assist_pair_roles(match: Match,
                     "számú zárnivalója: az adót testtel, a sávot "
                     "beleéréssel")
     return out
+
+
+# Specialista-poszt: ennyi mért JELENLÉT (játékos-másodperc) kell
+# posztonként az ítélethez, ennyi kell a csapatnak MINDKÉT fázisban
+# (különben egy fél-támadásnyi klip is 100%-ot mutatna), és ekkora
+# egyoldalúság fölött mondjuk ki, hogy a posztot váltott sorban
+# (csak védekezésre vagy csak támadásra) használják.
+SPC_MIN_S = 120.0
+SPC_MIN_PHASE_S = 60.0
+SPC_SPEC_PCT = 80.0
+
+
+def specialist_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Specialista-poszt: MELYIK POSZTOT játsszák váltott sorban.
+
+    Az egyirányú játékosok rétege (phase_specialists) az embert
+    nevezi meg — ez a posztot: a fázis-besorolt (labdabirtokos
+    melletti) kockákat posztonként összegzi, és megnézi, melyik
+    poszt tölti az idejét szinte csak védekezésben vagy szinte csak
+    támadásban. Így a váltott sor akkor is látszik, ha a nevek
+    meccsről meccsre cserélődnek.
+
+    Edzőileg ez a csere-pillanat kihasználása: a váltott sorban
+    játszott poszt a labda elvesztésekor/megszerzésekor cserélődik —
+    a gyors középkezdés és a szerzés utáni azonnali indítás pont
+    ott talál rossz embert (vagy hiányzót) a pályán. Saját
+    csapatra: a specialista-poszt cseréje idő, és a fáradó ellenfél
+    ellen kockázat.
+
+    Visszatérés csapatonként: {"seconds" (mért jelenlét,
+    játékos-másodperc), "roles": {poszt: {"seconds", "def_seconds",
+    "def_pct"}}, "main_role", "def_pct", "verdict"} — az ítélet
+    None, ha a csapatnak nincs meg mindkét fázisban az
+    SPC_MIN_PHASE_S, vagy egyik poszt sem éri el az SPC_MIN_S-t az
+    SPC_SPEC_PCT-os egyoldalúsággal.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    roles = estimate_positions(match, config)
+
+    acc: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        for p in f.players:
+            if p.role == "kapus" or p.team is None:
+                continue
+            rec_role = roles[p.team.value].get(p.track_id)
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = acc[p.team.value].setdefault(poszt, [0, 0])
+            rec[0] += 1
+            if p.team != holder.team:
+                rec[1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        by_role = {
+            poszt: {"seconds": round(n / fps, 1),
+                    "def_seconds": round(d / fps, 1),
+                    "def_pct": round(100.0 * d / n, 1) if n else None}
+            for poszt, (n, d) in sorted(acc[side].items(),
+                                        key=lambda kv: -kv[1][0])}
+        total_s = sum(r["seconds"] for r in by_role.values())
+        def_s = sum(r["def_seconds"] for r in by_role.values())
+        atk_s = total_s - def_s
+        main_role = None
+        def_pct = None
+        verdict = None
+        # Mindkét fázisnak meg kell lennie: egy fél-támadásnyi
+        # felvételen a jelen lévő poszt triviálisan 100%-os lenne.
+        if def_s >= SPC_MIN_PHASE_S and atk_s >= SPC_MIN_PHASE_S:
+            cands = [(poszt, r) for poszt, r in by_role.items()
+                     if r["seconds"] >= SPC_MIN_S
+                     and (r["def_pct"] >= SPC_SPEC_PCT
+                          or r["def_pct"] <= 100.0 - SPC_SPEC_PCT)]
+            if cands:
+                poszt, r = max(
+                    cands,
+                    key=lambda pr: abs(pr[1]["def_pct"] - 50.0))
+                main_role = poszt
+                def_pct = r["def_pct"]
+                irany = ("védekezésben" if def_pct >= SPC_SPEC_PCT
+                         else "támadásban")
+                verdict = (
+                    f"a(z) {poszt} posztjukat váltott sorban "
+                    f"játsszák: az idejük "
+                    f"{max(def_pct, 100.0 - def_pct):.0f}%-át "
+                    f"{irany} töltik ({r['seconds']:.0f} mp mért "
+                    "jelenlétből) — a csere-pillanatuk sebezhető: "
+                    "gyors középkezdéssel és a szerzés utáni "
+                    "azonnali indítással rossz embert találtok a "
+                    "pályán")
+        out[side] = {"seconds": round(total_s, 1), "roles": by_role,
+                     "main_role": main_role, "def_pct": def_pct,
+                     "verdict": verdict}
+    return out

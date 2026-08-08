@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Specialista-poszt: melyik posztot játsszák váltott sorban.** Az
+  egyirányú játékosok rétege az embert nevezi meg — az új réteg a
+  posztot: a fázis-besorolt kockákat posztonként összegzi, és
+  megnézi, melyik poszt tölti az idejét szinte csak védekezésben
+  vagy szinte csak támadásban. Edzőileg a csere-pillanat
+  kihasználása: a váltott sorban játszott poszt a labda
+  elvesztésekor/megszerzésekor cserélődik — a gyors középkezdés és a
+  szerzés utáni azonnali indítás pont ott talál rossz embert a
+  pályán. Saját oldalon a csere-fegyelem az edzés-téma. Posztonként
+  120 mp mért jelenlét, csapat-szinten mindkét fázisban 60 mp, és
+  80% egyoldalúság alatt hallgat (None) — a kétfázisú küszöb nélkül
+  egy fél-támadásnyi felvétel is 100%-ot mutatna.
+  Felületek: /analyze + meccs-csomag (`specialist_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 343. meccsterv-szabály),
+  edzés-fókusz (364. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Kulcs-páros: hány réteg mutat ugyanarra a posztpárra.** A hat
   páros-lencse (elzárás-, hetes-, kontra-, gólpassz-, kettőző- és
   lepattanó-páros) egyenként egy bejáratott kettőst nevez meg — az

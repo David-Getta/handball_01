@@ -2141,6 +2141,45 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Specialista-poszt: melyik posztot játsszák váltott sorban (120+
+  // mp mért jelenlét posztonként, mindkét fázisban 60+ mp, 80%
+  // egyoldalúság — a backenddel azonos küszöbök: SPC_MIN_S,
+  // SPC_MIN_PHASE_S, SPC_SPEC_PCT).
+  String? _specialistRole(Map<String, dynamic> r) {
+    final fr =
+        (r["spc_seconds_by_role"] as Map?)?.cast<String, dynamic>();
+    final df = (r["spc_def_seconds_by_role"] as Map?)
+        ?.cast<String, dynamic>();
+    if (fr == null || fr.isEmpty) return null;
+    var total = 0.0;
+    var defTotal = 0.0;
+    fr.forEach((k, v) => total += (v as num).toDouble());
+    df?.forEach((k, v) => defTotal += (v as num).toDouble());
+    // Mindkét fázis legyen meg: egy fél-támadásnyi felvétel is
+    // 100%-ot mutatna.
+    if (defTotal < 60.0 || total - defTotal < 60.0) return null;
+    String? post;
+    var postN = 0.0;
+    var postPct = 0.0;
+    fr.forEach((k, v) {
+      final n = (v as num).toDouble();
+      if (n < 120.0) return;
+      final d = ((df?[k] as num?) ?? 0).toDouble();
+      final pct = 100.0 * d / n;
+      if ((pct >= 80.0 || pct <= 20.0) && n > postN) {
+        post = k;
+        postN = n;
+        postPct = pct;
+      }
+    });
+    if (post == null) return null;
+    final egyold = postPct >= 80.0 ? postPct : 100.0 - postPct;
+    final irany = postPct >= 80.0 ? "védekezésben" : "támadásban";
+    return "a(z) $post posztjukat váltott sorban játsszák (idejük "
+        "${egyold.round()}%-a $irany) · a csere-pillanatuk gyors "
+        "középkezdéssel támadható";
+  }
+
   // Kulcs-páros: hány páros-réteg mutat ugyanarra a kettősre (2+
   // egyező réteg, holtverseny nélkül — a backenddel azonos küszöb:
   // KPR_MIN_LAYERS).
@@ -9046,6 +9085,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_specialistRole(r) != null)
+        ["Specialista-poszt", _specialistRole(r)!],
       if (_keyPair(r) != null)
         ["Kulcs-páros", _keyPair(r)!],
       if (_reboundPairRole(r) != null)
