@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 370) Menekülő-poszt: ha szorításban mindig ugyanahhoz a
+    # poszthoz megy a labda, a kiútunk kiszámítható és elfogható.
+    try:
+        from .decisions import ESC_SHARE_PCT, press_outlet_roles
+        esc370 = press_outlet_roles(match, config)
+        for side in ("home", "away"):
+            rec370 = esc370[side]
+            if rec370.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra szűkülő kiút",
+                f"szorításban a passzaink {rec370['share_pct']:.0f}"
+                f"%-a a(z) {rec370['main_role']} poszthoz megy "
+                f"({rec370['passes']} nyomás alatti passzból; "
+                f"{ESC_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kettőzés mögötti harmadik ember erre a passzra "
+                "állhat lesbe",
+                "kiút két irányba: minden kettőzés-helyzethez KÉT "
+                "leadási irány (közeli és hosszú), pattintott passz "
+                "a lesben álló mögé, és a labdás fej-felhozása "
+                "(előbb nézni, aztán adni) 3-3-as kisjátékban",
+                )
+    except Exception:
+        pass
+
     # 369) Időkéréspáros-poszt: ha az időkérés utáni figuránk mindig
     # ugyanazon a tengelyen fut, a fal az első passznál elvágja.
     try:

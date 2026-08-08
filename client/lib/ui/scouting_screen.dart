@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Menekülő-poszt: nyomás alatt kihez megy a labda (5+ nyomás
+  // alatti passz, 60% részarány — a backenddel azonos küszöbök:
+  // ESC_MIN_PASSES, ESC_SHARE_PCT).
+  String? _pressOutletRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["esc_passes_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "szorításban a labda a(z) $top poszthoz menekül "
+        "(${pct.round()}%, $total nyomás alatti passz) · a harmadik "
+        "ember ott álljon lesben";
+  }
+
   // Időkéréspáros-poszt: az időkérés utáni figura tengelye (3+
   // időkérés utáni lövés, 60% részarány — a backenddel azonos
   // küszöbök: TOP_MIN_SHOTS, TOP_SHARE_PCT).
@@ -9220,6 +9247,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_pressOutletRole(r) != null)
+        ["Menekülő-poszt", _pressOutletRole(r)!],
       if (_timeoutPairRole(r) != null)
         ["Időkéréspáros-poszt", _timeoutPairRole(r)!],
       if (_laneSwitchRole(r) != null)

@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Menekülő-poszt: nyomás alatt kihez megy a labda.
+    try:
+        from .decisions import press_outlet_roles
+        esc = press_outlet_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_esc = esc[side]
+            if rec_esc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} szorításban a(z) "
+                     f"{rec_esc['main_role']} poszthoz menekül "
+                     f"({rec_esc['share_pct']:.0f}%, "
+                     f"{rec_esc['passes']} nyomás alatti passzból) —"
+                     " a harmadik ember ott álljon lesben.")
+    except Exception:
+        pass
     # Időkéréspáros-poszt: az időkérés utáni figura tengelye.
     try:
         from .stoppages import timeout_pair_roles

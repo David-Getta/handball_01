@@ -1106,3 +1106,80 @@ def tired_turnover_roles(match: Match,
                 "ki a kéz: a szünet után friss védővel őt kell "
                 "nyomás alá tenni, rajta olcsó a labdaszerzés")
     return out
+
+
+# Menekülő-poszt: ennyi poszthoz kötött nyomás alatti passz kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy szorításban
+# mindig ugyanahhoz a poszthoz menekül a labda.
+ESC_MIN_PASSES = 5
+ESC_SHARE_PCT = 60.0
+
+
+def press_outlet_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Menekülő-poszt: NYOMÁS ALATT KIHEZ megy a labda.
+
+    A pressz-poszt azt mondja meg, melyik posztjuk VESZÍTI el a
+    labdát szorításban — ez azt, hová MENEKÜL: a testközeli védő
+    mellett (PRESS_TIGHT_M-en belül) meghozott passzokat a FOGADÓ
+    posztjához írja.
+
+    Edzőileg ez teszi a presszt labdaszerzéssé: ha szorításban a
+    labda rendre ugyanahhoz a poszthoz megy, a kettőző mögötti
+    harmadik ember előre tudja, hol kell lesben állnia — a menekülő
+    passz így nem kiút, hanem elfogott labda. Saját csapatra: ha a
+    kiút egy emberre szűkül, a pressz-elleni kiadásunk
+    kiszámítható.
+
+    Visszatérés csapatonként: {"passes" (poszthoz kötött nyomás
+    alatti passz), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    ESC_MIN_PASSES, vagy egyik poszt sem éri el az ESC_SHARE_PCT-t.
+    """
+    import math
+
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    def _tight(frame, pos, team) -> bool:
+        dists = [math.hypot(p.x - pos.x, p.y - pos.y)
+                 for p in frame.players
+                 if p.team != team and p.role != "kapus"]
+        return bool(dists) and min(dists) <= PRESS_TIGHT_M
+
+    out: dict = {side: {"passes": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        if not _tight(pe.decision_frame, pe.passer_pos, pe.team):
+            continue
+        side = pe.team.value
+        rec_role = roles[side].get(pe.receiver_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["passes"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["passes"] >= ESC_MIN_PASSES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["passes"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= ESC_SHARE_PCT:
+                rec["verdict"] = (
+                    f"szorításban a labda a(z) {poszt} poszthoz "
+                    f"menekül ({share:.0f}%, {rec['passes']} nyomás "
+                    "alatti passzból) — a kettőzés mögötti harmadik "
+                    "ember ott álljon lesben: a menekülő passz így "
+                    "nem kiút, hanem elfogott labda")
+    return out

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Menekülő-poszt: nyomás alatt kihez megy a labda.** A
+  pressz-poszt azt mondja meg, melyik posztjuk veszíti el a labdát
+  szorításban — az új réteg azt, hová menekül: a testközeli védő
+  mellett meghozott passzokat a FOGADÓ posztjához írja. Edzőileg ez
+  teszi a presszt labdaszerzéssé: ha szorításban a labda rendre
+  ugyanahhoz a poszthoz megy, a kettőzés mögötti harmadik ember
+  előre tudja, hol kell lesben állnia — a menekülő passz így nem
+  kiút, hanem elfogott labda. Saját oldalon a két irányba nyíló kiút
+  az edzés-téma. Legalább 5 nyomás alatti passz és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`press_outlet_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 349. meccsterv-szabály), edzés-fókusz
+  (370. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Időkéréspáros-poszt: az időkérés utáni figura tengelye.** Az
   időkérés-befejező a figura végpontját nevezi meg — az új réteg a
   tengelyt: az időkérés utáni ablakban leadott lövésekhez megkeresi a

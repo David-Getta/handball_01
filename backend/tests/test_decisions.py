@@ -808,3 +808,60 @@ def test_tired_turnover_roles_silent_without_jump():
     rec = tired_turnover_roles(
         _fto_match([7, 7], [7, 7]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Menekülő-poszt (nyomás alatt kihez megy a labda) ---------------------
+
+
+def _esc_match(receivers, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló, 9: szélső) + nyomás alatti
+    passzok: az 5-öst szorítja a 30-as védő, és a `receivers` szerinti
+    társnak adja tovább."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + [_pl(30, Team.AWAY, 29.9, 10.0)])   # rászorító védő
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in receivers:
+        rx, ry = spos[tid]
+        for _ in range(8):           # a labda a szorított irányítónál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=29.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(8):           # menekülő passz a társnak
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=rx + 0.2, y=ry,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="esc", home_team="H",
+                           away_team="A", fps=fps), frames)
+
+
+def test_press_outlet_roles_names_the_escape_post():
+    """Szorításban a labda rendre a beállóhoz megy → a harmadik ember
+    ott álljon lesben."""
+    from handball.pipeline.decisions import (ESC_MIN_PASSES,
+                                             press_outlet_roles)
+
+    rec = press_outlet_roles(
+        _esc_match([7, 9, 7, 9, 7, 7, 7]))["home"]
+    assert rec["passes"] >= ESC_MIN_PASSES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "lesben" in rec["verdict"], rec
+
+
+def test_press_outlet_roles_silent_with_few_passes():
+    """Néhány nyomás alatti passzból nincs ítélet."""
+    from handball.pipeline.decisions import press_outlet_roles
+
+    rec = press_outlet_roles(_esc_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
