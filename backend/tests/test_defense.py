@@ -3685,3 +3685,63 @@ def test_targeted_defender_roles_silent_with_few_shots():
 
     rec = targeted_defender_roles(_tgr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Letámadó-poszt (melyik posztjuk szed labdát elöl) ---------------------
+
+
+def _hsr_match(stealers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + elöl-szerzések: a vendég
+    21-es labdáját a megadott hazai a támadó térfélen (x>20) szerzi
+    meg."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + [_pl(21, Team.AWAY, 28.0, 10.0)])
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in stealers:
+        sx, sy = spos[tid]
+        for _ in range(10):          # a vendég felhozná a labdát
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=28.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # elöl-szerzés: a hazai elveszi
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_high_steal_roles_names_the_pressing_post():
+    """Négy elöl-szerzésből három a beállóé → az ő oldalán tilos a
+    kihozatal."""
+    from handball.pipeline.defense import (HSR_MIN_HIGH,
+                                           high_steal_roles)
+
+    rec = high_steal_roles(_hsr_match([7, 7, 7, 9]))["home"]
+    assert rec["high"] >= HSR_MIN_HIGH, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "másik oldalra indítson" in rec["verdict"], rec
+
+
+def test_high_steal_roles_silent_with_few_steals():
+    """Néhány elöl-szerzésből nincs ítélet."""
+    from handball.pipeline.defense import high_steal_roles
+
+    rec = high_steal_roles(_hsr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

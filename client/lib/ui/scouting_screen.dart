@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Letámadó-poszt: melyik posztjuk szed labdát elöl (3+
+  // elöl-szerzés, 60% részarány — a backenddel azonos küszöbök:
+  // HSR_MIN_HIGH, HSR_SHARE_PCT).
+  String? _highStealRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["hsr_high_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az elöl-szerzéseik ${pct.round()}%-a a(z) $top "
+        "posztjuknál születik ($total letámadás-szerzés) · az ő "
+        "oldalán tilos a kihozatalt vezetni";
+  }
+
   // Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük
   // (5+ rá-lövés, 60% részarány — a backenddel azonos küszöbök:
   // TGR_MIN_SHOTS, TGR_SHARE_PCT).
@@ -8780,6 +8807,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_highStealRole(r) != null)
+        ["Letámadó-poszt", _highStealRole(r)!],
       if (_targetedDefenderRole(r) != null)
         ["Célkereszt-poszt", _targetedDefenderRole(r)!],
       if (_coveredShooterRole(r) != null)

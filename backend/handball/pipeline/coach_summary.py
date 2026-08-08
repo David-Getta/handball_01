@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Letámadó-poszt: melyik posztjuk szed labdát elöl.
+    try:
+        from .defense import high_steal_roles
+        hsr = high_steal_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_hsr = hsr[side]
+            if rec_hsr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} letámadása a(z) "
+                     f"{rec_hsr['main_role']} posztján áll "
+                     f"({rec_hsr['share_pct']:.0f}%, "
+                     f"{rec_hsr['high']} elöl-szerzésből) — az ő "
+                     "oldalán tilos a kihozatalt vezetni.")
+    except Exception:
+        pass
     # Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük.
     try:
         from .defense import targeted_defender_roles

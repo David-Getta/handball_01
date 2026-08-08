@@ -4957,3 +4957,68 @@ def targeted_defender_roles(match, config=None) -> dict:
                     "rá-lövésből) — a minta bevált: oda kell "
                     "szervezni a támadást, a védője elé elzárást")
     return out
+
+
+# Letámadó-poszt: ennyi poszthoz kötött elöl-szerzés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# letámadásuk egy poszton áll.
+HSR_MIN_HIGH = 3
+HSR_SHARE_PCT = 60.0
+
+
+def high_steal_roles(match, config=None) -> dict:
+    """Letámadó-poszt: MELYIK POSZTJUK szed labdát elöl.
+
+    Az elöl szerző védők rétege (high_steal_players) az embert
+    nevezi meg — ez a posztot: a támadó térfélen született
+    szerzéseket a szerző posztjához írja. Így a minta akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kihozatal-terv: amelyik posztjuk elöl rendre
+    labdát szed, annak az oldalán tilos a kihozatalt vezetni — a
+    kapus a másik oldalra indítson, a felhozó ne fusson a sávjába.
+    Saját csapatra: a letámadás-motor terhelése és biztosítása
+    (mögötte nyílik a tér) a téma.
+
+    Visszatérés csapatonként: {"high" (poszthoz kötött
+    elöl-szerzés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    HSR_MIN_HIGH, vagy egyik poszt sem éri el a HSR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    hs = high_steal_players(match, config)
+
+    out: dict = {side: {"high": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in hs[side]["players"]:
+            if not row["high"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["high"])
+            rec["high"] += row["high"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["high"] >= HSR_MIN_HIGH:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["high"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= HSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az elöl-szerzéseik {share:.0f}%-a a(z) "
+                    f"{poszt} posztjuknál születik ({rec['high']} "
+                    "letámadás-szerzésből) — az ő oldalán tilos a "
+                    "kihozatalt vezetni: a kapus a másik oldalra "
+                    "indítson")
+    return out

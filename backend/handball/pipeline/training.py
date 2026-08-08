@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 354) Letámadó-poszt: ha a letámadásunk egy poszton áll, a
+    # felkészült ellenfél kikerüli — és mögötte nyílik a tér.
+    try:
+        from .defense import HSR_SHARE_PCT, high_steal_roles
+        hsr354 = high_steal_roles(match, config)
+        for side in ("home", "away"):
+            rec354 = hsr354[side]
+            if rec354.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy poszton álló letámadás",
+                f"az elöl-szerzéseink {rec354['share_pct']:.0f}%-a "
+                f"a(z) {rec354['main_role']} posztunknál születik "
+                f"({rec354['high']} letámadás-szerzésből; "
+                f"{HSR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél az ő oldalát kerüli, és a "
+                "háta mögé játszik",
+                "letámadás két hullámban: második elöl-szedő "
+                "kijelölése a másik oldalra, a letámadó mögötti tér"
+                " biztosítása (visszazáró társ), és csapda-jelek "
+                "gyakorlása az oldalváltásra",
+                )
+    except Exception:
+        pass
+
     # 353) Célkereszt-poszt: ha az ellenfelek rendre egy posztunk
     # előtt fejeznek be, oda segítség és elzárás-védés kell.
     try:

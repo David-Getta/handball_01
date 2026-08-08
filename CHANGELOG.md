@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Letámadó-poszt: melyik posztjuk szed labdát elöl.** Az elöl
+  szerző védők rétege az embert nevezi meg — az új réteg a posztot:
+  a támadó térfélen született szerzéseket a szerző posztjához írja.
+  Edzőileg a kihozatal-terv: a letámadó poszt oldalán tilos a
+  kihozatalt vezetni — a kapus a másik oldalra indítson. Saját
+  oldalon a letámadás-motor biztosítása (mögötte nyíló tér) a téma.
+  Legalább 3 elöl-szerzés és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`high_steal_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 333. meccsterv-
+  szabály), edzés-fókusz (354. szabály), HTML-riport (Védő-lencse
+  sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük.**
   A célba vett védő rétege az embert nevezi meg — az új réteg a
   posztot: a kapott lövéseket a lövőhöz legközelebbi védő posztjához
