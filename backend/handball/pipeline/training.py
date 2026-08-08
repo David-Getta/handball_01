@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 357) Csere-stílus: az átszabó cserehullám után a saját
+    # védekezésünknek is újra kell rendeződnie — gyakorolni kell.
+    try:
+        from .substitutions import swap_style
+        sws357 = swap_style(match, config)
+        for side in ("home", "away"):
+            rec357 = sws357[side]
+            if rec357.get("verdict") is None \
+                    or "átszabó" not in rec357["verdict"]:
+                continue
+            add(side, "védekezés", "Átszabó cserehullám",
+                f"a cseréink átszabják a felállást ({rec357['same']}"
+                f"/{rec357['pairs']} azonos-posztú váltás) — a "
+                "hullám utáni első védekezésünk rendezetlen, és a "
+                "felkészült ellenfél pont akkor támad",
+                "csere utáni rendeződés-gyakorlás: a hullám után "
+                "kötelező hangos fogás-osztás, az első védekezés "
+                "5-1-ből indul biztonsági alapfelállásként, és a "
+                "cserék időzítése saját támadás idejére",
+                )
+    except Exception:
+        pass
+
     # 356) Elzárópáros-poszt: ha az elzárás-játékunk egy posztpárra
     # jár, a felkészült fal párban fogja — kell a másik oldal.
     try:

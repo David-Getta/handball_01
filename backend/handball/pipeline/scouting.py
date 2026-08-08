@@ -977,6 +977,10 @@ class ScoutingReport:
     # Elzárópáros-poszt: elzárt lövések az (elzáró→lövő) posztpár
     # szerint. Darabszám, pontosan összegződik.
     spp_shots_by_role: dict = field(default_factory=dict)
+    # Csere-stílus: poszthoz köthető ki-be párosok és ebből az
+    # azonos-posztú váltások. Darabszámok, pontosan összegződnek.
+    sws_pairs: int = 0
+    sws_same: int = 0
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3785,6 +3789,22 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_spp_pct:.0f}%, {_spp_n} elzárt lövés) — párban"
                 " készüljetek: az elzáró őrzője előre szól, a lövőé"
                 " az elzárás előtt lép ki.")
+
+    # Csere-stílus: mit jelent a cserehullámuk a párosításra.
+    if rep.sws_pairs >= 3:
+        _sws_pct = 100.0 * rep.sws_same / rep.sws_pairs
+        if _sws_pct >= 70.0:
+            keys.append(
+                f"Posztot tartó a padjuk ({rep.sws_same}/"
+                f"{rep.sws_pairs} azonos-posztú váltás) — a "
+                "párosításotok a csere után is érvényes, csak a "
+                "nevet frissítsétek.")
+        elif _sws_pct <= 40.0:
+            keys.append(
+                f"Átszabó a padjuk ({rep.sws_same}/{rep.sws_pairs} "
+                "azonos-posztú váltás) — a cserehullámuk utáni első"
+                " támadásnál osszátok újra a fogásokat, különben "
+                "szabad emberük marad.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8699,6 +8719,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import screen_pair_roles as _spp
         spprec = _spp(match, config)[team.value]
         rep.spp_shots_by_role = dict(spprec["roles"])
+        from .substitutions import swap_style as _sws
+        swsrec = _sws(match, config)[team.value]
+        rep.sws_pairs = swsrec["pairs"]
+        rep.sws_same = swsrec["same"]
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11279,6 +11303,18 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 336) Az ő átszabó padjuk × a ti aktív időkérésetek: az átszabó
+    # hullám utáni zavart rendezéssel kell lecsapni.
+    if (opp.sws_pairs >= 3 and own.tsc_timeouts >= 2
+            and 100.0 * opp.sws_same / opp.sws_pairs <= 40.0):
+        plan.append(
+            f"Átszabó a padjuk ({opp.sws_same}/{opp.sws_pairs} "
+            "azonos-posztú váltás), ti pedig aktívan éltek az "
+            f"időkéréssel ({own.tsc_timeouts} a mérésben) — a "
+            "cserehullámuk után azonnal rendezzétek a fogásokat "
+            "(hangos jelzés vagy időkérés), és támadásban az első "
+            "labda a még rendezetlen sávjukba menjen.")
 
     # 335) Az ő elzárópáros-posztjuk × a ti kettőzésetek: a
     # bejáratott kettősük párban fogható.
@@ -17112,6 +17148,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sar_meters_by_role for r in reports),
         spp_shots_by_role=_merge_count_dicts(
             r.spp_shots_by_role for r in reports),
+        sws_pairs=sum(r.sws_pairs for r in reports),
+        sws_same=sum(r.sws_same for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

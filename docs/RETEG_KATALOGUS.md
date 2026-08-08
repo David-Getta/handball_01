@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **383 réteg**, modulonként csoportosítva; a
+Összesen **384 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (78)
@@ -425,7 +425,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `timeout_sub_combo` | Időkérés-csomag: AZ IDŐKÉRÉSÜK CSERÉVEL JÁR-E. |
 | `timeout_timing` | Időkérés-időzítés: MIKOR kérnek időt. |
 
-## substitutions (10)
+## substitutions (11)
 
 | Réteg | Mit mér |
 |---|---|
@@ -439,6 +439,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `substitution_triggers` | Csere-kiváltók: KAPOTT GÓL UTÁN cserélnek-e. |
 | `substitutions` | Cserék + a cserék utáni IMPACT_S másodperc mérlege csapatonként. |
 | `swap_pairs` | Váltópárok: KI KIT VÁLT a cseréknél. |
+| `swap_style` | Csere-stílus: POSZTOT TART vagy ÁTSZAB a padjuk. |
 
 ## summary_en (2)
 

@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Csere-stílus: posztot tart vagy átszab a padjuk.** A
+  cserehullám-rétegek a posztokat nézik külön — az új réteg a ki-be
+  párokat: minden hullámban a lecserélt és a beálló játékost párba
+  állítja, és megnézi, azonos posztra érkezik-e a váltás. Edzőileg:
+  posztot tartó pad ellen a párosítás a csere után is érvényes;
+  átszabó pad ellen a hullám utáni első támadásnál újra kell osztani
+  a fogásokat. Saját oldalon a csere utáni rendeződés a téma. 3
+  ki-be pár alatt hallgat (None); 70% fölött tartó, 40% alatt
+  átszabó az ítélet. Felületek: /analyze + meccs-csomag
+  (`swap_style`), edzői összefoglaló, felderítés (edzői kulcs + 336.
+  meccsterv-szabály), edzés-fókusz (357. szabály), kliens-csempe.
 - **Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk.**
   Az elzárás-páros rétege a két embert nevezi meg — az új réteg a
   posztpárt: minden elzárt lövést az (elzáró poszt → lövő poszt)

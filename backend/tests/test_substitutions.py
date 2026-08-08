@@ -622,3 +622,110 @@ def test_sub_in_roles_silent_with_few_ins():
 
     rec = sub_in_roles(_sbr_match([(7, 107), (9, 119)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Csere-stílus (posztot tart vagy átszab a pad) -------------------------
+
+
+def _sws_match(swaps, fps=25.0):
+    """Poszt-minta + cserehullámok: a `swaps` elemei (ki, be,
+    be-hely) hármasok — a be-hely None esetén a beálló a lecserélt
+    helyét veszi át (posztot tartó), különben a megadott új helyre
+    áll (átszabó)."""
+    spos = {7: (34.0, 10.0), 17: (33.5, 9.0), 27: (34.5, 11.0),
+            9: (35.0, 3.0)}
+    on_court = dict(spos)
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (out_tid, in_tid, in_spot) in swaps:
+        spot = on_court[out_tid]
+        dest = in_spot if in_spot is not None else spot
+        for i in range(50):          # a lecserélt a zóna felé tart
+            frac = (i + 1) / 50.0
+            x = spot[0] + (20.0 - spot[0]) * frac
+            y = spot[1] + (1.0 - spot[1]) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()
+                       if tid != out_tid] + [_pl(out_tid, Team.HOME,
+                                                 x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        del on_court[out_tid]
+        for _ in range(10):
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+        for i in range(50):          # az új track a zónából áll be
+            frac = (i + 1) / 50.0
+            x = 20.0 + (dest[0] - 20.0) * frac
+            y = 1.0 + (dest[1] - 1.0) * frac
+            players = [_pl(tid, Team.HOME, *xy)
+                       for tid, xy in on_court.items()] \
+                + [_pl(in_tid, Team.HOME, x, y)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        on_court[in_tid] = dest
+        for _ in range(250):         # két hullám közt eltelik az idő
+            frames.append(Frame(
+                t=t,
+                players=[_pl(tid, Team.HOME, *xy)
+                         for tid, xy in on_court.items()],
+                ball=Ball(x=25.0, y=16.0, confidence=1.0)))
+            t += 1
+    bx, by = next(iter(on_court.values()))
+    for _ in range(150):             # záró poszt-minta a beállókkal
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=bx + 0.2, y=by, confidence=1.0)))
+        t += 1
+    return Match(_meta(), frames)
+
+
+def test_swap_style_names_the_post_keeping_bench():
+    """Három azonos-posztú váltás → posztot tartó pad."""
+    from handball.pipeline.substitutions import swap_style
+
+    rec = swap_style(_sws_match(
+        [(7, 107, None), (17, 117, None), (27, 127, None)]))["home"]
+    assert rec["pairs"] >= 3, rec
+    assert rec["same_pct"] and rec["same_pct"] >= 70.0, rec
+    assert rec["verdict"] and "posztot tartó" in rec["verdict"], rec
+
+
+def test_swap_style_names_the_reshaping_bench():
+    """Három átszabó váltás (beálló-tájék ki, szélső-hely be) →
+    átszabó pad."""
+    from handball.pipeline.substitutions import swap_style
+
+    rec = swap_style(_sws_match(
+        [(7, 107, (36.0, 17.0)), (17, 117, (36.0, 2.0)),
+         (27, 127, (28.5, 10.0))]))["home"]
+    assert rec["pairs"] >= 3, rec
+    assert rec["same_pct"] is not None and rec["same_pct"] <= 40.0, rec
+    assert rec["verdict"] and "átszabó" in rec["verdict"], rec
+
+
+def test_swap_style_silent_with_few_pairs():
+    """Kevés ki-be párosból nincs ítélet."""
+    from handball.pipeline.substitutions import swap_style
+
+    rec = swap_style(_sws_match(
+        [(7, 107, None), (9, 119, None)]))["home"]
+    assert rec["same_pct"] is None and rec["verdict"] is None, rec

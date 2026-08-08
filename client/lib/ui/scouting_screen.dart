@@ -2141,6 +2141,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Csere-stílus: posztot tart vagy átszab a padjuk (3+ ki-be pár;
+  // 70% fölött tartó, 40% alatt átszabó — a backenddel azonos
+  // küszöbök: SWS_MIN_PAIRS, SWS_SAME_PCT, SWS_CROSS_PCT).
+  String? _swapStyle(Map<String, dynamic> r) {
+    final pairs = (r["sws_pairs"] as num?)?.toInt() ?? 0;
+    final same = (r["sws_same"] as num?)?.toInt() ?? 0;
+    if (pairs < 3) return null;
+    final pct = 100.0 * same / pairs;
+    if (pct >= 70.0) {
+      return "posztot tartó a padjuk ($same/$pairs azonos-posztú "
+          "váltás) · a párosítás a csere után is érvényes";
+    }
+    if (pct <= 40.0) {
+      return "átszabó a padjuk ($same/$pairs azonos-posztú váltás) "
+          "· a cserehullámuk után újra kell osztani a fogásokat";
+    }
+    return null;
+  }
+
   // Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk
   // (3+ elzárt lövés, 60% részarány — a backenddel azonos küszöbök:
   // SPP_MIN_SHOTS, SPP_SHARE_PCT).
@@ -8867,6 +8886,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_swapStyle(r) != null)
+        ["Csere-stílus", _swapStyle(r)!],
       if (_screenPairRole(r) != null)
         ["Elzárópáros-poszt", _screenPairRole(r)!],
       if (_staticAttackerRole(r) != null)

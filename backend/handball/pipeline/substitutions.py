@@ -678,3 +678,71 @@ def sub_in_roles(match: Match,
                     "friss láb, új lendület, az addigi párosítás "
                     "ott elavul")
     return out
+
+
+# Csere-stílus: ennyi poszthoz köthető ki-be páros kell az ítélethez;
+# e feletti azonos-poszt arány a posztot tartó, ez alatti az átszabó
+# pad jele.
+SWS_MIN_PAIRS = 3
+SWS_SAME_PCT = 70.0
+SWS_CROSS_PCT = 40.0
+
+
+def swap_style(match: Match,
+               config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-stílus: POSZTOT TART vagy ÁTSZAB a padjuk.
+
+    A cserehullám-rétegek a posztokat nézik külön — ez a ki-be
+    párokat: minden hullámban a lecserélt és a beálló játékost
+    párba állítja, és megnézi, azonos posztra érkezik-e a váltás.
+    A posztot tartó pad specialistát cserél specialistára; az
+    átszabó pad a felállást is átrendezi.
+
+    Edzőileg: posztot tartó pad ellen a párosítás a csere után is
+    érvényes — csak a nevet kell frissíteni; átszabó pad ellen a
+    cserehullám utáni ELSŐ támadásnál újra kell osztani a fogásokat
+    (hangos jelzés vagy időkérés), különben szabad ember marad.
+
+    Visszatérés csapatonként: {"pairs", "same", "cross",
+    "same_pct", "verdict"} — a same_pct/verdict None, ha nincs meg
+    az SWS_MIN_PAIRS; a verdict "posztot tartó a padjuk" /
+    "átszabó a padjuk" / None.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"pairs": 0, "same": 0, "cross": 0,
+                        "same_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for wave in detect_substitutions(match, config):
+        side = wave["team"]
+        for out_id, in_id in zip(wave["out_ids"], wave["in_ids"]):
+            r_out = roles[side].get(out_id)
+            r_in = roles[side].get(in_id)
+            if r_out is None or r_in is None:
+                continue
+            rec = out[side]
+            rec["pairs"] += 1
+            if r_out["poszt"] == r_in["poszt"]:
+                rec["same"] += 1
+            else:
+                rec["cross"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["pairs"] >= SWS_MIN_PAIRS:
+            pct = 100.0 * rec["same"] / rec["pairs"]
+            rec["same_pct"] = round(pct, 1)
+            if pct >= SWS_SAME_PCT:
+                rec["verdict"] = (
+                    "posztot tartó a padjuk — a párosítás a csere "
+                    "után is érvényes, csak a nevet kell "
+                    "frissíteni")
+            elif pct <= SWS_CROSS_PCT:
+                rec["verdict"] = (
+                    "átszabó a padjuk — a cserehullám utáni első "
+                    "támadásnál újra kell osztani a fogásokat, "
+                    "különben szabad emberük marad")
+    return out

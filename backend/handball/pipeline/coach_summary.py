@@ -916,6 +916,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Csere-stílus: posztot tart vagy átszab a padjuk.
+    try:
+        from .substitutions import swap_style
+        sws = swap_style(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sws = sws[side]
+            if rec_sws["verdict"] is None:
+                continue
+            body += (f" A(z) {name} cseréinél {rec_sws['verdict']} "
+                     f"({rec_sws['same']}/{rec_sws['pairs']} "
+                     "azonos-posztú váltás).")
+    except Exception:
+        pass
     # Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk.
     try:
         from .attack_types import screen_pair_roles
