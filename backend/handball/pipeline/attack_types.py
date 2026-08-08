@@ -5408,3 +5408,66 @@ def breakthrough_roles(match: Match,
                     "betörés vonalát testtel kell zárni: nélküle a "
                     "többiek kívül rekednek")
     return out
+
+
+# Elzárópáros-poszt: ennyi posztpárhoz kötött elzárt lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy az
+# elzárás-játékuk egy posztpárra jár.
+SPP_MIN_SHOTS = 3
+SPP_SHARE_PCT = 60.0
+
+
+def screen_pair_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárópáros-poszt: MELYIK POSZTPÁRRA jár az elzárás-játékuk.
+
+    Az elzárás-páros rétege (screen_pairs) a két embert nevezi meg —
+    ez a posztpárt: minden elzárásból leadott lövést az (elzáró
+    poszt → lövő poszt) párhoz ír. Így a bejáratott kettős akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg a páros ellen párban készül a védekezés: az elzáró
+    posztjának őrzője előre szól, a lövő posztjának őrzője pedig az
+    elzárás ELŐTT lép ki, hogy ne szoruljon mögé. Saját csapatra: a
+    figura másik oldalra is járjon, különben kiszámítható.
+
+    Visszatérés csapatonként: {"shots" (párhoz kötött elzárt lövés),
+    "roles": {"elzáró→lövő": darab}, "main_role" (a fő posztpár),
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    SPP_MIN_SHOTS, vagy egyik pár sem éri el az SPP_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    sp = screen_pairs(match, config)
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in sp[side]["pairs"]:
+            setter = roles[side].get(row["setter_id"])
+            shooter = roles[side].get(row["shooter_id"])
+            if setter is None or shooter is None:
+                continue
+            kulcs = f"{setter['poszt']}→{shooter['poszt']}"
+            rec["roles"][kulcs] = (rec["roles"].get(kulcs, 0)
+                                   + row["shots"])
+            rec["shots"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= SPP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= SPP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az elzárás-játékuk a(z) {par} posztpárra jár "
+                    f"({share:.0f}%, {rec['shots']} elzárt "
+                    "lövésből) — a védekezés párban készül: az "
+                    "elzáró őrzője előre szól, a lövőé az elzárás "
+                    "előtt lép ki")
+    return out

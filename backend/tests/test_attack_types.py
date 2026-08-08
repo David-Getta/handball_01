@@ -4228,3 +4228,66 @@ def test_breakthrough_roles_silent_with_few_entries():
 
     rec = breakthrough_roles(_btr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Elzárópáros-poszt (melyik posztpárra jár az elzárás-játék) ------------
+
+
+def _spp_match(setters, fps=25.0):
+    """Poszt-minta (1: átlövő, 5: beálló, 9: szélső) + elzárt
+    lövések: a `setters` szerinti társ zár az 1-es lövőnek."""
+    spos = {1: (30.0, 10.0), 5: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in spos.items()],
+            ball=Ball(x=30.2, y=10.0, confidence=1.0)))
+        t += 1
+    for setter_id in setters:
+        players = [_pl(1, Team.HOME, 30.0, 10.0),          # a lövő
+                   _pl(20, Team.AWAY, 31.5, 10.0),         # az őrző
+                   _pl(setter_id, Team.HOME, 31.5, 11.0)]  # az elzáró
+        players += [_pl(tid, Team.HOME, *spos[tid])
+                    for tid in spos if tid not in (1, setter_id)]
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(14):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(30.0 + 0.8 * (i + 1), 40.0), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=40.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_screen_pair_roles_names_the_drilled_pair():
+    """Négy elzárt lövésből három a beálló→átlövő párosé → párban
+    készül a védekezés."""
+    from handball.pipeline.attack_types import (SPP_MIN_SHOTS,
+                                                screen_pair_roles)
+
+    rec = screen_pair_roles(_spp_match([5, 5, 5, 9]))["home"]
+    assert rec["shots"] >= SPP_MIN_SHOTS, rec
+    assert rec["main_role"] == "beálló→átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "párban készül" in rec["verdict"], rec
+
+
+def test_screen_pair_roles_silent_with_few_shots():
+    """Néhány elzárt lövésből nincs ítélet."""
+    from handball.pipeline.attack_types import screen_pair_roles
+
+    rec = screen_pair_roles(_spp_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

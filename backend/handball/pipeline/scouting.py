@@ -974,6 +974,9 @@ class ScoutingReport:
     # és megtett méter. Összegek, pontosan összegződnek.
     sar_seconds_by_role: dict = field(default_factory=dict)
     sar_meters_by_role: dict = field(default_factory=dict)
+    # Elzárópáros-poszt: elzárt lövések az (elzáró→lövő) posztpár
+    # szerint. Darabszám, pontosan összegződik.
+    spp_shots_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3769,6 +3772,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                     "befelé segíthet, kettőzhet vagy a beállóra "
                     "léphet.")
                 break
+
+    # Elzárópáros-poszt: melyik kettősre készüljön a fal.
+    _spp_n = sum(rep.spp_shots_by_role.values())
+    if _spp_n >= 3:
+        _spp_p, _spp_c = max(rep.spp_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _spp_pct = 100.0 * _spp_c / _spp_n
+        if _spp_pct >= 60.0:
+            keys.append(
+                f"Az elzárás-játékuk a(z) {_spp_p} posztpárra jár "
+                f"({_spp_pct:.0f}%, {_spp_n} elzárt lövés) — párban"
+                " készüljetek: az elzáró őrzője előre szól, a lövőé"
+                " az elzárás előtt lép ki.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8680,6 +8696,9 @@ def _scout_team_cached(match: Match, team: Team,
             p: r["seconds"] for p, r in sarrec["roles"].items()}
         rep.sar_meters_by_role = {
             p: r["meters"] for p, r in sarrec["roles"].items()}
+        from .attack_types import screen_pair_roles as _spp
+        spprec = _spp(match, config)[team.value]
+        rep.spp_shots_by_role = dict(spprec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11260,6 +11279,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 335) Az ő elzárópáros-posztjuk × a ti kettőzésetek: a
+    # bejáratott kettősük párban fogható.
+    _spp335_n = sum(opp.spp_shots_by_role.values())
+    _dbl335 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _spp335_n >= 3 and _dbl335 >= 20.0:
+        _spp335_p, _spp335_c = max(opp.spp_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _spp335_pct = 100.0 * _spp335_c / _spp335_n
+        if _spp335_pct >= 60.0:
+            plan.append(
+                f"Az elzárás-játékuk a(z) {_spp335_p} posztpárra "
+                f"jár ({_spp335_pct:.0f}%, {_spp335_n} elzárt "
+                "lövés), ti pedig jól kettőztök "
+                f"({_dbl335:.0f}% a labdás nyomás alatt) — a "
+                "kettősük ellen párban álljatok: az elzáró őrzője "
+                "előre szól, a lövőé korán kilép, és a bejáratott "
+                "figurájuk elhal.")
 
     # 334) Az ő álló-posztjuk × a ti kettőzésetek: az álló poszt
     # védője nálatok ingyen besegítő.
@@ -17072,6 +17110,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.sar_seconds_by_role for r in reports),
         sar_meters_by_role=_merge_count_dicts(
             r.sar_meters_by_role for r in reports),
+        spp_shots_by_role=_merge_count_dicts(
+            r.spp_shots_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

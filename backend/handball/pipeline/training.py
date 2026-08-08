@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 356) Elzárópáros-poszt: ha az elzárás-játékunk egy posztpárra
+    # jár, a felkészült fal párban fogja — kell a másik oldal.
+    try:
+        from .attack_types import SPP_SHARE_PCT, screen_pair_roles
+        spp356 = screen_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec356 = spp356[side]
+            if rec356.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztpárra járó elzárás",
+                f"az elzárás-játékunk {rec356['share_pct']:.0f}%-a "
+                f"a(z) {rec356['main_role']} posztpárra jár "
+                f"({rec356['shots']} elzárt lövésből; "
+                f"{SPP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült fal párban fogja a kettősünket",
+                "elzárás-repertoár bővítése: a figura tükrözve a "
+                "másik oldalra is, második elzáró-lövő kettős "
+                "bejáratása, és elzárás-csel (kilépő védő mögé "
+                "visszagurulás) gyakorlása",
+                )
+    except Exception:
+        pass
+
     # 355) Álló-poszt: ha egy posztunk áll labda nélkül, a védője
     # ellenünk fordul — labda nélküli munka kell.
     try:

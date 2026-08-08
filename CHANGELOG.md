@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk.**
+  Az elzárás-páros rétege a két embert nevezi meg — az új réteg a
+  posztpárt: minden elzárt lövést az (elzáró poszt → lövő poszt)
+  kettőshöz ír. Edzőileg a páros elleni felkészülés: az elzáró
+  posztjának őrzője előre szól, a lövőé az elzárás előtt lép ki.
+  Saját oldalon a figura tükrözése a másik oldalra az edzés-téma.
+  Legalább 3 elzárt lövés és 60% párrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`screen_pair_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 335. meccsterv-szabály),
+  edzés-fókusz (356. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Álló-poszt: melyik posztjuk áll labda nélkül.** Az álló támadók
   rétege az embert nevezi meg — az új réteg a posztot: a szervezett
   támadás mozgás-másodperceit és métereit a játékos posztjához

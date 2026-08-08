@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Elzárópáros-poszt: melyik posztpárra jár az elzárás-játékuk.
+    try:
+        from .attack_types import screen_pair_roles
+        spp = screen_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spp = spp[side]
+            if rec_spp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} elzárás-játéka a(z) "
+                     f"{rec_spp['main_role']} posztpárra jár "
+                     f"({rec_spp['share_pct']:.0f}%, "
+                     f"{rec_spp['shots']} elzárt lövésből) — a "
+                     "védekezés párban készül ellene.")
+    except Exception:
+        pass
     # Álló-poszt: melyik posztjuk áll labda nélkül.
     try:
         from .tactics import static_attacker_roles
