@@ -3642,6 +3642,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import breakthrough_roles
+            res["breakthrough_roles"] = breakthrough_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5278,6 +5283,9 @@ def create_app():
                 from ..pipeline.defense import costly_turnover_roles
                 _layer("costly_turnover_roles",
                        lambda: costly_turnover_roles(match))
+                from ..pipeline.attack_types import breakthrough_roles
+                _layer("breakthrough_roles",
+                       lambda: breakthrough_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Áttörő-poszt: melyik posztjuk nyitja szét a falat.** Az áttörő
+  játékosok rétege az embert nevezi meg — az új réteg a posztot: a
+  labdás betöréseket (a kapu közeli körzetébe lépés) a betörő
+  posztjához írja. Edzőileg a kettőzés-terv belső köre: az áttörő
+  poszt védője segítőt kap, a betörés vonalát testtel kell zárni —
+  nélküle a többiek kívül rekednek. Saját oldalon a második áttörő
+  az edzés-téma. Legalább 4 betörés és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`breakthrough_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 329. meccsterv-szabály), edzés-fókusz (350. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Drága-eladó poszt: kinek a hibái kerülnek gólba.** A drága
   eladók rétege az embert nevezi meg — az új réteg a posztot: a
   gólba forduló (kapott góllal büntetett) eladásokat a vesztes

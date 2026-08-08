@@ -5344,3 +5344,67 @@ def backward_pass_roles(match: Match,
                     "menekül: a pressz rá jutalmat hoz, a "
                     "hátra-passza után a fal feljebb tolható")
     return out
+
+
+# Áttörő-poszt: ennyi poszthoz kötött betörés kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a falat egy posztjuk
+# nyitja szét.
+BTR_MIN_ENTRIES = 4
+BTR_SHARE_PCT = 60.0
+
+
+def breakthrough_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Áttörő-poszt: MELYIK POSZTJUK jut be labdával a falba.
+
+    Az áttörő játékosok rétege (breakthrough_players) az embert
+    nevezi meg — ez a posztot: a labdás betöréseket (a kapu közeli
+    körzetébe lépés) a betörő posztjához írja. Így a minta akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a kettőzés-terv belső köre: amelyik posztjuk rendre
+    szétnyitja a falat, annak a védője segítőt kap, a betörés
+    vonalát pedig testtel kell zárni — nélküle a többiek kívül
+    rekednek. Saját csapatra: az egy emberen álló betörés-játék
+    kockázat, kell a második áttörő.
+
+    Visszatérés csapatonként: {"entries" (poszthoz kötött betörés),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg a BTR_MIN_ENTRIES, vagy egyik
+    poszt sem éri el a BTR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    bp = breakthrough_players(match, config)
+
+    out: dict = {side: {"entries": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in bp[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["entries"])
+            rec["entries"] += row["entries"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["entries"] >= BTR_MIN_ENTRIES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["entries"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BTR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a falat {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjuk nyitja szét ({rec['entries']} labdás"
+                    " betörésből) — a védője segítőt kapjon, és a "
+                    "betörés vonalát testtel kell zárni: nélküle a "
+                    "többiek kívül rekednek")
+    return out

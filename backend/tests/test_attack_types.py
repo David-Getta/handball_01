@@ -4161,3 +4161,70 @@ def test_backward_pass_roles_silent_with_few_passes():
 
     rec = backward_pass_roles(_bpr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Áttörő-poszt (melyik posztjuk nyitja szét a falat) --------------------
+
+
+def _btr_match(entries, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + betörések: az `entries`
+    szerinti hazai játékos viszi be a labdát a kapu 9 m-es
+    körzetébe."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(mover=None, mx=None, my=None):
+        out = []
+        for tid, (x, y) in spos.items():
+            if tid == mover:
+                out.append(_pl(tid, Team.HOME, mx,
+                               my if my is not None else y))
+            else:
+                out.append(_pl(tid, Team.HOME, x, y))
+        return out + [_pl(21, Team.AWAY, 37.0, 17.0)]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in entries:
+        for _ in range(int(2.0 * fps)):    # felállás a 9 m-en kívül
+            frames.append(Frame(
+                t=t, players=cast(mover=tid, mx=28.0, my=8.0),
+                ball=Ball(x=28.2, y=8.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(1.5 * fps)):    # betörés a körzetbe
+            frames.append(Frame(
+                t=t, players=cast(mover=tid, mx=33.5, my=8.0),
+                ball=Ball(x=33.7, y=8.0, confidence=1.0)))
+            t += 1
+        for i in range(int(1.5 * fps)):    # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t,
+                players=[_pl(21, Team.AWAY, 18.0 - 0.05 * i, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * i, y=10.0,
+                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_breakthrough_roles_names_the_opening_post():
+    """Négy betörésből hármat a beálló visz be → az ő védője kap
+    segítőt."""
+    from handball.pipeline.attack_types import (BTR_MIN_ENTRIES,
+                                                breakthrough_roles)
+
+    rec = breakthrough_roles(_btr_match([7, 7, 7, 9]))["home"]
+    assert rec["entries"] >= BTR_MIN_ENTRIES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "testtel kell zárni" in rec["verdict"], rec
+
+
+def test_breakthrough_roles_silent_with_few_entries():
+    """Néhány betörésből nincs ítélet."""
+    from handball.pipeline.attack_types import breakthrough_roles
+
+    rec = breakthrough_roles(_btr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

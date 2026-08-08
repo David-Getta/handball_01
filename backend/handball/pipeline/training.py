@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 350) Áttörő-poszt: ha a betörés-játékunk egy emberen áll, egy
+    # időzített kettőzés az egész belső játékunkat lezárja.
+    try:
+        from .attack_types import BTR_SHARE_PCT, breakthrough_roles
+        btr350 = breakthrough_roles(match, config)
+        for side in ("home", "away"):
+            rec350 = btr350[side]
+            if rec350.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy emberen álló betörés-játék",
+                f"a betöréseink {rec350['share_pct']:.0f}%-a a(z) "
+                f"{rec350['main_role']} posztunktól jön "
+                f"({rec350['entries']} labdás betörésből; "
+                f"{BTR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "időzített kettőzés az egész belső játékunkat "
+                "lezárja",
+                "második áttörő építése: 1-1 elleni betörés-"
+                "gyakorlat két posztnak, elzárás utáni lekapcsolódó"
+                " betörés, és a betörő kettőzésekor kötelező kioldó"
+                " passz gyakorlása",
+                )
+    except Exception:
+        pass
+
     # 349) Drága-eladó poszt: ha egy posztunk hibái rendre gólba
     # kerülnek, nyomás alatti labdakezelés és visszazárás kell.
     try:

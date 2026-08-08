@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Áttörő-poszt: melyik posztjuk nyitja szét a falat.
+    try:
+        from .attack_types import breakthrough_roles
+        btr = breakthrough_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_btr = btr[side]
+            if rec_btr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} falbontását a(z) "
+                     f"{rec_btr['main_role']} posztja viszi "
+                     f"({rec_btr['share_pct']:.0f}%, "
+                     f"{rec_btr['entries']} labdás betörésből) — az"
+                     " ő védője kapjon segítőt.")
+    except Exception:
+        pass
     # Drága-eladó poszt: kinek a hibái kerülnek gólba.
     try:
         from .defense import costly_turnover_roles

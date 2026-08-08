@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **376 réteg**, modulonként csoportosítva; a
+Összesen **377 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (76)
+## attack_types (77)
 
 | Réteg | Mit mér |
 |---|---|
@@ -32,6 +32,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `break_sources` | Kontra-forrás: MIBŐL INDUL a lerohanásuk. |
 | `breaks_by_score` | Kontra-állás: MIKOR futják a lerohanásaikat — állás szerint. |
 | `breakthrough_players` | Áttörő játékosok: KI JUT BE labdával a falba. |
+| `breakthrough_roles` | Áttörő-poszt: MELYIK POSZTJUK jut be labdával a falba. |
 | `buildup_side` | Kihozatal-oldal: MELYIK OLDALON indítják a támadást. |
 | `buildup_time` | Felhozatal-idő: MENNYI IDŐ ALATT érnek a támadó térfélre. |
 | `circulation_direction` | Labda-forgatás iránya: MERRE JÁRATJÁK a labdát felállt támadásban. |

@@ -953,6 +953,9 @@ class ScoutingReport:
     # Drága-eladó poszt: a gólba forduló eladások darabszáma
     # posztonként. Darabszám, pontosan összegződik.
     dto_punished_by_role: dict = field(default_factory=dict)
+    # Áttörő-poszt: a labdás betörések darabszáma posztonként.
+    # Darabszám, pontosan összegződik.
+    btr_entries_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3663,6 +3666,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_dto_p} posztnál történik ({_dto_n} büntetett "
                 "hibából) — a felhozatalnál őt kettőzzétek-"
                 "zavarjátok: nála a legnagyobb a nyereség.")
+
+    # Áttörő-poszt: kinek a védője kapjon segítőt.
+    _btr_n = sum(rep.btr_entries_by_role.values())
+    if _btr_n >= 4:
+        _btr_p, _btr_c = max(rep.btr_entries_by_role.items(),
+                             key=lambda kv: kv[1])
+        _btr_pct = 100.0 * _btr_c / _btr_n
+        if _btr_pct >= 60.0:
+            keys.append(
+                f"A falat {_btr_pct:.0f}%-ban a(z) {_btr_p} "
+                f"posztjuk nyitja szét ({_btr_n} labdás betörésből)"
+                " — a védője kapjon segítőt, a betörés vonalát "
+                "testtel zárjátok: nélküle a többiek kívül "
+                "rekednek.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8552,6 +8569,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import costly_turnover_roles as _dto
         dtorec = _dto(match, config)[team.value]
         rep.dto_punished_by_role = dict(dtorec["roles"])
+        from .attack_types import breakthrough_roles as _btr
+        btrrec = _btr(match, config)[team.value]
+        rep.btr_entries_by_role = dict(btrrec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11132,6 +11152,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 329) Az ő áttörő-posztjuk × a ti kettőzésetek: az áttörő
+    # védője segítőt kap, és a fal zárva marad.
+    _btr329_n = sum(opp.btr_entries_by_role.values())
+    _dbl329 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _btr329_n >= 4 and _dbl329 >= 20.0:
+        _btr329_p, _btr329_c = max(opp.btr_entries_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _btr329_pct = 100.0 * _btr329_c / _btr329_n
+        if _btr329_pct >= 60.0:
+            plan.append(
+                f"A falat {_btr329_pct:.0f}%-ban a(z) {_btr329_p} "
+                f"posztjuk nyitja szét ({_btr329_n} labdás betörés),"
+                f" ti pedig amúgy is sokat kettőztök ({_dbl329:.0f}%"
+                " a labdás nyomás alatt) — az ő védője kapjon "
+                "segítőt már a betörés indulásakor: a vonalát "
+                "testtel zárva a falatok egyben marad, és a többi "
+                "lövőjük kívül reked.")
 
     # 328) Az ő drága-eladó posztjuk × a ti szerzés-utáni gyors
     # gólotok: az ő hibája nálatok azonnal a hálóban köt ki.
@@ -16816,6 +16855,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ibr_ins_by_role for r in reports),
         dto_punished_by_role=_merge_count_dicts(
             r.dto_punished_by_role for r in reports),
+        btr_entries_by_role=_merge_count_dicts(
+            r.btr_entries_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Áttörő-poszt: melyik posztjuk nyitja szét a falat (4+ labdás
+  // betörés, 60% részarány — a backenddel azonos küszöbök:
+  // BTR_MIN_ENTRIES, BTR_SHARE_PCT).
+  String? _breakthroughRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["btr_entries_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 4) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a falat ${pct.round()}%-ban a(z) $top posztjuk nyitja "
+        "szét ($total labdás betörés) · a védője kapjon segítőt, a "
+        "vonalát testtel kell zárni";
+  }
+
   // Drága-eladó poszt: kinek a hibái kerülnek gólba (3+ büntetett
   // eladás, 60% részarány — a backenddel azonos küszöbök:
   // DTO_MIN_PUNISHED, DTO_SHARE_PCT).
@@ -8673,6 +8700,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_breakthroughRole(r) != null)
+        ["Áttörő-poszt", _breakthroughRole(r)!],
       if (_costlyTurnoverRole(r) != null)
         ["Drága-eladó poszt", _costlyTurnoverRole(r)!],
       if (_subInRole(r) != null)
