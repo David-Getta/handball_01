@@ -1302,3 +1302,93 @@ def tired_shooter_roles(match: Match,
                 "fáradtan szétmegy a lövése: a szünet után rá lehet"
                 " engedni, a kilépés nála fölösleges kockázat")
     return out
+
+
+# Ziccer-előkészítő poszt: ennyi poszthoz kötött ziccer-előkészítés
+# kell az ítélethez, ekkora részarány fölött mondjuk ki a mintát, és
+# ennyi időn belüli utolsó passzt tekintünk előkészítésnek.
+BCF_FEED_MIN = 3
+BCF_FEED_SHARE_PCT = 60.0
+BCF_FEED_WINDOW_S = 4.0
+
+
+def big_chance_feeder_roles(match: Match,
+                            config: Optional[TacticsConfig] = None
+                            ) -> dict:
+    """Ziccer-előkészítő poszt: KI ADJA a passzt a nagy helyzethez.
+
+    A ziccer-poszt azt mondja meg, MELYIK POSZTNÁL alakul ki a nagy
+    helyzet — ez azt, KI TEREMTI: a BIG_CHANCE_XG feletti lövésekhez
+    megkeresi a lövő felé menő utolsó passzt, és a helyzetet a
+    PASSZOLÓ posztjához írja. Az előkészítő-poszt minden lövést néz,
+    ez csak a veszélyeseket.
+
+    Edzőileg ez a legdrágább passzsáv: ha a ziccereik nagy része
+    ugyanannak a posztnak a kezéből indul, az ő bejátszó-sávját kell
+    elvágni (testtel zárás, előrelépő védő) — a helyzet így ki sem
+    alakul, nem a befejezést kell hárítani. Saját csapatra: ha a
+    ziccer-teremtés egy emberen áll, a kiesésével a helyzeteink is
+    eltűnnek.
+
+    Visszatérés csapatonként: {"chances" (poszthoz kötött
+    ziccer-előkészítés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    BCF_FEED_MIN, vagy egyik poszt sem éri el a
+    BCF_FEED_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = BCF_FEED_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"chances": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        best = None
+        for p in passes:
+            if not (0 <= sh["t"] - p.t <= win):
+                continue
+            if p.team.value != side:
+                continue
+            if p.receiver_id != pid or p.passer_id == pid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        rec_role = roles[side].get(best.passer_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["chances"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chances"] >= BCF_FEED_MIN:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["chances"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= BCF_FEED_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a ziccereik {share:.0f}%-át a(z) {poszt} "
+                    f"posztjuk teremti ({rec['chances']} "
+                    "ziccer-előkészítésből) — az ő bejátszó-sávját "
+                    "vágjátok el: a helyzet így ki sem alakul, nem "
+                    "a befejezést kell hárítani")
+    return out

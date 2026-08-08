@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Ziccer-előkészítő poszt: ki adja a passzt a nagy helyzethez.
+    try:
+        from .xg import big_chance_feeder_roles
+        bcf = big_chance_feeder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bcf = bcf[side]
+            if rec_bcf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ziccereit a(z) "
+                     f"{rec_bcf['main_role']} posztja teremti "
+                     f"({rec_bcf['share_pct']:.0f}%, "
+                     f"{rec_bcf['chances']} előkészítésből) — az ő "
+                     "bejátszó-sávját kell elvágni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

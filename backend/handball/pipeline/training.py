@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 372) Ziccer-előkészítő poszt: ha a ziccereinket egy poszt
+    # teremti, a kiesésével a helyzeteink is eltűnnek.
+    try:
+        from .xg import (BCF_FEED_SHARE_PCT,
+                         big_chance_feeder_roles)
+        bcf372 = big_chance_feeder_roles(match, config)
+        for side in ("home", "away"):
+            rec372 = bcf372[side]
+            if rec372.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézből induló ziccerek",
+                f"a ziccereink {rec372['share_pct']:.0f}%-át a(z) "
+                f"{rec372['main_role']} posztunk teremti "
+                f"({rec372['chances']} előkészítésből; "
+                f"{BCF_FEED_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ő bejátszó-sávjának elvágásával a helyzeteink ki "
+                "sem alakulnak",
+                "ziccer-teremtés több kézből: bejátszás a szélről "
+                "és a hátsó sorból is, elzárás utáni kioldó passz "
+                "gyakorlása, és a fő előkészítőnk tehermentesítése "
+                "(ne mindig ő legyen a labdás a figurában)",
+                )
+    except Exception:
+        pass
+
     # 371) Vég-birtokos poszt: ha a terméketlen támadásaink mindig
     # ugyanannak a kezében halnak el, a befejezés-felelősség
     # tisztázatlan.

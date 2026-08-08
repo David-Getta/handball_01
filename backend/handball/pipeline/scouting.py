@@ -1025,6 +1025,10 @@ class ScoutingReport:
     # Vég-birtokos poszt: a lövés nélkül záruló támadások darabszáma
     # az utolsó birtokos posztja szerint. Darabszám, összegződik.
     lst_attacks_by_role: dict = field(default_factory=dict)
+    # Ziccer-előkészítő poszt: a nagy helyzetekhez adott utolsó
+    # passzok darabszáma a PASSZOLÓ posztja szerint. Darabszám,
+    # pontosan összegződik.
+    bcf_chances_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -4048,6 +4052,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "terméketlen támadás) — a támadás második felében rá"
                 " toljátok a nyomást: ott a legolcsóbb a "
                 "labdaszerzés.")
+
+    # Ziccer-előkészítő poszt: a legdrágább passzsáv.
+    _bcf_n = sum(rep.bcf_chances_by_role.values())
+    if _bcf_n >= 3:
+        _bcf_p, _bcf_c = max(rep.bcf_chances_by_role.items(),
+                             key=lambda kv: kv[1])
+        _bcf_pct = 100.0 * _bcf_c / _bcf_n
+        if _bcf_pct >= 60.0:
+            keys.append(
+                f"A ziccereik {_bcf_pct:.0f}%-át a(z) {_bcf_p} "
+                f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
+                "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
+                "sem alakul, nem a befejezést kell hárítani.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -9002,6 +9019,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import last_holder_roles as _lst
         lstrec = _lst(match, config)[team.value]
         rep.lst_attacks_by_role = dict(lstrec["roles"])
+        from .xg import big_chance_feeder_roles as _bcf
+        bcfrec = _bcf(match, config)[team.value]
+        rep.bcf_chances_by_role = dict(bcfrec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11594,6 +11614,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 351) Az ő ziccer-előkészítő posztjuk × a ti kilépő faltok: a
+    # bejátszó-sáv elvágásával a helyzet ki sem alakul.
+    _bcf351_n = sum(opp.bcf_chances_by_role.values())
+    if (_bcf351_n >= 3 and own.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _bcf351_p, _bcf351_c = max(opp.bcf_chances_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _bcf351_pct = 100.0 * _bcf351_c / _bcf351_n
+        if _bcf351_pct >= 60.0:
+            plan.append(
+                f"A ziccereik {_bcf351_pct:.0f}%-át a(z) "
+                f"{_bcf351_p} posztjuk teremti ({_bcf351_n} "
+                "előkészítés), ti pedig szorosan, kilépve "
+                f"védekeztek (átlag {own.defensive_pressure_m:.1f} "
+                "m) — a kilépés az ő bejátszó-sávjára menjen: a "
+                "ziccer ki sem alakul, nem a befejezést kell "
+                "hárítani.")
 
     # 350) Az ő vég-birtokos posztjuk × a ti labdaszerzésetek: ahol a
     # támadásuk elhal, ott a legolcsóbb elvenni a labdát.
@@ -17720,6 +17758,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.esc_passes_by_role for r in reports),
         lst_attacks_by_role=_merge_count_dicts(
             r.lst_attacks_by_role for r in reports),
+        bcf_chances_by_role=_merge_count_dicts(
+            r.bcf_chances_by_role for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

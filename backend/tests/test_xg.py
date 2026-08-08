@@ -1302,3 +1302,73 @@ def test_tired_shooter_roles_silent_without_jump():
 
     rec = tired_shooter_roles(_fsa_match([7, 7], [7, 7]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccer-előkészítő poszt (ki adja a passzt a nagy helyzethez) ----------
+
+
+def _bcfeed_match(feeders, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló a hatoson, 9: szélső) +
+    ziccerek: a `feeders` szerinti társ passza után a 7-es lő nagy
+    helyzetből (xG >= BIG_CHANCE_XG)."""
+    spos = {5: (29.0, 10.0), 7: (35.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(25):              # el a kaputól: lövés-debounce
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 1
+    for fid in feeders:
+        fx, fy = spos[fid]
+        for _ in range(10):          # a labda az előkészítőnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=fx + 0.2, y=fy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(8):           # átvétel a hatoson (7-es)
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=35.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = 35.0
+        while x < 40.5:              # ziccer a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):          # vissza középre: debounce
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_big_chance_feeder_roles_names_the_creator():
+    """Négy ziccerből hármat az irányító teremt → az ő bejátszó-
+    sávját kell elvágni."""
+    from handball.pipeline.xg import (BCF_FEED_MIN,
+                                      big_chance_feeder_roles)
+
+    rec = big_chance_feeder_roles(_bcfeed_match([5, 5, 5, 9]))["home"]
+    assert rec["chances"] >= BCF_FEED_MIN, rec
+    assert rec["main_role"] == "irányító", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "ki sem alakul" in rec["verdict"], rec
+
+
+def test_big_chance_feeder_roles_silent_with_few_chances():
+    """Néhány ziccer-előkészítésből nincs ítélet."""
+    from handball.pipeline.xg import big_chance_feeder_roles
+
+    rec = big_chance_feeder_roles(_bcfeed_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

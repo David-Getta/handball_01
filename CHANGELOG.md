@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Ziccer-előkészítő poszt: ki adja a passzt a nagy helyzethez.** A
+  ziccer-poszt azt mondja meg, melyik posztnál alakul ki a nagy
+  helyzet — az új réteg azt, ki teremti: a nagy helyzet-értékű
+  lövésekhez megkeresi a lövő felé menő utolsó passzt, és a
+  helyzetet a passzoló posztjához írja (az előkészítő-poszt minden
+  lövést néz, ez csak a veszélyeseket). Edzőileg a legdrágább
+  passzsáv: az előkészítő bejátszó-sávját elvágva a helyzet ki sem
+  alakul, nem a befejezést kell hárítani. Legalább 3
+  ziccer-előkészítés és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`big_chance_feeder_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 351. meccsterv-
+  szabály), edzés-fókusz (372. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.** A
   passzív-poszt csak a hosszú, felállt támadásokat nézi — az új
   réteg minden lövés nélkül záruló támadást: a szakasz utolsó

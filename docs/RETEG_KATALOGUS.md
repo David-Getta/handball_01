@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **398 réteg**, modulonként csoportosítva; a
+Összesen **399 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (82)
@@ -486,10 +486,11 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `training` | Csapatonként rangsorolt edzés-fókusz lista ({"home": [...], ...}). |
 
-## xg (23)
+## xg (24)
 
 | Réteg | Mit mér |
 |---|---|
+| `big_chance_feeder_roles` | Ziccer-előkészítő poszt: KI ADJA a passzt a nagy helyzethez. |
 | `big_chance_finishers` | Ziccer-befejezők: KI ÉRTÉKESÍTI a nagy helyzeteket. |
 | `big_chance_roles` | Ziccer-poszt: MELYIK POSZTJUKNÁL alakul ki a nagy helyzet. |
 | `big_save_momentum` | Bravúr utáni lendület: a nagy védés után jön-e gyors gól elöl. |
