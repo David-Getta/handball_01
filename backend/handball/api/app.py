@@ -3771,6 +3771,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import powerplay_turnover_roles
+            res["powerplay_turnover_roles"] = \
+                powerplay_turnover_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5482,6 +5488,9 @@ def create_app():
                 from ..pipeline.xg import big_chance_pair_roles
                 _layer("big_chance_pair_roles",
                        lambda: big_chance_pair_roles(match))
+                from ..pipeline.rules import powerplay_turnover_roles
+                _layer("powerplay_turnover_roles",
+                       lambda: powerplay_turnover_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

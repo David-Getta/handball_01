@@ -2088,3 +2088,61 @@ def test_seven_miss_roles_needs_enough_misses():
     assert rec["misses"] == 2
     assert rec["verdict"] is None and rec["main_role"] is None
     assert seven_miss_roles(_svm_match(2))["away"]["misses"] == 0
+
+
+# ---- Emberelőny-hiba poszt ---------------------------------------------------
+
+def _ppt_match(losers, fps=25.0):
+    """A VENDÉG van emberhátrányban (5 fő); a `losers` elemei adják,
+    kinél vész el a labda az emberelőnyben. A 7-es beálló (33, 10), a
+    9-es szélső (35, 3) — mindkettő végig a pályán az ablak alatt."""
+    spos = {7: (33.0, 10.0), 9: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _cast(away_n, extra=()):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(away_n)]
+        players += [_pl(tid, Team.HOME, *spos[tid]) for tid in extra]
+        return players
+
+    def _hold(n, away_n, extra, ball):
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=_cast(away_n, extra),
+                                ball=Ball(x=ball[0], y=ball[1],
+                                          confidence=1.0)))
+            t += 1
+
+    _hold(int(20.0 * fps), 6, (), (20.0, 9.0))     # teljes létszám
+    for loser in losers:                            # az emberelőny
+        lx, ly = spos[loser]
+        _hold(int(14.0 * fps), 5, (7, 9), (lx + 0.2, ly))
+        _hold(int(1.0 * fps), 5, (7, 9), (25.0, 4.0))   # elvesztve
+    _hold(int(20.0 * fps), 6, (), (20.0, 9.0))     # vissza hatra
+    return Match(_meta(fps), frames)
+
+
+def test_powerplay_turnover_roles_names_the_leaking_post():
+    """Ha az emberelőnyük rendre ugyanannak a kezén akad el,
+    hátrányban rá kell nyomni."""
+    from handball.pipeline.rules import (PPT_MIN_TURNOVERS,
+                                         powerplay_turnover_roles)
+
+    rec = powerplay_turnover_roles(_ppt_match([7, 7, 7, 9]))["home"]
+    assert rec["turnovers"] >= PPT_MIN_TURNOVERS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "dupla büntetés" in rec["verdict"], rec
+
+
+def test_powerplay_turnover_roles_silent_with_few_turnovers():
+    """Két emberelőny-eladásból még nincs ítélet."""
+    from handball.pipeline.rules import powerplay_turnover_roles
+
+    rec = powerplay_turnover_roles(_ppt_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+    assert powerplay_turnover_roles(
+        _ppt_match([7, 9]))["away"]["turnovers"] == 0

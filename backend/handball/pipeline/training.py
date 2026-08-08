@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 375) Emberelőny-hiba poszt: ha az emberelőnyünk mindig
+    # ugyanannak a kezén akad el, a két perc kárba vész.
+    try:
+        from .rules import (PPT_SHARE_PCT, powerplay_turnover_roles)
+        ppt375 = powerplay_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec375 = ppt375[side]
+            if rec375.get("verdict") is None:
+                continue
+            add(side, "támadás", "Emberelőny hiba nélkül",
+                f"az emberelőnyünk {rec375['share_pct']:.0f}%-ban "
+                f"a(z) {rec375['main_role']} kezén akad el "
+                f"({rec375['turnovers']} emberelőny-eladásból; "
+                f"{PPT_SHARE_PCT:.0f}% fölött már minta) — a két "
+                "perc így nem előny, hanem kockázat: az elvett "
+                "labdából ellenünk indul a kontra",
+                "6-5 figura biztonságra: lassabb labdajáratás két "
+                "körig (nincs erőltetett bejátszás), a hibázó poszt "
+                "fogadásainak gyakorlása kettőzés ellen, és "
+                "kijelölt visszabiztosító a kontra ellen",
+                )
+    except Exception:
+        pass
+
     # 374) Ziccerpáros-poszt: ha a helyzeteink egyetlen kettősön
     # állnak, egy ember mindkettőt kifogja.
     try:

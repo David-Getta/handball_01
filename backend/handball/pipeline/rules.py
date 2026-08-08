@@ -2377,3 +2377,82 @@ def seven_miss_roles(match: Match,
                     "késleltetett vetődés): nála a hetes nem "
                     "automatikus gól")
     return out
+
+
+# Emberelőny-hiba poszt küszöbei: ennyi poszthoz kötött
+# emberelőny-eladás kell az ítélethez, és ekkora részarány a vezető
+# posztnak.
+PPT_MIN_TURNOVERS = 3
+PPT_SHARE_PCT = 60.0
+
+
+def powerplay_turnover_roles(match: Match,
+                             config: Optional[TacticsConfig] = None
+                             ) -> dict:
+    """Emberelőny-hiba poszt: KINEK A KEZÉN akad el az emberelőnyük.
+
+    Az emberelőny-poszt azt mondja meg, kire fut ki a hat a öt ellen
+    — ez azt, kinél vész el: a kiállítás-ablakokban, EMBERELŐNYBEN
+    elkövetett labdaeladásaikat a vesztes posztjához írja. A
+    poszt-hibák rétege az egész meccset nézi, ez csak a két percet,
+    ahol a hiba a legdrágább.
+
+    Edzőileg ez a hátrányban álló csapat egyetlen esélye: ha az
+    emberelőnyük rendre ugyanannak a kezén akad el, hátrányban rá
+    kell nyomni (kettőzés, passzsáv-zárás a fogadásánál) — az ő
+    elvett labdája dupla büntetés, mert a kétperc alatt kontrázni
+    lehet belőle. Saját csapatra: az emberelőny-figurát nem szabad
+    ugyanarra a kézre bízni, ha ott szakad el.
+
+    Visszatérés csapatonként (a TÁMADÓ, tehát emberelőnyben lévő
+    oldal): {"turnovers" (poszthoz kötött emberelőny-eladás),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg a PPT_MIN_TURNOVERS, vagy egyik
+    poszt sem éri el a PPT_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    # Az emberelőny-ablakok a TÁMADÓ (előnyben lévő) oldal szerint.
+    windows = [("away" if w["team_down"] == "home" else "home",
+                w["start_frame"], w["end_frame"])
+               for w in detect_powerplay(match)]
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not windows:
+        return out
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(s == side and a <= e.t <= b for s, a, b in windows):
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["turnovers"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= PPT_MIN_TURNOVERS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= PPT_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az emberelőnyük {share:.0f}%-ban a(z) {poszt} "
+                    f"kezén akad el ({rec['turnovers']} "
+                    "emberelőny-eladásból) — hátrányban rá kell "
+                    "nyomni: az ő elvett labdája dupla büntetés, "
+                    "mert a kétperc alatt kontrázni lehet belőle")
+    return out

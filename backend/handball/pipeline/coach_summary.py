@@ -962,6 +962,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "lévő passzsávot kell elvágni.")
     except Exception:
         pass
+    # Emberelőny-hiba poszt: kinek a kezén akad el az emberelőnyük.
+    try:
+        from .rules import powerplay_turnover_roles
+        ppt = powerplay_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppt = ppt[side]
+            if rec_ppt["verdict"] is None:
+                continue
+            body += (f" A(z) {name} emberelőnye "
+                     f"{rec_ppt['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_ppt['main_role']} kezén akad el "
+                     f"({rec_ppt['turnovers']} emberelőny-eladás) — "
+                     "hátrányban rá kell nyomni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

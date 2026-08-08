@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Emberelőny-hiba poszt: az emberelőnyben elkövetett
+    # labdaeladások darabszáma a VESZTES posztja szerint. Darabszám,
+    # pontosan összegződik.
+    ppt_turnovers_by_role: dict = field(default_factory=dict)
     # Ziccerpáros-poszt: a nagy helyzetek darabszáma az
     # (előkészítő poszt → befejező poszt) páros szerint. Darabszám,
     # pontosan összegződik.
@@ -4072,6 +4076,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Emberelőny-hiba poszt: a hátrány-védekezés célpontja.
+    _ppt_n = sum(rep.ppt_turnovers_by_role.values())
+    if _ppt_n >= 3:
+        _ppt_p, _ppt_c = max(rep.ppt_turnovers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _ppt_pct = 100.0 * _ppt_c / _ppt_n
+        if _ppt_pct >= 60.0:
+            keys.append(
+                f"Az emberelőnyük {_ppt_pct:.0f}%-ban a(z) {_ppt_p} "
+                f"kezén akad el ({_ppt_n} emberelőny-eladás) — "
+                "hátrányban rá nyomjatok (kettőzés, passzsáv-zárás a "
+                "fogadásánál): az ő elvett labdájából a kétperc "
+                "alatt kontrázni lehet.")
 
     # Ziccerpáros-poszt: a legdrágább passzsáv két végpontja.
     _bcp_n = sum(rep.bcp_chances_by_pair.values())
@@ -9063,6 +9081,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .xg import big_chance_pair_roles as _bcp
         bcprec = _bcp(match, config)[team.value]
         rep.bcp_chances_by_pair = dict(bcprec["roles"])
+        from .rules import powerplay_turnover_roles as _ppt
+        pptrec = _ppt(match, config)[team.value]
+        rep.ppt_turnovers_by_role = dict(pptrec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11655,6 +11676,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 354) Az ő emberelőny-hiba posztjuk × a ti kontrátok: a
+    # kétperc alatt elvett labda dupla büntetés.
+    _ppt354_n = sum(opp.ppt_turnovers_by_role.values())
+    if _ppt354_n >= 3 and own.fast_break_pct >= 10.0:
+        _ppt354_p, _ppt354_c = max(opp.ppt_turnovers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _ppt354_pct = 100.0 * _ppt354_c / _ppt354_n
+        if _ppt354_pct >= 60.0:
+            plan.append(
+                f"Az emberelőnyük {_ppt354_pct:.0f}%-ban a(z) "
+                f"{_ppt354_p} kezén akad el ({_ppt354_n} "
+                "emberelőny-eladás), ti pedig futtok kontrákat "
+                f"(a támadásaitok {own.fast_break_pct:.0f}%-a "
+                "lerohanás) — hátrányban ne "
+                "csak tartsatok: az ő fogadására menjen a "
+                "passzsáv-zárás, és az elvett labdából azonnal "
+                "induljon a kontra, mert a kétperc alatt üres a "
+                "másik kapu.")
 
     # 353) Az ő ziccerpárosuk × a ti kettőzésetek: a páros közötti
     # passzsáv elvágása egy mozdulattal két posztot fog ki.
@@ -17843,6 +17883,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.svm_misses_by_role for r in reports),
         bcp_chances_by_pair=_merge_count_dicts(
             r.bcp_chances_by_pair for r in reports),
+        ppt_turnovers_by_role=_merge_count_dicts(
+            r.ppt_turnovers_by_role for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

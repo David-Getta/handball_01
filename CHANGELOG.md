@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Emberelőny-hiba poszt: kinek a kezén akad el az
+  emberelőnyük.** Az emberelőny-poszt azt mondja meg, kire fut ki a
+  hat a öt ellen — az új réteg azt, kinél vész el: a
+  kiállítás-ablakokban, emberelőnyben elkövetett labdaeladásokat a
+  vesztes posztjához írja (a poszt-hibák rétege az egész meccset
+  nézi, ez csak a két percet, ahol a hiba a legdrágább). Edzőileg ez
+  a hátrányban álló csapat esélye: ha az emberelőnyük rendre
+  ugyanannak a kezén akad el, rá kell nyomni — az ő elvett labdája
+  dupla büntetés, mert a kétperc alatt kontrázni lehet belőle.
+  Legalább 3 emberelőny-eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`powerplay_turnover_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 354. meccsterv-szabály), edzés-fókusz (375.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Ziccerpáros-poszt: ki adja és ki fejezi be a nagy
   helyzeteiket.** A ziccer-előkészítő poszt azt mondja meg, kinek a
   kezéből indul a helyzet, a ziccer-poszt azt, kinél alakul ki — az
