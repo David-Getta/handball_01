@@ -916,6 +916,19 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Álló-poszt: melyik posztjuk áll labda nélkül.
+    try:
+        from .tactics import static_attacker_roles
+        sar = static_attacker_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sar = sar[side]
+            if rec_sar["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_sar['main_role']} posztja "
+                     "áll labda nélkül — a védője otthagyhatja, és "
+                     "befelé segíthet.")
+    except Exception:
+        pass
     # Letámadó-poszt: melyik posztjuk szed labdát elöl.
     try:
         from .defense import high_steal_roles

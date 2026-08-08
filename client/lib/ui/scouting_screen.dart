@@ -2141,6 +2141,39 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Álló-poszt: melyik posztjuk áll labda nélkül (20+ mp mért
+  // mozgás, a csapatátlagnál 20%-kal lassabb — a backenddel azonos
+  // küszöbök: SAR_MIN_S, SAR_GAP_PCT).
+  String? _staticAttackerRole(Map<String, dynamic> r) {
+    final secs =
+        (r["sar_seconds_by_role"] as Map?)?.cast<String, dynamic>();
+    final mets =
+        (r["sar_meters_by_role"] as Map?)?.cast<String, dynamic>();
+    if (secs == null || secs.isEmpty || mets == null) return null;
+    var totalS = 0.0;
+    var totalM = 0.0;
+    secs.forEach((k, v) => totalS += (v as num).toDouble());
+    mets.forEach((k, v) => totalM += (v as num).toDouble());
+    if (totalS <= 0) return null;
+    final teamAvg = totalM / totalS;
+    String? post;
+    var postA = 0.0;
+    secs.forEach((k, v) {
+      final ps = (v as num).toDouble();
+      if (ps < 20.0) return;
+      final pa = ((mets[k] as num?) ?? 0).toDouble() / ps;
+      if (teamAvg > 0 && pa <= teamAvg * 0.8 && post == null) {
+        post = k;
+        postA = pa;
+      }
+    });
+    if (post == null) return null;
+    return "a(z) $post posztjuk áll labda nélkül "
+        "(${postA.toStringAsFixed(1)} m/s a "
+        "${teamAvg.toStringAsFixed(1)} m/s átlag mellett) · a "
+        "védője otthagyhatja, és befelé segíthet";
+  }
+
   // Letámadó-poszt: melyik posztjuk szed labdát elöl (3+
   // elöl-szerzés, 60% részarány — a backenddel azonos küszöbök:
   // HSR_MIN_HIGH, HSR_SHARE_PCT).
@@ -8807,6 +8840,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_staticAttackerRole(r) != null)
+        ["Álló-poszt", _staticAttackerRole(r)!],
       if (_highStealRole(r) != null)
         ["Letámadó-poszt", _highStealRole(r)!],
       if (_targetedDefenderRole(r) != null)

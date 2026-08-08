@@ -1145,3 +1145,79 @@ def static_attackers(match: Match,
         out[side] = {"team_avg_mps": team_avg, "players": rows,
                      "static": static}
     return out
+
+
+# Álló-poszt: posztonként ennyi mért másodperc kell, és a
+# csapatátlagnál ekkora (százalékos) lassabb labda nélküli mozgás,
+# hogy a posztot állónak mondjuk ki.
+SAR_MIN_S = 20.0
+SAR_GAP_PCT = 20.0
+
+
+def static_attacker_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Álló-poszt: MELYIK POSZTJUK áll labda nélkül.
+
+    Az álló támadók rétege (static_attackers) az embert nevezi meg —
+    ez a posztot: a szervezett támadásban mért mozgás-másodperceket
+    és métereket a játékos posztjához összegzi, és megnézi, melyik
+    posztjuk mozog érdemben a csapatátlag alatt.
+
+    Edzőileg ez a besegítés-forrás: az álló posztot a védője
+    nyugodtan otthagyhatja — befelé segíthet, kettőzhet vagy a
+    beállóra léphet, mert az álló ember nem bünteti meg. Saját
+    csapatra: a poszt labda nélküli munkája kész edzés-téma.
+
+    Visszatérés csapatonként: {"roles": {poszt: {"seconds",
+    "meters", "avg_mps"}}, "team_avg_mps", "main_role", "verdict"} —
+    az ítélet None, ha egyik poszt sem éri el a SAR_MIN_S-t a
+    SAR_GAP_PCT-s lemaradással.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    sa = static_attackers(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        agg: dict = {}
+        for row in sa[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec = agg.setdefault(poszt, {"seconds": 0.0,
+                                         "meters": 0.0})
+            rec["seconds"] += row["seconds"]
+            rec["meters"] += row["seconds"] * row["avg_mps"]
+        total_s = sum(r["seconds"] for r in agg.values())
+        total_m = sum(r["meters"] for r in agg.values())
+        team_avg = (total_m / total_s) if total_s > 0 else None
+        for r in agg.values():
+            r["seconds"] = round(r["seconds"], 1)
+            r["avg_mps"] = (round(r["meters"] / r["seconds"], 2)
+                            if r["seconds"] > 0 else None)
+            r["meters"] = round(r["meters"], 1)
+        rec_out = {"roles": dict(sorted(
+                       agg.items(),
+                       key=lambda kv: kv[1]["avg_mps"] or 0.0)),
+                   "team_avg_mps": (round(team_avg, 2)
+                                    if team_avg else None),
+                   "main_role": None, "verdict": None}
+        if team_avg:
+            for poszt, r in rec_out["roles"].items():
+                if r["seconds"] < SAR_MIN_S or r["avg_mps"] is None:
+                    continue
+                if r["avg_mps"] <= team_avg * (1 - SAR_GAP_PCT / 100.0):
+                    rec_out["main_role"] = poszt
+                    rec_out["verdict"] = (
+                        f"a(z) {poszt} posztjuk áll labda nélkül "
+                        f"({r['avg_mps']:.1f} m/s a "
+                        f"{team_avg:.1f} m/s csapatátlag mellett) —"
+                        " a védője otthagyhatja: befelé segíthet, "
+                        "kettőzhet vagy a beállóra léphet")
+                    break
+        out[side] = rec_out
+    return out

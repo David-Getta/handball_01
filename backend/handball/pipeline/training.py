@@ -1355,6 +1355,27 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 355) Álló-poszt: ha egy posztunk áll labda nélkül, a védője
+    # ellenünk fordul — labda nélküli munka kell.
+    try:
+        from .tactics import static_attacker_roles
+        sar355 = static_attacker_roles(match, config)
+        for side in ("home", "away"):
+            rec355 = sar355[side]
+            if rec355.get("verdict") is None:
+                continue
+            add(side, "támadás", "Labda nélkül álló poszt",
+                f"a(z) {rec355['main_role']} posztunk áll labda "
+                "nélkül — a védője otthagyja, és ellenünk fordul: "
+                "besegít, kettőz vagy a beállónkra lép",
+                "labda nélküli munka a posztnak: befutás-minták "
+                "(hátoldali, elzárásról lekapcsolódó), üres-oldali "
+                "mozgás-szabály a figurákban, és videó-visszajelzés"
+                " a mozgás-percekről",
+                )
+    except Exception:
+        pass
+
     # 354) Letámadó-poszt: ha a letámadásunk egy poszton áll, a
     # felkészült ellenfél kikerüli — és mögötte nyílik a tér.
     try:

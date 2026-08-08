@@ -1899,6 +1899,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                             sprint_threat_roles)
         from .substitutions import sub_in_roles, substituted_roles
         from .setplays import setplay_finishers
+        from .tactics import static_attacker_roles
         from .stoppages import timeout_finisher
 
         def _lens_rows(layers):
@@ -1963,6 +1964,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Drága-eladó poszt", costly_turnover_roles),
             ("Áttörő-poszt", breakthrough_roles),
             ("Fedezett-lövő poszt", covered_shooter_roles),
+            ("Álló-poszt", static_attacker_roles),
             ("Blokkolt-poszt", blocked_shooter_roles),
             ("Ziccerhagyó-poszt", missed_chance_roles),
             ("Fáradó-poszt", fatigue_roles),

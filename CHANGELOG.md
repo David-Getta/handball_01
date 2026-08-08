@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Álló-poszt: melyik posztjuk áll labda nélkül.** Az álló támadók
+  rétege az embert nevezi meg — az új réteg a posztot: a szervezett
+  támadás mozgás-másodperceit és métereit a játékos posztjához
+  összegzi, és megnézi, melyik posztjuk mozog érdemben a csapatátlag
+  alatt. Edzőileg a besegítés-forrás: az álló posztot a védője
+  otthagyhatja — befelé segíthet, kettőzhet vagy a beállóra léphet.
+  Saját oldalon a labda nélküli munka az edzés-téma. Posztonként 20
+  mp mért mozgás és 20% lemaradás alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`static_attacker_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 334. meccsterv-szabály),
+  edzés-fókusz (355. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Letámadó-poszt: melyik posztjuk szed labdát elöl.** Az elöl
   szerző védők rétege az embert nevezi meg — az új réteg a posztot:
   a támadó térfélen született szerzéseket a szerző posztjához írja.

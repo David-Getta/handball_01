@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **381 réteg**, modulonként csoportosítva; a
+Összesen **382 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (77)
@@ -446,7 +446,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `match_card_en` | English match card: compact, English-language match summary. |
 | `scouting_cards_en` | English scouting card: a one-page opponent brief per team. |
 
-## tactics (12)
+## tactics (13)
 
 | Réteg | Mit mér |
 |---|---|
@@ -459,6 +459,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `pass_tempo` | Passz-tempó (labdajáratás sebessége): hány passz jut a SAJÁT |
 | `slow_attack_cost` | Elhúzódó támadás ára: a passzív-veszélyes hosszú akciók HOZAMA. |
 | `slow_attacks` | Elhúzódó (passzív-veszélyes) támadások csapatonként. |
+| `static_attacker_roles` | Álló-poszt: MELYIK POSZTJUK áll labda nélkül. |
 | `static_attackers` | Álló támadók: KI mozog labda nélkül a legkevesebbet. |
 | `tilt_fade` | Területi-fölény-esés: a field tilt az 1. vs a 2. félidőben. |
 | `vs_formation` | Támadó-hatékonyság a VÉDŐFORMA szerint: melyik fal ellen megy. |

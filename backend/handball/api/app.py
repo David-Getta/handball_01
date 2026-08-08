@@ -3668,6 +3668,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.tactics import static_attacker_roles
+            res["static_attacker_roles"] = static_attacker_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5319,6 +5324,9 @@ def create_app():
                 from ..pipeline.defense import high_steal_roles
                 _layer("high_steal_roles",
                        lambda: high_steal_roles(match))
+                from ..pipeline.tactics import static_attacker_roles
+                _layer("static_attacker_roles",
+                       lambda: static_attacker_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

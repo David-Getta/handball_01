@@ -970,6 +970,10 @@ class ScoutingReport:
     # Letámadó-poszt: a támadó térfélen született szerzések
     # darabszáma posztonként. Darabszám, pontosan összegződik.
     hsr_high_by_role: dict = field(default_factory=dict)
+    # Álló-poszt: labda nélküli mozgás posztonként — mért másodperc
+    # és megtett méter. Összegek, pontosan összegződnek.
+    sar_seconds_by_role: dict = field(default_factory=dict)
+    sar_meters_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3746,6 +3750,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f" posztjuknál születik ({_hsr_n} letámadás-szerzés)"
                 " — az ő oldalán tilos a kihozatalt vezetni: a "
                 "kapus a másik oldalra indítson.")
+
+    # Álló-poszt: honnan lehet besegítést nyerni.
+    _sar_s = sum(rep.sar_seconds_by_role.values())
+    _sar_m = sum(rep.sar_meters_by_role.values())
+    if _sar_s > 0:
+        _sar_avg = _sar_m / _sar_s
+        for _sar_p, _sar_ps in rep.sar_seconds_by_role.items():
+            if _sar_ps < 20.0:
+                continue
+            _sar_pm = rep.sar_meters_by_role.get(_sar_p, 0.0)
+            _sar_pa = _sar_pm / _sar_ps
+            if _sar_avg > 0 and _sar_pa <= _sar_avg * 0.8:
+                keys.append(
+                    f"A(z) {_sar_p} posztjuk áll labda nélkül "
+                    f"({_sar_pa:.1f} m/s a {_sar_avg:.1f} m/s "
+                    "csapatátlag mellett) — a védője otthagyhatja: "
+                    "befelé segíthet, kettőzhet vagy a beállóra "
+                    "léphet.")
+                break
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8651,6 +8674,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .defense import high_steal_roles as _hsr
         hsrrec = _hsr(match, config)[team.value]
         rep.hsr_high_by_role = dict(hsrrec["roles"])
+        from .tactics import static_attacker_roles as _sar
+        sarrec = _sar(match, config)[team.value]
+        rep.sar_seconds_by_role = {
+            p: r["seconds"] for p, r in sarrec["roles"].items()}
+        rep.sar_meters_by_role = {
+            p: r["meters"] for p, r in sarrec["roles"].items()}
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11231,6 +11260,30 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 334) Az ő álló-posztjuk × a ti kettőzésetek: az álló poszt
+    # védője nálatok ingyen besegítő.
+    _sar334_s = sum(opp.sar_seconds_by_role.values())
+    _sar334_m = sum(opp.sar_meters_by_role.values())
+    _dbl334 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _sar334_s > 0 and _dbl334 >= 20.0:
+        _sar334_avg = _sar334_m / _sar334_s
+        for _sar334_p, _sar334_ps in opp.sar_seconds_by_role.items():
+            if _sar334_ps < 20.0:
+                continue
+            _sar334_pa = (opp.sar_meters_by_role.get(_sar334_p, 0.0)
+                          / _sar334_ps)
+            if _sar334_avg > 0 \
+                    and _sar334_pa <= _sar334_avg * 0.8:
+                plan.append(
+                    f"A(z) {_sar334_p} posztjuk áll labda nélkül "
+                    f"({_sar334_pa:.1f} m/s a {_sar334_avg:.1f} m/s"
+                    f" átlag mellett), ti pedig sokat kettőztök "
+                    f"({_dbl334:.0f}%) — az ő védője az ingyen "
+                    "besegítőtök: onnan jöjjön a kettőzés, az álló "
+                    "ember úgysem bünteti meg.")
+                break
 
     # 333) Az ő letámadó-posztjuk × a ti gyorsan indító kapusotok:
     # az indítás a letámadó oldalát kerülje, és a lerohanás él marad.
@@ -17015,6 +17068,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.tgr_shots_by_role for r in reports),
         hsr_high_by_role=_merge_count_dicts(
             r.hsr_high_by_role for r in reports),
+        sar_seconds_by_role=_merge_count_dicts(
+            r.sar_seconds_by_role for r in reports),
+        sar_meters_by_role=_merge_count_dicts(
+            r.sar_meters_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

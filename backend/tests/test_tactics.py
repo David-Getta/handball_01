@@ -671,3 +671,44 @@ def test_attack_side_shift_stable_or_no_halftime_none():
 
     nob, _t = _sds_half_frames(0, 3.0)
     assert attack_side_shift(Match(meta, nob))["home"]["verdict"] is None
+
+
+# ---- Álló-poszt (melyik posztjuk áll labda nélkül) -------------------------
+
+
+def _sar_match(wing_moves=True, fps=25.0):
+    """Szervezett hazai támadás: a beálló (7) áll, a szélső (9) —
+    ha wing_moves — ingázik a sávjában."""
+    frames = []
+    t = 0
+    y9 = 2.0
+    dy = 0.2
+    for _ in range(600):
+        if wing_moves:
+            y9 += dy
+            if y9 >= 7.0 or y9 <= 2.0:
+                dy = -dy
+        frames.append(Frame(
+            t=t,
+            players=[_pl(7, Team.HOME, 34.0, 10.0),
+                     _pl(9, Team.HOME, 35.0, y9)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_static_attacker_roles_names_the_standing_post():
+    """A beálló áll, a szélső ingázik → a beálló védője otthagyhatja."""
+    from handball.pipeline.tactics import static_attacker_roles
+
+    rec = static_attacker_roles(_sar_match())["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["verdict"] and "otthagyhatja" in rec["verdict"], rec
+
+
+def test_static_attacker_roles_silent_when_all_static():
+    """Ha mindenki egyformán (nem) mozog, nincs kiugró álló poszt."""
+    from handball.pipeline.tactics import static_attacker_roles
+
+    rec = static_attacker_roles(_sar_match(wing_moves=False))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
