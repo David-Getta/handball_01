@@ -504,3 +504,31 @@ def test_szam_szinkron_javitja_az_elavult_doksit():
         assert good in doc.read_text(encoding="utf-8")
     finally:
         doc.write_text(original, encoding="utf-8")
+
+
+def test_nincs_ketszer_definialt_modul_konstans():
+    """ŐR: egy pipeline-modulban ne legyen KÉTSZER definiált
+    NAGYBETŰS modul-konstans.
+
+    A réteg-recept minden új réteghez küszöb-konstansokat kér a modul
+    tetejére. Ha egy új réteg elveszi egy meglévő konstans nevét
+    (pl. PPP_WINDOW_S), a Python csendben FELÜLÍRJA a régit — a régi
+    réteg küszöbe megváltozik, és a hiba csak egy távoli teszten
+    bukik ki. Ez a teszt a modul-szintű értékadásokat számolja meg.
+    """
+    import pathlib
+    import re
+    from collections import Counter
+
+    pipeline_dir = pathlib.Path("handball/pipeline")
+    hibak = []
+    for mod in sorted(pipeline_dir.glob("*.py")):
+        src = mod.read_text(encoding="utf-8")
+        # Csak a modul legfelső szintje (nincs behúzás), NAGYBETŰS név.
+        nevek = re.findall(r"^([A-Z][A-Z0-9_]{2,})\s*(?::[^=\n]+)?=",
+                           src, flags=re.M)
+        dupla = [n for n, c in Counter(nevek).items() if c > 1]
+        if dupla:
+            hibak.append(f"{mod.name}: {sorted(dupla)}")
+    assert not hibak, ("kétszer definiált modul-konstansok: "
+                       + "; ".join(hibak))

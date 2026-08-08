@@ -4755,8 +4755,8 @@ def costly_turnover_roles(match, config=None) -> dict:
 # Védőmotor-poszt: ennyi első félidei védő-akció (szerzés+blokk)
 # kell egy posztról, és legfeljebb ennyi második félidei ahhoz, hogy
 # a posztot leálló védő-motornak mondjuk ki.
-FDD_MIN_FH = 3
-FDD_MAX_SH = 1
+FDR_MIN_FH = 3
+FDR_MAX_SH = 1
 
 
 def fading_defender_roles(match, config=None) -> dict:
@@ -4776,7 +4776,7 @@ def fading_defender_roles(match, config=None) -> dict:
     Visszatérés csapatonként (a VÉDŐ oldal): {"fh_roles": {poszt:
     darab}, "sh_roles": {poszt: darab}, "main_role", "fh", "sh",
     "verdict"} — az ítélet None, ha nincs felismert szünet, vagy
-    egyik poszt sem éri el az FDD_MIN_FH-t az FDD_MAX_SH melletti
+    egyik poszt sem éri el az FDR_MIN_FH-t az FDR_MAX_SH melletti
     leállással.
     """
     from .halftime import detect_halftime
@@ -4816,7 +4816,7 @@ def fading_defender_roles(match, config=None) -> dict:
         for poszt, fh in sorted(rec["fh_roles"].items(),
                                 key=lambda kv: -kv[1]):
             sh = rec["sh_roles"].get(poszt, 0)
-            if fh >= FDD_MIN_FH and sh <= FDD_MAX_SH:
+            if fh >= FDR_MIN_FH and sh <= FDR_MAX_SH:
                 fader = (poszt, fh, sh)
                 break
         if fader is not None:

@@ -2208,3 +2208,102 @@ def seven_pair_roles(match: Match,
                     "kiharcoló ellen kéz nélkül kell védekezni, a "
                     "dobó szokás-irányait a kapus tanulja")
     return out
+
+
+# Emberelőnypáros-poszt: ennyi párhoz kötött emberelőny-lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a 6-5
+# játékuk egy (előkészítő → befejező) tengelyen fut.
+PWP_MIN_SHOTS = 3
+PWP_SHARE_PCT = 60.0
+PWP_WINDOW_S = 4.0
+
+
+def powerplay_pair_roles(match: Match,
+                         config: Optional[TacticsConfig] = None
+                         ) -> dict:
+    """Emberelőnypáros-poszt: MELYIK TENGELYEN fut a 6-5 játékuk.
+
+    Az emberelőny-poszt a befejezőt nevezi meg — ez a tengelyt:
+    minden emberelőnyben leadott lövésnél megkeresi a lövő felé menő
+    utolsó passzt (PWP_WINDOW_S ablakban), és a lövést az
+    (előkészítő poszt → befejező poszt) párhoz írja.
+
+    Edzőileg ez az öt emberrel is kiosztható feladat: emberhátrányban
+    nincs elég kéz mindenre, ezért a tengelyt kell elvágni — az
+    előkészítő posztjának passzsávját zárja a fal széle, a befejező
+    posztjára pedig a kilépés jusson. Saját csapatra: ha a 6-5-ünk
+    egy tengelyen fut, öt emberrel is kiszámítható vagyunk.
+
+    Visszatérés csapatonként: {"shots" (párhoz kötött emberelőny-
+    lövés), "roles": {"előkészítő→befejező": darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    PWP_MIN_SHOTS, vagy egyik pár sem éri el a PWP_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = PWP_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+
+    # Emberelőny-ablakok az ELŐNYBEN lévő csapat szerint.
+    up_windows: list[tuple] = []
+    for w in detect_powerplay(match):
+        up = "away" if w["team_down"] == "home" else "home"
+        up_windows.append((up, w["start_frame"], w["end_frame"]))
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not up_windows:
+        return out
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(up == side and a <= e.t <= b
+                   for (up, a, b) in up_windows):
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        r_feed = roles[side].get(best.passer_id)
+        r_shot = roles[side].get(e.player_id)
+        if r_feed is None or r_shot is None:
+            continue
+        kulcs = f"{r_feed['poszt']}→{r_shot['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["shots"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= PWP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= PWP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a 6-5 játékuk a(z) {par} tengelyen fut "
+                    f"({share:.0f}%, {rec['shots']} emberelőny-"
+                    "lövésből) — öt emberrel a tengelyt vágjátok el:"
+                    " az előkészítő passzsávját a fal széle zárja, a"
+                    " befejezőre jusson a kilépés")
+    return out

@@ -1220,9 +1220,12 @@ def gk_break_response(match: Match, config=None) -> dict:
 
 # Indítás-irány: ennyi kapus-indítástól ítélünk, és e részarány felett
 # nevezzük egyoldalúnak az indítás-irányt (a pálya közepétől mért
-# oldal-sávok: a kapus melyik oldalra nyit).
+# oldal-sávok: a kapus melyik oldalra nyit). A név szándékosan más,
+# mint a gyengeoldal-rétegé (GK_SIDE_SHARE): a kettő korábban egy
+# néven futott, és ez a modul betöltésekor csendben felülírta a
+# gyengeoldal küszöbét.
 GK_SIDE_MIN_PASSES = 6
-GK_SIDE_SHARE = 0.65
+GK_OUTLET_SIDE_SHARE = 0.65
 
 
 def gk_outlet_side(match: Match, config=None) -> dict:
@@ -1269,9 +1272,9 @@ def gk_outlet_side(match: Match, config=None) -> dict:
         if rec["outlets"] >= GK_SIDE_MIN_PASSES:
             share = rec["left"] / rec["outlets"]
             rec["left_pct"] = round(100.0 * share, 1)
-            if share >= GK_SIDE_SHARE:
+            if share >= GK_OUTLET_SIDE_SHARE:
                 rec["side"] = "bal"
-            elif 1.0 - share >= GK_SIDE_SHARE:
+            elif 1.0 - share >= GK_OUTLET_SIDE_SHARE:
                 rec["side"] = "jobb"
     return out
 

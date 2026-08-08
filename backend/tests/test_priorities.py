@@ -139,7 +139,7 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   "swap_style", "seven_pair_roles",
                   "fast_break_pair_roles", "assist_pair_roles",
                   "doubling_pair_roles", "rebound_pair_roles",
-                  "specialist_roles"):
+                  "specialist_roles", "powerplay_pair_roles"):
         assert layer in names, f"{layer} nincs a rangsorban"
 
 

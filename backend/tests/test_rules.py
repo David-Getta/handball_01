@@ -1957,3 +1957,83 @@ def test_seven_pair_roles_silent_with_few_sevens():
 
     rec = seven_pair_roles(_svp_match([(7, 1), (9, 1)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Emberelőnypáros-poszt (melyik tengelyen fut a 6-5 játékuk) -----------
+
+
+def _ppp_match(pairs, fps=25.0):
+    """Mint a _ppr_match, de a lövés ELŐTT az előkészítő is
+    megkapja a labdát: a `pairs` elemei (előkészítő, befejező) — az
+    1-es irányító (28, 10), a 7-es beálló (33, 10), a 9-es szélső
+    (35, 3)."""
+    spos = {1: (28.0, 10.0), 7: (33.0, 10.0), 9: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _cast(away_n, extra=()):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(away_n)]
+        players += [_pl(tid, Team.HOME, *spos[tid]) for tid in extra]
+        return players
+
+    def _rosters(seconds, away_n, extra=(), bx=20.0, by=10.0):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=_cast(away_n, extra),
+                                ball=Ball(x=bx, y=by,
+                                          confidence=1.0)))
+            t += 1
+
+    def _feed_and_shot(feeder, shooter, away_n):
+        nonlocal t, frames
+        fx, fy = spos[feeder]
+        sx, sy = spos[shooter]
+        both = (feeder, shooter)
+        for _ in range(10):          # a labda az előkészítőnél
+            frames.append(Frame(t=t, players=_cast(away_n, both),
+                                ball=Ball(x=fx + 0.2, y=fy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(6):           # átvétel a befejezőnél
+            frames.append(Frame(t=t, players=_cast(away_n, both),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):           # a lövés a kapura
+            frames.append(Frame(t=t, players=_cast(away_n, both),
+                                ball=Ball(x=min(sx + 1.0 + i, 40.0),
+                                          y=sy, confidence=1.0)))
+            t += 1
+        _rosters(2.0, away_n, both)
+
+    _rosters(30.0, 6)
+    for feeder, shooter in pairs:
+        _rosters(15.0, 5, extra=(feeder, shooter))
+        _feed_and_shot(feeder, shooter, 5)
+    _rosters(30.0, 6)
+    return Match(_meta(fps), frames)
+
+
+def test_powerplay_pair_roles_names_the_axis():
+    """Négy emberelőny-lövésből hármat az irányító készít elő a
+    beállónak → öt emberrel ezt a tengelyt kell elvágni."""
+    from handball.pipeline.rules import (PWP_MIN_SHOTS,
+                                         powerplay_pair_roles)
+
+    rec = powerplay_pair_roles(
+        _ppp_match([(1, 7), (1, 7), (1, 7), (1, 9)]))["home"]
+    assert rec["shots"] >= PWP_MIN_SHOTS, rec
+    assert rec["main_role"] == "irányító→beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "tengelyt vágjátok el" in rec["verdict"], rec
+
+
+def test_powerplay_pair_roles_silent_with_few_shots():
+    """Néhány emberelőny-lövésből nincs ítélet."""
+    from handball.pipeline.rules import powerplay_pair_roles
+
+    rec = powerplay_pair_roles(_ppp_match([(1, 7), (1, 9)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

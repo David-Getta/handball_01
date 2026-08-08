@@ -1003,6 +1003,9 @@ class ScoutingReport:
     # védekezésben töltött, posztonként. Összeg, pontosan összegződik.
     spc_seconds_by_role: dict = field(default_factory=dict)
     spc_def_seconds_by_role: dict = field(default_factory=dict)
+    # Emberelőnypáros-poszt: emberelőny-lövések az (előkészítő→
+    # befejező) posztpár szerint. Darabszám, pontosan összegződik.
+    pwp_shots_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3929,6 +3932,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 " szerzés utáni azonnali indítással a "
                 "csere-pillanatukat támadjátok.")
             break
+
+    # Emberelőnypáros-poszt: az öt emberrel elvágandó tengely.
+    _pwp_n = sum(rep.pwp_shots_by_role.values())
+    if _pwp_n >= 3:
+        _pwp_p, _pwp_c = max(rep.pwp_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _pwp_pct = 100.0 * _pwp_c / _pwp_n
+        if _pwp_pct >= 60.0:
+            keys.append(
+                f"A 6-5 játékuk a(z) {_pwp_p} tengelyen fut "
+                f"({_pwp_pct:.0f}%, {_pwp_n} emberelőny-lövés) — öt "
+                "emberrel a tengelyt vágjátok el: az előkészítő "
+                "passzsávját a fal széle zárja, a befejezőre jusson "
+                "a kilépés.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8865,6 +8882,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .priorities import key_pair as _kpr
         kprrec = _kpr(match, config)[team.value]
         rep.kpr_layers_by_role = dict(kprrec["pairs"])
+        from .rules import powerplay_pair_roles as _pwp
+        pwprec = _pwp(match, config)[team.value]
+        rep.pwp_shots_by_role = dict(pwprec["roles"])
         from .roles import specialist_roles as _spc
         spcrec = _spc(match, config)[team.value]
         rep.spc_seconds_by_role = {
@@ -11451,6 +11471,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 344) Az ő emberelőnypáros-posztjuk × a ti kiállítás-mérlegetek:
+    # ha sokat vagytok hátrányban, a 6-5 tengelyük elvágása a
+    # legolcsóbb védekezés.
+    _pwp344_n = sum(opp.pwp_shots_by_role.values())
+    if _pwp344_n >= 3 and own.suspensions >= 2:
+        _pwp344_p, _pwp344_c = max(opp.pwp_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _pwp344_pct = 100.0 * _pwp344_c / _pwp344_n
+        if _pwp344_pct >= 60.0:
+            plan.append(
+                f"A 6-5 játékuk a(z) {_pwp344_p} tengelyen fut "
+                f"({_pwp344_pct:.0f}%, {_pwp344_n} emberelőny-lövés)"
+                f", ti pedig sokat vagytok hátrányban "
+                f"({own.suspensions} kiállítás) — öt emberrel ne "
+                "mindenkire jusson kéz: az előkészítő passzsávját a "
+                "fal széle zárja, a befejezőre menjen a kilépés.")
 
     # 343) Az ő specialista-posztjuk × a ti gyors középkezdésetek: a
     # csere-pillanat pont a váltott soros poszton sebezhető.
@@ -17441,6 +17478,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rbp_shots_by_role for r in reports),
         kpr_layers_by_role=_merge_count_dicts(
             r.kpr_layers_by_role for r in reports),
+        pwp_shots_by_role=_merge_count_dicts(
+            r.pwp_shots_by_role for r in reports),
         spc_seconds_by_role=_merge_count_dicts(
             r.spc_seconds_by_role for r in reports),
         spc_def_seconds_by_role=_merge_count_dicts(

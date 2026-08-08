@@ -3719,6 +3719,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import powerplay_pair_roles
+            res["powerplay_pair_roles"] = powerplay_pair_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5400,6 +5405,9 @@ def create_app():
                 from ..pipeline.roles import specialist_roles
                 _layer("specialist_roles",
                        lambda: specialist_roles(match))
+                from ..pipeline.rules import powerplay_pair_roles
+                _layer("powerplay_pair_roles",
+                       lambda: powerplay_pair_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

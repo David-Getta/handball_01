@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk.
+    try:
+        from .rules import powerplay_pair_roles
+        pwp = powerplay_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_pwp = pwp[side]
+            if rec_pwp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} 6-5 játéka a(z) "
+                     f"{rec_pwp['main_role']} tengelyen fut "
+                     f"({rec_pwp['share_pct']:.0f}%, "
+                     f"{rec_pwp['shots']} emberelőny-lövésből) — öt"
+                     " emberrel ezt a tengelyt kell elvágni.")
+    except Exception:
+        pass
     # Specialista-poszt: melyik posztot játsszák váltott sorban.
     try:
         from .roles import specialist_roles

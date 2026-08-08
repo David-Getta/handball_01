@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 365) Emberelőnypáros-poszt: ha a 6-5-ünk egy tengelyen fut, öt
+    # emberrel is kiszámíthatók vagyunk.
+    try:
+        from .rules import PWP_SHARE_PCT, powerplay_pair_roles
+        pwp365 = powerplay_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec365 = pwp365[side]
+            if rec365.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen futó emberelőny",
+                f"a 6-5 lövéseink {rec365['share_pct']:.0f}%-a a(z) "
+                f"{rec365['main_role']} tengelyen születik "
+                f"({rec365['shots']} emberelőny-lövésből; "
+                f"{PWP_SHARE_PCT:.0f}% fölött már minta) — öt "
+                "emberrel védekező ellenfél is ki tudja osztani rá "
+                "a két emberét",
+                "emberelőny-repertoár: a 6-5 figura tükrözve a másik"
+                " oldalra, beálló-kioldás és szélső-befutás mint "
+                "második befejezési út, és üres kapus (7a6) "
+                "változat begyakorolva",
+                )
+    except Exception:
+        pass
+
     # 364) Specialista-poszt: ha egy posztunkat váltott sorban
     # játsszuk, a csere-pillanatunk sebezhető.
     try:

@@ -5,6 +5,30 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk.** Az
+  emberelőny-poszt a befejezőt nevezi meg — az új réteg a tengelyt:
+  minden emberelőnyben leadott lövésnél megkeresi a lövő felé menő
+  utolsó passzt, és a lövést az (előkészítő poszt → befejező poszt)
+  párhoz írja. Edzőileg az öt emberrel is kiosztható feladat:
+  hátrányban nincs elég kéz mindenre, ezért a tengelyt kell elvágni
+  — az előkészítő passzsávját a fal széle zárja, a befejezőre jusson
+  a kilépés. Legalább 3 emberelőny-lövés és 60% párrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`powerplay_pair_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 344. meccsterv-szabály), edzés-fókusz (365. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
+- **Javítás — kétszer definiált modul-konstansok.** Új őr-teszt
+  (`test_nincs_ketszer_definialt_modul_konstans`) számolja a
+  pipeline-modulok NAGYBETŰS modul-konstansait: ha egy új réteg
+  elveszi egy meglévő konstans nevét, a Python csendben felülírja a
+  régit, és a régi réteg küszöbe megváltozik. Az őr két valódi
+  ütközést talált: a Védőmotor-poszt konstansai elvették az "Eltűnő
+  védő" rétegéit (azonos érték, törékeny név → FDR_ előtag), a
+  kapus-indítás oldal-küszöbe (0,65) pedig FELÜLÍRTA a
+  kapus-gyengeoldal küszöbét (0,45) — az utóbbi réteg eddig csendben
+  szigorúbb határral futott a dokumentáltnál, mostantól külön néven
+  (`GK_OUTLET_SIDE_SHARE`) a helyes értékkel dolgozik.
 - **Specialista-poszt: melyik posztot játsszák váltott sorban.** Az
   egyirányú játékosok rétege az embert nevezi meg — az új réteg a
   posztot: a fázis-besorolt kockákat posztonként összegzi, és

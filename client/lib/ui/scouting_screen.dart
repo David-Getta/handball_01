@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk (3+
+  // emberelőny-lövés, 60% részarány — a backenddel azonos küszöbök:
+  // PWP_MIN_SHOTS, PWP_SHARE_PCT).
+  String? _powerplayPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["pwp_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a 6-5 játékuk a(z) $top tengelyen fut (${pct.round()}%, "
+        "$total emberelőny-lövés) · öt emberrel ezt a tengelyt kell "
+        "elvágni";
+  }
+
   // Specialista-poszt: melyik posztot játsszák váltott sorban (120+
   // mp mért jelenlét posztonként, mindkét fázisban 60+ mp, 80%
   // egyoldalúság — a backenddel azonos küszöbök: SPC_MIN_S,
@@ -9085,6 +9112,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_powerplayPairRole(r) != null)
+        ["Emberelőnypáros-poszt", _powerplayPairRole(r)!],
       if (_specialistRole(r) != null)
         ["Specialista-poszt", _specialistRole(r)!],
       if (_keyPair(r) != null)
