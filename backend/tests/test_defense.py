@@ -3813,3 +3813,50 @@ def test_doubling_pair_roles_silent_with_few_frames():
     rec = doubling_pair_roles(
         _dpp_match([((21, 22), 50), ((21, 23), 30)]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Elöl lógó poszt (melyik posztjuk nem ér haza védekezni) ---------------
+
+
+def _rcr_match(hang_frames=300, fps=25.0):
+    """Hazai poszt-minta (7: beálló, 9: szélső), majd felállt hazai
+    védekezés: a 9-es hazaér (x=8), a 7-es elöl marad (x=30)."""
+    frames = []
+    t = 0
+    for _ in range(150):             # hazai támadó fázis: poszt-minta
+        frames.append(Frame(
+            t=t,
+            players=[_pl(7, Team.HOME, 34.0, 10.0),
+                     _pl(9, Team.HOME, 35.0, 3.0)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(hang_frames):     # felállt hazai védekezés
+        frames.append(Frame(
+            t=t,
+            players=[_pl(21, Team.AWAY, 12.0, 10.0),   # labdás
+                     _pl(9, Team.HOME, 8.0, 6.0),      # hazaért
+                     _pl(7, Team.HOME, 30.0, 10.0)],   # elöl lóg
+            ball=Ball(x=12.1, y=10.0, confidence=1.0)))
+        t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_recovery_roles_names_the_hanging_post():
+    """A beálló a védekezett idő alatt végig elöl marad → az ő
+    oldalára kell vezetni a gyors indítást."""
+    from handball.pipeline.defense import (RCR_MIN_FRAMES,
+                                           recovery_roles)
+
+    rec = recovery_roles(_rcr_match(300))["home"]
+    assert rec["roles"]["beálló"]["frames"] >= RCR_MIN_FRAMES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] is not None and rec["share_pct"] < 70.0
+    assert rec["verdict"] and "üres a pálya" in rec["verdict"], rec
+
+
+def test_recovery_roles_silent_with_few_frames():
+    """Kevés védekezett kockából nincs ítélet."""
+    from handball.pipeline.defense import recovery_roles
+
+    rec = recovery_roles(_rcr_match(100))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

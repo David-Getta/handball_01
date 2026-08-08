@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 367) Elöl lógó poszt: ha egy posztunk nem ér haza, mögötte üres
+    # a pálya — az ellenfél oda fogja vezetni a gyors indítást.
+    try:
+        from .defense import recovery_roles
+        rcr367 = recovery_roles(match, config)
+        for side in ("home", "away"):
+            rec367 = rcr367[side]
+            if rec367.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Elöl lógó poszt",
+                f"a(z) {rec367['main_role']} posztunk a védekezett "
+                f"idő csak {rec367['share_pct']:.0f}%-ában van a "
+                "saját térfelünkön — mögötte üres a pálya, és az "
+                "ellenfél oda vezeti a gyors indítást",
+                "visszaérés-fegyelem: kijelölt első visszafutó "
+                "minden lövésnél (nem mindig ugyanaz), "
+                "visszafutás-verseny kisjátékban, és a poszt "
+                "terhelésének felülvizsgálata (csere, kondíció)",
+                )
+    except Exception:
+        pass
+
     # 366) Válasz-poszt: ha a kapott gól utáni válaszunk egy posztra
     # épül, az ellenfél a saját gólja után azonnal ráállhat.
     try:

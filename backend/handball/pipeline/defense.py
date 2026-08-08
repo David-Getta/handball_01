@@ -5104,3 +5104,91 @@ def doubling_pair_roles(match, config=None) -> dict:
                     "kettőző elhagyott embere fix: a kioldó passz "
                     "oda menjen, még a szorítás előtt begyakorolva")
     return out
+
+
+# Elöl lógó poszt: ennyi védekezett kocka kell posztonként az
+# ítélethez, és ez alatti hazaérési arány jelenti, hogy a poszt a
+# védekezett idő nagy részét az ellenfél térfelén tölti.
+RCR_MIN_FRAMES = 200
+RCR_LOW_PCT = 70.0
+
+
+def recovery_roles(match, config=None) -> dict:
+    """Elöl lógó poszt: MELYIK POSZTJUK nem ér haza védekezni.
+
+    A visszaérés-fegyelem rétege (recovery_discipline) az embert
+    nevezi meg — ez a posztot: a védekezett kockákat posztonként
+    összegzi, és megnézi, melyik poszt tölti az idejének nagy részét
+    az ellenfél térfelén. A visszafutás-poszttól abban tér el, hogy
+    az a kontrák VÉGÉN mért lemaradást nézi, ez pedig a védekezett
+    IDŐ eloszlását: a tartósan elöl maradó posztot mutatja meg.
+
+    Edzőileg ez a gyors indítás iránya: az elöl lógó poszt mögött
+    nincs védő — a kapus indítása és a felhozatal az ő oldalára
+    menjen, mert ott a pálya üres. Saját csapatra: a visszaérés
+    fegyelem-kérdés, és a poszt terhelése (kondíció, csere) is
+    felülvizsgálandó.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"frames"
+    (védekezett kocka), "roles": {poszt: {"frames", "home_frames",
+    "share_pct"}}, "main_role", "share_pct", "verdict"} — az ítélet
+    None, ha egyik poszt sem éri el az RCR_MIN_FRAMES-t az
+    RCR_LOW_PCT alatti hazaérési aránnyal.
+    """
+    from ..models.tracking import Team
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+    from .tactics import COURT_LENGTH_M, TacticsConfig
+
+    config = config or TacticsConfig()
+    half = COURT_LENGTH_M / 2.0
+    roles = estimate_positions(match, config)
+
+    acc: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        deff = Team.AWAY if holder.team == Team.HOME else Team.HOME
+        own_x = config.own_goal_x(deff)
+        if abs(holder.x - own_x) > half:
+            continue   # csak felállt/rendezett védekezés
+        for p in f.players:
+            if p.team != deff or p.role == "kapus":
+                continue
+            rec_role = roles[deff.value].get(p.track_id)
+            if rec_role is None:
+                continue
+            rec = acc[deff.value].setdefault(rec_role["poszt"], [0, 0])
+            rec[0] += 1
+            if abs(p.x - own_x) <= half:
+                rec[1] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        by_role = {
+            poszt: {"frames": n, "home_frames": h,
+                    "share_pct": round(100.0 * h / n, 1) if n else None}
+            for poszt, (n, h) in sorted(acc[side].items(),
+                                        key=lambda kv: -kv[1][0])}
+        main_role = None
+        share_pct = None
+        verdict = None
+        cands = [(poszt, r) for poszt, r in by_role.items()
+                 if r["frames"] >= RCR_MIN_FRAMES
+                 and r["share_pct"] < RCR_LOW_PCT]
+        if cands:
+            poszt, r = min(cands, key=lambda pr: pr[1]["share_pct"])
+            main_role = poszt
+            share_pct = r["share_pct"]
+            verdict = (
+                f"a(z) {poszt} posztjuk lóg elöl: a védekezett "
+                f"idejének csak {share_pct:.0f}%-ában van a saját "
+                f"térfelén ({r['frames']} védekezett kockából) — a "
+                "gyors indítást az ő oldalára vezessétek: mögötte "
+                "üres a pálya")
+        out[side] = {
+            "frames": sum(r["frames"] for r in by_role.values()),
+            "roles": by_role, "main_role": main_role,
+            "share_pct": share_pct, "verdict": verdict}
+    return out

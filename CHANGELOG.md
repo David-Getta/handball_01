@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Elöl lógó poszt: melyik posztjuk nem ér haza védekezni.** A
+  visszaérés-fegyelem rétege az embert nevezi meg — az új réteg a
+  posztot: a védekezett kockákat posztonként összegzi, és megnézi,
+  melyik poszt tölti az idejének nagy részét az ellenfél térfelén. A
+  visszafutás-poszttól abban tér el, hogy az a kontrák VÉGÉN mért
+  lemaradást nézi, ez pedig a védekezett IDŐ eloszlását. Edzőileg a
+  gyors indítás iránya: az elöl lógó poszt mögött nincs védő — a
+  kihozatalt az ő oldalára kell vezetni. Posztonként 200 védekezett
+  kocka és 70% fölötti hazaérés mellett hallgat (None). Felületek:
+  /analyze + meccs-csomag (`recovery_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 346. meccsterv-szabály), edzés-fókusz
+  (367. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Válasz-poszt: kapott gól után melyik posztjuk válaszol.** A
   kapott gól utáni megingás csapat-szinten mondja meg, mi történik a
   bekapott gól után — az új réteg a posztot: a kapott gólt 60

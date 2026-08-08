@@ -3730,6 +3730,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import recovery_roles
+            res["recovery_roles"] = recovery_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5417,6 +5422,9 @@ def create_app():
                 from ..pipeline.momentum import response_scorer_roles
                 _layer("response_scorer_roles",
                        lambda: response_scorer_roles(match))
+                from ..pipeline.defense import recovery_roles
+                _layer("recovery_roles",
+                       lambda: recovery_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

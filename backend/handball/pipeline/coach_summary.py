@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Elöl lógó poszt: melyik posztjuk nem ér haza védekezni.
+    try:
+        from .defense import recovery_roles
+        rcr = recovery_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rcr = rcr[side]
+            if rec_rcr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} {rec_rcr['main_role']} posztja "
+                     f"elöl lóg (a védekezett idő "
+                     f"{rec_rcr['share_pct']:.0f}%-ában van otthon)"
+                     " — a gyors indítást az ő oldalára érdemes "
+                     "vezetni.")
+    except Exception:
+        pass
     # Válasz-poszt: kapott gól után melyik posztjuk válaszol.
     try:
         from .momentum import response_scorer_roles

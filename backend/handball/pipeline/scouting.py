@@ -1009,6 +1009,10 @@ class ScoutingReport:
     # Válasz-poszt: a kapott gólt 60 mp-en belül követő saját gólok
     # darabszáma posztonként. Darabszám, pontosan összegződik.
     rsp_goals_by_role: dict = field(default_factory=dict)
+    # Elöl lógó poszt: védekezett kockák és ebből a saját térfélen
+    # töltöttek posztonként. Kocka-darabszám, pontosan összegződik.
+    rcr_frames_by_role: dict = field(default_factory=dict)
+    rcr_home_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3962,6 +3966,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_rsp_pct:.0f}%, {_rsp_n} válasz-gól) — a saját "
                 "gólotok után azonnal az ő fogására váltsatok: ott "
                 "törik meg a lendületük, mielőtt elindulna.")
+
+    # Elöl lógó poszt: merre vezessétek a gyors indítást.
+    for _rcr_p, _rcr_n in sorted(rep.rcr_frames_by_role.items(),
+                                 key=lambda kv: -kv[1]):
+        if _rcr_n < 200:
+            continue
+        _rcr_h = rep.rcr_home_by_role.get(_rcr_p, 0)
+        _rcr_pct = 100.0 * _rcr_h / _rcr_n
+        if _rcr_pct < 70.0:
+            keys.append(
+                f"A(z) {_rcr_p} posztjuk elöl lóg: a védekezett "
+                f"idejének csak {_rcr_pct:.0f}%-ában van a saját "
+                "térfelén — a gyors indítást az ő oldalára "
+                "vezessétek, mögötte üres a pálya.")
+            break
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8904,6 +8923,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .momentum import response_scorer_roles as _rsp
         rsprec = _rsp(match, config)[team.value]
         rep.rsp_goals_by_role = dict(rsprec["roles"])
+        from .defense import recovery_roles as _rcr
+        rcrrec = _rcr(match, config)[team.value]
+        rep.rcr_frames_by_role = {
+            p: r["frames"] for p, r in rcrrec["roles"].items()}
+        rep.rcr_home_by_role = {
+            p: r["home_frames"] for p, r in rcrrec["roles"].items()}
         from .roles import specialist_roles as _spc
         spcrec = _spc(match, config)[team.value]
         rep.spc_seconds_by_role = {
@@ -11490,6 +11515,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 346) Az ő elöl lógó posztjuk × a ti gyorsan indító kapusotok: a
+    # mögötte lévő üres sávba érdemes vezetni a kihozatalt.
+    if own.gk_outlets >= 5 and own.gk_outlet_fast >= 3:
+        for _rcr346_p, _rcr346_n in sorted(
+                opp.rcr_frames_by_role.items(), key=lambda kv: -kv[1]):
+            if _rcr346_n < 200:
+                continue
+            _rcr346_h = opp.rcr_home_by_role.get(_rcr346_p, 0)
+            _rcr346_pct = 100.0 * _rcr346_h / _rcr346_n
+            if _rcr346_pct < 70.0:
+                plan.append(
+                    f"A(z) {_rcr346_p} posztjuk elöl lóg (a "
+                    f"védekezett idő {_rcr346_pct:.0f}%-ában van "
+                    "otthon), a kapusotok pedig gyorsan indít "
+                    f"({own.gk_outlet_fast} gyors indítás) — a "
+                    "kihozatalt tudatosan az ő oldalára vezessétek: "
+                    "mögötte nincs védő, ott indul a kontrátok.")
+                break
 
     # 345) Az ő válasz-posztjuk × a ti gólerős támadásotok: ha sokat
     # gólt lőttök, sokszor jön a válaszuk — annyiszor fogható.
@@ -17518,6 +17562,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.pwp_shots_by_role for r in reports),
         rsp_goals_by_role=_merge_count_dicts(
             r.rsp_goals_by_role for r in reports),
+        rcr_frames_by_role=_merge_count_dicts(
+            r.rcr_frames_by_role for r in reports),
+        rcr_home_by_role=_merge_count_dicts(
+            r.rcr_home_by_role for r in reports),
         spc_seconds_by_role=_merge_count_dicts(
             r.spc_seconds_by_role for r in reports),
         spc_def_seconds_by_role=_merge_count_dicts(
