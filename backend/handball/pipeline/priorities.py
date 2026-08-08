@@ -86,6 +86,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("fáradás", "Fal-fáradás", "xg", "wall_fade"),
         ("fáradás", "Kapus-forma", "goalkeeper", "gk_save_fade"),
         ("fáradás", "Fegyelem-esés", "rules", "discipline_fade"),
+        ("fáradás", "Sprint-esés", "stats", "sprint_fade"),
         # --- állás: eredményjelző-függő minta ------------------------
         ("állás", "Hiba-állás", "attack_types", "turnovers_by_score"),
         ("állás", "Kontra-állás", "attack_types", "breaks_by_score"),

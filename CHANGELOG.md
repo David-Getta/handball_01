@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Sprint-esés: megfogy-e a láb a második félidőre.** A
+  sprint-állás az eredményjelzőn nézi a futást, a játékos-fáradás
+  emberenként — az új réteg csapatszinten, félidőnként: a
+  sprint/perc ütemet veti össze az első és a második félidőben.
+  Edzőileg ez a második félidő tempó-döntése: ha a lábuk megfogy, a
+  szünet után tempót kell emelni (minden labdaszerzésből futni, mert
+  a visszarendeződésük már nem megy); ha nő, ők kapcsolnak a hajrára
+  — akkor a saját ritmust kell tartani. Félidő-jel nélkül, öt
+  játékperc vagy nyolc sprint alatt hallgat (None). A rangsorban a
+  "fáradás" családba tartozik. Felületek: /analyze + meccs-csomag
+  (`sprint_fade`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 366. meccsterv-szabály), edzés-fókusz (387.
+  szabály, külön mondattal az esésre és a kapcsolásra),
+  kliens-csempe.
 - **Óralopás: vezetve elhúzzák-e a támadást a hajrában.** A
   kapkodás-index a kapott gól utáni tempót méri, a hajrá-rétegek
   azt, ki viszi a végjátékot — az új réteg az órát: a felvétel

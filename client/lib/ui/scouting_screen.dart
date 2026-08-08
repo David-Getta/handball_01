@@ -2168,6 +2168,36 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Sprint-esés: megfogy-e a láb a második félidőre (félidőnként 5+
+  // játékperc, 8+ sprint, 0,7 arány alatt esés / 1,43 fölött
+  // kapcsolás — a backenddel azonos küszöbök: SFD_MIN_HALF_MIN,
+  // SFD_MIN_SPRINTS, SFD_DROP_RATIO).
+  String? _sprintFade(Map<String, dynamic> r) {
+    final fhS = (r["sfd_fh_sprints"] as num?)?.toInt() ?? 0;
+    final shS = (r["sfd_sh_sprints"] as num?)?.toInt() ?? 0;
+    final fhM = (r["sfd_fh_min"] as num?)?.toDouble() ?? 0.0;
+    final shM = (r["sfd_sh_min"] as num?)?.toDouble() ?? 0.0;
+    if (fhM < 5.0 || shM < 5.0 || fhS + shS < 8 || fhS == 0) {
+      return null;
+    }
+    final f = fhS / fhM;
+    final s = shS / shM;
+    if (f <= 0) return null;
+    final ratio = s / f;
+    if (ratio <= 0.7) {
+      return "a második félidőre megfogy a lábuk "
+          "(${s.toStringAsFixed(1)} sprint/perc az "
+          "${f.toStringAsFixed(1)} helyett) · a szünet után "
+          "emeljetek tempót";
+    }
+    if (ratio >= 1.43) {
+      return "a második félidőre kapcsolnak (${s.toStringAsFixed(1)} "
+          "sprint/perc az ${f.toStringAsFixed(1)} helyett) · "
+          "tartsátok a saját ritmusotokat";
+    }
+    return null;
+  }
+
   // Óralopás: vezetve elhúzzák-e a támadást a hajrában (3+
   // hajrá-támadás vezetésben, 4+ alap-támadás, 3 mp eltérés — a
   // backenddel azonos küszöbök: CLK_MIN_ATTACKS, CLK_MIN_BASE,
@@ -9661,6 +9691,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kipattanó ára", _reboundPunishment(r)!],
       if (_clockManagement(r) != null)
         ["Óralopás", _clockManagement(r)!],
+      if (_sprintFade(r) != null)
+        ["Sprint-esés", _sprintFade(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

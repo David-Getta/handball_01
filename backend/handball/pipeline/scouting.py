@@ -1032,6 +1032,13 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Sprint-esés: félidőnkénti sprint-darabszám és játékperc.
+    # Darabszám/összeg, hogy meccsek közt pontosan összegződjön
+    # (ütem = sprint / perc).
+    sfd_fh_sprints: int = 0
+    sfd_fh_min: float = 0.0
+    sfd_sh_sprints: int = 0
+    sfd_sh_min: float = 0.0
     # Óralopás: a hajrában vezetéssel, illetve máskor indított
     # támadások darabszáma + hosszuk ÖSSZEGE (mp). Darabszám/összeg,
     # hogy meccsek közt pontosan összegződjön (átlag = sum / db).
@@ -4135,6 +4142,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Sprint-esés: a második félidő tempó-döntése.
+    if (rep.sfd_fh_min >= 5.0 and rep.sfd_sh_min >= 5.0
+            and rep.sfd_fh_sprints + rep.sfd_sh_sprints >= 8
+            and rep.sfd_fh_sprints > 0):
+        _sfd_f = rep.sfd_fh_sprints / rep.sfd_fh_min
+        _sfd_s = rep.sfd_sh_sprints / rep.sfd_sh_min
+        _sfd_r = _sfd_s / _sfd_f if _sfd_f else None
+        if _sfd_r is not None and _sfd_r <= 0.7:
+            keys.append(
+                f"A második félidőre megfogy a lábuk ({_sfd_s:.1f} "
+                f"sprint/perc az {_sfd_f:.1f} helyett) — a szünet "
+                "után emeljetek tempót: minden labdaszerzésből "
+                "fussatok, a visszarendeződésük már nem megy.")
+        elif _sfd_r is not None and _sfd_r >= 1.43:
+            keys.append(
+                f"A második félidőre kapcsolnak ({_sfd_s:.1f} "
+                f"sprint/perc az {_sfd_f:.1f} helyett) — a hajrára "
+                "gyorsítanak: tartsátok a saját ritmusotokat, és a "
+                "labdát ne veszítsétek el a saját térfeleteken.")
 
     # Óralopás: a végjáték óra-kezelése.
     if rep.clk_lead >= 3 and rep.clk_base >= 4:
@@ -9313,6 +9340,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .stats import sprint_fade as _sfd
+        sfdrec = _sfd(match, config)[team.value]
+        rep.sfd_fh_sprints = int(sfdrec["fh_sprints"])
+        rep.sfd_fh_min = float(sfdrec["fh_min"])
+        rep.sfd_sh_sprints = int(sfdrec["sh_sprints"])
+        rep.sfd_sh_min = float(sfdrec["sh_min"])
         from .momentum import clock_management as _clk
         clkrec = _clk(match, config)[team.value]
         rep.clk_lead = int(clkrec["lead"])
@@ -11953,6 +11986,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 366) Az ő sprint-esésük × a ti kontra-erősségetek: a második
+    # félidő a futás félideje.
+    if (opp.sfd_fh_min >= 5.0 and opp.sfd_sh_min >= 5.0
+            and opp.sfd_fh_sprints > 0 and own.fast_break_pct >= 10.0):
+        _sfd366_f = opp.sfd_fh_sprints / opp.sfd_fh_min
+        _sfd366_s = opp.sfd_sh_sprints / opp.sfd_sh_min
+        if _sfd366_f and _sfd366_s / _sfd366_f <= 0.7:
+            plan.append(
+                f"A második félidőre megfogy a lábuk ({_sfd366_s:.1f} "
+                f"sprint/perc az {_sfd366_f:.1f} helyett), ti pedig "
+                f"kontráztok (a támadásaitok {own.fast_break_pct:.0f}"
+                "%-a lerohanás) — a szünet után minden "
+                "labdaszerzésből induljatok: a második félidő a "
+                "futás félideje, ott dől el a meccs.")
 
     # 365) Az ő óralopásuk × a ti labdaszerzésetek: az elhúzott
     # támadás a passzív jel és a kettőzés terepe.
@@ -18343,6 +18391,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        sfd_fh_sprints=sum(r.sfd_fh_sprints for r in reports),
+        sfd_fh_min=round(sum(r.sfd_fh_min for r in reports), 1),
+        sfd_sh_sprints=sum(r.sfd_sh_sprints for r in reports),
+        sfd_sh_min=round(sum(r.sfd_sh_min for r in reports), 1),
         clk_lead=sum(r.clk_lead for r in reports),
         clk_lead_sum_s=round(sum(r.clk_lead_sum_s for r in reports), 1),
         clk_base=sum(r.clk_base for r in reports),

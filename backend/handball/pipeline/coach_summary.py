@@ -1145,6 +1145,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_clk['base_s']:.1f} mp helyett).")
     except Exception:
         pass
+    # Sprint-esés: megfogy-e a láb a második félidőre.
+    try:
+        from .stats import sprint_fade
+        sfd = sprint_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sfd = sfd[side]
+            if rec_sfd["verdict"] is None:
+                continue
+            _ir = ("megfogy" if rec_sfd["ratio"] < 1.0
+                   else "megnő")
+            body += (f" A(z) {name} sprint-üteme a második félidőre "
+                     f"{_ir} ({rec_sfd['sh_per_min']:.1f} "
+                     f"sprint/perc az {rec_sfd['fh_per_min']:.1f} "
+                     "helyett).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

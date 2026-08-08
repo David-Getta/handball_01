@@ -46,3 +46,101 @@ def test_iron_man_roles_silent_when_everyone_plays_through():
 
     rec = iron_man_roles(_irm_match(deep_bench=False))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Sprint-esés (megfogy-e a láb a második félidőre) ----------------------
+
+
+def _sfd_pl(tid, team, x, y):
+    from handball.models.tracking import PlayerPosition, PositionSource
+    return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                          source=PositionSource.MEASURED,
+                          confidence=1.0)
+
+
+def _sfd_match(fh_sprints, sh_sprints, fps=25.0):
+    """Két félidő 6-6 perccel és 90 mp szünettel; félidőnként a
+    megadott számú hazai sprint-futam (a többi kocka lassú séta)."""
+    from handball.models.tracking import Frame, Match, MatchMeta, Team
+
+    _pl = _sfd_pl
+    frames = []
+    t = 0
+
+    def _walk(seconds, x0=10.0):
+        nonlocal t
+        for i in range(int(seconds * fps)):
+            players = [_pl(10 + k, Team.HOME, x0 + 0.5 * k, 5.0 + k)
+                       for k in range(6)]
+            players += [_pl(20 + k, Team.AWAY, 30.0 + 0.5 * k,
+                            5.0 + k) for k in range(6)]
+            frames.append(Frame(t=t, players=players, ball=None))
+            t += 1
+
+    def _sprint():
+        """Egy 1 mp-es sprint-futam a hazai 10-esnek (8 m/s)."""
+        nonlocal t
+        x = 5.0
+        for _ in range(int(1.0 * fps)):
+            players = [_pl(10, Team.HOME, x, 5.0)]
+            players += [_pl(11 + k, Team.HOME, 12.0 + k, 8.0 + k)
+                        for k in range(5)]
+            players += [_pl(20 + k, Team.AWAY, 30.0 + 0.5 * k,
+                            5.0 + k) for k in range(6)]
+            frames.append(Frame(t=t, players=players, ball=None))
+            x += 8.0 / fps
+            t += 1
+
+    def _break(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    _walk(150.0)
+    for _ in range(fh_sprints):
+        _sprint()
+        _walk(5.0)
+    _walk(180.0)
+    _break(90.0)
+    _walk(150.0)
+    for _ in range(sh_sprints):
+        _sprint()
+        _walk(5.0)
+    _walk(180.0)
+    return Match(MatchMeta(match_id="sfd", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_sprint_fade_flags_the_tiring_team():
+    """Ha a második félidőre a sprint-ütem harmadára esik, a szünet
+    után tempót kell emelni ellenük."""
+    from handball.pipeline.stats import sprint_fade
+
+    rec = sprint_fade(_sfd_match(9, 2))["home"]
+    assert rec["fh_sprints"] >= 8 or rec["sh_sprints"] >= 1, rec
+    assert rec["ratio"] is not None and rec["ratio"] <= 0.7, rec
+    assert rec["verdict"] and "megfogy a lábuk" in rec["verdict"], rec
+
+
+def test_sprint_fade_flags_the_second_half_surge():
+    """A fordított eset: a második félidőre kapcsolnak."""
+    from handball.pipeline.stats import sprint_fade
+
+    rec = sprint_fade(_sfd_match(2, 9))["home"]
+    assert rec["ratio"] and rec["ratio"] >= 1.4, rec
+    assert rec["verdict"] and "KAPCSOLNAK" in rec["verdict"], rec
+
+
+def test_sprint_fade_silent_without_halftime():
+    """Félidő-jel (szünet) nélkül nincs ítélet."""
+    from handball.pipeline.stats import sprint_fade
+
+    from handball.models.tracking import Frame, Match, MatchMeta, Team
+
+    frames = [Frame(t=i, players=[_sfd_pl(10, Team.HOME, 10.0, 5.0)],
+                    ball=None) for i in range(500)]
+    rec = sprint_fade(Match(MatchMeta(match_id="sfd0", home_team="H",
+                                      away_team="A", fps=25.0),
+                            frames))["home"]
+    assert rec["ratio"] is None and rec["verdict"] is None, rec

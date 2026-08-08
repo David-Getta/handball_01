@@ -1355,6 +1355,42 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 387) Sprint-esés: ha a második félidőre megfogy a láb, a
+    # kontra-játékunk a szünettel eltűnik.
+    try:
+        from .stats import SFD_DROP_RATIO, sprint_fade
+        sfd387 = sprint_fade(match, config)
+        for side in ("home", "away"):
+            rec387 = sfd387[side]
+            if rec387.get("verdict") is None:
+                continue
+            if rec387["ratio"] <= SFD_DROP_RATIO:
+                add(side, "erőnlét", "Második félidei futás",
+                    f"a sprint-ütemünk a második félidőre "
+                    f"{rec387['sh_per_min']:.1f} sprint/percre esik "
+                    f"az {rec387['fh_per_min']:.1f} helyett "
+                    f"({SFD_DROP_RATIO:.1f} arány alatt már minta) — "
+                    "a kontra-játékunk a szünettel eltűnik, és a "
+                    "visszarendeződés is lassul",
+                    "ismétléses sprint-blokk a hét közepén "
+                    "(10×30 m rövid pihenővel), és a második "
+                    "félidőre tervezett csere-ritmus: a "
+                    "sprint-terhelésű posztokat a 40. perc előtt "
+                    "pihentetni kell",
+                    )
+            else:
+                add(side, "erőnlét", "Kapcsolás a szünet után",
+                    f"a sprint-ütemünk a második félidőre "
+                    f"{rec387['sh_per_min']:.1f} sprint/percre nő az "
+                    f"{rec387['fh_per_min']:.1f} helyett — jó jel, "
+                    "de az első félidő így kihasználatlan marad",
+                    "korai tempó: bemelegítésben sprint-indítás, és "
+                    "az első tíz percre tudatos kontra-terv (a "
+                    "meccset ne a szünet után kelljen behozni)",
+                    )
+    except Exception:
+        pass
+
     # 386) Óralopás: a végjáték óra-kezelése vezetésben.
     try:
         from .momentum import CLK_DIFF_S, clock_management

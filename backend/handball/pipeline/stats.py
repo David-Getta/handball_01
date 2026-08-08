@@ -1159,3 +1159,122 @@ def fatigue_roles(match: Match, config=None) -> dict:
                 "szünet után az ő sávjában kell támadni, és ott "
                 "éri meg a friss embert bevetni")
     return out
+
+
+# Sprint-esés küszöbei: félidőnként ennyi játékperc és ennyi sprint
+# kell az ítélethez, és ekkora arányú változás az érdemi.
+SFD_MIN_HALF_MIN = 5.0
+SFD_MIN_SPRINTS = 8
+SFD_DROP_RATIO = 0.7
+
+
+def sprint_fade(match: Match, config=None) -> dict:
+    """Sprint-esés: MEGFOGY-E A LÁB a második félidőre.
+
+    A sprint-állás (sprints_by_score) az eredményjelzőn nézi a
+    futást, a játékos-fáradás (player_fatigue) emberenként — ez
+    csapatszinten, félidőnként: a sprint/perc ütemet veti össze az
+    első és a második félidőben.
+
+    Edzőileg ez a második félidő tempó-döntése. Ha a lábuk megfogy
+    (az ütem a SFD_DROP_RATIO-ra vagy alá esik), a második félidőben
+    tempót KELL emelni: minden labdaszerzésből futni, mert a
+    visszarendeződésük már nem megy. Ha nő az ütem, ők kapcsolnak a
+    hajrára — akkor a saját ritmust kell tartani, és a labdát nem
+    szabad elveszíteni a saját térfélen.
+
+    Visszatérés csapatonként: {"fh_sprints", "fh_min",
+    "fh_per_min", "sh_sprints", "sh_min", "sh_per_min", "ratio",
+    "verdict"} — az ítélet None félidő-jel nélkül, kevés játékperc
+    (félidőnként SFD_MIN_HALF_MIN) vagy kevés sprint
+    (SFD_MIN_SPRINTS) esetén.
+    """
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    empty = {"fh_sprints": 0, "fh_min": 0.0, "fh_per_min": None,
+             "sh_sprints": 0, "sh_min": 0.0, "sh_per_min": None,
+             "ratio": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None or not match.frames:
+        return out
+
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out["home"]["fh_min"] = out["away"]["fh_min"] = round(
+        ht / fps / 60.0, 1)
+    sh_min = round((match.frames[-1].t - ht) / fps / 60.0, 1)
+    out["home"]["sh_min"] = out["away"]["sh_min"] = sh_min
+
+    # Sprint-futamok félidőnként, a futam KEZDETE szerint.
+    prev_pos: dict = {}
+    runs: dict = {}
+
+    def close_run(tid):
+        run = runs.pop(tid, None)
+        if run is None or run["s"] < SPRINT_MIN_S:
+            return
+        key = "fh" if run["t0"] < ht else "sh"
+        out[run["team"]][f"{key}_sprints"] += 1
+
+    for f in match.frames:
+        seen = set()
+        for pl in f.players:
+            if pl.source != PositionSource.MEASURED:
+                continue
+            seen.add(pl.track_id)
+            prev = prev_pos.get(pl.track_id)
+            prev_pos[pl.track_id] = (f.t, pl.x, pl.y,
+                                     getattr(pl.team, "value", pl.team))
+            if prev is None or f.t - prev[0] != 1:
+                close_run(pl.track_id)
+                continue
+            speed = math.hypot(pl.x - prev[1], pl.y - prev[2]) * fps
+            if SPRINT_SPEED_MS <= speed <= MAX_PLAUSIBLE_MS:
+                run = runs.get(pl.track_id)
+                if run is None:
+                    runs[pl.track_id] = {
+                        "t0": prev[0], "s": 1.0 / fps,
+                        "team": getattr(pl.team, "value", pl.team)}
+                else:
+                    run["s"] += 1.0 / fps
+            else:
+                close_run(pl.track_id)
+        for tid in list(runs):
+            if tid not in seen:
+                close_run(tid)
+    for tid in list(runs):
+        close_run(tid)
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["fh_min"] > 0:
+            rec["fh_per_min"] = round(
+                rec["fh_sprints"] / rec["fh_min"], 2)
+        if rec["sh_min"] > 0:
+            rec["sh_per_min"] = round(
+                rec["sh_sprints"] / rec["sh_min"], 2)
+        if (rec["fh_min"] < SFD_MIN_HALF_MIN
+                or rec["sh_min"] < SFD_MIN_HALF_MIN
+                or rec["fh_sprints"] + rec["sh_sprints"]
+                < SFD_MIN_SPRINTS
+                or not rec["fh_per_min"]):
+            continue
+        ratio = rec["sh_per_min"] / rec["fh_per_min"]
+        rec["ratio"] = round(ratio, 2)
+        if ratio <= SFD_DROP_RATIO:
+            rec["verdict"] = (
+                f"a második félidőre megfogy a lábuk "
+                f"({rec['sh_per_min']:.1f} sprint/perc az "
+                f"{rec['fh_per_min']:.1f} helyett) — a szünet után "
+                "tempót kell emelni: minden labdaszerzésből futni, "
+                "mert a visszarendeződésük már nem megy")
+        elif ratio >= 1.0 / SFD_DROP_RATIO:
+            rec["verdict"] = (
+                f"a második félidőre KAPCSOLNAK "
+                f"({rec['sh_per_min']:.1f} sprint/perc az "
+                f"{rec['fh_per_min']:.1f} helyett) — a hajrára "
+                "gyorsítanak: a saját ritmust kell tartani, és a "
+                "labdát nem szabad elveszíteni a saját térfélen")
+    return out
