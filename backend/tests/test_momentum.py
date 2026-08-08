@@ -2342,3 +2342,80 @@ def test_response_turnover_roles_silent_with_few_turnovers():
 
     rec = response_turnover_roles(_rto_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Óralopás (vezetve elhúzzák-e a támadást a hajrában) -------------------
+
+
+def _clk_match(base_s, lead_s, fps=25.0):
+    """Két hazai gól (vezetés), `base_s` hosszú alap-támadások, majd
+    a felvétel utolsó öt percében `lead_s` hosszú hazai támadások."""
+    frames = []
+    t = 0
+
+    def _attack(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 28.0, 10.0)],
+                                ball=Ball(x=28.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _gap(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=18.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _home_goal():
+        nonlocal t
+        for i in range(10):
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 33.0, 10.0)],
+                                ball=Ball(x=min(34.0 + i, 40.4), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _gap(3.0)
+
+    for _ in range(2):        # két gól: a hazai vezet
+        _home_goal()
+    for _ in range(4):        # alap-támadások
+        _attack(base_s)
+        _gap(3.0)
+    _gap(120.0)               # a hajrá-ablak előtti szakasz
+    for _ in range(3):        # a hajrá: vezetéses támadások
+        _attack(lead_s)
+        _gap(3.0)
+    _gap(300.0 - 3 * (lead_s + 3.0))
+    return Match(_meta(fps), frames)
+
+
+def test_clock_management_flags_the_clock_killer():
+    """Ha vezetve elhúzzák a támadást a hajrában, passzív jelre kell
+    játszani."""
+    from handball.pipeline.momentum import (CLK_MIN_ATTACKS,
+                                            clock_management)
+
+    rec = clock_management(_clk_match(6.0, 18.0))["home"]
+    assert rec["lead"] >= CLK_MIN_ATTACKS, rec
+    assert rec["base"] >= 4, rec
+    assert rec["diff_s"] and rec["diff_s"] > 0, rec
+    assert rec["verdict"] and "lopják az órát" in rec["verdict"], rec
+
+
+def test_clock_management_flags_the_hurrying_leader():
+    """A fordított eset: vezetve rövidebb támadás = sietnek."""
+    from handball.pipeline.momentum import clock_management
+
+    rec = clock_management(_clk_match(16.0, 6.0))["home"]
+    assert rec["diff_s"] and rec["diff_s"] < 0, rec
+    assert rec["verdict"] and "sietnek" in rec["verdict"], rec
+
+
+def test_clock_management_silent_without_real_change():
+    """Egy másodperces eltérés nem minta — az ítélet None."""
+    from handball.pipeline.momentum import clock_management
+
+    rec = clock_management(_clk_match(10.0, 9.0))["home"]
+    assert rec["diff_s"] is not None and rec["verdict"] is None, rec

@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **412 réteg**, modulonként csoportosítva; a
+Összesen **413 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (83)
@@ -261,12 +261,13 @@ leírás a réteg-függvény docstringjének első sora.
 | `first_half_close` | A félidő-zárás mérlege: ki üt utoljára a szünet előtt. |
 | `second_half_start` | A szünet utáni kezdés mérlege: ki üt először a 2. félidőben. |
 
-## momentum (48)
+## momentum (49)
 
 | Réteg | Mit mér |
 |---|---|
 | `bench_scoring` | Pad-gólok: A KISPAD IS TERMEL-E, vagy csak a kezdők. |
 | `black_window` | Fekete ötperc: a meccs MELYIK ÖT PERCE süllyed el. |
+| `clock_management` | Óralopás: VEZETVE ELHÚZZÁK-E a támadást a hajrában. |
 | `close_game_record` | Szoros meccs-mérleg: hogyan végződött az 1-2 gólos meccs. |
 | `closing_attacks` | Félidő-zárás: MIT KEZDENEK AZ UTOLSÓ LABDÁVAL. |
 | `clutch` | Hajrá-teljesítmény: ki bírja jobban a meccs végét. |

@@ -3151,3 +3151,105 @@ def response_turnover_roles(match: Match, config=None) -> dict:
                     "az ő fogadására kell menni: a válaszuk el sem "
                     "indul, és jöhet a következő gólunk")
     return out
+
+
+# Óralopás küszöbei: a hajrá-ablak, ennyi gólos előny számít
+# vezetésnek, ennyi hajrá-támadás és ennyi alap-támadás kell az
+# ítélethez, és ennyi másodperc eltérés az érdemi változás.
+CLK_WINDOW_S = 300.0
+CLK_MIN_LEAD = 1
+CLK_MIN_ATTACKS = 3
+CLK_MIN_BASE = 4
+CLK_DIFF_S = 3.0
+
+
+def clock_management(match: Match, config=None) -> dict:
+    """Óralopás: VEZETVE ELHÚZZÁK-E a támadást a hajrában.
+
+    A kapkodás-index a kapott gól utáni tempót méri, a hajrá-rétegek
+    azt, ki viszi a végjátékot — ez az ÓRÁT: a felvétel utolsó
+    CLK_WINDOW_S másodpercében, VEZETÉSBEN indított támadásaik
+    átlagos hosszát veti össze a többi támadásukéval.
+
+    Edzőileg ez a végjáték egyik döntése. Ha vezetve elhúzzák a
+    támadást, a passzív jelre kell játszani: korai kettőzés, tudatos
+    időhúzás-jelzés a játékvezetőnek, és a labdaszerzésnél azonnali
+    kontra — nekik minden elvesztett másodperc a barátjuk. Ha nem
+    lassítanak (vagy épp gyorsítanak), a védekezésnek nem kell
+    kockáztatnia: elég zárt fallal kivárni, mert maguktól hoznak
+    helyzetet.
+
+    Visszatérés csapatonként: {"lead" (hajrá-vezetéses támadás),
+    "lead_s", "base" (a többi), "base_s", "diff_s", "verdict"} — az
+    ítélet None, ha nincs meg a CLK_MIN_ATTACKS / CLK_MIN_BASE, vagy
+    a különbség a CLK_DIFF_S-en belül marad.
+    """
+    from .attack_types import classify_attacks
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    out: dict = {side: {"lead": 0, "lead_s": None, "base": 0,
+                        "base_s": None, "diff_s": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    if not frames:
+        return out
+
+    cut = frames[-1].t - CLK_WINDOW_S * fps
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    def _score_at(t: int) -> dict:
+        sc = {"home": 0, "away": 0}
+        for (gt, tm) in goals:
+            if gt < t:
+                sc[tm] += 1
+        return sc
+
+    sums = {"home": [0.0, 0.0], "away": [0.0, 0.0]}   # [lead, base]
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        other = "away" if side == "home" else "home"
+        t0 = a["start_frame"]
+        sc = _score_at(t0)
+        hajra_vezet = (t0 >= cut
+                       and sc[side] - sc[other] >= CLK_MIN_LEAD)
+        rec = out[side]
+        if hajra_vezet:
+            rec["lead"] += 1
+            sums[side][0] += a["duration_s"]
+        else:
+            rec["base"] += 1
+            sums[side][1] += a["duration_s"]
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["lead"] > 0:
+            rec["lead_s"] = round(sums[side][0] / rec["lead"], 1)
+        if rec["base"] > 0:
+            rec["base_s"] = round(sums[side][1] / rec["base"], 1)
+        if rec["lead_s"] is None or rec["base_s"] is None:
+            continue
+        diff = rec["lead_s"] - rec["base_s"]
+        rec["diff_s"] = round(diff, 1)
+        if (rec["lead"] < CLK_MIN_ATTACKS or rec["base"] < CLK_MIN_BASE
+                or abs(diff) < CLK_DIFF_S):
+            continue
+        if diff > 0:
+            rec["verdict"] = (
+                f"vezetve {diff:.1f} másodperccel hosszabb a "
+                f"támadásuk a hajrában ({rec['lead_s']:.1f} mp a "
+                f"{rec['base_s']:.1f} mp helyett, {rec['lead']} "
+                "támadásból) — lopják az órát: passzív jelre kell "
+                "játszani, korai kettőzéssel és azonnali kontrával")
+        else:
+            rec["verdict"] = (
+                f"vezetve {abs(diff):.1f} másodperccel RÖVIDEBB a "
+                f"támadásuk a hajrában ({rec['lead_s']:.1f} mp a "
+                f"{rec['base_s']:.1f} mp helyett, {rec['lead']} "
+                "támadásból) — nem húzzák az időt, hanem sietnek: "
+                "elég zárt fallal kivárni, maguktól hoznak helyzetet")
+    return out

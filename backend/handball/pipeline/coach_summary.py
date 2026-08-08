@@ -1129,6 +1129,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "elhalasztott helyzet.")
     except Exception:
         pass
+    # Óralopás: vezetve elhúzzák-e a támadást a hajrában.
+    try:
+        from .momentum import clock_management
+        clk = clock_management(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_clk = clk[side]
+            if rec_clk["verdict"] is None:
+                continue
+            _ir = ("hosszabb" if rec_clk["diff_s"] > 0 else "rövidebb")
+            body += (f" A(z) {name} vezetve "
+                     f"{abs(rec_clk['diff_s']):.1f} másodperccel "
+                     f"{_ir} támadásokat játszik a hajrában "
+                     f"({rec_clk['lead_s']:.1f} mp a "
+                     f"{rec_clk['base_s']:.1f} mp helyett).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

@@ -1032,6 +1032,13 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Óralopás: a hajrában vezetéssel, illetve máskor indított
+    # támadások darabszáma + hosszuk ÖSSZEGE (mp). Darabszám/összeg,
+    # hogy meccsek közt pontosan összegződjön (átlag = sum / db).
+    clk_lead: int = 0
+    clk_lead_sum_s: float = 0.0
+    clk_base: int = 0
+    clk_base_sum_s: float = 0.0
     # Kipattanó ára: a mért védések és a közülük második helyzetből
     # góllal büntetettek darabszáma. Darabszám, pontosan összegződik
     # (arány = punished / saves).
@@ -4128,6 +4135,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Óralopás: a végjáték óra-kezelése.
+    if rep.clk_lead >= 3 and rep.clk_base >= 4:
+        _clk_l = rep.clk_lead_sum_s / rep.clk_lead
+        _clk_b = rep.clk_base_sum_s / rep.clk_base
+        _clk_d = _clk_l - _clk_b
+        if _clk_d >= 3.0:
+            keys.append(
+                f"Vezetve {_clk_d:.1f} másodperccel hosszabb a "
+                f"támadásuk a hajrában ({_clk_l:.1f} mp a "
+                f"{_clk_b:.1f} mp helyett, {rep.clk_lead} támadás) — "
+                "lopják az órát: játsszatok a passzív jelre, korai "
+                "kettőzéssel és azonnali kontrával.")
+        elif _clk_d <= -3.0:
+            keys.append(
+                f"Vezetve {abs(_clk_d):.1f} másodperccel rövidebb a "
+                f"támadásuk a hajrában ({_clk_l:.1f} mp a "
+                f"{_clk_b:.1f} mp helyett, {rep.clk_lead} támadás) — "
+                "nem húzzák az időt, hanem sietnek: elég zárt fallal "
+                "kivárni, maguktól hoznak helyzetet.")
 
     # Kipattanó ára: megéri-e berobbanó embert küldeni.
     if rep.rpn_saves >= 5:
@@ -9286,6 +9313,14 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .momentum import clock_management as _clk
+        clkrec = _clk(match, config)[team.value]
+        rep.clk_lead = int(clkrec["lead"])
+        rep.clk_lead_sum_s = round(
+            (clkrec["lead_s"] or 0.0) * clkrec["lead"], 1)
+        rep.clk_base = int(clkrec["base"])
+        rep.clk_base_sum_s = round(
+            (clkrec["base_s"] or 0.0) * clkrec["base"], 1)
         from .goalkeeper import rebound_punishment as _rpn
         rpnrec = _rpn(match, config)[team.value]
         rep.rpn_saves = int(rpnrec["saves"])
@@ -11918,6 +11953,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 365) Az ő óralopásuk × a ti labdaszerzésetek: az elhúzott
+    # támadás a passzív jel és a kettőzés terepe.
+    if (opp.clk_lead >= 3 and opp.clk_base >= 4
+            and own.trans_steals >= 3):
+        _clk365_l = opp.clk_lead_sum_s / opp.clk_lead
+        _clk365_b = opp.clk_base_sum_s / opp.clk_base
+        if _clk365_l - _clk365_b >= 3.0:
+            plan.append(
+                f"Vezetve {_clk365_l - _clk365_b:.1f} másodperccel "
+                f"hosszabb a támadásuk a hajrában ({_clk365_l:.1f} "
+                f"mp a {_clk365_b:.1f} mp helyett), ti pedig jó "
+                f"labdaszerzők vagytok ({own.trans_steals} szerzés) "
+                "— a végjátékban ne várjatok: kérjétek a passzív "
+                "jelet, és a hetedik-nyolcadik passznál jöjjön a "
+                "kettőzés, mert ott már nekik sürgős.")
 
     # 364) Az ő drága kipattanóik × a ti lövésszámotok: a második
     # helyzet a legolcsóbb gól.
@@ -18292,6 +18343,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        clk_lead=sum(r.clk_lead for r in reports),
+        clk_lead_sum_s=round(sum(r.clk_lead_sum_s for r in reports), 1),
+        clk_base=sum(r.clk_base for r in reports),
+        clk_base_sum_s=round(sum(r.clk_base_sum_s for r in reports), 1),
         rpn_saves=sum(r.rpn_saves for r in reports),
         rpn_punished=sum(r.rpn_punished for r in reports),
         rtp_shots=sum(r.rtp_shots for r in reports),

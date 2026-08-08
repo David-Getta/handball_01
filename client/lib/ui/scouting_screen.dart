@@ -2168,6 +2168,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Óralopás: vezetve elhúzzák-e a támadást a hajrában (3+
+  // hajrá-támadás vezetésben, 4+ alap-támadás, 3 mp eltérés — a
+  // backenddel azonos küszöbök: CLK_MIN_ATTACKS, CLK_MIN_BASE,
+  // CLK_DIFF_S).
+  String? _clockManagement(Map<String, dynamic> r) {
+    final lead = (r["clk_lead"] as num?)?.toInt() ?? 0;
+    final base = (r["clk_base"] as num?)?.toInt() ?? 0;
+    final leadSum = (r["clk_lead_sum_s"] as num?)?.toDouble() ?? 0.0;
+    final baseSum = (r["clk_base_sum_s"] as num?)?.toDouble() ?? 0.0;
+    if (lead < 3 || base < 4) return null;
+    final l = leadSum / lead;
+    final b = baseSum / base;
+    final d = l - b;
+    if (d.abs() < 3.0) return null;
+    if (d > 0) {
+      return "vezetve ${d.toStringAsFixed(1)} mp-cel hosszabb a "
+          "támadásuk a hajrában (${l.toStringAsFixed(1)} mp a "
+          "${b.toStringAsFixed(1)} mp helyett) · lopják az órát, "
+          "játsszatok a passzív jelre";
+    }
+    return "vezetve ${d.abs().toStringAsFixed(1)} mp-cel rövidebb a "
+        "támadásuk a hajrában (${l.toStringAsFixed(1)} mp a "
+        "${b.toStringAsFixed(1)} mp helyett) · sietnek, elég zárt "
+        "fallal kivárni";
+  }
+
   // Kipattanó ára: a védéseik után kapott második-helyzet gólok (5+
   // védés, 15% fölött drága — a backenddel azonos küszöbök:
   // RPN_MIN_SAVES, RPN_COSTLY_PCT).
@@ -9633,6 +9659,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszaállás ára", _retreatPunishment(r)!],
       if (_reboundPunishment(r) != null)
         ["Kipattanó ára", _reboundPunishment(r)!],
+      if (_clockManagement(r) != null)
+        ["Óralopás", _clockManagement(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)
@@ -9915,7 +9943,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                            "sorozat", "lendület", "elalvás", "gólcsend",
                            "csend-", "hidegedés", "bemelegedés",
                            "utolsó labda", "meccsek", "percek", "forró",
-                           "hosszú áll", "kapkodás"]),
+                           "hosszú áll", "kapkodás", "óra"]),
     ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
                    "betörés", "kilép", "átvert", "lefogott", "őr",
                    "kifutás", "visszaérés", "visszaállás", "press",

@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Óralopás: vezetve elhúzzák-e a támadást a hajrában.** A
+  kapkodás-index a kapott gól utáni tempót méri, a hajrá-rétegek
+  azt, ki viszi a végjátékot — az új réteg az órát: a felvétel
+  utolsó öt percében, vezetésben indított támadásaik átlagos hosszát
+  veti össze a többi támadásukéval. Edzőileg ez a végjáték egyik
+  döntése: ha vezetve elhúzzák a támadást, a passzív jelre kell
+  játszani (korai kettőzés, azonnali kontra); ha nem lassítanak, elég
+  zárt fallal kivárni, mert maguktól hoznak helyzetet. Három
+  hajrá-támadás és négy alap-támadás alatt hallgat (None), és három
+  másodperc eltérés kell az ítélethez. A rangsorban az "állás"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`clock_management`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 365. meccsterv-szabály), edzés-fókusz (386.
+  szabály, külön mondattal az időhúzásra és a kapkodásra),
+  kliens-csempe.
 - **Kipattanó ára: a védésük után kapott második-helyzet gól.** A
   kapus-kipattanó azt mondja meg, fogja-e vagy kiüti a kapus a
   labdát, a lepattanó-szedő poszt azt, ki szedi össze — az új réteg

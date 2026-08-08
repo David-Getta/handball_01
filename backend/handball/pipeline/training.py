@@ -1355,6 +1355,43 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 386) Óralopás: a végjáték óra-kezelése vezetésben.
+    try:
+        from .momentum import CLK_DIFF_S, clock_management
+        clk386 = clock_management(match, config)
+        for side in ("home", "away"):
+            rec386 = clk386[side]
+            if rec386.get("verdict") is None:
+                continue
+            if rec386["diff_s"] > 0:
+                add(side, "támadás", "Óra-kezelés vezetésben",
+                    f"vezetve {rec386['diff_s']:.1f} másodperccel "
+                    "hosszabb a támadásunk a hajrában "
+                    f"({rec386['lead_s']:.1f} mp a "
+                    f"{rec386['base_s']:.1f} mp helyett; "
+                    f"{CLK_DIFF_S:.0f} mp fölött már minta) — az "
+                    "időhúzás jó, de a passzív jel ellenünk fordítja",
+                    "időhúzás szabályosan: mozgásos labdajáratás "
+                    "(nem álló), kötelező befejezés a passzív jel "
+                    "után négy passzon belül, és bejáratott "
+                    "gyors-figura a jelre — edzésen passzív jeles "
+                    "5-5 játék",
+                    )
+            else:
+                add(side, "támadás", "Nyugalom vezetésben",
+                    f"vezetve {abs(rec386['diff_s']):.1f} "
+                    "másodperccel rövidebb a támadásunk a hajrában "
+                    f"({rec386['lead_s']:.1f} mp a "
+                    f"{rec386['base_s']:.1f} mp helyett) — "
+                    "sietünk, pedig az idő nekünk dolgozik",
+                    "végjáték-forgatókönyv előnnyel: kötelező "
+                    "körbejátszás lövés előtt, kijelölt "
+                    "labdatartó, és csak tiszta helyzetből lövés — "
+                    "edzésen vezetéses óra ellen játszott 5-5",
+                    )
+    except Exception:
+        pass
+
     # 385) Kipattanó ára: a védés nem megúszott helyzet, ha a
     # kipattanó gólt ér.
     try:
