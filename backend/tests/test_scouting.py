@@ -2425,3 +2425,22 @@ def test_combine_merges_every_by_role_field():
     rossz = [name for name in role_fields
              if getattr(comb, name).get("beálló") != 2]
     assert not rossz, f"nem összegzett posztonkénti mezők: {rossz}"
+
+
+def test_minden_posztonkenti_mezo_eljut_edzoi_feluletre():
+    """ŐR: minden *_by_role mező jusson el edzői felületre — vagy az
+    edzői kulcsok (_coach_keys), vagy a meccsterv (matchup_plan)
+    olvassa. Egy csak eltárolt, de sehol nem olvasott posztonkénti
+    mező holt adat: a réteg-recept 4. lépése fél-kész maradt."""
+    import dataclasses
+    import inspect
+
+    from handball.pipeline import scouting
+
+    fields = [f.name for f in dataclasses.fields(scouting.ScoutingReport)
+              if f.name.endswith("_by_role")]
+    assert len(fields) >= 60, fields   # az olvasás elromlott
+    src = (inspect.getsource(scouting._coach_keys)
+           + inspect.getsource(scouting.matchup_plan))
+    arva = [f for f in fields if f not in src]
+    assert not arva, f"edzői felület nélküli posztonkénti mezők: {arva}"
