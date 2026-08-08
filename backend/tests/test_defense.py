@@ -3860,3 +3860,66 @@ def test_recovery_roles_silent_with_few_frames():
 
     rec = recovery_roles(_rcr_match(100))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Visszaállás-idő (a lövés utáni hazaérés) ------------------------------
+
+
+def _rtt_match(delays_s, fps=25.0):
+    """Hazai lövések a +x kapura; a `delays_s` elemei adják, hány
+    másodperc múlva ér haza (x < 20) négy hazai mezőnyjátékos."""
+    frames = []
+    t = 0
+
+    def _cast(x_home):
+        # Négy hazai mezőnyjátékos + négy vendég a saját térfelén.
+        out = [_pl(10 + k, Team.HOME, x_home + 0.4 * k, 6.0 + 2.0 * k)
+               for k in range(4)]
+        out += [_pl(20 + k, Team.AWAY, 8.0 + k, 5.0 + 2.0 * k)
+                for k in range(4)]
+        return out
+
+    for delay in delays_s:
+        for _ in range(10):        # a labda a lövőnél a kapu előtt
+            frames.append(Frame(t=t, players=_cast(30.0),
+                                ball=Ball(x=30.2, y=6.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(10):        # a lövés a +x kapuba
+            frames.append(Frame(t=t, players=_cast(30.0),
+                                ball=Ball(x=min(31.0 + i, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(delay * fps)):   # még kint a támadók
+            frames.append(Frame(t=t, players=_cast(30.0),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(int(5 * fps)):       # hazaértek (x < 20)
+            frames.append(Frame(t=t, players=_cast(12.0),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_retreat_time_flags_the_slow_wall():
+    """Ha a lövésük után átlag nyolc másodpercnél tovább tart a
+    hazaérés, a kapusnak azonnal indítania kell."""
+    from handball.pipeline.defense import RTT_MIN_SHOTS, retreat_time
+
+    rec = retreat_time(_rtt_match([10.0, 10.0, 10.0, 10.0]))["home"]
+    assert rec["shots"] >= RTT_MIN_SHOTS, rec
+    assert rec["avg_s"] and rec["avg_s"] >= 8.0, rec
+    assert rec["slow"] == rec["shots"], rec
+    assert rec["verdict"] and "üres pályát talál" in rec["verdict"], rec
+
+
+def test_retreat_time_silent_when_the_wall_is_quick():
+    """Gyors visszaállásnál nincs ítélet — csak a szám marad meg."""
+    from handball.pipeline.defense import retreat_time
+
+    rec = retreat_time(_rtt_match([1.0, 1.0, 1.0, 1.0]))["home"]
+    assert rec["shots"] >= 4, rec
+    assert rec["avg_s"] is not None and rec["avg_s"] < 8.0, rec
+    assert rec["verdict"] is None, rec

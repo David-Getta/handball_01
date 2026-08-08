@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Visszaállás-idő: hány másodperc alatt áll össze a faluk a
+  lövésük után.** A visszafutás-poszt azt mondja meg, KI marad le —
+  az új réteg azt, MENNYI IDŐ alatt áll össze a fal: minden lövésük
+  után megméri, mennyi idő telik el, míg négy mezőnyjátékosuk a
+  saját térfelükre ér (ha húsz másodperc alatt sem, a felső
+  korláttal számol — a lassúságot nem hallgatja el). Edzőileg ez a
+  kontra-terv egy száma: nyolc másodperc fölött a lövésük után
+  indított első hullám még üres pályát talál, a kapusnak azonnal
+  indítania kell. Négy mért lövés alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`retreat_time`), edzői összefoglaló,
+  felderítés (edzői kulcs + 357. meccsterv-szabály), edzés-fókusz
+  (378. szabály), kliens-csempe. Nem poszt-lencse: csapatszintű
+  szám, ezért a Kulcs-poszt bizonyíték-rétegek közé nem kerül be.
 - **Időkérés-hiba poszt: a megbeszélt figura kinek a kezén hal
   el.** Az időkérés-befejező és az időkéréspáros a sikeres figurát
   írja le — az új réteg a kudarcát: az időkérés utáni ablakban

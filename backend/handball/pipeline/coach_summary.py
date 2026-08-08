@@ -1008,6 +1008,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "az ő indításánál kell megnyomni.")
     except Exception:
         pass
+    # Visszaállás-idő: mennyi idő alatt áll össze a faluk.
+    try:
+        from .defense import retreat_time
+        rtt = retreat_time(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtt = rtt[side]
+            if rec_rtt["verdict"] is None:
+                continue
+            body += (f" A(z) {name} lövése után átlag "
+                     f"{rec_rtt['avg_s']:.1f} másodperc, míg "
+                     f"összeáll a faluk ({rec_rtt['shots']} "
+                     "lövésből) — a kapusnak azonnal indítania "
+                     "kell.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

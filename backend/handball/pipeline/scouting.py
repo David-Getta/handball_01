@@ -1032,6 +1032,12 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Visszaállás-idő: a mért lövések száma, a visszaállási idők
+    # ÖSSZEGE (mp) és a lassú esetek száma — darabszám/összeg, hogy
+    # meccsek közt pontosan összegződjön (átlag = sum / shots).
+    rtt_shots: int = 0
+    rtt_sum_s: float = 0.0
+    rtt_slow: int = 0
     # Időkérés-hiba poszt: az időkérés utáni ablakban elkövetett
     # labdaeladások darabszáma a VESZTES posztja szerint. Darabszám,
     # pontosan összegződik.
@@ -4084,6 +4090,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Visszaállás-idő: a kontra-terv egy száma.
+    if rep.rtt_shots >= 4:
+        _rtt_avg = rep.rtt_sum_s / rep.rtt_shots
+        if _rtt_avg > 8.0:
+            keys.append(
+                f"A lövésük után átlag {_rtt_avg:.1f} másodperc, míg "
+                f"négy emberük hazaér ({rep.rtt_shots} lövésből "
+                f"{rep.rtt_slow} volt 8 mp fölött) — a kapusotok "
+                "azonnal indítson: az első hullám még üres pályát "
+                "talál, nem kell megvárni a felállt támadást.")
 
     # Időkérés-hiba poszt: a megbeszélt figura leggyengébb pontja.
     _toe_n = sum(rep.toe_turnovers_by_role.values())
@@ -9125,6 +9142,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .defense import retreat_time as _rtt
+        rttrec = _rtt(match, config)[team.value]
+        rep.rtt_shots = int(rttrec["shots"])
+        rep.rtt_sum_s = round(
+            (rttrec["avg_s"] or 0.0) * rttrec["shots"], 1)
+        rep.rtt_slow = int(rttrec["slow"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11717,6 +11740,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 357) Az ő lassú visszaállásuk × a ti kapus-indításotok: a
+    # lövésük utáni első hullám üres pályát talál.
+    if opp.rtt_shots >= 4 and own.gk_outlets >= 2:
+        _rtt357_avg = opp.rtt_sum_s / opp.rtt_shots
+        _rtt357_fast = (100.0 * own.gk_outlet_fast / own.gk_outlets
+                        if own.gk_outlets else 0.0)
+        if _rtt357_avg > 8.0:
+            plan.append(
+                f"A lövésük után átlag {_rtt357_avg:.1f} másodperc, "
+                f"míg négy emberük hazaér ({opp.rtt_shots} lövésből "
+                f"{opp.rtt_slow} volt 8 mp fölött), a kapusotok "
+                f"pedig indít ({own.gk_outlets} indítás, "
+                f"{_rtt357_fast:.0f}% gyors) — minden védés és "
+                "kapott gól után azonnal jöjjön a hosszú indítás: a "
+                "második hullámra már felállnak, az elsőre nem.")
 
     # 356) Az ő időkérés-hiba posztjuk × a ti időkérés utáni
     # védekezésetek: a figura az indításnál törik a legolcsóbban.
@@ -17962,6 +18001,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        rtt_shots=sum(r.rtt_shots for r in reports),
+        rtt_sum_s=round(sum(r.rtt_sum_s for r in reports), 1),
+        rtt_slow=sum(r.rtt_slow for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

@@ -274,6 +274,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "response_turnover_roles"),
         ("felkészülés", "Időkérés-hiba poszt", "stoppages",
          "timeout_turnover_roles"),
+        ("felkészülés", "Visszaállás-idő", "defense", "retreat_time"),
     ]
 
 

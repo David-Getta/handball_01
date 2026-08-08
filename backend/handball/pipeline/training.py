@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 378) Visszaállás-idő: ha a lövésünk után lassan áll össze a
+    # fal, minden lövésünk kockázat.
+    try:
+        from .defense import RTT_SLOW_S, retreat_time
+        rtt378 = retreat_time(match, config)
+        for side in ("home", "away"):
+            rec378 = rtt378[side]
+            if rec378.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Visszaállás a lövésünk után",
+                f"a lövésünk után átlag {rec378['avg_s']:.1f} "
+                f"másodperc, míg négy emberünk hazaér "
+                f"({rec378['shots']} lövésből {rec378['slow']} volt "
+                f"{RTT_SLOW_S:.0f} mp fölött) — így minden "
+                "lövésünk kontra-kockázat, a kapott gólok egy része "
+                "nem is a falon múlik",
+                "visszafutás-sorrend a figurákba építve: a lövés "
+                "pillanatában kijelölt első visszafutó, "
+                "sprint-visszafutás edzésen (lövés után azonnal "
+                "5-0 visszafutás jelre), és labda mögötti "
+                "biztosítás minden befejezésnél",
+                )
+    except Exception:
+        pass
+
     # 377) Időkérés-hiba poszt: ha a táblára rajzolt figura mindig
     # ugyanannak a kezén hal el, egyszerűbb kezdés kell.
     try:

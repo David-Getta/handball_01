@@ -3789,6 +3789,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import retreat_time
+            res["retreat_time"] = retreat_time(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5509,6 +5514,8 @@ def create_app():
                 from ..pipeline.stoppages import timeout_turnover_roles
                 _layer("timeout_turnover_roles",
                        lambda: timeout_turnover_roles(match))
+                from ..pipeline.defense import retreat_time
+                _layer("retreat_time", lambda: retreat_time(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

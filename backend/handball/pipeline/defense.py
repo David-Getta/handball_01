@@ -5192,3 +5192,97 @@ def recovery_roles(match, config=None) -> dict:
             "roles": by_role, "main_role": main_role,
             "share_pct": share_pct, "verdict": verdict}
     return out
+
+
+# Visszaállás-idő küszöbei: ennyi mért lövés kell az ítélethez, ennyi
+# védő legyen otthon, ennyi másodperc után nevezzük lassúnak a
+# visszaállást, és ennyi idő alatt keressük (utána feladjuk).
+RTT_MIN_SHOTS = 4
+RTT_BACK_PLAYERS = 4
+RTT_SLOW_S = 8.0
+RTT_MAX_S = 20.0
+
+
+def retreat_time(match, config=None) -> dict:
+    """Visszaállás-idő: HÁNY MÁSODPERC alatt állnak vissza a lövésük után.
+
+    A visszafutás-poszt azt mondja meg, KI marad le — ez azt, MENNYI
+    IDŐ alatt áll össze a faluk: minden lövésük után megméri, mennyi
+    idő telik el, míg RTT_BACK_PLAYERS mezőnyjátékosuk a saját
+    térfelükre ér. Ha RTT_MAX_S alatt sem áll össze, a szakasz a
+    felső korláttal számít (a lassúságot nem hallgatjuk el).
+
+    Edzőileg ez a kontra-terv egy száma: RTT_SLOW_S fölött a lövésük
+    után indított első hullám még üres pályát talál — a kapusnak
+    azonnal indítania kell, nem szabad megvárni a felállt támadást.
+    Saját csapatra: a lövés pillanatában kijelölt első visszafutó és
+    a labda mögötti biztosítás a téma.
+
+    Visszatérés csapatonként: {"shots" (mért lövés), "avg_s" (átlagos
+    visszaállási idő), "slow" (RTT_SLOW_S fölötti eset), "verdict"} —
+    az ítélet None, ha nincs meg az RTT_MIN_SHOTS, vagy az átlag a
+    küszöb alatt marad.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    max_frames = round(RTT_MAX_S * fps)
+    frames_by_t = {f.t: f for f in match.frames}
+    times = sorted(frames_by_t)
+
+    out: dict = {side: {"shots": 0, "avg_s": None, "slow": 0,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    sums = {"home": 0.0, "away": 0.0}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        side = e.team.value
+        team = Team.HOME if side == "home" else Team.AWAY
+        own_x = config.own_goal_x(team)
+        # A saját térfél: a saját kapu felőli oldal a pálya közepéhez
+        # (20 m) képest.
+        felezo = 20.0
+        haza = None
+        for t in times:
+            if t < e.t:
+                continue
+            if t > e.t + max_frames:
+                break
+            fr = frames_by_t[t]
+            n = 0
+            for p in fr.players:
+                if p.team != team or p.role == "kapus":
+                    continue
+                if (p.x <= felezo if own_x < felezo else p.x >= felezo):
+                    n += 1
+            if n >= RTT_BACK_PLAYERS:
+                haza = (t - e.t) / fps
+                break
+        # Ha az ablakban nem állt össze a fal, a felső korláttal
+        # számolunk — a lassúságot nem hallgatjuk el.
+        if haza is None:
+            haza = RTT_MAX_S
+        rec = out[side]
+        rec["shots"] += 1
+        sums[side] += haza
+        if haza > RTT_SLOW_S:
+            rec["slow"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["shots"] <= 0:
+            continue
+        avg = sums[side] / rec["shots"]
+        rec["avg_s"] = round(avg, 1)
+        if rec["shots"] >= RTT_MIN_SHOTS and avg > RTT_SLOW_S:
+            rec["verdict"] = (
+                f"a lövésük után átlag {avg:.1f} másodperc, míg "
+                f"{RTT_BACK_PLAYERS} emberük hazaér ({rec['shots']} "
+                f"lövésből {rec['slow']} volt {RTT_SLOW_S:.0f} mp "
+                "fölött) — a kapusnak azonnal indítania kell: az "
+                "első hullám még üres pályát talál")
+    return out

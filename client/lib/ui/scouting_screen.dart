@@ -2168,6 +2168,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Visszaállás-idő: hány másodperc alatt áll össze a faluk a
+  // lövésük után (4+ mért lövés, 8 mp fölött szólal meg — a
+  // backenddel azonos küszöbök: RTT_MIN_SHOTS, RTT_SLOW_S).
+  String? _retreatTime(Map<String, dynamic> r) {
+    final shots = (r["rtt_shots"] as num?)?.toInt() ?? 0;
+    final sum = (r["rtt_sum_s"] as num?)?.toDouble() ?? 0.0;
+    final slow = (r["rtt_slow"] as num?)?.toInt() ?? 0;
+    if (shots < 4) return null;
+    final avg = sum / shots;
+    if (avg <= 8.0) return null;
+    return "a lövésük után átlag ${avg.toStringAsFixed(1)} mp, míg "
+        "négy emberük hazaér ($shots lövésből $slow volt 8 mp "
+        "fölött) · a kapusotok azonnal indítson";
+  }
+
   // Időkérés-hiba poszt: a megbeszélt figura kinek a kezén hal el
   // (3+ időkérés utáni eladás, 60% részarány — a backenddel azonos
   // küszöbök: TOE_MIN_TURNOVERS, TOE_SHARE_PCT).
@@ -9448,6 +9463,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Válaszhiba-poszt", _responseTurnoverRole(r)!],
       if (_timeoutTurnoverRole(r) != null)
         ["Időkérés-hiba poszt", _timeoutTurnoverRole(r)!],
+      if (_retreatTime(r) != null)
+        ["Visszaállás-idő", _retreatTime(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)
