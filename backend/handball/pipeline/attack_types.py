@@ -5832,3 +5832,98 @@ def last_holder_roles(match: Match,
                     "nála zárul a támadás, ott a legolcsóbb a "
                     "labdaszerzés")
     return out
+
+
+# Kapkodás-index küszöbei: a kapott gól utáni ablak, ennyi
+# válasz-támadás kell az ítélethez, ennyi a "többi" támadás
+# minimuma, és ennyi másodperc eltérés számít érdemi változásnak.
+RUS_WINDOW_S = 60.0
+RUS_MIN_ATTACKS = 3
+RUS_MIN_BASE = 4
+RUS_DIFF_S = 3.0
+
+
+def post_goal_rush(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Kapkodás-index: KAPOTT GÓL UTÁN rövidül vagy nyúlik a támadásuk.
+
+    A válasz-poszt és a válaszhiba-poszt embert nevez meg — ez a
+    tempót: a kapott gólt RUS_WINDOW_S-en belül követő támadásaik
+    átlagos hosszát veti össze a TÖBBI támadásukéval. A különbség
+    előjele mondja meg, mit csinálnak a bekapott góllal: RUS_DIFF_S
+    másodperccel rövidebb támadás = kapkodás, ennyivel hosszabb =
+    befagyás (biztonsági játék).
+
+    Edzőileg ez a saját gólunk utáni terv egy mondata. Ha kapkodnak,
+    a gólunk után vissza kell állni és nem szabad hibára csábulni:
+    az elsietett lövés nekünk termel labdát. Ha befagynak, épp
+    fordítva: a gólunk után előre kell tolni a védekezést, mert az
+    óra nekik ketyeg. Saját csapatra: a bekapott gól utáni első
+    támadásnak kötelező figurája legyen.
+
+    Visszatérés csapatonként: {"after" (válasz-támadás), "after_s"
+    (átlagos hossz), "base" (a többi támadás), "base_s", "diff_s"
+    (after - base), "verdict"} — az ítélet None, ha nincs meg a
+    RUS_MIN_ATTACKS / RUS_MIN_BASE, vagy a különbség a
+    RUS_DIFF_S-en belül marad.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = RUS_WINDOW_S * fps
+
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"after": 0, "after_s": None, "base": 0,
+                        "base_s": None, "diff_s": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    sums = {"home": [0.0, 0.0], "away": [0.0, 0.0]}   # [after, base]
+    for a in classify_attacks(match, config):
+        side = a["team"]
+        t0 = a["start_frame"]
+        # Volt-e az ablakon belül ELŐTTE kapott gól?
+        kapott = any(tg < t0 and t0 - tg <= win and sg != side
+                     for (tg, sg) in goals)
+        rec = out[side]
+        if kapott:
+            rec["after"] += 1
+            sums[side][0] += a["duration_s"]
+        else:
+            rec["base"] += 1
+            sums[side][1] += a["duration_s"]
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["after"] > 0:
+            rec["after_s"] = round(sums[side][0] / rec["after"], 1)
+        if rec["base"] > 0:
+            rec["base_s"] = round(sums[side][1] / rec["base"], 1)
+        if rec["after_s"] is None or rec["base_s"] is None:
+            continue
+        diff = rec["after_s"] - rec["base_s"]
+        rec["diff_s"] = round(diff, 1)
+        if (rec["after"] < RUS_MIN_ATTACKS
+                or rec["base"] < RUS_MIN_BASE
+                or abs(diff) < RUS_DIFF_S):
+            continue
+        if diff < 0:
+            rec["verdict"] = (
+                f"kapott gól után {abs(diff):.1f} másodperccel "
+                f"rövidebb a támadásuk ({rec['after_s']:.1f} mp a "
+                f"{rec['base_s']:.1f} mp helyett, {rec['after']} "
+                "válasz-támadásból) — kapkodnak: a gólunk után "
+                "vissza kell állni, az elsietett lövés nekünk "
+                "termel labdát")
+        else:
+            rec["verdict"] = (
+                f"kapott gól után {diff:.1f} másodperccel hosszabb "
+                f"a támadásuk ({rec['after_s']:.1f} mp a "
+                f"{rec['base_s']:.1f} mp helyett, {rec['after']} "
+                "válasz-támadásból) — befagynak: a gólunk után "
+                "előre kell tolni a védekezést, az óra nekik "
+                "ketyeg")
+    return out

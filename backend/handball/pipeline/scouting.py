@@ -1032,6 +1032,13 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Kapkodás-index: a kapott gól utáni ("válasz") és a többi
+    # támadás darabszáma + hosszuk ÖSSZEGE (mp) — darabszám/összeg,
+    # hogy meccsek közt pontosan összegződjön (átlag = sum / db).
+    rus_after: int = 0
+    rus_after_sum_s: float = 0.0
+    rus_base: int = 0
+    rus_base_sum_s: float = 0.0
     # Visszaállás-idő: a mért lövések száma, a visszaállási idők
     # ÖSSZEGE (mp) és a lassú esetek száma — darabszám/összeg, hogy
     # meccsek közt pontosan összegződjön (átlag = sum / shots).
@@ -4090,6 +4097,26 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Kapkodás-index: a saját gólunk utáni terv egy mondata.
+    if rep.rus_after >= 3 and rep.rus_base >= 4:
+        _rus_a = rep.rus_after_sum_s / rep.rus_after
+        _rus_b = rep.rus_base_sum_s / rep.rus_base
+        _rus_d = _rus_a - _rus_b
+        if _rus_d <= -3.0:
+            keys.append(
+                f"Kapott gól után {abs(_rus_d):.1f} másodperccel "
+                f"rövidebb a támadásuk ({_rus_a:.1f} mp a "
+                f"{_rus_b:.1f} mp helyett, {rep.rus_after} "
+                "válasz-támadás) — kapkodnak: a gólotok után álljatok "
+                "vissza, az elsietett lövésük nektek termel labdát.")
+        elif _rus_d >= 3.0:
+            keys.append(
+                f"Kapott gól után {_rus_d:.1f} másodperccel hosszabb "
+                f"a támadásuk ({_rus_a:.1f} mp a {_rus_b:.1f} mp "
+                f"helyett, {rep.rus_after} válasz-támadás) — "
+                "befagynak: a gólotok után toljátok előre a "
+                "védekezést, az óra nekik ketyeg.")
 
     # Visszaállás-idő: a kontra-terv egy száma.
     if rep.rtt_shots >= 4:
@@ -9142,6 +9169,14 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .attack_types import post_goal_rush as _rus
+        rusrec = _rus(match, config)[team.value]
+        rep.rus_after = int(rusrec["after"])
+        rep.rus_after_sum_s = round(
+            (rusrec["after_s"] or 0.0) * rusrec["after"], 1)
+        rep.rus_base = int(rusrec["base"])
+        rep.rus_base_sum_s = round(
+            (rusrec["base_s"] or 0.0) * rusrec["base"], 1)
         from .defense import retreat_time as _rtt
         rttrec = _rtt(match, config)[team.value]
         rep.rtt_shots = int(rttrec["shots"])
@@ -11740,6 +11775,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 358) Az ő kapkodásuk × a ti gólerősségetek: minden gólotok
+    # után jön egy elsietett támadásuk.
+    if opp.rus_after >= 3 and opp.rus_base >= 4 and own.goals >= 5:
+        _rus358_a = opp.rus_after_sum_s / opp.rus_after
+        _rus358_b = opp.rus_base_sum_s / opp.rus_base
+        _rus358_d = _rus358_a - _rus358_b
+        if _rus358_d <= -3.0:
+            plan.append(
+                f"Kapott gól után {abs(_rus358_d):.1f} másodperccel "
+                f"rövidebb a támadásuk ({_rus358_a:.1f} mp a "
+                f"{_rus358_b:.1f} mp helyett), ti pedig gólerősek "
+                f"vagytok ({own.goals} gól) — minden gólotok után "
+                "jön egy elsietett támadásuk: ne menjetek ki rá, "
+                "álljatok vissza zárt fallal, és az elsietett "
+                "lövésből induljon a következő kontrátok.")
 
     # 357) Az ő lassú visszaállásuk × a ti kapus-indításotok: a
     # lövésük utáni első hullám üres pályát talál.
@@ -18001,6 +18052,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        rus_after=sum(r.rus_after for r in reports),
+        rus_after_sum_s=round(sum(r.rus_after_sum_s for r in reports), 1),
+        rus_base=sum(r.rus_base for r in reports),
+        rus_base_sum_s=round(sum(r.rus_base_sum_s for r in reports), 1),
         rtt_shots=sum(r.rtt_shots for r in reports),
         rtt_sum_s=round(sum(r.rtt_sum_s for r in reports), 1),
         rtt_slow=sum(r.rtt_slow for r in reports),

@@ -275,6 +275,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("felkészülés", "Időkérés-hiba poszt", "stoppages",
          "timeout_turnover_roles"),
         ("felkészülés", "Visszaállás-idő", "defense", "retreat_time"),
+        ("felkészülés", "Kapkodás-index", "attack_types",
+         "post_goal_rush"),
     ]
 
 

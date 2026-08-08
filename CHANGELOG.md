@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kapkodás-index: kapott gól után rövidül vagy nyúlik a
+  támadásuk.** A válasz-poszt és a válaszhiba-poszt embert nevez meg
+  — az új réteg a tempót: a kapott gólt egy percen belül követő
+  támadásaik átlagos hosszát veti össze a többi támadásukéval. A
+  különbség előjele mondja meg, mit csinálnak a bekapott góllal: 3
+  másodperccel rövidebb támadás = kapkodás, ennyivel hosszabb =
+  befagyás. Edzőileg ez a saját gólunk utáni terv egy mondata: ha
+  kapkodnak, vissza kell állni (az elsietett lövés nekünk termel
+  labdát); ha befagynak, előre kell tolni a védekezést, mert az óra
+  nekik ketyeg. Három válasz-támadás és négy alap-támadás alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`post_goal_rush`), edzői összefoglaló, felderítés (edzői kulcs +
+  358. meccsterv-szabály), edzés-fókusz (379. szabály, mindkét
+  irányra külön mondattal), kliens-csempe. Nem poszt-lencse:
+  csapatszintű szám, a Kulcs-poszt bizonyíték-rétegek közé nem
+  kerül be.
 - **Visszaállás-idő: hány másodperc alatt áll össze a faluk a
   lövésük után.** A visszafutás-poszt azt mondja meg, KI marad le —
   az új réteg azt, MENNYI IDŐ alatt áll össze a fal: minden lövésük

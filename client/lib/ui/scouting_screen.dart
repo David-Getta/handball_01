@@ -2168,6 +2168,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Kapkodás-index: kapott gól után rövidül vagy nyúlik a támadásuk
+  // (3+ válasz-támadás, 4+ alap-támadás, 3 mp eltérés — a
+  // backenddel azonos küszöbök: RUS_MIN_ATTACKS, RUS_MIN_BASE,
+  // RUS_DIFF_S).
+  String? _postGoalRush(Map<String, dynamic> r) {
+    final after = (r["rus_after"] as num?)?.toInt() ?? 0;
+    final base = (r["rus_base"] as num?)?.toInt() ?? 0;
+    final afterSum = (r["rus_after_sum_s"] as num?)?.toDouble() ?? 0.0;
+    final baseSum = (r["rus_base_sum_s"] as num?)?.toDouble() ?? 0.0;
+    if (after < 3 || base < 4) return null;
+    final a = afterSum / after;
+    final b = baseSum / base;
+    final d = a - b;
+    if (d.abs() < 3.0) return null;
+    if (d < 0) {
+      return "kapott gól után ${d.abs().toStringAsFixed(1)} mp-cel "
+          "rövidebb a támadásuk (${a.toStringAsFixed(1)} mp a "
+          "${b.toStringAsFixed(1)} mp helyett) · kapkodnak, a "
+          "gólotok után álljatok vissza";
+    }
+    return "kapott gól után ${d.toStringAsFixed(1)} mp-cel hosszabb "
+        "a támadásuk (${a.toStringAsFixed(1)} mp a "
+        "${b.toStringAsFixed(1)} mp helyett) · befagynak, toljátok "
+        "előre a védekezést";
+  }
+
   // Visszaállás-idő: hány másodperc alatt áll össze a faluk a
   // lövésük után (4+ mért lövés, 8 mp fölött szólal meg — a
   // backenddel azonos küszöbök: RTT_MIN_SHOTS, RTT_SLOW_S).
@@ -9465,6 +9491,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés-hiba poszt", _timeoutTurnoverRole(r)!],
       if (_retreatTime(r) != null)
         ["Visszaállás-idő", _retreatTime(r)!],
+      if (_postGoalRush(r) != null)
+        ["Kapkodás-index", _postGoalRush(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)
@@ -9747,7 +9775,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                            "sorozat", "lendület", "elalvás", "gólcsend",
                            "csend-", "hidegedés", "bemelegedés",
                            "utolsó labda", "meccsek", "percek", "forró",
-                           "hosszú áll"]),
+                           "hosszú áll", "kapkodás"]),
     ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
                    "betörés", "kilép", "átvert", "lefogott", "őr",
                    "kifutás", "visszaérés", "visszaállás", "press",

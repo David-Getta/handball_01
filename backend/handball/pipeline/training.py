@@ -1355,6 +1355,44 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 379) Kapkodás-index: ha a kapott gól után elsietjük a
+    # támadást, a hátrányból sorozat lesz.
+    try:
+        from .attack_types import RUS_DIFF_S, post_goal_rush
+        rus379 = post_goal_rush(match, config)
+        for side in ("home", "away"):
+            rec379 = rus379[side]
+            if rec379.get("verdict") is None:
+                continue
+            if rec379["diff_s"] < 0:
+                add(side, "támadás", "Kapott gól után nyugalom",
+                    f"kapott gól után {abs(rec379['diff_s']):.1f} "
+                    "másodperccel rövidebb a támadásunk "
+                    f"({rec379['after_s']:.1f} mp a "
+                    f"{rec379['base_s']:.1f} mp helyett; "
+                    f"{RUS_DIFF_S:.0f} mp fölött már minta) — "
+                    "kapkodunk, és az elsietett lövés az ellenfélnek "
+                    "termel labdát",
+                    "bekapott gól után kötelező körbejátszás: két "
+                    "teljes oldalváltás lövés előtt, és a "
+                    "figura csak a második körben indul — edzésen "
+                    "hátrányból indított 5-5 óra ellen",
+                    )
+            else:
+                add(side, "támadás", "Kapott gól után lendület",
+                    f"kapott gól után {rec379['diff_s']:.1f} "
+                    "másodperccel hosszabb a támadásunk "
+                    f"({rec379['after_s']:.1f} mp a "
+                    f"{rec379['base_s']:.1f} mp helyett; "
+                    f"{RUS_DIFF_S:.0f} mp fölött már minta) — "
+                    "befagyunk, közben az óra ellenünk ketyeg",
+                    "bekapott gól után gyors középkezdés: bejáratott "
+                    "első hullám (kapus azonnal indít), és kijelölt "
+                    "figura az első tíz másodpercre",
+                    )
+    except Exception:
+        pass
+
     # 378) Visszaállás-idő: ha a lövésünk után lassan áll össze a
     # fal, minden lövésünk kockázat.
     try:

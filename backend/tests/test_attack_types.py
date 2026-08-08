@@ -4504,3 +4504,89 @@ def test_last_holder_roles_silent_with_few_attacks():
 
     rec = last_holder_roles(_lst_match([7, 5]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kapkodás-index (kapott gól után rövidül-e a támadás) ------------------
+
+
+def _rus_frames(t0, seconds, x_from, x_to, fps=25.0):
+    """HAZAI támadás-szakasz (mint az _attack_frames), de a vendég
+    védők a hazai térfélen is látszanak — így a vendég gól után is
+    van kit birtokosnak jelölni."""
+    return _attack_frames(t0, seconds, x_from, x_to, fps=fps)
+
+
+def _rus_gap(t0, seconds, fps=25.0):
+    """Szabad labda: nincs birtokos, a szakasz itt zárul."""
+    return [Frame(t=t0 + i, players=[],
+                  ball=Ball(x=20.0, y=18.0, confidence=1.0))
+            for i in range(int(seconds * fps))]
+
+
+def _rus_away_goal(t0, fps=25.0):
+    """Vendég gól a hazai (-x) kapuba: a 21-es viszi be a labdát."""
+    frames = []
+    i = 0
+    x = 8.0
+    while x > -0.5:
+        players = [_pl(21, Team.AWAY, max(x, 0.5), 10.0),
+                   _pl(22, Team.AWAY, 12.0, 14.0)]
+        frames.append(Frame(t=t0 + i, players=players,
+                            ball=Ball(x=max(x, -0.5), y=10.0,
+                                      confidence=1.0)))
+        x -= 0.4
+        i += 1
+    return frames
+
+
+def _rus_match(base_s, after_s, fps=25.0):
+    """`base_s` hosszúságú hazai támadások gól nélkül, majd
+    vendéggólonként egy `after_s` hosszúságú válasz-támadás."""
+    frames = []
+    t = 0
+    for _ in range(4):                    # alap-támadások (gól előtt)
+        frames += _rus_frames(t, base_s, 26.0, 31.0, fps)
+        t += int(base_s * fps)
+        frames += _rus_gap(t, 2.0, fps)
+        t += int(2.0 * fps)
+    for _ in range(3):                    # vendéggól + válasz-támadás
+        g = _rus_away_goal(t, fps)
+        frames += g
+        t += len(g)
+        frames += _rus_gap(t, 2.0, fps)
+        t += int(2.0 * fps)
+        frames += _rus_frames(t, after_s, 26.0, 31.0, fps)
+        t += int(after_s * fps)
+        frames += _rus_gap(t, 2.0, fps)
+        t += int(2.0 * fps)
+    return Match(_meta(fps), frames)
+
+
+def test_post_goal_rush_flags_the_panicking_team():
+    """Ha a kapott gól után 11 másodperccel rövidebb a támadásuk,
+    kapkodnak — a gólunk után vissza kell állni."""
+    from handball.pipeline.attack_types import (RUS_MIN_ATTACKS,
+                                                post_goal_rush)
+
+    rec = post_goal_rush(_rus_match(16.0, 5.0))["home"]
+    assert rec["after"] >= RUS_MIN_ATTACKS, rec
+    assert rec["base"] >= 4, rec
+    assert rec["diff_s"] and rec["diff_s"] < 0, rec
+    assert rec["verdict"] and "kapkodnak" in rec["verdict"], rec
+
+
+def test_post_goal_rush_flags_the_freezing_team():
+    """A fordított eset: kapott gól után hosszabb támadás = befagyás."""
+    from handball.pipeline.attack_types import post_goal_rush
+
+    rec = post_goal_rush(_rus_match(6.0, 16.0))["home"]
+    assert rec["diff_s"] and rec["diff_s"] > 0, rec
+    assert rec["verdict"] and "befagynak" in rec["verdict"], rec
+
+
+def test_post_goal_rush_silent_without_real_change():
+    """Egy másodperces eltérés nem minta — az ítélet None."""
+    from handball.pipeline.attack_types import post_goal_rush
+
+    rec = post_goal_rush(_rus_match(10.0, 9.0))["home"]
+    assert rec["diff_s"] is not None and rec["verdict"] is None, rec

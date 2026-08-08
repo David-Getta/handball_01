@@ -1023,6 +1023,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "kell.")
     except Exception:
         pass
+    # Kapkodás-index: kapott gól után rövidül-e a támadásuk.
+    try:
+        from .attack_types import post_goal_rush
+        rus = post_goal_rush(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rus = rus[side]
+            if rec_rus["verdict"] is None:
+                continue
+            _irany = ("rövidebb" if rec_rus["diff_s"] < 0
+                      else "hosszabb")
+            body += (f" A(z) {name} támadása kapott gól után "
+                     f"{abs(rec_rus['diff_s']):.1f} másodperccel "
+                     f"{_irany} ({rec_rus['after_s']:.1f} mp a "
+                     f"{rec_rus['base_s']:.1f} mp helyett).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

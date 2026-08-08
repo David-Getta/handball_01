@@ -3794,6 +3794,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import post_goal_rush
+            res["post_goal_rush"] = post_goal_rush(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5516,6 +5521,9 @@ def create_app():
                        lambda: timeout_turnover_roles(match))
                 from ..pipeline.defense import retreat_time
                 _layer("retreat_time", lambda: retreat_time(match))
+                from ..pipeline.attack_types import post_goal_rush
+                _layer("post_goal_rush",
+                       lambda: post_goal_rush(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score
