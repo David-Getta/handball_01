@@ -1055,6 +1055,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "fogadására kell menni.")
     except Exception:
         pass
+    # Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben.
+    try:
+        from .goalkeeper import gk_clutch_saves
+        gkc = gk_clutch_saves(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gkc = gkc[side]
+            if rec_gkc["verdict"] is None:
+                continue
+            _ir = "nő" if rec_gkc["gap_pp"] > 0 else "beesik"
+            body += (f" A(z) {name} kapusa a hajrában {_ir} "
+                     f"({rec_gkc['clutch']['save_pct']:.0f}% a "
+                     f"{rec_gkc['rest']['save_pct']:.0f}% helyett, "
+                     f"{rec_gkc['clutch']['faced']} lövésből).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

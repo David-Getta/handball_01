@@ -1355,6 +1355,44 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 381) Hajrá-kapus: a saját kapusunk végjáték-formája.
+    try:
+        from .goalkeeper import GKC_GAP_PP, gk_clutch_saves
+        gkc381 = gk_clutch_saves(match, config)
+        for side in ("home", "away"):
+            rec381 = gkc381[side]
+            if rec381.get("verdict") is None:
+                continue
+            if rec381["gap_pp"] < 0:
+                add(side, "kapus", "Kapus a hajrában",
+                    f"a kapusunk a hajrában beesik "
+                    f"({rec381['clutch']['save_pct']:.0f}% a "
+                    f"{rec381['rest']['save_pct']:.0f}% helyett, "
+                    f"{rec381['clutch']['faced']} lövésből; "
+                    f"{GKC_GAP_PP:.0f} százalékpont fölött már "
+                    "minta) — a döntő percekben a kapusunk nem "
+                    "segít, pedig ott a legdrágább minden gól",
+                    "hajrá-szimuláció a kapussal: fáradtan, "
+                    "sorozatlövés után 10 éles helyzet, kijelölt "
+                    "hetes-kapus, és a végjátékra tudatos "
+                    "kapuscsere-terv (nem érzés alapján)",
+                    )
+            else:
+                add(side, "kapus", "Kapus-forma a végjátékra",
+                    f"a kapusunk a hajrában nő "
+                    f"({rec381['clutch']['save_pct']:.0f}% a "
+                    f"{rec381['rest']['save_pct']:.0f}% helyett, "
+                    f"{rec381['clutch']['faced']} lövésből) — erre "
+                    "építeni lehet: a végjátékban a védekezés "
+                    "vállalhatja a távoli lövést",
+                    "a hajrá-fal a kapusra épüljön: kifelé tereljük "
+                    "a lövéseket (távoli, szögből), a beállós és a "
+                    "szélső helyzeteket viszont ki kell venni — "
+                    "edzésen a kapussal egyeztetett sarok-felosztás",
+                    )
+    except Exception:
+        pass
+
     # 380) Emberhátrány-hiba poszt: öt emberrel egy elvesztett
     # labda azonnal gólt ér.
     try:

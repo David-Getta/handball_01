@@ -1032,6 +1032,13 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Hajrá-kapus: az utolsó öt percben, illetve azelőtt kaputra
+    # érkezett lövések és védések darabszáma. Darabszám, pontosan
+    # összegződik (arány = saves / faced).
+    gkc_clutch_faced: int = 0
+    gkc_clutch_saves: int = 0
+    gkc_rest_faced: int = 0
+    gkc_rest_saves: int = 0
     # Emberhátrány-hiba poszt: a hátrányban elkövetett labdaeladások
     # darabszáma a VESZTES posztja szerint. Darabszám, pontosan
     # összegződik.
@@ -4101,6 +4108,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Hajrá-kapus: a végjáték lövésválasztása.
+    if rep.gkc_clutch_faced >= 3 and rep.gkc_rest_faced >= 3:
+        _gkc_c = 100.0 * rep.gkc_clutch_saves / rep.gkc_clutch_faced
+        _gkc_r = 100.0 * rep.gkc_rest_saves / rep.gkc_rest_faced
+        _gkc_d = _gkc_c - _gkc_r
+        if _gkc_d >= 15.0:
+            keys.append(
+                f"A kapusuk a hajrában nő ({_gkc_c:.0f}% a "
+                f"{_gkc_r:.0f}% helyett, {rep.gkc_clutch_faced} "
+                "lövésből) — a döntő percekben ne félhelyzetből "
+                "lőjetek: kiugratás, beállós helyzet vagy hetes "
+                "kell.")
+        elif _gkc_d <= -15.0:
+            keys.append(
+                f"A kapusuk a hajrában beesik ({_gkc_c:.0f}% a "
+                f"{_gkc_r:.0f}% helyett, {rep.gkc_clutch_faced} "
+                "lövésből) — a végjátékban minden tiszta lövés "
+                "megéri, vigyétek fel a lövésszámot.")
 
     # Emberhátrány-hiba poszt: az emberelőnyünk célpontja.
     _sht_n = sum(rep.sht_turnovers_by_role.values())
@@ -9187,6 +9213,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .goalkeeper import gk_clutch_saves as _gkc
+        gkcrec = _gkc(match, config)[team.value]
+        rep.gkc_clutch_faced = int(gkcrec["clutch"]["faced"])
+        rep.gkc_clutch_saves = int(gkcrec["clutch"]["saves"])
+        rep.gkc_rest_faced = int(gkcrec["rest"]["faced"])
+        rep.gkc_rest_saves = int(gkcrec["rest"]["saves"])
         from .rules import shorthanded_turnover_roles as _sht
         shtrec = _sht(match, config)[team.value]
         rep.sht_turnovers_by_role = dict(shtrec["roles"])
@@ -11796,6 +11828,30 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 360) Az ő hajrá-kapusuk × a ti hajrá-gólerősségetek: a
+    # végjáték lövésválasztása.
+    if (opp.gkc_clutch_faced >= 3 and opp.gkc_rest_faced >= 3
+            and own.goals >= 5):
+        _gkc360_c = (100.0 * opp.gkc_clutch_saves
+                     / opp.gkc_clutch_faced)
+        _gkc360_r = 100.0 * opp.gkc_rest_saves / opp.gkc_rest_faced
+        _gkc360_d = _gkc360_c - _gkc360_r
+        if _gkc360_d >= 15.0:
+            plan.append(
+                f"A kapusuk a hajrában nő ({_gkc360_c:.0f}% a "
+                f"{_gkc360_r:.0f}% helyett, {opp.gkc_clutch_faced} "
+                "lövésből) — az utolsó öt percben ne a lövésszám "
+                "döntsön: minden támadás végén tiszta helyzet "
+                "kell (kiugratás, beállós, kiharcolt hetes), "
+                "félhelyzetből ne engedjétek el a labdát.")
+        elif _gkc360_d <= -15.0:
+            plan.append(
+                f"A kapusuk a hajrában beesik ({_gkc360_c:.0f}% a "
+                f"{_gkc360_r:.0f}% helyett, {opp.gkc_clutch_faced} "
+                "lövésből) — az utolsó öt percben vigyétek fel a "
+                "lövésszámot: minden tiszta lövés megéri, a "
+                "kipattanóra pedig küldjetek embert.")
 
     # 359) Az ő emberhátrány-hiba posztjuk × a ti
     # emberelőny-játékotok: a két perc alatt elvett labda üres kapu.
@@ -18090,6 +18146,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        gkc_clutch_faced=sum(r.gkc_clutch_faced for r in reports),
+        gkc_clutch_saves=sum(r.gkc_clutch_saves for r in reports),
+        gkc_rest_faced=sum(r.gkc_rest_faced for r in reports),
+        gkc_rest_saves=sum(r.gkc_rest_saves for r in reports),
         sht_turnovers_by_role=_merge_count_dicts(
             r.sht_turnovers_by_role for r in reports),
         rus_after=sum(r.rus_after for r in reports),

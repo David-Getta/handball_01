@@ -3805,6 +3805,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_clutch_saves
+            res["gk_clutch_saves"] = gk_clutch_saves(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5533,6 +5538,9 @@ def create_app():
                 from ..pipeline.rules import shorthanded_turnover_roles
                 _layer("shorthanded_turnover_roles",
                        lambda: shorthanded_turnover_roles(match))
+                from ..pipeline.goalkeeper import gk_clutch_saves
+                _layer("gk_clutch_saves",
+                       lambda: gk_clutch_saves(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

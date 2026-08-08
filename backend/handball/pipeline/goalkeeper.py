@@ -2617,3 +2617,89 @@ def outlet_hunter_roles(match: Match, config=None) -> dict:
                     "indításból) — a kapus-indítás a másik oldalon "
                     "vagy az ő feje fölött nyisson")
     return out
+
+
+# Hajrá-kapus küszöbei: az utolsó ennyi másodperc a hajrá, ennyi
+# kaputra érkezett lövés kell szakaszonként, és ennyi százalékpont
+# eltérés számít érdemi változásnak.
+GKC_WINDOW_S = 300.0
+GKC_MIN_FACED = 3
+GKC_GAP_PP = 15.0
+
+
+def gk_clutch_saves(match: Match, config=None) -> dict:
+    """Hajrá-kapus: NŐ VAGY BEESIK a kapusuk az utolsó öt percben.
+
+    A kapus-bemelegedés a meccs elejét méri, a kapus-forma
+    félidőnként a fáradást — ez a VÉGJÁTÉKOT: a rá kaputra érkezett
+    lövéseket szétválasztja a felvétel utolsó GKC_WINDOW_S
+    másodpercére és a maradékra.
+
+    Edzőileg ez a hajrá-terv kapus-fejezete. Ha a kapusuk a végén
+    nő, a döntő percekben nem szabad félhelyzetből lőni: kiugratás,
+    beállós helyzet vagy hetes kell — biztos befejezés. Ha beesik,
+    épp fordítva: a végjátékban minden tiszta lövés megéri, és a
+    lövésszámot fel kell vinni. Saját csapatra: a kapuscsere és a
+    pihentetés kérdése.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"clutch": {"faced",
+    "saves", "save_pct"}, "rest": {...}, "gap_pp", "verdict"} — a
+    gap_pp/verdict None, ha bármelyik szakaszban GKC_MIN_FACED
+    alatti a lövésszám.
+    """
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames = match.frames
+    empty = {"clutch": {"faced": 0, "saves": 0, "save_pct": None},
+             "rest": {"faced": 0, "saves": 0, "save_pct": None},
+             "gap_pp": None, "verdict": None}
+    if not frames:
+        return {side: {k: (dict(v) if isinstance(v, dict) else v)
+                       for k, v in empty.items()}
+                for side in ("home", "away")}
+
+    cut = frames[-1].t - GKC_WINDOW_S * fps
+    xg = match_xg(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = {"clutch": {"faced": 0, "saves": 0, "save_pct": None},
+               "rest": {"faced": 0, "saves": 0, "save_pct": None},
+               "gap_pp": None, "verdict": None}
+        for sh in xg["shots"]:
+            # A VÉDŐ oldal kapusát a MÁSIK csapat lövése terheli.
+            if sh["team"] == side:
+                continue
+            if sh["outcome"] not in ("goal", "save"):
+                continue  # mellé/blokk: nem kaputra érkezett
+            key = "clutch" if sh["t"] >= cut else "rest"
+            rec[key]["faced"] += 1
+            if sh["outcome"] == "save":
+                rec[key]["saves"] += 1
+        for key in ("clutch", "rest"):
+            n = rec[key]["faced"]
+            rec[key]["save_pct"] = (
+                round(100.0 * rec[key]["saves"] / n, 1) if n else None)
+        if all(rec[k]["faced"] >= GKC_MIN_FACED
+               for k in ("clutch", "rest")):
+            gap = rec["clutch"]["save_pct"] - rec["rest"]["save_pct"]
+            rec["gap_pp"] = round(gap, 1)
+            if gap >= GKC_GAP_PP:
+                rec["verdict"] = (
+                    f"a kapusuk a hajrában nő ({rec['clutch']['save_pct']:.0f}%"
+                    f" a {rec['rest']['save_pct']:.0f}% helyett, "
+                    f"{rec['clutch']['faced']} lövésből) — a döntő "
+                    "percekben ne félhelyzetből lőjetek: kiugratás, "
+                    "beállós helyzet vagy hetes kell")
+            elif gap <= -GKC_GAP_PP:
+                rec["verdict"] = (
+                    f"a kapusuk a hajrában beesik ({rec['clutch']['save_pct']:.0f}%"
+                    f" a {rec['rest']['save_pct']:.0f}% helyett, "
+                    f"{rec['clutch']['faced']} lövésből) — a "
+                    "végjátékban minden tiszta lövés megéri, a "
+                    "lövésszámot fel kell vinni")
+        out[side] = rec
+    return out

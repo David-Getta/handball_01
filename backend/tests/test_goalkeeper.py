@@ -2333,3 +2333,89 @@ def test_outlet_hunter_roles_silent_with_few_steals():
 
     rec = outlet_hunter_roles(_ohr_match([2, 3]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hajrá-kapus (az utolsó öt perc védés-mérlege) --------------------------
+
+
+def _clutch_gk_match(rest_saves=4, rest_goals=0, clutch_saves=0,
+                     clutch_goals=4, fps=25.0):
+    """A vendég kapusára érkező lövések: előbb a meccs derekán, majd
+    az utolsó öt percben (a felvétel végéhez képest)."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(
+                t=t, players=[PlayerPosition(
+                    track_id=99, team=Team.AWAY, x=39.2, y=10.0,
+                    role="kapus", source=PositionSource.MEASURED,
+                    confidence=1.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _shot(save):
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0),
+                       PlayerPosition(track_id=99, team=Team.AWAY,
+                                      x=39.2, y=10.0, role="kapus",
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            bx = min(34.0 + i, 38.6 if save else 40.4)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    _idle(10.0)
+    for _ in range(rest_saves):
+        _shot(save=True)
+    for _ in range(rest_goals):
+        _shot(save=False)
+    _idle(600.0)          # a hajrá-ablak előtti szakasz lezárása
+    for _ in range(clutch_saves):
+        _shot(save=True)
+    for _ in range(clutch_goals):
+        _shot(save=False)
+    return Match(MatchMeta(match_id="gkc", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_gk_clutch_saves_flags_the_fading_keeper():
+    """Ha a hajrában beesik a védés, a végjátékban fel kell vinni a
+    lövésszámot."""
+    from handball.pipeline.goalkeeper import gk_clutch_saves
+
+    rec = gk_clutch_saves(_clutch_gk_match())["away"]
+    assert rec["rest"]["faced"] == 4 and rec["clutch"]["faced"] == 4
+    assert rec["rest"]["save_pct"] == 100.0
+    assert rec["clutch"]["save_pct"] == 0.0
+    assert rec["verdict"] and "beesik" in rec["verdict"], rec
+
+
+def test_gk_clutch_saves_flags_the_rising_keeper():
+    """A fordított eset: a hajrában nő a kapus — biztos befejezés kell."""
+    from handball.pipeline.goalkeeper import gk_clutch_saves
+
+    rec = gk_clutch_saves(_clutch_gk_match(
+        rest_saves=0, rest_goals=4, clutch_saves=4,
+        clutch_goals=0))["away"]
+    assert rec["verdict"] and "nő" in rec["verdict"], rec
+
+
+def test_gk_clutch_saves_needs_both_windows():
+    """Ha a hajrában nincs elég lövés, nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_clutch_saves
+
+    rec = gk_clutch_saves(_clutch_gk_match(
+        clutch_saves=0, clutch_goals=1))["away"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec

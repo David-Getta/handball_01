@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben.** A
+  kapus-bemelegedés a meccs elejét méri, a kapus-forma félidőnként a
+  fáradást — az új réteg a végjátékot: a rá kaputra érkezett
+  lövéseket szétválasztja a felvétel utolsó öt percére és a
+  maradékra. Edzőileg ez a hajrá-terv kapus-fejezete: ha a kapusuk a
+  végén nő, a döntő percekben nem szabad félhelyzetből lőni
+  (kiugratás, beállós helyzet vagy hetes kell); ha beesik, minden
+  tiszta lövés megéri, és a lövésszámot fel kell vinni. Szakaszonként
+  három kaputra érkezett lövés és 15 százalékpont eltérés alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`gk_clutch_saves`), edzői összefoglaló, felderítés (edzői kulcs +
+  360. meccsterv-szabály, mindkét irányra), edzés-fókusz (381.
+  szabály, külön mondattal a beeső és az erősödő kapusra),
+  kliens-csempe. Nem poszt-lencse: a Kulcs-poszt bizonyíték-rétegek
+  közé nem kerül be.
 - **Emberhátrány-hiba poszt: öt emberrel kinek a kezén vész el a
   labdájuk.** Az emberhátrány-poszt azt mondja meg, ki vállalja a
   befejezést öt emberrel — az új réteg a párja: a kiállítás-

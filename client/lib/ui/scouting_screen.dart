@@ -2168,6 +2168,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben (3+
+  // kaputra érkezett lövés mindkét szakaszban, 15 százalékpont
+  // eltérés — a backenddel azonos küszöbök: GKC_MIN_FACED,
+  // GKC_GAP_PP).
+  String? _clutchKeeper(Map<String, dynamic> r) {
+    final cf = (r["gkc_clutch_faced"] as num?)?.toInt() ?? 0;
+    final cs = (r["gkc_clutch_saves"] as num?)?.toInt() ?? 0;
+    final rf = (r["gkc_rest_faced"] as num?)?.toInt() ?? 0;
+    final rs = (r["gkc_rest_saves"] as num?)?.toInt() ?? 0;
+    if (cf < 3 || rf < 3) return null;
+    final c = 100.0 * cs / cf;
+    final b = 100.0 * rs / rf;
+    final d = c - b;
+    if (d.abs() < 15.0) return null;
+    if (d > 0) {
+      return "a kapusuk a hajrában nő (${c.round()}% a ${b.round()}% "
+          "helyett, $cf lövésből) · a végén csak tiszta helyzetből "
+          "lőjetek";
+    }
+    return "a kapusuk a hajrában beesik (${c.round()}% a "
+        "${b.round()}% helyett, $cf lövésből) · a végén vigyétek fel "
+        "a lövésszámot";
+  }
+
   // Emberhátrány-hiba poszt: öt emberrel kinek a kezén vész el a
   // labdájuk (3+ hátrány-eladás, 60% részarány — a backenddel
   // azonos küszöbök: SHT_MIN_TURNOVERS, SHT_SHARE_PCT).
@@ -9522,6 +9546,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapkodás-index", _postGoalRush(r)!],
       if (_shorthandedTurnoverRole(r) != null)
         ["Emberhátrány-hiba poszt", _shorthandedTurnoverRole(r)!],
+      if (_clutchKeeper(r) != null)
+        ["Hajrá-kapus", _clutchKeeper(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)
