@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Ziccerpáros-poszt: ki adja és ki fejezi be a nagy
+  helyzeteiket.** A ziccer-előkészítő poszt azt mondja meg, kinek a
+  kezéből indul a helyzet, a ziccer-poszt azt, kinél alakul ki — az
+  új réteg a kettőt köti össze helyzetenként: az (előkészítő poszt →
+  befejező poszt) párost számolja. A gólpasszpáros a góllal zárult
+  összjátékot nézi, ez a helyzet-értéket: a bejáratott ziccer-gyár
+  akkor is látszik, ha a befejezés sokszor kimarad. Edzőileg egy
+  mozdulattal két posztot fog ki a védekezés: nem külön-külön kell
+  fogni őket, hanem a köztük lévő passzsávot elvágni — zárt sávnál a
+  ziccer ki sem alakul. Legalább 3 ziccer-páros és 55%
+  párosrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`big_chance_pair_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 353. meccsterv-szabály), edzés-fókusz
+  (374. szabály), HTML-riport (Befejező-lencse sor), Kulcs-páros
+  bizonyíték-réteg, kliens-csempe.
 - **Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest.** A
   hetesdobó-poszt azt mondja meg, ki áll oda — az új réteg azt, ki
   hibáz: a felismert hétméteresek közül a gól NÉLKÜL zárulókat

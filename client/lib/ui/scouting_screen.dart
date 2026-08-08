@@ -2168,6 +2168,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Ziccerpáros-poszt: ki adja és ki fejezi be a nagy helyzeteiket
+  // (3+ ziccer-páros, 55% részarány — a backenddel azonos küszöbök:
+  // BCP_PAIR_MIN, BCP_PAIR_SHARE_PCT).
+  String? _bigChancePair(Map<String, dynamic> r) {
+    final byPair =
+        (r["bcp_chances_by_pair"] as Map?)?.cast<String, dynamic>();
+    if (byPair == null || byPair.isEmpty) return null;
+    var total = 0;
+    byPair.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byPair.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 55.0) return null;
+    return "a ziccereik ${pct.round()}%-a ugyanabból a párosból jön "
+        "($top, $total helyzet) · a köztük lévő passzsávot vágjátok "
+        "el, ne külön-külön fogjátok őket";
+  }
+
   // Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest (3+ gól
   // nélküli hetes, 60% részarány — a backenddel azonos küszöbök:
   // SVM_MIN_MISSES, SVM_SHARE_PCT).
@@ -9332,6 +9359,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Ziccer-előkészítő poszt", _bigChanceFeederRole(r)!],
       if (_sevenMissRole(r) != null)
         ["Hetes-kihagyó poszt", _sevenMissRole(r)!],
+      if (_bigChancePair(r) != null)
+        ["Ziccerpáros-poszt", _bigChancePair(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

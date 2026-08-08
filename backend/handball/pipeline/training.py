@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 374) Ziccerpáros-poszt: ha a helyzeteink egyetlen kettősön
+    # állnak, egy ember mindkettőt kifogja.
+    try:
+        from .xg import BCP_PAIR_SHARE_PCT, big_chance_pair_roles
+        bcp374 = big_chance_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec374 = bcp374[side]
+            if rec374.get("verdict") is None:
+                continue
+            add(side, "támadás", "Ziccer-gyár szétszedése",
+                f"a ziccereink {rec374['share_pct']:.0f}%-a "
+                f"ugyanabból a párosból jön ({rec374['main_role']}, "
+                f"{rec374['chances']} helyzetből; "
+                f"{BCP_PAIR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "köztük lévő passzsáv elvágásával az ellenfél egy "
+                "mozdulattal mindkét posztunkat kifogja",
+                "ugyanaz a figura három kimenettel: a bejáratott "
+                "páros mellett a másik oldal befejezésével és "
+                "visszajátszással is; és cseréljük meg a szerepeket "
+                "(a befejező adja a bejátszást) — a ziccer ne "
+                "egyetlen sávon múljon",
+                )
+    except Exception:
+        pass
+
     # 373) Hetes-kihagyó poszt: ha a kihagyott heteseink egy poszthoz
     # kötődnek, a hetes-sorrend és a rutin a téma.
     try:

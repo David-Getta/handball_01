@@ -947,6 +947,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hagyatkozhat.")
     except Exception:
         pass
+    # Ziccerpáros-poszt: ki adja és ki fejezi be a nagy helyzeteiket.
+    try:
+        from .xg import big_chance_pair_roles
+        bcp = big_chance_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bcp = bcp[side]
+            if rec_bcp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ziccereinek "
+                     f"{rec_bcp['share_pct']:.0f}%-a ugyanabból a "
+                     f"párosból jön ({rec_bcp['main_role']}, "
+                     f"{rec_bcp['chances']} helyzetből) — a köztük "
+                     "lévő passzsávot kell elvágni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

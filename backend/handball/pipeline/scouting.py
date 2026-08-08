@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Ziccerpáros-poszt: a nagy helyzetek darabszáma az
+    # (előkészítő poszt → befejező poszt) páros szerint. Darabszám,
+    # pontosan összegződik.
+    bcp_chances_by_pair: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -4068,6 +4072,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Ziccerpáros-poszt: a legdrágább passzsáv két végpontja.
+    _bcp_n = sum(rep.bcp_chances_by_pair.values())
+    if _bcp_n >= 3:
+        _bcp_p, _bcp_c = max(rep.bcp_chances_by_pair.items(),
+                             key=lambda kv: kv[1])
+        _bcp_pct = 100.0 * _bcp_c / _bcp_n
+        if _bcp_pct >= 55.0:
+            keys.append(
+                f"A ziccereik {_bcp_pct:.0f}%-a ugyanabból a "
+                f"párosból jön ({_bcp_p}, {_bcp_n} helyzet) — ne "
+                "külön-külön fogjátok őket, hanem a köztük lévő "
+                "passzsávot vágjátok el: zárt sávnál a helyzet ki "
+                "sem alakul.")
 
     # Hetes-kihagyó poszt: a kapus hetes-felkészítése.
     _svm_n = sum(rep.svm_misses_by_role.values())
@@ -9042,6 +9060,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import seven_miss_roles as _svm
         svmrec = _svm(match, config)[team.value]
         rep.svm_misses_by_role = dict(svmrec["roles"])
+        from .xg import big_chance_pair_roles as _bcp
+        bcprec = _bcp(match, config)[team.value]
+        rep.bcp_chances_by_pair = dict(bcprec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11634,6 +11655,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 353) Az ő ziccerpárosuk × a ti kettőzésetek: a páros közötti
+    # passzsáv elvágása egy mozdulattal két posztot fog ki.
+    _bcp353_n = sum(opp.bcp_chances_by_pair.values())
+    if (_bcp353_n >= 3 and own.dbl_holder_frames > 0
+            and own.dbl_doubled_frames >= 25):
+        _bcp353_p, _bcp353_c = max(opp.bcp_chances_by_pair.items(),
+                                   key=lambda kv: kv[1])
+        _bcp353_pct = 100.0 * _bcp353_c / _bcp353_n
+        if _bcp353_pct >= 55.0:
+            plan.append(
+                f"A ziccereik {_bcp353_pct:.0f}%-a ugyanabból a "
+                f"párosból jön ({_bcp353_p}, {_bcp353_n} helyzet), "
+                "ti pedig kettőztök is (a labdás-kockák "
+                f"{100.0 * own.dbl_doubled_frames / own.dbl_holder_frames:.0f}"
+                "%-ában) — a "
+                "kettőzés ne a labdásra menjen, hanem a páros közé: "
+                "a passzsáv elvágásával egy mozdulattal mindkét "
+                "posztot kifogjátok, a ziccer ki sem alakul.")
 
     # 352) Az ő hetes-kihagyó posztjuk × a ti kapusotok: ha ő áll
     # oda, a kapus mehet a saját megérzésére.
@@ -17801,6 +17841,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.bcf_chances_by_role for r in reports),
         svm_misses_by_role=_merge_count_dicts(
             r.svm_misses_by_role for r in reports),
+        bcp_chances_by_pair=_merge_count_dicts(
+            r.bcp_chances_by_pair for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

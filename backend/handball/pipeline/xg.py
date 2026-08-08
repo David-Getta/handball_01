@@ -1392,3 +1392,97 @@ def big_chance_feeder_roles(match: Match,
                     "vágjátok el: a helyzet így ki sem alakul, nem "
                     "a befejezést kell hárítani")
     return out
+
+
+# Ziccerpáros-poszt küszöbei: ennyi poszthoz kötött ziccer-páros kell
+# az ítélethez, és ekkora részarány a fő párosnak (a páros ritkább
+# esemény, mint az egy-posztos minta, ezért enyhébb a részarány).
+BCP_PAIR_MIN = 3
+BCP_PAIR_SHARE_PCT = 55.0
+
+
+def big_chance_pair_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Ziccerpáros-poszt: KI ADJA és KI FEJEZI BE a nagy helyzeteiket.
+
+    A ziccer-előkészítő poszt azt mondja meg, kinek a kezéből indul a
+    nagy helyzet, a ziccer-poszt azt, kinél alakul ki — ez a kettőt
+    köti össze helyzetenként: az (előkészítő poszt → befejező poszt)
+    párost számolja. A gólpasszpáros a GÓLLAL zárult összjátékot
+    nézi, ez a helyzet-értéket: itt a bejáratott ziccer-gyár akkor is
+    látszik, ha a befejezés sokszor kimarad.
+
+    Edzőileg egy mozdulattal két posztot fog ki a védekezés: a párost
+    nem külön-külön kell fogni, hanem a köztük lévő passzsávot
+    elvágni (testtel zárás a bejátszó és az érkező között,
+    előrelépéssel a passz idejére) — ha a sáv zárva van, a ziccer ki
+    sem alakul. Saját csapatra: ha a ziccereink egyetlen kettősön
+    állnak, a párost szét kell szedni az edzésen (más befejező, más
+    bejátszó), különben az ellenfél egy emberrel megfogja mindkettőt.
+
+    Visszatérés csapatonként: {"chances" (poszthoz kötött
+    ziccer-páros), "roles": {"A→B": darab}, "main_role" (a fő páros),
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    BCP_PAIR_MIN, vagy egyik páros sem éri el a
+    BCP_PAIR_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = BCF_FEED_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"chances": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        # A helyzethez vezető utolsó passz — mint a ziccer-előkészítő
+        # rétegben; itt a passzoló ÉS a befejező posztja is kell.
+        best = None
+        for p in passes:
+            if not (0 <= sh["t"] - p.t <= win):
+                continue
+            if p.team.value != side:
+                continue
+            if p.receiver_id != pid or p.passer_id == pid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        r_feed = roles[side].get(best.passer_id)
+        r_fin = roles[side].get(pid)
+        if r_feed is None or r_fin is None:
+            continue
+        kulcs = f"{r_feed['poszt']}→{r_fin['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["chances"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chances"] >= BCP_PAIR_MIN:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["chances"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= BCP_PAIR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a ziccereik {share:.0f}%-a ugyanabból a "
+                    f"párosból jön ({par}, {rec['chances']} "
+                    "helyzetből) — nem külön-külön kell fogni őket, "
+                    "hanem a köztük lévő passzsávot elvágni: zárt "
+                    "sávnál a helyzet ki sem alakul")
+    return out

@@ -1372,3 +1372,28 @@ def test_big_chance_feeder_roles_silent_with_few_chances():
 
     rec = big_chance_feeder_roles(_bcfeed_match([5, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Ziccerpáros-poszt -------------------------------------------------------
+
+def test_big_chance_pair_roles_names_the_duo():
+    """Négy ziccerből hármat ugyanaz a kettős csinál (irányító
+    bejátszás → beálló befejezés) → a köztük lévő sávot kell vágni."""
+    from handball.pipeline.xg import (BCP_PAIR_MIN,
+                                      big_chance_pair_roles)
+
+    rec = big_chance_pair_roles(_bcfeed_match([5, 5, 5, 9]))["home"]
+    assert rec["chances"] >= BCP_PAIR_MIN, rec
+    assert rec["main_role"] == "irányító→beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 55.0, rec
+    assert rec["verdict"] and "passzsávot" in rec["verdict"], rec
+
+
+def test_big_chance_pair_roles_silent_with_few_chances():
+    """Két ziccer-párosból még nincs ítélet."""
+    from handball.pipeline.xg import big_chance_pair_roles
+
+    rec = big_chance_pair_roles(_bcfeed_match([5, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+    assert big_chance_pair_roles(
+        _bcfeed_match([5, 9]))["away"]["chances"] == 0
