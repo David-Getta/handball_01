@@ -271,3 +271,27 @@ def test_kulcs_poszt_lefedi_a_poszt_iteletes_retegeket():
                 missing.append(f"{mod.stem}.{fn}")
     assert not missing, ("hiányzik a KP_LAYERS-ből: "
                          + ", ".join(sorted(missing)))
+
+
+def test_minden_kp_reteg_a_riport_lencsekben_is():
+    """ŐR: minden Kulcs-poszt bizonyíték-réteg jelenjen meg a
+    HTML-riport Befejező- vagy Védő-lencse táblájában is.
+
+    A lencse-sorokat kézzel soroljuk fel a report_html-ben — ez a
+    teszt a KP_LAYERS névsorával veti össze őket, hogy egy új réteg
+    lencse-sora ne maradhasson ki csendben.
+    """
+    import re
+
+    from handball.pipeline.priorities import KP_LAYERS
+
+    src = open("handball/pipeline/report_html.py",
+               encoding="utf-8").read()
+    i = src.index("fin_rows = _lens_rows")
+    k = src.index("if def_rows:")
+    lens_names = set(re.findall(r'\("([^"]+)",\s*[a-z_0-9]+\),?',
+                                src[i:k]))
+    kp_names = {name for (name, _m, _f) in KP_LAYERS}
+    hianyzik = sorted(kp_names - lens_names)
+    assert not hianyzik, (
+        f"KP-rétegek lencse-sor nélkül: {hianyzik}")
