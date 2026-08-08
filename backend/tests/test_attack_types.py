@@ -4389,3 +4389,59 @@ def test_rebound_pair_roles_silent_with_few_shots():
 
     rec = rebound_pair_roles(_scr_match([(1, 2), (2, 1)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Sávváltó-poszt (melyik posztjuk vált sávot a támadásban) --------------
+
+
+def _lsw_match(switchers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + keresztmozgás: a
+    `switchers` szerinti játékos átmegy a pálya másik szélső sávjába
+    (és ott marad 2 mp-ig), majd vissza. Az 5-ös irányítónál marad a
+    labda, hogy a birtoklás a mozgás alatt is mérhető legyen."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(mover=None, my=None):
+        out = []
+        for tid, (x, y) in spos.items():
+            if tid == mover:
+                out.append(_pl(tid, Team.HOME, x, my))
+            else:
+                out.append(_pl(tid, Team.HOME, x, y))
+        return out
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in switchers:
+        for my in (17.0, spos[tid][1]):   # átmegy, majd vissza
+            for _ in range(int(2.0 * fps)):
+                frames.append(Frame(
+                    t=t, players=cast(mover=tid, my=my),
+                    ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+                t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_lane_switch_roles_names_the_crossing_post():
+    """A beálló viszi a keresztmozgást → a védője követés/átadás
+    szabályát előre el kell dönteni."""
+    from handball.pipeline.attack_types import (LSW_MIN_SWITCHES,
+                                                lane_switch_roles)
+
+    rec = lane_switch_roles(_lsw_match([7, 7, 7, 9]))["home"]
+    assert rec["switches"] >= LSW_MIN_SWITCHES, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "ÁTADJA" in rec["verdict"], rec
+
+
+def test_lane_switch_roles_silent_with_few_switches():
+    """Néhány sávváltásból nincs ítélet."""
+    from handball.pipeline.attack_types import lane_switch_roles
+
+    rec = lane_switch_roles(_lsw_match([7]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

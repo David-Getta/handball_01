@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Sávváltó-poszt: melyik posztjuk vált sávot a támadásban.
+    try:
+        from .attack_types import lane_switch_roles
+        lsw = lane_switch_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lsw = lsw[side]
+            if rec_lsw["verdict"] is None:
+                continue
+            body += (f" A(z) {name} keresztmozgása a(z) "
+                     f"{rec_lsw['main_role']} posztra épül "
+                     f"({rec_lsw['share_pct']:.0f}%, "
+                     f"{rec_lsw['switches']} sávváltásból) — előre "
+                     "kell dönteni: követés vagy átadás.")
+    except Exception:
+        pass
     # Elöl lógó poszt: melyik posztjuk nem ér haza védekezni.
     try:
         from .defense import recovery_roles

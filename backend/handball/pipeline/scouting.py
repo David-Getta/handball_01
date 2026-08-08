@@ -1013,6 +1013,9 @@ class ScoutingReport:
     # töltöttek posztonként. Kocka-darabszám, pontosan összegződik.
     rcr_frames_by_role: dict = field(default_factory=dict)
     rcr_home_by_role: dict = field(default_factory=dict)
+    # Sávváltó-poszt: a támadás közbeni sávváltások darabszáma
+    # posztonként. Darabszám, pontosan összegződik.
+    lsw_switches_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3981,6 +3984,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "térfelén — a gyors indítást az ő oldalára "
                 "vezessétek, mögötte üres a pálya.")
             break
+
+    # Sávváltó-poszt: követés vagy átadás.
+    _lsw_n = sum(rep.lsw_switches_by_role.values())
+    if _lsw_n >= 5:
+        _lsw_p, _lsw_c = max(rep.lsw_switches_by_role.items(),
+                             key=lambda kv: kv[1])
+        _lsw_pct = 100.0 * _lsw_c / _lsw_n
+        if _lsw_pct >= 60.0:
+            keys.append(
+                f"A keresztmozgásuk a(z) {_lsw_p} posztra épül "
+                f"({_lsw_pct:.0f}%, {_lsw_n} sávváltás) — előre "
+                "döntsétek el, hogy a védője KÖVETI a sávváltáson "
+                "át, vagy ÁTADJA a szomszédnak: a bizonytalan "
+                "átadásból nyílik a lyuk.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8923,6 +8940,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .momentum import response_scorer_roles as _rsp
         rsprec = _rsp(match, config)[team.value]
         rep.rsp_goals_by_role = dict(rsprec["roles"])
+        from .attack_types import lane_switch_roles as _lsw
+        lswrec = _lsw(match, config)[team.value]
+        rep.lsw_switches_by_role = dict(lswrec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11515,6 +11535,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 347) Az ő sávváltó-posztjuk × a ti kettőzésetek: a keresztmozgás
+    # pillanata a legjobb kettőzés-időzítés.
+    _lsw347_n = sum(opp.lsw_switches_by_role.values())
+    _dbl347 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _lsw347_n >= 5 and _dbl347 >= 20.0:
+        _lsw347_p, _lsw347_c = max(opp.lsw_switches_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _lsw347_pct = 100.0 * _lsw347_c / _lsw347_n
+        if _lsw347_pct >= 60.0:
+            plan.append(
+                f"A keresztmozgásuk a(z) {_lsw347_p} posztra épül "
+                f"({_lsw347_pct:.0f}%, {_lsw347_n} sávváltás), ti "
+                f"pedig jól kettőztök ({_dbl347:.0f}% a labdás "
+                "nyomás alatt) — a sávváltás pillanatában "
+                "kettőzzetek rá: ott a legnagyobb a bizonytalanság "
+                "az átadásban, és ott a legolcsóbb a labdaszerzés.")
 
     # 346) Az ő elöl lógó posztjuk × a ti gyorsan indító kapusotok: a
     # mögötte lévő üres sávba érdemes vezetni a kihozatalt.
@@ -17562,6 +17600,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.pwp_shots_by_role for r in reports),
         rsp_goals_by_role=_merge_count_dicts(
             r.rsp_goals_by_role for r in reports),
+        lsw_switches_by_role=_merge_count_dicts(
+            r.lsw_switches_by_role for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Sávváltó-poszt: melyik posztjuk vált sávot a támadásban.** Új
+  mérés (nem meglévő motor lencséje): a saját támadás közben
+  megszámolja, hányszor lép át egy játékos a pálya szélességének
+  másik harmadába úgy, hogy ott legalább egy másodpercig marad, és a
+  sávváltást a posztjához írja. Edzőileg a védekezés váltás-szabálya:
+  ha a keresztmozgásuk egy posztra épül, előre el kell dönteni, hogy
+  a védője KÖVETI a sávváltáson át, vagy ÁTADJA a szomszédnak — a
+  bizonytalan átadásból nyílik a lyuk. Saját oldalon a
+  figura-repertoár mérője. Legalább 5 sávváltás és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`lane_switch_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 347. meccsterv-szabály), edzés-fókusz (368.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Elöl lógó poszt: melyik posztjuk nem ér haza védekezni.** A
   visszaérés-fegyelem rétege az embert nevezi meg — az új réteg a
   posztot: a védekezett kockákat posztonként összegzi, és megnézi,

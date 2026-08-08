@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Sávváltó-poszt: melyik posztjuk vált sávot a támadásban (5+
+  // sávváltás, 60% részarány — a backenddel azonos küszöbök:
+  // LSW_MIN_SWITCHES, LSW_SHARE_PCT).
+  String? _laneSwitchRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["lsw_switches_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 5) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a keresztmozgásuk a(z) $top posztra épül "
+        "(${pct.round()}%, $total sávváltás) · előre döntsétek el: a"
+        " védője követi vagy átadja";
+  }
+
   // Elöl lógó poszt: melyik posztjuk nem ér haza védekezni (200+
   // védekezett kocka, 70% alatti hazaérés — a backenddel azonos
   // küszöbök: RCR_MIN_FRAMES, RCR_LOW_PCT).
@@ -9166,6 +9193,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_laneSwitchRole(r) != null)
+        ["Sávváltó-poszt", _laneSwitchRole(r)!],
       if (_recoveryRole(r) != null)
         ["Elöl lógó poszt", _recoveryRole(r)!],
       if (_responseScorerRole(r) != null)

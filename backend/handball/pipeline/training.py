@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 368) Sávváltó-poszt: ha a keresztmozgásunkat egy poszt viszi, a
+    # felkészült fal egyszerűen követi.
+    try:
+        from .attack_types import LSW_SHARE_PCT, lane_switch_roles
+        lsw368 = lane_switch_roles(match, config)
+        for side in ("home", "away"):
+            rec368 = lsw368[side]
+            if rec368.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő keresztmozgás",
+                f"a sávváltásaink {rec368['share_pct']:.0f}%-a a(z) "
+                f"{rec368['main_role']} posztunktól jön "
+                f"({rec368['switches']} sávváltásból; "
+                f"{LSW_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült fal egy emberrel követi, és a figuráink "
+                "nem nyitnak teret",
+                "keresztmozgás több posztról: ellenirányú kettős "
+                "keresztek (két ember egyszerre vált sávot), "
+                "elzárással kombinált átfutás, és a labda nélküli "
+                "mozgás időzítése a bejátszáshoz",
+                )
+    except Exception:
+        pass
+
     # 367) Elöl lógó poszt: ha egy posztunk nem ér haza, mögötte üres
     # a pálya — az ellenfél oda fogja vezetni a gyors indítást.
     try:

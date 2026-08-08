@@ -5642,3 +5642,104 @@ def rebound_pair_roles(match: Match,
                     "rohamból) — az első lövés zárása UTÁN azonnal "
                     "az érkező útját kell elállni")
     return out
+
+
+# Sávváltó-poszt: a pálya szélességét három sávra osztjuk; egy
+# sávváltás akkor számít, ha a játékos legalább ennyi ideig marad az
+# új sávban. Ennyi poszthoz kötött sávváltás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a keresztmozgásuk egy
+# posztra épül.
+LSW_HOLD_S = 1.0
+LSW_MIN_SWITCHES = 5
+LSW_SHARE_PCT = 60.0
+
+
+def lane_switch_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Sávváltó-poszt: MELYIK POSZTJUK vált sávot a támadásban.
+
+    A támadás-szélesség (attack_width) csapat-szinten mondja meg,
+    mennyire húzzák szét a pályát — ez a keresztmozgást méri
+    posztonként: a saját támadás közben megszámoljuk, hányszor lép
+    át egy játékos a pálya szélességének másik harmadába (bal /
+    közép / jobb sáv) úgy, hogy ott legalább LSW_HOLD_S ideig marad.
+
+    Edzőileg ez a védekezés váltás-szabálya: ha a keresztmozgásuk egy
+    posztra épül, előre el kell dönteni, hogy a védője KÖVETI-e a
+    sávváltáson át, vagy ÁTADJA a szomszédnak — a bizonytalan
+    átadásból nyílik a lyuk. Saját csapatra: a keresztmozgás
+    eloszlása a figura-repertoár mérője; ha egy ember viszi, könnyű
+    követni.
+
+    Visszatérés csapatonként: {"switches" (poszthoz kötött
+    sávváltás), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az LSW_MIN_SWITCHES,
+    vagy egyik poszt sem éri el az LSW_SHARE_PCT-t.
+    """
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    hold = max(1, round(LSW_HOLD_S * fps))
+    third = COURT_WIDTH_M / 3.0
+    roles = estimate_positions(match, config)
+
+    def _lane(y: float) -> int:
+        if y < third:
+            return 0
+        return 1 if y < 2 * third else 2
+
+    # Játékosonként: az utolsó MEGERŐSÍTETT sáv, a futó jelölt sáv és
+    # az abban töltött kockák.
+    state: dict = {}
+    out: dict = {side: {"switches": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        atk = holder.team
+        for p in f.players:
+            if p.team != atk or p.role == "kapus":
+                continue
+            lane = _lane(p.y)
+            st = state.get(p.track_id)
+            if st is None:
+                state[p.track_id] = [lane, lane, 0]
+                continue
+            confirmed, cand, n = st
+            if lane != cand:
+                st[1], st[2] = lane, 1
+                continue
+            st[2] = n + 1
+            if lane != confirmed and st[2] >= hold:
+                st[0] = lane
+                side = atk.value
+                rec_role = roles[side].get(p.track_id)
+                if rec_role is None:
+                    continue
+                poszt = rec_role["poszt"]
+                rec = out[side]
+                rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+                rec["switches"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["switches"] >= LSW_MIN_SWITCHES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["switches"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= LSW_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a keresztmozgásuk a(z) {poszt} posztra épül "
+                    f"({share:.0f}%, {rec['switches']} sávváltásból)"
+                    " — előre döntsétek el, hogy a védője KÖVETI a "
+                    "sávváltáson át, vagy ÁTADJA a szomszédnak: a "
+                    "bizonytalan átadásból nyílik a lyuk")
+    return out
