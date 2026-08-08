@@ -1355,6 +1355,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 384) Visszaállás ára: a lövésünk után kapott gyors gólok
+    # számlája — nem a fal minősége, hanem a jelenléte a kérdés.
+    try:
+        from .defense import (RTP_COSTLY_PCT, RTP_WINDOW_S,
+                              retreat_punishment)
+        rtp384 = retreat_punishment(match, config)
+        for side in ("home", "away"):
+            rec384 = rtp384[side]
+            if rec384.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Lövés utáni első hullám",
+                f"a gól nélküli lövéseink {rec384['rate_pct']:.0f}"
+                f"%-át gyors kapott gól követi ({rec384['punished']} "
+                f"a {rec384['shots']} lövésből, "
+                f"{RTP_WINDOW_S:.0f} másodpercen belül; "
+                f"{RTP_COSTLY_PCT:.0f}% fölött már drága) — ilyenkor "
+                "nem a fal minősége a baj, hanem hogy a fal még "
+                "nincs ott",
+                "lövés utáni azonnali visszafutás jelre: a "
+                "befejezés pillanatában a labda mögötti két ember "
+                "indul, a szélsők a saját sávjukban futnak vissza; "
+                "edzésen befejezés után azonnali 5-6 elleni "
+                "védekezés (a hiányzó ember a lövő)",
+                )
+    except Exception:
+        pass
+
     # 383) Lepattanó-szedő poszt: ha a kipattanókat mindig ugyanaz
     # szedi, a többiek nem indulnak el.
     try:

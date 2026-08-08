@@ -1099,6 +1099,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "küldeni a berobbanó embert.")
     except Exception:
         pass
+    # Visszaállás ára: a lövésük után kapott gyors gólok.
+    try:
+        from .defense import retreat_punishment
+        rtp = retreat_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rtp = rtp[side]
+            if rec_rtp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gól nélküli lövéseinek "
+                     f"{rec_rtp['rate_pct']:.0f}%-át gyors kapott "
+                     f"gól követi ({rec_rtp['punished']} a "
+                     f"{rec_rtp['shots']} lövésből) — ez a lassú "
+                     "visszaállás ára.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

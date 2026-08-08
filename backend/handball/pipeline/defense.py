@@ -5385,3 +5385,73 @@ def defensive_rebound_roles(match, config=None) -> dict:
                     "berobbanó embert: a második lövés a legolcsóbb "
                     "gól")
     return out
+
+
+# Visszaállás ára: ennyi másodpercen belüli kapott gól számít a
+# lövésük utáni büntetésnek, ennyi mért lövés kell az ítélethez, és
+# e fölötti arány már drága.
+RTP_WINDOW_S = 12.0
+RTP_MIN_SHOTS = 6
+RTP_COSTLY_PCT = 20.0
+
+
+def retreat_punishment(match, config=None) -> dict:
+    """Visszaállás ára: a GÓL NÉLKÜLI lövésük után kapott gyors gól.
+
+    A visszaállás-idő (retreat_time) azt mondja meg, HÁNY MÁSODPERC
+    alatt áll össze a faluk — ez azt, MENNYIBE KERÜL: a gól nélkül
+    záruló lövéseiket (védés, mellé, blokk) nézi, és megszámolja,
+    hányat követett RTP_WINDOW_S-en belül az ellenfél gólja. A
+    góllal záruló lövések kimaradnak: onnan középkezdés jön, nem
+    lerohanás.
+
+    Edzőileg ez a lassú visszaállás számlája: ha a lövéseik ötödét
+    gyors kapott gól követi, nem a fal minősége a baj, hanem az,
+    hogy a fal nincs ott. Ellenük ez az olvasat, hogy minden
+    védésből azonnal indítani kell; saját csapatra a lövés
+    pillanatában kijelölt visszafutó és a labda mögötti biztosítás.
+
+    Visszatérés csapatonként: {"shots" (gól nélküli lövés),
+    "punished" (gyors kapott góllal büntetett), "rate_pct",
+    "verdict"} — a rate_pct None RTP_MIN_SHOTS alatt, az ítélet
+    None, ha az arány a RTP_COSTLY_PCT alatt marad.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(RTP_WINDOW_S * fps)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+    goals = sorted((e.t, e.team.value) for e in shots
+                   if e.type == EventType.GOAL)
+
+    out: dict = {side: {"shots": 0, "punished": 0, "rate_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for e in shots:
+        if e.type == EventType.GOAL:
+            continue      # gól után középkezdés jön, nem lerohanás
+        side = e.team.value
+        other = "away" if side == "home" else "home"
+        rec = out[side]
+        rec["shots"] += 1
+        if any(gs == other and 0 <= gt - e.t <= win
+               for (gt, gs) in goals):
+            rec["punished"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["shots"] < RTP_MIN_SHOTS:
+            continue
+        rate = 100.0 * rec["punished"] / rec["shots"]
+        rec["rate_pct"] = round(rate, 1)
+        if rate >= RTP_COSTLY_PCT:
+            rec["verdict"] = (
+                f"a gól nélküli lövéseik {rate:.0f}%-át gyors kapott "
+                f"gól követi ({rec['punished']} a {rec['shots']} "
+                f"lövésből, {RTP_WINDOW_S:.0f} másodpercen belül) — "
+                "ez a lassú visszaállás ára: minden védésükből "
+                "azonnal indítani kell, mert a fal még nincs ott")
+    return out

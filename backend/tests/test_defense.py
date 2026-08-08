@@ -4037,3 +4037,74 @@ def test_defensive_rebound_roles_silent_with_few_rebounds():
 
     rec = defensive_rebound_roles(_rbc_match([30, 31]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Visszaállás ára (a lövésük után kapott gyors gól) ---------------------
+
+
+def _rtp_match(punished, clean, fps=25.0):
+    """`punished` hazai lövés, mindegyik után 5 mp-en belül vendég
+    góllal; `clean` hazai lövés büntetlenül."""
+    frames = []
+    t = 0
+
+    def _home_miss():
+        nonlocal t
+        for _ in range(10):     # a labda a lövőnél
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 6.0)],
+                                ball=Ball(x=30.2, y=6.0, confidence=1.0)))
+            t += 1
+        for i in range(12):     # mellé megy (y=5, a kapun kívül)
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 30.0, 6.0)],
+                                ball=Ball(x=min(31.0 + i, 40.5), y=5.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _away_goal():
+        nonlocal t
+        x = 8.0
+        while x > -0.5:
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, max(x, 0.5), 10.0)],
+                ball=Ball(x=max(x, -0.5), y=10.0, confidence=1.0)))
+            x -= 0.4
+            t += 1
+
+    def _gap(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=18.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(punished):
+        _home_miss()
+        _away_goal()          # a lövés után pár másodperccel
+        _gap(20.0)
+    for _ in range(clean):
+        _home_miss()
+        _gap(30.0)
+    return Match(_meta(fps), frames)
+
+
+def test_retreat_punishment_prices_the_slow_wall():
+    """Ha a gól nélküli lövéseik ötödét gyors kapott gól követi, a
+    lassú visszaállásnak ára van."""
+    from handball.pipeline.defense import (RTP_MIN_SHOTS,
+                                           retreat_punishment)
+
+    rec = retreat_punishment(_rtp_match(punished=3, clean=5))["home"]
+    assert rec["shots"] >= RTP_MIN_SHOTS, rec
+    assert rec["punished"] == 3, rec
+    assert rec["rate_pct"] and rec["rate_pct"] >= 20.0, rec
+    assert rec["verdict"] and "visszaállás ára" in rec["verdict"], rec
+
+
+def test_retreat_punishment_silent_when_nothing_is_punished():
+    """Ha a lövéseik után nem jön gyors gól, nincs ítélet."""
+    from handball.pipeline.defense import retreat_punishment
+
+    rec = retreat_punishment(_rtp_match(punished=0, clean=8))["home"]
+    assert rec["shots"] >= 6 and rec["punished"] == 0, rec
+    assert rec["rate_pct"] == 0.0 and rec["verdict"] is None, rec

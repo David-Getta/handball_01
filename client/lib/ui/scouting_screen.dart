@@ -2168,6 +2168,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Visszaállás ára: a gól nélküli lövésük után kapott gyors gólok
+  // (6+ lövés, 20% fölött drága — a backenddel azonos küszöbök:
+  // RTP_MIN_SHOTS, RTP_COSTLY_PCT).
+  String? _retreatPunishment(Map<String, dynamic> r) {
+    final shots = (r["rtp_shots"] as num?)?.toInt() ?? 0;
+    final punished = (r["rtp_punished"] as num?)?.toInt() ?? 0;
+    if (shots < 6) return null;
+    final pct = 100.0 * punished / shots;
+    if (pct < 20.0) return null;
+    return "a gól nélküli lövéseik ${pct.round()}%-át gyors kapott "
+        "gól követi ($punished a $shots lövésből) · minden "
+        "védésetekből azonnal indítsatok";
+  }
+
   // Lepattanó-szedő poszt: védés után kinél marad a labda (3+
   // megszerzett kipattanó, 60% részarány — a backenddel azonos
   // küszöbök: RBC_MIN_REBOUNDS, RBC_SHARE_PCT).
@@ -9601,6 +9615,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Figura-koncentráció", _setplayConcentration(r)!],
       if (_defensiveReboundRole(r) != null)
         ["Lepattanó-szedő poszt", _defensiveReboundRole(r)!],
+      if (_retreatPunishment(r) != null)
+        ["Visszaállás ára", _retreatPunishment(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Visszaállás ára: a gól nélküli lövésük után kapott gyors gól.**
+  A visszaállás-idő azt mondja meg, hány másodperc alatt áll össze a
+  faluk — az új réteg azt, mennyibe kerül: a gól nélkül záruló
+  lövéseiket (védés, mellé, blokk) nézi, és megszámolja, hányat
+  követett tizenkét másodpercen belül az ellenfél gólja (a góllal
+  záruló lövések kimaradnak: onnan középkezdés jön, nem lerohanás).
+  Edzőileg ez a lassú visszaállás számlája: ha a lövéseik ötödét
+  gyors kapott gól követi, nem a fal minősége a baj, hanem hogy a
+  fal nincs ott. Hat gól nélküli lövés alatt hallgat (None); az
+  ítélet 20% fölött szólal meg. A rangsorban az "ár" családba
+  tartozik. Felületek: /analyze + meccs-csomag
+  (`retreat_punishment`), edzői összefoglaló, felderítés (edzői
+  kulcs + 363. meccsterv-szabály), edzés-fókusz (384. szabály),
+  kliens-csempe.
 - **Lepattanó-szedő poszt: védés után kinél marad a labda.** A
   kapus-kipattanó azt mondja meg, fogja-e a kapus a labdát, a
   lepattanó-poszt azt, ki lő másodszor — az új réteg a védekező
