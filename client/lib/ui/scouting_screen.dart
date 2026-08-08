@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt (100+
+  // kettőzött kocka, 60% részarány — a backenddel azonos küszöbök:
+  // DPP_MIN_FRAMES, DPP_SHARE_PCT).
+  String? _doublingPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["dpp_frames_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 100) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kettőzésük a(z) $top védő-pároson áll "
+        "(${pct.round()}% a kettőzött időből) · a kioldó passz "
+        "célpontja fix, gyakoroljátok be";
+  }
+
   // Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik (3+
   // asszisztos gól, 60% részarány — a backenddel azonos küszöbök:
   // APR_MIN_GOALS, APR_SHARE_PCT).
@@ -8967,6 +8994,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_doublingPairRole(r) != null)
+        ["Kettőzőpáros-poszt", _doublingPairRole(r)!],
       if (_assistPairRole(r) != null)
         ["Gólpasszpáros-poszt", _assistPairRole(r)!],
       if (_fastBreakPairRole(r) != null)

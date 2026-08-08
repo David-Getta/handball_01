@@ -990,6 +990,9 @@ class ScoutingReport:
     # Gólpasszpáros-poszt: asszisztos gólok az (adó→befejező)
     # posztpár szerint. Darabszám, pontosan összegződik.
     apr_goals_by_role: dict = field(default_factory=dict)
+    # Kettőzőpáros-poszt: kettőzött kockák a két legközelebbi védő
+    # posztpárja szerint. Kocka-darabszám, pontosan összegződik.
+    dpp_frames_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3853,6 +3856,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_apr_pct:.0f}%, {_apr_n} asszisztos gól) — a "
                 "kettős közti passzsávot zárjátok: az adót testtel,"
                 " a sávot beleéréssel, és a gól-gépezetük áll.")
+
+    # Kettőzőpáros-poszt: hova menjen a kioldó passz.
+    _dpp_n = sum(rep.dpp_frames_by_role.values())
+    if _dpp_n >= 100:
+        _dpp_p, _dpp_c = max(rep.dpp_frames_by_role.items(),
+                             key=lambda kv: kv[1])
+        _dpp_pct = 100.0 * _dpp_c / _dpp_n
+        if _dpp_pct >= 60.0:
+            keys.append(
+                f"A kettőzésük a(z) {_dpp_p} védő-pároson áll "
+                f"({_dpp_pct:.0f}%-a a kettőzött időnek) — a "
+                "kettőző elhagyott embere fix: a kioldó passz oda "
+                "menjen, még a szorítás előtt begyakorolva.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8780,6 +8796,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .roles import assist_pair_roles as _apr
         aprrec = _apr(match, config)[team.value]
         rep.apr_goals_by_role = dict(aprrec["roles"])
+        from .defense import doubling_pair_roles as _dpp
+        dpprec = _dpp(match, config)[team.value]
+        rep.dpp_frames_by_role = dict(dpprec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11360,6 +11379,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 340) Az ő kettőzőpáros-posztjuk × a ti pressz-tűrésetek: a
+    # begyakorolt kioldó passz a kettőzésüket bünteti.
+    _dpp340_n = sum(opp.dpp_frames_by_role.values())
+    if (_dpp340_n >= 100 and own.ps_press_passes >= 10
+            and own.ps_press_to * 5 <= own.ps_press_passes):
+        _dpp340_p, _dpp340_c = max(opp.dpp_frames_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _dpp340_pct = 100.0 * _dpp340_c / _dpp340_n
+        if _dpp340_pct >= 60.0:
+            plan.append(
+                f"A kettőzésük a(z) {_dpp340_p} védő-pároson áll "
+                f"({_dpp340_pct:.0f}%-a a kettőzött időnek), ti "
+                "pedig jól tűritek a nyomást (a nyomott "
+                f"passzaitokból csak {own.ps_press_to} veszett el) "
+                "— a kettőző elhagyott embere fix: a "
+                "kioldó passz oda menjen, és a kettőzésük minden "
+                "alkalommal emberelőnyt ad nektek.")
 
     # 339) Az ő gólpasszpáros-posztjuk × a ti labdaszerzésetek: a
     # tengely-sáv beleérése azonnali labdaszerzés.
@@ -17266,6 +17303,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.fbp_breaks_by_role for r in reports),
         apr_goals_by_role=_merge_count_dicts(
             r.apr_goals_by_role for r in reports),
+        dpp_frames_by_role=_merge_count_dicts(
+            r.dpp_frames_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

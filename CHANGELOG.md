@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt.** A
+  kettőző-poszt az egy védőt nevezi meg — az új réteg a párost: a
+  kettőzött labdás kockákon a labdáshoz legközelebbi két védő
+  posztpárját számolja. Edzőileg a kioldó-passz térképe: ha a
+  kettőzés mindig ugyanattól a párostól jön, a kettőzés miatt
+  elhagyott ember fix — a kioldó passz oda menjen, még a szorítás
+  előtt begyakorolva. Saját oldalon a kettőző-páros forgatása az
+  edzés-téma. Legalább 100 kettőzött kocka és 60% párrészarány
+  alatt hallgat (None). Felületek: /analyze + meccs-csomag
+  (`doubling_pair_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 340. meccsterv-szabály), edzés-fókusz (361. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik.** A
   gólpassz-poszt az adót, a kiszolgált-poszt a befejezőt nevezi meg
   — az új réteg a kettőt köti össze gólonként: az asszisztos gólokat

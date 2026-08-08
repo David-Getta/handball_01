@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 361) Kettőzőpáros-poszt: ha a kettőzésünk egy védő-pároson áll,
+    # az elhagyott ember kiszámítható — a kioldó passz ingyen jön.
+    try:
+        from .defense import DPP_SHARE_PCT, doubling_pair_roles
+        dpp361 = doubling_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec361 = dpp361[side]
+            if rec361.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Egy pároson álló kettőzés",
+                f"a kettőzésünk {rec361['share_pct']:.0f}%-a a(z) "
+                f"{rec361['main_role']} védő-pároson áll "
+                f"({DPP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kettőzéskor elhagyott emberünk mindig ugyanaz, és "
+                "a felkészült ellenfél oda oldja ki a labdát",
+                "kettőző-páros forgatása: a kettőzés több "
+                "poszt-párosból induljon (jelre váltott felelősök), "
+                "és a kettőzés mögötti harmadik ember zárja a "
+                "kioldó passzsávot 3-3-as kisjátékban",
+                )
+    except Exception:
+        pass
+
     # 360) Gólpasszpáros-poszt: ha a góljaink egy tengelyen
     # születnek, egy sávzárás a gól-gépezetünket állítja le.
     try:

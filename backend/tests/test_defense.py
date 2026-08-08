@@ -3745,3 +3745,71 @@ def test_high_steal_roles_silent_with_few_steals():
 
     rec = high_steal_roles(_hsr_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kettőzőpáros-poszt (melyik védő-kettősük kettőz együtt) ---------------
+
+
+def _dpp_match(plan, fps=25.0):
+    """Hazai (támadó) és vendég (védő) poszt-minta + kettőzött
+    kockák: a `plan` elemei ((védő1, védő2), kocka) párok — a két
+    vendég védő a hazai 3-as labdás mellé lép."""
+    aspos = {21: (6.0, 10.0), 22: (5.0, 3.0), 23: (11.0, 10.0)}
+
+    def home_cast():
+        return [_pl(3, Team.HOME, 30.0, 10.0)]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # hazai támadó fázis: a 3-as elöl
+        frames.append(Frame(
+            t=t, players=[_pl(3, Team.HOME, 34.0, 10.0)],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(150):             # vendég támadó fázis: posztok
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.AWAY, *xy)
+                     for tid, xy in aspos.items()],
+            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for ((d1, d2), n) in plan:
+        cast = home_cast() + [
+            _pl(d1, Team.AWAY, 30.8, 10.4),
+            _pl(d2, Team.AWAY, 29.2, 9.6),
+        ] + [_pl(tid, Team.AWAY, *aspos[tid])
+             for tid in aspos if tid not in (d1, d2)]
+        for _ in range(n):           # kettőzött labdás kockák
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=30.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda a szakaszok közt
+            frames.append(Frame(t=t, players=home_cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_doubling_pair_roles_names_the_duo():
+    """A kettőzött idő dandárját a beálló+szélső kettős adja → a
+    kioldó passz célpontja fix."""
+    from handball.pipeline.defense import (DPP_MIN_FRAMES,
+                                           doubling_pair_roles)
+
+    rec = doubling_pair_roles(
+        _dpp_match([((21, 22), 150), ((21, 23), 40)]))["away"]
+    assert rec["frames"] >= DPP_MIN_FRAMES, rec
+    assert rec["main_role"] == "beálló+szélső", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kioldó passz" in rec["verdict"], rec
+
+
+def test_doubling_pair_roles_silent_with_few_frames():
+    """Kevés kettőzött kockából nincs ítélet."""
+    from handball.pipeline.defense import doubling_pair_roles
+
+    rec = doubling_pair_roles(
+        _dpp_match([((21, 22), 50), ((21, 23), 30)]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

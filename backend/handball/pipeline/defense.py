@@ -5022,3 +5022,85 @@ def high_steal_roles(match, config=None) -> dict:
                     "kihozatalt vezetni: a kapus a másik oldalra "
                     "indítson")
     return out
+
+
+# Kettőzőpáros-poszt: ennyi poszthoz kötött kettőzött kocka kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
+# kettőzésük egy védő-pároson áll.
+DPP_MIN_FRAMES = 100
+DPP_SHARE_PCT = 60.0
+
+
+def doubling_pair_roles(match, config=None) -> dict:
+    """Kettőzőpáros-poszt: MELYIK VÉDŐ-KETTŐSÜK kettőz együtt.
+
+    A kettőző-poszt az egy védőt nevezi meg — ez a párost: a
+    kettőzött (két védős) labdás kockákon a labdáshoz legközelebbi
+    KÉT védő (támadó-fázisból becsült) posztját rendezetlen párként
+    számolja. Így a kettőzés-szokásuk akkor is látszik, ha a nevek
+    cserélődnek.
+
+    Edzőileg a kioldó-passz térképe: ha a kettőzésük mindig
+    ugyanattól a párostól jön, a kettőző által elhagyott ember FIX —
+    a kettőzött játékosunk kioldó passza oda menjen, még a szorítás
+    előtt begyakorolva. Saját csapatra: a kettőző-páros forgatása a
+    kiszámíthatóság ellen.
+
+    Visszatérés csapatonként (a KETTŐZŐ, védő oldal): {"frames"
+    (párhoz kötött kettőzött kocka), "roles": {"A+B": kocka},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg a DPP_MIN_FRAMES, vagy egyik pár sem éri el a
+    DPP_SHARE_PCT-t.
+    """
+    import math
+
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"frames": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None \
+                or holder.role == "kapus":
+            continue
+        deff = "away" if holder.team.value == "home" else "home"
+        near = sorted(
+            ((math.hypot(p.x - holder.x, p.y - holder.y), p)
+             for p in f.players
+             if p.team is not None and p.team != holder.team
+             and p.role != "kapus"),
+            key=lambda dp: dp[0])
+        close = [p for (d, p) in near if d <= DOUBLE_TEAM_M]
+        if len(close) < 2:
+            continue
+        r1 = roles[deff].get(close[0].track_id)
+        r2 = roles[deff].get(close[1].track_id)
+        if r1 is None or r2 is None:
+            continue
+        kulcs = "+".join(sorted((r1["poszt"], r2["poszt"])))
+        rec = out[deff]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["frames"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["frames"] >= DPP_MIN_FRAMES:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["frames"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= DPP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kettőzésük a(z) {par} védő-pároson áll "
+                    f"({share:.0f}%-a a kettőzött időnek) — a "
+                    "kettőző elhagyott embere fix: a kioldó passz "
+                    "oda menjen, még a szorítás előtt begyakorolva")
+    return out

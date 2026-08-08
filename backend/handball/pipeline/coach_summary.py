@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kettőzőpáros-poszt: melyik védő-kettősük kettőz együtt.
+    try:
+        from .defense import doubling_pair_roles
+        dpp = doubling_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dpp = dpp[side]
+            if rec_dpp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kettőzése a(z) "
+                     f"{rec_dpp['main_role']} védő-pároson áll "
+                     f"({rec_dpp['share_pct']:.0f}%-a a kettőzött "
+                     "időnek) — a kioldó passz célpontja fix.")
+    except Exception:
+        pass
     # Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik.
     try:
         from .roles import assist_pair_roles
