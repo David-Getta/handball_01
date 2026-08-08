@@ -3,7 +3,71 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.24 óta)
+## Kiadatlan (a v0.1.25 óta)
+
+## v0.1.25 — kiadva (2026-08-09)
+
+> Kiadás-jegyzet: a v0.1.24 óta a fejlesztés hat szálon futott. A kör
+> vezérfonala a POSZT-LENCSE kiteljesítése: a rendszer immár nemcsak
+> azt mondja meg, MI történt, hanem azt is, MELYIK POSZTJUKNÁL — és
+> ami ebből következik, KI ELLEN mit kell tenni.
+>
+> **(1) Poszt-lencse mindenre**: kilencven fölötti új réteg vitte
+> végig ugyanazt a formát a játék minden szakaszán — befejezés
+> (ziccer, ziccerhagyó, pazarló, blokkolt, fedezett, fáradt lövő),
+> építkezés (indító, előkészítő, bejátszó, térnyerő, hátrapassz,
+> labdatartó, lágypassz, kockáztató, sávváltó, vég-birtokos),
+> védekezés (kilépő, átvert, elzárt, kettőző, kettőzött, célkereszt,
+> beállóőr, letámadó, visszafutás, elöl lógó, védőmotor,
+> lepattanó-szedő), szabály és létszám (hetesdobó, hetes-okozó,
+> hetes-kihagyó, kiülő, emberelőny, emberhátrány, 7a6-befejező),
+> valamint a végjáték és a lélektan (hajrá, hajrákéz, hajráhiba,
+> válasz, válaszhiba, csendtörő, forró, eltűnő, felzárkózás, rajt,
+> újrakezdő, középkezdő). Minden réteg ugyanazt az utat járja be: motor
+> → /analyze és meccs-csomag → edzői összefoglaló → felderítés (mező,
+> edzői kulcs, sorszámozott meccsterv-szabály, több meccs összegzése)
+> → edzés-fókusz → HTML-jelentés lencse-sora → kliens-csempe → teszt.
+>
+> **(2) Páros-lencse és a két szintézis**: kilenc réteg már nem egy
+> posztot, hanem egy KETTŐST nevez meg (elzáró-, hetes-, kontra-,
+> gólpassz-, kettőző-, lepattanó-, emberelőny-, időkérés- és
+> ziccerpáros, majd a kétperc-lánc). Fölébük két összegző réteg
+> került: a **Kulcs-poszt** azt mondja meg, hány réteg mutat ugyanarra
+> az EGY posztra, a **Kulcs-páros** azt, hány réteg ugyanarra a
+> KETTŐSRE — a két lista szándékosan külön áll, hogy a "melyik ember"
+> és a "melyik kettős" kérdés ne hígítsa egymást. A jelentésben mindkettő
+> indoklással, a bizonyíték-rétegek felsorolásával jelenik meg.
+>
+> **(3) Ár és végjáték**: új "ár"-rétegek mondják meg, mennyibe kerül
+> egy szokás — a **visszaállás ára** (a gól nélküli lövés után kapott
+> gyors gól) és a **kipattanó ára** (a védés utáni második-helyzet
+> gól). A végjátékot a **hajrá-kapus**, az **óralopás** (vezetve
+> elhúzzák-e a támadást), a **kapkodás-index** (kapott gól után
+> rövidül-e) és a **sprint-esés** írja le. Ide tartozik a
+> **figura-koncentráció** is: megmondja, egyáltalán érdemes-e konkrét
+> figurára készülni ellenük, vagy elvekre kell.
+>
+> **(4) Feldolgozás: nem áll meg egy rossz képkockán.** A videó-feldolgozó
+> eddig 3 perc előrelépés nélkül feladta és részleges meccset mentett.
+> Mostantól a beragadt képkockát ÁTUGORJA, és a következőtől folytatja
+> (legfeljebb húsz ugrás), a felület pedig ki is írja, hogy ez történik.
+>
+> **(5) Szerkezeti őr-tesztek**: a kör során több olyan háló készült,
+> ami nem egy réteget mér, hanem a rendszer épségét — kétszer definiált
+> modul-konstans és függvény, kimaradt Kulcs-poszt bizonyíték-réteg,
+> lefedetlen kliens-csempe-csoport, hiányzó lencse-sor. Ezek élesben
+> fogtak meg valódi hibákat: egy néma küszöb-felülírás miatt a kapus
+> gyengeoldal-rétege 0,45 helyett 0,65-ös küszöbbel futott, egy másik
+> a Kiülő-poszt küszöbét írta át, egy ütköző teszt-helper pedig két
+> meglévő tesztet döntött be.
+>
+> **(6) Mérési igazság**: a réteg-katalógus, a tény-lap és a pályázati
+> doksik számai generáltak, őr-teszttel; a sorrend-függés jelentése a
+> kiadás előtt újra lefutott, és **417 rétegből 0 sorrend-függő** — a
+> termék minden összeállítása sorrend-független.
+>
+> A kiadás számai: **417 elemző réteg**, **1548 automata teszt**, 369
+> meccsterv-szabály, 390 edzés-szabály, 390 kliens-csempe.
 
 - **Kipattanó-szedők: ki szedi össze a kipattanót védés után.** A
   lepattanó-szedő poszt a posztot nevezi meg — az új réteg az
