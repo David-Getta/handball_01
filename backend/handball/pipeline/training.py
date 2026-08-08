@@ -1355,6 +1355,46 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 382) Figura-koncentráció: ha a támadásaink egyetlen mintából
+    # jönnek, egy jó felkészülés kifog minket.
+    try:
+        from .setplays import SPK_TOP_PCT, setplay_concentration
+        spk382 = setplay_concentration(match, config)
+        for side in ("home", "away"):
+            rec382 = spk382[side]
+            if rec382.get("verdict") is None:
+                continue
+            if rec382["top_pct"] >= SPK_TOP_PCT:
+                add(side, "támadás", "Több figura a repertoárba",
+                    f"a támadásaink {rec382['top_pct']:.0f}%-a "
+                    "egyetlen mintából jön "
+                    f"({rec382['attacks']} mért támadás, "
+                    f"{rec382['figures']} figura; "
+                    f"{SPK_TOP_PCT:.0f}% fölött már minta) — egy jó "
+                    "felkészülés kifog minket, mert mindig ugyanazt "
+                    "látja az ellenfél",
+                    "két új kezdés a meglévő figura mellé (másik "
+                    "oldalról indított elzárás, hátsó sorból "
+                    "érkező), és ugyanaz a figura tükrözve is — a "
+                    "cél, hogy a mintánk ne legyen felismerhető az "
+                    "első két passzból",
+                    )
+            else:
+                add(side, "támadás", "Bejáratott figura a szűk "
+                    "helyzetekre",
+                    "a támadásaink sokfelé oszlanak (a legnagyobb "
+                    f"minta is csak {rec382['top_pct']:.0f}%, "
+                    f"{rec382['figures']} figura) — a változatosság "
+                    "jó, de a szoros hajrában kell egy biztos, "
+                    "bejáratott megoldás is",
+                    "válasszunk két figurát végjátékra, és azokat "
+                    "hetente gyakoroljuk élesben (fáradtan, "
+                    "időkérés után, emberelőnyben is) — a "
+                    "többi maradjon szabad játék",
+                    )
+    except Exception:
+        pass
+
     # 381) Hajrá-kapus: a saját kapusunk végjáték-formája.
     try:
         from .goalkeeper import GKC_GAP_PP, gk_clutch_saves

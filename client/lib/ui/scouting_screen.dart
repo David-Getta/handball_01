@@ -2168,6 +2168,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Figura-koncentráció: egy figurára épül-e a támadójátékuk (6+
+  // mért támadás; 40% fölött egy mintára készülni éri meg, 25%
+  // alatt elvekre kell — a backenddel azonos küszöbök:
+  // SPK_MIN_ATTACKS, SPK_TOP_PCT, SPK_VARIED_PCT).
+  String? _setplayConcentration(Map<String, dynamic> r) {
+    final attacks = (r["spk_attacks"] as num?)?.toInt() ?? 0;
+    final top = (r["spk_top"] as num?)?.toInt() ?? 0;
+    final figures = (r["spk_figures"] as num?)?.toInt() ?? 0;
+    if (attacks < 6) return null;
+    final pct = 100.0 * top / attacks;
+    if (pct >= 40.0) {
+      return "a támadásaik ${pct.round()}%-a egyetlen mintából jön "
+          "($attacks mért támadás, $figures figura) · konkrét "
+          "figurára készüljetek";
+    }
+    if (pct <= 25.0) {
+      return "a támadásaik sokfelé oszlanak (a legnagyobb minta is "
+          "csak ${pct.round()}%, $figures figura) · elvekre "
+          "készüljetek, ne figurákra";
+    }
+    return null;
+  }
+
   // Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben (3+
   // kaputra érkezett lövés mindkét szakaszban, 15 százalékpont
   // eltérés — a backenddel azonos küszöbök: GKC_MIN_FACED,
@@ -9548,6 +9571,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberhátrány-hiba poszt", _shorthandedTurnoverRole(r)!],
       if (_clutchKeeper(r) != null)
         ["Hajrá-kapus", _clutchKeeper(r)!],
+      if (_setplayConcentration(r) != null)
+        ["Figura-koncentráció", _setplayConcentration(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

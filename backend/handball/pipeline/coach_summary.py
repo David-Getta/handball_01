@@ -1070,6 +1070,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_gkc['clutch']['faced']} lövésből).")
     except Exception:
         pass
+    # Figura-koncentráció: egy figurára épül-e a támadójátékuk.
+    try:
+        from .setplays import setplay_concentration
+        spk = setplay_concentration(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_spk = spk[side]
+            if rec_spk["verdict"] is None:
+                continue
+            body += (f" A(z) {name} támadásainak "
+                     f"{rec_spk['top_pct']:.0f}%-a a legnagyobb "
+                     f"mintából jön ({rec_spk['attacks']} mért "
+                     f"támadás, {rec_spk['figures']} figura).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

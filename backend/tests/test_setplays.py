@@ -316,3 +316,52 @@ def test_setplay_finishers_silent_with_few_shots():
     rec = setplay_finishers(_spf_match([1, 2]))["home"]
     assert rec["telegraphed"] is None and rec["verdict"] is None, rec
     assert all(r["main_role"] is None for r in rec["figures"]), rec
+
+
+# ---- Figura-koncentráció (egy figurára épül-e a támadójáték) ---------------
+
+
+def _spk_match(sides, fps=25.0):
+    """`sides` = támadásonként a tömörülés oldala ("bal"/"jobb"): a
+    két oldal két külön figurát ad. Támadások közt átmenet."""
+    frames = []
+    t = 0
+    for side in sides:
+        y = 4.0 if side == "bal" else 16.0
+        for _ in range(8):
+            frames.append(_home_attack_frame(t, [28.0, 31.0, 34.0],
+                                             [y, y, y]))
+            t += 1
+        for _ in range(4):     # átmenet: a hazai a saját térfelén
+            frames.append(Frame(t=t,
+                                players=[_pl(1, Team.HOME, 8.0, 10.0)],
+                                ball=Ball(x=8.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="spk", home_team="A", away_team="B",
+                           fps=fps), frames)
+
+
+def test_setplay_concentration_flags_the_one_figure_team():
+    """Ha a támadások nagy része egyetlen mintából jön, konkrét
+    figurára lehet készülni."""
+    from handball.pipeline.setplays import (SPK_MIN_ATTACKS,
+                                            setplay_concentration)
+
+    rec = setplay_concentration(_spk_match(["bal"] * 6 + ["jobb"]))["home"]
+    assert rec["attacks"] >= SPK_MIN_ATTACKS, rec
+    assert rec["figures"] == 2, rec
+    assert rec["top_pct"] and rec["top_pct"] >= 40.0, rec
+    assert rec["cover_figures"] and rec["cover_figures"] >= 1, rec
+    assert rec["verdict"] and "konkrét figurára" in rec["verdict"], rec
+
+
+def test_setplay_concentration_silent_with_few_attacks():
+    """Néhány támadásból nincs ítélet — a szám viszont látszik."""
+    from handball.pipeline.setplays import setplay_concentration
+
+    rec = setplay_concentration(_spk_match(["bal", "jobb"]))["home"]
+    assert rec["attacks"] == 2, rec
+    assert rec["verdict"] is None, rec
+    assert setplay_concentration(
+        _spk_match(["bal", "jobb"]))["away"]["attacks"] == 0

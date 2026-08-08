@@ -1032,6 +1032,12 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Figura-koncentráció: a mért támadások és a legnagyobb figura
+    # támadásainak darabszáma + a figurák száma. Darabszám, meccsek
+    # közt összegződik (arány = top / attacks).
+    spk_attacks: int = 0
+    spk_top: int = 0
+    spk_figures: int = 0
     # Hajrá-kapus: az utolsó öt percben, illetve azelőtt kaputra
     # érkezett lövések és védések darabszáma. Darabszám, pontosan
     # összegződik (arány = saves / faced).
@@ -4108,6 +4114,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Figura-koncentráció: mennyire éri meg figurákra készülni.
+    if rep.spk_attacks >= 6:
+        _spk_pct = 100.0 * rep.spk_top / rep.spk_attacks
+        if _spk_pct >= 40.0:
+            keys.append(
+                f"A támadásaik {_spk_pct:.0f}%-a egyetlen mintából "
+                f"jön ({rep.spk_attacks} mért támadás, "
+                f"{rep.spk_figures} figura) — konkrét figurára "
+                "készüljetek: videó, bejátszott védekezés, előre "
+                "megbeszélt kettőzés.")
+        elif _spk_pct <= 25.0:
+            keys.append(
+                f"A támadásaik sokfelé oszlanak (a legnagyobb minta "
+                f"is csak {_spk_pct:.0f}%, {rep.spk_figures} figura, "
+                f"{rep.spk_attacks} mért támadás) — figurákra "
+                "készülni pazarlás: elvekre kell (kilépés-szabály, "
+                "beálló-átadás, kettőzés-jel).")
 
     # Hajrá-kapus: a végjáték lövésválasztása.
     if rep.gkc_clutch_faced >= 3 and rep.gkc_rest_faced >= 3:
@@ -9213,6 +9237,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .setplays import setplay_concentration as _spk
+        spkrec = _spk(match, config)[team.value]
+        rep.spk_attacks = int(spkrec["attacks"])
+        rep.spk_top = int(round(
+            (spkrec["top_pct"] or 0.0) * spkrec["attacks"] / 100.0))
+        rep.spk_figures = int(spkrec["figures"])
         from .goalkeeper import gk_clutch_saves as _gkc
         gkcrec = _gkc(match, config)[team.value]
         rep.gkc_clutch_faced = int(gkcrec["clutch"]["faced"])
@@ -11828,6 +11858,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 361) Az ő figura-koncentrációjuk × a ti védekezés-váltásotok:
+    # egy mintára készülni csak akkor éri meg, ha van mire váltani.
+    if opp.spk_attacks >= 6 and own.defense_main != "—":
+        _spk361 = 100.0 * opp.spk_top / opp.spk_attacks
+        if _spk361 >= 40.0:
+            plan.append(
+                f"A támadásaik {_spk361:.0f}%-a egyetlen mintából "
+                f"jön ({opp.spk_attacks} mért támadás), ti pedig "
+                f"bejáratott falat játszotok ({own.defense_main}) "
+                "— erre az egy figurára készüljetek külön "
+                "védekezéssel: az első felismerésnél jöjjön a "
+                "váltás, ne a harmadik gól után.")
 
     # 360) Az ő hajrá-kapusuk × a ti hajrá-gólerősségetek: a
     # végjáték lövésválasztása.
@@ -18146,6 +18189,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        spk_attacks=sum(r.spk_attacks for r in reports),
+        spk_top=sum(r.spk_top for r in reports),
+        spk_figures=sum(r.spk_figures for r in reports),
         gkc_clutch_faced=sum(r.gkc_clutch_faced for r in reports),
         gkc_clutch_saves=sum(r.gkc_clutch_saves for r in reports),
         gkc_rest_faced=sum(r.gkc_rest_faced for r in reports),

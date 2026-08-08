@@ -3810,6 +3810,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.setplays import setplay_concentration
+            res["setplay_concentration"] = setplay_concentration(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5541,6 +5546,9 @@ def create_app():
                 from ..pipeline.goalkeeper import gk_clutch_saves
                 _layer("gk_clutch_saves",
                        lambda: gk_clutch_saves(match))
+                from ..pipeline.setplays import setplay_concentration
+                _layer("setplay_concentration",
+                       lambda: setplay_concentration(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

@@ -433,3 +433,90 @@ def setplay_finishers(match: Match, config: TacticsConfig | None = None,
         out[team.value] = {"figures": rows, "telegraphed": telegraphed,
                            "verdict": verdict}
     return out
+
+
+# Figura-koncentráció küszöbei: ennyi mért támadás kell az ítélethez,
+# ekkora részarány számít "egy figurára épülő" játéknak, ennyi
+# részarány alatt viszont változatosnak, és ennyi figurát nézünk a
+# lefedettségnél.
+SPK_MIN_ATTACKS = 6
+SPK_TOP_PCT = 40.0
+SPK_VARIED_PCT = 25.0
+SPK_COVER_PCT = 80.0
+
+
+def setplay_concentration(match: Match,
+                          config: TacticsConfig | None = None,
+                          threshold: float = 0.15,
+                          min_length: int = 5) -> dict:
+    """Figura-koncentráció: EGY FIGURÁRA épül-e a támadójátékuk.
+
+    A figura-hatékonyság (setplay_efficiency) azt mondja meg, MELYIK
+    figurájuk veszélyes, a figura-befejező azt, KIRE fut ki — ez a
+    repertoár SZÉLESSÉGÉT: a támadás-szakaszaikat csapatonként
+    klaszterezi, és megnézi, mekkora hányad esik a legnagyobb
+    klaszterbe, illetve hány figura fedi le a támadások
+    SPK_COVER_PCT százalékát.
+
+    Edzőileg ez a felkészülés terjedelme. Ha a támadásaik nagy része
+    egyetlen mintából jön, konkrét figurára lehet készülni (videó,
+    bejátszott védekezés, előre megbeszélt kettőzés) — ez a
+    legolcsóbb felkészülés. Ha viszont sokfelé oszlik, figurákra
+    készülni pazarlás: elvekre kell (kilépés-szabály, beálló-átadás,
+    kettőzés-jel), mert a konkrét minta úgysem ismétlődik.
+
+    Visszatérés csapatonként: {"attacks" (mért támadás), "figures"
+    (klaszter), "top_pct" (a legnagyobb klaszter részaránya),
+    "cover_figures" (ennyi figura fedi le a támadások
+    SPK_COVER_PCT%-át), "verdict"} — az ítélet None, ha nincs meg a
+    SPK_MIN_ATTACKS, vagy a kép a két küszöb közé esik.
+    """
+    config = config or TacticsConfig()
+
+    out: dict = {}
+    for team in (Team.HOME, Team.AWAY):
+        seqs = [s_ for s_ in segment_attacks(match, config,
+                                             min_length=min_length)
+                if s_.team == team]
+        rec = {"attacks": len(seqs), "figures": 0, "top_pct": None,
+               "cover_figures": None, "verdict": None}
+        if seqs:
+            labels = cluster_signatures(
+                [attack_signature(s_) for s_ in seqs],
+                threshold=threshold)
+            sizes: dict = {}
+            for lab in labels:
+                sizes[lab] = sizes.get(lab, 0) + 1
+            counts = sorted(sizes.values(), reverse=True)
+            rec["figures"] = len(counts)
+            top = 100.0 * counts[0] / len(seqs)
+            rec["top_pct"] = round(top, 1)
+            # Hány figura kell a támadások SPK_COVER_PCT%-ához.
+            acc = 0
+            cover = 0
+            for n in counts:
+                acc += n
+                cover += 1
+                if 100.0 * acc / len(seqs) >= SPK_COVER_PCT:
+                    break
+            rec["cover_figures"] = cover
+            if len(seqs) >= SPK_MIN_ATTACKS:
+                if top >= SPK_TOP_PCT:
+                    rec["verdict"] = (
+                        f"a támadásaik {top:.0f}%-a egyetlen "
+                        f"mintából jön ({len(seqs)} mért támadásból, "
+                        f"{cover} figura fedi le a "
+                        f"{SPK_COVER_PCT:.0f}%-ot) — konkrét figurára "
+                        "lehet készülni: videó, bejátszott "
+                        "védekezés, előre megbeszélt kettőzés")
+                elif top <= SPK_VARIED_PCT:
+                    rec["verdict"] = (
+                        f"a támadásaik sokfelé oszlanak (a legnagyobb "
+                        f"minta is csak {top:.0f}%, {rec['figures']} "
+                        f"figura, {cover} kell a "
+                        f"{SPK_COVER_PCT:.0f}%-hoz) — figurákra "
+                        "készülni pazarlás: elvekre kell "
+                        "(kilépés-szabály, beálló-átadás, "
+                        "kettőzés-jel)")
+        out[team.value] = rec
+    return out

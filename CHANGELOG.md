@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Figura-koncentráció: egy figurára épül-e a támadójátékuk.** A
+  figura-hatékonyság azt mondja meg, melyik figurájuk veszélyes, a
+  figura-befejező azt, kire fut ki — az új réteg a repertoár
+  szélességét: a támadás-szakaszokat csapatonként klaszterezi, és
+  megnézi, mekkora hányad esik a legnagyobb klaszterbe, illetve hány
+  figura fedi le a támadások 80%-át. Edzőileg ez a felkészülés
+  terjedelme: 40% fölött konkrét figurára lehet készülni (videó,
+  bejátszott védekezés, előre megbeszélt kettőzés), 25% alatt viszont
+  figurákra készülni pazarlás — elvekre kell (kilépés-szabály,
+  beálló-átadás, kettőzés-jel). Hat mért támadás alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`setplay_concentration`), edzői összefoglaló, felderítés (edzői
+  kulcs mindkét irányra + 361. meccsterv-szabály), edzés-fókusz (382.
+  szabály, külön mondattal a szűk és a széles repertoárra),
+  kliens-csempe. Nem poszt-lencse: a Kulcs-poszt bizonyíték-rétegek
+  közé nem kerül be.
 - **Hajrá-kapus: nő vagy beesik a kapusuk az utolsó öt percben.** A
   kapus-bemelegedés a meccs elejét méri, a kapus-forma félidőnként a
   fáradást — az új réteg a végjátékot: a rá kaputra érkezett
