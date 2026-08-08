@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Időkéréspáros-poszt: az időkérés utáni figura tengelye.** Az
+  időkérés-befejező a figura végpontját nevezi meg — az új réteg a
+  tengelyt: az időkérés utáni ablakban leadott lövésekhez megkeresi a
+  lövő felé menő utolsó passzt, és a lövést az (előkészítő poszt →
+  befejező poszt) párhoz írja. Edzőileg a megbeszélés egy mondata: a
+  fal tudja, hogy kész figura jön — ha a tengely ismert, nem csak a
+  befejezőre kell figyelni, hanem az ELSŐ passzt kell elvágni, mert
+  ott törik meg a figura a legolcsóbban. Legalább 3 időkérés utáni
+  lövés és 60% párrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`timeout_pair_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 348. meccsterv-szabály),
+  edzés-fókusz (369. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Sávváltó-poszt: melyik posztjuk vált sávot a támadásban.** Új
   mérés (nem meglévő motor lencséje): a saját támadás közben
   megszámolja, hányszor lép át egy játékos a pálya szélességének

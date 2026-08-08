@@ -1016,6 +1016,9 @@ class ScoutingReport:
     # Sávváltó-poszt: a támadás közbeni sávváltások darabszáma
     # posztonként. Darabszám, pontosan összegződik.
     lsw_switches_by_role: dict = field(default_factory=dict)
+    # Időkéréspáros-poszt: időkérés utáni lövések az (előkészítő→
+    # befejező) posztpár szerint. Darabszám, pontosan összegződik.
+    top_shots_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3998,6 +4001,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "döntsétek el, hogy a védője KÖVETI a sávváltáson "
                 "át, vagy ÁTADJA a szomszédnak: a bizonytalan "
                 "átadásból nyílik a lyuk.")
+
+    # Időkéréspáros-poszt: az időkérés utáni figura elvágása.
+    _top_n = sum(rep.top_shots_by_role.values())
+    if _top_n >= 3:
+        _top_p, _top_c = max(rep.top_shots_by_role.items(),
+                             key=lambda kv: kv[1])
+        _top_pct = 100.0 * _top_c / _top_n
+        if _top_pct >= 60.0:
+            keys.append(
+                f"Az időkérés utáni figurájuk a(z) {_top_p} "
+                f"tengelyen fut ({_top_pct:.0f}%, {_top_n} lövés) — "
+                "ne csak a befejezőre figyeljetek: az ELSŐ passzt "
+                "vágjátok el, ott törik meg a figura a legolcsóbban.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8943,6 +8959,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import lane_switch_roles as _lsw
         lswrec = _lsw(match, config)[team.value]
         rep.lsw_switches_by_role = dict(lswrec["roles"])
+        from .stoppages import timeout_pair_roles as _top
+        toprec = _top(match, config)[team.value]
+        rep.top_shots_by_role = dict(toprec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11535,6 +11554,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 348) Az ő időkéréspáros-posztjuk × a ti aktív időkérésetek: ha
+    # ti is sokat kértek időt, sokszor jön a kész figurájuk — annyiszor
+    # vágható el az első passznál.
+    _top348_n = sum(opp.top_shots_by_role.values())
+    if _top348_n >= 3 and own.tsc_timeouts >= 2:
+        _top348_p, _top348_c = max(opp.top_shots_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _top348_pct = 100.0 * _top348_c / _top348_n
+        if _top348_pct >= 60.0:
+            plan.append(
+                f"Az időkérés utáni figurájuk a(z) {_top348_p} "
+                f"tengelyen fut ({_top348_pct:.0f}%, {_top348_n} "
+                "lövés), és a meccsen sok az időkérés (nálatok "
+                f"{own.tsc_timeouts}) — minden újraindításnál az "
+                "ELSŐ passzt vágjátok el: a figurájuk az indításnál "
+                "törik meg a legolcsóbban.")
 
     # 347) Az ő sávváltó-posztjuk × a ti kettőzésetek: a keresztmozgás
     # pillanata a legjobb kettőzés-időzítés.
@@ -17602,6 +17638,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rsp_goals_by_role for r in reports),
         lsw_switches_by_role=_merge_count_dicts(
             r.lsw_switches_by_role for r in reports),
+        top_shots_by_role=_merge_count_dicts(
+            r.top_shots_by_role for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

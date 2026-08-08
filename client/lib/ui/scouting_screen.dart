@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Időkéréspáros-poszt: az időkérés utáni figura tengelye (3+
+  // időkérés utáni lövés, 60% részarány — a backenddel azonos
+  // küszöbök: TOP_MIN_SHOTS, TOP_SHARE_PCT).
+  String? _timeoutPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["top_shots_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az időkérés utáni figurájuk a(z) $top tengelyen fut "
+        "(${pct.round()}%, $total lövés) · az ELSŐ passzt vágjátok "
+        "el, ott törik meg a legolcsóbban";
+  }
+
   // Sávváltó-poszt: melyik posztjuk vált sávot a támadásban (5+
   // sávváltás, 60% részarány — a backenddel azonos küszöbök:
   // LSW_MIN_SWITCHES, LSW_SHARE_PCT).
@@ -9193,6 +9220,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_timeoutPairRole(r) != null)
+        ["Időkéréspáros-poszt", _timeoutPairRole(r)!],
       if (_laneSwitchRole(r) != null)
         ["Sávváltó-poszt", _laneSwitchRole(r)!],
       if (_recoveryRole(r) != null)

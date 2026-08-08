@@ -3740,6 +3740,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stoppages import timeout_pair_roles
+            res["timeout_pair_roles"] = timeout_pair_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5433,6 +5438,9 @@ def create_app():
                 from ..pipeline.attack_types import lane_switch_roles
                 _layer("lane_switch_roles",
                        lambda: lane_switch_roles(match))
+                from ..pipeline.stoppages import timeout_pair_roles
+                _layer("timeout_pair_roles",
+                       lambda: timeout_pair_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

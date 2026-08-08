@@ -715,3 +715,78 @@ def test_timeout_finisher_needs_enough_shots():
 
     rec = timeout_finisher(_tof_match([1, 2]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Időkéréspáros-poszt (az időkérés utáni figura tengelye) ---------------
+
+
+def _top_match(pairs, fps=25.0):
+    """Mint a _tof_match, de a lövés ELŐTT az előkészítő is megkapja
+    a labdát: a `pairs` elemei (előkészítő, befejező) hazai id-k."""
+    frames = []
+    t = 0
+
+    def _play(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            players = _tof_players(t, moving=True)
+            hp = players[0]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y,
+                                          confidence=1.0)))
+            t += 1
+
+    for feeder, shooter in pairs:
+        _play(10)
+        for _ in range(int(20 * fps)):        # időkérés: 20 mp állás
+            frames.append(Frame(t=t,
+                                players=_tof_players(0, moving=False),
+                                ball=None))
+            t += 1
+        for _ in range(8):                    # a labda az előkészítőnél
+            cast = _tof_players(t, moving=True)
+            who = next(p for p in cast if p.track_id == feeder)
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=who.x + 0.2, y=who.y,
+                                          confidence=1.0)))
+            t += 1
+        sx, sy = _TOF_HOME[shooter]
+        for _ in range(6):                    # átvétel a befejezőnél
+            cast = _tof_players(t, moving=True)
+            who = next(p for p in cast if p.track_id == shooter)
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=who.x + 0.2, y=who.y,
+                                          confidence=1.0)))
+            t += 1
+        steps = 10
+        for i in range(1, steps + 1):
+            f = i / steps
+            frames.append(Frame(
+                t=t, players=_tof_players(t, moving=True),
+                ball=Ball(x=sx + 0.2 + (40.4 - sx - 0.2) * f,
+                          y=sy + (10.0 - sy) * f, confidence=1.0)))
+            t += 1
+        _play(60)
+    return Match(_meta(fps), frames)
+
+
+def test_timeout_pair_roles_names_the_axis():
+    """Ha az időkérés utáni figura mindig ugyanazon a tengelyen fut,
+    az ELSŐ passzt kell elvágni."""
+    from handball.pipeline.stoppages import (TOP_MIN_SHOTS,
+                                             timeout_pair_roles)
+
+    rec = timeout_pair_roles(
+        _top_match([(1, 2), (1, 2), (1, 2), (2, 1)]))["home"]
+    assert rec["shots"] >= TOP_MIN_SHOTS, rec
+    assert rec["main_role"] and "→" in rec["main_role"], rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "ELSŐ passzt" in rec["verdict"], rec
+
+
+def test_timeout_pair_roles_silent_with_few_shots():
+    """Kevés időkérés utáni lövésből nincs ítélet."""
+    from handball.pipeline.stoppages import timeout_pair_roles
+
+    rec = timeout_pair_roles(_top_match([(1, 2), (2, 1)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

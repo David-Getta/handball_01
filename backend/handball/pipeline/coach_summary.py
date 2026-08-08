@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Időkéréspáros-poszt: az időkérés utáni figura tengelye.
+    try:
+        from .stoppages import timeout_pair_roles
+        top = timeout_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_top = top[side]
+            if rec_top["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérés utáni figurája a(z) "
+                     f"{rec_top['main_role']} tengelyen fut "
+                     f"({rec_top['share_pct']:.0f}%, "
+                     f"{rec_top['shots']} lövésből) — az első "
+                     "passzt kell elvágni.")
+    except Exception:
+        pass
     # Sávváltó-poszt: melyik posztjuk vált sávot a támadásban.
     try:
         from .attack_types import lane_switch_roles

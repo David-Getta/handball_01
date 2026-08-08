@@ -1937,7 +1937,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         from .substitutions import sub_in_roles, substituted_roles
         from .setplays import setplay_finishers
         from .tactics import static_attacker_roles
-        from .stoppages import timeout_finisher
+        from .stoppages import timeout_finisher, timeout_pair_roles
 
         def _lens_rows(layers):
             rows = []
@@ -2010,6 +2010,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Emberelőnypáros-poszt", powerplay_pair_roles),
             ("Válasz-poszt", response_scorer_roles),
             ("Sávváltó-poszt", lane_switch_roles),
+            ("Időkéréspáros-poszt", timeout_pair_roles),
             ("Gólpasszpáros-poszt", assist_pair_roles),
             ("Blokkolt-poszt", blocked_shooter_roles),
             ("Ziccerhagyó-poszt", missed_chance_roles),

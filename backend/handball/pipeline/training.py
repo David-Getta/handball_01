@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 369) Időkéréspáros-poszt: ha az időkérés utáni figuránk mindig
+    # ugyanazon a tengelyen fut, a fal az első passznál elvágja.
+    try:
+        from .stoppages import TOP_SHARE_PCT, timeout_pair_roles
+        top369 = timeout_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec369 = top369[side]
+            if rec369.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen futó időkérés-figura",
+                f"az időkérés utáni lövéseink "
+                f"{rec369['share_pct']:.0f}%-a a(z) "
+                f"{rec369['main_role']} tengelyen születik "
+                f"({rec369['shots']} lövésből; "
+                f"{TOP_SHARE_PCT:.0f}% fölött már minta) — a fal "
+                "tudja, hogy figura jön, és az első passzt elvágja",
+                "időkérés-figura B-vel: két kész figura különböző "
+                "indítással (más előkészítő), álcázó első passz, és "
+                "a figura begyakorlása fáradtan is",
+                )
+    except Exception:
+        pass
+
     # 368) Sávváltó-poszt: ha a keresztmozgásunkat egy poszt viszi, a
     # felkészült fal egyszerűen követi.
     try:

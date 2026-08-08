@@ -627,3 +627,101 @@ def timeout_finisher(match: Match,
                     f"({share:.0f}%, {rec['shots']} lövésből) — a "
                     "megbeszélésen ő kapja az embert, elé kell állni")
     return out
+
+
+# Időkéréspáros-poszt: ennyi párhoz kötött időkérés utáni lövés kell
+# az ítélethez, ekkora részarány fölött mondjuk ki a tengelyt, és
+# ennyi időn belüli utolsó passzt tekintünk előkészítésnek.
+TOP_MIN_SHOTS = 3
+TOP_SHARE_PCT = 60.0
+TOP_PASS_WINDOW_S = 4.0
+
+
+def timeout_pair_roles(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Időkéréspáros-poszt: AZ IDŐKÉRÉS UTÁNI FIGURA TENGELYE.
+
+    Az időkérés-befejező a figura végpontját nevezi meg — ez a
+    tengelyt: az időkérés utáni ablakban leadott lövésekhez
+    megkeresi a lövő felé menő utolsó passzt, és a lövést az
+    (előkészítő poszt → befejező poszt) párhoz írja.
+
+    Edzőileg ez a megbeszélés egy mondata: az időkérés után a fal
+    tudja, hogy kész figura jön — ha a tengely ismert, nem csak a
+    befejezőre kell figyelni, hanem az ELSŐ passzt kell elvágni. A
+    figura az indításnál a legolcsóbban törik meg. Saját csapatra: az
+    időkérés utáni figura ne mindig ugyanazon a tengelyen fusson.
+
+    Visszatérés csapatonként: {"shots" (párhoz kötött), "roles":
+    {"előkészítő→befejező": darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg a TOP_MIN_SHOTS, vagy
+    egyik pár sem éri el a TOP_SHARE_PCT-t.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    pass_win = TOP_PASS_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+    passes = detect_passes(match, config)
+
+    # Az időkérést kérő csapat és az újraindítás ideje.
+    stops = [(s["likely_team"], s["end_frame"])
+             for s in detect_stoppages(match, config)
+             if s.get("likely_team") is not None]
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not stops:
+        return out
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(team == side and 0 <= e.t - end <= win
+                   for (team, end) in stops):
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= pass_win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        r_feed = roles[side].get(best.passer_id)
+        r_shot = roles[side].get(e.player_id)
+        if r_feed is None or r_shot is None:
+            continue
+        kulcs = f"{r_feed['poszt']}→{r_shot['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["shots"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= TOP_MIN_SHOTS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["shots"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= TOP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérés utáni figurájuk a(z) {par} "
+                    f"tengelyen fut ({share:.0f}%, {rec['shots']} "
+                    "időkérés utáni lövésből) — ne csak a befejezőre"
+                    " figyeljetek: az ELSŐ passzt vágjátok el, ott "
+                    "törik meg a figura a legolcsóbban")
+    return out
