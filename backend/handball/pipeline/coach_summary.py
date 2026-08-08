@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Beérkező-poszt: melyik posztra hoz frissítést a padjuk.
+    try:
+        from .substitutions import sub_in_roles
+        ibr = sub_in_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ibr = ibr[side]
+            if rec_ibr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} padja a(z) "
+                     f"{rec_ibr['main_role']} posztra hoz "
+                     f"frissítést ({rec_ibr['share_pct']:.0f}%, "
+                     f"{rec_ibr['ins']} beállásból) — a "
+                     "cserehullámuk után arra a sávra kell váltani.")
+    except Exception:
+        pass
     # Forgatott-poszt: melyik posztjukat cserélik.
     try:
         from .substitutions import substituted_roles

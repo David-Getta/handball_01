@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Beérkező-poszt: melyik posztra hoz frissítést a padjuk.** A
+  forgatott-poszt a lecserélteket nézi — az új réteg a beállókat: a
+  cserehullámokkal érkező játékosokat a posztjukhoz írja. Edzőileg a
+  cserehullám utáni figyelem-irány: ha a padjuk rendre ugyanarra a
+  posztra hoz friss embert, a hullám után arra a sávra kell váltani
+  — friss láb, új lendület, az addigi párosítás ott elavul. Saját
+  oldalon a második sor szélesítése az edzés-téma. Legalább 3
+  beállás és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`sub_in_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 327. meccsterv-szabály), edzés-fókusz
+  (348. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Forgatott-poszt: melyik posztjukat cserélik.** A
   cserehullám-rétegek a hullámot nézik — az új réteg a posztot: a
   lecserélt játékosokat a posztjukhoz írja. Edzőileg a

@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 348) Beérkező-poszt: ha a padunk csak egy posztra hoz
+    # frissítést, a második sorunk féloldalas.
+    try:
+        from .substitutions import IBR_SHARE_PCT, sub_in_roles
+        ibr348 = sub_in_roles(match, config)
+        for side in ("home", "away"):
+            rec348 = ibr348[side]
+            if rec348.get("verdict") is None:
+                continue
+            add(side, "fáradás", "Féloldalas második sor",
+                f"a beállásaink {rec348['share_pct']:.0f}%-a a(z) "
+                f"{rec348['main_role']} posztra érkezik "
+                f"({rec348['ins']} beállásból; "
+                f"{IBR_SHARE_PCT:.0f}% fölött már minta) — a többi "
+                "poszton nincs érdemi frissítésünk, és ott a "
+                "fáradtság dönt",
+                "második sor szélesítése: poszt-specifikus "
+                "felkészítés a ritkán cserélt posztok cseréinek, "
+                "vegyes sorok gyakorlása edzésmeccsen, és a "
+                "keret-terv felülvizsgálata a hiányposztokra",
+                )
+    except Exception:
+        pass
+
     # 347) Forgatott-poszt: ha a forgatásunk egy posztra jár, a többi
     # poszton felhalmozódik a fáradtság.
     try:

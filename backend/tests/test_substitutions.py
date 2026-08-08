@@ -565,6 +565,13 @@ def _sbr_match(out_plan, fps=25.0):
                          for tid, xy in on_court.items()],
                 ball=Ball(x=25.0, y=16.0, confidence=1.0)))
             t += 1
+    for _ in range(150):             # záró poszt-minta a beállókkal
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in on_court.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
     return Match(_meta(), frames)
 
 
@@ -588,4 +595,30 @@ def test_substituted_roles_silent_with_few_subs():
     from handball.pipeline.substitutions import substituted_roles
 
     rec = substituted_roles(_sbr_match([(7, 107), (9, 119)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Beérkező-poszt (melyik posztra hoz frissítést a padjuk) ---------------
+
+
+def test_sub_in_roles_names_the_refreshed_post():
+    """Négy beállásból három a beálló-tájékra érkezik → a hullám után
+    arra a sávra kell váltani."""
+    from handball.pipeline.substitutions import (IBR_MIN_INS,
+                                                 sub_in_roles)
+
+    rec = sub_in_roles(
+        _sbr_match([(7, 107), (17, 117), (27, 127),
+                    (9, 119)]))["home"]
+    assert rec["ins"] >= IBR_MIN_INS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "friss láb" in rec["verdict"], rec
+
+
+def test_sub_in_roles_silent_with_few_ins():
+    """Néhány beállásból nincs ítélet."""
+    from handball.pipeline.substitutions import sub_in_roles
+
+    rec = sub_in_roles(_sbr_match([(7, 107), (9, 119)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec

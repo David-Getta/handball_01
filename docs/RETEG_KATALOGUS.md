@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **374 réteg**, modulonként csoportosítva; a
+Összesen **375 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (76)
@@ -418,13 +418,14 @@ leírás a réteg-függvény docstringjének első sora.
 | `timeout_sub_combo` | Időkérés-csomag: AZ IDŐKÉRÉSÜK CSERÉVEL JÁR-E. |
 | `timeout_timing` | Időkérés-időzítés: MIKOR kérnek időt. |
 
-## substitutions (9)
+## substitutions (10)
 
 | Réteg | Mit mér |
 |---|---|
 | `gap_punishment` | Csere-büntetés: GÓLBA KERÜLNEK-E a csere-lyukak. |
 | `late_subs` | Késő cserék: nagy tempó-esésű játékosok, akiket NEM cseréltek le. |
 | `sub_gaps` | Csere-lyukak: MENNYI IDEIG JÁTSZANAK 5-EN csere közben. |
+| `sub_in_roles` | Beérkező-poszt: MELYIK POSZTRA hoz frissítést a padjuk. |
 | `subs_by_score` | Csere-állás: VEZETVE FORGATNAK-E. |
 | `substituted_roles` | Forgatott-poszt: MELYIK POSZTJUKAT cserélik. |
 | `substitution_blocks` | Csere-blokkok: egyesével cserélnek, vagy egységekben. |
