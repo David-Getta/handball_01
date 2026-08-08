@@ -1161,6 +1161,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "helyett).")
     except Exception:
         pass
+    # Hetes-kihagyók: ki hibázza el a hetest.
+    try:
+        from .rules import seven_miss_players
+        svmp = seven_miss_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = svmp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} hetesein {_ki} hibázott a "
+                     f"legtöbbet ({top['misses']} gól nélküli "
+                     "hetes) — ellene a kapus mehet a saját "
+                     "megérzésére.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

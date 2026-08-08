@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 388) Hetes-kihagyók: névre szóló hetes-rutin.
+    try:
+        from .rules import SVMP_MIN_MISSES, seven_miss_players
+        svmp388 = seven_miss_players(match, config)
+        for side in ("home", "away"):
+            top388 = svmp388[side].get("top")
+            if top388 is None:
+                continue
+            _ki388 = (f"a(z) {top388['jersey']}. számú"
+                      if top388.get("jersey") is not None
+                      else f"a(z) {top388['player_id']}. játékos")
+            add(side, "befejezés", "Hetes-sorrend a napi forma "
+                "szerint",
+                f"a heteseinket {_ki388} hagyta ki a legtöbbször "
+                f"({top388['misses']} gól nélküli hetes; "
+                f"{SVMP_MIN_MISSES} kihagyástól már jelezzük) — a "
+                "hetes nálunk nem automatikus gól, pedig annak "
+                "kellene lennie",
+                "hetes-verseny edzés végén, fáradtan (10-10 dobás "
+                "kapusra, előre bejelentett sarokkal), és kijelölt "
+                "második dobó: a hetest a heti forma döntse el, ne "
+                "a rangsor",
+                )
+    except Exception:
+        pass
+
     # 387) Sprint-esés: ha a második félidőre megfogy a láb, a
     # kontra-játékunk a szünettel eltűnik.
     try:

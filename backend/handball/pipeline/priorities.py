@@ -68,6 +68,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("ember", "Eltűnő ember", "momentum", "fading_scorers"),
         ("ember", "Eltűnő védő", "defense", "fading_defenders"),
         ("ember", "Felzárkózás-húzó", "momentum", "comeback_carriers"),
+        ("ember", "Hetes-kihagyó", "rules", "seven_miss_players"),
         # --- szünet: ami a félidőben megváltozik ---------------------
         ("szünet", "Szünet-váltás", "attack_types", "attack_mix_shift"),
         ("szünet", "Fal-váltás a szünetre", "tactics",

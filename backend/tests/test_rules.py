@@ -2213,3 +2213,28 @@ def test_shorthanded_turnover_roles_silent_with_few_turnovers():
 
     rec = shorthanded_turnover_roles(_sht_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hetes-kihagyók (ki hibázza el a hetest) ---------------------------------
+
+def test_seven_miss_players_names_the_shooter():
+    """Két gól nélküli hetes ugyanattól a dobótól → ő a listán, és a
+    kapus mehet ellene a saját megérzésére."""
+    from handball.pipeline.rules import (SVMP_MIN_MISSES,
+                                         seven_miss_players)
+
+    rec = seven_miss_players(_svm_match(3))["home"]
+    assert rec["misses"] == 3, rec
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 1, rec
+    assert rec["top"]["misses"] >= SVMP_MIN_MISSES, rec
+
+
+def test_seven_miss_players_silent_after_one_miss():
+    """Egyetlen kihagyásból nincs kiemelt név (a hetes ritka esemény,
+    de egy eset még nem minta)."""
+    from handball.pipeline.rules import seven_miss_players
+
+    rec = seven_miss_players(_svm_match(1))["home"]
+    assert rec["misses"] == 1 and rec["top"] is None, rec
+    assert seven_miss_players(_svm_match(1))["away"]["players"] == []

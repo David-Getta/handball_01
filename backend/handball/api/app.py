@@ -3841,6 +3841,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_miss_players
+            res["seven_miss_players"] = seven_miss_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5589,6 +5594,9 @@ def create_app():
                        lambda: clock_management(match))
                 from ..pipeline.stats import sprint_fade
                 _layer("sprint_fade", lambda: sprint_fade(match))
+                from ..pipeline.rules import seven_miss_players
+                _layer("seven_miss_players",
+                       lambda: seven_miss_players(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

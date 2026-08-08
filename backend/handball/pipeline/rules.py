@@ -2534,3 +2534,58 @@ def shorthanded_turnover_roles(match: Match,
                     "fogadására kell menni: az elvett labdából üres "
                     "kapura indulhat a kontra")
     return out
+
+
+# Hetes-kihagyók: ennyi gól nélküli hetes kell ahhoz, hogy a
+# játékost kiemeljük (a hetes ritka esemény, ezért alacsony a küszöb).
+SVMP_MIN_MISSES = 2
+
+
+def seven_miss_players(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-kihagyók: KI HIBÁZZA EL a hetest.
+
+    A hetes-mérleg (seven_meter_summary) csapat-szinten mondja meg,
+    mennyi megy be a hetesekből, a hetes-kihagyó poszt a POSZTOT — ez
+    az EMBERT: a gól nélkül záruló hétméteresek (védés vagy mellé) a
+    dobó játékoshoz kerülnek.
+
+    Edzőileg ez a kapus felkészítésének névsora: ha ő áll oda, a
+    kapus mehet a saját megérzésére (kimozdulás, késleltetett
+    vetődés) — nála a hetes nem automatikus gól. Saját csapatra: a
+    hetes-sorrend nem rangsor, hanem napi forma; a listán szereplő
+    dobó mögé kell egy második ember.
+
+    Visszatérés csapatonként: {"misses" (gól nélküli hetes),
+    "players": [{"player_id", "jersey", "misses"}], "top"} — a "top"
+    az első játékos, ha legalább SVMP_MIN_MISSES kihagyása van,
+    különben None.
+    """
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None or sm.get("outcome") in ("gól", None,
+                                                "ismeretlen"):
+            continue
+        side = sm["team"]
+        tally[side][pid] = tally[side].get(pid, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "misses": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0] if rows and rows[0]["misses"] >= SVMP_MIN_MISSES
+               else None)
+        out[side] = {"misses": sum(r["misses"] for r in rows),
+                     "players": rows, "top": top}
+    return out

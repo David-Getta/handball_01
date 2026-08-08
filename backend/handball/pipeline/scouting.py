@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Hetes-kihagyók: a gól nélküli hetesek darabszáma DOBÓNKÉNT
+    # (kulcs: mez-szám vagy track-azonosító). Darabszám, meccsek közt
+    # összegződik.
+    svmp_misses_by_player: dict = field(default_factory=dict)
     # Sprint-esés: félidőnkénti sprint-darabszám és játékperc.
     # Darabszám/összeg, hogy meccsek közt pontosan összegződjön
     # (ütem = sprint / perc).
@@ -4142,6 +4146,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Hetes-kihagyók: kire mehet rá a kapus a hetesnél.
+    if rep.svmp_misses_by_player:
+        _svmp_k, _svmp_n = max(rep.svmp_misses_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _svmp_n >= 2:
+            keys.append(
+                f"A heteseiket leggyakrabban a(z) {_svmp_k}. hagyja "
+                f"ki ({_svmp_n} gól nélküli hetes) — ha ő áll oda, a "
+                "kapusotok mehet a saját megérzésére (kimozdulás, "
+                "késleltetett vetődés).")
 
     # Sprint-esés: a második félidő tempó-döntése.
     if (rep.sfd_fh_min >= 5.0 and rep.sfd_sh_min >= 5.0
@@ -9340,6 +9355,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .rules import seven_miss_players as _svmp
+        svmprec = _svmp(match, config)[team.value]
+        rep.svmp_misses_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["misses"]
+            for r in svmprec["players"]}
         from .stats import sprint_fade as _sfd
         sfdrec = _sfd(match, config)[team.value]
         rep.sfd_fh_sprints = int(sfdrec["fh_sprints"])
@@ -11986,6 +12007,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 367) Az ő hetes-kihagyójuk × a ti kapusotok: névre szóló
+    # hetes-terv a kapusnak.
+    if opp.svmp_misses_by_player and own.gk_on_target >= 5:
+        _svmp367_k, _svmp367_n = max(
+            opp.svmp_misses_by_player.items(), key=lambda kv: kv[1])
+        if _svmp367_n >= 2:
+            _svmp367_gk = 100.0 * own.gk_saves / own.gk_on_target
+            plan.append(
+                f"A heteseiket leggyakrabban a(z) {_svmp367_k}. "
+                f"hagyja ki ({_svmp367_n} gól nélküli hetes), a ti "
+                f"kapusotok pedig fog ({_svmp367_gk:.0f}% védés) — "
+                "névre szóló hetes-terv: ha ő áll oda, a kapus "
+                "kockáztasson (korai kimozdulás vagy késleltetett "
+                "vetődés), másnál maradjon a vonalon.")
 
     # 366) Az ő sprint-esésük × a ti kontra-erősségetek: a második
     # félidő a futás félideje.
@@ -18391,6 +18427,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        svmp_misses_by_player=_merge_count_dicts(
+            r.svmp_misses_by_player for r in reports),
         sfd_fh_sprints=sum(r.sfd_fh_sprints for r in reports),
         sfd_fh_min=round(sum(r.sfd_fh_min for r in reports), 1),
         sfd_sh_sprints=sum(r.sfd_sh_sprints for r in reports),

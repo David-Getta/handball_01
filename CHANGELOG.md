@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hetes-kihagyók: ki hibázza el a hetest.** A hetes-mérleg
+  csapat-szinten mondja meg, mennyi megy be a hetesekből, a
+  hetes-kihagyó poszt a posztot — az új réteg az embert: a gól
+  nélkül záruló hétméteresek (védés vagy mellé) a dobó játékoshoz
+  kerülnek. Edzőileg ez a kapus felkészítésének névsora: ha ő áll
+  oda, a kapus mehet a saját megérzésére (kimozdulás, késleltetett
+  vetődés) — nála a hetes nem automatikus gól. Saját csapatra a
+  hetes-sorrend és a második dobó kijelölése a téma. Két kihagyástól
+  emel ki nevet (a hetes ritka esemény). A rangsorban az "ember"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`seven_miss_players`), edzői összefoglaló, felderítés
+  (`svmp_misses_by_player` mező dobónként + edzői kulcs + 367.
+  meccsterv-szabály), edzés-fókusz (388. szabály), kliens-csempe.
 - **Sprint-esés: megfogy-e a láb a második félidőre.** A
   sprint-állás az eredményjelzőn nézi a futást, a játékos-fáradás
   emberenként — az új réteg csapatszinten, félidőnként: a

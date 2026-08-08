@@ -2168,6 +2168,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Hetes-kihagyók: ki hibázza el a hetest (2+ gól nélküli hetes
+  // ugyanattól a dobótól — a backenddel azonos küszöb:
+  // SVMP_MIN_MISSES).
+  String? _sevenMissPlayer(Map<String, dynamic> r) {
+    final byPlayer =
+        (r["svmp_misses_by_player"] as Map?)?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a heteseiket leggyakrabban a(z) $top. hagyja ki ($topN "
+        "gól nélküli hetes) · ha ő áll oda, a kapusotok mehet a "
+        "saját megérzésére";
+  }
+
   // Sprint-esés: megfogy-e a láb a második félidőre (félidőnként 5+
   // játékperc, 8+ sprint, 0,7 arány alatt esés / 1,43 fölött
   // kapcsolás — a backenddel azonos küszöbök: SFD_MIN_HALF_MIN,
@@ -9693,6 +9715,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Óralopás", _clockManagement(r)!],
       if (_sprintFade(r) != null)
         ["Sprint-esés", _sprintFade(r)!],
+      if (_sevenMissPlayer(r) != null)
+        ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)
