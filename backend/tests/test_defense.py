@@ -3481,3 +3481,73 @@ def test_costly_turnover_roles_silent_with_few_punished():
 
     rec = costly_turnover_roles(_dto_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Védőmotor-poszt (melyik posztjuk védő-motorja áll le) -----------------
+
+
+def _fdd_match(fh_stealers, sh_stealers, with_break=True, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + labdaszerzések
+    félidőnként: a vendég 21-es labdáját a megadott hazai szerzi
+    meg; a félidőket 90 mp-es üres szakasz választja el."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast():
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + [_pl(21, Team.AWAY, 15.0, 10.0)])
+
+    def steal(frames, t, tid):
+        sx, sy = spos[tid]
+        for _ in range(10):          # a labda a vendégnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # a szerző elveszi
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # semleges labda
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        return t
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in fh_stealers:
+        t = steal(frames, t, tid)
+    if with_break:
+        for _ in range(int(90 * fps)):   # félidei szünet: üres kockák
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+    for tid in sh_stealers:
+        t = steal(frames, t, tid)
+    return Match(_meta(fps), frames)
+
+
+def test_fading_defender_roles_names_the_stalling_motor():
+    """A beálló 3 első félidei szerzés után a másodikban leáll → a
+    szünet után az ő zónáján át kell támadni."""
+    from handball.pipeline.defense import fading_defender_roles
+
+    rec = fading_defender_roles(
+        _fdd_match([7, 7, 7], [9, 9]))["home"]
+    assert rec["main_role"] == "beálló", rec
+    assert rec["fh"] == 3 and rec["sh"] == 0, rec
+    assert rec["verdict"] and "nem ér oda" in rec["verdict"], rec
+
+
+def test_fading_defender_roles_silent_without_break():
+    """Felismert szünet nélkül nincs ítélet."""
+    from handball.pipeline.defense import fading_defender_roles
+
+    rec = fading_defender_roles(
+        _fdd_match([7, 7, 7], [], with_break=False))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -4750,3 +4750,82 @@ def costly_turnover_roles(match, config=None) -> dict:
                     "büntetett hibából) — a felhozatalnál őt kell "
                     "kettőzni-zavarni: nála a legnagyobb a nyereség")
     return out
+
+
+# Védőmotor-poszt: ennyi első félidei védő-akció (szerzés+blokk)
+# kell egy posztról, és legfeljebb ennyi második félidei ahhoz, hogy
+# a posztot leálló védő-motornak mondjuk ki.
+FDD_MIN_FH = 3
+FDD_MAX_SH = 1
+
+
+def fading_defender_roles(match, config=None) -> dict:
+    """Védőmotor-poszt: MELYIK POSZTJUK védő-motorja áll le.
+
+    Az eltűnő védő rétege (fading_defenders) az embert nevezi meg —
+    ez a posztot: a védő-akciókat (labdaszerzés + blokk) félidőnként
+    a védő (támadó-fázisból becsült) posztjához írja, és megkeresi,
+    melyik posztjuk első félidei motorja áll le a másodikra.
+
+    Edzőileg ez a második félidei támadás-irány: az első félidei kép
+    alapján a pörgő védő-zónát kerülnénk — pedig a másodikra már nem
+    ér oda: a szünet után pont az ő zónáján át kell támadni. Saját
+    csapatra: a védő-motor tervezett pihenője a szünet körül az
+    edzés-téma.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"fh_roles": {poszt:
+    darab}, "sh_roles": {poszt: darab}, "main_role", "fh", "sh",
+    "verdict"} — az ítélet None, ha nincs felismert szünet, vagy
+    egyik poszt sem éri el az FDD_MIN_FH-t az FDD_MAX_SH melletti
+    leállással.
+    """
+    from .halftime import detect_halftime
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh_roles": {}, "sh_roles": {},
+                        "main_role": None, "fh": None, "sh": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    roles = estimate_positions(match, config)
+
+    def add(side, pid, t):
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            return
+        poszt = rec_role["poszt"]
+        key = "fh_roles" if t <= ht else "sh_roles"
+        out[side][key][poszt] = out[side][key].get(poszt, 0) + 1
+
+    bw = ball_winners(match, config)
+    blk = detect_blocks(match, config)
+    for side in ("home", "away"):
+        for e in bw[side]["ts"]:
+            add(side, e["player_id"], e["t"])
+        for e in blk[side]["events"]:
+            if e.get("player_id") is not None:
+                add(side, e["player_id"], e["t"])
+
+    for side in ("home", "away"):
+        rec = out[side]
+        fader = None
+        for poszt, fh in sorted(rec["fh_roles"].items(),
+                                key=lambda kv: -kv[1]):
+            sh = rec["sh_roles"].get(poszt, 0)
+            if fh >= FDD_MIN_FH and sh <= FDD_MAX_SH:
+                fader = (poszt, fh, sh)
+                break
+        if fader is not None:
+            poszt, fh, sh = fader
+            rec["main_role"] = poszt
+            rec["fh"], rec["sh"] = fh, sh
+            rec["verdict"] = (
+                f"a védő-motorjuk a(z) {poszt} poszton az első "
+                f"félidőben pörög ({fh} szerzés+blokk), a másodikra"
+                f" leáll ({sh}) — a szünet után pont az ő zónáján "
+                "át kell támadni: addigra már nem ér oda")
+    return out

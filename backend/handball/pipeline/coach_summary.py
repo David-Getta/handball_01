@@ -916,6 +916,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Védőmotor-poszt: melyik posztjuk védő-motorja áll le.
+    try:
+        from .defense import fading_defender_roles
+        fdd = fading_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fdd = fdd[side]
+            if rec_fdd["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védő-motorja a(z) "
+                     f"{rec_fdd['main_role']} poszton az első "
+                     f"félidőben pörög ({rec_fdd['fh']} "
+                     f"szerzés+blokk), a másodikra leáll "
+                     f"({rec_fdd['sh']}) — a szünet után az ő "
+                     "zónáján át kell támadni.")
+    except Exception:
+        pass
     # Áttörő-poszt: melyik posztjuk nyitja szét a falat.
     try:
         from .attack_types import breakthrough_roles

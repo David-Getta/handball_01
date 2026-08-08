@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 351) Védőmotor-poszt: ha a védő-motorunk egy poszton a második
+    # félidőre leáll, tervezett pihenő kell a szünet körül.
+    try:
+        from .defense import fading_defender_roles
+        fdd351 = fading_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec351 = fdd351[side]
+            if rec351.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Leálló védő-motor",
+                f"a védő-motorunk a(z) {rec351['main_role']} "
+                f"poszton az első félidőben pörög ({rec351['fh']} "
+                f"szerzés+blokk), a másodikra leáll "
+                f"({rec351['sh']}) — a felkészült ellenfél a szünet"
+                " után pont ott fog támadni",
+                "védő-motor rotációja: tervezett pihenő a szünet "
+                "körüli tíz percben, a védő-akciók terhének "
+                "elosztása két posztra, és kondicionális blokk "
+                "(ismételt védekező lábmunka) az edzésen",
+                )
+    except Exception:
+        pass
+
     # 350) Áttörő-poszt: ha a betörés-játékunk egy emberen áll, egy
     # időzített kettőzés az egész belső játékunkat lezárja.
     try:

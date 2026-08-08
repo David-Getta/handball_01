@@ -956,6 +956,10 @@ class ScoutingReport:
     # Áttörő-poszt: a labdás betörések darabszáma posztonként.
     # Darabszám, pontosan összegződik.
     btr_entries_by_role: dict = field(default_factory=dict)
+    # Védőmotor-poszt: védő-akciók (szerzés+blokk) posztonként,
+    # félidőnként. Darabszám, pontosan összegződik.
+    fdd_fh_by_role: dict = field(default_factory=dict)
+    fdd_sh_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3680,6 +3684,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 " — a védője kapjon segítőt, a betörés vonalát "
                 "testtel zárjátok: nélküle a többiek kívül "
                 "rekednek.")
+
+    # Védőmotor-poszt: a szünet utáni támadás-irány.
+    for _fdd_p, _fdd_fh in sorted(rep.fdd_fh_by_role.items(),
+                                  key=lambda kv: -kv[1]):
+        _fdd_sh = rep.fdd_sh_by_role.get(_fdd_p, 0)
+        if _fdd_fh >= 3 and _fdd_sh <= 1:
+            keys.append(
+                f"A védő-motorjuk a(z) {_fdd_p} poszton az első "
+                f"félidőben pörög ({_fdd_fh} szerzés+blokk), a "
+                f"másodikra leáll ({_fdd_sh}) — a szünet után pont "
+                "az ő zónáján át támadjatok: addigra már nem ér "
+                "oda.")
+            break
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8572,6 +8589,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import breakthrough_roles as _btr
         btrrec = _btr(match, config)[team.value]
         rep.btr_entries_by_role = dict(btrrec["roles"])
+        from .defense import fading_defender_roles as _fdd
+        fddrec = _fdd(match, config)[team.value]
+        rep.fdd_fh_by_role = dict(fddrec["fh_roles"])
+        rep.fdd_sh_by_role = dict(fddrec["sh_roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11152,6 +11173,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 330) Az ő védőmotor-posztjuk × a ti jó félidő-nyitásotok: a
+    # szünet után a leálló zónán át vezet a legrövidebb út.
+    _ho330 = own.ho_for - own.ho_against
+    if _ho330 >= 2:
+        for _fdd330_p, _fdd330_fh in sorted(
+                opp.fdd_fh_by_role.items(), key=lambda kv: -kv[1]):
+            _fdd330_sh = opp.fdd_sh_by_role.get(_fdd330_p, 0)
+            if _fdd330_fh >= 3 and _fdd330_sh <= 1:
+                plan.append(
+                    f"A védő-motorjuk a(z) {_fdd330_p} poszton az "
+                    f"első félidőben pörög ({_fdd330_fh} "
+                    f"szerzés+blokk), a másodikra leáll "
+                    f"({_fdd330_sh}), ti pedig jól nyitjátok a "
+                    f"félidőket (+{_ho330} a mérleg) — a szünet "
+                    "utáni figurák az ő zónáján át menjenek: "
+                    "addigra már nem ér oda.")
+                break
 
     # 329) Az ő áttörő-posztjuk × a ti kettőzésetek: az áttörő
     # védője segítőt kap, és a fal zárva marad.
@@ -16857,6 +16896,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.dto_punished_by_role for r in reports),
         btr_entries_by_role=_merge_count_dicts(
             r.btr_entries_by_role for r in reports),
+        fdd_fh_by_role=_merge_count_dicts(
+            r.fdd_fh_by_role for r in reports),
+        fdd_sh_by_role=_merge_count_dicts(
+            r.fdd_sh_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

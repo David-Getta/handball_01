@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Védőmotor-poszt: melyik posztjuk védő-motorja áll le.** Az
+  eltűnő védő rétege az embert nevezi meg — az új réteg a posztot: a
+  védő-akciókat (labdaszerzés + blokk) félidőnként a védő posztjához
+  írja, és megkeresi, melyik posztjuk motorja áll le a másodikra.
+  Edzőileg a második félidei támadás-irány: az első félidei kép
+  alapján a pörgő védő-zónát kerülnénk — pedig a másodikra már nem
+  ér oda, a szünet után pont ott kell támadni. Saját oldalon a
+  védő-motor tervezett pihenője az edzés-téma. Felismert szünet
+  nélkül, 3 első félidei akció és legfeljebb 1 második félidei alatt
+  szólal meg. Felületek: /analyze + meccs-csomag
+  (`fading_defender_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 330. meccsterv-szabály), edzés-fókusz (351. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Áttörő-poszt: melyik posztjuk nyitja szét a falat.** Az áttörő
   játékosok rétege az embert nevezi meg — az új réteg a posztot: a
   labdás betöréseket (a kapu közeli körzetébe lépés) a betörő

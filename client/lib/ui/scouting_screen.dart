@@ -2141,6 +2141,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Védőmotor-poszt: melyik posztjuk védő-motorja áll le (3+ első
+  // félidei szerzés+blokk, legfeljebb 1 második félidei — a
+  // backenddel azonos küszöbök: FDD_MIN_FH, FDD_MAX_SH).
+  String? _fadingDefenderRole(Map<String, dynamic> r) {
+    final fh =
+        (r["fdd_fh_by_role"] as Map?)?.cast<String, dynamic>();
+    final sh =
+        (r["fdd_sh_by_role"] as Map?)?.cast<String, dynamic>();
+    if (fh == null || fh.isEmpty) return null;
+    String? post;
+    var postFh = 0;
+    fh.forEach((k, v) {
+      final n = (v as num).toInt();
+      final s2 = ((sh?[k] as num?) ?? 0).toInt();
+      if (n >= 3 && s2 <= 1 && n > postFh) {
+        post = k;
+        postFh = n;
+      }
+    });
+    if (post == null) return null;
+    final postSh = ((sh?[post] as num?) ?? 0).toInt();
+    return "a védő-motorjuk a(z) $post poszton az 1. félidőben "
+        "pörög ($postFh szerzés+blokk), a 2.-ra leáll ($postSh) · "
+        "a szünet után az ő zónáján át kell támadni";
+  }
+
   // Áttörő-poszt: melyik posztjuk nyitja szét a falat (4+ labdás
   // betörés, 60% részarány — a backenddel azonos küszöbök:
   // BTR_MIN_ENTRIES, BTR_SHARE_PCT).
@@ -8700,6 +8726,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_fadingDefenderRole(r) != null)
+        ["Védőmotor-poszt", _fadingDefenderRole(r)!],
       if (_breakthroughRole(r) != null)
         ["Áttörő-poszt", _breakthroughRole(r)!],
       if (_costlyTurnoverRole(r) != null)
