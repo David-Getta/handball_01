@@ -1022,6 +1022,9 @@ class ScoutingReport:
     # Menekülő-poszt: a nyomás alatti passzok darabszáma a FOGADÓ
     # posztja szerint. Darabszám, pontosan összegződik.
     esc_passes_by_role: dict = field(default_factory=dict)
+    # Vég-birtokos poszt: a lövés nélkül záruló támadások darabszáma
+    # az utolsó birtokos posztja szerint. Darabszám, összegződik.
+    lst_attacks_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -4031,6 +4034,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "passz) — a kettőzés mögötti harmadik ember ott "
                 "álljon lesben: a menekülő passz így elfogott "
                 "labda.")
+
+    # Vég-birtokos poszt: kire toljátok a nyomást a támadás végén.
+    _lst_n = sum(rep.lst_attacks_by_role.values())
+    if _lst_n >= 4:
+        _lst_p, _lst_c = max(rep.lst_attacks_by_role.items(),
+                             key=lambda kv: kv[1])
+        _lst_pct = 100.0 * _lst_c / _lst_n
+        if _lst_pct >= 60.0:
+            keys.append(
+                f"A lövés nélkül záruló támadásaik {_lst_pct:.0f}"
+                f"%-a a(z) {_lst_p} poszt kezében hal el ({_lst_n} "
+                "terméketlen támadás) — a támadás második felében rá"
+                " toljátok a nyomást: ott a legolcsóbb a "
+                "labdaszerzés.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8982,6 +8999,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .decisions import press_outlet_roles as _esc
         escrec = _esc(match, config)[team.value]
         rep.esc_passes_by_role = dict(escrec["roles"])
+        from .attack_types import last_holder_roles as _lst
+        lstrec = _lst(match, config)[team.value]
+        rep.lst_attacks_by_role = dict(lstrec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11574,6 +11594,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 350) Az ő vég-birtokos posztjuk × a ti labdaszerzésetek: ahol a
+    # támadásuk elhal, ott a legolcsóbb elvenni a labdát.
+    _lst350_n = sum(opp.lst_attacks_by_role.values())
+    if _lst350_n >= 4 and own.steal_n >= 5:
+        _lst350_p, _lst350_c = max(opp.lst_attacks_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _lst350_pct = 100.0 * _lst350_c / _lst350_n
+        if _lst350_pct >= 60.0:
+            plan.append(
+                f"A lövés nélkül záruló támadásaik "
+                f"{_lst350_pct:.0f}%-a a(z) {_lst350_p} poszt "
+                f"kezében hal el ({_lst350_n} terméketlen támadás), "
+                f"ti pedig sok labdát szereztek ({own.steal_n} "
+                "szerzés) — a támadásuk második felében őt "
+                "nyomjátok: ott zárul a támadás, és ott a legkisebb "
+                "kockázattal vehető el a labda.")
 
     # 349) Az ő menekülő-posztjuk × a ti kettőzésetek: a kettőzés
     # mögötti harmadik ember a menekülő passzra álljon lesben.
@@ -17681,6 +17718,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.top_shots_by_role for r in reports),
         esc_passes_by_role=_merge_count_dicts(
             r.esc_passes_by_role for r in reports),
+        lst_attacks_by_role=_merge_count_dicts(
+            r.lst_attacks_by_role for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

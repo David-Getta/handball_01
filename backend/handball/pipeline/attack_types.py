@@ -5743,3 +5743,92 @@ def lane_switch_roles(match: Match,
                     "sávváltáson át, vagy ÁTADJA a szomszédnak: a "
                     "bizonytalan átadásból nyílik a lyuk")
     return out
+
+
+# Vég-birtokos poszt: ennyi poszthoz kötött, lövés NÉLKÜL záruló
+# támadás kell az ítélethez, és ekkora részarány fölött mondjuk ki,
+# hogy a terméketlen támadásaik egy poszt kezében halnak el.
+LST_MIN_ATTACKS = 4
+LST_SHARE_PCT = 60.0
+
+
+def last_holder_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Vég-birtokos poszt: KINÉL ÉR VÉGET a támadásuk lövés nélkül.
+
+    A passzív-poszt csak a HOSSZÚ, felállt támadásokat nézi — ez
+    minden lövés nélkül záruló támadást: a szakasz UTOLSÓ
+    labdabirtokosát a posztjához írja. Így a rövid, eladásba fulladó
+    támadások vége is látszik.
+
+    Edzőileg ez a nyomás címzettje: ha a terméketlen támadásaik
+    rendre ugyanannak a posztnak a kezében halnak el, rá kell tolni
+    a nyomást a támadás második felében — nála zárul a támadás, és
+    ott a legolcsóbb a labdaszerzés. Saját csapatra: ha nálunk mindig
+    ugyanaz a poszt marad a labdával, a befejezés-felelősség
+    tisztázatlan.
+
+    Visszatérés csapatonként: {"attacks" (poszthoz kötött, lövés
+    nélkül záruló támadás), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    LST_MIN_ATTACKS, vagy egyik poszt sem éri el az LST_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    roles = estimate_positions(match, config)
+    by_t = {f.t: f for f in match.frames}
+    shots = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"attacks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        if any(s == side and seq.start_t <= t <= seq.end_t + tail
+               for (t, s) in shots):
+            continue   # lövéssel zárult: nem terméketlen
+        last_id = None
+        for t in range(seq.end_t, seq.start_t - 1, -1):
+            f = by_t.get(t)
+            if f is None:
+                continue
+            h = ball_holder(f, config)
+            if h is not None and h.team is not None \
+                    and h.team.value == side and h.role != "kapus":
+                last_id = h.track_id
+                break
+        if last_id is None:
+            continue
+        rec_role = roles[side].get(last_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["attacks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["attacks"] >= LST_MIN_ATTACKS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["attacks"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= LST_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a lövés nélkül záruló támadásaik {share:.0f}"
+                    f"%-a a(z) {poszt} poszt kezében hal el "
+                    f"({rec['attacks']} terméketlen támadásból) — a "
+                    "támadás második felében rá toljátok a nyomást: "
+                    "nála zárul a támadás, ott a legolcsóbb a "
+                    "labdaszerzés")
+    return out

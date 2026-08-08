@@ -4445,3 +4445,62 @@ def test_lane_switch_roles_silent_with_few_switches():
 
     rec = lane_switch_roles(_lsw_match([7]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Vég-birtokos poszt (kinél ér véget a támadás lövés nélkül) ------------
+
+
+def _lst_match(enders, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló) + lövés nélkül záruló
+    hazai támadások: az `enders` szerinti játékosnál marad a labda,
+    majd a vendég birtokol (a szakasz lezárul)."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0)}
+
+    def cast():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in enders:
+        for _ in range(40):          # hazai támadás: a labda körbejár
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=29.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        ex, ey = spos[tid]
+        for _ in range(40):          # a végén a lezáró birtokosnál
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=ex + 0.2, y=ey,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(60):          # vendég-birtoklás: a szakasz zárul
+            frames.append(Frame(
+                t=t, players=cast() + [_pl(21, Team.AWAY, 12.0, 10.0)],
+                ball=Ball(x=12.1, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_last_holder_roles_names_the_closing_post():
+    """A terméketlen támadások a beálló kezében halnak el → a
+    támadás második felében rá kell tolni a nyomást."""
+    from handball.pipeline.attack_types import (LST_MIN_ATTACKS,
+                                                last_holder_roles)
+
+    rec = last_holder_roles(_lst_match([7, 7, 7, 7, 5]))["home"]
+    assert rec["attacks"] >= LST_MIN_ATTACKS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "nyomást" in rec["verdict"], rec
+
+
+def test_last_holder_roles_silent_with_few_attacks():
+    """Néhány terméketlen támadásból nincs ítélet."""
+    from handball.pipeline.attack_types import last_holder_roles
+
+    rec = last_holder_roles(_lst_match([7, 5]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

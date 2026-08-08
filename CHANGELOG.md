@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.** A
+  passzív-poszt csak a hosszú, felállt támadásokat nézi — az új
+  réteg minden lövés nélkül záruló támadást: a szakasz utolsó
+  labdabirtokosát a posztjához írja, így a rövid, eladásba fulladó
+  támadások vége is látszik. Edzőileg a nyomás címzettje: ha a
+  terméketlen támadásaik rendre ugyanannak a posztnak a kezében
+  halnak el, a támadás második felében rá kell tolni a nyomást —
+  ott zárul a támadás, és ott a legolcsóbb a labdaszerzés. Saját
+  oldalon a befejezés-felelősség tisztázása az edzés-téma. Legalább
+  4 terméketlen támadás és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`last_holder_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 350. meccsterv-szabály),
+  edzés-fókusz (371. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Menekülő-poszt: nyomás alatt kihez megy a labda.** A
   pressz-poszt azt mondja meg, melyik posztjuk veszíti el a labdát
   szorításban — az új réteg azt, hová menekül: a testközeli védő

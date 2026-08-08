@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
+    try:
+        from .attack_types import last_holder_roles
+        lst = last_holder_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lst = lst[side]
+            if rec_lst["verdict"] is None:
+                continue
+            body += (f" A(z) {name} terméketlen támadásai a(z) "
+                     f"{rec_lst['main_role']} poszt kezében halnak "
+                     f"el ({rec_lst['share_pct']:.0f}%, "
+                     f"{rec_lst['attacks']} támadásból) — a támadás "
+                     "második felében rá kell tolni a nyomást.")
+    except Exception:
+        pass
     # Menekülő-poszt: nyomás alatt kihez megy a labda.
     try:
         from .decisions import press_outlet_roles

@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 371) Vég-birtokos poszt: ha a terméketlen támadásaink mindig
+    # ugyanannak a kezében halnak el, a befejezés-felelősség
+    # tisztázatlan.
+    try:
+        from .attack_types import LST_SHARE_PCT, last_holder_roles
+        lst371 = last_holder_roles(match, config)
+        for side in ("home", "away"):
+            rec371 = lst371[side]
+            if rec371.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy kézben elhaló támadás",
+                f"a lövés nélkül záruló támadásaink "
+                f"{rec371['share_pct']:.0f}%-a a(z) "
+                f"{rec371['main_role']} poszt kezében hal el "
+                f"({rec371['attacks']} terméketlen támadásból; "
+                f"{LST_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a támadás második felében rá tolja a "
+                "nyomást",
+                "befejezés-felelősség tisztázása: minden figurának "
+                "legyen kijelölt befejezője és határideje (hány "
+                "másodperc után kötelező a lövés vagy a bejátszás), "
+                "és a poszt kapjon kioldó megoldást nyomás alatt",
+                )
+    except Exception:
+        pass
+
     # 370) Menekülő-poszt: ha szorításban mindig ugyanahhoz a
     # poszthoz megy a labda, a kiútunk kiszámítható és elfogható.
     try:
