@@ -1032,6 +1032,11 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Kétperc ára: a mért kiállítás-ablakok és a közben kapott gólok
+    # darabszáma. Darabszám, pontosan összegződik (arány = conceded /
+    # windows).
+    sct_windows: int = 0
+    sct_conceded: int = 0
     # Emberfogás-váltás: a legszorosabb őrzési páros átlagtávolsága
     # félidőnként (méter) — egy meccs képe, több meccsnél az UTOLSÓ
     # felvétel értéke marad (nem összegezhető átlag).
@@ -4158,6 +4163,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Kétperc ára: megéri-e a kiállítás kiharcolására játszani.
+    if rep.sct_windows >= 3:
+        _sct_per = rep.sct_conceded / rep.sct_windows
+        if _sct_per >= 1.2:
+            keys.append(
+                f"Egy kiállításuk átlag {_sct_per:.1f} gólba kerül "
+                f"({rep.sct_conceded} gól {rep.sct_windows} kétperc "
+                "alatt) — a kiharcolás náluk pont-termelés: "
+                "vállaljátok a betöréseket, a szabálytalanság duplán "
+                "fizet.")
+        elif _sct_per <= 0.5:
+            keys.append(
+                f"Egy kiállításuk csak {_sct_per:.1f} gólba kerül "
+                f"({rep.sct_conceded} gól {rep.sct_windows} kétperc "
+                "alatt) — olcsón megússzák a hátrányt: ne a "
+                "kiállítás kiharcolására játsszatok, marad a "
+                "felállt támadás.")
 
     # Emberfogás-váltás: mire készüljünk a szünet után.
     if rep.msh_fh_dist_m > 0.0 and rep.msh_sh_dist_m > 0.0:
@@ -9410,6 +9433,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .rules import suspension_cost as _sct
+        sctrec = _sct(match, config)[team.value]
+        rep.sct_windows = int(sctrec["windows"])
+        rep.sct_conceded = int(sctrec["conceded"])
         from .defense import marking_shift as _msh
         mshrec = _msh(match, config)[team.value]
         rep.msh_fh_dist_m = float(mshrec["fh_dist_m"] or 0.0)
@@ -12075,6 +12102,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 371) Az ő drága kétpercük × a ti betörés-erősségetek: a
+    # kiharcolás pontot ér.
+    if opp.sct_windows >= 3 and own.shots >= 8:
+        _sct371 = opp.sct_conceded / opp.sct_windows
+        if _sct371 >= 1.2:
+            plan.append(
+                f"Egy kiállításuk átlag {_sct371:.1f} gólba kerül "
+                f"({opp.sct_conceded} gól {opp.sct_windows} kétperc "
+                f"alatt), ti pedig sokat lőttök ({own.shots} lövés) "
+                "— vállaljátok a betöréseket és a beállós "
+                "helyzeteket: náluk a szabálytalanság duplán fizet, "
+                "mert a kétperc alatt is szivárognak.")
 
     # 370) Az ő emberfogás-váltásuk × a ti kulcsemberetek: a
     # szünet utáni terv előre megírható.
@@ -18540,6 +18580,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        sct_windows=sum(r.sct_windows for r in reports),
+        sct_conceded=sum(r.sct_conceded for r in reports),
         msh_fh_dist_m=max((r.msh_fh_dist_m for r in reports),
                           default=0.0),
         msh_sh_dist_m=max((r.msh_sh_dist_m for r in reports),

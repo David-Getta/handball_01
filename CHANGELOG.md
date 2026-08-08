@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kétperc ára: mennyi gólba kerül egy kiállításuk.** Az
+  emberelőny-hatékonyság azt méri, mit támadnak a két perc alatt, az
+  emberelőny-védekezés azt, mit kapnak közben — az új réteg a
+  hátrány oldalát egyetlen számban: hány gólt kapnak átlagosan egy
+  kiállítás-ablak alatt. Edzőileg ez a fegyelem ára forintosítva: ha
+  egy kétperc átlag több mint egy gólba kerül, a kiharcolás
+  önmagában pont-termelés (a betöréseket vállalni kell); ha olcsón
+  megússzák, nem szabad a kiállításra játszani. Három
+  kiállítás-ablak alatt hallgat (None). A rangsorban az "ár"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`suspension_cost`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 371. meccsterv-szabály), edzés-fókusz (392.
+  szabály, külön mondattal a drága és az olcsó hátrányra),
+  kliens-csempe.
+
 - **Emberfogás-váltás: a szünet után emberfogásra váltanak-e.** Az
   őrzési párok a meccs egészére mondják meg, ki kit fogott — az új
   réteg a váltást: félidőnként megkeresi a legszorosabb párost, és

@@ -2318,3 +2318,79 @@ def test_suspension_chain_roles_silent_with_few_chains():
 
     rec = suspension_chain_roles(_schain_match([(9, 7), (5, 7)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kétperc ára (mennyi gólba kerül egy kiállításuk) ------------------------
+
+def _sct_match(goals_per_window, fps=25.0):
+    """A VENDÉG van emberhátrányban; a `goals_per_window` elemei adják,
+    hány hazai gól esik az adott kiállítás-ablakban."""
+    frames = []
+    t = 0
+
+    def _cast(away_n):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(6)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(away_n)]
+        return players
+
+    def _hold(n, away_n, ball):
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=_cast(away_n),
+                                ball=Ball(x=ball[0], y=ball[1],
+                                          confidence=1.0)))
+            t += 1
+
+    def _home_goal(away_n):
+        nonlocal t, frames
+        for i in range(10):
+            players = _cast(away_n)
+            players.append(_pl(1, Team.HOME, 33.0, 10.0))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 40.4),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _hold(int(3.0 * fps), away_n, (20.0, 9.0))
+
+    _hold(int(20.0 * fps), 6, (20.0, 9.0))
+    for n_goals in goals_per_window:
+        _hold(int(20.0 * fps), 5, (20.0, 9.0))
+        for _ in range(n_goals):
+            _home_goal(5)
+        _hold(int(40.0 * fps), 5, (20.0, 9.0))
+        _hold(int(30.0 * fps), 6, (20.0, 9.0))
+    return Match(_meta(fps), frames)
+
+
+def test_suspension_cost_prices_the_expensive_two_minutes():
+    """Ha egy kétpercük átlag több mint egy gólba kerül, a
+    kiharcolás pont-termelés."""
+    from handball.pipeline.rules import (SCT_MIN_WINDOWS,
+                                         suspension_cost)
+
+    rec = suspension_cost(_sct_match([2, 2, 1]))["away"]
+    assert rec["windows"] >= SCT_MIN_WINDOWS, rec
+    assert rec["conceded"] == 5, rec
+    assert rec["per_susp"] and rec["per_susp"] >= 1.2, rec
+    assert rec["verdict"] and "pont-termelés" in rec["verdict"], rec
+
+
+def test_suspension_cost_flags_the_cheap_two_minutes():
+    """Ha olcsón megússzák a hátrányt, nem szabad a kiállításra
+    játszani."""
+    from handball.pipeline.rules import suspension_cost
+
+    rec = suspension_cost(_sct_match([0, 0, 1]))["away"]
+    assert rec["per_susp"] is not None and rec["per_susp"] <= 0.5, rec
+    assert rec["verdict"] and "olcsón megússzák" in rec["verdict"], rec
+
+
+def test_suspension_cost_silent_with_few_windows():
+    """Két kiállításból még nincs ítélet."""
+    from handball.pipeline.rules import suspension_cost
+
+    rec = suspension_cost(_sct_match([1, 1]))["away"]
+    assert rec["windows"] == 2 and rec["verdict"] is None, rec
+    assert rec["per_susp"] is None, rec

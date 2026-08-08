@@ -60,6 +60,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("ár", "Elhúzódó támadás ára", "tactics", "slow_attack_cost"),
         ("ár", "Visszaállás ára", "defense", "retreat_punishment"),
         ("ár", "Kipattanó ára", "goalkeeper", "rebound_punishment"),
+        ("ár", "Kétperc ára", "rules", "suspension_cost"),
         ("ár", "Eladás-ár posztonként", "roles", "role_turnover_cost"),
         # --- ember: néven nevezett minta -----------------------------
         ("ember", "Tüzes kéz", "momentum", "hot_hands"),

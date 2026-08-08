@@ -1227,6 +1227,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "helyett).")
     except Exception:
         pass
+    # Kétperc ára: mennyi gólba kerül egy kiállításuk.
+    try:
+        from .rules import suspension_cost
+        sct = suspension_cost(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sct = sct[side]
+            if rec_sct["verdict"] is None:
+                continue
+            body += (f" A(z) {name} egy kiállítása átlag "
+                     f"{rec_sct['per_susp']:.1f} gólba kerül "
+                     f"({rec_sct['conceded']} gól "
+                     f"{rec_sct['windows']} kétperc alatt).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

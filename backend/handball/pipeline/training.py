@@ -1355,6 +1355,42 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 392) Kétperc ára: a hátrány-védekezés forintosítva.
+    try:
+        from .rules import SCT_CHEAP, SCT_COSTLY, suspension_cost
+        sct392 = suspension_cost(match, config)
+        for side in ("home", "away"):
+            rec392 = sct392[side]
+            if rec392.get("verdict") is None:
+                continue
+            if rec392["per_susp"] >= SCT_COSTLY:
+                add(side, "védekezés", "Hátrány-védekezés ára",
+                    f"egy kiállításunk átlag {rec392['per_susp']:.1f} "
+                    f"gólba kerül ({rec392['conceded']} gól "
+                    f"{rec392['windows']} kétperc alatt; "
+                    f"{SCT_COSTLY:.1f} fölött már drága) — a "
+                    "fegyelmezetlenség nálunk közvetlenül pontot ér",
+                    "hátrány-fal gyakorlása 5-6 ellen (kifelé "
+                    "terelés, beállós átadás, kapussal egyeztetett "
+                    "sarok-felosztás), és a kiállítás-okok "
+                    "átbeszélése videón: melyik szabálytalanság "
+                    "elkerülhető lett volna",
+                    )
+            elif rec392["per_susp"] <= SCT_CHEAP:
+                add(side, "védekezés", "A hátrány-védekezés erősség",
+                    f"egy kiállításunk csak {rec392['per_susp']:.1f} "
+                    f"gólba kerül ({rec392['conceded']} gól "
+                    f"{rec392['windows']} kétperc alatt) — a "
+                    "hátrány-védekezés a csapat erőssége, erre "
+                    "építeni lehet",
+                    "tudatos kockázat: a hátrány-fal magasabbra "
+                    "húzása labdaszerzésért, és a hátrányban "
+                    "vállalt kontra gyakorlása — a két percből így "
+                    "nettó nyereség lehet",
+                    )
+    except Exception:
+        pass
+
     # 391) Emberfogás-váltás: a szünetben hozott emberfogás a
     # legdrágább meglepetés — nekünk is legyen rá válaszunk.
     try:

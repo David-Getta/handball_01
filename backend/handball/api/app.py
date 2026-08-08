@@ -3863,6 +3863,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import suspension_cost
+            res["suspension_cost"] = suspension_cost(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5622,6 +5627,9 @@ def create_app():
                        lambda: defensive_rebound_players(match))
                 from ..pipeline.defense import marking_shift
                 _layer("marking_shift", lambda: marking_shift(match))
+                from ..pipeline.rules import suspension_cost
+                _layer("suspension_cost",
+                       lambda: suspension_cost(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

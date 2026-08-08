@@ -2689,3 +2689,74 @@ def suspension_chain_roles(match: Match,
                     "testtel, kéz nélkül kell védekezni, a "
                     "befejezőjüket pedig hátrányban le kell tiltani")
     return out
+
+
+# Kétperc ára: ennyi mért kiállítás-ablak kell az ítélethez, e fölött
+# drága a kétperc (gól/kiállítás), ez alatt viszont olcsó — a
+# hátrány-védekezésük jó.
+SCT_MIN_WINDOWS = 3
+SCT_COSTLY = 1.2
+SCT_CHEAP = 0.5
+
+
+def suspension_cost(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Kétperc ára: MENNYI GÓLBA KERÜL egy kiállításuk.
+
+    Az emberelőny-hatékonyság azt méri, mit TÁMADNAK a két perc
+    alatt, az emberelőny-védekezés azt, mit kapnak közben — ez a
+    HÁTRÁNY oldalát egyetlen számban: hány gólt kapnak átlagosan egy
+    kiállítás-ablak alatt.
+
+    Edzőileg ez a fegyelem ára forintosítva. Ha egy kétperc átlag
+    több mint egy gólba kerül nekik, a kiharcolás önmagában
+    pont-termelés: a betöréseket vállalni kell, mert a szabálytalanság
+    duplán fizet. Ha viszont olcsón megússzák, a kiállítás nem
+    stratégia — nem szabad rá játszani, marad a felállt támadás.
+    Saját csapatra: a hátrány-védekezés (fal-forma, kapus, labdatartás)
+    a téma.
+
+    Visszatérés csapatonként (a KIÁLLÍTOTT oldal): {"windows"
+    (kiállítás-ablak), "conceded" (közben kapott gól), "per_susp",
+    "verdict"} — a per_susp None SCT_MIN_WINDOWS alatt, az ítélet
+    None, ha a két küszöb közé esik.
+    """
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+
+    out: dict = {side: {"windows": 0, "conceded": 0, "per_susp": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for w in detect_powerplay(match):
+        down = w["team_down"]
+        up = "away" if down == "home" else "home"
+        rec = out[down]
+        rec["windows"] += 1
+        rec["conceded"] += sum(
+            1 for (gt, gs) in goals
+            if gs == up and w["start_frame"] <= gt <= w["end_frame"])
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["windows"] < SCT_MIN_WINDOWS:
+            continue
+        per = rec["conceded"] / rec["windows"]
+        rec["per_susp"] = round(per, 2)
+        if per >= SCT_COSTLY:
+            rec["verdict"] = (
+                f"egy kiállításuk átlag {per:.1f} gólba kerül "
+                f"({rec['conceded']} gól {rec['windows']} kétperc "
+                "alatt) — a kiharcolás náluk pont-termelés: a "
+                "betöréseket vállalni kell, mert a szabálytalanság "
+                "duplán fizet")
+        elif per <= SCT_CHEAP:
+            rec["verdict"] = (
+                f"egy kiállításuk csak {per:.1f} gólba kerül "
+                f"({rec['conceded']} gól {rec['windows']} kétperc "
+                "alatt) — olcsón megússzák a hátrányt: nem szabad a "
+                "kiállítás kiharcolására játszani, marad a felállt "
+                "támadás")
+    return out

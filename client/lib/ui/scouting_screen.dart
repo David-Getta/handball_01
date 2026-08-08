@@ -2168,6 +2168,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Kétperc ára: mennyi gólba kerül egy kiállításuk (3+ ablak; 1,2
+  // gól/kiállítás fölött drága, 0,5 alatt olcsó — a backenddel
+  // azonos küszöbök: SCT_MIN_WINDOWS, SCT_COSTLY, SCT_CHEAP).
+  String? _suspensionCost(Map<String, dynamic> r) {
+    final windows = (r["sct_windows"] as num?)?.toInt() ?? 0;
+    final conceded = (r["sct_conceded"] as num?)?.toInt() ?? 0;
+    if (windows < 3) return null;
+    final per = conceded / windows;
+    if (per >= 1.2) {
+      return "egy kiállításuk átlag ${per.toStringAsFixed(1)} gólba "
+          "kerül ($conceded gól $windows kétperc alatt) · a "
+          "kiharcolás náluk pont-termelés";
+    }
+    if (per <= 0.5) {
+      return "egy kiállításuk csak ${per.toStringAsFixed(1)} gólba "
+          "kerül ($conceded gól $windows kétperc alatt) · ne a "
+          "kiállításra játsszatok";
+    }
+    return null;
+  }
+
   // Emberfogás-váltás: a szünet után emberfogásra váltanak-e (2 m
   // alatt emberfogás, 0,7-es arány a váltás — a backenddel azonos
   // küszöbök: MSH_TIGHT_M, MSH_DROP_RATIO).
@@ -9793,6 +9814,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kipattanó-szedő ember", _reboundCollector(r)!],
       if (_markingShift(r) != null)
         ["Emberfogás-váltás", _markingShift(r)!],
+      if (_suspensionCost(r) != null)
+        ["Kétperc ára", _suspensionCost(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)
@@ -10067,7 +10090,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                "hetes-védés", "kapu-sarok"]),
     ("Posztok", ["poszt"]),
     ("Szabály és létszám", ["hetes", "kiállítás", "fegyelem",
-                            "emberelőny", "emberhátrány", "létszám",
+                            "emberelőny", "emberhátrány", "létszám", "kétperc",
                             "előny-", "hátrány-", "kettős ember"]),
     ("Idő, állás, forma", ["-állás", "állás szerint", "félidő", "félidei",
                            "szünet", "hajrá", "negyedóra", "ötperc",
