@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 376) Válaszhiba-poszt: ha a kapott gól után mindig ugyanannak
+    # a kezén vész el a labda, a hátrány sorozattá nő.
+    try:
+        from .momentum import (RTO_SHARE_PCT, response_turnover_roles)
+        rto376 = response_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec376 = rto376[side]
+            if rec376.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kapott gól utáni első támadás",
+                f"kapott gól után {rec376['share_pct']:.0f}%-ban "
+                f"a(z) {rec376['main_role']} kezén vész el a "
+                f"labdánk ({rec376['turnovers']} válasz-eladásból; "
+                f"{RTO_SHARE_PCT:.0f}% fölött már minta) — így a "
+                "bekapott gólból sorozat lesz, mert a válasz-"
+                "támadásunk el sem indul",
+                "bekapott gól utáni kötelező figura: lassú "
+                "felhozatal, két biztos passz, és a kapkodó poszt "
+                "NEM kapja meg elsőre a labdát; edzésen kapott gól "
+                "után azonnali labdaszerző-játék 4-4-ben",
+                )
+    except Exception:
+        pass
+
     # 375) Emberelőny-hiba poszt: ha az emberelőnyünk mindig
     # ugyanannak a kezén akad el, a két perc kárba vész.
     try:

@@ -3071,3 +3071,83 @@ def response_scorer_roles(match: Match, config=None) -> dict:
                     "váltsatok: ott törik meg a lendületük, mielőtt "
                     "elindulna")
     return out
+
+
+# Válaszhiba-poszt küszöbei: a kapott gólt követő ablak, a poszthoz
+# kötött eladások minimuma és a vezető poszt részaránya.
+RTO_WINDOW_S = 60.0
+RTO_MIN_TURNOVERS = 3
+RTO_SHARE_PCT = 60.0
+
+
+def response_turnover_roles(match: Match, config=None) -> dict:
+    """Válaszhiba-poszt: KAPOTT GÓL UTÁN kinél vész el a labdájuk.
+
+    A válasz-poszt azt mondja meg, kire fut ki a bekapott gól utáni
+    válaszuk — ez a másik felét: a kapott gólt RTO_WINDOW_S
+    másodpercen belül követő SAJÁT labdaeladásokat a vesztes
+    posztjához írja. A poszt-hibák rétege az egész meccset nézi, ez
+    csak a gól utáni percet, amikor a csapat kapkod.
+
+    Edzőileg ez a saját gólunk utáni presszterv: ha a kapott gól után
+    rendre ugyanannak a kezén vész el a labda, a gólunk után azonnal
+    az ő fogadására kell menni (előrelépő védő, kettőzés a
+    bejátszásnál) — a válaszuk így el sem indul, és a labdából
+    jöhet a következő gólunk is. Saját csapatra: a bekapott gól
+    utáni első támadást ki kell venni a kapkodó kezéből.
+
+    Visszatérés csapatonként: {"turnovers" (poszthoz kötött
+    válasz-eladás), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    RTO_MIN_TURNOVERS, vagy egyik poszt sem éri el az
+    RTO_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events, detect_shots
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = RTO_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        # Volt-e az ablakon belül ELŐTTE kapott gól?
+        kapott = any(t0 < e.t and e.t - t0 <= win and s0 != side
+                     for (t0, s0) in goals)
+        if not kapott:
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["turnovers"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= RTO_MIN_TURNOVERS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RTO_SHARE_PCT:
+                rec["verdict"] = (
+                    f"kapott gól után {share:.0f}%-ban a(z) {poszt} "
+                    f"kezén vész el a labdájuk ({rec['turnovers']} "
+                    "válasz-eladásból) — a saját gólunk után azonnal "
+                    "az ő fogadására kell menni: a válaszuk el sem "
+                    "indul, és jöhet a következő gólunk")
+    return out

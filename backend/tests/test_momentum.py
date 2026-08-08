@@ -2266,3 +2266,79 @@ def test_response_scorer_roles_silent_with_few_goals():
 
     rec = response_scorer_roles(_rsp_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Válaszhiba-poszt --------------------------------------------------------
+
+def _rto_match(losers, fps=25.0):
+    """Mint az _rsp_match, de a kapott gól után nem gól, hanem
+    LABDAELADÁS jön: a `losers` adja, kinek a kezén vész el."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(extra=()):
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + list(extra))
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in losers:
+        away = [_pl(21, Team.AWAY, 10.0, 10.0)]
+        for _ in range(10):          # a labda a vendég lövőnél
+            frames.append(Frame(t=t, players=cast(away),
+                                ball=Ball(x=10.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = 10.0
+        while x > -0.5:              # vendég gól a -x kapuba
+            x -= 0.5
+            frames.append(Frame(t=t, players=cast(away),
+                                ball=Ball(x=max(x, -0.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(20):          # semleges szakasz (nincs birtokos)
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+        sx, sy = spos[tid]
+        for _ in range(15):          # a labda a hazai vesztesnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(15):          # elvesztve: a vendégnél a labda
+            frames.append(Frame(t=t, players=cast(away),
+                                ball=Ball(x=10.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):          # zóna-visszaállás
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_response_turnover_roles_names_the_panicking_post():
+    """Ha a kapott gól után rendre ugyanannak a kezén vész el a
+    labda, a saját gólunk után az ő fogadására kell menni."""
+    from handball.pipeline.momentum import (RTO_MIN_TURNOVERS,
+                                            response_turnover_roles)
+
+    rec = response_turnover_roles(_rto_match([7, 7, 7, 9]))["home"]
+    assert rec["turnovers"] >= RTO_MIN_TURNOVERS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "el sem indul" in rec["verdict"], rec
+
+
+def test_response_turnover_roles_silent_with_few_turnovers():
+    """Két válasz-eladásból még nincs ítélet."""
+    from handball.pipeline.momentum import response_turnover_roles
+
+    rec = response_turnover_roles(_rto_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Válaszhiba-poszt: a kapott gólt követő percben elkövetett
+    # labdaeladások darabszáma a VESZTES posztja szerint. Darabszám,
+    # pontosan összegződik.
+    rto_turnovers_by_role: dict = field(default_factory=dict)
     # Emberelőny-hiba poszt: az emberelőnyben elkövetett
     # labdaeladások darabszáma a VESZTES posztja szerint. Darabszám,
     # pontosan összegződik.
@@ -4076,6 +4080,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Válaszhiba-poszt: a saját gólunk utáni pressz célpontja.
+    _rto_n = sum(rep.rto_turnovers_by_role.values())
+    if _rto_n >= 3:
+        _rto_p, _rto_c = max(rep.rto_turnovers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rto_pct = 100.0 * _rto_c / _rto_n
+        if _rto_pct >= 60.0:
+            keys.append(
+                f"Kapott gól után {_rto_pct:.0f}%-ban a(z) {_rto_p} "
+                f"kezén vész el a labdájuk ({_rto_n} válasz-eladás) "
+                "— a gólotok után azonnal az ő fogadására menjetek "
+                "(előrelépő védő, kettőzés a bejátszásnál): a "
+                "válaszuk el sem indul.")
 
     # Emberelőny-hiba poszt: a hátrány-védekezés célpontja.
     _ppt_n = sum(rep.ppt_turnovers_by_role.values())
@@ -9084,6 +9102,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .rules import powerplay_turnover_roles as _ppt
         pptrec = _ppt(match, config)[team.value]
         rep.ppt_turnovers_by_role = dict(pptrec["roles"])
+        from .momentum import response_turnover_roles as _rto
+        rtorec = _rto(match, config)[team.value]
+        rep.rto_turnovers_by_role = dict(rtorec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11676,6 +11697,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 355) Az ő válaszhiba-posztjuk × a ti gólerősségetek: minden
+    # gólunk után nyílik egy ablak, amiben elvehető a labda.
+    _rto355_n = sum(opp.rto_turnovers_by_role.values())
+    if _rto355_n >= 3 and own.goals >= 5:
+        _rto355_p, _rto355_c = max(opp.rto_turnovers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rto355_pct = 100.0 * _rto355_c / _rto355_n
+        if _rto355_pct >= 60.0:
+            plan.append(
+                f"Kapott gól után {_rto355_pct:.0f}%-ban a(z) "
+                f"{_rto355_p} kezén vész el a labdájuk ({_rto355_n} "
+                f"válasz-eladás), ti pedig gólerősek vagytok "
+                f"({own.goals} gól) — minden gólotok után nyílik egy "
+                "ablak: azonnal az ő fogadására lépjetek ki, a "
+                "sorozatot ott lehet elindítani.")
 
     # 354) Az ő emberelőny-hiba posztjuk × a ti kontrátok: a
     # kétperc alatt elvett labda dupla büntetés.
@@ -17885,6 +17922,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.bcp_chances_by_pair for r in reports),
         ppt_turnovers_by_role=_merge_count_dicts(
             r.ppt_turnovers_by_role for r in reports),
+        rto_turnovers_by_role=_merge_count_dicts(
+            r.rto_turnovers_by_role for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

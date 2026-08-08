@@ -977,6 +977,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátrányban rá kell nyomni.")
     except Exception:
         pass
+    # Válaszhiba-poszt: kapott gól után kinél vész el a labdájuk.
+    try:
+        from .momentum import response_turnover_roles
+        rto = response_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rto = rto[side]
+            if rec_rto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott gól után "
+                     f"{rec_rto['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_rto['main_role']} kezén veszíti el a "
+                     f"labdát ({rec_rto['turnovers']} "
+                     "válasz-eladás) — gól után azonnal az ő "
+                     "fogadására kell menni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

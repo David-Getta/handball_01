@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Válaszhiba-poszt: kapott gól után kinél vész el a labdájuk.**
+  A válasz-poszt azt mondja meg, kire fut ki a bekapott gól utáni
+  válaszuk — az új réteg a másik felét: a kapott gólt egy percen
+  belül követő labdaeladásokat a vesztes posztjához írja (a
+  poszt-hibák rétege az egész meccset nézi, ez csak a gól utáni
+  percet, amikor a csapat kapkod). Edzőileg ez a saját gólunk utáni
+  presszterv: ha a kapott gól után rendre ugyanannak a kezén vész el
+  a labda, a gólunk után azonnal az ő fogadására kell menni — a
+  válaszuk el sem indul, és a labdából jöhet a következő gólunk.
+  Legalább 3 válasz-eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`response_turnover_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 355. meccsterv-szabály), edzés-fókusz (376. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Emberelőny-hiba poszt: kinek a kezén akad el az
   emberelőnyük.** Az emberelőny-poszt azt mondja meg, kire fut ki a
   hat a öt ellen — az új réteg azt, kinél vész el: a
