@@ -1870,7 +1870,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                               slow_retreat_roles)
         from .goalkeeper import (outlet_hunter_roles,
                                  seven_six_finisher_roles)
-        from .roles import (assisted_scorer_roles,
+        from .roles import (assist_pair_roles,
+                            assisted_scorer_roles,
                             attack_starter_roles,
                             role_assist_sources, role_fast_breaks,
                             role_pressure_finish)
@@ -1971,6 +1972,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Elzárópáros-poszt", screen_pair_roles),
             ("Hetespáros-poszt", seven_pair_roles),
             ("Kontrapáros-poszt", fast_break_pair_roles),
+            ("Gólpasszpáros-poszt", assist_pair_roles),
             ("Blokkolt-poszt", blocked_shooter_roles),
             ("Ziccerhagyó-poszt", missed_chance_roles),
             ("Fáradó-poszt", fatigue_roles),

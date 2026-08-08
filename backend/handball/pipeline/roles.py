@@ -2030,3 +2030,73 @@ def attack_starter_roles(match: Match,
                     " korai nyomás rá már a felezőnél, és a "
                     "szervezésük el sem kezdődik")
     return out
+
+
+# Gólpasszpáros-poszt: ennyi poszthoz kötött asszisztos gól kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a góljaik
+# egy (adó → befejező) posztpáron születnek.
+APR_MIN_GOALS = 3
+APR_SHARE_PCT = 60.0
+
+
+def assist_pair_roles(match: Match,
+                      config: Optional[TacticsConfig] = None) -> dict:
+    """Gólpasszpáros-poszt: MELYIK TENGELYEN születnek a góljaik.
+
+    A gólpassz-poszt az adót, a kiszolgált-poszt a befejezőt nevezi
+    meg — ez a kettőt köti össze gólonként: az asszisztos gólokat az
+    (adó poszt → befejező poszt) párhoz írja. A bejáratott
+    gól-tengely akkor is látszik, ha a nevek cserélődnek.
+
+    Edzőileg ez a tengely-vágás terve: a bejáratott adó-befejező
+    kettős közti passzsáv a fal első számú zárnivalója — az adót
+    testtel, a sávot beleéréssel, és a gól-gépezetük áll. Saját
+    csapatra: a tengely kiszámíthatósága ellen második befejező-út
+    kell.
+
+    Visszatérés csapatonként: {"goals" (párhoz kötött asszisztos
+    gól), "roles": {"adó→befejező": darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg az
+    APR_MIN_GOALS, vagy egyik pár sem éri el az APR_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"goals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        aid = (e.detail or {}).get("assist_id")
+        if aid is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        r_a = roles[side].get(aid)
+        r_s = roles[side].get(e.player_id)
+        if r_a is None or r_s is None:
+            continue
+        kulcs = f"{r_a['poszt']}→{r_s['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["goals"] >= APR_MIN_GOALS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["goals"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= APR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a góljaik a(z) {par} tengelyen születnek "
+                    f"({share:.0f}%, {rec['goals']} asszisztos "
+                    "gólból) — a kettős közti passzsáv a fal első "
+                    "számú zárnivalója: az adót testtel, a sávot "
+                    "beleéréssel")
+    return out

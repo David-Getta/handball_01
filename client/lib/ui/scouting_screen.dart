@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik (3+
+  // asszisztos gól, 60% részarány — a backenddel azonos küszöbök:
+  // APR_MIN_GOALS, APR_SHARE_PCT).
+  String? _assistPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["apr_goals_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a góljaik a(z) $top tengelyen születnek "
+        "(${pct.round()}%, $total asszisztos gól) · a kettős közti "
+        "passzsáv a fő zárnivaló";
+  }
+
   // Kontrapáros-poszt: melyik tengelyen futnak a kontráik (3+
   // lerohanás, 60% részarány — a backenddel azonos küszöbök:
   // FBP_MIN_BREAKS, FBP_SHARE_PCT).
@@ -8940,6 +8967,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_assistPairRole(r) != null)
+        ["Gólpasszpáros-poszt", _assistPairRole(r)!],
       if (_fastBreakPairRole(r) != null)
         ["Kontrapáros-poszt", _fastBreakPairRole(r)!],
       if (_sevenPairRole(r) != null)

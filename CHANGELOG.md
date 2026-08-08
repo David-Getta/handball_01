@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik.** A
+  gólpassz-poszt az adót, a kiszolgált-poszt a befejezőt nevezi meg
+  — az új réteg a kettőt köti össze gólonként: az asszisztos gólokat
+  az (adó poszt → befejező poszt) párhoz írja. Edzőileg a
+  tengely-vágás terve: a kettős közti passzsáv a fal első számú
+  zárnivalója — az adót testtel, a sávot beleéréssel. Saját oldalon
+  a második gól-tengely az edzés-téma. Legalább 3 asszisztos gól és
+  60% párrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`assist_pair_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 339. meccsterv-szabály), edzés-fókusz (360.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Kontrapáros-poszt: melyik tengelyen futnak a kontráik.** A
   kontra-poszt a befejezőt nevezi meg — az új réteg a teljes
   tengelyt: minden lerohanásnál az első labdabirtokos (indító) és a

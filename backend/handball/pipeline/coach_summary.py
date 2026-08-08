@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Gólpasszpáros-poszt: melyik tengelyen születnek a góljaik.
+    try:
+        from .roles import assist_pair_roles
+        apr = assist_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_apr = apr[side]
+            if rec_apr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} góljai a(z) "
+                     f"{rec_apr['main_role']} tengelyen születnek "
+                     f"({rec_apr['share_pct']:.0f}%, "
+                     f"{rec_apr['goals']} asszisztos gólból) — a "
+                     "kettős közti passzsáv a fő zárnivaló.")
+    except Exception:
+        pass
     # Kontrapáros-poszt: melyik tengelyen futnak a kontráik.
     try:
         from .attack_types import fast_break_pair_roles

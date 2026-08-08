@@ -1451,3 +1451,29 @@ def test_attack_starter_roles_silent_with_few_attacks():
 
     rec = attack_starter_roles(_ats_match(3))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Gólpasszpáros-poszt (melyik tengelyen születnek a góljaik) ------------
+
+
+def test_assist_pair_roles_names_the_goal_axis():
+    """Három asszisztos gól a szélső→beálló tengelyen → a kettős
+    közti sáv a zárnivaló."""
+    from handball.pipeline.roles import (APR_MIN_GOALS,
+                                         assist_pair_roles)
+
+    rec = assist_pair_roles(
+        _asr_match([(7, True), (7, True), (7, True),
+                    (9, False)]))["home"]
+    assert rec["goals"] >= APR_MIN_GOALS, rec
+    assert rec["main_role"] == "szélső→beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "zárnivalója" in rec["verdict"], rec
+
+
+def test_assist_pair_roles_silent_with_few_goals():
+    """Néhány asszisztos gólból nincs ítélet."""
+    from handball.pipeline.roles import assist_pair_roles
+
+    rec = assist_pair_roles(_asr_match([(7, True), (9, True)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

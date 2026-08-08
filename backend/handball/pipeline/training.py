@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 360) Gólpasszpáros-poszt: ha a góljaink egy tengelyen
+    # születnek, egy sávzárás a gól-gépezetünket állítja le.
+    try:
+        from .roles import APR_SHARE_PCT, assist_pair_roles
+        apr360 = assist_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec360 = apr360[side]
+            if rec360.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen születő gólok",
+                f"az asszisztos góljaink {rec360['share_pct']:.0f}"
+                f"%-a a(z) {rec360['main_role']} tengelyen születik"
+                f" ({rec360['goals']} gólból; "
+                f"{APR_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "sávzárás a fő gól-forrásunkat vágja el",
+                "második gól-tengely: a fő figura tükrözése és "
+                "másik adó-befejező kettős bejáratása, a fő "
+                "tengelynek pedig sávzárás elleni variáció "
+                "(hátoldali befutás, visszatett labda)",
+                )
+    except Exception:
+        pass
+
     # 359) Kontrapáros-poszt: ha a kontráink egy tengelyen futnak, a
     # felkészült ellenfél két ponton fogja őket.
     try:
