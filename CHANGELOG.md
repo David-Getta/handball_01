@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kulcs-páros: hány réteg mutat ugyanarra a posztpárra.** A hat
+  páros-lencse (elzárás-, hetes-, kontra-, gólpassz-, kettőző- és
+  lepattanó-páros) egyenként egy bejáratott kettőst nevez meg — az
+  új réteg összeszámolja őket, és kimondja a csapat kulcs-párosát.
+  Edzőileg a meccsterv második lapja: a kulcs-poszt egy embert jelöl
+  ki, a kulcs-páros egy tengelyt — a kettejük közti sáv szétvágásával
+  több minta hal el egyszerre. A páros-rétegek ezzel kikerültek a
+  kulcs-poszt listájából (KP_PAIRS a KP_LAYERS mellett): a
+  kulcs-poszt embert keres, a kulcs-páros kettőst, a keverés
+  mindkét számot hígítaná. 2 egyező réteg alatt (vagy holtversenynél)
+  hallgat (None). Felületek: /analyze + meccs-csomag (`key_pair`),
+  edzői összefoglaló, felderítés (edzői kulcs + 342. meccsterv-
+  szabály), edzés-fókusz (363. szabály), HTML-riport (önálló
+  Kulcs-páros szakasz bizonyíték-rétegekkel), kliens-csempe.
 - **Lepattanópáros-poszt: melyik lövésükre ki érkezik.** A
   lepattanó-poszt az érkezőt nevezi meg — az új réteg a párost:
   minden megnyert második rohamnál az eredeti lövő és az újra lövő

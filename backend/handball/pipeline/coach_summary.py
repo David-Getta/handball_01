@@ -916,6 +916,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kulcs-páros: hány réteg mutat ugyanarra a posztpárra.
+    try:
+        from .priorities import key_pair
+        kpr = key_pair(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kpr = kpr[side]
+            if rec_kpr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kulcs-párosa a(z) "
+                     f"{rec_kpr['top']}: {rec_kpr['pairs'][rec_kpr['top']]}"
+                     f" páros-réteg mutat rá — a kettejük közti "
+                     "sávot kell szétvágni.")
+    except Exception:
+        pass
     # Lepattanópáros-poszt: melyik lövésükre ki érkezik.
     try:
         from .attack_types import rebound_pair_roles

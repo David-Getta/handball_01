@@ -245,6 +245,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("felkészülés", "Lepattanópáros-poszt", "attack_types",
          "rebound_pair_roles"),
         ("felkészülés", "Kulcs-poszt", "priorities", "key_post"),
+        ("felkészülés", "Kulcs-páros", "priorities", "key_pair"),
     ]
 
 
@@ -381,6 +382,16 @@ KP_LAYERS: tuple = (
     ("Célkereszt-poszt", "defense", "targeted_defender_roles"),
     ("Letámadó-poszt", "defense", "high_steal_roles"),
     ("Álló-poszt", "tactics", "static_attacker_roles"),
+)
+
+
+# Kulcs-páros: a PÁROS-lencse rétegek (két posztot megnevező minták)
+# névsora, és ennyi egyező réteg kell a kulcs-páros kimondásához. A
+# páros-rétegek szándékosan NEM a KP_LAYERS-ben vannak: a kulcs-poszt
+# egy embert keres, a kulcs-páros egy kettőst — a kettő keverése
+# mindkét számot hígítaná.
+KPR_MIN_LAYERS = 2
+KP_PAIRS: tuple = (
     ("Elzárópáros-poszt", "attack_types", "screen_pair_roles"),
     ("Hetespáros-poszt", "rules", "seven_pair_roles"),
     ("Kontrapáros-poszt", "attack_types", "fast_break_pair_roles"),
@@ -388,6 +399,69 @@ KP_LAYERS: tuple = (
     ("Kettőzőpáros-poszt", "defense", "doubling_pair_roles"),
     ("Lepattanópáros-poszt", "attack_types", "rebound_pair_roles"),
 )
+
+
+def key_pair(match: Match, config=None) -> dict:
+    """Kulcs-páros: HÁNY RÉTEG mutat ugyanarra a POSZTPÁRRA.
+
+    A páros-lencse rétegek (ki zár kinek, ki indít kinek, ki érkezik
+    a lepattanóra, melyik kettős kettőz) egyenként egy-egy bejáratott
+    kettőst neveznek meg — ez a réteg összeszámolja őket: ha több
+    ítélet ugyanazt a párost adja vissza, az a csapat KULCS-PÁROSA.
+
+    Edzőileg ez a meccsterv második lapja (a kulcs-poszt után): a
+    kulcs-poszt EGY embert jelöl ki, a kulcs-páros egy TENGELYT — a
+    kettejük közti passzsáv és a hozzájuk tartozó figura az, amit
+    szét kell választani. Ha a kettőst megbontjuk (a sávot zárva, az
+    egyiket kivéve), több minta hal el egyszerre. Saját csapatnál a
+    kulcs-páros a kiszámíthatóság mérője: a figuráinknak másik
+    tengelyen is futniuk kell.
+
+    Visszatérés csapatonként: {"layers" (megszólaló páros-réteg),
+    "pairs": {páros: réteg-darab}, "named": [{"layer", "pair"}],
+    "top", "verdict"} — a top/verdict None, ha nincs KPR_MIN_LAYERS
+    egyező réteg, vagy az élen holtverseny áll.
+    """
+    import importlib
+
+    from .primitive_cache import primitive_cache
+
+    out: dict = {side: {"layers": 0, "pairs": {}, "named": [],
+                        "top": None, "verdict": None}
+                 for side in ("home", "away")}
+    with primitive_cache(match):
+        for label, mod_name, fn_name in KP_PAIRS:
+            try:
+                mod = importlib.import_module(f".{mod_name}", __package__)
+                rec_all = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side in ("home", "away"):
+                rec = rec_all.get(side) or {}
+                par = rec.get("main_role")
+                if rec.get("verdict") is None or par is None:
+                    continue
+                o = out[side]
+                o["layers"] += 1
+                o["pairs"][par] = o["pairs"].get(par, 0) + 1
+                o["named"].append({"layer": label, "pair": par})
+    for o in out.values():
+        o["pairs"] = dict(sorted(o["pairs"].items(),
+                                 key=lambda kv: -kv[1]))
+        if not o["pairs"]:
+            continue
+        vals = list(o["pairs"].values())
+        top_n = vals[0]
+        tie = len(vals) > 1 and vals[1] == top_n
+        if top_n >= KPR_MIN_LAYERS and not tie:
+            par = next(iter(o["pairs"]))
+            o["top"] = par
+            o["verdict"] = (
+                f"a kulcs-párosuk a(z) {par}: {top_n} réteg ítélete "
+                f"mutat rá (a {o['layers']} megszólalóból) — a "
+                "kettejük közti sávot kell szétvágni, mert azzal "
+                "több mintájuk hal el egyszerre")
+    return out
 
 
 def key_post(match: Match, config=None) -> dict:

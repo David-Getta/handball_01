@@ -258,9 +258,13 @@ def test_kulcs_poszt_lefedi_a_poszt_iteletes_retegeket():
     import pathlib
     import re
 
-    from handball.pipeline.priorities import KP_LAYERS
+    from handball.pipeline.priorities import KP_LAYERS, KP_PAIRS
 
-    covered = {fn for _, _, fn in KP_LAYERS}
+    # A poszt-lencse a KP_LAYERS-be, a POSZTPÁR-lencse a KP_PAIRS-be
+    # tartozik (kulcs-poszt vs. kulcs-páros) — mindkettő lefedésnek
+    # számít, de a két lista szándékosan külön áll.
+    covered = ({fn for _, _, fn in KP_LAYERS}
+               | {fn for _, _, fn in KP_PAIRS})
     # A hetes-oldal (irány-ítélet) és a poszt-nyomás kivétel: nem
     # posztot neveznek meg, vagy más a szerkezetük.
     pipeline_dir = pathlib.Path("handball/pipeline")
@@ -276,7 +280,7 @@ def test_kulcs_poszt_lefedi_a_poszt_iteletes_retegeket():
             body = src[m.start():end if end > 0 else len(src)]
             if '"main_role"' in body and fn not in covered:
                 missing.append(f"{mod.stem}.{fn}")
-    assert not missing, ("hiányzik a KP_LAYERS-ből: "
+    assert not missing, ("hiányzik a KP_LAYERS/KP_PAIRS listákból: "
                          + ", ".join(sorted(missing)))
 
 
@@ -302,3 +306,24 @@ def test_minden_kp_reteg_a_riport_lencsekben_is():
     hianyzik = sorted(kp_names - lens_names)
     assert not hianyzik, (
         f"KP-rétegek lencse-sor nélkül: {hianyzik}")
+
+
+def test_kulcs_paros_osszegzi_a_paros_retegeket():
+    """A kulcs-páros akkor szólal meg, ha több páros-réteg ugyanazt a
+    kettőst nevezi meg — és a KP_PAIRS a páros-rétegeket a
+    kulcs-poszt listájától külön tartja."""
+    from handball.pipeline.priorities import (KP_LAYERS, KP_PAIRS,
+                                              key_pair)
+
+    # A két lista nem fed át: a poszt- és a páros-lencse külön él.
+    assert not ({fn for _, _, fn in KP_PAIRS}
+                & {fn for _, _, fn in KP_LAYERS})
+    assert len(KP_PAIRS) >= 5
+
+    rec = key_pair(_kp_match())
+    for side in ("home", "away"):
+        o = rec[side]
+        assert set(o) == {"layers", "pairs", "named", "top", "verdict"}
+        # Minden megnevezett páros egy-egy páros-rétegtől jön.
+        cimkek = {label for label, _m, _f in KP_PAIRS}
+        assert all(n["layer"] in cimkek for n in o["named"]), o["named"]

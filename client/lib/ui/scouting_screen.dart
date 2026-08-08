@@ -2141,6 +2141,31 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Kulcs-páros: hány páros-réteg mutat ugyanarra a kettősre (2+
+  // egyező réteg, holtverseny nélkül — a backenddel azonos küszöb:
+  // KPR_MIN_LAYERS).
+  String? _keyPair(Map<String, dynamic> r) {
+    final byPair =
+        (r["kpr_layers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byPair == null || byPair.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var secondN = 0;
+    byPair.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (n > topN) {
+        secondN = topN;
+        top = k;
+        topN = n;
+      } else if (n > secondN) {
+        secondN = n;
+      }
+    });
+    if (top == null || topN < 2 || topN == secondN) return null;
+    return "a kulcs-párosuk a(z) $top: $topN páros-réteg mutat rá · "
+        "a kettejük közti sávot kell szétvágni";
+  }
+
   // Lepattanópáros-poszt: melyik lövésükre ki érkezik (3+ második
   // roham, 60% részarány — a backenddel azonos küszöbök:
   // RBP_MIN_SHOTS, RBP_SHARE_PCT).
@@ -9021,6 +9046,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_keyPair(r) != null)
+        ["Kulcs-páros", _keyPair(r)!],
       if (_reboundPairRole(r) != null)
         ["Lepattanópáros-poszt", _reboundPairRole(r)!],
       if (_doublingPairRole(r) != null)

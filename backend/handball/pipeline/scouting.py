@@ -996,6 +996,9 @@ class ScoutingReport:
     # Lepattanópáros-poszt: második rohamok a (lövő→érkező) posztpár
     # szerint. Darabszám, pontosan összegződik.
     rbp_shots_by_role: dict = field(default_factory=dict)
+    # Kulcs-páros: posztpáronként HÁNY páros-réteg ítélete mutat rá.
+    # Réteg-darabszám, meccsek közt pontosan összegződik.
+    kpr_layers_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3885,6 +3888,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"({_rbp_pct:.0f}%, {_rbp_n} második roham) — az "
                 "első lövés zárása UTÁN azonnal az érkező útját "
                 "álljátok el: a lepattanóban a másodperc dönt.")
+
+    # Kulcs-páros: a meccsterv második lapja (a kulcs-poszt után).
+    if rep.kpr_layers_by_role:
+        _kpr_p, _kpr_c = max(rep.kpr_layers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _kpr_vals = sorted(rep.kpr_layers_by_role.values(),
+                           reverse=True)
+        _kpr_tie = len(_kpr_vals) > 1 and _kpr_vals[1] == _kpr_c
+        if _kpr_c >= 2 and not _kpr_tie:
+            keys.append(
+                f"A kulcs-párosuk a(z) {_kpr_p}: {_kpr_c} "
+                "páros-réteg ítélete mutat rá — a kettejük közti "
+                "sávot vágjátok szét, azzal több mintájuk hal el "
+                "egyszerre.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8818,6 +8835,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .attack_types import rebound_pair_roles as _rbp
         rbprec = _rbp(match, config)[team.value]
         rep.rbp_shots_by_role = dict(rbprec["roles"])
+        from .priorities import key_pair as _kpr
+        kprrec = _kpr(match, config)[team.value]
+        rep.kpr_layers_by_role = dict(kprrec["pairs"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11398,6 +11418,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 342) Az ő kulcs-párosuk × a ti kettőzésetek: a legtöbb réteg
+    # által megnevezett kettőst szétválasztva több minta hal el.
+    _dbl342 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if opp.kpr_layers_by_role and _dbl342 >= 20.0:
+        _kpr342_p, _kpr342_c = max(opp.kpr_layers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _kpr342_vals = sorted(opp.kpr_layers_by_role.values(),
+                              reverse=True)
+        _kpr342_tie = (len(_kpr342_vals) > 1
+                       and _kpr342_vals[1] == _kpr342_c)
+        if _kpr342_c >= 2 and not _kpr342_tie:
+            plan.append(
+                f"A kulcs-párosuk a(z) {_kpr342_p} ({_kpr342_c} "
+                "páros-réteg mutat rá), ti pedig jól kettőztök "
+                f"({_dbl342:.0f}% a labdás nyomás alatt) — a "
+                "meccsterv gerince a kettejük szétválasztása: a "
+                "köztük lévő passzsávot zárjátok, és a kettőzés is "
+                "erre a tengelyre menjen.")
 
     # 341) Az ő lepattanópáros-posztjuk × a ti blokkoló falatok: a
     # blokk után a lepattanó-útvonal ismert, és elzárható.
@@ -17342,6 +17382,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.dpp_frames_by_role for r in reports),
         rbp_shots_by_role=_merge_count_dicts(
             r.rbp_shots_by_role for r in reports),
+        kpr_layers_by_role=_merge_count_dicts(
+            r.kpr_layers_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

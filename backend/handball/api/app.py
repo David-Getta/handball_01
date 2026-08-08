@@ -3709,6 +3709,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.priorities import key_pair
+            res["key_pair"] = key_pair(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5385,6 +5390,8 @@ def create_app():
                 from ..pipeline.attack_types import rebound_pair_roles
                 _layer("rebound_pair_roles",
                        lambda: rebound_pair_roles(match))
+                from ..pipeline.priorities import key_pair
+                _layer("key_pair", lambda: key_pair(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 363) Kulcs-páros: ha több páros-rétegünk ugyanarra a kettősre
+    # mutat, a játékunk egyetlen tengelyen áll.
+    try:
+        from .priorities import KPR_MIN_LAYERS, key_pair
+        kpr363 = key_pair(match, config)
+        for side in ("home", "away"):
+            rec363 = kpr363[side]
+            if rec363.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen álló játék",
+                f"a kulcs-párosunk a(z) {rec363['top']}: "
+                f"{rec363['pairs'][rec363['top']]} páros-réteg "
+                f"ítélete mutat rá (a {rec363['layers']} "
+                f"megszólalóból; {KPR_MIN_LAYERS} egyező réteg "
+                "fölött már minta) — egy jó sávzárás több "
+                "mintánkat egyszerre viszi el",
+                "tengely-váltás gyakorlása: a fő figurák tükrözve a "
+                "másik oldalra, a kulcs-páros szétválasztása a "
+                "figurákban (egyikük indít, a másik befejez "
+                "harmadikon keresztül), és tudatos harmadik ember "
+                "bevonása a kijátszásokba",
+                )
+    except Exception:
+        pass
+
     # 362) Lepattanópáros-poszt: ha a lepattanó-érkezésünk egy
     # útvonalon fut, a felkészült fal elzárja.
     try:

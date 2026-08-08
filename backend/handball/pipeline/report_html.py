@@ -1835,6 +1835,32 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
 
+    # Kulcs-páros: a meccsterv második lapja — melyik KETTŐST kell
+    # szétválasztani (a kulcs-poszt szakasza után, a lencse-táblák
+    # elé).
+    key_pair_html = ""
+    try:
+        from .priorities import key_pair as _kpr_fn
+        kpr_rec = _kpr_fn(match)
+        kpr_lines = []
+        for side, name in (("home", home), ("away", away)):
+            rec_kpr = kpr_rec.get(side) or {}
+            v = rec_kpr.get("verdict")
+            if not v:
+                continue
+            evidence = [n["layer"] for n in rec_kpr.get("named", [])
+                        if n.get("pair") == rec_kpr.get("top")]
+            tail = (' <span class="note">(rétegek: '
+                    + escape(", ".join(evidence)) + ")</span>"
+                    if evidence else "")
+            kpr_lines.append(f"<li><b>{escape(name)}</b>: "
+                             f"{escape(v)}{tail}</li>")
+        if kpr_lines:
+            key_pair_html = ("<h2>Kulcs-páros</h2><ul>"
+                             + "".join(kpr_lines) + "</ul>")
+    except Exception:
+        pass
+
     # Befejező-lencse: a "kire fut ki a játékuk" ítéletek egy helyen —
     # kire lépj ki, időkérés után kit fogj, kontránál kit vegyél fel
     # először, hetesnél merre vetődj. A védő-oldali párja a Védő-lencse:
@@ -2033,6 +2059,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
     rules_html = (moments_html + setplays_html + key_post_html
+                  + key_pair_html
                   + finishers_html + defense_lens_html + rules_html)
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
