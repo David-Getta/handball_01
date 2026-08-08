@@ -2168,6 +2168,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Emberfogás-váltás: a szünet után emberfogásra váltanak-e (2 m
+  // alatt emberfogás, 0,7-es arány a váltás — a backenddel azonos
+  // küszöbök: MSH_TIGHT_M, MSH_DROP_RATIO).
+  String? _markingShift(Map<String, dynamic> r) {
+    final fh = (r["msh_fh_dist_m"] as num?)?.toDouble() ?? 0.0;
+    final sh = (r["msh_sh_dist_m"] as num?)?.toDouble() ?? 0.0;
+    if (fh <= 0.0 || sh <= 0.0) return null;
+    if (sh <= 2.0 && sh <= 0.7 * fh) {
+      return "a szünet után emberfogásra váltanak (a legszorosabb "
+          "páros ${sh.toStringAsFixed(1)} m az első félidei "
+          "${fh.toStringAsFixed(1)} m helyett) · a fogott emberetek "
+          "húzza el a védőjét";
+    }
+    if (fh <= 2.0 && fh <= 0.7 * sh) {
+      return "a szünet után elengedik az emberfogást (a legszorosabb "
+          "páros ${sh.toStringAsFixed(1)} m az első félidei "
+          "${fh.toStringAsFixed(1)} m helyett) · a fogott emberetek "
+          "visszakapja a labdát";
+    }
+    return null;
+  }
+
   // Kipattanó-szedők: ki szedi össze a kipattanót védés után (2+
   // kipattanó ugyanattól a védőtől — a backenddel azonos küszöb:
   // RBCP_MIN_REBOUNDS).
@@ -9769,6 +9791,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kétperc-páros", _suspensionChain(r)!],
       if (_reboundCollector(r) != null)
         ["Kipattanó-szedő ember", _reboundCollector(r)!],
+      if (_markingShift(r) != null)
+        ["Emberfogás-váltás", _markingShift(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

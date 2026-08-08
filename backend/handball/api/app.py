@@ -3858,6 +3858,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import marking_shift
+            res["marking_shift"] = marking_shift(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5615,6 +5620,8 @@ def create_app():
                 from ..pipeline.defense import defensive_rebound_players
                 _layer("defensive_rebound_players",
                        lambda: defensive_rebound_players(match))
+                from ..pipeline.defense import marking_shift
+                _layer("marking_shift", lambda: marking_shift(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

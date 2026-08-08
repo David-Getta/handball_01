@@ -4128,3 +4128,65 @@ def test_defensive_rebound_players_silent_after_one():
 
     rec = defensive_rebound_players(_rbc_match([30]))["away"]
     assert rec["rebounds"] == 1 and rec["top"] is None, rec
+
+
+# ---- Emberfogás-váltás (a szünet után emberfogásra váltanak-e) -------------
+
+
+def _msh_match(fh_dist, sh_dist, fps=25.0):
+    """Két félidő 6-6 perccel és 90 mp szünettel: a vendég 20-as a
+    hazai 1-est őrzi, az első félidőben `fh_dist`, a másodikban
+    `sh_dist` méterre."""
+    from handball.models.tracking import Ball, Frame, Match
+
+    frames = []
+    t = 0
+
+    def _play(seconds, dist):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[
+                _pl(1, Team.HOME, 25.0, 10.0),
+                _pl(2, Team.HOME, 25.0, 3.0),
+                _pl(20, Team.AWAY, 25.0, 10.0 + dist),
+                _pl(21, Team.AWAY, 25.0, 3.0 + 3.2)],
+                ball=Ball(x=25.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _break(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(t=t, players=[], ball=None))
+            t += 1
+
+    _play(360.0, fh_dist)
+    _break(90.0)
+    _play(360.0, sh_dist)
+    return Match(_meta(fps), frames)
+
+
+def test_marking_shift_flags_the_second_half_man_marking():
+    """Ha a szünet után a legszorosabb páros 3 m-ről 1 m-re szorul,
+    emberfogásra váltottak."""
+    from handball.pipeline.defense import marking_shift
+
+    rec = marking_shift(_msh_match(3.0, 1.0))["away"]
+    assert rec["fh_dist_m"] and rec["fh_dist_m"] > 2.0, rec
+    assert rec["sh_dist_m"] and rec["sh_dist_m"] <= 2.0, rec
+    assert rec["verdict"] and "emberfogásra váltottak" in rec["verdict"]
+
+
+def test_marking_shift_flags_the_released_marking():
+    """A fordított eset: a szünet után elengedik az emberfogást."""
+    from handball.pipeline.defense import marking_shift
+
+    rec = marking_shift(_msh_match(1.0, 3.0))["away"]
+    assert rec["verdict"] and "elengedték" in rec["verdict"], rec
+
+
+def test_marking_shift_silent_without_change():
+    """Változatlan szorosságnál nincs ítélet."""
+    from handball.pipeline.defense import marking_shift
+
+    rec = marking_shift(_msh_match(2.0, 2.0))["away"]
+    assert rec["fh_dist_m"] is not None and rec["verdict"] is None, rec

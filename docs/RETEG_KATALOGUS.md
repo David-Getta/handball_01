@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **417 réteg**, modulonként csoportosítva; a
+Összesen **418 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (83)
@@ -117,7 +117,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (77)
+## defense (78)
 
 | Réteg | Mit mér |
 |---|---|
@@ -164,6 +164,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `high_steal_roles` | Letámadó-poszt: MELYIK POSZTJUK szed labdát elöl. |
 | `line_height_by_score` | Védekezési mélység állás szerint: ELŐNYBEN vagy HÁTRÁNYBAN |
 | `marking` | Őrzési párok: ki kit fogott a védekezésben. |
+| `marking_shift` | Emberfogás-váltás: A SZÜNET UTÁN emberfogásra váltanak-e. |
 | `pivot_defense` | Beálló-védekezés: mennyire bírja a fal az ellenfél beállóját. |
 | `pivot_guard_roles` | Beállóőr-poszt: MELYIK POSZTJUK őrzi az ellenfél beállóját. |
 | `pivot_guards` | Beálló-őr: KI ŐRZI az ellenfél beállóját. |

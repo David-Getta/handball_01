@@ -1032,6 +1032,11 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Emberfogás-váltás: a legszorosabb őrzési páros átlagtávolsága
+    # félidőnként (méter) — egy meccs képe, több meccsnél az UTOLSÓ
+    # felvétel értéke marad (nem összegezhető átlag).
+    msh_fh_dist_m: float = 0.0
+    msh_sh_dist_m: float = 0.0
     # Kipattanó-szedők: a megszerzett kipattanók darabszáma
     # JÁTÉKOSONKÉNT (mez-szám vagy track-azonosító). Darabszám,
     # meccsek közt összegződik.
@@ -4153,6 +4158,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Emberfogás-váltás: mire készüljünk a szünet után.
+    if rep.msh_fh_dist_m > 0.0 and rep.msh_sh_dist_m > 0.0:
+        if (rep.msh_sh_dist_m <= 2.0
+                and rep.msh_sh_dist_m <= 0.7 * rep.msh_fh_dist_m):
+            keys.append(
+                f"A szünet után emberfogásra váltanak (a legszorosabb "
+                f"páros {rep.msh_sh_dist_m:.1f} m az első félidei "
+                f"{rep.msh_fh_dist_m:.1f} m helyett) — a fogott "
+                "emberetek húzza el a védőjét, és a felszabaduló "
+                "területet játsszátok meg.")
+        elif (rep.msh_fh_dist_m <= 2.0
+                and rep.msh_fh_dist_m <= 0.7 * rep.msh_sh_dist_m):
+            keys.append(
+                f"A szünet után elengedik az emberfogást (a "
+                f"legszorosabb páros {rep.msh_sh_dist_m:.1f} m az "
+                f"első félidei {rep.msh_fh_dist_m:.1f} m helyett) — a "
+                "korábban fogott emberetek visszakapja a labdát.")
 
     # Kipattanó-szedők: kit kell blokkolni a második helyzetnél.
     if rep.rbcp_rebounds_by_player:
@@ -9387,6 +9410,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .defense import marking_shift as _msh
+        mshrec = _msh(match, config)[team.value]
+        rep.msh_fh_dist_m = float(mshrec["fh_dist_m"] or 0.0)
+        rep.msh_sh_dist_m = float(mshrec["sh_dist_m"] or 0.0)
         from .defense import defensive_rebound_players as _rbcp
         rbcprec = _rbcp(match, config)[team.value]
         rep.rbcp_rebounds_by_player = {
@@ -12048,6 +12075,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 370) Az ő emberfogás-váltásuk × a ti kulcsemberetek: a
+    # szünet utáni terv előre megírható.
+    if (opp.msh_fh_dist_m > 0.0 and opp.msh_sh_dist_m > 0.0
+            and own.goals >= 5):
+        if (opp.msh_sh_dist_m <= 2.0
+                and opp.msh_sh_dist_m <= 0.7 * opp.msh_fh_dist_m):
+            plan.append(
+                f"A szünet után emberfogásra váltanak (a legszorosabb "
+                f"páros {opp.msh_sh_dist_m:.1f} m az első félidei "
+                f"{opp.msh_fh_dist_m:.1f} m helyett), nálatok pedig "
+                f"van, akire ez jönni fog ({own.goals} gól) — a "
+                "szünetben beszéljétek meg: a fogott ember kifut a "
+                "szélre vagy mélyre beáll, és a felszabaduló "
+                "területre érkezik a második hullám.")
 
     # 369) Az ő kipattanó-szedőjük × a ti lövésszámotok: a második
     # helyzet akkor ér gólt, ha van, aki elveszi tőle.
@@ -18498,6 +18540,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        msh_fh_dist_m=max((r.msh_fh_dist_m for r in reports),
+                          default=0.0),
+        msh_sh_dist_m=max((r.msh_sh_dist_m for r in reports),
+                          default=0.0),
         rbcp_rebounds_by_player=_merge_count_dicts(
             r.rbcp_rebounds_by_player for r in reports),
         sup_chains_by_pair=_merge_count_dicts(

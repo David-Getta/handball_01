@@ -1355,6 +1355,43 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 391) Emberfogás-váltás: a szünetben hozott emberfogás a
+    # legdrágább meglepetés — nekünk is legyen rá válaszunk.
+    try:
+        from .defense import MSH_TIGHT_M, marking_shift
+        msh391 = marking_shift(match, config)
+        for side in ("home", "away"):
+            rec391 = msh391[side]
+            if rec391.get("verdict") is None:
+                continue
+            if rec391["sh_dist_m"] < rec391["fh_dist_m"]:
+                add(side, "védekezés", "Emberfogás a szünet után",
+                    f"a szünet után emberfogásra váltottunk (a "
+                    f"legszorosabb páros {rec391['sh_dist_m']:.1f} m "
+                    f"az első félidei {rec391['fh_dist_m']:.1f} m "
+                    f"helyett; {MSH_TIGHT_M:.1f} m alatt már "
+                    "emberfogás) — a váltás jó fegyver, de a mögötte "
+                    "maradó öt ember területe kinyílik",
+                    "emberfogás-gyakorlás a fal mögötti biztosítással: "
+                    "kijelölt átadás-szabály a fogott ember "
+                    "elfutásánál, és próba emberfogás után visszaállás "
+                    "zárt falra — edzésen 5+1 játék jelre váltva",
+                    )
+            else:
+                add(side, "védekezés", "Emberfogás elengedése",
+                    f"a szünet után elengedtük az emberfogást (a "
+                    f"legszorosabb páros {rec391['sh_dist_m']:.1f} m "
+                    f"az első félidei {rec391['fh_dist_m']:.1f} m "
+                    "helyett) — a korábban fogott emberük "
+                    "visszakapja a labdát",
+                    "döntsük el előre, meddig tart az emberfogás "
+                    "(állás, idő, elfáradás), és legyen jel a "
+                    "visszaállásra — a felszabaduló emberre azonnal "
+                    "menjen az új felelős",
+                    )
+    except Exception:
+        pass
+
     # 390) Kipattanó-szedők: a kipattanó-munka kiosztható feladat.
     try:
         from .defense import (RBCP_MIN_REBOUNDS,

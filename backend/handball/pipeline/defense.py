@@ -5535,3 +5535,94 @@ def defensive_rebound_players(match, config=None) -> dict:
         out[side] = {"rebounds": sum(r["rebounds"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Emberfogás-váltás küszöbei: félidőnként ennyi őrzés-kocka kell egy
+# párostól, ez alatt a távolság alatt beszélünk emberfogásról, és
+# ekkora arányú szorosodás számít váltásnak.
+MSH_MIN_FRAMES = 250
+MSH_TIGHT_M = 2.0
+MSH_DROP_RATIO = 0.7
+
+
+def marking_shift(match, config=None) -> dict:
+    """Emberfogás-váltás: A SZÜNET UTÁN emberfogásra váltanak-e.
+
+    Az őrzési párok (marking_pairs) a meccs egészére mondják meg, ki
+    kit fogott — ez a VÁLTÁST: félidőnként megkeresi a legszorosabb
+    párost, és összeveti a két átlagtávolságot. A szünetben hozott
+    emberfogás a leggyakoribb meccs közbeni tervmódosítás, és a
+    felkészülésben ez a legdrágább meglepetés.
+
+    Edzőileg: ha a szünet után emberfogásra váltanak, a fogott
+    játékosnak el kell húznia a védőjét (kifutás a szélre, mély
+    beállós mozgás), és a felszabaduló területet kell megjátszani —
+    nem őt erőltetni. Ha elengedik az emberfogást, épp fordítva: a
+    korábban fogott ember visszakapja a labdát.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"fh_dist_m",
+    "fh_pair", "sh_dist_m", "sh_pair", "verdict"} — az ítélet None
+    félidő-jel nélkül, kevés őrzés-kocka (MSH_MIN_FRAMES) esetén,
+    vagy ha a szorosság érdemben nem változik.
+    """
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    empty = {"fh_dist_m": None, "fh_pair": None, "sh_dist_m": None,
+             "sh_pair": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None or not match.frames:
+        return out
+
+    first = marking_pairs(match, config, until_t=ht)
+    whole = marking_pairs(match, config)
+
+    for side in ("home", "away"):
+        # Az első félidő párosai kulcs szerint (védő, támadó).
+        fh = {(p["defender"], p["attacker"]):
+              [p["frames"], p["frames"] * p["avg_dist_m"]]
+              for p in first[side]["pairs"]}
+        best_fh = best_sh = None
+        for p in whole[side]["pairs"]:
+            key = (p["defender"], p["attacker"])
+            all_n = p["frames"]
+            all_sum = p["frames"] * p["avg_dist_m"]
+            f_n, f_sum = fh.get(key, [0, 0.0])
+            # A második félidő ugyanennek a párosnak a maradéka.
+            s_n, s_sum = all_n - f_n, all_sum - f_sum
+            if f_n >= MSH_MIN_FRAMES:
+                d = f_sum / f_n
+                if best_fh is None or d < best_fh[0]:
+                    best_fh = (d, key)
+            if s_n >= MSH_MIN_FRAMES:
+                d = s_sum / s_n
+                if best_sh is None or d < best_sh[0]:
+                    best_sh = (d, key)
+        rec = out[side]
+        if best_fh is not None:
+            rec["fh_dist_m"] = round(best_fh[0], 2)
+            rec["fh_pair"] = list(best_fh[1])
+        if best_sh is not None:
+            rec["sh_dist_m"] = round(best_sh[0], 2)
+            rec["sh_pair"] = list(best_sh[1])
+        if best_fh is None or best_sh is None:
+            continue
+        if (best_sh[0] <= MSH_TIGHT_M
+                and best_sh[0] <= MSH_DROP_RATIO * best_fh[0]):
+            rec["verdict"] = (
+                f"a szünet után emberfogásra váltottak (a "
+                f"legszorosabb páros {best_sh[0]:.1f} m az első "
+                f"félidei {best_fh[0]:.1f} m helyett) — a fogott "
+                "játékos húzza el a védőjét, és a felszabaduló "
+                "területet kell megjátszani")
+        elif (best_fh[0] <= MSH_TIGHT_M
+                and best_fh[0] <= MSH_DROP_RATIO * best_sh[0]):
+            rec["verdict"] = (
+                f"a szünet után elengedték az emberfogást (a "
+                f"legszorosabb páros {best_sh[0]:.1f} m az első "
+                f"félidei {best_fh[0]:.1f} m helyett) — a korábban "
+                "fogott emberünk visszakapja a labdát, rá lehet "
+                "építeni a második félidőt")
+    return out

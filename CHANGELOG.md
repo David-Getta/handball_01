@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Emberfogás-váltás: a szünet után emberfogásra váltanak-e.** Az
+  őrzési párok a meccs egészére mondják meg, ki kit fogott — az új
+  réteg a váltást: félidőnként megkeresi a legszorosabb párost, és
+  összeveti a két átlagtávolságot. A szünetben hozott emberfogás a
+  leggyakoribb meccs közbeni tervmódosítás, és a felkészülésben ez a
+  legdrágább meglepetés. Edzőileg: ha a szünet után emberfogásra
+  váltanak, a fogott játékosnak el kell húznia a védőjét, és a
+  felszabaduló területet kell megjátszani; ha elengedik, a korábban
+  fogott ember visszakapja a labdát. Félidő-jel nélkül vagy kevés
+  őrzés-kocka mellett hallgat (None). A rangsorban a "szünet"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`marking_shift`), edzői összefoglaló, felderítés (edzői kulcs
+  mindkét irányra + 370. meccsterv-szabály), edzés-fókusz (391.
+  szabály, külön mondattal a váltásra és az elengedésre),
+  kliens-csempe.
+
 ## v0.1.25 — kiadva (2026-08-09)
 
 > Kiadás-jegyzet: a v0.1.24 óta a fejlesztés hat szálon futott. A kör

@@ -1210,6 +1210,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "második helyzetnél őt kell blokkolni.")
     except Exception:
         pass
+    # Emberfogás-váltás: a szünet után emberfogásra váltanak-e.
+    try:
+        from .defense import marking_shift
+        msh = marking_shift(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_msh = msh[side]
+            if rec_msh["verdict"] is None:
+                continue
+            _ir = ("emberfogásra váltott"
+                   if rec_msh["sh_dist_m"] < rec_msh["fh_dist_m"]
+                   else "elengedte az emberfogást")
+            body += (f" A(z) {name} a szünet után {_ir} (a "
+                     f"legszorosabb páros {rec_msh['sh_dist_m']:.1f} "
+                     f"m az első félidei {rec_msh['fh_dist_m']:.1f} m "
+                     "helyett).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

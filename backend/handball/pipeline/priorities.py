@@ -79,6 +79,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "attack_side_shift"),
         ("szünet", "Poszt-váltás a szünetre", "roles",
          "role_share_shift"),
+        ("szünet", "Emberfogás-váltás", "defense", "marking_shift"),
         # --- fáradás: időfüggő romlás --------------------------------
         ("fáradás", "Tempó-esés", "attack_types", "team_pace_fade"),
         ("fáradás", "Lövőerő-esés", "event_detection",
