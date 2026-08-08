@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Hetespáros-poszt: ki harcolja ki és ki dobja a hetest (3+
+  // hetes, 60% részarány — a backenddel azonos küszöbök:
+  // SVP_MIN_SEVENS, SVP_SHARE_PCT).
+  String? _sevenPairRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["svp_sevens_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a hetes-játékuk a(z) $top posztpárra jár "
+        "(${pct.round()}%, $total hetes) · a kiharcoló ellen kéz "
+        "nélkül, a dobóra a kapus készül";
+  }
+
   // Csere-stílus: posztot tart vagy átszab a padjuk (3+ ki-be pár;
   // 70% fölött tartó, 40% alatt átszabó — a backenddel azonos
   // küszöbök: SWS_MIN_PAIRS, SWS_SAME_PCT, SWS_CROSS_PCT).
@@ -8886,6 +8913,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_sevenPairRole(r) != null)
+        ["Hetespáros-poszt", _sevenPairRole(r)!],
       if (_swapStyle(r) != null)
         ["Csere-stílus", _swapStyle(r)!],
       if (_screenPairRole(r) != null)

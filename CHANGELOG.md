@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hetespáros-poszt: ki harcolja ki és ki dobja a heteseiket.** A
+  hetes-kiharcoló és a hetesdobó poszt külön ismert — az új réteg a
+  kettőt köti össze hetesenként: a (kiharcoló poszt → dobó poszt)
+  párost számolja. Edzőileg két kiosztható feladat egyszerre: a
+  kiharcoló ellen kéz nélkül, lábmunkával kell védekezni, a dobó
+  szokás-irányait a kapus tanulja. Saját oldalon mindkettőhöz kell
+  tartalék. Legalább 3 hetes és 60% párrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`seven_pair_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 337. meccsterv-
+  szabály), edzés-fókusz (358. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Csere-stílus: posztot tart vagy átszab a padjuk.** A
   cserehullám-rétegek a posztokat nézik külön — az új réteg a ki-be
   párokat: minden hullámban a lecserélt és a beálló játékost párba

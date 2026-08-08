@@ -1355,6 +1355,28 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 358) Hetespáros-poszt: ha a kiharcolás és a dobás is egy-egy
+    # emberen áll, mindkettőhöz tartalék kell.
+    try:
+        from .rules import SVP_SHARE_PCT, seven_pair_roles
+        svp358 = seven_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec358 = svp358[side]
+            if rec358.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy párosra járó hetes-játék",
+                f"a hetes-játékunk {rec358['share_pct']:.0f}%-a "
+                f"a(z) {rec358['main_role']} posztpárra jár "
+                f"({rec358['sevens']} hetesből; "
+                f"{SVP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "kiharcolónk és a dobónk is kiszámítható",
+                "tartalék a hetes-párosra: második betörő-figura a "
+                "kiharcoláshoz és második kijelölt dobó, heti "
+                "hetes-versennyel; a fő dobónak irány-variálás",
+                )
+    except Exception:
+        pass
+
     # 357) Csere-stílus: az átszabó cserehullám után a saját
     # védekezésünknek is újra kell rendeződnie — gyakorolni kell.
     try:

@@ -1879,3 +1879,81 @@ def test_seven_taker_roles_silent_with_few_sevens():
 
     rec = seven_taker_roles(_stk_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hetespáros-poszt (ki harcolja ki és ki dobja a hetest) ----------------
+
+
+def _svp_match(pairs, fps=25.0):
+    """Poszt-minta (7: beálló, 1: átlövő, 9: szélső) + hetesek: a
+    `pairs` elemei (kiharcoló, dobó) — a kiharcoló a jel előtt betör
+    a kapu elé, majd a dobó lövi a kimenetelt."""
+    spos = {7: (35.5, 10.0), 1: (30.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(front_tid=None):
+        out = []
+        for tid, (x, y) in spos.items():
+            if tid == front_tid:
+                out.append(_pl(tid, Team.HOME, 37.5, y))
+            else:
+                out.append(_pl(tid, Team.HOME, x, y))
+        return out
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=35.7, y=10.0, confidence=1.0)))
+        t += 1
+    for (earner, taker) in pairs:
+        for _ in range(60):          # a kiharcoló betör a kapu elé
+            frames.append(Frame(t=t, players=cast(front_tid=earner),
+                                ball=Ball(x=36.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(25):          # a labda megáll a 7 m-es ponton
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=33.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        sx, sy = spos[taker]
+        for _ in range(10):          # a dobó kézbe veszi
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        x = sx
+        while x < 40.5:              # a kimenetel-lövés a kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(260):         # szünet a hetes-debounce miatt
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_seven_pair_roles_names_the_seven_duo():
+    """Négy hetesből hármat a beálló harcol ki és az átlövő dob →
+    két kiosztható feladat."""
+    from handball.pipeline.rules import (SVP_MIN_SEVENS,
+                                         seven_pair_roles)
+
+    rec = seven_pair_roles(
+        _svp_match([(7, 1), (7, 1), (7, 1), (9, 1)]))["home"]
+    assert rec["sevens"] >= SVP_MIN_SEVENS, rec
+    assert rec["main_role"] == "beálló→átlövő", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kéz nélkül" in rec["verdict"], rec
+
+
+def test_seven_pair_roles_silent_with_few_sevens():
+    """Néhány hetesből nincs ítélet."""
+    from handball.pipeline.rules import seven_pair_roles
+
+    rec = seven_pair_roles(_svp_match([(7, 1), (9, 1)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

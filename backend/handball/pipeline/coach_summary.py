@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Hetespáros-poszt: ki harcolja ki és ki dobja a hetest.
+    try:
+        from .rules import seven_pair_roles
+        svp = seven_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svp = svp[side]
+            if rec_svp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hetes-játéka a(z) "
+                     f"{rec_svp['main_role']} posztpárra jár "
+                     f"({rec_svp['share_pct']:.0f}%, "
+                     f"{rec_svp['sevens']} hetesből) — a kiharcoló "
+                     "és a dobó két külön kiosztható feladat.")
+    except Exception:
+        pass
     # Csere-stílus: posztot tart vagy átszab a padjuk.
     try:
         from .substitutions import swap_style

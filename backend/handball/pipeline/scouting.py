@@ -981,6 +981,9 @@ class ScoutingReport:
     # azonos-posztú váltások. Darabszámok, pontosan összegződnek.
     sws_pairs: int = 0
     sws_same: int = 0
+    # Hetespáros-poszt: hetesek a (kiharcoló→dobó) posztpár szerint.
+    # Darabszám, pontosan összegződik.
+    svp_sevens_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -3805,6 +3808,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "azonos-posztú váltás) — a cserehullámuk utáni első"
                 " támadásnál osszátok újra a fogásokat, különben "
                 "szabad emberük marad.")
+
+    # Hetespáros-poszt: két kiosztható hetes-feladat.
+    _svp_n = sum(rep.svp_sevens_by_role.values())
+    if _svp_n >= 3:
+        _svp_p, _svp_c = max(rep.svp_sevens_by_role.items(),
+                             key=lambda kv: kv[1])
+        _svp_pct = 100.0 * _svp_c / _svp_n
+        if _svp_pct >= 60.0:
+            keys.append(
+                f"A hetes-játékuk a(z) {_svp_p} posztpárra jár "
+                f"({_svp_pct:.0f}%, {_svp_n} hetes) — a kiharcoló "
+                "ellen kéz nélkül védekezzetek, a dobó "
+                "szokás-irányait a kapus tanulja.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -8723,6 +8739,9 @@ def _scout_team_cached(match: Match, team: Team,
         swsrec = _sws(match, config)[team.value]
         rep.sws_pairs = swsrec["pairs"]
         rep.sws_same = swsrec["same"]
+        from .rules import seven_pair_roles as _svp
+        svprec = _svp(match, config)[team.value]
+        rep.svp_sevens_by_role = dict(svprec["roles"])
         from .stats import iron_man_roles as _irm
         irmrec = _irm(match, config)[team.value]
         rep.irm_total_frames = len(match.frames)
@@ -11303,6 +11322,24 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 337) Az ő hetespáros-posztjuk × a ti kettőzésetek: a kiharcoló
+    # betörését kettőzéssel kell megfogni, mielőtt lerántás lenne.
+    _svp337_n = sum(opp.svp_sevens_by_role.values())
+    _dbl337 = (100.0 * own.dbl_doubled_frames / own.dbl_holder_frames
+               if own.dbl_holder_frames >= 250 else 0.0)
+    if _svp337_n >= 3 and _dbl337 >= 20.0:
+        _svp337_p, _svp337_c = max(opp.svp_sevens_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _svp337_pct = 100.0 * _svp337_c / _svp337_n
+        if _svp337_pct >= 60.0:
+            plan.append(
+                f"A hetes-játékuk a(z) {_svp337_p} posztpárra jár "
+                f"({_svp337_pct:.0f}%, {_svp337_n} hetes), ti pedig"
+                f" jól kettőztök ({_dbl337:.0f}% a labdás nyomás "
+                "alatt) — a kiharcoló betörését időzített, korai "
+                "kettőzéssel fogjátok meg (test, nem kéz): a "
+                "hetes-gépezetük el sem indul.")
 
     # 336) Az ő átszabó padjuk × a ti aktív időkérésetek: az átszabó
     # hullám utáni zavart rendezéssel kell lecsapni.
@@ -17150,6 +17187,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.spp_shots_by_role for r in reports),
         sws_pairs=sum(r.sws_pairs for r in reports),
         sws_same=sum(r.sws_same for r in reports),
+        svp_sevens_by_role=_merge_count_dicts(
+            r.svp_sevens_by_role for r in reports),
         tof_timeouts=sum(r.tof_timeouts for r in reports),
         tof_shots_by_role=_merge_count_dicts(
             r.tof_shots_by_role for r in reports),

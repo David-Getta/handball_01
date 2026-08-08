@@ -2119,3 +2119,92 @@ def seven_taker_roles(match: Match,
                     " a posztot kiveszik, a hetes-rutinjuk is vele "
                     "megy")
     return out
+
+
+# Hetespáros-poszt: ennyi poszthoz kötött hetes kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy a hetes-játékuk egy
+# (kiharcoló → dobó) posztpárra jár.
+SVP_MIN_SEVENS = 3
+SVP_SHARE_PCT = 60.0
+
+
+def seven_pair_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Hetespáros-poszt: KI HARCOLJA KI és KI DOBJA a heteseiket.
+
+    A hetes-kiharcoló és a hetesdobó poszt külön-külön ismert — ez a
+    kettőt köti össze hetesenként: a (kiharcoló poszt → dobó poszt)
+    párost számolja. A bejáratott hetes-munkamegosztás akkor is
+    látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg két kiosztható feladat egyszerre: a kiharcoló posztja
+    ellen kéz nélkül, lábmunkával kell védekezni (nála a lerántás
+    büntető), a dobó posztjának szokás-irányait pedig a kapus
+    tanulja. Saját csapatra: ha a kiharcolás és a dobás is egy-egy
+    emberen áll, mindkettőhöz kell tartalék.
+
+    Visszatérés csapatonként: {"sevens" (párhoz kötött hetes),
+    "roles": {"kiharcoló→dobó": darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az SVP_MIN_SEVENS,
+    vagy egyik pár sem éri el az SVP_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"sevens": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        taker_id = sm.get("shooter_id")
+        if taker_id is None:
+            continue
+        # A kiharcoló: a jel előtti pillanatban a kapuhoz legközelebb
+        # járó (nem kapus) támadó — mint a seven_meter_earners-ben.
+        t_prev = sm["t"] - round(SEVEN_EARNER_LOOKBACK_S * fps)
+        fr = None
+        for dt in range(0, round(fps)):
+            fr = (frames_by_t.get(t_prev - dt)
+                  or frames_by_t.get(t_prev + dt))
+            if fr is not None and fr.players:
+                break
+        if fr is None or not fr.players:
+            continue
+        best = None
+        for p in fr.players:
+            if p.team.value != sm["team"] or p.role == "kapus":
+                continue
+            d = abs(p.x - sm["goal_x"])
+            if best is None or d < best[1]:
+                best = (p.track_id, d)
+        if best is None:
+            continue
+        side = sm["team"]
+        r_earn = roles[side].get(best[0])
+        r_take = roles[side].get(taker_id)
+        if r_earn is None or r_take is None:
+            continue
+        kulcs = f"{r_earn['poszt']}→{r_take['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["sevens"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sevens"] >= SVP_MIN_SEVENS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["sevens"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= SVP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a hetes-játékuk a(z) {par} posztpárra jár "
+                    f"({share:.0f}%, {rec['sevens']} hetesből) — a "
+                    "kiharcoló ellen kéz nélkül kell védekezni, a "
+                    "dobó szokás-irányait a kapus tanulja")
+    return out
