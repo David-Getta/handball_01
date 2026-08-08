@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Időkérés-hiba poszt: a megbeszélt figura kinek a kezén hal
+  el.** Az időkérés-befejező és az időkéréspáros a sikeres figurát
+  írja le — az új réteg a kudarcát: az időkérés utáni ablakban
+  elkövetett labdaeladásokat a vesztes posztjához írja. Edzőileg ez
+  az időkérés utáni védekezés második mondata: a figura ott a
+  legsérülékenyebb, ahol eddig is elhalt — az ő indításánál kell
+  megnyomni (előrelépő védő, kettőzés az első bejátszásnál). Saját
+  csapatra: ha a kulcspasszt mindig ugyanaz rontja el, egyszerűbb
+  kezdés kell. Legalább 3 időkérés utáni eladás és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`timeout_turnover_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 356. meccsterv-szabály), edzés-fókusz
+  (377. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Válaszhiba-poszt: kapott gól után kinél vész el a labdájuk.**
   A válasz-poszt azt mondja meg, kire fut ki a bekapott gól utáni
   válaszuk — az új réteg a másik felét: a kapott gólt egy percen

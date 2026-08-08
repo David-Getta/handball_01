@@ -2168,6 +2168,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Időkérés-hiba poszt: a megbeszélt figura kinek a kezén hal el
+  // (3+ időkérés utáni eladás, 60% részarány — a backenddel azonos
+  // küszöbök: TOE_MIN_TURNOVERS, TOE_SHARE_PCT).
+  String? _timeoutTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["toe_turnovers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "az időkérés utáni labdájuk ${pct.round()}%-ban a(z) $top "
+        "kezén vész el ($total eladás) · a figurát az ő indításánál "
+        "nyomjátok meg";
+  }
+
   // Válaszhiba-poszt: kapott gól után kinél vész el a labdájuk (3+
   // válasz-eladás, 60% részarány — a backenddel azonos küszöbök:
   // RTO_MIN_TURNOVERS, RTO_SHARE_PCT).
@@ -9419,6 +9446,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberelőny-hiba poszt", _powerplayTurnoverRole(r)!],
       if (_responseTurnoverRole(r) != null)
         ["Válaszhiba-poszt", _responseTurnoverRole(r)!],
+      if (_timeoutTurnoverRole(r) != null)
+        ["Időkérés-hiba poszt", _timeoutTurnoverRole(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

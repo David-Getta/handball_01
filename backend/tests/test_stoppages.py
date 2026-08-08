@@ -790,3 +790,68 @@ def test_timeout_pair_roles_silent_with_few_shots():
 
     rec = timeout_pair_roles(_top_match([(1, 2), (2, 1)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Időkérés-hiba poszt (a megbeszélt figura kudarca) --------------------
+
+
+def _toe_match(losers, fps=25.0):
+    """Mint a _tof_match, de az újraindítás után nem lövés, hanem
+    LABDAELADÁS jön: a `losers` elemei a hibázó hazai id-k."""
+    frames = []
+    t = 0
+
+    def _play(seconds):
+        nonlocal t
+        for _ in range(int(seconds * fps)):
+            players = _tof_players(t, moving=True)
+            hp = players[0]      # a hazai 1-es birtokol (ő kér időt)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=hp.x, y=hp.y,
+                                          confidence=1.0)))
+            t += 1
+
+    for tid in losers:
+        _play(10)
+        for _ in range(int(20 * fps)):        # időkérés: 20 mp állás
+            frames.append(Frame(t=t,
+                                players=_tof_players(0, moving=False),
+                                ball=None))
+            t += 1
+        for _ in range(10):                   # a labda a hibázónál
+            cast = _tof_players(t, moving=True)
+            who = next(p for p in cast if p.track_id == tid)
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=who.x + 0.2, y=who.y,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):                   # elvesztve: a vendégnél
+            cast = _tof_players(t, moving=True)
+            opp = next(p for p in cast if p.track_id == 20)
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=opp.x, y=opp.y,
+                                          confidence=1.0)))
+            t += 1
+        _play(60)
+    return Match(_meta(fps), frames)
+
+
+def test_timeout_turnover_roles_names_the_failing_post():
+    """Ha az időkérés utáni labda rendre ugyanannak a kezén vész el,
+    a figurát az ő indításánál kell megnyomni."""
+    from handball.pipeline.stoppages import (TOE_MIN_TURNOVERS,
+                                             timeout_turnover_roles)
+
+    rec = timeout_turnover_roles(_toe_match([1, 1, 1, 2]))["home"]
+    assert rec["turnovers"] >= TOE_MIN_TURNOVERS, rec
+    assert rec["main_role"] == "átlövő", rec
+    assert rec["share_pct"] == 75.0, rec
+    assert rec["verdict"] and "indításánál" in rec["verdict"], rec
+
+
+def test_timeout_turnover_roles_needs_enough_turnovers():
+    """Két eladásból nincs ítélet — az időkérés ritka esemény."""
+    from handball.pipeline.stoppages import timeout_turnover_roles
+
+    rec = timeout_turnover_roles(_toe_match([1, 2]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -725,3 +725,86 @@ def timeout_pair_roles(match: Match,
                     " figyeljetek: az ELSŐ passzt vágjátok el, ott "
                     "törik meg a figura a legolcsóbban")
     return out
+
+
+# Időkérés-hiba poszt küszöbei: ennyi poszthoz kötött időkérés utáni
+# eladás kell az ítélethez, és ekkora részarány a vezető posztnak.
+TOE_MIN_TURNOVERS = 3
+TOE_SHARE_PCT = 60.0
+
+
+def timeout_turnover_roles(match: Match,
+                           config: Optional[TacticsConfig] = None
+                           ) -> dict:
+    """Időkérés-hiba poszt: A MEGBESZÉLT FIGURA kinek a kezén hal el.
+
+    Az időkérés-befejező és az időkéréspáros a sikeres figurát írja
+    le (ki fejez be, milyen tengelyen) — ez a kudarcát: az időkérés
+    utáni ablakban (TOF_WINDOW_S) elkövetett labdaeladásaikat a
+    vesztes posztjához írja.
+
+    Edzőileg ez az időkérés utáni védekezés második mondata: a
+    megbeszélt figura ott a legsérülékenyebb, ahol eddig is elhalt —
+    ha az időkérés utáni labdájuk rendre ugyanannak a kezében vész
+    el, oda kell nyomni a figura indításánál (előrelépő védő,
+    kettőzés az első bejátszásnál). Saját csapatra: a táblára rajzolt
+    figura nem működik, ha a kulcspasszt mindig ugyanaz rontja el —
+    egyszerűbb kezdés kell.
+
+    Visszatérés csapatonként: {"turnovers" (poszthoz kötött időkérés
+    utáni eladás), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    TOE_MIN_TURNOVERS, vagy egyik poszt sem éri el a
+    TOE_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_events
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+
+    # Az időkérést kérő csapat és az újraindítás ideje.
+    stops = [(s["likely_team"], s["end_frame"])
+             for s in detect_stoppages(match, config)
+             if s.get("likely_team") is not None]
+
+    out: dict = {side: {"turnovers": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    if not stops:
+        return out
+
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        if not any(team == side and 0 <= e.t - end <= win
+                   for (team, end) in stops):
+            continue
+        rec_role = roles[side].get(e.player_id)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["turnovers"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["turnovers"] >= TOE_MIN_TURNOVERS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["turnovers"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= TOE_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az időkérés utáni labdájuk {share:.0f}%-ban "
+                    f"a(z) {poszt} kezén vész el ({rec['turnovers']} "
+                    "eladásból) — a megbeszélt figurát az ő "
+                    "indításánál kell megnyomni, ott hal el "
+                    "magától is")
+    return out

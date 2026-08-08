@@ -993,6 +993,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "fogadására kell menni.")
     except Exception:
         pass
+    # Időkérés-hiba poszt: a megbeszélt figura hol hal el.
+    try:
+        from .stoppages import timeout_turnover_roles
+        toe = timeout_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_toe = toe[side]
+            if rec_toe["verdict"] is None:
+                continue
+            body += (f" A(z) {name} időkérés utáni labdája "
+                     f"{rec_toe['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_toe['main_role']} kezén vész el "
+                     f"({rec_toe['turnovers']} eladás) — a figurát "
+                     "az ő indításánál kell megnyomni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 377) Időkérés-hiba poszt: ha a táblára rajzolt figura mindig
+    # ugyanannak a kezén hal el, egyszerűbb kezdés kell.
+    try:
+        from .stoppages import (TOE_SHARE_PCT, timeout_turnover_roles)
+        toe377 = timeout_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec377 = toe377[side]
+            if rec377.get("verdict") is None:
+                continue
+            add(side, "támadás", "Időkérés utáni figura",
+                f"az időkérés utáni labdánk {rec377['share_pct']:.0f}"
+                f"%-ban a(z) {rec377['main_role']} kezén vész el "
+                f"({rec377['turnovers']} eladásból; "
+                f"{TOE_SHARE_PCT:.0f}% fölött már minta) — a "
+                "megbeszélt figura pont ott törik meg, ahol indul",
+                "időkérés-szimuláció edzésen: tábla, 30 másodperc "
+                "megbeszélés, majd élesben a figura — előbb "
+                "egyszerű, két passzos kezdéssel, és a hibázó poszt "
+                "ne az első átvevő legyen",
+                )
+    except Exception:
+        pass
+
     # 376) Válaszhiba-poszt: ha a kapott gól után mindig ugyanannak
     # a kezén vész el a labda, a hátrány sorozattá nő.
     try:
