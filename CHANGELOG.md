@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Fedezett-lövő poszt: melyik posztjuk lő fedezetten is.** A
+  fedezetten lövők rétege az embert nevezi meg — az új réteg a
+  posztot: a testközeli védő melletti lövéseket a lövő posztjához
+  írja. Edzőileg a fal takarékossága: amelyik posztjuk fedezetten
+  is elhúzza a ravaszt, arra nem kell kilépni — a fedezett lövés
+  alacsony értékű, elég a blokk-kéz és a mögé rendezett fal. Saját
+  oldalon a lövés-szelekció az edzés-téma. Legalább 3 fedezett
+  lövés és 60% posztrészarány alatt hallgat (None). Felületek:
+  /analyze + meccs-csomag (`covered_shooter_roles`), edzői
+  összefoglaló, felderítés (edzői kulcs + 331. meccsterv-szabály),
+  edzés-fókusz (352. szabály), HTML-riport (Befejező-lencse sor),
+  Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Védőmotor-poszt: melyik posztjuk védő-motorja áll le.** Az
   eltűnő védő rétege az embert nevezi meg — az új réteg a posztot: a
   védő-akciókat (labdaszerzés + blokk) félidőnként a védő posztjához

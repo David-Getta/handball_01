@@ -3551,3 +3551,71 @@ def test_fading_defender_roles_silent_without_break():
     rec = fading_defender_roles(
         _fdd_match([7, 7, 7], [], with_break=False))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Fedezett-lövő poszt (melyik posztjuk lő fedezetten is) ----------------
+
+
+def _cvr_match(shooters_covered, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + lövések: a
+    `shooters_covered` elemei (lövő, fedezett?) párok — fedezett
+    lövésnél a 30-as védő 1 m-re áll a lövőtől."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(cover_tid=None):
+        out = [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+        if cover_tid is not None:
+            cx, cy = spos[cover_tid]
+            out.append(_pl(30, Team.AWAY, cx + 1.0, cy))
+        return out
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (tid, covered) in shooters_covered:
+        sx, sy = spos[tid]
+        cov = tid if covered else None
+        for _ in range(10):          # a labda a lövőnél
+            frames.append(Frame(t=t, players=cast(cov),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        x = sx
+        while x < 40.5:              # lövés a +x kapura
+            x += 0.5
+            frames.append(Frame(t=t, players=cast(cov),
+                                ball=Ball(x=min(x, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):          # semleges szakasz + debounce
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_covered_shooter_roles_names_the_pressured_post():
+    """Négy fedezett lövésből három a beállóé → rá nem kell kilépni."""
+    from handball.pipeline.defense import (CVR_MIN_COVERED,
+                                           covered_shooter_roles)
+
+    rec = covered_shooter_roles(
+        _cvr_match([(7, True), (7, True), (7, True), (9, True),
+                    (9, False)]))["home"]
+    assert rec["covered"] >= CVR_MIN_COVERED, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "blokk-kéz" in rec["verdict"], rec
+
+
+def test_covered_shooter_roles_silent_with_few_covered():
+    """Néhány fedezett lövésből nincs ítélet."""
+    from handball.pipeline.defense import covered_shooter_roles
+
+    rec = covered_shooter_roles(
+        _cvr_match([(7, True), (9, True)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

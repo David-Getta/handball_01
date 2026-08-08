@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 352) Fedezett-lövő poszt: ha egy posztunk fedezetten is lő, a
+    # lövés-szelekció az edzés-téma.
+    try:
+        from .defense import CVR_SHARE_PCT, covered_shooter_roles
+        cvr352 = covered_shooter_roles(match, config)
+        for side in ("home", "away"):
+            rec352 = cvr352[side]
+            if rec352.get("verdict") is None:
+                continue
+            add(side, "támadás", "Fedezett lövések egy poszton",
+                f"a fedezett lövéseink {rec352['share_pct']:.0f}%-a "
+                f"a(z) {rec352['main_role']} posztunkról jön "
+                f"({rec352['covered']} fedezett lövésből; "
+                f"{CVR_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél rá sem lép ki, a lövéseink a blokkban "
+                "halnak el",
+                "lövés-szelekció a posztnak: fedezetten kötelező a "
+                "továbbjátszás (videó-szabály), lövőcsel-repertoár "
+                "bővítése, és elzárással nyitott tiszta lövő-sáv "
+                "gyakorlása",
+                )
+    except Exception:
+        pass
+
     # 351) Védőmotor-poszt: ha a védő-motorunk egy poszton a második
     # félidőre leáll, tervezett pihenő kell a szünet körül.
     try:

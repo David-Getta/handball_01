@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **378 réteg**, modulonként csoportosítva; a
+Összesen **379 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (77)
@@ -110,7 +110,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (68)
+## defense (69)
 
 | Réteg | Mit mér |
 |---|---|
@@ -135,6 +135,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `costly_turnover_players` | Drága eladók: kinek az eladásai kerülnek gólba. |
 | `costly_turnover_roles` | Drága-eladó poszt: MELYIK POSZTJUK hibái kerülnek gólba. |
 | `counter_press` | Ellen-press: az eladott labdát azonnal visszaszerzik-e. |
+| `covered_shooter_roles` | Fedezett-lövő poszt: MELYIK POSZTJUK lő fedezetten is. |
 | `covered_shooters` | Fedezetten lövők: KI HÚZZA EL a ravaszt nyomás alatt is. |
 | `defense` | Mindkét csapat VÉDEKEZÉSÉNEK képe a kapott lövésekből. |
 | `defense_setup_time` | Falépítés-idő: MENNYI IDŐ ALATT ÁLL FEL a faluk. |

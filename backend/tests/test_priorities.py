@@ -133,7 +133,7 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   "tired_shooter_roles", "tired_conceder_roles",
                   "substituted_roles", "sub_in_roles",
                   "costly_turnover_roles", "breakthrough_roles",
-                  "fading_defender_roles"):
+                  "fading_defender_roles", "covered_shooter_roles"):
         assert layer in names, f"{layer} nincs a rangsorban"
 
 

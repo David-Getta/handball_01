@@ -4829,3 +4829,69 @@ def fading_defender_roles(match, config=None) -> dict:
                 f" leáll ({sh}) — a szünet után pont az ő zónáján "
                 "át kell támadni: addigra már nem ér oda")
     return out
+
+
+# Fedezett-lövő poszt: ennyi poszthoz kötött fedezett lövés kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a nyomás
+# alatti lövés-vállalás egy poszton áll.
+CVR_MIN_COVERED = 3
+CVR_SHARE_PCT = 60.0
+
+
+def covered_shooter_roles(match, config=None) -> dict:
+    """Fedezett-lövő poszt: MELYIK POSZTJUK lő fedezetten is.
+
+    A fedezetten lövők rétege (covered_shooters) az embert nevezi
+    meg — ez a posztot: a fedezett (testközeli védő melletti)
+    lövéseket a lövő posztjához írja. Így a minta akkor is látszik,
+    ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a fal takarékossága: amelyik posztjuk fedezetten is
+    elhúzza a ravaszt, arra nem kell kilépni — a fedezett lövés
+    alacsony értékű, elég a blokk-kéz és a mögé rendezett fal-kapus
+    páros. Saját csapatra: a poszt lövés-szelekciója (fedezetten
+    inkább passz) az edzés-téma.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"covered" (poszthoz
+    kötött fedezett lövés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    CVR_MIN_COVERED, vagy egyik poszt sem éri el a CVR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    cs = covered_shooters(match, config)
+
+    out: dict = {side: {"covered": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in cs[side]["players"]:
+            if not row["covered"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["covered"])
+            rec["covered"] += row["covered"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["covered"] >= CVR_MIN_COVERED:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["covered"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= CVR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a fedezett lövéseik {share:.0f}%-a a(z) "
+                    f"{poszt} posztról jön ({rec['covered']} "
+                    "fedezett lövésből) — rá nem kell kilépni: a "
+                    "fedezett lövése alacsony értékű, elég a "
+                    "blokk-kéz és a mögé rendezett fal")
+    return out

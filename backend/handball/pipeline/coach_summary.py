@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Fedezett-lövő poszt: melyik posztjuk lő fedezetten is.
+    try:
+        from .defense import covered_shooter_roles
+        cvr = covered_shooter_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cvr = cvr[side]
+            if rec_cvr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} fedezett lövései a(z) "
+                     f"{rec_cvr['main_role']} posztról jönnek "
+                     f"({rec_cvr['share_pct']:.0f}%, "
+                     f"{rec_cvr['covered']} fedezett lövésből) — rá"
+                     " nem kell kilépni, elég a blokk-kéz.")
+    except Exception:
+        pass
     # Védőmotor-poszt: melyik posztjuk védő-motorja áll le.
     try:
         from .defense import fading_defender_roles
