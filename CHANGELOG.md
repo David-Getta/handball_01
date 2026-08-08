@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kontrapáros-poszt: melyik tengelyen futnak a kontráik.** A
+  kontra-poszt a befejezőt nevezi meg — az új réteg a teljes
+  tengelyt: minden lerohanásnál az első labdabirtokos (indító) és a
+  lövést elengedő (befejező) posztját párba állítja. Edzőileg a
+  kontra két ponton fogható: az indítóra azonnali nyomás a
+  labdavesztés pillanatában, a befejező sávját az első visszaérő
+  zárja. Saját oldalon a második kontra-tengely az edzés-téma.
+  Legalább 3 lerohanás és 60% párrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`fast_break_pair_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 338. meccsterv-
+  szabály), edzés-fókusz (359. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Hetespáros-poszt: ki harcolja ki és ki dobja a heteseiket.** A
   hetes-kiharcoló és a hetesdobó poszt külön ismert — az új réteg a
   kettőt köti össze hetesenként: a (kiharcoló poszt → dobó poszt)

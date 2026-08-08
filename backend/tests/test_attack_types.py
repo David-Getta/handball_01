@@ -4291,3 +4291,76 @@ def test_screen_pair_roles_silent_with_few_shots():
 
     rec = screen_pair_roles(_spp_match([5, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kontrapáros-poszt (melyik tengelyen futnak a kontráik) ----------------
+
+
+def _fbp_match(pairs, fps=25.0):
+    """Poszt-minta (5: irányító, 7: beálló, 9: szélső) + lerohanások:
+    a `pairs` elemei (indító, befejező) — az indító hátulról hozza a
+    labdát, a befejező lövi; köztük vendég-birtoklás választ el."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def base():
+        return [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=base(),
+                            ball=Ball(x=29.2, y=10.0, confidence=1.0)))
+        t += 1
+    for (starter, finisher) in pairs:
+        for i in range(40):          # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 16.0, 10.0)],
+                ball=Ball(x=16.0, y=10.0, confidence=1.0)))
+            t += 1
+        x = 8.0
+        for i in range(30):          # az indító rohan a labdával
+            players = [_pl(starter, Team.HOME, x, 10.0)] + [
+                _pl(tid, Team.HOME, *spos[tid])
+                for tid in spos if tid != starter]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x + 0.2, y=10.0,
+                                          confidence=1.0)))
+            x += 0.5
+            t += 1
+        fx, fy = spos[finisher]
+        for _ in range(6):           # a befejezőnél a labda
+            frames.append(Frame(t=t, players=base(),
+                                ball=Ball(x=fx + 0.2, y=fy,
+                                          confidence=1.0)))
+            t += 1
+        xx = fx
+        while xx < 40.5:             # a kontra-lövés a kapura
+            xx += 0.5
+            frames.append(Frame(t=t, players=base(),
+                                ball=Ball(x=min(xx, 40.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_fast_break_pair_roles_names_the_axis():
+    """Négy lerohanásból három az irányító→szélső tengelyen fut →
+    az indítót kell fékezni."""
+    from handball.pipeline.attack_types import (FBP_MIN_BREAKS,
+                                                fast_break_pair_roles)
+
+    rec = fast_break_pair_roles(
+        _fbp_match([(5, 9), (5, 9), (5, 9), (7, 9)]))["home"]
+    assert rec["breaks"] >= FBP_MIN_BREAKS, rec
+    assert rec["main_role"] == "irányító→szélső", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "labdavesztés pillanatában" \
+        in rec["verdict"], rec
+
+
+def test_fast_break_pair_roles_silent_with_few_breaks():
+    """Néhány lerohanásból nincs ítélet."""
+    from handball.pipeline.attack_types import fast_break_pair_roles
+
+    rec = fast_break_pair_roles(_fbp_match([(5, 9), (7, 9)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

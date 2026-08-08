@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 359) Kontrapáros-poszt: ha a kontráink egy tengelyen futnak, a
+    # felkészült ellenfél két ponton fogja őket.
+    try:
+        from .attack_types import (FBP_SHARE_PCT,
+                                   fast_break_pair_roles)
+        fbp359 = fast_break_pair_roles(match, config)
+        for side in ("home", "away"):
+            rec359 = fbp359[side]
+            if rec359.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy tengelyen futó kontra",
+                f"a kontráink {rec359['share_pct']:.0f}%-a a(z) "
+                f"{rec359['main_role']} tengelyen fut "
+                f"({rec359['breaks']} lerohanásból; "
+                f"{FBP_SHARE_PCT:.0f}% fölött már minta) — a "
+                "felkészült ellenfél az indítónkat nyomja, a "
+                "befejezőnk sávját zárja",
+                "második kontra-tengely: másik indító és másik "
+                "kifutó-sáv bejáratása, kétsávos lerohanás-gyakorlat"
+                " és az indító nyomás alatti első passzának edzése",
+                )
+    except Exception:
+        pass
+
     # 358) Hetespáros-poszt: ha a kiharcolás és a dobás is egy-egy
     # emberen áll, mindkettőhöz tartalék kell.
     try:

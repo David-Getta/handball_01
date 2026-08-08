@@ -5471,3 +5471,96 @@ def screen_pair_roles(match: Match,
                     "elzáró őrzője előre szól, a lövőé az elzárás "
                     "előtt lép ki")
     return out
+
+
+# Kontrapáros-poszt: ennyi poszthoz kötött lerohanás kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a kontráik
+# egy (indító → befejező) posztpáron futnak.
+FBP_MIN_BREAKS = 3
+FBP_SHARE_PCT = 60.0
+
+
+def fast_break_pair_roles(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Kontrapáros-poszt: MELYIK TENGELYEN futnak a kontráik.
+
+    A kontra-poszt a befejezőt nevezi meg — ez a teljes tengelyt:
+    minden lerohanásnál az ELSŐ labdabirtokos (az indító) és a
+    szakasz lövését elengedő (a befejező) posztját párba állítja.
+    Így a kontra-gépezet akkor is látszik, ha a nevek meccsről
+    meccsre cserélődnek.
+
+    Edzőileg a kontra két ponton fogható: az indító posztját már a
+    labdavesztés pillanatában nyomás alá kell tenni (az első passz
+    késleltetése), a befejező posztjának sávját pedig a
+    visszarendeződés első embere zárja. Saját csapatra: a tengely
+    kiszámíthatósága ellen második kifutó-sáv kell.
+
+    Visszatérés csapatonként: {"breaks" (párhoz kötött lerohanás),
+    "roles": {"indító→befejező": darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az FBP_MIN_BREAKS,
+    vagy egyik pár sem éri el az FBP_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    roles = estimate_positions(match, config)
+    by_t = {f.t: f for f in match.frames}
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)
+             and e.player_id is not None]
+    fast = [(a["team"], a["start_frame"], a["end_frame"])
+            for a in classify_attacks(match, config)
+            if a["type"] == AttackType.FAST_BREAK.value]
+
+    out: dict = {side: {"breaks": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for (side, a0, a1) in fast:
+        starter = None
+        for t in range(a0, a1 + 1):
+            f = by_t.get(t)
+            if f is None:
+                continue
+            h = ball_holder(f, config)
+            if h is not None and h.team is not None \
+                    and h.team.value == side and h.role != "kapus":
+                starter = h.track_id
+                break
+        finisher = next((e.player_id for e in shots
+                         if e.team.value == side
+                         and a0 <= e.t <= a1 + tail), None)
+        if starter is None or finisher is None:
+            continue
+        r_st = roles[side].get(starter)
+        r_fi = roles[side].get(finisher)
+        if r_st is None or r_fi is None:
+            continue
+        kulcs = f"{r_st['poszt']}→{r_fi['poszt']}"
+        rec = out[side]
+        rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+        rec["breaks"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["breaks"] >= FBP_MIN_BREAKS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["breaks"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= FBP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kontráik a(z) {par} tengelyen futnak "
+                    f"({share:.0f}%, {rec['breaks']} lerohanásból) "
+                    "— az indítót már a labdavesztés pillanatában "
+                    "nyomás alá kell tenni, a befejező sávját a "
+                    "visszarendeződés első embere zárja")
+    return out

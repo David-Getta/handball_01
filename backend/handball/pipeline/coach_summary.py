@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Kontrapáros-poszt: melyik tengelyen futnak a kontráik.
+    try:
+        from .attack_types import fast_break_pair_roles
+        fbp = fast_break_pair_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_fbp = fbp[side]
+            if rec_fbp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kontrái a(z) "
+                     f"{rec_fbp['main_role']} tengelyen futnak "
+                     f"({rec_fbp['share_pct']:.0f}%, "
+                     f"{rec_fbp['breaks']} lerohanásból) — az "
+                     "indítót kell először fékezni.")
+    except Exception:
+        pass
     # Hetespáros-poszt: ki harcolja ki és ki dobja a hetest.
     try:
         from .rules import seven_pair_roles

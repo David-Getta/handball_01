@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **385 réteg**, modulonként csoportosítva; a
+Összesen **386 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (78)
+## attack_types (79)
 
 | Réteg | Mit mér |
 |---|---|
@@ -41,6 +41,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `fast_break_conversion` | Lerohanás-hatékonyság: MENNYI LESZ GÓL a kontráikból. |
 | `fast_break_finishers` | Ki fejezi be a lerohanásokat: a lerohanás-szakaszokra eső gólok |
 | `fast_break_headstart` | Kontra-elszökés: ELŐRE SZÖKÖTT emberrel kontráznak-e. |
+| `fast_break_pair_roles` | Kontrapáros-poszt: MELYIK TENGELYEN futnak a kontráik. |
 | `fast_break_support` | Kontra-kíséret: HÁNYAN FUTNAK FEL a lerohanásaiknál. |
 | `fast_break_waves` | Kontra-hullámok: az ELSŐ EMBER vagy a MÁSODIK HULLÁM fejezi be |
 | `goal_buildup` | Gól-előkészítés hossza: direkt vagy kombinatív gólokból élnek. |
