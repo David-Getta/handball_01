@@ -4108,3 +4108,23 @@ def test_retreat_punishment_silent_when_nothing_is_punished():
     rec = retreat_punishment(_rtp_match(punished=0, clean=8))["home"]
     assert rec["shots"] >= 6 and rec["punished"] == 0, rec
     assert rec["rate_pct"] == 0.0 and rec["verdict"] is None, rec
+
+
+def test_defensive_rebound_players_names_the_collector():
+    """Ugyanaz a védő szedi a kipattanókat → őt kell blokkolni a
+    második helyzetnél."""
+    from handball.pipeline.defense import (RBCP_MIN_REBOUNDS,
+                                           defensive_rebound_players)
+
+    rec = defensive_rebound_players(_rbc_match([30, 30, 30, 31]))["away"]
+    assert rec["rebounds"] == 4, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 30, rec
+    assert rec["top"]["rebounds"] >= RBCP_MIN_REBOUNDS, rec
+
+
+def test_defensive_rebound_players_silent_after_one():
+    """Egyetlen kipattanó még nem minta — nincs kiemelt név."""
+    from handball.pipeline.defense import defensive_rebound_players
+
+    rec = defensive_rebound_players(_rbc_match([30]))["away"]
+    assert rec["rebounds"] == 1 and rec["top"] is None, rec

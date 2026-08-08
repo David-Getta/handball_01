@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 390) Kipattanó-szedők: a kipattanó-munka kiosztható feladat.
+    try:
+        from .defense import (RBCP_MIN_REBOUNDS,
+                              defensive_rebound_players)
+        rbcp390 = defensive_rebound_players(match, config)
+        for side in ("home", "away"):
+            top390 = rbcp390[side].get("top")
+            if top390 is None:
+                continue
+            _ki390 = (f"a(z) {top390['jersey']}. számú"
+                      if top390.get("jersey") is not None
+                      else f"a(z) {top390['player_id']}. játékos")
+            add(side, "védekezés", "Kipattanó-munka szétosztása",
+                f"a kipattanóinkat {_ki390} szedi össze a "
+                f"legtöbbször ({top390['rebounds']} kipattanó; "
+                f"{RBCP_MIN_REBOUNDS} kipattanótól már jelezzük) — "
+                "ha őt blokkolják, a második helyzet az ellenfélé",
+                "kipattanó-zónák kiosztása védekezésenként (rövid "
+                "sarok, hosszú sarok, kilenc méter), és minden "
+                "védés után hangos jelre indulás — edzésen "
+                "sorozatlövés kipattanó-küzdelemmel",
+                )
+    except Exception:
+        pass
+
     # 389) Kétperc-páros: ha a kiharcolás és az emberelőny-
     # befejezés is egy-egy poszton áll, mindkettő kiszámítható.
     try:

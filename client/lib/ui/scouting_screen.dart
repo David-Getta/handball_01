@@ -2168,6 +2168,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Kipattanó-szedők: ki szedi össze a kipattanót védés után (2+
+  // kipattanó ugyanattól a védőtől — a backenddel azonos küszöb:
+  // RBCP_MIN_REBOUNDS).
+  String? _reboundCollector(Map<String, dynamic> r) {
+    final byPlayer = (r["rbcp_rebounds_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a kipattanókat leggyakrabban a(z) $top. szedi össze "
+        "($topN kipattanó) · a második helyzetnél őt kell blokkolni";
+  }
+
   // Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket (3+
   // lánc, 55% részarány — a backenddel azonos küszöbök:
   // SUP_MIN_PAIRS, SUP_SHARE_PCT).
@@ -9746,6 +9767,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
         ["Kétperc-páros", _suspensionChain(r)!],
+      if (_reboundCollector(r) != null)
+        ["Kipattanó-szedő ember", _reboundCollector(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

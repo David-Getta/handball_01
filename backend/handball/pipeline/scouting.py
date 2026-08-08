@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Kipattanó-szedők: a megszerzett kipattanók darabszáma
+    # JÁTÉKOSONKÉNT (mez-szám vagy track-azonosító). Darabszám,
+    # meccsek közt összegződik.
+    rbcp_rebounds_by_player: dict = field(default_factory=dict)
     # Kétperc-páros: a (kiharcoló poszt → emberelőny-befejező poszt)
     # láncok darabszáma. Darabszám, pontosan összegződik.
     sup_chains_by_pair: dict = field(default_factory=dict)
@@ -4149,6 +4153,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Kipattanó-szedők: kit kell blokkolni a második helyzetnél.
+    if rep.rbcp_rebounds_by_player:
+        _rbcp_k, _rbcp_n = max(rep.rbcp_rebounds_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _rbcp_n >= 2:
+            keys.append(
+                f"A kipattanókat leggyakrabban a(z) {_rbcp_k}. szedi "
+                f"össze ({_rbcp_n} kipattanó) — a második helyzetnél "
+                "őt kell blokkolni (test, elzárás a "
+                "kipattanó-zónában).")
 
     # Kétperc-páros: a kiállítás-lánc két végpontja.
     _sup_n = sum(rep.sup_chains_by_pair.values())
@@ -9372,6 +9387,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .defense import defensive_rebound_players as _rbcp
+        rbcprec = _rbcp(match, config)[team.value]
+        rep.rbcp_rebounds_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["rebounds"]
+            for r in rbcprec["players"]}
         from .rules import suspension_chain_roles as _sup
         suprec = _sup(match, config)[team.value]
         rep.sup_chains_by_pair = dict(suprec["roles"])
@@ -12027,6 +12048,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 369) Az ő kipattanó-szedőjük × a ti lövésszámotok: a második
+    # helyzet akkor ér gólt, ha van, aki elveszi tőle.
+    if opp.rbcp_rebounds_by_player and own.shots >= 8:
+        _rbcp369_k, _rbcp369_n = max(
+            opp.rbcp_rebounds_by_player.items(), key=lambda kv: kv[1])
+        if _rbcp369_n >= 2:
+            plan.append(
+                f"A kipattanókat leggyakrabban a(z) {_rbcp369_k}. "
+                f"szedi össze ({_rbcp369_n} kipattanó), ti pedig "
+                f"sokat lőttök ({own.shots} lövés) — a berobbanó "
+                "emberetek ne a kapust nézze, hanem őt: ha nem ő "
+                "éri el elsőként a labdát, a második lövés a "
+                "tiétek.")
 
     # 368) Az ő kétperc-párosuk × a ti fegyelmetek: a lánc az
     # elejénél a legolcsóbban vágható el.
@@ -18463,6 +18498,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        rbcp_rebounds_by_player=_merge_count_dicts(
+            r.rbcp_rebounds_by_player for r in reports),
         sup_chains_by_pair=_merge_count_dicts(
             r.sup_chains_by_pair for r in reports),
         svmp_misses_by_player=_merge_count_dicts(

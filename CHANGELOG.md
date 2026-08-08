@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kipattanó-szedők: ki szedi össze a kipattanót védés után.** A
+  lepattanó-szedő poszt a posztot nevezi meg — az új réteg az
+  embert: ugyanazokat a megszerzett kipattanókat játékosonként
+  számolja. Edzőileg ez a berobbanó ember célpontja: aki rendre
+  összeszedi a kipattanókat, azt a második helyzetnél blokkolni kell
+  (test, elzárás a kipattanó-zónában); saját csapatra a
+  kipattanó-munka kiosztása a téma. Két kipattanótól emel ki nevet.
+  A rangsorban az "ember" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`defensive_rebound_players`), edzői összefoglaló,
+  felderítés (`rbcp_rebounds_by_player` mező + edzői kulcs + 369.
+  meccsterv-szabály), edzés-fókusz (390. szabály), kliens-csempe.
 - **Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket.**
   A kiállítás-kiharcolás poszt szerint azt mondja meg, ki hozza a
   kétperceseket, az emberelőny-poszt azt, kire fut ki a hat az öt

@@ -5455,3 +5455,83 @@ def retreat_punishment(match, config=None) -> dict:
                 "ez a lassú visszaállás ára: minden védésükből "
                 "azonnal indítani kell, mert a fal még nincs ott")
     return out
+
+
+# Kipattanó-szedők: ennyi megszerzett kipattanótól emeljük ki a
+# játékost (a kipattanó ritkább, mint a labdaszerzés).
+RBCP_MIN_REBOUNDS = 2
+
+
+def defensive_rebound_players(match, config=None) -> dict:
+    """Kipattanó-szedők: KI SZEDI ÖSSZE a kipattanót védés után.
+
+    A lepattanó-szedő poszt (defensive_rebound_roles) a POSZTOT
+    nevezi meg — ez az EMBERT: ugyanazokat a megszerzett
+    kipattanókat játékosonként számolja.
+
+    Edzőileg ez a berobbanó ember célpontja: aki rendre összeszedi a
+    kipattanókat, azt a második helyzetnél blokkolni kell (test,
+    elzárás a kipattanó-zónában). Saját csapatra: a kipattanó-munka
+    elismerése és a felelősség kiosztása — nem véletlen, hanem
+    feladat.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"rebounds",
+    "players": [{"player_id", "jersey", "rebounds"}], "top"} — a
+    "top" az első játékos, ha legalább RBCP_MIN_REBOUNDS kipattanója
+    van, különben None.
+    """
+    from .decisions import ball_holder
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(RBC_WINDOW_S * fps)
+    gk_hold = round(RBC_GK_HOLD_S * fps)
+    frames_by_t = {f.t: f for f in match.frames}
+    times = sorted(frames_by_t)
+    xg = match_xg(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        if sh["outcome"] != "save":
+            continue
+        side = "away" if sh["team"] == "home" else "home"
+        gk_frames = 0
+        for t in times:
+            if t <= sh["t"]:
+                continue
+            if t > sh["t"] + win:
+                break
+            holder = ball_holder(frames_by_t[t], config)
+            if holder is None:
+                continue
+            if holder.team.value != side:
+                break
+            if holder.role == "kapus":
+                gk_frames += 1
+                if gk_frames > gk_hold:
+                    break
+                continue
+            tally[side][holder.track_id] = (
+                tally[side].get(holder.track_id, 0) + 1)
+            break
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "rebounds": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["rebounds"] >= RBCP_MIN_REBOUNDS
+               else None)
+        out[side] = {"rebounds": sum(r["rebounds"] for r in rows),
+                     "players": rows, "top": top}
+    return out

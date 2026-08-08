@@ -1194,6 +1194,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "emberfogással.")
     except Exception:
         pass
+    # Kipattanó-szedők: ki szedi össze a kipattanót védés után.
+    try:
+        from .defense import defensive_rebound_players
+        rbcp = defensive_rebound_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = rbcp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} kipattanóit {_ki} szedi össze a "
+                     f"legtöbbször ({top['rebounds']} kipattanó) — a "
+                     "második helyzetnél őt kell blokkolni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles
