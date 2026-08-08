@@ -2419,3 +2419,89 @@ def test_gk_clutch_saves_needs_both_windows():
     rec = gk_clutch_saves(_clutch_gk_match(
         clutch_saves=0, clutch_goals=1))["away"]
     assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
+# ---- Kipattanó ára (a védés után kapott második-helyzet gól) ---------------
+
+
+def _rpn_match(punished, clean, fps=25.0):
+    """`punished` hazai lövés, amit a vendég kapus véd, majd 2 mp-en
+    belül hazai gól jön a kipattanóból; `clean` védés büntetlenül."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def _idle(seconds):
+        nonlocal t, frames
+        for _ in range(int(seconds * fps)):
+            frames.append(Frame(
+                t=t, players=[PlayerPosition(
+                    track_id=99, team=Team.AWAY, x=39.2, y=10.0,
+                    role="kapus", source=PositionSource.MEASURED,
+                    confidence=1.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+
+    def _saved_shot():
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0),
+                       PlayerPosition(track_id=99, team=Team.AWAY,
+                                      x=39.2, y=10.0, role="kapus",
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 38.6),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    def _home_goal():
+        nonlocal t, frames
+        for i in range(9):
+            players = [PlayerPosition(track_id=1, team=Team.HOME,
+                                      x=33.0, y=10.0,
+                                      source=PositionSource.MEASURED,
+                                      confidence=1.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 40.4),
+                                          y=10.0, confidence=1.0)))
+            t += 1
+        _idle(2.0)
+
+    _idle(5.0)
+    for _ in range(punished):
+        _saved_shot()
+        _home_goal()          # a védés után két másodperccel
+        _idle(10.0)
+    for _ in range(clean):
+        _saved_shot()
+        _idle(15.0)
+    return Match(MatchMeta(match_id="rpn", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_rebound_punishment_prices_the_second_chance():
+    """Ha a védéseik hatoda gólba fut a kipattanóból, minden lövésnél
+    indítani kell a kipattanó-zónába."""
+    from handball.pipeline.goalkeeper import (RPN_MIN_SAVES,
+                                              rebound_punishment)
+
+    rec = rebound_punishment(_rpn_match(punished=2, clean=4))["away"]
+    assert rec["saves"] >= RPN_MIN_SAVES, rec
+    assert rec["punished"] == 2, rec
+    assert rec["rate_pct"] and rec["rate_pct"] >= 15.0, rec
+    assert rec["verdict"] and "elhalasztott" in rec["verdict"], rec
+
+
+def test_rebound_punishment_silent_without_second_chances():
+    """Ha a védéseik után nem jön gól, nincs ítélet."""
+    from handball.pipeline.goalkeeper import rebound_punishment
+
+    rec = rebound_punishment(_rpn_match(punished=0, clean=6))["away"]
+    assert rec["saves"] >= 5 and rec["punished"] == 0, rec
+    assert rec["rate_pct"] == 0.0 and rec["verdict"] is None, rec

@@ -2703,3 +2703,74 @@ def gk_clutch_saves(match: Match, config=None) -> dict:
                     "lövésszámot fel kell vinni")
         out[side] = rec
     return out
+
+
+# Kipattanó ára: ennyi másodpercen belüli gól számít második
+# helyzetnek, ennyi védés kell az ítélethez, és e fölötti arány már
+# drága kipattanó-kezelés.
+RPN_WINDOW_S = 4.0
+RPN_MIN_SAVES = 5
+RPN_COSTLY_PCT = 15.0
+
+
+def rebound_punishment(match: Match, config=None) -> dict:
+    """Kipattanó ára: a VÉDÉSÜK után kapott második-helyzet gól.
+
+    A kapus-kipattanó (gk_rebound_control) azt mondja meg, fogja-e
+    vagy kiüti a kapus a labdát, a lepattanó-szedő poszt azt, ki
+    szedi össze — ez azt, MENNYIBE KERÜL: a védéseiket nézi, és
+    megszámolja, hányat követett RPN_WINDOW_S-en belül a támadó
+    csapat gólja. A védés így nem "megúszott helyzet", hanem
+    elhalasztott: a második lövés a kapust már mozgásban találja.
+
+    Edzőileg ez a berobbanó ember számlája. Ellenük: ha a védéseik
+    hatoda gólba fut, minden lövésnél indítani kell a kipattanó-
+    zónába (szélső vagy beálló becsúszása). Saját csapatra: a
+    kipattanó-felelősség kiosztása és a kapus terelés-iránya a téma
+    (hova üsse ki: a szélre, ne középre).
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"saves" (mért védés),
+    "punished" (második helyzetből góllal büntetett), "rate_pct",
+    "verdict"} — a rate_pct None RPN_MIN_SAVES alatt, az ítélet
+    None, ha az arány a RPN_COSTLY_PCT alatt marad.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(RPN_WINDOW_S * fps)
+    goals = sorted((e.t, e.team.value) for e in detect_shots(match, config)
+                   if e.type == EventType.GOAL)
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"saves": 0, "punished": 0, "rate_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        if sh["outcome"] != "save":
+            continue
+        # A VÉDŐ oldal a lövő ellenfele.
+        side = "away" if sh["team"] == "home" else "home"
+        rec = out[side]
+        rec["saves"] += 1
+        if any(gs == sh["team"] and 0 < gt - sh["t"] <= win
+               for (gt, gs) in goals):
+            rec["punished"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        if rec["saves"] < RPN_MIN_SAVES:
+            continue
+        rate = 100.0 * rec["punished"] / rec["saves"]
+        rec["rate_pct"] = round(rate, 1)
+        if rate >= RPN_COSTLY_PCT:
+            rec["verdict"] = (
+                f"a védéseik {rate:.0f}%-a után gól jön a "
+                f"kipattanóból ({rec['punished']} a {rec['saves']} "
+                f"védésből, {RPN_WINDOW_S:.0f} másodpercen belül) — "
+                "a védés náluk nem megúszott helyzet, hanem "
+                "elhalasztott: minden lövésnél indítani kell a "
+                "kipattanó-zónába")
+    return out

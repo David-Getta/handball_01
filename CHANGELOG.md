@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kipattanó ára: a védésük után kapott második-helyzet gól.** A
+  kapus-kipattanó azt mondja meg, fogja-e vagy kiüti a kapus a
+  labdát, a lepattanó-szedő poszt azt, ki szedi össze — az új réteg
+  azt, mennyibe kerül: a védéseiket nézi, és megszámolja, hányat
+  követett négy másodpercen belül a támadó csapat gólja. A védés így
+  nem megúszott helyzet, hanem elhalasztott. Edzőileg ez a berobbanó
+  ember számlája: ha a védéseik hatoda gólba fut, minden lövésnél
+  indítani kell a kipattanó-zónába; saját csapatra a kapus
+  terelés-iránya (a szélre üsse, ne középre) és a
+  kipattanó-felelősség kiosztása a téma. Öt védés alatt hallgat
+  (None); az ítélet 15% fölött szólal meg. A rangsorban az "ár"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`rebound_punishment`), edzői összefoglaló, felderítés (edzői
+  kulcs + 364. meccsterv-szabály), edzés-fókusz (385. szabály),
+  kliens-csempe.
 - **Visszaállás ára: a gól nélküli lövésük után kapott gyors gól.**
   A visszaállás-idő azt mondja meg, hány másodperc alatt áll össze a
   faluk — az új réteg azt, mennyibe kerül: a gól nélkül záruló

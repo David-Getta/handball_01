@@ -1032,6 +1032,11 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Kipattanó ára: a mért védések és a közülük második helyzetből
+    # góllal büntetettek darabszáma. Darabszám, pontosan összegződik
+    # (arány = punished / saves).
+    rpn_saves: int = 0
+    rpn_punished: int = 0
     # Visszaállás ára: a gól nélküli lövések és a közülük gyors
     # kapott góllal büntetettek darabszáma. Darabszám, pontosan
     # összegződik (arány = punished / shots).
@@ -4123,6 +4128,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Kipattanó ára: megéri-e berobbanó embert küldeni.
+    if rep.rpn_saves >= 5:
+        _rpn_pct = 100.0 * rep.rpn_punished / rep.rpn_saves
+        if _rpn_pct >= 15.0:
+            keys.append(
+                f"A védéseik {_rpn_pct:.0f}%-a után gól jön a "
+                f"kipattanóból ({rep.rpn_punished} a {rep.rpn_saves} "
+                "védésből) — náluk a védés elhalasztott helyzet: "
+                "minden lövésnél induljon a berobbanó ember a "
+                "kipattanó-zónába.")
 
     # Visszaállás ára: mennyit hoz a lövésük utáni azonnali indítás.
     if rep.rtp_shots >= 6:
@@ -9270,6 +9286,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .goalkeeper import rebound_punishment as _rpn
+        rpnrec = _rpn(match, config)[team.value]
+        rep.rpn_saves = int(rpnrec["saves"])
+        rep.rpn_punished = int(rpnrec["punished"])
         from .defense import retreat_punishment as _rtp2
         rtp2rec = _rtp2(match, config)[team.value]
         rep.rtp_shots = int(rtp2rec["shots"])
@@ -11898,6 +11918,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 364) Az ő drága kipattanóik × a ti lövésszámotok: a második
+    # helyzet a legolcsóbb gól.
+    if opp.rpn_saves >= 5 and own.shots >= 8:
+        _rpn364 = 100.0 * opp.rpn_punished / opp.rpn_saves
+        if _rpn364 >= 15.0:
+            plan.append(
+                f"A védéseik {_rpn364:.0f}%-a után gól jön a "
+                f"kipattanóból ({opp.rpn_punished} a {opp.rpn_saves} "
+                f"védésből), ti pedig sokat lőttök ({own.shots} "
+                "lövés) — a lövés ne legyen a támadás vége: "
+                "kijelölt berobbanó a rövid és a hosszú sarokra, "
+                "mert a kipattanójuk gólt ér.")
 
     # 363) Az ő büntethető visszaállásuk × a ti kontra-erősségetek:
     # a lövésük utáni első hullám a legolcsóbb gól.
@@ -18259,6 +18292,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        rpn_saves=sum(r.rpn_saves for r in reports),
+        rpn_punished=sum(r.rpn_punished for r in reports),
         rtp_shots=sum(r.rtp_shots for r in reports),
         rtp_punished=sum(r.rtp_punished for r in reports),
         rbc_rebounds_by_role=_merge_count_dicts(

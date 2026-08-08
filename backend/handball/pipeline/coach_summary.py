@@ -1114,6 +1114,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "visszaállás ára.")
     except Exception:
         pass
+    # Kipattanó ára: a védés után kapott második-helyzet gól.
+    try:
+        from .goalkeeper import rebound_punishment
+        rpn = rebound_punishment(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rpn = rpn[side]
+            if rec_rpn["verdict"] is None:
+                continue
+            body += (f" A(z) {name} védéseinek "
+                     f"{rec_rpn['rate_pct']:.0f}%-a után gól jön a "
+                     f"kipattanóból ({rec_rpn['punished']} a "
+                     f"{rec_rpn['saves']} védésből) — a védés náluk "
+                     "elhalasztott helyzet.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 385) Kipattanó ára: a védés nem megúszott helyzet, ha a
+    # kipattanó gólt ér.
+    try:
+        from .goalkeeper import (RPN_COSTLY_PCT, RPN_WINDOW_S,
+                                 rebound_punishment)
+        rpn385 = rebound_punishment(match, config)
+        for side in ("home", "away"):
+            rec385 = rpn385[side]
+            if rec385.get("verdict") is None:
+                continue
+            add(side, "kapus", "Kipattanó-kezelés",
+                f"a védéseink {rec385['rate_pct']:.0f}%-a után gól "
+                f"jön a kipattanóból ({rec385['punished']} a "
+                f"{rec385['saves']} védésből, "
+                f"{RPN_WINDOW_S:.0f} másodpercen belül; "
+                f"{RPN_COSTLY_PCT:.0f}% fölött már drága) — a "
+                "bravúr így nem ér pontot, csak halasztást",
+                "kapussal egyeztetett terelés: a kiütés a szélre "
+                "menjen, ne középre; a fal két embere a "
+                "kipattanó-zónába lép a lövés pillanatában — "
+                "edzésen sorozatlövés kipattanó-küzdelemmel, "
+                "élesben megjátszott második helyzettel",
+                )
+    except Exception:
+        pass
+
     # 384) Visszaállás ára: a lövésünk után kapott gyors gólok
     # számlája — nem a fal minősége, hanem a jelenléte a kérdés.
     try:
