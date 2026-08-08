@@ -443,3 +443,26 @@ def test_kliens_varazslo_lepesei_megmondjak_mi_hianyzik():
     assert not missing, (
         "varázsló-lépés magyarázat nélkül — a letiltott 'Tovább' így néma "
         f"zsákutca (sorok): {missing}")
+
+
+def test_minden_posztonkenti_mezo_a_kliensben_is():
+    """ŐR: minden *_by_role ScoutingReport-mezőt olvasson a kliens
+    felderítő-képernyője is — a réteg-recept 6. lépése (csempe) ne
+    maradhasson ki csendben."""
+    import dataclasses
+    from pathlib import Path
+
+    import pytest
+
+    from handball.pipeline import scouting
+
+    dart = (Path(__file__).resolve().parents[2] / "client" / "lib"
+            / "ui" / "scouting_screen.dart")
+    if not dart.exists():
+        pytest.skip("nincs kliens a fában")
+    src = dart.read_text(encoding="utf-8")
+    fields = [f.name for f in dataclasses.fields(scouting.ScoutingReport)
+              if f.name.endswith("_by_role")]
+    assert len(fields) >= 60, fields   # az olvasás elromlott
+    arva = [f for f in fields if f'"{f}"' not in src]
+    assert not arva, f"kliens-csempe nélküli posztonkénti mezők: {arva}"
