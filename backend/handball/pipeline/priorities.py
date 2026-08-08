@@ -290,6 +290,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "setplay_concentration"),
         ("felkészülés", "Lepattanó-szedő poszt", "defense",
          "defensive_rebound_roles"),
+        ("felkészülés", "Kétperc-páros", "rules",
+         "suspension_chain_roles"),
     ]
 
 
@@ -459,6 +461,7 @@ KP_PAIRS: tuple = (
     ("Emberelőnypáros-poszt", "rules", "powerplay_pair_roles"),
     ("Időkéréspáros-poszt", "stoppages", "timeout_pair_roles"),
     ("Ziccerpáros-poszt", "xg", "big_chance_pair_roles"),
+    ("Kétperc-páros", "rules", "suspension_chain_roles"),
 )
 
 # A Specialista-poszt a KP_LAYERS-be tartozik (egy posztot nevez meg).

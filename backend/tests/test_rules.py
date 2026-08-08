@@ -2238,3 +2238,83 @@ def test_seven_miss_players_silent_after_one_miss():
     rec = seven_miss_players(_svm_match(1))["home"]
     assert rec["misses"] == 1 and rec["top"] is None, rec
     assert seven_miss_players(_svm_match(1))["away"]["players"] == []
+
+
+# ---- Kétperc-páros (kiharcoló → emberelőny-befejező) -------------------------
+
+def _schain_match(chains, fps=25.0):
+    """`chains` elemei (kiharcoló, befejező) hazai id-k. A hazai
+    szerzi az emberelőnyt: az ablak előtt a kiharcoló nyomul a
+    kapuhoz, az ablakban a befejező lő. A 7-es beálló (34, 10), a
+    9-es szélső (35, 3), az 5-ös irányító (29, 10)."""
+    spos = {5: (29.0, 10.0), 7: (34.0, 10.0), 9: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _cast(away_n, deep=None):
+        players = []
+        for tid, (x, y) in spos.items():
+            # A kiharcoló az ablak előtt mélyebbre nyomul.
+            if deep == tid:
+                players.append(_pl(tid, Team.HOME, 38.0, y))
+            else:
+                players.append(_pl(tid, Team.HOME, x, y))
+        # Három hátsó hazai játékos: velük lesz teljes (hatos) a
+        # hazai létszám, de a poszt-becslésbe nem esnek bele.
+        players += [_pl(100 + k, Team.HOME, 15.0 + k, 16.0 + k)
+                    for k in range(3)]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(away_n)]
+        return players
+
+    def _hold(n, away_n, ball, deep=None):
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=_cast(away_n, deep),
+                                ball=Ball(x=ball[0], y=ball[1],
+                                          confidence=1.0)))
+            t += 1
+
+    _hold(int(20.0 * fps), 6, (29.2, 10.0))     # poszt-minta
+    for earner, shooter in chains:
+        # A kiállítás előtti szakasz: a kiharcoló nyomul a kapuhoz.
+        _hold(int(12.0 * fps), 6, (29.2, 10.0), deep=earner)
+        # Az emberelőny-ablak (a vendég öt emberrel) — bőven a
+        # PP_MIN_S fölött, hogy az ablak-határok se vágják meg.
+        _hold(int(35.0 * fps), 5, (29.2, 10.0))
+        sx, sy = spos[shooter]
+        for _ in range(5):                       # a labda a lövőnél
+            frames.append(Frame(t=t, players=_cast(5),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(8):                       # a lövés
+            frames.append(Frame(t=t, players=_cast(5),
+                                ball=Ball(x=min(sx + 1.0 + i, 40.4),
+                                          y=sy, confidence=1.0)))
+            t += 1
+        _hold(int(45.0 * fps), 5, (29.2, 10.0))
+        _hold(int(30.0 * fps), 6, (29.2, 10.0))  # vissza hatra
+    return Match(_meta(fps), frames)
+
+
+def test_suspension_chain_roles_names_the_two_minute_chain():
+    """Ha a kétperceket ugyanaz a lánc futja (kiharcoló → befejező),
+    mindkét posztra jut feladat."""
+    from handball.pipeline.rules import (SCH_MIN_PAIRS,
+                                         suspension_chain_roles)
+
+    rec = suspension_chain_roles(
+        _schain_match([(9, 7), (9, 7), (9, 7), (5, 7)]))["home"]
+    assert rec["chains"] >= SCH_MIN_PAIRS, rec
+    assert rec["main_role"] == "szélső→beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 55.0, rec
+    assert rec["verdict"] and "kiharcolójuk" in rec["verdict"], rec
+
+
+def test_suspension_chain_roles_silent_with_few_chains():
+    """Két láncból még nincs ítélet — a kiállítás ritka esemény."""
+    from handball.pipeline.rules import suspension_chain_roles
+
+    rec = suspension_chain_roles(_schain_match([(9, 7), (5, 7)]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

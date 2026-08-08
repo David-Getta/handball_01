@@ -2168,6 +2168,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket (3+
+  // lánc, 55% részarány — a backenddel azonos küszöbök:
+  // SUP_MIN_PAIRS, SUP_SHARE_PCT).
+  String? _suspensionChain(Map<String, dynamic> r) {
+    final byPair =
+        (r["sup_chains_by_pair"] as Map?)?.cast<String, dynamic>();
+    if (byPair == null || byPair.isEmpty) return null;
+    var total = 0;
+    byPair.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byPair.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 55.0) return null;
+    return "a kétperceik ${pct.round()}%-a ugyanazt a láncot futja "
+        "($top, $total emberelőny-lövés) · a kiharcoló ellen "
+        "testtel, a befejező ellen emberfogással";
+  }
+
   // Hetes-kihagyók: ki hibázza el a hetest (2+ gól nélküli hetes
   // ugyanattól a dobótól — a backenddel azonos küszöb:
   // SVMP_MIN_MISSES).
@@ -9717,6 +9744,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Sprint-esés", _sprintFade(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
+      if (_suspensionChain(r) != null)
+        ["Kétperc-páros", _suspensionChain(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

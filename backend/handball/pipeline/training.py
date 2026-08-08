@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 389) Kétperc-páros: ha a kiharcolás és az emberelőny-
+    # befejezés is egy-egy poszton áll, mindkettő kiszámítható.
+    try:
+        from .rules import SCH_SHARE_PCT, suspension_chain_roles
+        sup389 = suspension_chain_roles(match, config)
+        for side in ("home", "away"):
+            rec389 = sup389[side]
+            if rec389.get("verdict") is None:
+                continue
+            add(side, "támadás", "Kétperc-lánc szélesítése",
+                f"a kétperceink {rec389['share_pct']:.0f}%-a "
+                f"ugyanazt a láncot futja ({rec389['main_role']}, "
+                f"{rec389['chains']} emberelőny-lövésből; "
+                f"{SCH_SHARE_PCT:.0f}% fölött már minta) — egy "
+                "felkészült ellenfél a kiharcolót és a befejezőt "
+                "egyszerre kezeli, és a kétpercünk elvész",
+                "emberelőny-figura két kifutási úttal (a szokásos "
+                "befejező mellé egy második), és a kiharcolás "
+                "variálása: betörés a másik oldalról, beállós "
+                "átadás — a lánc ne legyen felismerhető",
+                )
+    except Exception:
+        pass
+
     # 388) Hetes-kihagyók: névre szóló hetes-rutin.
     try:
         from .rules import SVMP_MIN_MISSES, seven_miss_players

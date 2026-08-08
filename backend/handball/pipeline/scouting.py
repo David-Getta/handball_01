@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Kétperc-páros: a (kiharcoló poszt → emberelőny-befejező poszt)
+    # láncok darabszáma. Darabszám, pontosan összegződik.
+    sup_chains_by_pair: dict = field(default_factory=dict)
     # Hetes-kihagyók: a gól nélküli hetesek darabszáma DOBÓNKÉNT
     # (kulcs: mez-szám vagy track-azonosító). Darabszám, meccsek közt
     # összegződik.
@@ -4146,6 +4149,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Kétperc-páros: a kiállítás-lánc két végpontja.
+    _sup_n = sum(rep.sup_chains_by_pair.values())
+    if _sup_n >= 3:
+        _sup_p, _sup_c = max(rep.sup_chains_by_pair.items(),
+                             key=lambda kv: kv[1])
+        _sup_pct = 100.0 * _sup_c / _sup_n
+        if _sup_pct >= 55.0:
+            keys.append(
+                f"A kétperceik {_sup_pct:.0f}%-a ugyanazt a láncot "
+                f"futja ({_sup_p}, {_sup_n} emberelőny-lövés) — a "
+                "kiharcolójuk ellen testtel, kéz nélkül védekezzetek "
+                "(nála a kései fogás kétpercet ér), a befejezőjüket "
+                "pedig hátrányban tiltsátok le.")
 
     # Hetes-kihagyók: kire mehet rá a kapus a hetesnél.
     if rep.svmp_misses_by_player:
@@ -9355,6 +9372,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .rules import suspension_chain_roles as _sup
+        suprec = _sup(match, config)[team.value]
+        rep.sup_chains_by_pair = dict(suprec["roles"])
         from .rules import seven_miss_players as _svmp
         svmprec = _svmp(match, config)[team.value]
         rep.svmp_misses_by_player = {
@@ -12007,6 +12027,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 368) Az ő kétperc-párosuk × a ti fegyelmetek: a lánc az
+    # elejénél a legolcsóbban vágható el.
+    _sup368_n = sum(opp.sup_chains_by_pair.values())
+    if _sup368_n >= 3 and own.suspensions >= 2:
+        _sup368_p, _sup368_c = max(opp.sup_chains_by_pair.items(),
+                                   key=lambda kv: kv[1])
+        _sup368_pct = 100.0 * _sup368_c / _sup368_n
+        if _sup368_pct >= 55.0:
+            plan.append(
+                f"A kétperceik {_sup368_pct:.0f}%-a ugyanazt a "
+                f"láncot futja ({_sup368_p}, {_sup368_n} "
+                f"emberelőny-lövés), ti pedig kaptok kiállításokat "
+                f"({own.suspensions} kétperc) — a láncot az elején "
+                "vágjátok el: a kiharcolójuk ellen testtel, kéz "
+                "nélkül, mert a kétperc nálatok duplán fáj.")
 
     # 367) Az ő hetes-kihagyójuk × a ti kapusotok: névre szóló
     # hetes-terv a kapusnak.
@@ -18427,6 +18463,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        sup_chains_by_pair=_merge_count_dicts(
+            r.sup_chains_by_pair for r in reports),
         svmp_misses_by_player=_merge_count_dicts(
             r.svmp_misses_by_player for r in reports),
         sfd_fh_sprints=sum(r.sfd_fh_sprints for r in reports),

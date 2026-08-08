@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket.**
+  A kiállítás-kiharcolás poszt szerint azt mondja meg, ki hozza a
+  kétperceseket, az emberelőny-poszt azt, kire fut ki a hat az öt
+  ellen — az új réteg a kettőt köti össze kiállításonként: a
+  (kiharcoló poszt → emberelőny-befejező poszt) párost számolja az
+  ablakon belüli lövéseik alapján. Edzőileg egy kiállítás két
+  feladatot ad egyszerre: a kiharcoló posztja ellen fegyelmezetten,
+  testtel kell védekezni (nála a kései fogás kétpercet ér), a
+  befejező posztját pedig hátrányban letiltani — a lánc így már az
+  elején elvágható. Három lánc és 55% párosrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`suspension_chain_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 368. meccsterv-szabály), edzés-fókusz (389. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-páros bizonyíték-réteg,
+  kliens-csempe.
 - **Hetes-kihagyók: ki hibázza el a hetest.** A hetes-mérleg
   csapat-szinten mondja meg, mennyi megy be a hetesekből, a
   hetes-kihagyó poszt a posztot — az új réteg az embert: a gól

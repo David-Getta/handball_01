@@ -2589,3 +2589,103 @@ def seven_miss_players(match: Match,
         out[side] = {"misses": sum(r["misses"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Kétperc-páros küszöbei: ennyi poszthoz kötött (kiharcoló →
+# emberelőny-befejező) pár kell az ítélethez, és ekkora részarány a
+# vezető párosnak. A kiállítás ritka esemény, ezért enyhébb a
+# részarány-küszöb, mint az egy-posztos lencséknél.
+SCH_MIN_PAIRS = 3
+SCH_SHARE_PCT = 55.0
+
+
+def suspension_chain_roles(match: Match,
+                           config: Optional[TacticsConfig] = None
+                           ) -> dict:
+    """Kétperc-páros: KI HARCOLJA KI és KI FEJEZI BE a kétpercüket.
+
+    A kiállítás-kiharcolás poszt szerint azt mondja meg, ki hozza a
+    kétperceseket, az emberelőny-poszt azt, kire fut ki a hat az öt
+    ellen — ez a kettőt köti össze kiállításonként: a (kiharcoló
+    poszt → emberelőny-befejező poszt) párost számolja, az ablakon
+    belül leadott lövéseik alapján.
+
+    Edzőileg egy kiállítás két feladatot ad egyszerre: a kiharcoló
+    posztja ellen fegyelmezetten, testtel kell védekezni (nála a
+    kései fogás kétpercet ér), a befejező posztját pedig hátrányban
+    kell letiltani — a lánc így már az elején elvágható. Saját
+    csapatra: ha a kiharcolás és az emberelőny-befejezés is egy-egy
+    poszton áll, mindkettő kiszámítható.
+
+    Visszatérés csapatonként (a KÉTPERCET SZERZŐ oldal): {"chains"
+    (poszthoz kötött lánc), "roles": {"A→B": darab}, "main_role" (a
+    fő páros), "share_pct", "verdict"} — az ítélet None, ha nincs meg
+    a SCH_MIN_PAIRS, vagy egyik páros sem éri el a SCH_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    frames_by_t = {f.t: f for f in match.frames}
+    roles = estimate_positions(match, config)
+    shots = [e for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    out: dict = {side: {"chains": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for w in detect_powerplay(match):
+        up = "away" if w["team_down"] == "home" else "home"
+        goal_x = config.attacks_toward_x(
+            Team.HOME if up == "home" else Team.AWAY)
+        # A kiharcoló: az ablak kezdete előtt a kapuhoz legmélyebben
+        # nyomuló támadó — ugyanaz a heurisztika, mint a
+        # suspension_earners-ben.
+        t0 = w["start_frame"] - round(SUSP_EARNER_LOOKBACK_S * fps)
+        best = None
+        for dt in range(0, round(SUSP_EARNER_LOOKBACK_S * fps) + 1):
+            fr = frames_by_t.get(t0 + dt)
+            if fr is None:
+                continue
+            for p in fr.players:
+                if p.team.value != up or p.role == "kapus":
+                    continue
+                d = abs(p.x - goal_x)
+                if best is None or d < best[1]:
+                    best = (p.track_id, d)
+        if best is None:
+            continue
+        r_earn = roles[up].get(best[0])
+        if r_earn is None:
+            continue
+        for e in shots:
+            if e.team.value != up or e.player_id is None:
+                continue
+            if not (w["start_frame"] <= e.t <= w["end_frame"]):
+                continue
+            r_fin = roles[up].get(e.player_id)
+            if r_fin is None:
+                continue
+            kulcs = f"{r_earn['poszt']}→{r_fin['poszt']}"
+            rec = out[up]
+            rec["roles"][kulcs] = rec["roles"].get(kulcs, 0) + 1
+            rec["chains"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["chains"] >= SCH_MIN_PAIRS:
+            par = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][par] / rec["chains"]
+            rec["main_role"] = par
+            rec["share_pct"] = round(share, 1)
+            if share >= SCH_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kétperceik {share:.0f}%-a ugyanazt a láncot "
+                    f"futja ({par}, {rec['chains']} "
+                    "emberelőny-lövésből) — a kiharcolójuk ellen "
+                    "testtel, kéz nélkül kell védekezni, a "
+                    "befejezőjüket pedig hátrányban le kell tiltani")
+    return out

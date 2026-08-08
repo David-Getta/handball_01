@@ -1178,6 +1178,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megérzésére.")
     except Exception:
         pass
+    # Kétperc-páros: ki harcolja ki és ki fejezi be a kétpercüket.
+    try:
+        from .rules import suspension_chain_roles
+        sup = suspension_chain_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sup = sup[side]
+            if rec_sup["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kétperceinek "
+                     f"{rec_sup['share_pct']:.0f}%-a ugyanazt a "
+                     f"láncot futja ({rec_sup['main_role']}, "
+                     f"{rec_sup['chains']} emberelőny-lövés) — a "
+                     "kiharcoló ellen testtel, a befejező ellen "
+                     "emberfogással.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles
