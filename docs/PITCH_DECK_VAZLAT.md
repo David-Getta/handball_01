@@ -10,7 +10,7 @@ tartalom-vázlat magyarul. Cél: 10 dia, 3 perc.
 | 2 | **The problem** | a sportanalitika a profiké; EU-szerte több százezer utánpótlás/amatőr csapat edzője "szemre" dönt; a meglévő megoldások ára/hardvere kizárja őket |
 | 3 | **The product** | egy pásztázó kamera → követés → 392 elemző réteg → magyar edzői nyelvű ítéletek: meccs-jelentés, ellenfél-felderítés, meccsterv, heti edzés-fókusz; élő app-demó képek |
 | 4 | **Why deep tech** | egykamerás kalibráció + képen kívüli becslés + labdakövetés; szabály-értő réteg (bírói döntések lenyomata a követésből — piacon egyedülálló); magyarázható MI (AI Act/GDPR-barát), helyben fut |
-| 5 | **Proof it works** | 1492 automata teszt (élő szám: `docs/SZAMOK.md`), reprodukálható benchmark, beépített precision/recall validáció, dátumozott mérési jegyzőkönyv valós meccseken (`docs/MERESI_JEGYZOKONYV.md`) |
+| 5 | **Proof it works** | 1493 automata teszt (élő szám: `docs/SZAMOK.md`), reprodukálható benchmark, beépített precision/recall validáció, dátumozott mérési jegyzőkönyv valós meccseken (`docs/MERESI_JEGYZOKONYV.md`) |
 | 6 | **Market** | hosszú farok: iskolák, akadémiák, alsóbb osztályok; belépés: magyar kézilabda → EU kézilabda-nemzetek → sportfüggetlen skálázás (kosár, futsal, hoki ugyanazon a motoron); ⬜ TAM/SAM/SOM számok |
 | 7 | **Competition** | Veo/Hudl/Spiideo/Catapult tábla: ár, hardver-igény, felhő-függés, magyarázhatóság — a mi oszlopunk: nulla hardver, on-premise, explainable, amatőr-árazás |
 | 8 | **Business model & traction** | klub-licenc + szezon-előfizetés; pilot-klubok és LOI-k (⬜ számok a pilotból); ár-pont az amatőr szegmenshez |

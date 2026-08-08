@@ -532,3 +532,31 @@ def test_nincs_ketszer_definialt_modul_konstans():
             hibak.append(f"{mod.name}: {sorted(dupla)}")
     assert not hibak, ("kétszer definiált modul-konstansok: "
                        + "; ".join(hibak))
+
+
+def test_nincs_ketszer_definialt_fuggveny():
+    """ŐR: egy modulban ne legyen KÉTSZER definiált modul-szintű
+    függvény.
+
+    Ugyanaz a csendes felülírás, mint a konstansoknál: ha egy új
+    réteg motorja elveszi egy meglévő függvény nevét, a Python az
+    utolsót tartja meg — a régi réteg minden felülete észrevétlenül
+    az ÚJ motort hívja. A tesztfájlokra is áll: a pytest ott is csak
+    az utolsó azonos nevű tesztet futtatja, a korábbi némán eltűnik.
+    """
+    import pathlib
+    import re
+    from collections import Counter
+
+    hibak = []
+    for d, minta in ((pathlib.Path("handball/pipeline"), "*.py"),
+                     (pathlib.Path("handball/api"), "*.py"),
+                     (pathlib.Path("tests"), "test_*.py")):
+        for mod in sorted(d.glob(minta)):
+            src = mod.read_text(encoding="utf-8")
+            nevek = re.findall(r"^def (\w+)\(", src, flags=re.M)
+            dupla = [n for n, c in Counter(nevek).items() if c > 1]
+            if dupla:
+                hibak.append(f"{mod.name}: {sorted(dupla)}")
+    assert not hibak, ("kétszer definiált függvények: "
+                       + "; ".join(hibak))
