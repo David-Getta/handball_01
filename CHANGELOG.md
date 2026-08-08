@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Drága-eladó poszt: kinek a hibái kerülnek gólba.** A drága
+  eladók rétege az embert nevezi meg — az új réteg a posztot: a
+  gólba forduló (kapott góllal büntetett) eladásokat a vesztes
+  posztjához írja. Edzőileg a nyereség-térkép: amelyik posztjuk
+  hibái rendre gólt érnek, a felhozatalnál őt kell kettőzni-zavarni
+  — nála a legnagyobb a szerezhető nyereség. Saját oldalon a nyomás
+  alatti labdakezelés és a hiba utáni visszazárás az edzés-téma.
+  Legalább 3 büntetett eladás és 60% posztrészarány alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag
+  (`costly_turnover_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 328. meccsterv-szabály), edzés-fókusz (349. szabály),
+  HTML-riport (Befejező-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Beérkező-poszt: melyik posztra hoz frissítést a padjuk.** A
   forgatott-poszt a lecserélteket nézi — az új réteg a beállókat: a
   cserehullámokkal érkező játékosokat a posztjukhoz írja. Edzőileg a

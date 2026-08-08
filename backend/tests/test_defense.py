@@ -3414,3 +3414,70 @@ def test_tired_conceder_roles_silent_without_jump():
 
     rec = tired_conceder_roles(_tcr_match([7, 7], [7, 7]))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Drága-eladó poszt (kinek a hibái kerülnek gólba) ----------------------
+
+
+def _dto_match(losers, fps=25.0):
+    """Poszt-minta (7: beálló, 9: szélső) + büntetett eladások: a
+    vesztes labdája a 30-as vendéghez kerül, aki 30 mp-en belül a -x
+    kapuba viszi."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    def cast(ax=15.0):
+        return ([_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+                + [_pl(30, Team.AWAY, ax, 10.0)])
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(t=t, players=cast(),
+                            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in losers:
+        sx, sy = spos[tid]
+        for _ in range(10):          # a labda a vesztesnél
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=sx + 0.2, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(10):          # eladás: a labda a 30-ashoz kerül
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=15.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        x = 15.0
+        while x > -0.5:              # a 30-as a -x kapuba viszi: gól
+            x -= 0.5
+            frames.append(Frame(t=t, players=cast(ax=15.0),
+                                ball=Ball(x=max(x, -0.5), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):          # semleges szakasz
+            frames.append(Frame(t=t, players=cast(),
+                                ball=Ball(x=25.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_costly_turnover_roles_names_the_costly_post():
+    """Négy gólba forduló eladásból három a beállóé → őt kell
+    zavarni a felhozatalnál."""
+    from handball.pipeline.defense import (DTO_MIN_PUNISHED,
+                                           costly_turnover_roles)
+
+    rec = costly_turnover_roles(_dto_match([7, 7, 7, 9]))["home"]
+    assert rec["punished"] >= DTO_MIN_PUNISHED, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "legnagyobb a nyereség" in rec["verdict"], rec
+
+
+def test_costly_turnover_roles_silent_with_few_punished():
+    """Néhány büntetett eladásból nincs ítélet."""
+    from handball.pipeline.defense import costly_turnover_roles
+
+    rec = costly_turnover_roles(_dto_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 349) Drága-eladó poszt: ha egy posztunk hibái rendre gólba
+    # kerülnek, nyomás alatti labdakezelés és visszazárás kell.
+    try:
+        from .defense import DTO_SHARE_PCT, costly_turnover_roles
+        dto349 = costly_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec349 = dto349[side]
+            if rec349.get("verdict") is None:
+                continue
+            add(side, "támadás", "Gólba forduló hibák egy poszton",
+                f"a gólba forduló eladásaink {rec349['share_pct']:.0f}"
+                f"%-a a(z) {rec349['main_role']} posztunknál "
+                f"történik ({rec349['punished']} büntetett hibából; "
+                f"{DTO_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél pontosan tudja, kinek a labdájára érdemes"
+                " startolni",
+                "nyomás alatti labdakezelés a posztnak (1+1 elleni "
+                "labdatartás, kettőzés elleni leadás), és hiba utáni"
+                " azonnali visszazárás-szabály: az eladó sprintel "
+                "elsőként vissza",
+                )
+    except Exception:
+        pass
+
     # 348) Beérkező-poszt: ha a padunk csak egy posztra hoz
     # frissítést, a második sorunk féloldalas.
     try:

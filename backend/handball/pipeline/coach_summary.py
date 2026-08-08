@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Drága-eladó poszt: kinek a hibái kerülnek gólba.
+    try:
+        from .defense import costly_turnover_roles
+        dto = costly_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_dto = dto[side]
+            if rec_dto["verdict"] is None:
+                continue
+            body += (f" A(z) {name} gólba forduló eladásai a(z) "
+                     f"{rec_dto['main_role']} posztnál történnek "
+                     f"({rec_dto['share_pct']:.0f}%, "
+                     f"{rec_dto['punished']} büntetett hibából) — a"
+                     " felhozatalnál őt kell zavarni.")
+    except Exception:
+        pass
     # Beérkező-poszt: melyik posztra hoz frissítést a padjuk.
     try:
         from .substitutions import sub_in_roles

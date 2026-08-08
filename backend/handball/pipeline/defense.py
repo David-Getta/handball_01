@@ -4685,3 +4685,68 @@ def tired_conceder_roles(match, config=None) -> dict:
                 f"rajtuk ({fh} → {sh} kapott gól) — a faluk ott ül "
                 "le fáradtan: a szünet után onnan kell nyitni")
     return out
+
+
+# Drága-eladó poszt: ennyi poszthoz kötött, gólba forduló eladás kell
+# az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a drága
+# hibáik egy posztnál történnek.
+DTO_MIN_PUNISHED = 3
+DTO_SHARE_PCT = 60.0
+
+
+def costly_turnover_roles(match, config=None) -> dict:
+    """Drága-eladó poszt: MELYIK POSZTJUK hibái kerülnek gólba.
+
+    A drága eladók rétege (costly_turnover_players) az embert nevezi
+    meg — ez a posztot: a gólba forduló (a hibát követő kapott góllal
+    büntetett) eladásokat a vesztes posztjához írja. Így a minta
+    akkor is látszik, ha a nevek meccsről meccsre cserélődnek.
+
+    Edzőileg ez a nyereség-térkép: amelyik posztjuk hibái rendre
+    gólt érnek, ott a legtöbb a szerezhető gól — a felhozatalnál őt
+    kell kettőzni-zavarni, és a labdájára rá kell startolni. Saját
+    csapatra: annál a posztnál a nyomás alatti labdakezelés és a
+    hiba utáni azonnali visszazárás a téma.
+
+    Visszatérés csapatonként: {"punished" (poszthoz kötött, gólba
+    forduló eladás), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    DTO_MIN_PUNISHED, vagy egyik poszt sem éri el a DTO_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    ct = costly_turnover_players(match, config)
+
+    out: dict = {side: {"punished": 0, "roles": {},
+                        "main_role": None, "share_pct": None,
+                        "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in ct[side]["players"]:
+            if not row["punished"]:
+                continue
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["punished"])
+            rec["punished"] += row["punished"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["punished"] >= DTO_MIN_PUNISHED:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["punished"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= DTO_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a gólba forduló eladásaik {share:.0f}%-a a(z) "
+                    f"{poszt} posztnál történik ({rec['punished']} "
+                    "büntetett hibából) — a felhozatalnál őt kell "
+                    "kettőzni-zavarni: nála a legnagyobb a nyereség")
+    return out

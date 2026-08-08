@@ -2141,6 +2141,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$total hajrá-gól) · az utolsó öt percben őt kell fogni";
   }
 
+  // Drága-eladó poszt: kinek a hibái kerülnek gólba (3+ büntetett
+  // eladás, 60% részarány — a backenddel azonos küszöbök:
+  // DTO_MIN_PUNISHED, DTO_SHARE_PCT).
+  String? _costlyTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["dto_punished_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a gólba forduló eladásaik ${pct.round()}%-a a(z) $top "
+        "posztnál történik ($total büntetett hiba) · a "
+        "felhozatalnál őt kell kettőzni-zavarni";
+  }
+
   // Beérkező-poszt: melyik posztra hoz frissítést a padjuk (3+
   // beállás, 60% részarány — a backenddel azonos küszöbök:
   // IBR_MIN_INS, IBR_SHARE_PCT).
@@ -8646,6 +8673,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Befejező-váltás", _finisherRotation(r)!],
       if (_reboundRole(r) != null)
         ["Lepattanó-poszt", _reboundRole(r)!],
+      if (_costlyTurnoverRole(r) != null)
+        ["Drága-eladó poszt", _costlyTurnoverRole(r)!],
       if (_subInRole(r) != null)
         ["Beérkező-poszt", _subInRole(r)!],
       if (_substitutedRole(r) != null)
