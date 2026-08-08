@@ -3619,3 +3619,69 @@ def test_covered_shooter_roles_silent_with_few_covered():
     rec = covered_shooter_roles(
         _cvr_match([(7, True), (9, True)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Célkereszt-poszt (melyik posztjuk előtt fejeznek be) ------------------
+
+
+def _tgr_match(targets, fps=25.0):
+    """Hazai poszt-minta (7: beálló, 9: szélső) + vendég lövések a -x
+    kapura: a `targets` szerinti hazai védő áll a lövő orra előtt."""
+    spos = {7: (34.0, 10.0), 9: (35.0, 3.0)}
+
+    frames = []
+    t = 0
+    for _ in range(150):             # poszt-minta: hazai birtoklás elöl
+        frames.append(Frame(
+            t=t,
+            players=[_pl(tid, Team.HOME, *xy)
+                     for tid, xy in spos.items()],
+            ball=Ball(x=34.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in targets:
+        sy = 10.0 if tid == 7 else 4.0
+        deff = [_pl(7, Team.HOME, 9.0 if tid == 7 else 14.0,
+                    10.0),
+                _pl(9, Team.HOME, 9.0 if tid == 9 else 14.0,
+                    4.0 if tid == 9 else 17.0)]
+        cast = deff + [_pl(21, Team.AWAY, 8.0, sy)]
+        for _ in range(10):          # a labda a vendég lövőnél
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=7.8, y=sy,
+                                          confidence=1.0)))
+            t += 1
+        x = 8.0
+        while x > -0.5:              # lövés a -x kapura
+            x -= 0.5
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=max(x, -0.5), y=sy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(30):          # semleges szakasz + debounce
+            frames.append(Frame(t=t, players=cast,
+                                ball=Ball(x=20.0, y=16.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_targeted_defender_roles_names_the_targeted_post():
+    """Öt rá-lövésből négy a beálló orra előtt → oda kell szervezni
+    a támadást."""
+    from handball.pipeline.defense import (TGR_MIN_SHOTS,
+                                           targeted_defender_roles)
+
+    rec = targeted_defender_roles(
+        _tgr_match([7, 7, 7, 7, 9]))["home"]
+    assert rec["shots"] >= TGR_MIN_SHOTS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "minta bevált" in rec["verdict"], rec
+
+
+def test_targeted_defender_roles_silent_with_few_shots():
+    """Néhány rá-lövésből nincs ítélet."""
+    from handball.pipeline.defense import targeted_defender_roles
+
+    rec = targeted_defender_roles(_tgr_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

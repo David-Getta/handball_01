@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük.
+    try:
+        from .defense import targeted_defender_roles
+        tgr = targeted_defender_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_tgr = tgr[side]
+            if rec_tgr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ellen a befejezések "
+                     f"{rec_tgr['share_pct']:.0f}%-a a(z) "
+                     f"{rec_tgr['main_role']} posztjuk előtt "
+                     f"történik ({rec_tgr['shots']} rá-lövésből) — "
+                     "az ellenfelek őt keresik.")
+    except Exception:
+        pass
     # Fedezett-lövő poszt: melyik posztjuk lő fedezetten is.
     try:
         from .defense import covered_shooter_roles

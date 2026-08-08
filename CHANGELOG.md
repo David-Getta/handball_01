@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Célkereszt-poszt: melyik posztjuk előtt fejeznek be ellenük.**
+  A célba vett védő rétege az embert nevezi meg — az új réteg a
+  posztot: a kapott lövéseket a lövőhöz legközelebbi védő posztjához
+  írja. Edzőileg kollektív felderítés: ha az ellenfelek rendre
+  ugyanannak a posztnak az orra előtt fejeznek be, a minta bevált —
+  a támadást oda kell szervezni, a védője elé elzárást. Saját
+  oldalon a célba vett poszt segítséget kap. Legalább 5 rá-lövés és
+  60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`targeted_defender_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 332. meccsterv-szabály), edzés-fókusz
+  (353. szabály), HTML-riport (Védő-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Fedezett-lövő poszt: melyik posztjuk lő fedezetten is.** A
   fedezetten lövők rétege az embert nevezi meg — az új réteg a
   posztot: a testközeli védő melletti lövéseket a lövő posztjához

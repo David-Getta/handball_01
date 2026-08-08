@@ -4895,3 +4895,65 @@ def covered_shooter_roles(match, config=None) -> dict:
                     "fedezett lövése alacsony értékű, elég a "
                     "blokk-kéz és a mögé rendezett fal")
     return out
+
+
+# Célkereszt-poszt: ennyi poszthoz kötött rá-lövés kell az ítélethez,
+# és ekkora részarány fölött mondjuk ki, hogy az ellenfelek egy
+# posztjuk előtt fejeznek be.
+TGR_MIN_SHOTS = 5
+TGR_SHARE_PCT = 60.0
+
+
+def targeted_defender_roles(match, config=None) -> dict:
+    """Célkereszt-poszt: MELYIK POSZTJUK előtt fejeznek be ellenük.
+
+    A célba vett védő rétege (targeted_defenders) az embert nevezi
+    meg — ez a posztot: a kapott lövéseket a lövőhöz legközelebbi
+    védő (támadó-fázisból becsült) posztjához írja. Így látszik,
+    melyik posztjukat keresik az ellenfelek.
+
+    Edzőileg kollektív felderítés: ha az ellenfelek rendre ugyanannak
+    a posztnak az orra előtt fejeznek be, a minta bevált — a
+    támadásokat oda kell szervezni, az ő védője elé pedig elzárást
+    vinni. Saját csapatra: a célba vett posztunk segítséget kap
+    (mögé a kapus szöge, mellé korai besegítés).
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"shots" (poszthoz
+    kötött rá-lövés), "roles": {poszt: darab}, "main_role",
+    "share_pct", "verdict"} — az ítélet None, ha nincs meg a
+    TGR_MIN_SHOTS, vagy egyik poszt sem éri el a TGR_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+    td = targeted_defenders(match, config)
+
+    out: dict = {side: {"shots": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for side in ("home", "away"):
+        rec = out[side]
+        for row in td[side]["players"]:
+            rec_role = roles[side].get(row["player_id"])
+            if rec_role is None:
+                continue
+            poszt = rec_role["poszt"]
+            rec["roles"][poszt] = (rec["roles"].get(poszt, 0)
+                                   + row["shots"])
+            rec["shots"] += row["shots"]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["shots"] >= TGR_MIN_SHOTS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["shots"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= TGR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"az ellenfelek {share:.0f}%-ban a(z) {poszt} "
+                    f"posztjuk előtt fejeznek be ({rec['shots']} "
+                    "rá-lövésből) — a minta bevált: oda kell "
+                    "szervezni a támadást, a védője elé elzárást")
+    return out

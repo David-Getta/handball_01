@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 353) Célkereszt-poszt: ha az ellenfelek rendre egy posztunk
+    # előtt fejeznek be, oda segítség és elzárás-védés kell.
+    try:
+        from .defense import TGR_SHARE_PCT, targeted_defender_roles
+        tgr353 = targeted_defender_roles(match, config)
+        for side in ("home", "away"):
+            rec353 = tgr353[side]
+            if rec353.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Célkeresztben lévő poszt",
+                f"az ellenfelek {rec353['share_pct']:.0f}%-ban a(z) "
+                f"{rec353['main_role']} posztunk előtt fejeznek be "
+                f"({rec353['shots']} rá-lövésből; "
+                f"{TGR_SHARE_PCT:.0f}% fölött már minta) — a "
+                "következő ellenfél is oda fogja szervezni a "
+                "támadását",
+                "segítség a célba vett posztnak: korai besegítés a "
+                "sávjába, elzárás-védés (átcsúszás-váltás) "
+                "gyakorlása, és a kapus szög-igazítása az ő "
+                "zónájára",
+                )
+    except Exception:
+        pass
+
     # 352) Fedezett-lövő poszt: ha egy posztunk fedezetten is lő, a
     # lövés-szelekció az edzés-téma.
     try:

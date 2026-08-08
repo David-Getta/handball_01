@@ -1857,6 +1857,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                               covered_shooter_roles,
                               fading_defender_roles,
                               pivot_guard_roles,
+                              targeted_defender_roles,
                               tired_conceder_roles,
                               blocked_shooter_roles,
                               doubled_target_roles,
@@ -1987,7 +1988,8 @@ def _match_report_html_cached(match, tactics: dict, events: list,
             ("Kilépő-poszt", advanced_defender_roles),
             ("Beállóőr-poszt", pivot_guard_roles),
             ("Fáradt-fal poszt", tired_conceder_roles),
-            ("Védőmotor-poszt", fading_defender_roles)))
+            ("Védőmotor-poszt", fading_defender_roles),
+            ("Célkereszt-poszt", targeted_defender_roles)))
         if def_rows:
             defense_lens_html = (
                 "<h2>Védő-lencse (hol sebezhető a védekezésük)</h2>"
