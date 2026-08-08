@@ -2168,6 +2168,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest (3+ gól
+  // nélküli hetes, 60% részarány — a backenddel azonos küszöbök:
+  // SVM_MIN_MISSES, SVM_SHARE_PCT).
+  String? _sevenMissRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["svm_misses_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kihagyott heteseik ${pct.round()}%-a a(z) $top "
+        "posztjukhoz kötődik ($total gól nélküli hetes) · ha ő áll "
+        "oda, a kapus mehet a saját megérzésére";
+  }
+
   // Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül (4+
   // terméketlen támadás, 60% részarány — a backenddel azonos
   // küszöbök: LST_MIN_ATTACKS, LST_SHARE_PCT).
@@ -9303,6 +9330,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lepattanó-poszt", _reboundRole(r)!],
       if (_bigChanceFeederRole(r) != null)
         ["Ziccer-előkészítő poszt", _bigChanceFeederRole(r)!],
+      if (_sevenMissRole(r) != null)
+        ["Hetes-kihagyó poszt", _sevenMissRole(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

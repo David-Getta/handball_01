@@ -2037,3 +2037,54 @@ def test_powerplay_pair_roles_silent_with_few_shots():
 
     rec = powerplay_pair_roles(_ppp_match([(1, 7), (1, 9)]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+# ---- Hetes-kihagyó poszt -----------------------------------------------------
+
+def _svm_match(n_miss, fps=25.0):
+    """`n_miss` gól nélküli hazai hetes ugyanattól a dobótól (1-es), plusz
+    egy birtoklás-előjáték, hogy a poszt-becslés mintaszáma meglegyen."""
+    frames = []
+    t = 0
+    for _ in range(150):   # előjáték: labdás támadó a 11 m-es körzetben
+        frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 28.0, 10.0)],
+                            ball=Ball(x=29.0, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(n_miss):
+        for _ in range(30):    # álló labda a 7 m-es ponton
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        for i in range(7):     # a lövés mellé megy (y=5)
+            frames.append(Frame(t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                                ball=Ball(x=min(34.0 + i, 40.0), y=5.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(300):   # 12 mp szünet (hetes-debounce)
+            frames.append(Frame(t=t + i, players=[],
+                                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+        t += 300
+    return Match(_meta(fps), frames)
+
+
+def test_seven_miss_roles_finds_the_missing_post():
+    """Három gól nélküli hetes ugyanattól a dobótól → az ő posztja
+    adja a kihagyások 100%-át, ítélettel."""
+    from handball.pipeline.rules import seven_miss_roles
+
+    rec = seven_miss_roles(_svm_match(3))["home"]
+    assert rec["misses"] == 3
+    assert rec["main_role"] is not None
+    assert rec["roles"][rec["main_role"]] == 3
+    assert rec["share_pct"] == 100.0
+    assert rec["verdict"] and "hetes" in rec["verdict"]
+
+
+def test_seven_miss_roles_needs_enough_misses():
+    """Két kihagyás még kevés: az ítélet None, a darabszám viszont látszik."""
+    from handball.pipeline.rules import seven_miss_roles
+
+    rec = seven_miss_roles(_svm_match(2))["home"]
+    assert rec["misses"] == 2
+    assert rec["verdict"] is None and rec["main_role"] is None
+    assert seven_miss_roles(_svm_match(2))["away"]["misses"] == 0

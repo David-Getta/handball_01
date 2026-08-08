@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 373) Hetes-kihagyó poszt: ha a kihagyott heteseink egy poszthoz
+    # kötődnek, a hetes-sorrend és a rutin a téma.
+    try:
+        from .rules import SVM_SHARE_PCT, seven_miss_roles
+        svm373 = seven_miss_roles(match, config)
+        for side in ("home", "away"):
+            rec373 = svm373[side]
+            if rec373.get("verdict") is None:
+                continue
+            add(side, "befejezés", "Hetes-rutin a kihagyó posztnál",
+                f"a kihagyott heteseink {rec373['share_pct']:.0f}%-a "
+                f"a(z) {rec373['main_role']} posztunkhoz kötődik "
+                f"({rec373['misses']} gól nélküli hetesből; "
+                f"{SVM_SHARE_PCT:.0f}% fölött már minta) — a "
+                "hetes nálunk nem automatikus gól, pedig annak "
+                "kellene lennie",
+                "hetes-rutin fáradtan: sorozat után 10 hetes "
+                "kapusra, előre bejelentett sarokkal; és jelöljünk "
+                "ki második dobót — a hetest a napi forma döntse el, "
+                "ne a megszokás",
+                )
+    except Exception:
+        pass
+
     # 372) Ziccer-előkészítő poszt: ha a ziccereinket egy poszt
     # teremti, a kiesésével a helyzeteink is eltűnnek.
     try:

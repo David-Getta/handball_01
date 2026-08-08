@@ -2307,3 +2307,73 @@ def powerplay_pair_roles(match: Match,
                     " az előkészítő passzsávját a fal széle zárja, a"
                     " befejezőre jusson a kilépés")
     return out
+
+
+# Hetes-kihagyó poszt: ennyi poszthoz kötött, gól nélkül záruló
+# hetes kell az ítélethez, és ekkora részarány fölött mondjuk ki,
+# hogy a kihagyott heteseik egy posztra sűrűsödnek.
+SVM_MIN_MISSES = 3
+SVM_SHARE_PCT = 60.0
+
+
+def seven_miss_roles(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-kihagyó poszt: MELYIK POSZTJUK hibázza el a hetest.
+
+    A hetesdobó-poszt azt mondja meg, ki áll oda — ez azt, ki hibáz:
+    a felismert hétméteresek közül a gól NÉLKÜL zárulókat (védés
+    vagy mellé) a dobó posztjához írja.
+
+    Edzőileg ez a kapus felkészítésének második fele: ha a
+    kihagyásaik egy posztra sűrűsödnek, a kapus tudja, melyik dobó
+    ellen érdemes a saját megérzésére hagyatkozni (kimozdulás,
+    késleltetett vetődés) — nála a hetes nem automatikus gól. Saját
+    csapatra: a kihagyó poszt hetes-gyakorlása és a második dobó
+    kijelölése a téma.
+
+    Visszatérés csapatonként: {"misses" (poszthoz kötött kihagyott
+    hetes), "roles": {poszt: darab}, "main_role", "share_pct",
+    "verdict"} — az ítélet None, ha nincs meg az SVM_MIN_MISSES,
+    vagy egyik poszt sem éri el az SVM_SHARE_PCT-t.
+    """
+    from .roles import estimate_positions
+
+    config = config or TacticsConfig()
+    roles = estimate_positions(match, config)
+
+    out: dict = {side: {"misses": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None or sm.get("outcome") == "gól":
+            continue
+        if sm.get("outcome") in (None, "ismeretlen"):
+            continue   # nem mérhető kimenetel: nem számoljuk hibának
+        side = sm["team"]
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["misses"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["misses"] >= SVM_MIN_MISSES:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["misses"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= SVM_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kihagyott heteseik {share:.0f}%-a a(z) "
+                    f"{poszt} posztjukhoz kötődik ({rec['misses']} "
+                    "gól nélküli hetesből) — ellene a kapus a saját "
+                    "megérzésére hagyatkozhat (kimozdulás, "
+                    "késleltetett vetődés): nála a hetes nem "
+                    "automatikus gól")
+    return out

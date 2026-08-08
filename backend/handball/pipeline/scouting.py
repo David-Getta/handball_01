@@ -1029,6 +1029,9 @@ class ScoutingReport:
     # passzok darabszáma a PASSZOLÓ posztja szerint. Darabszám,
     # pontosan összegződik.
     bcf_chances_by_role: dict = field(default_factory=dict)
+    # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
+    # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
+    svm_misses_by_role: dict = field(default_factory=dict)
     tof_timeouts: int = 0
     tof_shots_by_role: dict = field(default_factory=dict)
     spf_figures: int = 0
@@ -4065,6 +4068,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Hetes-kihagyó poszt: a kapus hetes-felkészítése.
+    _svm_n = sum(rep.svm_misses_by_role.values())
+    if _svm_n >= 3:
+        _svm_p, _svm_c = max(rep.svm_misses_by_role.items(),
+                             key=lambda kv: kv[1])
+        _svm_pct = 100.0 * _svm_c / _svm_n
+        if _svm_pct >= 60.0:
+            keys.append(
+                f"A kihagyott heteseik {_svm_pct:.0f}%-a a(z) "
+                f"{_svm_p} posztjukhoz kötődik ({_svm_n} gól nélküli "
+                "hetes) — ha ő áll oda, a kapusotok mehet a saját "
+                "megérzésére (kimozdulás, késleltetett vetődés): "
+                "nála a hetes nem automatikus gól.")
 
     # Hajrá-poszt: az utolsó öt perc terve.
     _csr_n = sum(rep.csr_goals_by_role.values())
@@ -9022,6 +9039,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .xg import big_chance_feeder_roles as _bcf
         bcfrec = _bcf(match, config)[team.value]
         rep.bcf_chances_by_role = dict(bcfrec["roles"])
+        from .rules import seven_miss_roles as _svm
+        svmrec = _svm(match, config)[team.value]
+        rep.svm_misses_by_role = dict(svmrec["roles"])
         from .defense import recovery_roles as _rcr
         rcrrec = _rcr(match, config)[team.value]
         rep.rcr_frames_by_role = {
@@ -11614,6 +11634,25 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 352) Az ő hetes-kihagyó posztjuk × a ti kapusotok: ha ő áll
+    # oda, a kapus mehet a saját megérzésére.
+    _svm352_n = sum(opp.svm_misses_by_role.values())
+    if _svm352_n >= 3 and own.gk_on_target >= 5:
+        _svm352_p, _svm352_c = max(opp.svm_misses_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _svm352_pct = 100.0 * _svm352_c / _svm352_n
+        _svm352_gk = 100.0 * own.gk_saves / own.gk_on_target
+        if _svm352_pct >= 60.0:
+            plan.append(
+                f"A kihagyott heteseik {_svm352_pct:.0f}%-a a(z) "
+                f"{_svm352_p} posztjukhoz kötődik ({_svm352_n} gól "
+                "nélküli hetes), a ti kapusotok pedig fog "
+                f"({_svm352_gk:.0f}% védés, {own.gk_saves}/"
+                f"{own.gk_on_target}) — ha ő áll a hetesnél, a kapus "
+                "menjen a saját megérzésére (kimozdulás, késleltetett "
+                "vetődés): nála a hetes nem automatikus gól, "
+                "megéri kockáztatni.")
 
     # 351) Az ő ziccer-előkészítő posztjuk × a ti kilépő faltok: a
     # bejátszó-sáv elvágásával a helyzet ki sem alakul.
@@ -17760,6 +17799,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.lst_attacks_by_role for r in reports),
         bcf_chances_by_role=_merge_count_dicts(
             r.bcf_chances_by_role for r in reports),
+        svm_misses_by_role=_merge_count_dicts(
+            r.svm_misses_by_role for r in reports),
         rcr_frames_by_role=_merge_count_dicts(
             r.rcr_frames_by_role for r in reports),
         rcr_home_by_role=_merge_count_dicts(

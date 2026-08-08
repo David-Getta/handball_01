@@ -3761,6 +3761,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import seven_miss_roles
+            res["seven_miss_roles"] = seven_miss_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5466,6 +5471,9 @@ def create_app():
                 from ..pipeline.xg import big_chance_feeder_roles
                 _layer("big_chance_feeder_roles",
                        lambda: big_chance_feeder_roles(match))
+                from ..pipeline.rules import seven_miss_roles
+                _layer("seven_miss_roles",
+                       lambda: seven_miss_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

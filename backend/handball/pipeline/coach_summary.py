@@ -931,6 +931,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "bejátszó-sávját kell elvágni.")
     except Exception:
         pass
+    # Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest.
+    try:
+        from .rules import seven_miss_roles
+        svm = seven_miss_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svm = svm[side]
+            if rec_svm["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kihagyott heteseinek "
+                     f"{rec_svm['share_pct']:.0f}%-a a(z) "
+                     f"{rec_svm['main_role']} posztjához kötődik "
+                     f"({rec_svm['misses']} gól nélküli hetes) — "
+                     "ellene a kapus a saját megérzésére "
+                     "hagyatkozhat.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

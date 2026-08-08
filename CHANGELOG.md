@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Hetes-kihagyó poszt: melyik posztjuk hibázza el a hetest.** A
+  hetesdobó-poszt azt mondja meg, ki áll oda — az új réteg azt, ki
+  hibáz: a felismert hétméteresek közül a gól NÉLKÜL zárulókat
+  (védés vagy mellé) a dobó posztjához írja. Edzőileg ez a kapus
+  felkészítésének második fele: ha a kihagyásaik egy posztra
+  sűrűsödnek, a kapus tudja, melyik dobó ellen érdemes a saját
+  megérzésére hagyatkozni (kimozdulás, késleltetett vetődés) — nála a
+  hetes nem automatikus gól. Saját csapatra a hetes-rutin és a
+  második dobó kijelölése a téma. Legalább 3 gól nélküli hetes és
+  60% posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`seven_miss_roles`), edzői összefoglaló, felderítés
+  (edzői kulcs + 352. meccsterv-szabály), edzés-fókusz (373.
+  szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Ziccer-előkészítő poszt: ki adja a passzt a nagy helyzethez.** A
   ziccer-poszt azt mondja meg, melyik posztnál alakul ki a nagy
   helyzet — az új réteg azt, ki teremti: a nagy helyzet-értékű
