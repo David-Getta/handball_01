@@ -1039,6 +1039,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_rus['base_s']:.1f} mp helyett).")
     except Exception:
         pass
+    # Emberhátrány-hiba poszt: öt emberrel kinél vész el a labda.
+    try:
+        from .rules import shorthanded_turnover_roles
+        sht = shorthanded_turnover_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sht = sht[side]
+            if rec_sht["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hátrányban "
+                     f"{rec_sht['share_pct']:.0f}%-ban a(z) "
+                     f"{rec_sht['main_role']} kezén veszíti el a "
+                     f"labdát ({rec_sht['turnovers']} "
+                     "hátrány-eladás) — a hat az öt ellen az ő "
+                     "fogadására kell menni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

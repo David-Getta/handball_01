@@ -3799,6 +3799,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import shorthanded_turnover_roles
+            res["shorthanded_turnover_roles"] = \
+                shorthanded_turnover_roles(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5524,6 +5530,9 @@ def create_app():
                 from ..pipeline.attack_types import post_goal_rush
                 _layer("post_goal_rush",
                        lambda: post_goal_rush(match))
+                from ..pipeline.rules import shorthanded_turnover_roles
+                _layer("shorthanded_turnover_roles",
+                       lambda: shorthanded_turnover_roles(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

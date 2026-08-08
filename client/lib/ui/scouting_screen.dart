@@ -2168,6 +2168,33 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Emberhátrány-hiba poszt: öt emberrel kinek a kezén vész el a
+  // labdájuk (3+ hátrány-eladás, 60% részarány — a backenddel
+  // azonos küszöbök: SHT_MIN_TURNOVERS, SHT_SHARE_PCT).
+  String? _shorthandedTurnoverRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["sht_turnovers_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "hátrányban ${pct.round()}%-ban a(z) $top kezén vész el a "
+        "labdájuk ($total hátrány-eladás) · a hat az öt ellen az ő "
+        "fogadására menjetek";
+  }
+
   // Kapkodás-index: kapott gól után rövidül vagy nyúlik a támadásuk
   // (3+ válasz-támadás, 4+ alap-támadás, 3 mp eltérés — a
   // backenddel azonos küszöbök: RUS_MIN_ATTACKS, RUS_MIN_BASE,
@@ -9493,6 +9520,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszaállás-idő", _retreatTime(r)!],
       if (_postGoalRush(r) != null)
         ["Kapkodás-index", _postGoalRush(r)!],
+      if (_shorthandedTurnoverRole(r) != null)
+        ["Emberhátrány-hiba poszt", _shorthandedTurnoverRole(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

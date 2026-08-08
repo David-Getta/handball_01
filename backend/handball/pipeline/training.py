@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 380) Emberhátrány-hiba poszt: öt emberrel egy elvesztett
+    # labda azonnal gólt ér.
+    try:
+        from .rules import (SHT_SHARE_PCT, shorthanded_turnover_roles)
+        sht380 = shorthanded_turnover_roles(match, config)
+        for side in ("home", "away"):
+            rec380 = sht380[side]
+            if rec380.get("verdict") is None:
+                continue
+            add(side, "támadás", "Öt emberrel biztos labda",
+                f"hátrányban {rec380['share_pct']:.0f}%-ban a(z) "
+                f"{rec380['main_role']} kezén vész el a labdánk "
+                f"({rec380['turnovers']} hátrány-eladásból; "
+                f"{SHT_SHARE_PCT:.0f}% fölött már minta) — öt "
+                "emberrel minden elvesztett labda üres kaput ér az "
+                "ellenfélnek",
+                "hátrány-figura kockázat nélkül: kijelölt "
+                "labdatartó, tiltott bejátszás-sávok, és "
+                "időhúzó-játék 5-6 ellen edzésen (a cél nem a gól, "
+                "hanem a két perc túlélése labdavesztés nélkül)",
+                )
+    except Exception:
+        pass
+
     # 379) Kapkodás-index: ha a kapott gól után elsietjük a
     # támadást, a hátrányból sorozat lesz.
     try:

@@ -2146,3 +2146,70 @@ def test_powerplay_turnover_roles_silent_with_few_turnovers():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
     assert powerplay_turnover_roles(
         _ppt_match([7, 9]))["away"]["turnovers"] == 0
+
+
+# ---- Emberhátrány-hiba poszt -------------------------------------------------
+
+def _sht_match(losers, fps=25.0):
+    """A HAZAI van emberhátrányban (öt mezőnyjátékos); a `losers`
+    elemei adják, kinél vész el a labda. A 7-es beálló (33, 10), a
+    9-es szélső (35, 3) — ők ketten a hazai ötből."""
+    spos = {7: (33.0, 10.0), 9: (35.0, 3.0)}
+    frames = []
+    t = 0
+
+    def _cast(home_extra=True):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(3 if home_extra else 4)]
+        if home_extra:
+            players += [_pl(tid, Team.HOME, *xy)
+                        for tid, xy in spos.items()]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(6)]
+        return players
+
+    def _hold(n, ball, home_extra=True):
+        nonlocal t, frames
+        for _ in range(n):
+            frames.append(Frame(t=t, players=_cast(home_extra),
+                                ball=Ball(x=ball[0], y=ball[1],
+                                          confidence=1.0)))
+            t += 1
+
+    # Teljes létszám: a hazai hatodik ember is a pályán (nincs ablak).
+    for _ in range(int(20.0 * fps)):
+        players = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+                   for k in range(4)]
+        players += [_pl(tid, Team.HOME, *xy) for tid, xy in spos.items()]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(6)]
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=20.0, y=9.0, confidence=1.0)))
+        t += 1
+    for loser in losers:                 # az emberhátrány (5 a 6 ellen)
+        lx, ly = spos[loser]
+        _hold(int(14.0 * fps), (lx + 0.2, ly))
+        _hold(int(1.0 * fps), (25.0, 4.0))      # elvesztve
+    _hold(int(20.0 * fps), (20.0, 9.0), home_extra=False)
+    return Match(_meta(fps), frames)
+
+
+def test_shorthanded_turnover_roles_names_the_leaking_post():
+    """Ha hátrányban rendre ugyanannak a kezén vész el a labda, a
+    hat az öt ellen az ő fogadására kell menni."""
+    from handball.pipeline.rules import (SHT_MIN_TURNOVERS,
+                                         shorthanded_turnover_roles)
+
+    rec = shorthanded_turnover_roles(_sht_match([7, 7, 7, 9]))["home"]
+    assert rec["turnovers"] >= SHT_MIN_TURNOVERS, rec
+    assert rec["main_role"] == "beálló", rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "üres kapura" in rec["verdict"], rec
+
+
+def test_shorthanded_turnover_roles_silent_with_few_turnovers():
+    """Két hátrány-eladásból még nincs ítélet."""
+    from handball.pipeline.rules import shorthanded_turnover_roles
+
+    rec = shorthanded_turnover_roles(_sht_match([7, 9]))["home"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Emberhátrány-hiba poszt: a hátrányban elkövetett labdaeladások
+    # darabszáma a VESZTES posztja szerint. Darabszám, pontosan
+    # összegződik.
+    sht_turnovers_by_role: dict = field(default_factory=dict)
     # Kapkodás-index: a kapott gól utáni ("válasz") és a többi
     # támadás darabszáma + hosszuk ÖSSZEGE (mp) — darabszám/összeg,
     # hogy meccsek közt pontosan összegződjön (átlag = sum / db).
@@ -4097,6 +4101,20 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Emberhátrány-hiba poszt: az emberelőnyünk célpontja.
+    _sht_n = sum(rep.sht_turnovers_by_role.values())
+    if _sht_n >= 3:
+        _sht_p, _sht_c = max(rep.sht_turnovers_by_role.items(),
+                             key=lambda kv: kv[1])
+        _sht_pct = 100.0 * _sht_c / _sht_n
+        if _sht_pct >= 60.0:
+            keys.append(
+                f"Hátrányban {_sht_pct:.0f}%-ban a(z) {_sht_p} kezén "
+                f"vész el a labdájuk ({_sht_n} hátrány-eladás) — a "
+                "hat az öt ellen az ő fogadására menjetek (kilépő "
+                "védő, passzsáv-zárás): az elvett labdából üres "
+                "kapura indulhat a kontra.")
 
     # Kapkodás-index: a saját gólunk utáni terv egy mondata.
     if rep.rus_after >= 3 and rep.rus_base >= 4:
@@ -9169,6 +9187,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .rules import shorthanded_turnover_roles as _sht
+        shtrec = _sht(match, config)[team.value]
+        rep.sht_turnovers_by_role = dict(shtrec["roles"])
         from .attack_types import post_goal_rush as _rus
         rusrec = _rus(match, config)[team.value]
         rep.rus_after = int(rusrec["after"])
@@ -11775,6 +11796,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 359) Az ő emberhátrány-hiba posztjuk × a ti
+    # emberelőny-játékotok: a két perc alatt elvett labda üres kapu.
+    _sht359_n = sum(opp.sht_turnovers_by_role.values())
+    if _sht359_n >= 3 and own.pp_shots >= 3:
+        _sht359_p, _sht359_c = max(opp.sht_turnovers_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _sht359_pct = 100.0 * _sht359_c / _sht359_n
+        if _sht359_pct >= 60.0:
+            plan.append(
+                f"Hátrányban {_sht359_pct:.0f}%-ban a(z) "
+                f"{_sht359_p} kezén vész el a labdájuk "
+                f"({_sht359_n} hátrány-eladás), ti pedig "
+                f"emberelőnyben is játszotok ({own.pp_shots} "
+                "emberelőny-lövés) — a hat az öt ellen ne csak "
+                "körbejárassátok: az ő fogadására lépjen ki a "
+                "védőtök, mert az elvett labda üres kaput ér.")
 
     # 358) Az ő kapkodásuk × a ti gólerősségetek: minden gólotok
     # után jön egy elsietett támadásuk.
@@ -18052,6 +18090,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        sht_turnovers_by_role=_merge_count_dicts(
+            r.sht_turnovers_by_role for r in reports),
         rus_after=sum(r.rus_after for r in reports),
         rus_after_sum_s=round(sum(r.rus_after_sum_s for r in reports), 1),
         rus_base=sum(r.rus_base for r in reports),

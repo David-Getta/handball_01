@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Emberhátrány-hiba poszt: öt emberrel kinek a kezén vész el a
+  labdájuk.** Az emberhátrány-poszt azt mondja meg, ki vállalja a
+  befejezést öt emberrel — az új réteg a párja: a kiállítás-
+  ablakokban, emberhátrányban elkövetett labdaeladásokat a vesztes
+  posztjához írja (az emberelőny-hiba poszt a két percet előnyből
+  nézi, ez hátrányból, ahol egy elvesztett labda azonnal gólt ér).
+  Edzőileg ez az emberelőny-játékunk célpontja: a hat az öt ellen az
+  ő fogadására kell menni, mert az elvett labdából üres kapura
+  indulhat a kontra. Legalább 3 hátrány-eladás és 60%
+  posztrészarány alatt hallgat (None). Felületek: /analyze +
+  meccs-csomag (`shorthanded_turnover_roles`), edzői összefoglaló,
+  felderítés (edzői kulcs + 359. meccsterv-szabály), edzés-fókusz
+  (380. szabály), HTML-riport (Befejező-lencse sor), Kulcs-poszt
+  bizonyíték-réteg, kliens-csempe.
 - **Kapkodás-index: kapott gól után rövidül vagy nyúlik a
   támadásuk.** A válasz-poszt és a válaszhiba-poszt embert nevez meg
   — az új réteg a tempót: a kapott gólt egy percen belül követő
