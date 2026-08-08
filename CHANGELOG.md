@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Válasz-poszt: kapott gól után melyik posztjuk válaszol.** A
+  kapott gól utáni megingás csapat-szinten mondja meg, mi történik a
+  bekapott gól után — az új réteg a posztot: a kapott gólt 60
+  másodpercen belül követő saját gólokat a lövő posztjához írja.
+  Edzőileg a gól utáni első védekezés terve: ha a válaszuk rendre
+  ugyanarról a posztról jön, a saját gólunk után azonnal az ő
+  fogására kell váltani — ott törik meg a lendületük, mielőtt
+  elindulna. Saját oldalon a B-s válasz-forgatókönyv az edzés-téma.
+  Legalább 3 válasz-gól és 60% posztrészarány alatt hallgat (None).
+  Felületek: /analyze + meccs-csomag (`response_scorer_roles`),
+  edzői összefoglaló, felderítés (edzői kulcs + 345. meccsterv-
+  szabály), edzés-fókusz (366. szabály), HTML-riport (Befejező-
+  lencse sor), Kulcs-poszt bizonyíték-réteg, kliens-csempe.
 - **Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk.** Az
   emberelőny-poszt a befejezőt nevezi meg — az új réteg a tengelyt:
   minden emberelőnyben leadott lövésnél megkeresi a lövő felé menő

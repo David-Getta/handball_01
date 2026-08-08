@@ -916,6 +916,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "csak biztonsági passz mehet.")
     except Exception:
         pass
+    # Válasz-poszt: kapott gól után melyik posztjuk válaszol.
+    try:
+        from .momentum import response_scorer_roles
+        rsp = response_scorer_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rsp = rsp[side]
+            if rec_rsp["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapott gól után a(z) "
+                     f"{rec_rsp['main_role']} posztjával válaszol "
+                     f"({rec_rsp['share_pct']:.0f}%, "
+                     f"{rec_rsp['goals']} válasz-gólból) — a saját "
+                     "gólunk után azonnal őt kell fogni.")
+    except Exception:
+        pass
     # Emberelőnypáros-poszt: melyik tengelyen fut a 6-5 játékuk.
     try:
         from .rules import powerplay_pair_roles

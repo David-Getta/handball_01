@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 366) Válasz-poszt: ha a kapott gól utáni válaszunk egy posztra
+    # épül, az ellenfél a saját gólja után azonnal ráállhat.
+    try:
+        from .momentum import RSP_SHARE_PCT, response_scorer_roles
+        rsp366 = response_scorer_roles(match, config)
+        for side in ("home", "away"):
+            rec366 = rsp366[side]
+            if rec366.get("verdict") is None:
+                continue
+            add(side, "támadás", "Egy posztra épülő válasz",
+                f"kapott gól után a válasz-góljaink "
+                f"{rec366['share_pct']:.0f}%-a a(z) "
+                f"{rec366['main_role']} posztról jön "
+                f"({rec366['goals']} válasz-gólból; "
+                f"{RSP_SHARE_PCT:.0f}% fölött már minta) — az "
+                "ellenfél a saját gólja után azonnal ráállhat",
+                "válasz-forgatókönyv B-vel: a kapott gól utáni első "
+                "támadásra KÉT begyakorolt figura (más-más "
+                "befejezővel), gyors középkezdés mint alapérték, és "
+                "a válasz-emberünk tehermentesítése elzárással",
+                )
+    except Exception:
+        pass
+
     # 365) Emberelőnypáros-poszt: ha a 6-5-ünk egy tengelyen fut, öt
     # emberrel is kiszámíthatók vagyunk.
     try:

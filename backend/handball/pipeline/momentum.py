@@ -2990,3 +2990,84 @@ def lead_scorer_roles(match: Match, config=None) -> dict:
                     "kivétele (szoros fogás, kettőzés) töri meg a "
                     "lendület-tartásukat")
     return out
+
+
+# Válasz-poszt: a kapott gól utáni ennyi másodpercben lőtt gól számít
+# azonnali válasznak; ennyi poszthoz kötött válasz-gól kell az
+# ítélethez, és ekkora részarány fölött mondjuk ki, hogy a válaszuk
+# egy posztra épül.
+RSP_WINDOW_S = 60.0
+RSP_MIN_GOALS = 3
+RSP_SHARE_PCT = 60.0
+
+
+def response_scorer_roles(match: Match, config=None) -> dict:
+    """Válasz-poszt: KAPOTT GÓL UTÁN melyik posztjuk válaszol.
+
+    A kapott gól utáni megingás (post_goal_lapses) csapat-szinten
+    mondja meg, mi történik a bekapott gól után — ez a posztot: a
+    kapott gólt RSP_WINDOW_S másodpercen belül követő SAJÁT gólokat
+    a lövő posztjához írja. Így látszik, kire fut ki a válasz-
+    támadásuk.
+
+    Edzőileg ez a gól utáni első védekezés terve: ha a válaszuk
+    rendre ugyanarról a posztról jön, a saját gólunk után azonnal az
+    ő fogására kell váltani (kiemelt őrzés, korai kettőzés) — a
+    lendületük ott törik meg, ahol elindulna. Saját csapatra: ha a
+    válaszunk egy emberen áll, a bekapott gól után kiszámíthatók
+    vagyunk.
+
+    Visszatérés csapatonként: {"goals" (poszthoz kötött válasz-gól),
+    "roles": {poszt: darab}, "main_role", "share_pct", "verdict"} —
+    az ítélet None, ha nincs meg az RSP_MIN_GOALS, vagy egyik poszt
+    sem éri el az RSP_SHARE_PCT-t.
+    """
+    from .event_detection import EventType, detect_shots
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = RSP_WINDOW_S * fps
+    roles = estimate_positions(match, config)
+
+    goals = [(e.t, e.team.value, e.player_id)
+             for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out: dict = {side: {"goals": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for i, (t, side, pid) in enumerate(goals):
+        if pid is None:
+            continue
+        # Volt-e az ablakon belül ELŐTTE kapott gól?
+        kapott = any(t0 < t and t - t0 <= win and s0 != side
+                     for (t0, s0, _p) in goals[:i])
+        if not kapott:
+            continue
+        rec_role = roles[side].get(pid)
+        if rec_role is None:
+            continue
+        poszt = rec_role["poszt"]
+        rec = out[side]
+        rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+        rec["goals"] += 1
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["goals"] >= RSP_MIN_GOALS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["goals"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RSP_SHARE_PCT:
+                rec["verdict"] = (
+                    f"kapott gól után a(z) {poszt} posztjuk válaszol"
+                    f" ({share:.0f}%, {rec['goals']} válasz-gólból)"
+                    " — a saját gólotok után azonnal az ő fogására "
+                    "váltsatok: ott törik meg a lendületük, mielőtt "
+                    "elindulna")
+    return out
