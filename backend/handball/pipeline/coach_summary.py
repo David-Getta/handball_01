@@ -1084,6 +1084,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"támadás, {rec_spk['figures']} figura).")
     except Exception:
         pass
+    # Lepattanó-szedő poszt: védés után kinél marad a labda.
+    try:
+        from .defense import defensive_rebound_roles
+        rbc = defensive_rebound_roles(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_rbc = rbc[side]
+            if rec_rbc["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kipattanóinak "
+                     f"{rec_rbc['share_pct']:.0f}%-át a(z) "
+                     f"{rec_rbc['main_role']} posztja szedi össze "
+                     f"({rec_rbc['rebounds']} kipattanó) — oda kell "
+                     "küldeni a berobbanó embert.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

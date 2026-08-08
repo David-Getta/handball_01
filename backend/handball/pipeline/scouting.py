@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Lepattanó-szedő poszt: a kapusuk védése után megszerzett
+    # kipattanók darabszáma a SZEDŐ posztja szerint. Darabszám,
+    # pontosan összegződik.
+    rbc_rebounds_by_role: dict = field(default_factory=dict)
     # Figura-koncentráció: a mért támadások és a legnagyobb figura
     # támadásainak darabszáma + a figurák száma. Darabszám, meccsek
     # közt összegződik (arány = top / attacks).
@@ -4114,6 +4118,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Lepattanó-szedő poszt: hova küldjük a berobbanó embert.
+    _rbc_n = sum(rep.rbc_rebounds_by_role.values())
+    if _rbc_n >= 3:
+        _rbc_p, _rbc_c = max(rep.rbc_rebounds_by_role.items(),
+                             key=lambda kv: kv[1])
+        _rbc_pct = 100.0 * _rbc_c / _rbc_n
+        if _rbc_pct >= 60.0:
+            keys.append(
+                f"A kipattanók {_rbc_pct:.0f}%-át a(z) {_rbc_p} "
+                f"posztjuk szedi össze ({_rbc_n} kipattanó) — oda "
+                "küldjétek a berobbanó embert (szélső vagy beálló "
+                "becsúszása): a második lövés a legolcsóbb gól.")
 
     # Figura-koncentráció: mennyire éri meg figurákra készülni.
     if rep.spk_attacks >= 6:
@@ -9237,6 +9254,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .defense import defensive_rebound_roles as _rbc
+        rbcrec = _rbc(match, config)[team.value]
+        rep.rbc_rebounds_by_role = dict(rbcrec["roles"])
         from .setplays import setplay_concentration as _spk
         spkrec = _spk(match, config)[team.value]
         rep.spk_attacks = int(spkrec["attacks"])
@@ -11858,6 +11878,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 362) Az ő lepattanó-szedő posztjuk × a ti lövésszámotok: sok
+    # lövés = sok kipattanó, ha van, aki utánamegy.
+    _rbc362_n = sum(opp.rbc_rebounds_by_role.values())
+    if _rbc362_n >= 3 and own.shots >= 8:
+        _rbc362_p, _rbc362_c = max(opp.rbc_rebounds_by_role.items(),
+                                   key=lambda kv: kv[1])
+        _rbc362_pct = 100.0 * _rbc362_c / _rbc362_n
+        if _rbc362_pct >= 60.0:
+            plan.append(
+                f"A kipattanók {_rbc362_pct:.0f}%-át a(z) "
+                f"{_rbc362_p} posztjuk szedi össze ({_rbc362_n} "
+                f"kipattanó), ti pedig sokat lőttök ({own.shots} "
+                "lövés) — minden lövésnél induljon a berobbanó "
+                "ember az ő zónájába: a második lövés a legolcsóbb "
+                "gól, és a kipattanó nekik nem szabad labda.")
 
     # 361) Az ő figura-koncentrációjuk × a ti védekezés-váltásotok:
     # egy mintára készülni csak akkor éri meg, ha van mire váltani.
@@ -18189,6 +18225,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        rbc_rebounds_by_role=_merge_count_dicts(
+            r.rbc_rebounds_by_role for r in reports),
         spk_attacks=sum(r.spk_attacks for r in reports),
         spk_top=sum(r.spk_top for r in reports),
         spk_figures=sum(r.spk_figures for r in reports),

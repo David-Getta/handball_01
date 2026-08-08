@@ -2168,6 +2168,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Lepattanó-szedő poszt: védés után kinél marad a labda (3+
+  // megszerzett kipattanó, 60% részarány — a backenddel azonos
+  // küszöbök: RBC_MIN_REBOUNDS, RBC_SHARE_PCT).
+  String? _defensiveReboundRole(Map<String, dynamic> r) {
+    final byRole =
+        (r["rbc_rebounds_by_role"] as Map?)?.cast<String, dynamic>();
+    if (byRole == null || byRole.isEmpty) return null;
+    var total = 0;
+    byRole.forEach((k, v) => total += (v as num).toInt());
+    if (total < 3) return null;
+    String? top;
+    var topN = 0;
+    byRole.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null) return null;
+    final pct = 100.0 * topN / total;
+    if (pct < 60.0) return null;
+    return "a kipattanók ${pct.round()}%-át a(z) $top posztjuk szedi "
+        "össze ($total kipattanó) · oda küldjétek a berobbanó embert";
+  }
+
   // Figura-koncentráció: egy figurára épül-e a támadójátékuk (6+
   // mért támadás; 40% fölött egy mintára készülni éri meg, 25%
   // alatt elvekre kell — a backenddel azonos küszöbök:
@@ -9573,6 +9599,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hajrá-kapus", _clutchKeeper(r)!],
       if (_setplayConcentration(r) != null)
         ["Figura-koncentráció", _setplayConcentration(r)!],
+      if (_defensiveReboundRole(r) != null)
+        ["Lepattanó-szedő poszt", _defensiveReboundRole(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

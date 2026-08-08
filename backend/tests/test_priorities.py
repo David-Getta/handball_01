@@ -148,7 +148,8 @@ def test_a_poszt_lencse_eljut_a_rangsorba():
                   "powerplay_turnover_roles",
                   "response_turnover_roles",
                   "timeout_turnover_roles",
-                  "shorthanded_turnover_roles"):
+                  "shorthanded_turnover_roles",
+                  "defensive_rebound_roles"):
         assert layer in names, f"{layer} nincs a rangsorban"
 
 

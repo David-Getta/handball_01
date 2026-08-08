@@ -3923,3 +3923,117 @@ def test_retreat_time_silent_when_the_wall_is_quick():
     assert rec["shots"] >= 4, rec
     assert rec["avg_s"] is not None and rec["avg_s"] < 8.0, rec
     assert rec["verdict"] is None, rec
+
+
+# ---- Lepattanó-szedő poszt (védés után kinél marad a labda) ----------------
+
+
+_RBC_AWAY = {30: (6.0, 10.0), 31: (5.0, 3.0)}     # támadó-fázisbeli helyük
+_RBC_BACK = {30: (35.0, 6.0), 31: (35.0, 14.0)}   # a kipattanó-zónában
+
+
+def _rbc_match(collectors, fps=25.0):
+    """A HAZAI lő, a vendég kapus véd, majd a `collectors` szerinti
+    vendég védő szedi össze a kipattanót. Az elején vendég-birtoklás,
+    hogy a poszt-becslésnek legyen mintája."""
+    frames = []
+    t = 0
+
+    def _away_cast(positions):
+        return [_pl(tid, Team.AWAY, *xy) for tid, xy in positions.items()]
+
+    for _ in range(200):          # poszt-minta: vendég-támadás elöl
+        players = _away_cast(_RBC_AWAY)
+        frames.append(Frame(t=t, players=players,
+                            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for tid in collectors:
+        gk = _pl(99, Team.AWAY, 39.2, 10.0, role="kapus")
+        for i in range(9):        # hazai lövés, a kapus véd (38,6-ig)
+            players = [_pl(1, Team.HOME, 33.0, 10.0), gk]
+            players += _away_cast(_RBC_BACK)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 38.6), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        cx, cy = _RBC_BACK[tid]
+        for _ in range(20):       # a kipattanó a szedő kezében
+            players = [_pl(1, Team.HOME, 33.0, 10.0), gk]
+            players += _away_cast(_RBC_BACK)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=cx + 0.2, y=cy,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):       # szabad labda: a következő lövésig
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=18.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_defensive_rebound_roles_names_the_collector():
+    """Ha a kipattanókat rendre ugyanaz a posztjuk szedi, oda kell
+    küldeni a berobbanó embert."""
+    from handball.pipeline.defense import (RBC_MIN_REBOUNDS,
+                                           defensive_rebound_roles)
+
+    rec = defensive_rebound_roles(_rbc_match([30, 30, 30, 31]))["away"]
+    assert rec["rebounds"] >= RBC_MIN_REBOUNDS, rec
+    assert rec["main_role"] is not None, rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "berobbanó embert" in rec["verdict"], rec
+
+
+def _rbc_caught_match(n, fps=25.0):
+    """Mint az _rbc_match, de a kapus MEGFOGJA a labdát (több mint egy
+    másodpercig nála van) — nincs kipattanó, nincs mit szedni."""
+    frames = []
+    t = 0
+
+    def _away_cast(positions):
+        return [_pl(tid, Team.AWAY, *xy) for tid, xy in positions.items()]
+
+    for _ in range(200):
+        frames.append(Frame(t=t, players=_away_cast(_RBC_AWAY),
+                            ball=Ball(x=6.2, y=10.0, confidence=1.0)))
+        t += 1
+    for _ in range(n):
+        gk = _pl(99, Team.AWAY, 39.2, 10.0, role="kapus")
+        for i in range(9):
+            players = [_pl(1, Team.HOME, 33.0, 10.0), gk]
+            players += _away_cast(_RBC_BACK)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=min(34.0 + i, 38.6), y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(50):       # a kapus két másodpercig tartja
+            players = [_pl(1, Team.HOME, 33.0, 10.0), gk]
+            players += _away_cast(_RBC_BACK)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=39.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=18.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_defensive_rebound_roles_ignores_caught_balls():
+    """Ha a kapus megfogja a labdát, nincs kipattanó — a réteg nem
+    ír jóvá semmit senkinek."""
+    from handball.pipeline.defense import defensive_rebound_roles
+
+    rec = defensive_rebound_roles(_rbc_caught_match(4))["away"]
+    assert rec["rebounds"] == 0 and rec["verdict"] is None, rec
+
+
+def test_defensive_rebound_roles_silent_with_few_rebounds():
+    """Két megszerzett kipattanóból még nincs ítélet."""
+    from handball.pipeline.defense import defensive_rebound_roles
+
+    rec = defensive_rebound_roles(_rbc_match([30, 31]))["away"]
+    assert rec["main_role"] is None and rec["verdict"] is None, rec

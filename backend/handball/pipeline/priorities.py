@@ -283,6 +283,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "gk_clutch_saves"),
         ("felkészülés", "Figura-koncentráció", "setplays",
          "setplay_concentration"),
+        ("felkészülés", "Lepattanó-szedő poszt", "defense",
+         "defensive_rebound_roles"),
     ]
 
 
@@ -432,6 +434,7 @@ KP_LAYERS: tuple = (
     ("Időkérés-hiba poszt", "stoppages", "timeout_turnover_roles"),
     ("Emberhátrány-hiba poszt", "rules",
      "shorthanded_turnover_roles"),
+    ("Lepattanó-szedő poszt", "defense", "defensive_rebound_roles"),
 )
 
 

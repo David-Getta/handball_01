@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **409 réteg**, modulonként csoportosítva; a
+Összesen **410 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (83)
@@ -117,7 +117,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `support_distance` | Támogatás-távolság (izoláció-jel): milyen messze van a labdás |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (74)
+## defense (75)
 
 | Réteg | Mit mér |
 |---|---|
@@ -148,6 +148,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `defense_setup_time` | Falépítés-idő: MENNYI IDŐ ALATT ÁLL FEL a faluk. |
 | `defensive_aggression` | Védekezés-keménység: MENNYI BÜNTETÉST hoz a faluk. |
 | `defensive_line_height` | Védekezési vonal magassága: milyen mélyen vagy magasan áll a fal. |
+| `defensive_rebound_roles` | Lepattanó-szedő poszt: VÉDÉS UTÁN kinél marad a labda. |
 | `defensive_shift_lag` | Fal-csúszás késése: MILYEN GYORSAN igazodik a faluk az |
 | `defensive_width` | Védelmi tömörség (fal-szélesség): milyen szélesen áll a védőfal. |
 | `double_punishment` | Kettőzés-büntetés: MÖGÉ BETALÁLNAK-E a kettőzésüknek. |

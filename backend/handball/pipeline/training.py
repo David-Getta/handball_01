@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 383) Lepattanó-szedő poszt: ha a kipattanókat mindig ugyanaz
+    # szedi, a többiek nem indulnak el.
+    try:
+        from .defense import (RBC_SHARE_PCT, defensive_rebound_roles)
+        rbc383 = defensive_rebound_roles(match, config)
+        for side in ("home", "away"):
+            rec383 = rbc383[side]
+            if rec383.get("verdict") is None:
+                continue
+            add(side, "védekezés", "Kipattanó-felelősség",
+                f"a kipattanók {rec383['share_pct']:.0f}%-át a(z) "
+                f"{rec383['main_role']} posztunk szedi össze "
+                f"({rec383['rebounds']} kipattanóból; "
+                f"{RBC_SHARE_PCT:.0f}% fölött már minta) — a többiek "
+                "nem indulnak el a labdára, így az ellenfél "
+                "berobbanó embere elviszi a második helyzetet",
+                "kipattanó-játék a kapussal: védés után kijelölt "
+                "zónák (rövid sarok, hosszú sarok, kilenc méter), és "
+                "minden védés után hangos jelre indulás — edzésen "
+                "sorozatlövés kipattanó-küzdelemmel",
+                )
+    except Exception:
+        pass
+
     # 382) Figura-koncentráció: ha a támadásaink egyetlen mintából
     # jönnek, egy jó felkészülés kifog minket.
     try:

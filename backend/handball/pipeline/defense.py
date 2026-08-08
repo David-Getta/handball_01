@@ -5286,3 +5286,102 @@ def retreat_time(match, config=None) -> dict:
                 "fölött) — a kapusnak azonnal indítania kell: az "
                 "első hullám még üres pályát talál")
     return out
+
+
+# Lepattanó-szedő poszt küszöbei: a védés utáni ablak, ennyi
+# poszthoz kötött megszerzett kipattanó kell az ítélethez, és ekkora
+# részarány a vezető posztnak.
+RBC_WINDOW_S = 4.0
+RBC_MIN_REBOUNDS = 3
+RBC_SHARE_PCT = 60.0
+# A kapus ennyi ideig lehet a labdánál: ez a hárítás pillanata. Ennél
+# hosszabb tartás már FOGÁS (nincs kipattanó, nincs mit szedni).
+RBC_GK_HOLD_S = 1.0
+
+
+def defensive_rebound_roles(match, config=None) -> dict:
+    """Lepattanó-szedő poszt: VÉDÉS UTÁN kinél marad a labda.
+
+    A kapus-kipattanó (gk_rebound_control) azt mondja meg, fogja-e a
+    kapus a labdát, a lepattanó-poszt (second_chance_roles) azt, ki lő
+    másodszor — ez a védekező oldalt: a kapusuk védése utáni
+    RBC_WINDOW_S-en belül megszerzett kipattanókat a labdát MEGSZERZŐ
+    védőjük posztjához írja.
+
+    Edzőileg ez a második helyzet terve: ha a kipattanókat rendre
+    ugyanaz a posztjuk szedi össze, oda kell küldeni a berobbanó
+    embert (a szélső vagy a beálló becsúszása a kipattanó-zónába) —
+    a második lövés a legolcsóbb gól. Saját csapatra: a
+    kipattanó-felelősség kiosztható feladat, nem véletlen.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"rebounds"
+    (poszthoz kötött szerzett kipattanó), "roles": {poszt: darab},
+    "main_role", "share_pct", "verdict"} — az ítélet None, ha nincs
+    meg a RBC_MIN_REBOUNDS, vagy egyik poszt sem éri el a
+    RBC_SHARE_PCT-t.
+    """
+    from .decisions import ball_holder
+    from .roles import estimate_positions
+    from .tactics import TacticsConfig
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = round(RBC_WINDOW_S * fps)
+    gk_hold = round(RBC_GK_HOLD_S * fps)
+    roles = estimate_positions(match, config)
+    frames_by_t = {f.t: f for f in match.frames}
+    times = sorted(frames_by_t)
+    xg = match_xg(match, config)
+
+    out: dict = {side: {"rebounds": 0, "roles": {}, "main_role": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sh in xg["shots"]:
+        if sh["outcome"] != "save":
+            continue
+        # A VÉDEKEZŐ oldal a lövő ellenfele.
+        side = "away" if sh["team"] == "home" else "home"
+        gk_frames = 0
+        for t in times:
+            if t <= sh["t"]:
+                continue
+            if t > sh["t"] + win:
+                break
+            holder = ball_holder(frames_by_t[t], config)
+            if holder is None:
+                continue
+            if holder.team.value != side:
+                break   # a támadó szerezte vissza a labdát
+            if holder.role == "kapus":
+                # A hárítás pillanata: a kapus még a labdánál van.
+                gk_frames += 1
+                if gk_frames > gk_hold:
+                    break   # nem kipattanó, hanem fogás
+                continue
+            rec_role = roles[side].get(holder.track_id)
+            if rec_role is None:
+                break
+            poszt = rec_role["poszt"]
+            rec = out[side]
+            rec["roles"][poszt] = rec["roles"].get(poszt, 0) + 1
+            rec["rebounds"] += 1
+            break
+
+    for side in ("home", "away"):
+        rec = out[side]
+        rec["roles"] = dict(sorted(rec["roles"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["rebounds"] >= RBC_MIN_REBOUNDS:
+            poszt = max(rec["roles"], key=lambda p: rec["roles"][p])
+            share = 100.0 * rec["roles"][poszt] / rec["rebounds"]
+            rec["main_role"] = poszt
+            rec["share_pct"] = round(share, 1)
+            if share >= RBC_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a kipattanók {share:.0f}%-át a(z) {poszt} "
+                    f"posztjuk szedi össze ({rec['rebounds']} "
+                    "megszerzett kipattanóból) — oda kell küldeni a "
+                    "berobbanó embert: a második lövés a legolcsóbb "
+                    "gól")
+    return out

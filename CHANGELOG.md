@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.24 óta)
 
+- **Lepattanó-szedő poszt: védés után kinél marad a labda.** A
+  kapus-kipattanó azt mondja meg, fogja-e a kapus a labdát, a
+  lepattanó-poszt azt, ki lő másodszor — az új réteg a védekező
+  oldalt: a kapusuk védése utáni négy másodpercben megszerzett
+  kipattanókat a labdát megszerző védőjük posztjához írja (ha a
+  kapus egy másodpercnél tovább tartja, az fogás, nem kipattanó — az
+  ilyen eset nem számít). Edzőileg ez a második helyzet terve: ha a
+  kipattanókat rendre ugyanaz a posztjuk szedi össze, oda kell
+  küldeni a berobbanó embert, mert a második lövés a legolcsóbb gól.
+  Legalább 3 megszerzett kipattanó és 60% posztrészarány alatt
+  hallgat (None). Felületek: /analyze + meccs-csomag
+  (`defensive_rebound_roles`), edzői összefoglaló, felderítés (edzői
+  kulcs + 362. meccsterv-szabály), edzés-fókusz (383. szabály),
+  HTML-riport (Védő-lencse sor), Kulcs-poszt bizonyíték-réteg,
+  kliens-csempe.
 - **Figura-koncentráció: egy figurára épül-e a támadójátékuk.** A
   figura-hatékonyság azt mondja meg, melyik figurájuk veszélyes, a
   figura-befejező azt, kire fut ki — az új réteg a repertoár
