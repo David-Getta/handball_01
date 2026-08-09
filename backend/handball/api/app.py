@@ -4617,6 +4617,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import screen_yield
+            res["screen_yield"] = screen_yield(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5530,6 +5535,8 @@ def create_app():
                        lambda: suspension_collectors(match))
                 from ..pipeline.goalkeeper import outlet_targets
                 _layer("outlet_targets", lambda: outlet_targets(match))
+                from ..pipeline.attack_types import screen_yield
+                _layer("screen_yield", lambda: screen_yield(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

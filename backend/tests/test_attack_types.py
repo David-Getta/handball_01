@@ -1104,6 +1104,72 @@ def test_screen_usage_separates_screened_and_isolated_shooters():
     assert few["home"]["style"] is None
 
 
+def _scy_match(screened_goals=5, clean_goals=0, n=5):
+    """Hazai lövés-sorozat: `n` elzárásos és `n` tiszta lövés, a
+    megadott számú góllal (a többi a kapuson akad meg)."""
+    frames = []
+    t = 0
+
+    def _shot(screened, goal):
+        nonlocal t
+        sx, gx = 30.0, 40.0
+        players = [_pl(1, Team.HOME, sx, 10.0),
+                   _pl(20, Team.AWAY, sx + 1.5, 10.0)]
+        if screened:
+            players.append(_pl(2, Team.HOME, sx + 1.5, 11.0))
+        gk = _pl(30, Team.AWAY, 39.5, 10.0)
+        gk.role = "kapus"
+        players = players + [gk]
+        for _ in range(30):
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=sx, y=10.0, confidence=1.0)))
+            t += 1
+        end = gx if goal else 38.5
+        for i in range(14):
+            frames.append(Frame(
+                t=t, players=players,
+                ball=Ball(x=min(sx + 0.8 * (i + 1), end), y=10.0,
+                          confidence=1.0)))
+            t += 1
+        if not goal:                      # kipattanó: védés lesz belőle
+            for i in range(10):
+                frames.append(Frame(
+                    t=t, players=players,
+                    ball=Ball(x=38.5 - 0.8 * i, y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for _ in range(40):
+            frames.append(Frame(t=t, players=[],
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for k in range(n):
+        _shot(True, goal=k < screened_goals)
+    for k in range(n):
+        _shot(False, goal=k < clean_goals)
+    return Match(_meta(), frames)
+
+
+def test_screen_yield_shows_when_the_screen_pays():
+    """Ha az elzárásos lövéseik bemennek, a tiszták nem, a
+    váltás-kommunikáció a meccs kulcsa."""
+    from handball.pipeline.attack_types import SCY_GAP_PP, screen_yield
+
+    rec = screen_yield(_scy_match())["home"]
+    assert rec["screened_shots"] >= 4 and rec["clean_shots"] >= 4, rec
+    assert rec["gap_pp"] is not None and rec["gap_pp"] >= SCY_GAP_PP, rec
+    assert rec["verdict"] and "váltás-kommunikáció" in rec["verdict"], rec
+
+
+def test_screen_yield_silent_with_few_shots():
+    """Sávonként kevés lövésnél nincs ítélet."""
+    from handball.pipeline.attack_types import screen_yield
+
+    rec = screen_yield(_scy_match(screened_goals=2, n=2))["home"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
 def test_pass_risk_flags_lost_long_balls():
     """A hazai hosszú passzai zömmel az ellenfélnél kötnek ki, a
     rövidek nem → kockázatos hosszú passz; kevés kísérletnél nincs

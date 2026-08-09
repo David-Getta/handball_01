@@ -1820,6 +1820,103 @@ def screen_usage(match: Match,
     return out
 
 
+# Elzárás-hozam: sávonként ennyi őrzött lövés kell az ítélethez, és
+# ekkora (százalékpontos) különbség számít érdemi hozamnak.
+SCY_MIN_SHOTS = 4
+SCY_GAP_PP = 15.0
+
+
+def screen_yield(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Elzárás-hozam: MEGÉRI-E nekik az elzárás.
+
+    Az elzárás-használat (screen_usage) a GYAKORISÁGOT méri — ez a
+    HOZAMOT: az őrzött lövéseket két sávra bontja (elzárásból lőtt
+    vagy tisztán, elzárás nélkül), és sávonként számol gólarányt.
+
+    Edzőileg ez dönti el, hova megy a védekező munka. Ha az
+    elzárásos lövéseik érdemben jobban mennek be, a váltás-
+    kommunikáció (hangos váltás, átcsúszás) a meccs kulcsa — az
+    elzárás megtörése többet ér, mint a lövő szorítása. Ha az
+    elzárásból ugyanannyi vagy kevesebb gól esik, hagyni kell őket
+    elzárni, és a lövő-vonalra kell menni. Saját csapatra: az
+    elzárás-játékunk hozama mérhető, nem hitkérdés.
+
+    Visszatérés csapatonként: {"screened_shots", "screened_goals",
+    "clean_shots", "clean_goals", "screened_pct", "clean_pct",
+    "gap_pp", "verdict"} — a pct/gap/verdict None, ha bármelyik
+    sávban kevés (SCY_MIN_SHOTS alatti) a lövés; a verdict
+    "az elzárás hozza a gólt" / "az elzárás nem fizet" / None.
+    """
+    import math
+
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    idx_of = {f.t: i for i, f in enumerate(match.frames)}
+    counts = {side: {"screened_shots": 0, "screened_goals": 0,
+                     "clean_shots": 0, "clean_goals": 0}
+              for side in ("home", "away")}
+
+    for sh in match_xg(match, config).get("shots", []):
+        pid = sh.get("player_id")
+        i0 = idx_of.get(sh["t"])
+        if pid is None or i0 is None:
+            continue
+        f = match.frames[i0]
+        shooter = next((p for p in f.players if p.track_id == pid),
+                       None)
+        if shooter is None:
+            continue
+        marker = None
+        best = SCREEN_MARKER_MAX_M
+        for d in f.players:
+            if d.team is None or d.team == shooter.team:
+                continue
+            dist = math.hypot(d.x - shooter.x, d.y - shooter.y)
+            if dist <= best:
+                marker, best = d, dist
+        if marker is None:
+            continue  # szabad lövés: nincs kit elzárni
+        screened = any(
+            p.track_id != pid and p.team == shooter.team
+            and math.hypot(p.x - marker.x, p.y - marker.y)
+            <= SCREEN_DIST_M
+            for p in f.players)
+        rec = counts[sh["team"]]
+        key = "screened" if screened else "clean"
+        rec[f"{key}_shots"] += 1
+        if sh.get("outcome") == "goal":
+            rec[f"{key}_goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = counts[side]
+        r = {**rec, "screened_pct": None, "clean_pct": None,
+             "gap_pp": None, "verdict": None}
+        if (rec["screened_shots"] >= SCY_MIN_SHOTS
+                and rec["clean_shots"] >= SCY_MIN_SHOTS):
+            sp = 100.0 * rec["screened_goals"] / rec["screened_shots"]
+            cp = 100.0 * rec["clean_goals"] / rec["clean_shots"]
+            r["screened_pct"] = round(sp, 1)
+            r["clean_pct"] = round(cp, 1)
+            r["gap_pp"] = round(sp - cp, 1)
+            if sp - cp >= SCY_GAP_PP:
+                r["verdict"] = (
+                    f"az elzárás hozza a gólt ({sp:.0f}% elzárásból, "
+                    f"{cp:.0f}% tisztán) — a váltás-kommunikáció a "
+                    "meccs: hangos váltás vagy átcsúszás az elzárás "
+                    "alatt, mert a lövő szorítása önmagában kevés")
+            elif cp - sp >= SCY_GAP_PP:
+                r["verdict"] = (
+                    f"az elzárás nem fizet nekik ({sp:.0f}% "
+                    f"elzárásból, {cp:.0f}% tisztán) — hagyni kell "
+                    "őket elzárni, és a lövő-vonalra kell menni: a "
+                    "váltásra fordított energia máshol többet ér")
+        out[side] = r
+    return out
+
+
 # Passz-kockázat: ettől a távolságtól számít hosszúnak a passz;
 # sávonként ennyi kísérlet kell az ítélethez, és ekkora eladás-arány
 # különbség (százalékpont) számít érdeminek.

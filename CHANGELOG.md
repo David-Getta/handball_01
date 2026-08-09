@@ -17,6 +17,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Elzárás-hozam: megéri-e nekik az elzárás.** Az elzárás-használat
+  a gyakoriságot méri — az új réteg a hozamot: az őrzött lövéseket
+  két sávra bontja (elzárásból lőtt vagy tisztán), és sávonként
+  számol gólarányt. Edzőileg ez dönti el, hova megy a védekező
+  munka: ha az elzárásos lövéseik érdemben jobban mennek be, a
+  váltás-kommunikáció (hangos váltás, átcsúszás) a meccs kulcsa — az
+  elzárás megtörése többet ér, mint a lövő szorítása; ha az
+  elzárásból ugyanannyi vagy kevesebb gól esik, hagyni kell őket
+  elzárni és a lövő-vonalra menni. Saját csapatra: az elzárás-játék
+  hozama mérhető, nem hitkérdés. Sávonként négy lövéstől és 15
+  százalékpontos különbségtől ítél. A rangsorban a "felkészülés"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`screen_yield`), edzői összefoglaló, felderítés (`scy_*` mezők +
+  edzői kulcs + 393. meccsterv-szabály), edzés-fókusz (414. szabály,
+  mindkét irányban), kliens-csempe.
+
 - **Felhozatal-emberek: kire hozzák fel a labdát a kaputól.** A
   felhozatal-posztok a posztot nevezik meg — az új réteg az embert: a
   kapus-indítások célpontjait névre bontva összegzi. Edzőileg ez a

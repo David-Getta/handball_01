@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **440 réteg**, modulonként csoportosítva; a
+Összesen **441 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (87)
+## attack_types (88)
 
 | Réteg | Mit mér |
 |---|---|
@@ -79,6 +79,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `screen_setter_roles` | Elzáró-poszt: MELYIK POSZTJUK áll elzárásba. |
 | `screen_setters` | Elzárók: KI ÁLL ELZÁRÁSBA a lövőik előtt. |
 | `screen_usage` | Elzárás-használat: elzárásból lőnek, vagy tisztán, 1v1-ből. |
+| `screen_yield` | Elzárás-hozam: MEGÉRI-E nekik az elzárás. |
 | `second_chance` | Második roham / lepattanó-visszaszerzés: a saját, gólt NEM érő lövés |
 | `second_chance_fade` | Lepattanó-esés: MELYIK FÉLIDŐBEN él a második roham. |
 | `second_chance_roles` | Lepattanó-poszt: KI LŐ MÁSODSZOR — melyik posztjuk viszi a |

@@ -1060,6 +1060,12 @@ class ScoutingReport:
     # Felhozatal-emberek: a kapus-indítások átvételeinek darabszáma
     # CÉLPONTONKÉNT. Darabszám, meccsek közt összegződik.
     otp_outlets_by_player: dict = field(default_factory=dict)
+    # Elzárás-hozam: az elzárásos és a tiszta lövések darabszáma és a
+    # belőlük esett gólok. Darabszám, meccsek közt összegződik.
+    scy_screened_shots: int = 0
+    scy_screened_goals: int = 0
+    scy_clean_shots: int = 0
+    scy_clean_goals: int = 0
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4328,6 +4334,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "letámadásnál rá kell lépni az átvételnél, és a "
                 "visszapassz sávját lezárni: nála akad meg az egész "
                 "kihozatal.")
+
+    # Elzárás-hozam: a váltás-kommunikáció vagy a lövő-vonal.
+    if (rep.scy_screened_shots >= 4 and rep.scy_clean_shots >= 4):
+        _scy_s = 100.0 * rep.scy_screened_goals / rep.scy_screened_shots
+        _scy_c = 100.0 * rep.scy_clean_goals / rep.scy_clean_shots
+        if _scy_s - _scy_c >= 15.0:
+            keys.append(
+                f"Az elzárásos lövéseik {_scy_s:.0f}%-ban mennek be, "
+                f"a tiszták csak {_scy_c:.0f}%-ban — a váltás-"
+                "kommunikáció a meccs: hangos váltás vagy átcsúszás "
+                "az elzárás alatt, a lövő szorítása önmagában kevés.")
+        elif _scy_c - _scy_s >= 15.0:
+            keys.append(
+                f"Az elzárásuk nem fizet ({_scy_s:.0f}% elzárásból, "
+                f"{_scy_c:.0f}% tisztán) — hagyjátok őket elzárni, és "
+                "menjetek a lövő-vonalra: a váltásra fordított "
+                "energia máshol többet ér.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9773,6 +9796,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .attack_types import screen_yield as _scy
+        scyrec = _scy(match, config)[team.value]
+        rep.scy_screened_shots = scyrec["screened_shots"]
+        rep.scy_screened_goals = scyrec["screened_goals"]
+        rep.scy_clean_shots = scyrec["clean_shots"]
+        rep.scy_clean_goals = scyrec["clean_goals"]
         from .goalkeeper import outlet_targets as _otp
         otprec = _otp(match, config)[team.value]
         rep.otp_outlets_by_player = {
@@ -12537,6 +12566,22 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 393) Az ő elzárás-hozamuk × a ti fal-kommunikációtok: a
+    # váltás vagy a lövő-vonal — attól függ, mi fizet nekik.
+    if (opp.scy_screened_shots >= 4 and opp.scy_clean_shots >= 4
+            and own.defense_main):
+        _scy393_s = (100.0 * opp.scy_screened_goals
+                     / opp.scy_screened_shots)
+        _scy393_c = 100.0 * opp.scy_clean_goals / opp.scy_clean_shots
+        if _scy393_s - _scy393_c >= 15.0:
+            plan.append(
+                f"Az elzárásos lövéseik {_scy393_s:.0f}%-ban mennek "
+                f"be, a tiszták {_scy393_c:.0f}%-ban, ti pedig "
+                f"{own.defense_main} falat játszotok — a hangos "
+                "váltást és az átcsúszást kell begyakorolni rájuk: "
+                "az elzárás megtörése többet ér, mint a lövő "
+                "szorítása.")
 
     # 392) Az ő felhozatal-emberük × a ti letámadásotok: egy
     # emberrel megfogható a kihozataluk.
@@ -19329,6 +19374,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stc_susp_by_player for r in reports),
         otp_outlets_by_player=_merge_count_dicts(
             r.otp_outlets_by_player for r in reports),
+        scy_screened_shots=sum(r.scy_screened_shots for r in reports),
+        scy_screened_goals=sum(r.scy_screened_goals for r in reports),
+        scy_clean_shots=sum(r.scy_clean_shots for r in reports),
+        scy_clean_goals=sum(r.scy_clean_goals for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

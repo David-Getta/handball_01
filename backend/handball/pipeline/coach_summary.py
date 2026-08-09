@@ -2639,6 +2639,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "letámadásnál rá kell lépni az átvételnél.")
     except Exception:
         pass
+    # Elzárás-hozam: megéri-e nekik az elzárás.
+    try:
+        from .attack_types import screen_yield
+        scy = screen_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_scy = scy[side]
+            if rec_scy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} elzárásos lövései "
+                     f"{rec_scy['screened_pct']:.0f}%-ban mennek be, a "
+                     f"tiszták {rec_scy['clean_pct']:.0f}%-ban — "
+                     f"{rec_scy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

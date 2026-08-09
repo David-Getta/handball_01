@@ -1355,6 +1355,40 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 414) Elzárás-hozam: mérhető, hogy fizet-e az elzárás-játékunk.
+    try:
+        from .attack_types import SCY_GAP_PP, screen_yield
+        scy414 = screen_yield(match, config)
+        for side in ("home", "away"):
+            rec414 = scy414[side]
+            if rec414["gap_pp"] is None:
+                continue
+            if rec414["gap_pp"] <= -SCY_GAP_PP:
+                add(side, "támadás", "Elzárás-hozam",
+                    f"az elzárásból lőtt lövéseink csak "
+                    f"{rec414['screened_pct']:.0f}%-ban mennek be, a "
+                    f"tiszta lövéseink {rec414['clean_pct']:.0f}%-ban "
+                    "— az elzárás-játékunk jelenleg nem fizet",
+                    "elzárás-technika edzése: időzítés (a lövő "
+                    "ritmusához, nem előtte), stabil, széles test és "
+                    "azonnali leforgás a zárás után; és a figurákban "
+                    "a zárás UTÁNI második megoldás (leforduló "
+                    "beálló) gyakorlása",
+                    )
+            elif rec414["gap_pp"] >= SCY_GAP_PP:
+                add(side, "támadás", "Elzárás-hozam",
+                    f"az elzárásos lövéseink "
+                    f"{rec414['screened_pct']:.0f}%-ban mennek be, a "
+                    f"tiszták csak {rec414['clean_pct']:.0f}%-ban — "
+                    "az elzárás nálunk fizet, tehát több kell belőle",
+                    "elzárás-mennyiség növelése a figurákban: minden "
+                    "átlövés elé kijelölt zárás, kettős zárás a "
+                    "középső védőre, és a zárás utáni leforgás "
+                    "automatizmusa",
+                    )
+    except Exception:
+        pass
+
     # 413) Felhozatal-emberek: az egy emberre épülő kihozatal egy
     # emberrel megfogható.
     try:

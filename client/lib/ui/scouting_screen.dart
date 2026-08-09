@@ -2506,6 +2506,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "indítás-átvétel) · rá kell lépni az átvételnél";
   }
 
+  // Elzárás-hozam: megéri-e nekik az elzárás (sávonként 4+ lövés,
+  // 15 százalékpontos különbség — a backenddel azonos küszöbök:
+  // SCY_MIN_SHOTS, SCY_GAP_PP).
+  String? _screenYield(Map<String, dynamic> r) {
+    final ss = (r["scy_screened_shots"] as num?)?.toInt() ?? 0;
+    final sg = (r["scy_screened_goals"] as num?)?.toInt() ?? 0;
+    final cs = (r["scy_clean_shots"] as num?)?.toInt() ?? 0;
+    final cg = (r["scy_clean_goals"] as num?)?.toInt() ?? 0;
+    if (ss < 4 || cs < 4) return null;
+    final sp = 100.0 * sg / ss;
+    final cp = 100.0 * cg / cs;
+    if (sp - cp >= 15.0) {
+      return "az elzárásos lövéseik ${sp.toStringAsFixed(0)}%-ban "
+          "mennek be, a tiszták ${cp.toStringAsFixed(0)}%-ban · "
+          "hangos váltás és átcsúszás kell";
+    }
+    if (cp - sp >= 15.0) {
+      return "az elzárásuk nem fizet (${sp.toStringAsFixed(0)}% vs "
+          "${cp.toStringAsFixed(0)}% tisztán) · hagyjátok zárni, "
+          "menjetek a lövő-vonalra";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10274,6 +10298,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kétperc-gyűjtő", _suspensionCollector(r)!],
       if (_outletTargetPlayer(r) != null)
         ["Felhozatal-ember", _outletTargetPlayer(r)!],
+      if (_screenYield(r) != null)
+        ["Elzárás-hozam", _screenYield(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
