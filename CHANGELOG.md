@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.26 óta)
 
+- **Hátrapasszolók: kinél fordul vissza a játék.** A
+  hátrapassz-poszt a posztot nevezi meg — az új réteg az embert: a
+  kaputól távolabbi társhoz menő passzokat a passzoló játékoshoz
+  írja. Edzőileg ez a pressz jutalma névre szólóan: ha nyomás alatt
+  rendre ugyanaz fordítja vissza a labdát, rá érdemes kimenni — a
+  hátrapassz időt ad a falnak; saját csapatra a labdás mögé érkező
+  felkínálás a téma. Három hátra-passztól emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`backward_passers`), edzői összefoglaló, felderítés
+  (`bprp_passes_by_player` mező + edzői kulcs + 384.
+  meccsterv-szabály), edzés-fókusz (405. szabály), kliens-csempe.
+
 - **Térnyerők: ki viszi előre a labdát.** A térnyerő-poszt a
   posztot nevezi meg — az új réteg az embert: a labdás játékos
   egymást követő kockái közt a támadott kapu felé megtett métereket

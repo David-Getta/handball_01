@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **431 réteg**, modulonként csoportosítva; a
+Összesen **432 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (86)
+## attack_types (87)
 
 | Réteg | Mit mér |
 |---|---|
@@ -27,6 +27,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `attack_vs_wall_height` | Fal-magasság elleni játék: MEGBÜNTETIK-E A FELFUTÓ FALAT. |
 | `attack_width` | Támadás-szélesség: mennyire húzza szét a csapat a pályát. |
 | `backward_pass_roles` | Hátrapassz-poszt: MELYIK POSZTJUKNÁL fordul vissza a játék. |
+| `backward_passers` | Hátrapasszolók: KINÉL FORDUL VISSZA a játék. |
 | `balls_out` | Kidobott labda: hányszor hagyja el a labda a pályát az OLDALVONALON. |
 | `break_share_fade` | Kontra-esés: MELYIK FÉLIDŐBEN kontráznak. |
 | `break_sources` | Kontra-forrás: MIBŐL INDUL a lerohanásuk. |

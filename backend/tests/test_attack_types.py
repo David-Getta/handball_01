@@ -4699,3 +4699,22 @@ def test_lane_switchers_silent_with_few_switches():
 
     rec = lane_switchers(_lsw_match([7]))["home"]
     assert rec["top"] is None, rec
+
+
+def test_backward_passers_names_the_turner():
+    """Ha nyomás alatt rendre ugyanaz fordítja vissza a labdát, rá
+    érdemes kimenni."""
+    from handball.pipeline.attack_types import (BPRP_MIN_PASSES,
+                                                backward_passers)
+
+    rec = backward_passers(_bpr_match([7, 7, 7, 7, 7, 9]))["home"]
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["passes"] >= BPRP_MIN_PASSES, rec
+
+
+def test_backward_passers_silent_with_few_passes():
+    """Két hátra-passzból még nincs kiemelt név."""
+    from handball.pipeline.attack_types import backward_passers
+
+    rec = backward_passers(_bpr_match([7, 9]))["home"]
+    assert rec["top"] is None, rec

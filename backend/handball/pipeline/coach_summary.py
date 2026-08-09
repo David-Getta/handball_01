@@ -1420,6 +1420,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "felezőtől hátrálva kell fogadni.")
     except Exception:
         pass
+    # Hátrapasszolók: kinél fordul vissza a játék.
+    try:
+        from .attack_types import backward_passers
+        bprp = backward_passers(match)
+        for side, name in (("home", home), ("away", away)):
+            top = bprp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} játéka {_ki} kezénél fordul "
+                     f"vissza a legtöbbször ({top['passes']} "
+                     "hátra-passz) — rá érdemes kimenni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

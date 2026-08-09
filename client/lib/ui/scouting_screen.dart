@@ -2344,6 +2344,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
+  // backenddel azonos küszöb: BPRP_MIN_PASSES).
+  String? _backwardPasserPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["bprp_passes_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "a játékuk a(z) $top. kezénél fordul vissza a legtöbbször "
+        "($topN hátra-passz) · rá menjetek ki";
+  }
+
   // Térnyerők: ki viszi előre a labdát (25+ méter labdával előre —
   // a backenddel azonos küszöb: TNRP_MIN_M).
   String? _ballCarrierPlayer(Map<String, dynamic> r) {
@@ -10074,6 +10094,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Sávváltó ember", _laneSwitcherPlayer(r)!],
       if (_ballCarrierPlayer(r) != null)
         ["Térnyerő ember", _ballCarrierPlayer(r)!],
+      if (_backwardPasserPlayer(r) != null)
+        ["Hátrapasszoló ember", _backwardPasserPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

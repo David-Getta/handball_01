@@ -6153,3 +6153,70 @@ def lane_switchers(match: Match,
         out[side] = {"switches": sum(r["switches"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Hátrapasszolók: ennyi hátra-passztól emeljük ki a játékost.
+BPRP_MIN_PASSES = 3
+
+
+def backward_passers(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Hátrapasszolók: KINÉL FORDUL VISSZA a játék.
+
+    A hátrapassz-poszt (backward_pass_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a kaputól BPR_BACK_M méterrel távolabbi társhoz
+    menő passzokat a PASSZOLÓ játékoshoz írja.
+
+    Edzőileg ez a pressz jutalma névre szólóan: ha nyomás alatt
+    rendre ugyanaz fordítja vissza a labdát, rá érdemes kimenni — a
+    hátrapassz időt ad a falnak, és a támadásukat újraindítja. Saját
+    csapatra: a visszafordulás a bátorság hiánya vagy rossz
+    felkínálás jele; a labdás mögé kell érkező társ.
+
+    Visszatérés csapatonként: {"passes" (emberhez kötött hátra-passz),
+    "players": [{"player_id", "jersey", "passes"}], "top"} — a "top"
+    az első játékos, ha legalább BPRP_MIN_PASSES hátra-passza van,
+    különben None.
+    """
+    from .decisions import detect_passes
+
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    frames_by_t = {f.t: f for f in match.frames}
+    tally: dict = {"home": {}, "away": {}}
+    for p in detect_passes(match, config):
+        if p.passer_pos is None or p.passer_id is None:
+            continue
+        fr = frames_by_t.get(p.t)
+        if fr is None:
+            continue
+        receiver = next((q for q in fr.players
+                         if q.track_id == p.receiver_id), None)
+        if receiver is None:
+            continue
+        goal_x = config.attacks_toward_x(p.team)
+        d_passer = abs(p.passer_pos.x - goal_x)
+        d_receiver = abs(receiver.x - goal_x)
+        if d_receiver - d_passer < BPR_BACK_M:
+            continue
+        side = p.team.value
+        tally[side][p.passer_id] = tally[side].get(p.passer_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "passes": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["passes"] >= BPRP_MIN_PASSES
+               else None)
+        out[side] = {"passes": sum(r["passes"] for r in rows),
+                     "players": rows, "top": top}
+    return out

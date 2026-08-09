@@ -1355,6 +1355,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 405) Hátrapasszolók: a visszafordulás a bátorság hiánya vagy
+    # a rossz felkínálás jele.
+    try:
+        from .attack_types import BPRP_MIN_PASSES, backward_passers
+        bprp405 = backward_passers(match, config)
+        for side in ("home", "away"):
+            top405 = bprp405[side].get("top")
+            if top405 is None:
+                continue
+            _ki405 = (f"a(z) {top405['jersey']}. számú"
+                      if top405.get("jersey") is not None
+                      else f"a(z) {top405['player_id']}. játékos")
+            add(side, "támadás", "Előre játék a visszafordulás "
+                "helyett",
+                f"a játékunk {_ki405} kezénél fordul vissza a "
+                f"legtöbbször ({top405['passes']} hátra-passz; "
+                f"{BPRP_MIN_PASSES} passztól már jelezzük) — a "
+                "hátrapassz időt ad az ellenfél falának, és a "
+                "támadásunkat újraindítja",
+                "felkínálás a labdás MÖGÉ és MELLÉ (ne csak vissza), "
+                "beálló-bejátszás gyakorlása szorításból, és "
+                "szabály: a visszapassz után azonnal indul a "
+                "keresztmozgás — edzésen tiltott hátrapassz-játék",
+                )
+    except Exception:
+        pass
+
     # 404) Térnyerők: ha a térnyerés egy emberen áll, a kiesésével a
     # felhozatalunk is leáll.
     try:

@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Hátrapasszolók: a hátrafelé menő passzok darabszáma
+    # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
+    bprp_passes_by_player: dict = field(default_factory=dict)
     # Térnyerők: a labdával megtett előre-méterek JÁTÉKOSONKÉNT.
     # Összeg (méter), meccsek közt pontosan összegződik.
     tnrp_meters_by_player: dict = field(default_factory=dict)
@@ -4202,6 +4205,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Hátrapasszolók: kire érdemes kimenni.
+    if rep.bprp_passes_by_player:
+        _bprp_k, _bprp_n = max(rep.bprp_passes_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _bprp_n >= 3:
+            keys.append(
+                f"A játékuk a(z) {_bprp_k}. kezénél fordul vissza a "
+                f"legtöbbször ({_bprp_n} hátra-passz) — rá menjetek "
+                "ki: a hátrapassz időt ad a falnak, és nála a "
+                "legolcsóbb a nyomás.")
 
     # Térnyerők: kit kell a felezőtől hátrálva fogadni.
     if rep.tnrp_meters_by_player:
@@ -9612,6 +9626,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .attack_types import backward_passers as _bprp
+        bprprec = _bprp(match, config)[team.value]
+        rep.bprp_passes_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["passes"]
+            for r in bprprec["players"]}
         from .decisions import ball_carriers as _tnrp
         tnrprec = _tnrp(match, config)[team.value]
         rep.tnrp_meters_by_player = {
@@ -12348,6 +12368,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 384) Az ő hátrapasszolójuk × a ti letámadásotok: a
+    # visszafordított labda a pressz jutalma.
+    if opp.bprp_passes_by_player and own.trans_steals >= 3:
+        _bprp384_k, _bprp384_n = max(
+            opp.bprp_passes_by_player.items(), key=lambda kv: kv[1])
+        if _bprp384_n >= 3:
+            plan.append(
+                f"A játékuk a(z) {_bprp384_k}. kezénél fordul vissza "
+                f"({_bprp384_n} hátra-passz), ti pedig szedtek "
+                f"labdát ({own.trans_steals} szerzés) — rá menjetek "
+                "ki bátran: a hátrapasszal időt nyertek, és a "
+                "visszafordított labda a ti presszetek jutalma.")
 
     # 383) Az ő térnyerőjük × a ti visszarendeződésetek: a
     # lendületet a felezőnél kell megfogni.
@@ -18994,6 +19027,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        bprp_passes_by_player=_merge_count_dicts(
+            r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(
             r.tnrp_meters_by_player for r in reports),
         lswp_switches_by_player=_merge_count_dicts(
