@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Térnyerők: a labdával megtett előre-méterek JÁTÉKOSONKÉNT.
+    # Összeg (méter), meccsek közt pontosan összegződik.
+    tnrp_meters_by_player: dict = field(default_factory=dict)
     # Sávváltók: a megerősített sávváltások darabszáma
     # JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
     lswp_switches_by_player: dict = field(default_factory=dict)
@@ -4199,6 +4202,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Térnyerők: kit kell a felezőtől hátrálva fogadni.
+    if rep.tnrp_meters_by_player:
+        _tnrp_k, _tnrp_m = max(rep.tnrp_meters_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _tnrp_m >= 25.0:
+            keys.append(
+                f"A térnyerésük a(z) {_tnrp_k}. lábán van "
+                f"({_tnrp_m:.0f} m labdával előre) — őt ne a "
+                "hatosnál fogadjátok, hanem a felezőtől hátrálva: "
+                "lendületbe engedni tilos.")
 
     # Sávváltók: kinek a védőjére kell külön szabály.
     if rep.lswp_switches_by_player:
@@ -9598,6 +9612,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .decisions import ball_carriers as _tnrp
+        tnrprec = _tnrp(match, config)[team.value]
+        rep.tnrp_meters_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["meters"]
+            for r in tnrprec["players"]}
         from .attack_types import lane_switchers as _lswp
         lswprec = _lswp(match, config)[team.value]
         rep.lswp_switches_by_player = {
@@ -12328,6 +12348,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 383) Az ő térnyerőjük × a ti visszarendeződésetek: a
+    # lendületet a felezőnél kell megfogni.
+    if opp.tnrp_meters_by_player and own.def_shots_against >= 4:
+        _tnrp383_k, _tnrp383_m = max(
+            opp.tnrp_meters_by_player.items(), key=lambda kv: kv[1])
+        if _tnrp383_m >= 25.0:
+            plan.append(
+                f"A térnyerésük a(z) {_tnrp383_k}. lábán van "
+                f"({_tnrp383_m:.0f} m labdával előre), ti pedig "
+                f"rendszeresen védekeztek ({own.def_shots_against} "
+                "kapott lövés) — az ő felhozatalát a felezőnél "
+                "fogadjátok hátrálva, ne a hatosnál: onnan már csak "
+                "szabálytalansággal állítható meg.")
 
     # 382) Az ő sávváltójuk × a ti bejáratott falatok: a
     # követés/átadás szabálya előre kiosztható.
@@ -18960,6 +18994,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        tnrp_meters_by_player=_merge_count_dicts(
+            r.tnrp_meters_by_player for r in reports),
         lswp_switches_by_player=_merge_count_dicts(
             r.lswp_switches_by_player for r in reports),
         escp_passes_by_player=_merge_count_dicts(

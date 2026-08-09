@@ -1249,3 +1249,66 @@ def press_outlets(match: Match,
         out[side] = {"passes": sum(r["passes"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Térnyerők: ennyi labdával megtett előre-métertől emeljük ki a
+# játékost.
+TNRP_MIN_M = 25.0
+
+
+def ball_carriers(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Térnyerők: KI VISZI ELŐRE a labdát.
+
+    A térnyerő-poszt (ball_carrier_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a labdás játékos egymást követő kockái közt a
+    támadott kapu felé megtett métereket játékosonként összegzi.
+
+    Edzőileg ez a lendület-fék névre szóló terve: őt nem a hatosnál
+    kell fogadni, hanem a felezőtől hátrálva — lendületbe engedni
+    tilos, mert onnan már csak szabálytalansággal állítható meg.
+    Saját csapatra: ha a térnyerés egy emberen áll, a kiesésével a
+    felhozatalunk is leáll.
+
+    Visszatérés csapatonként: {"meters" (emberhez kötött
+    előre-méter), "players": [{"player_id", "jersey", "meters"}],
+    "top"} — a "top" az első játékos, ha legalább TNRP_MIN_M métert
+    vitt előre, különben None.
+    """
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    prev = None   # (track_id, side, x, elore-irany)
+    for f in match.frames:
+        h = ball_holder(f, config)
+        if h is None or h.team is None or h.role == "kapus":
+            prev = None
+            continue
+        side = h.team.value
+        goal_x = config.attacks_toward_x(h.team)
+        ahead = 1.0 if goal_x > COURT_LENGTH_M / 2.0 else -1.0
+        if prev is not None and prev[0] == h.track_id \
+                and prev[1] == side:
+            dx = (h.x - prev[2]) * ahead
+            if 0.0 < dx < 2.0:   # előre-mozgás (követés-ugrás nélkül)
+                tally[side][h.track_id] = round(
+                    tally[side].get(h.track_id, 0.0) + dx, 2)
+        prev = (h.track_id, side, h.x, ahead)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "meters": round(m, 1)}
+                for pid, m in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["meters"] >= TNRP_MIN_M else None)
+        out[side] = {"meters": round(sum(r["meters"] for r in rows), 1),
+                     "players": rows, "top": top}
+    return out

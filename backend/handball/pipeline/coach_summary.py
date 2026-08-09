@@ -1404,6 +1404,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "ő védőjének követés/átadás szabálya kell.")
     except Exception:
         pass
+    # Térnyerők: ki viszi előre a labdát.
+    try:
+        from .decisions import ball_carriers
+        tnrp = ball_carriers(match)
+        for side, name in (("home", home), ("away", away)):
+            top = tnrp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} térnyerése {_ki} lábán van "
+                     f"({top['meters']:.0f} m labdával előre) — őt a "
+                     "felezőtől hátrálva kell fogadni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

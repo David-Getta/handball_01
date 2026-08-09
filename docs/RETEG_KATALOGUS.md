@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **430 réteg**, modulonként csoportosítva; a
+Összesen **431 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (86)
@@ -103,11 +103,12 @@ leírás a réteg-függvény docstringjének első sora.
 |---|---|
 | `coach_summary` | A meccs automatikus edzői összefoglalója. |
 
-## decisions (13)
+## decisions (14)
 
 | Réteg | Mit mér |
 |---|---|
 | `ball_carrier_roles` | Térnyerő-poszt: MELYIK POSZTJUK viszi előre a labdát. |
+| `ball_carriers` | Térnyerők: KI VISZI ELŐRE a labdát. |
 | `hold_time_players` | Labdatartás-idő: KI meddig tartja magánál a labdát. |
 | `hold_time_roles` | Labdatartó-poszt: MELYIK POSZTJUKNÁL áll meg a labda. |
 | `pass_security` | Pressz-tűrés: labdabiztonság testközeli védő mellett vs szabadon. |

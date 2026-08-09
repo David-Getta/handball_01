@@ -885,3 +885,24 @@ def test_press_outlets_silent_with_few_passes():
 
     rec = press_outlets(_esc_match([7, 9]))["home"]
     assert rec["top"] is None, rec
+
+
+def test_ball_carriers_names_the_runner():
+    """Ha a térnyerés egy ember lábán van, őt a felezőtől hátrálva
+    kell fogadni."""
+    from handball.pipeline.decisions import TNRP_MIN_M, ball_carriers
+
+    rec = ball_carriers(
+        _tnr_match([(7, 18.0), (7, 18.0), (7, 18.0),
+                    (9, 10.0)]))["home"]
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["meters"] >= TNRP_MIN_M, rec
+    assert rec["meters"] >= rec["top"]["meters"], rec
+
+
+def test_ball_carriers_silent_with_little_carrying():
+    """Kevés labdával megtett méterből nincs kiemelt név."""
+    from handball.pipeline.decisions import ball_carriers
+
+    rec = ball_carriers(_tnr_match([(7, 12.0), (9, 8.0)]))["home"]
+    assert rec["top"] is None, rec

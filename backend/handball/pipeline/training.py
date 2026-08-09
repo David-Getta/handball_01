@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 404) Térnyerők: ha a térnyerés egy emberen áll, a kiesésével a
+    # felhozatalunk is leáll.
+    try:
+        from .decisions import TNRP_MIN_M, ball_carriers
+        tnrp404 = ball_carriers(match, config)
+        for side in ("home", "away"):
+            top404 = tnrp404[side].get("top")
+            if top404 is None:
+                continue
+            _ki404 = (f"a(z) {top404['jersey']}. számú"
+                      if top404.get("jersey") is not None
+                      else f"a(z) {top404['player_id']}. játékos")
+            add(side, "támadás", "Térnyerés több lábon",
+                f"a térnyerésünk {_ki404} lábán van "
+                f"({top404['meters']:.0f} m labdával előre; "
+                f"{TNRP_MIN_M:.0f} m fölött már minta) — ha őt "
+                "korán fogadják vagy kiesik, a felhozatalunk leáll",
+                "felhozatal két úton: második labdavivő kijelölése, "
+                "kapus-indítás a másik oldalra, és a labdavivő "
+                "tehermentesítése rövid passzokkal — edzésen "
+                "letámadás elleni kihozatal váltott vivővel",
+                )
+    except Exception:
+        pass
+
     # 403) Sávváltók: ha a keresztmozgás egy emberen áll, a fal egy
     # döntéssel felkészül rá.
     try:

@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.26 óta)
 
+- **Térnyerők: ki viszi előre a labdát.** A térnyerő-poszt a
+  posztot nevezi meg — az új réteg az embert: a labdás játékos
+  egymást követő kockái közt a támadott kapu felé megtett métereket
+  játékosonként összegzi. Edzőileg ez a lendület-fék névre szóló
+  terve: őt nem a hatosnál kell fogadni, hanem a felezőtől hátrálva
+  — lendületbe engedni tilos, mert onnan már csak
+  szabálytalansággal állítható meg; saját csapatra a második
+  labdavivő a téma. Huszonöt métertől emel ki nevet. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`ball_carriers`), edzői összefoglaló, felderítés
+  (`tnrp_meters_by_player` mező + edzői kulcs + 383.
+  meccsterv-szabály), edzés-fókusz (404. szabály), kliens-csempe.
+
 ## v0.1.26 — kiadva (2026-08-09)
 
 > Kiadás-jegyzet: a v0.1.25 óta rövid, de sűrű kör futott. Két

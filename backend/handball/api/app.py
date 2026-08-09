@@ -3928,6 +3928,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import ball_carriers
+            res["ball_carriers"] = ball_carriers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5720,6 +5725,8 @@ def create_app():
                 from ..pipeline.attack_types import lane_switchers
                 _layer("lane_switchers",
                        lambda: lane_switchers(match))
+                from ..pipeline.decisions import ball_carriers
+                _layer("ball_carriers", lambda: ball_carriers(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score
