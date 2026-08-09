@@ -409,3 +409,45 @@ def test_kulcs_ember_holtversenynel_hallgat(monkeypatch):
     prio = _kpl_stub(monkeypatch, [egy] * 4 + [mas] * 4)
     rec = prio.key_player(_kp_match())["home"]
     assert rec["top"] is None and rec["verdict"] is None, rec
+
+
+def test_kulcs_ember_lefedi_az_ember_iteletes_retegeket():
+    """ŐR: minden pipeline-függvény, amely EMBERT nevez meg (a "top"
+    mezőjében player_id áll), szerepeljen a KPL_LAYERS listában.
+
+    Enélkül egy új ember-réteg csendben kimaradna a Kulcs-ember
+    összegzéséből: a szintézis akkor is "négy réteg mutat rá"-t
+    mondana, ha valójában öt lenne — a bizonyíték-lánc pedig
+    hiányos maradna.
+    """
+    import pathlib
+    import re
+
+    from handball.pipeline.priorities import KPL_LAYERS
+
+    covered = {fn for _, _, fn in KPL_LAYERS}
+    # Kivételek. A poszt-lencse rétegek a top-jukban POSZTOT adnak
+    # (a player_id csak a belső számolásban szerepel), a páros-lencse
+    # kettőst, a privát segédek pedig nem rétegek.
+    kivetel = {"screen_pairs",          # PÁROS-lencse (két embert nevez)
+               "blocked_by_role",       # poszt-lencse
+               "outlet_target_roles",   # poszt-lencse
+               "seven_earner_roles",    # poszt-lencse
+               "susp_earner_roles"}     # poszt-lencse
+    pipeline_dir = pathlib.Path("handball/pipeline")
+    missing = []
+    for mod in pipeline_dir.glob("*.py"):
+        if mod.name in ("priorities.py", "scouting.py",
+                        "report_html.py"):
+            continue
+        src = mod.read_text(encoding="utf-8")
+        for m in re.finditer(r"\ndef (\w+)\(", src):
+            fn = m.group(1)
+            if fn.startswith("_") or fn in covered or fn in kivetel:
+                continue
+            end = src.find("\ndef ", m.end())
+            body = src[m.start():end if end > 0 else len(src)]
+            if '"player_id"' in body and '"top"' in body:
+                missing.append(f"{mod.stem}.{fn}")
+    assert not missing, ("hiányzik a KPL_LAYERS listából: "
+                         + ", ".join(sorted(missing)))

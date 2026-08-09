@@ -626,6 +626,7 @@ KPL_LAYERS: tuple = (
     ("Blokkolt lövő", "defense", "blocked_shooters"),
     ("Fedezett lövő", "defense", "covered_shooters"),
     ("Beállóőr", "defense", "pivot_guards"),
+    ("Kilépő védő", "defense", "advanced_defender"),
     ("Kipattanó-szedő", "defense", "defensive_rebound_players"),
     ("Támadás-indító", "attack_types", "attack_starters"),
     ("Beálló-bejátszó", "attack_types", "pivot_feeders"),

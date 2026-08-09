@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Őr-teszt a Kulcs-ember névsorára.** A Kulcs-poszt lefedettségét
+  eddig is őrizte teszt; mostantól az ember-oldalt is: minden
+  pipeline-függvény, amely a `top` mezőjében EMBERT nevez meg
+  (`player_id`), szerepelnie kell a `KPL_LAYERS` listában — a
+  poszt- és páros-lencse rétegek nevesített kivételek. Az őr rögtön
+  dolgozott is: a Kilépő védő (`advanced_defender`) kimaradt a
+  névsorból, most bekerült, így a Kulcs-ember bizonyíték-lánca
+  teljes.
+
 - **Hetesdobók: ki áll oda a hétméteresekhez.** A hetesdobó-poszt a
   posztot nevezi meg, a hetes-kihagyók azt, ki hibázza el — az új
   réteg azt, ki áll oda egyáltalán: a felismert hétméteresek dobóit
