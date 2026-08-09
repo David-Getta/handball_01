@@ -17,6 +17,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **7a6 eladás: mennyibe kerül egy elvesztett labda üres kapunál.**
+  Az üres kapura kapott gólok rétege a 7 a 6 teljes mérlegét adja —
+  az új réteg a mechanizmust: megszámolja a lehozott kapus mellett
+  elvesztett labdákat, és megnézi, hányat büntettek meg nyolc
+  másodpercen belül góllal. Edzőileg a 7 a 6 kockázata nem a létszám,
+  hanem a labdakezelés: ha az eladásaikat rendre megbüntetik, a
+  szerzés után az első nézés MINDIG az üres kapu legyen, ne a
+  felállás; saját csapatra a lehozott kapus mellé kijelölt, biztos
+  kezű ötös és tiltott-megoldás-lista tartozik. Két eladástól ítél,
+  alatta hallgat. A rangsorban az "ár" családba tartozik. Felületek:
+  /analyze + meccs-csomag (`empty_net_turnovers`), edzői összefoglaló,
+  felderítés (`ent_turnovers` / `ent_punished` mezők + edzői kulcs +
+  389. meccsterv-szabály), edzés-fókusz (410. szabály), kliens-csempe.
+
 - **Indítás-vadász emberek: ki ugrik rá a kapus-indításra.** Az
   indítás-vadász poszt a posztot nevezi meg — az új réteg az embert:
   minden elveszett kapus-indításnál a labdát megszerző játékos

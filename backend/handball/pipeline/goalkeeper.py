@@ -644,6 +644,90 @@ def empty_net_by_score(match: Match, config=None) -> dict:
     return out
 
 
+# 7a6 eladás: ennyi mért eladás kell az ítélethez a lehozott kapus
+# mellett, ekkora büntetés-arány fölött mondjuk ki, hogy minden
+# elvesztett labdájuk gól, és ennyi másodpercen belüli kapott gól
+# számít az eladás büntetésének.
+ENT_MIN_TURNOVERS = 2
+ENT_PUNISH_PCT = 50.0
+ENT_PUNISH_S = 8.0
+
+
+def empty_net_turnovers(match: Match, config=None) -> dict:
+    """7a6 eladás: MENNYIBE KERÜL egy elvesztett labda üres kapunál.
+
+    Az üres kapura kapott gólok rétege (empty_net_goals) a 7 a 6
+    teljes mérlegét adja — ez a MECHANIZMUST: a lehozott kapus
+    mellett elvesztett labdákat számolja meg, és megnézi, hányat
+    büntettek meg ENT_PUNISH_S másodpercen belül góllal.
+
+    Edzőileg: a 7 a 6 kockázata nem a létszám, hanem a labdakezelés.
+    Ellenük: ha az eladásaik nagy részét megbüntetik, a 7a6-juk
+    alatt az első nézés MINDIG az üres kapu — a szerzés után nem
+    felállni, hanem dobni kell. Saját csapatra: a 7 a 6-ot csak
+    biztos kezű ötössel szabad játszani, és a labdaeladás-veszélyes
+    megoldásokat (átlövés kipattanóval, bejátszás a beállóra
+    zsúfoltba) ki kell venni a képletből.
+
+    Visszatérés csapatonként (a kapuját LEHOZÓ oldal): {"windows",
+    "turnovers", "punished", "punish_pct", "verdict"} — a
+    punish_pct/verdict None, ha nincs meg az ENT_MIN_TURNOVERS.
+    """
+    from .event_detection import EventType, detect_events, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    margin = EMPTY_NET_GOAL_MARGIN_S * fps
+    windows = detect_empty_net(match, config)
+    out = {side: {"windows": 0, "turnovers": 0, "punished": 0,
+                  "punish_pct": None, "verdict": None}
+           for side in ("home", "away")}
+    for w in windows:
+        out[w["team"]]["windows"] += 1
+
+    goals = [(e.t, getattr(e.team, "value", e.team))
+             for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER:
+            continue
+        side = getattr(e.team, "value", e.team)
+        if side not in out:
+            continue
+        in_window = any(
+            w["team"] == side
+            and w["start_frame"] <= e.t <= w["end_frame"] + margin
+            for w in windows)
+        if not in_window:
+            continue
+        rec = out[side]
+        rec["turnovers"] += 1
+        rival = "away" if side == "home" else "home"
+        if any(tm == rival and e.t <= t <= e.t + ENT_PUNISH_S * fps
+               for (t, tm) in goals):
+            rec["punished"] += 1
+
+    for rec in out.values():
+        if rec["turnovers"] >= ENT_MIN_TURNOVERS:
+            pct = 100.0 * rec["punished"] / rec["turnovers"]
+            rec["punish_pct"] = round(pct, 1)
+            if pct >= ENT_PUNISH_PCT:
+                rec["verdict"] = (
+                    f"a 7 a 6-juk alatt elvesztett labdák "
+                    f"{pct:.0f}%-a gólt ér ({rec['punished']}/"
+                    f"{rec['turnovers']}) — a szerzés után az első "
+                    "nézés az üres kapu legyen, ne a felállás")
+            else:
+                rec["verdict"] = (
+                    f"a 7 a 6-juk alatt elvesztett labdákból ritkán "
+                    f"lesz gól ({rec['punished']}/{rec['turnovers']}) "
+                    "— az üres kapus készenlétet kell élesíteni: "
+                    "szerzés után azonnali dobás")
+    return out
+
+
 def empty_net_goals(match: Match, config=None) -> dict:
     """Üres kapura kapott gólok: a 7 a 6 (lehozott kapus) ára.
 

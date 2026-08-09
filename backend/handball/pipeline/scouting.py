@@ -1046,6 +1046,10 @@ class ScoutingReport:
     # Indítás-vadász emberek: az elcsípett kapus-indítások darabszáma
     # RABLÓNKÉNT. Darabszám, meccsek közt pontosan összegződik.
     ohp_steals_by_player: dict = field(default_factory=dict)
+    # 7a6 eladás: a lehozott kapus mellett elvesztett labdák és a
+    # góllal büntetett részük. Darabszám, meccsek közt összegződik.
+    ent_turnovers: int = 0
+    ent_punished: int = 0
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4265,6 +4269,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"legtöbbször ({_ohp_n} elcsípett indítás) — a "
                 "kapusotok ne az ő térfelére nyisson: vagy a másik "
                 "oldal, vagy a feje fölött a hosszú indítás.")
+
+    # 7a6 eladás: mennyibe kerül nálatok a lehozott kapus hibája.
+    if rep.ent_turnovers >= 2:
+        _ent_pct = 100.0 * rep.ent_punished / rep.ent_turnovers
+        if _ent_pct >= 50.0:
+            keys.append(
+                f"A 7 a 6-otok alatt elvesztett labdák "
+                f"{_ent_pct:.0f}%-a gólt ér ({rep.ent_punished}/"
+                f"{rep.ent_turnovers}) — a lehozott kapus mellé csak "
+                "biztos kezű ötös menjen, és a kockázatos megoldások "
+                "(zsúfoltba bejátszás, kipattanós átlövés) maradjanak "
+                "ki a képletből.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9706,6 +9722,10 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["steals"]
             for r in ohprec["players"]}
+        from .goalkeeper import empty_net_turnovers as _ent
+        entrec = _ent(match, config)[team.value]
+        rep.ent_turnovers = entrec["turnovers"]
+        rep.ent_punished = entrec["punished"]
         from .attack_types import backward_passers as _bprp
         bprprec = _bprp(match, config)[team.value]
         rep.bprp_passes_by_player = {
@@ -12448,6 +12468,17 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 389) Az ő 7a6-eladásuk × a ti labdaszerzésetek: a lehozott
+    # kapus mellett minden szerzés azonnali dobás.
+    if opp.ent_turnovers >= 2 and own.trans_steals >= 3:
+        _ent389 = 100.0 * opp.ent_punished / opp.ent_turnovers
+        plan.append(
+            f"A 7 a 6-juk alatt {opp.ent_turnovers} labdát vesztenek "
+            f"(ebből {opp.ent_punished} volt gól, {_ent389:.0f}%), ti "
+            f"pedig sokat szereztek ({own.trans_steals} szerzés) — "
+            "a lehozott kapusuk alatt a szerzés után NE álljatok fel: "
+            "az első nézés az üres kapu, a második a kiugró társ.")
 
     # 388) Az ő indítás-vadászuk × a ti kapus-indításotok: a rabló
     # térfelét el kell kerülni az első passzal.
@@ -19176,6 +19207,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.tcp_fh_by_player for r in reports),
         ohp_steals_by_player=_merge_count_dicts(
             r.ohp_steals_by_player for r in reports),
+        ent_turnovers=sum(r.ent_turnovers for r in reports),
+        ent_punished=sum(r.ent_punished for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

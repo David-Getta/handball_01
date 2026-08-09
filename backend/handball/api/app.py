@@ -4597,6 +4597,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import empty_net_turnovers
+            res["empty_net_turnovers"] = empty_net_turnovers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5500,6 +5505,9 @@ def create_app():
                        lambda: tired_conceder_players(match))
                 from ..pipeline.goalkeeper import outlet_hunters
                 _layer("outlet_hunters", lambda: outlet_hunters(match))
+                from ..pipeline.goalkeeper import empty_net_turnovers
+                _layer("empty_net_turnovers",
+                       lambda: empty_net_turnovers(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

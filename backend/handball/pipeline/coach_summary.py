@@ -2572,6 +2572,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "kapus-indítás ne az ő térfelére nyisson.")
     except Exception:
         pass
+    # 7a6 eladás: mennyibe kerül egy elvesztett labda üres kapunál.
+    try:
+        from .goalkeeper import ENT_PUNISH_PCT, empty_net_turnovers
+        ent = empty_net_turnovers(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ent = ent[side]
+            if rec_ent["punish_pct"] is None:
+                continue
+            if rec_ent["punish_pct"] >= ENT_PUNISH_PCT:
+                body += (f" A(z) {name} 7 a 6-ja alatt elvesztett "
+                         f"labdák {rec_ent['punish_pct']:.0f}%-a gólt "
+                         f"ér ({rec_ent['punished']}/"
+                         f"{rec_ent['turnovers']}) — a szerzés után "
+                         "az első nézés az üres kapu.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

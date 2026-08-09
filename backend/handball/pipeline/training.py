@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 410) 7a6 eladás: a lehozott kapus kockázata labdakezelés-,
+    # nem létszám-kérdés.
+    try:
+        from .goalkeeper import (ENT_MIN_TURNOVERS, ENT_PUNISH_PCT,
+                                 empty_net_turnovers)
+        ent410 = empty_net_turnovers(match, config)
+        for side in ("home", "away"):
+            rec410 = ent410[side]
+            if rec410["punish_pct"] is None:
+                continue
+            if rec410["punish_pct"] < ENT_PUNISH_PCT:
+                continue
+            add(side, "támadás", "7 a 6 labdabiztonság",
+                f"a lehozott kapus mellett {rec410['turnovers']} "
+                f"labdát vesztünk, ebből {rec410['punished']} lett "
+                f"gól ({rec410['punish_pct']:.0f}%; "
+                f"{ENT_MIN_TURNOVERS} eladástól már jelezzük) — a 7 a "
+                "6 kockázata nem a létszám, hanem a labdakezelés",
+                "7 a 6 gyakorlás élesben: kijelölt, biztos kezű ötös, "
+                "tiltott megoldások listája (zsúfoltba bejátszás, "
+                "kipattanós átlövés), és minden eladás után azonnali "
+                "visszafutás-verseny az üres kapuért",
+                )
+    except Exception:
+        pass
+
     # 409) Indítás-vadász emberek: az egy emberre épülő letámadás
     # egy cserével hatástalanítható.
     try:

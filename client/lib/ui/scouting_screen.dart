@@ -2428,6 +2428,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "($topN elcsípett indítás) · ne az ő térfelére nyisson a kapus";
   }
 
+  // 7a6 eladás: mennyibe kerül a lehozott kapus melletti hiba (2+
+  // eladás, 50%+ büntetés — a backenddel azonos küszöbök:
+  // ENT_MIN_TURNOVERS, ENT_PUNISH_PCT).
+  String? _emptyNetTurnovers(Map<String, dynamic> r) {
+    final to = (r["ent_turnovers"] as num?)?.toInt() ?? 0;
+    final pun = (r["ent_punished"] as num?)?.toInt() ?? 0;
+    if (to < 2) return null;
+    final pct = 100.0 * pun / to;
+    if (pct < 50.0) return null;
+    return "a 7 a 6 alatt elvesztett labdák ${pct.toStringAsFixed(0)}%-a "
+        "gólt ér ($pun/$to) · szerzés után azonnal az üres kapura";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10188,6 +10201,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fáradt-fal ember", _tiredConcederPlayer(r)!],
       if (_outletHunter(r) != null)
         ["Indítás-vadász ember", _outletHunter(r)!],
+      if (_emptyNetTurnovers(r) != null)
+        ["7a6 eladás ára", _emptyNetTurnovers(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

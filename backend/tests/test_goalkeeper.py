@@ -334,6 +334,71 @@ def test_outlet_speed_measures_fast_restart():
     assert outlet_speed(_match(frames))["home"]["saves"] == 0
 
 
+def _ent_match(rep=2, punish=True):
+    """`rep` darab 7 a 6 szakasz: a hazai kapus elöl, a hazai birtokol,
+    majd a vendég megszerzi a labdát (eladás). `punish` esetén a
+    vendég rögtön az üres hazai kapuba is dob."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+
+    def cast(bx, by):
+        players = [
+            PlayerPosition(track_id=1, team=Team.HOME, x=20.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0,
+                           role="kapus"),
+            PlayerPosition(track_id=2, team=Team.HOME, x=30.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+            PlayerPosition(track_id=4, team=Team.AWAY, x=12.0, y=10.0,
+                           source=PositionSource.MEASURED, confidence=1.0),
+        ]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=bx, y=by, confidence=1.0))
+
+    for _ in range(rep):
+        for _ in range(150):          # 6 mp 7 a 6, hazai birtoklással
+            frames.append(cast(30.0, 10.0))
+            t += 1
+        for _ in range(40):           # a vendég megszerzi: eladás
+            frames.append(cast(12.0, 10.0))
+            t += 1
+        if punish:
+            for i in range(20):       # dobás az üres hazai kapuba
+                frames.append(cast(max(12.0 - 0.7 * i, 0.0), 10.0))
+                t += 1
+        else:
+            for _ in range(60):       # nincs befejezés
+                frames.append(cast(12.0, 10.0))
+                t += 1
+    return _match(frames)
+
+
+def test_empty_net_turnovers_punished():
+    """Ha a 7 a 6 alatt elvesztett labdákat góllal büntetik, a szerzés
+    utáni első nézés az üres kapu kell legyen."""
+    from handball.pipeline.goalkeeper import (ENT_PUNISH_PCT,
+                                              empty_net_turnovers)
+
+    rec = empty_net_turnovers(_ent_match())["home"]
+    assert rec["turnovers"] == 2 and rec["punished"] == 2, rec
+    assert rec["punish_pct"] is not None
+    assert rec["punish_pct"] >= ENT_PUNISH_PCT, rec
+    assert rec["verdict"] and "üres kapu" in rec["verdict"], rec
+
+
+def test_empty_net_turnovers_unpunished_and_silent_without_samples():
+    """Büntetés nélkül más az ítélet, egyetlen szakaszból pedig nincs."""
+    from handball.pipeline.goalkeeper import empty_net_turnovers
+
+    rec = empty_net_turnovers(_ent_match(punish=False))["home"]
+    assert rec["turnovers"] == 2 and rec["punished"] == 0, rec
+    assert rec["verdict"] and "készenlétet" in rec["verdict"], rec
+
+    solo = empty_net_turnovers(_ent_match(rep=1))["home"]
+    assert solo["punish_pct"] is None and solo["verdict"] is None, solo
+
+
 def test_empty_net_goals_counts_punish_goal():
     """A 7 a 6 szakasz után azonnal bedobott gól "üres kapura kapott"
     gólnak számít a kaput elhagyó csapatnál."""
