@@ -253,6 +253,50 @@ def test_seven_meter_missed_outcome():
     assert out[0]["outcome"] == "kihagyva"
 
 
+def _svy_match(goals=4, misses=0):
+    """Több hazai hetes egymás után: `goals` gól és `misses` mellé."""
+    frames = []
+    t = 0
+    for k in range(goals + misses):
+        for _ in range(30):        # álló labda a 7 m-es ponton
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                ball=Ball(x=33.0, y=10.0, confidence=1.0)))
+            t += 1
+        y = 10.0 if k < goals else 5.0
+        for i in range(7):         # a dobás
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 32.0, 10.0)],
+                ball=Ball(x=min(34.0 + i, 40.0), y=y, confidence=1.0)))
+            t += 1
+        for _ in range(300):       # szünet a következő hetesig
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 20.0, 10.0)],
+                ball=Ball(x=20.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_seven_yield_flags_automatic_penalties():
+    """Ha minden hetesük bemegy, a hetest érő szabálytalanság a
+    legrosszabb üzlet."""
+    from handball.pipeline.rules import SVY_HIGH_PCT, seven_yield
+
+    rec = seven_yield(_svy_match())["home"]
+    assert rec["attempts"] >= 4, rec
+    assert rec["goal_pct"] is not None
+    assert rec["goal_pct"] >= SVY_HIGH_PCT, rec
+    assert rec["verdict"] and "legrosszabb üzlet" in rec["verdict"], rec
+
+
+def test_seven_yield_silent_with_few_attempts():
+    """Kevés hetesből nincs ítélet."""
+    from handball.pipeline.rules import seven_yield
+
+    rec = seven_yield(_svy_match(goals=2))["home"]
+    assert rec["goal_pct"] is None and rec["verdict"] is None, rec
+
+
 def test_seven_meter_no_shot_is_unknown():
     """Ha az ablakban nincs lövés (pl. újra lefújták), a kimenetel ismeretlen."""
     frames = []

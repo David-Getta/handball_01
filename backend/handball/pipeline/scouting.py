@@ -1066,6 +1066,10 @@ class ScoutingReport:
     # félidőnként. Darabszám, meccsek közt összegződik.
     # Emberelőny-hozam: kaputra tartó lövések és gólok emberelőnyben,
     # illetve egyenlő létszámnál. Darabszám, összegződik.
+    # Hetes-hozam: a mért hetesek és a belőlük esett gólok.
+    # Darabszám, meccsek közt pontosan összegződik.
+    svy_attempts: int = 0
+    svy_goals: int = 0
     ppy_pp_shots: int = 0
     ppy_pp_goals: int = 0
     ppy_eq_shots: int = 0
@@ -4398,6 +4402,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"emberelőnyben, {_ppy_e:.0f}% egyenlő létszámnál) — "
                 "a két perc ellenük olcsó: a szükséges taktikai "
                 "megállítás vállalható.")
+
+    # Hetes-hozam: mit ér ellenük a hetest érő szabálytalanság.
+    if rep.svy_attempts >= 4:
+        _svy_p = 100.0 * rep.svy_goals / rep.svy_attempts
+        if _svy_p >= 85.0:
+            keys.append(
+                f"A heteseik szinte biztos gólok ({rep.svy_goals}/"
+                f"{rep.svy_attempts}, {_svy_p:.0f}%) — a hetest érő "
+                "szabálytalanság a legrosszabb üzlet: a fal lábbal "
+                "védekezzen, a beugró elé testtel álljatok, ne kézzel "
+                "húzzátok vissza.")
+        elif _svy_p <= 60.0:
+            keys.append(
+                f"A hetesük megfogható ({rep.svy_goals}/"
+                f"{rep.svy_attempts}, {_svy_p:.0f}%) — a biztos "
+                "helyzetet megállító szabálytalanság ellenük "
+                "vállalható, a kapusotok pedig külön készüljön a "
+                "hetesükre.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9843,6 +9865,10 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .rules import seven_yield as _svy
+        svyrec = _svy(match, config)[team.value]
+        rep.svy_attempts = svyrec["attempts"]
+        rep.svy_goals = svyrec["goals"]
         from .rules import powerplay_yield as _ppy
         ppyrec = _ppy(match, config)[team.value]
         rep.ppy_pp_shots = ppyrec["pp_shots"]
@@ -12625,6 +12651,26 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 396) Az ő hetes-hozamuk × a ti kapusotok: a hetest érő
+    # szabálytalanság ára náluk mérhető.
+    if opp.svy_attempts >= 4 and own.gk_on_target >= 5:
+        _svy396 = 100.0 * opp.svy_goals / opp.svy_attempts
+        if _svy396 <= 60.0:
+            plan.append(
+                f"A hetesük megfogható ({opp.svy_goals}/"
+                f"{opp.svy_attempts}, {_svy396:.0f}%), a kapusotok "
+                f"pedig {100.0 * own.gk_saves / own.gk_on_target:.0f}"
+                "%-on véd — a biztos "
+                "helyzetet megállító szabálytalanság ellenük "
+                "vállalható: a hetes jobb üzlet, mint az üres kapu.")
+        elif _svy396 >= 85.0:
+            plan.append(
+                f"A heteseik szinte biztos gólok ({opp.svy_goals}/"
+                f"{opp.svy_attempts}, {_svy396:.0f}%) — a hetest érő "
+                "szabálytalanságot ki kell venni a játékunkból: a "
+                "fal lábbal védekezzen, a beugró elé testtel "
+                "álljatok.")
 
     # 395) Az ő emberelőny-hozamuk × a ti fegyelmetek: a kétperc
     # ára náluk mérhető.
@@ -19463,6 +19509,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stc_susp_by_player for r in reports),
         otp_outlets_by_player=_merge_count_dicts(
             r.otp_outlets_by_player for r in reports),
+        svy_attempts=sum(r.svy_attempts for r in reports),
+        svy_goals=sum(r.svy_goals for r in reports),
         ppy_pp_shots=sum(r.ppy_pp_shots for r in reports),
         ppy_pp_goals=sum(r.ppy_pp_goals for r in reports),
         ppy_eq_shots=sum(r.ppy_eq_shots for r in reports),

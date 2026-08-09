@@ -2580,6 +2580,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hetes-hozam: mennyit ér náluk egy megítélt hetes (4+ hetes — a
+  // backenddel azonos küszöbök: SVY_MIN_ATTEMPTS, SVY_HIGH_PCT,
+  // SVY_LOW_PCT).
+  String? _sevenYield(Map<String, dynamic> r) {
+    final att = (r["svy_attempts"] as num?)?.toInt() ?? 0;
+    final gl = (r["svy_goals"] as num?)?.toInt() ?? 0;
+    if (att < 4) return null;
+    final pct = 100.0 * gl / att;
+    if (pct >= 85.0) {
+      return "a heteseik szinte biztos gólok ($gl/$att, "
+          "${pct.toStringAsFixed(0)}%) · a hetest érő "
+          "szabálytalanság a legrosszabb üzlet";
+    }
+    if (pct <= 60.0) {
+      return "a hetesük megfogható ($gl/$att, "
+          "${pct.toStringAsFixed(0)}%) · a megállító szabálytalanság "
+          "ellenük vállalható";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10354,6 +10375,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Blokk-fáradás", _blockFade(r)!],
       if (_powerplayYield(r) != null)
         ["Emberelőny-hozam", _powerplayYield(r)!],
+      if (_sevenYield(r) != null)
+        ["Hetes-hozam", _sevenYield(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

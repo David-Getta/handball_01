@@ -550,6 +550,63 @@ def seven_meter_summary(match: Match,
     return out
 
 
+# Hetes-hozam: ennyi mért hetes kell az ítélethez; e fölött
+# "biztos kezűek", e alatt "megfoghatók" a hetesnél.
+SVY_MIN_ATTEMPTS = 4
+SVY_HIGH_PCT = 85.0
+SVY_LOW_PCT = 60.0
+
+
+def seven_yield(match: Match,
+                config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-hozam: MENNYIT ÉR NÁLUK egy megítélt hetes.
+
+    A hétméteres-mérleg (seven_meter_summary) a nyers számokat adja
+    — ez az ÍTÉLETET: a felismert hetesek gólarányát méri, és
+    megmondja, mit ér ellenük a hetest érő szabálytalanság.
+
+    Edzőileg ez a védekezés ár-kalkulációja. Ha a heteseik szinte
+    mindig bemennek, a hetest érő szabálytalanság a legrosszabb
+    üzlet: a fal lábbal védekezzen, és a beugró ellen inkább a
+    testtel elzárt út kell, mint a kézzel visszahúzás. Ha a
+    hetesük megfogható, a biztos helyzetet megállító szabálytalanság
+    vállalható, és a kapusnak érdemes a hetesre külön készülnie.
+    Saját csapatra: a hetes-értékesítésünk mérhető, nem hitkérdés.
+
+    Visszatérés csapatonként (a DOBÓ oldal): {"attempts", "goals",
+    "saved", "missed", "goal_pct", "verdict"} — a pct/verdict None,
+    ha kevés (SVY_MIN_ATTEMPTS alatti) a mért hetes.
+    """
+    config = config or TacticsConfig()
+    summ = seven_meter_summary(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec = dict(summ.get(side, {"attempts": 0, "goals": 0,
+                                   "saved": 0, "missed": 0}))
+        rec["goal_pct"] = None
+        rec["verdict"] = None
+        if rec["attempts"] >= SVY_MIN_ATTEMPTS:
+            pct = 100.0 * rec["goals"] / rec["attempts"]
+            rec["goal_pct"] = round(pct, 1)
+            if pct >= SVY_HIGH_PCT:
+                rec["verdict"] = (
+                    f"a hetesük szinte biztos gól ({rec['goals']}/"
+                    f"{rec['attempts']}, {pct:.0f}%) — a hetest érő "
+                    "szabálytalanság a legrosszabb üzlet: a fal "
+                    "lábbal védekezzen, a beugró elé testtel kell "
+                    "állni, nem kézzel visszahúzni")
+            elif pct <= SVY_LOW_PCT:
+                rec["verdict"] = (
+                    f"a hetesük megfogható ({rec['goals']}/"
+                    f"{rec['attempts']}, {pct:.0f}%) — a biztos "
+                    "helyzetet megállító szabálytalanság ellenük "
+                    "vállalható, és a kapusnak külön készülnie kell "
+                    "a hetesükre")
+        out[side] = rec
+    return out
+
+
 def seven_meter_defense(match: Match,
                         config: Optional[TacticsConfig] = None) -> dict:
     """Hetes-védés: a kapus mérlege a RÁ dobott hetesekből.

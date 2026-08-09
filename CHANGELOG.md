@@ -17,6 +17,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Hetes-hozam: mennyit ér náluk egy megítélt hetes.** A
+  hétméteres-mérleg eddig csak a nyers számokat adta — az új réteg az
+  ítéletet: a felismert hetesek gólarányát méri, és megmondja, mit ér
+  ellenük a hetest érő szabálytalanság. Edzőileg ez a védekezés
+  ár-kalkulációja: ha a heteseik szinte mindig bemennek, a hetest érő
+  szabálytalanság a legrosszabb üzlet (lábbal védekező fal, a beugró
+  elé testtel, nem kézzel); ha a hetesük megfogható, a biztos
+  helyzetet megállító szabálytalanság vállalható, és a kapusnak külön
+  készülnie kell rá. Saját csapatra: a hetes-értékesítésünk mérhető,
+  és 60% alatt edzés-téma (fix rutin, fáradtan gyakorolt hetes). Négy
+  mért hetestől ítél. A rangsorban a "felkészülés" családba tartozik.
+  Felületek: /analyze + meccs-csomag (`seven_yield`), edzői
+  összefoglaló, felderítés (`svy_attempts` / `svy_goals` mezők +
+  edzői kulcs + 396. meccsterv-szabály), edzés-fókusz (417.
+  szabály), kliens-csempe.
+
 - **Emberelőny-hozam: megbüntetik-e a kiállítást.** Az
   emberelőny-hatékonyság eddig csak a nyers számokat adta — az új
   réteg az ítéletet: összeveti a kaputra tartó lövések gólarányát

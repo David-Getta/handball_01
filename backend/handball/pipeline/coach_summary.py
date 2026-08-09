@@ -2681,6 +2681,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_ppy['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Hetes-hozam: mennyit ér náluk egy megítélt hetes.
+    try:
+        from .rules import seven_yield
+        svy = seven_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svy = svy[side]
+            if rec_svy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} hetesei "
+                     f"{rec_svy['goal_pct']:.0f}%-ban mennek be "
+                     f"({rec_svy['goals']}/{rec_svy['attempts']}) — "
+                     f"{rec_svy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

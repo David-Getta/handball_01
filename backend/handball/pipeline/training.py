@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 417) Hetes-hozam: a hetes a legolcsóbb gól — ha bemegy.
+    try:
+        from .rules import SVY_LOW_PCT, seven_yield
+        svy417 = seven_yield(match, config)
+        for side in ("home", "away"):
+            rec417 = svy417[side]
+            if rec417["goal_pct"] is None:
+                continue
+            if rec417["goal_pct"] > SVY_LOW_PCT:
+                continue
+            add(side, "támadás", "Hetes-értékesítés",
+                f"a heteseinkből csak {rec417['goal_pct']:.0f}% megy "
+                f"be ({rec417['goals']}/{rec417['attempts']}; "
+                f"{SVY_LOW_PCT:.0f}% alatt jelezzük) — a legolcsóbb "
+                "gólt hagyjuk a kapuson",
+                "hetes-rutin: kijelölt 1-2 dobó, mindenkinek FIX "
+                "rutin (ugyanaz a ritmus és irány-döntés), "
+                "hetes-gyakorlás fáradtan és nyomás alatt (edzés "
+                "végén, tétre menő sorozatban)",
+                )
+    except Exception:
+        pass
+
     # 416) Emberelőny-hozam: a két perc akkor ér valamit, ha gól
     # lesz belőle.
     try:
