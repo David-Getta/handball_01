@@ -1957,6 +1957,73 @@ def assisted_scorer_roles(match: Match,
     return out
 
 
+# Kiszolgált befejezők: ennyi bejátszásból esett gól kell a névhez,
+# és ekkora részarány fölött mondjuk ki, hogy ő kiszolgálásból él.
+ASP_MIN_ASSISTED = 3
+ASP_SHARE_PCT = 60.0
+
+
+def assisted_scorers(match: Match,
+                     config: Optional[TacticsConfig] = None) -> dict:
+    """Kiszolgált befejezők: KI él a bejátszásokból.
+
+    A kiszolgált-poszt (assisted_scorer_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: minden gólnál megnézi, volt-e gólpassz, és a
+    befejező nevéhez írja a gólt (kiszolgáltként vagy sajátként).
+
+    Edzőileg ez dönti el, mit kell ellene tenni. Aki a góljai nagy
+    részét bejátszásból szerzi, azt nem fogni kell, hanem éheztetni:
+    a felé futó passzt elvágni (sávzárás, előrelépő védő) — ő
+    egyénileg nem teremt helyzetet. Aki maga teremt, ott a passz
+    elvágása keveset ér: oda emberfogás vagy kettőzés kell. Saját
+    csapatra: aki csak kiszolgálásból él, a bejátszó emberének
+    kiesésekor tervre szorul.
+
+    Visszatérés csapatonként: {"assisted", "players": [{"player_id",
+    "jersey", "assisted", "goals"}], "top"} — a lista kiszolgált gól
+    szerint csökkenő; a "top" az első játékos, ha legalább
+    ASP_MIN_ASSISTED kiszolgált gólja van, és ezek a góljainak
+    legalább ASP_SHARE_PCT-át adják, különben None.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        if side not in tally:
+            continue
+        rec = tally[side].setdefault(e.player_id, {"assisted": 0,
+                                                   "goals": 0})
+        rec["goals"] += 1
+        if (e.detail or {}).get("assist_id"):
+            rec["assisted"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "assisted": r["assisted"], "goals": r["goals"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["assisted"])]
+        top = None
+        if rows and rows[0]["assisted"] >= ASP_MIN_ASSISTED:
+            share = 100.0 * rows[0]["assisted"] / max(1, rows[0]["goals"])
+            if share >= ASP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"assisted": sum(r["assisted"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
 # Indító-poszt: ennyi poszthoz kötött támadás-indítás kell az
 # ítélethez, és ekkora részarány fölött mondjuk ki, hogy a
 # szervezésük egy posztnál indul.

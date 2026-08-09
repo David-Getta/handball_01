@@ -1397,6 +1397,29 @@ def test_assisted_scorer_roles_silent_with_few_assisted():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_assisted_scorers_names_the_fed_man():
+    """Három bejátszott gól ugyanattól az embertől → őt éheztetni
+    kell, nem fogni."""
+    from handball.pipeline.roles import (ASP_MIN_ASSISTED,
+                                         assisted_scorers)
+
+    rec = assisted_scorers(
+        _asr_match([(7, True), (7, True), (7, True),
+                    (9, False)]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["assisted"] >= ASP_MIN_ASSISTED, rec
+
+
+def test_assisted_scorers_silent_for_self_made_scorer():
+    """Aki maga teremt (kevés bejátszott gól), azt nem nevezzük meg."""
+    from handball.pipeline.roles import assisted_scorers
+
+    rec = assisted_scorers(
+        _asr_match([(7, True), (9, False), (9, False)]))["home"]
+    assert rec["top"] is None, rec
+
+
 # ---- Indító-poszt (melyik posztjuknál indul a támadás-szervezés) -----------
 
 

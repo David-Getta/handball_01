@@ -2588,6 +2588,24 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                          "az első nézés az üres kapu.")
     except Exception:
         pass
+    # Kiszolgált befejezők: ki él a bejátszásokból.
+    try:
+        from .roles import assisted_scorers
+        asp = assisted_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_asp = asp[side]["top"]
+            if top_asp is None:
+                continue
+            _ki4 = (f"a(z) {top_asp['jersey']}. számú"
+                    if top_asp.get("jersey") is not None
+                    else f"a(z) {top_asp['player_id']}. játékos")
+            body += (f" A(z) {name} befejezői közül {_ki4} a "
+                     f"bejátszásokból él ({top_asp['assisted']}/"
+                     f"{top_asp['goals']} gólja gólpasszos) — őt nem "
+                     "fogni kell, hanem éheztetni: a felé futó "
+                     "passzt elvágni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

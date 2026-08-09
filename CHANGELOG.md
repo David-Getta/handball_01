@@ -17,6 +17,23 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Kiszolgált befejezők: ki él a bejátszásokból.** A kiszolgált-
+  poszt a posztot nevezi meg — az új réteg az embert: minden gólnál
+  megnézi, volt-e gólpassz, és a befejező nevéhez írja. Edzőileg ez
+  dönti el, mit kell ellene tenni: aki a góljai nagy részét
+  bejátszásból szerzi, azt nem fogni kell, hanem éheztetni (a felé
+  futó passzt elvágni sávzárással, előrelépő védővel) — egyénileg nem
+  teremt helyzetet; aki maga teremt, ott a passz elvágása keveset ér,
+  oda emberfogás vagy kettőzés kell. Saját csapatra: aki csak
+  kiszolgálásból él, a bejátszója kiesésekor terv nélkül marad. Három
+  kiszolgált góltól és a góljai 60%-ától emel ki nevet. A rangsorban
+  az "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`assisted_scorers`), edzői összefoglaló, felderítés
+  (`asp_assisted_by_player` / `asp_goals_by_player` mezők + edzői
+  kulcs + 390. meccsterv-szabály), edzés-fókusz (411. szabály),
+  kliens-csempe.
+
 - **7a6 eladás: mennyibe kerül egy elvesztett labda üres kapunál.**
   Az üres kapura kapott gólok rétege a 7 a 6 teljes mérlegét adja —
   az új réteg a mechanizmust: megszámolja a lehozott kapus mellett

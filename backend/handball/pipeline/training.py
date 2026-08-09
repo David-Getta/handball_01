@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 411) Kiszolgált befejezők: aki csak bejátszásból él, a
+    # kiszolgálója kiesésekor terv nélkül marad.
+    try:
+        from .roles import ASP_MIN_ASSISTED, assisted_scorers
+        asp411 = assisted_scorers(match, config)
+        for side in ("home", "away"):
+            top411 = asp411[side].get("top")
+            if top411 is None:
+                continue
+            _ki411 = (f"a(z) {top411['jersey']}. számú"
+                      if top411.get("jersey") is not None
+                      else f"a(z) {top411['player_id']}. játékos")
+            add(side, "támadás", "Önálló helyzetteremtés",
+                f"{_ki411} góljai bejátszásból esnek "
+                f"({top411['assisted']}/{top411['goals']} gólpasszos; "
+                f"{ASP_MIN_ASSISTED} kiszolgált góltól már jelezzük) "
+                "— ha a kiszolgálóját kiveszik a játékból, ő is "
+                "eltűnik vele",
+                "önálló befejezés-edzés neki: indulás labda nélkül és "
+                "átvétel mozgásban, 1v1 a saját sávban lezárt passz "
+                "mellett, és második megoldás a figurákban (ha nem "
+                "jön a bejátszás, ő legyen a kezdeményező)",
+                )
+    except Exception:
+        pass
+
     # 410) 7a6 eladás: a lehozott kapus kockázata labdakezelés-,
     # nem létszám-kérdés.
     try:

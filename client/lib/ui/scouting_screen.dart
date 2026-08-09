@@ -2441,6 +2441,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "gólt ér ($pun/$to) · szerzés után azonnal az üres kapura";
   }
 
+  // Kiszolgált befejezők: ki él a bejátszásokból (3+ kiszolgált gól,
+  // a góljainak 60%-a — a backenddel azonos küszöbök:
+  // ASP_MIN_ASSISTED, ASP_SHARE_PCT).
+  String? _assistedScorer(Map<String, dynamic> r) {
+    final asd = (r["asp_assisted_by_player"] as Map?)?.cast<String, dynamic>();
+    final gls = (r["asp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (asd == null || asd.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    asd.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    final goals = ((gls?[top] as num?) ?? 0).toInt();
+    if (topN < 0.6 * (goals < 1 ? 1 : goals)) return null;
+    return "a(z) $top. a bejátszásokból él ($topN/$goals gólja "
+        "gólpasszos) · éheztetni kell, nem fogni";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10203,6 +10226,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Indítás-vadász ember", _outletHunter(r)!],
       if (_emptyNetTurnovers(r) != null)
         ["7a6 eladás ára", _emptyNetTurnovers(r)!],
+      if (_assistedScorer(r) != null)
+        ["Kiszolgált befejező", _assistedScorer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

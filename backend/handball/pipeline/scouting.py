@@ -1050,6 +1050,10 @@ class ScoutingReport:
     # góllal büntetett részük. Darabszám, meccsek közt összegződik.
     ent_turnovers: int = 0
     ent_punished: int = 0
+    # Kiszolgált befejezők: a bejátszásból esett gólok és az ÖSSZES
+    # góljuk BEFEJEZŐNKÉNT. Darabszám, meccsek közt összegződik.
+    asp_assisted_by_player: dict = field(default_factory=dict)
+    asp_goals_by_player: dict = field(default_factory=dict)
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4281,6 +4285,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "biztos kezű ötös menjen, és a kockázatos megoldások "
                 "(zsúfoltba bejátszás, kipattanós átlövés) maradjanak "
                 "ki a képletből.")
+
+    # Kiszolgált befejezők: kit éheztetni kell, nem fogni.
+    if rep.asp_assisted_by_player:
+        _asp_k, _asp_n = max(rep.asp_assisted_by_player.items(),
+                             key=lambda kv: kv[1])
+        _asp_g = rep.asp_goals_by_player.get(_asp_k, 0)
+        if _asp_n >= 3 and _asp_n >= 0.6 * max(1, _asp_g):
+            keys.append(
+                f"A(z) {_asp_k}. a bejátszásokból él ({_asp_n}/"
+                f"{_asp_g} gólja gólpasszos) — őt nem fogni kell, "
+                "hanem éheztetni: a felé futó passzt vágjátok el "
+                "(sávzárás, előrelépő védő), egyénileg nem teremt "
+                "helyzetet.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9726,6 +9743,16 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .roles import assisted_scorers as _asp
+        asprec = _asp(match, config)[team.value]
+        rep.asp_assisted_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["assisted"]
+            for r in asprec["players"] if r["assisted"]}
+        rep.asp_goals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["goals"]
+            for r in asprec["players"] if r["goals"]}
         from .attack_types import backward_passers as _bprp
         bprprec = _bprp(match, config)[team.value]
         rep.bprp_passes_by_player = {
@@ -12468,6 +12495,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 390) Az ő kiszolgált befejezőjük × a ti passzsáv-zárásotok:
+    # az éheztetés olcsóbb, mint az emberfogás.
+    if opp.asp_assisted_by_player and own.dbl_doubled_frames >= 50:
+        _asp390_k, _asp390_n = max(opp.asp_assisted_by_player.items(),
+                                   key=lambda kv: kv[1])
+        _asp390_g = opp.asp_goals_by_player.get(_asp390_k, 0)
+        if _asp390_n >= 3 and _asp390_n >= 0.6 * max(1, _asp390_g):
+            plan.append(
+                f"A(z) {_asp390_k}. a bejátszásokból él ({_asp390_n}/"
+                f"{_asp390_g} gólja gólpasszos), ti pedig tudtok "
+                "kettőzni — de ellene ne a kettőzés menjen: a felé "
+                "futó passzt vágjátok el (sávzárás, előrelépő védő), "
+                "és a kettőzést tartsátok meg a magát megteremtő "
+                "emberükre.")
 
     # 389) Az ő 7a6-eladásuk × a ti labdaszerzésetek: a lehozott
     # kapus mellett minden szerzés azonnali dobás.
@@ -19209,6 +19251,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ohp_steals_by_player for r in reports),
         ent_turnovers=sum(r.ent_turnovers for r in reports),
         ent_punished=sum(r.ent_punished for r in reports),
+        asp_assisted_by_player=_merge_count_dicts(
+            r.asp_assisted_by_player for r in reports),
+        asp_goals_by_player=_merge_count_dicts(
+            r.asp_goals_by_player for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

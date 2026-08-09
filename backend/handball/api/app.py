@@ -4602,6 +4602,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.roles import assisted_scorers
+            res["assisted_scorers"] = assisted_scorers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5508,6 +5513,8 @@ def create_app():
                 from ..pipeline.goalkeeper import empty_net_turnovers
                 _layer("empty_net_turnovers",
                        lambda: empty_net_turnovers(match))
+                from ..pipeline.roles import assisted_scorers
+                _layer("assisted_scorers", lambda: assisted_scorers(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning
