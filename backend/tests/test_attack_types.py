@@ -4659,3 +4659,23 @@ def test_breakthrough_yield_silent_with_few_entries():
     rec = breakthrough_yield(_bty_match(3, 1))["home"]
     assert rec["entries"] == 3 and rec["goal_pct"] is None, rec
     assert rec["verdict"] is None, rec
+
+
+def test_last_holders_names_the_dead_end():
+    """Ha a terméketlen támadások rendre ugyanannak a kezében halnak
+    el, rá kell tolni a nyomást."""
+    from handball.pipeline.attack_types import (LSTP_MIN_ATTACKS,
+                                                last_holders)
+
+    rec = last_holders(_lst_match([7, 7, 7, 7, 5]))["home"]
+    assert rec["attacks"] >= 4, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["attacks"] >= LSTP_MIN_ATTACKS, rec
+
+
+def test_last_holders_silent_with_few_attacks():
+    """Két terméketlen támadásból még nincs kiemelt név."""
+    from handball.pipeline.attack_types import last_holders
+
+    rec = last_holders(_lst_match([7, 5]))["home"]
+    assert rec["top"] is None, rec

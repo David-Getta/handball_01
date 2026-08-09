@@ -1355,6 +1355,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "az ő bejátszó-sávját kell elvágni.")
     except Exception:
         pass
+    # Vég-birtokosok: kinek a kezében hal el a támadásuk.
+    try:
+        from .attack_types import last_holders
+        lstp = last_holders(match)
+        for side, name in (("home", home), ("away", away)):
+            top = lstp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} terméketlen támadásai {_ki} "
+                     f"kezében halnak el a legtöbbször "
+                     f"({top['attacks']} támadás) — a támadás "
+                     "második felében rá kell tolni a nyomást.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

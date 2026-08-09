@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 401) Vég-birtokosok: ha mindig ugyanaz marad a labdával, a
+    # befejezés-felelősség tisztázatlan.
+    try:
+        from .attack_types import LSTP_MIN_ATTACKS, last_holders
+        lstp401 = last_holders(match, config)
+        for side in ("home", "away"):
+            top401 = lstp401[side].get("top")
+            if top401 is None:
+                continue
+            _ki401 = (f"a(z) {top401['jersey']}. számú"
+                      if top401.get("jersey") is not None
+                      else f"a(z) {top401['player_id']}. játékos")
+            add(side, "támadás", "Befejezés-felelősség",
+                f"a terméketlen támadásaink {_ki401} kezében halnak "
+                f"el a legtöbbször ({top401['attacks']} lövés "
+                f"nélküli támadás; {LSTP_MIN_ATTACKS} támadástól már "
+                "jelezzük) — az ő kezében fogy el a támadás, és "
+                "onnan nincs megoldás",
+                "kötelező befejezés-szabály: a hetedik passz után "
+                "lövés vagy kiugratás, kijelölt második befejező, és "
+                "a labdatartó tehermentesítése — edzésen "
+                "óra-nyomással játszott 5-5",
+                )
+    except Exception:
+        pass
+
     # 400) Ziccer-előkészítők: ha a helyzeteink egy ember kezéből
     # indulnak, a kiesésével eltűnnek.
     try:

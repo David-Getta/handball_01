@@ -5995,3 +5995,79 @@ def breakthrough_yield(match: Match,
                     "a kipattanóra küldeni embert")
         out[side] = rec
     return out
+
+
+# Vég-birtokosok: ennyi lövés nélkül záruló támadástól emeljük ki a
+# játékost.
+LSTP_MIN_ATTACKS = 3
+
+
+def last_holders(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Vég-birtokosok: KINEK A KEZÉBEN hal el a támadásuk.
+
+    A vég-birtokos poszt (last_holder_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: minden lövés nélkül záruló támadás UTOLSÓ
+    labdabirtokosát számolja játékosonként.
+
+    Edzőileg ez a nyomás névre szóló címzettje: ha a terméketlen
+    támadásaik rendre ugyanannak a kezében halnak el, a támadás
+    második felében rá kell tolni a nyomást — nála zárul a támadás,
+    és ott a legolcsóbb a labdaszerzés. Saját csapatra: ha nálunk
+    mindig ugyanaz marad a labdával, a befejezés-felelősség
+    tisztázatlan.
+
+    Visszatérés csapatonként: {"attacks" (emberhez kötött, lövés
+    nélkül záruló támadás), "players": [{"player_id", "jersey",
+    "attacks"}], "top"} — a "top" az első játékos, ha legalább
+    LSTP_MIN_ATTACKS ilyen támadása van, különben None.
+    """
+    from .decisions import ball_holder
+    from .event_detection import EventType, detect_shots
+    from .setplays import segment_attacks
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    tail = round(ATTACK_TAIL_S * fps)
+    by_t = {f.t: f for f in match.frames}
+    shots = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type in (EventType.SHOT, EventType.GOAL)]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for seq in segment_attacks(match, config):
+        side = seq.team.value
+        if any(s == side and seq.start_t <= t <= seq.end_t + tail
+               for (t, s) in shots):
+            continue   # lövéssel zárult: nem terméketlen
+        last_id = None
+        for t in range(seq.end_t, seq.start_t - 1, -1):
+            f = by_t.get(t)
+            if f is None:
+                continue
+            h = ball_holder(f, config)
+            if h is not None and h.team is not None \
+                    and h.team.value == side and h.role != "kapus":
+                last_id = h.track_id
+                break
+        if last_id is None:
+            continue
+        tally[side][last_id] = tally[side].get(last_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "attacks": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["attacks"] >= LSTP_MIN_ATTACKS
+               else None)
+        out[side] = {"attacks": sum(r["attacks"] for r in rows),
+                     "players": rows, "top": top}
+    return out

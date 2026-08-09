@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Vég-birtokosok: kinek a kezében hal el a támadásuk.** A
+  vég-birtokos poszt a posztot nevezi meg — az új réteg az embert:
+  minden lövés nélkül záruló támadás utolsó labdabirtokosát számolja
+  játékosonként. Edzőileg ez a nyomás névre szóló címzettje: a
+  támadás második felében rá kell tolni a nyomást, mert nála zárul a
+  támadás, és ott a legolcsóbb a labdaszerzés; saját csapatra a
+  befejezés-felelősség tisztázása a téma. Három terméketlen
+  támadástól emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`last_holders`), edzői
+  összefoglaló, felderítés (`lstp_attacks_by_player` mező + edzői
+  kulcs + 380. meccsterv-szabály), edzés-fókusz (401. szabály),
+  kliens-csempe.
+
 - **Ziccer-előkészítők: ki adja a passzt a nagy helyzethez.** A
   ziccer-előkészítő poszt a posztot nevezi meg — az új réteg az
   embert: a nagy helyzet-értékű lövésekhez megkeresi a lövő felé menő

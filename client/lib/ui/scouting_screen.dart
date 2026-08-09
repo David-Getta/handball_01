@@ -2344,6 +2344,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Vég-birtokosok: kinek a kezében hal el a támadásuk (3+ lövés
+  // nélkül záruló támadás — a backenddel azonos küszöb:
+  // LSTP_MIN_ATTACKS).
+  String? _lastHolderPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["lstp_attacks_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "a terméketlen támadásaik a(z) $top. kezében halnak el a "
+        "legtöbbször ($topN támadás) · a támadás második felében rá "
+        "toljátok a nyomást";
+  }
+
   // Ziccer-előkészítők: ki adja a passzt a nagy helyzethez (2+
   // előkészítés — a backenddel azonos küszöb: BCFP_MIN_FEEDS).
   String? _bigChanceFeederPlayer(Map<String, dynamic> r) {
@@ -9982,6 +10004,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Válaszhiba-ember", _responseTurnoverPlayer(r)!],
       if (_bigChanceFeederPlayer(r) != null)
         ["Ziccer-előkészítő ember", _bigChanceFeederPlayer(r)!],
+      if (_lastHolderPlayer(r) != null)
+        ["Vég-birtokos ember", _lastHolderPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
