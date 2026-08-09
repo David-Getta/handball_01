@@ -17,6 +17,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Indítás-vadász emberek: ki ugrik rá a kapus-indításra.** Az
+  indítás-vadász poszt a posztot nevezi meg — az új réteg az embert:
+  minden elveszett kapus-indításnál a labdát megszerző játékos
+  nevéhez ír egy rablást. Edzőileg kétirányú és azonnal használható:
+  ellenük a saját kapus indítása ne az ő térfelére nyisson (másik
+  oldal, vagy a feje fölött hosszan), saját csapatra pedig figyelmeztet,
+  ha a letámadásunk egyetlen emberen áll — azt az ellenfél egy cserével
+  hatástalanítja. Két elcsípett indítástól emel ki nevet. A rangsorban
+  az "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`outlet_hunters`), edzői összefoglaló, felderítés
+  (`ohp_steals_by_player` mező + edzői kulcs + 388. meccsterv-szabály),
+  edzés-fókusz (409. szabály), kliens-csempe.
+
 - **Fáradt-fal emberek: ki jár át rajtuk a második félidőre.** A
   fáradt-fal poszt a posztot nevezi meg — az új réteg az embert: a
   kapott gólokat félidőnként a LÖVŐ nevéhez írja, és megkeresi, kinek

@@ -1043,6 +1043,9 @@ class ScoutingReport:
     # LÖVŐNKÉNT (a mi falunk ellen). Darabszám, összegződik.
     tcp_sh_by_player: dict = field(default_factory=dict)
     tcp_fh_by_player: dict = field(default_factory=dict)
+    # Indítás-vadász emberek: az elcsípett kapus-indítások darabszáma
+    # RABLÓNKÉNT. Darabszám, meccsek közt pontosan összegződik.
+    ohp_steals_by_player: dict = field(default_factory=dict)
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4251,6 +4254,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"át ({_tcp_fh} → {_tcp_sh} kapott gól) — a szünet "
                 "után rá friss védő és besegítés kell: fáradtan "
                 "vele szemben nyílik meg a fal.")
+
+    # Indítás-vadász emberek: merre nyisson a kapusotok.
+    if rep.ohp_steals_by_player:
+        _ohp_k, _ohp_n = max(rep.ohp_steals_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _ohp_n >= 2:
+            keys.append(
+                f"Az indításaitokra a(z) {_ohp_k}. ugrik rá a "
+                f"legtöbbször ({_ohp_n} elcsípett indítás) — a "
+                "kapusotok ne az ő térfelére nyisson: vagy a másik "
+                "oldal, vagy a feje fölött a hosszú indítás.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9686,6 +9700,12 @@ def _scout_team_cached(match: Match, team: Team,
         tcprec = _tcp(match, config)[team.value]
         rep.tcp_sh_by_player = dict(tcprec["sh"])
         rep.tcp_fh_by_player = dict(tcprec["fh"])
+        from .goalkeeper import outlet_hunters as _ohp
+        ohprec = _ohp(match, config)[team.value]
+        rep.ohp_steals_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["steals"]
+            for r in ohprec["players"]}
         from .attack_types import backward_passers as _bprp
         bprprec = _bprp(match, config)[team.value]
         rep.bprp_passes_by_player = {
@@ -12428,6 +12448,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 388) Az ő indítás-vadászuk × a ti kapus-indításotok: a rabló
+    # térfelét el kell kerülni az első passzal.
+    if opp.ohp_steals_by_player and own.gos_outlets >= 6:
+        _ohp388_k, _ohp388_n = max(opp.ohp_steals_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _ohp388_n >= 2:
+            plan.append(
+                f"A(z) {_ohp388_k}. ugrik rá az indításokra "
+                f"({_ohp388_n} elcsípett indítás), ti pedig sokat "
+                f"indítotok a kapustól ({own.gos_outlets} indítás) — "
+                "az első passz az ő térfelét kerülje el: másik "
+                "oldalra vagy a feje fölött, hosszan.")
 
     # 387) Az ő fáradó faluk × a ti hajrá-emberetek: a szünet utáni
     # figurákat arra a lövőre kell építeni, aki átjár rajtuk.
@@ -19141,6 +19174,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.tcp_sh_by_player for r in reports),
         tcp_fh_by_player=_merge_count_dicts(
             r.tcp_fh_by_player for r in reports),
+        ohp_steals_by_player=_merge_count_dicts(
+            r.ohp_steals_by_player for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

@@ -2409,6 +2409,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "($first → $topN kapott gól) · friss védő és besegítés kell rá";
   }
 
+  // Indítás-vadász emberek: ki ugrik rá a kapus-indításra (2+
+  // elcsípett indítás — a backenddel azonos küszöb: OHP_MIN_STEALS).
+  String? _outletHunter(Map<String, dynamic> r) {
+    final st = (r["ohp_steals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (st == null || st.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    st.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "az indításaitokra a(z) $top. ugrik rá a legtöbbször "
+        "($topN elcsípett indítás) · ne az ő térfelére nyisson a kapus";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10167,6 +10186,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Visszafutás-lemaradó ember", _slowRetreatPlayer(r)!],
       if (_tiredConcederPlayer(r) != null)
         ["Fáradt-fal ember", _tiredConcederPlayer(r)!],
+      if (_outletHunter(r) != null)
+        ["Indítás-vadász ember", _outletHunter(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
@@ -10471,7 +10492,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
                    "betörés", "kilép", "átvert", "lefogott", "őr",
                    "kifutás", "visszaérés", "visszaállás", "visszafutás",
-                   "press",
+                   "vadász", "press",
                    "engedett", "kapott", "keménység", "mélység",
                    "folyosó", "szorult", "elöl szerző", "zóna"]),
     ("Támadás és befejezés", ["támad", "lövés", "lövő", "gól", "passz",

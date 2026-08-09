@@ -2335,6 +2335,26 @@ def test_outlet_hunter_roles_silent_with_few_steals():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_outlet_hunters_names_the_hunting_man():
+    """Ha az indítás-rablások egy emberhez kötődnek, őt nevezzük meg —
+    a kapus-indítás ne az ő térfelére nyisson."""
+    from handball.pipeline.goalkeeper import (OHP_MIN_STEALS,
+                                              outlet_hunters)
+
+    rec = outlet_hunters(_ohr_match([2, 2, 2, 3]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 2, rec
+    assert rec["top"]["steals"] >= OHP_MIN_STEALS, rec
+
+
+def test_outlet_hunters_silent_with_few_steals():
+    """Egy-egy rablásból nem nevezünk meg embert."""
+    from handball.pipeline.goalkeeper import outlet_hunters
+
+    rec = outlet_hunters(_ohr_match([2, 3]))["home"]
+    assert rec["top"] is None, rec
+
+
 # ---- Hajrá-kapus (az utolsó öt perc védés-mérlege) --------------------------
 
 

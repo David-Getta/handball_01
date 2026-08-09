@@ -2619,6 +2619,82 @@ def outlet_hunter_roles(match: Match, config=None) -> dict:
     return out
 
 
+# Indítás-vadász emberek: ennyi elrabolt indítás kell a névhez.
+OHP_MIN_STEALS = 2
+
+
+def outlet_hunters(match: Match, config=None) -> dict:
+    """Indítás-vadász emberek: KI ugrik rá a kapus-indításra.
+
+    Az indítás-vadász poszt (outlet_hunter_roles) a POSZTOT nevezi
+    meg — ez az EMBERT: minden elveszett kapus-indításnál a labdát
+    megszerző játékos nevéhez ír egy rablást.
+
+    Edzőileg kétirányú, és névre szólóan azonnal használható.
+    Ellenük: a saját kapus indítása ne az ő térfelére nyisson —
+    vagy a másik oldal, vagy az ő feje fölött a hosszú indítás.
+    Saját csapatra: ha a letámadásunk egyetlen emberen fut, az
+    ellenfél egy cserével hatástalanítja — a rablás a rendszeré
+    legyen, ne egy emberé.
+
+    Visszatérés csapatonként (a RABLÓ oldal): {"steals",
+    "players": [{"player_id", "jersey", "steals"}], "top"} — a lista
+    rablás szerint csökkenő; a "top" az első játékos, ha legalább
+    OHP_MIN_STEALS rablása van, különben None.
+    """
+    import math as _math
+
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    detect_goalkeepers(match)
+    follow = round(GK_OUTLET_FOLLOW_S * fps)
+
+    def _holder(frame):
+        if frame.ball is None:
+            return None
+        best, best_d = None, GK_HOLD_RADIUS_M
+        for p in frame.players:
+            if p.source != PositionSource.MEASURED:
+                continue
+            d = _math.hypot(p.x - frame.ball.x, p.y - frame.ball.y)
+            if d < best_d:
+                best, best_d = p, d
+        return best
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    pending = None
+    for i, f in enumerate(match.frames):
+        h = _holder(f)
+        if h is not None and h.role == ROLE_GOALKEEPER:
+            pending = (h.team.value, i)
+            continue
+        if pending is None or h is None:
+            continue
+        side, i0 = pending
+        pending = None
+        if i - i0 > follow or h.team.value == side:
+            continue
+        hunter = h.team.value
+        if h.jersey_number is not None:
+            jersey.setdefault(h.track_id, h.jersey_number)
+        tally[hunter][h.track_id] = tally[hunter].get(h.track_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "steals": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0] if rows and rows[0]["steals"] >= OHP_MIN_STEALS
+               else None)
+        out[side] = {"steals": sum(r["steals"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
 # Hajrá-kapus küszöbei: az utolsó ennyi másodperc a hajrá, ennyi
 # kaputra érkezett lövés kell szakaszonként, és ennyi százalékpont
 # eltérés számít érdemi változásnak.

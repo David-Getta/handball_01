@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 409) Indítás-vadász emberek: az egy emberre épülő letámadás
+    # egy cserével hatástalanítható.
+    try:
+        from .goalkeeper import OHP_MIN_STEALS, outlet_hunters
+        ohp409 = outlet_hunters(match, config)
+        for side in ("home", "away"):
+            top409 = ohp409[side].get("top")
+            if top409 is None:
+                continue
+            _ki409 = (f"a(z) {top409['jersey']}. számú"
+                      if top409.get("jersey") is not None
+                      else f"a(z) {top409['player_id']}. játékos")
+            add(side, "védekezés", "Indítás-rablás rendszerré",
+                f"az indítás-rablásainkat {_ki409} hozza "
+                f"({top409['steals']} elcsípett indítás; "
+                f"{OHP_MIN_STEALS} rablástól már jelezzük) — ha ez "
+                "egy emberen áll, az ellenfél egy cserével "
+                "hatástalanítja",
+                "letámadás-edzés kiosztott szerepekkel: az első passz "
+                "elvágása PÁROSBAN (rálépő + hátsó lezáró), a "
+                "vadász-szerep körbeadása a szélsők és a második sor "
+                "között, és az elrabolt labda azonnali befejezése",
+                )
+    except Exception:
+        pass
+
     # 408) Fáradt-fal emberek: a második félidőre megnyíló fal
     # csere- és besegítés-kérdés.
     try:

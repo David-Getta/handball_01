@@ -2556,6 +2556,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "építeni.")
     except Exception:
         pass
+    # Indítás-vadász emberek: ki ugrik rá a kapus-indításra.
+    try:
+        from .goalkeeper import outlet_hunters
+        ohp = outlet_hunters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ohp = ohp[side]["top"]
+            if top_ohp is None:
+                continue
+            _ki3 = (f"a(z) {top_ohp['jersey']}. számú"
+                    if top_ohp.get("jersey") is not None
+                    else f"a(z) {top_ohp['player_id']}. játékos")
+            body += (f" A(z) {name} indítás-rablásait {_ki3} hozza "
+                     f"({top_ohp['steals']} elcsípett indítás) — a "
+                     "kapus-indítás ne az ő térfelére nyisson.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles
