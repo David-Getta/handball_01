@@ -74,6 +74,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "defensive_rebound_players"),
         ("ember", "Emberelőny-hibázó", "rules",
          "powerplay_turnover_players"),
+        ("ember", "Emberhátrány-hibázó", "rules",
+         "shorthanded_turnover_players"),
         ("ember", "Kulcs-ember", "priorities", "key_player"),
         # --- szünet: ami a félidőben megváltozik ---------------------
         ("szünet", "Szünet-váltás", "attack_types", "attack_mix_shift"),
@@ -633,6 +635,8 @@ KPL_LAYERS: tuple = (
     ("Emberhátrány-lövő", "rules", "shorthanded_shooters"),
     ("Hetes-kihagyó", "rules", "seven_miss_players"),
     ("Emberelőny-hibázó", "rules", "powerplay_turnover_players"),
+    ("Emberhátrány-hibázó", "rules",
+     "shorthanded_turnover_players"),
     ("Hetes-okozó", "rules", "seven_meter_conceders"),
     ("Sprint-veszély", "stats", "sprint_threats"),
     ("Pazarló lövő", "xg", "wasteful_shooters"),

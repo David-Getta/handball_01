@@ -1355,6 +1355,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 395) Emberhátrány-hibázók: öt emberrel a labda a legbiztosabb
+    # kézben maradjon.
+    try:
+        from .rules import (SHTP_MIN_TURNOVERS,
+                            shorthanded_turnover_players)
+        shtp395 = shorthanded_turnover_players(match, config)
+        for side in ("home", "away"):
+            top395 = shtp395[side].get("top")
+            if top395 is None:
+                continue
+            _ki395 = (f"a(z) {top395['jersey']}. számú"
+                      if top395.get("jersey") is not None
+                      else f"a(z) {top395['player_id']}. játékos")
+            add(side, "támadás", "Hátrány: labdatartó kijelölése",
+                f"hátrányban {_ki395} veszítette el a legtöbb labdát "
+                f"({top395['turnovers']} hátrány-eladás; "
+                f"{SHTP_MIN_TURNOVERS} eladástól már jelezzük) — öt "
+                "emberrel minden elvesztett labda üres kaput ér az "
+                "ellenfélnek",
+                "hátrány-figura kijelölt labdatartóval (ne ő legyen), "
+                "tiltott bejátszás-sávok, és időhúzó 5-6 elleni "
+                "játék edzésen — a cél a két perc túlélése "
+                "labdavesztés nélkül",
+                )
+    except Exception:
+        pass
+
     # 394) Emberelőny-hibázók: a két perc alatt elvesztett labda a
     # legdrágább, mert onnan üres kapura indul az ellenfél.
     try:

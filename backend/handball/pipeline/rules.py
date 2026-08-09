@@ -2824,3 +2824,67 @@ def powerplay_turnover_players(match: Match,
         out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Emberhátrány-hibázók: ennyi hátrány-eladástól emeljük ki a
+# játékost — öt emberrel egy elvesztett labda azonnal gólt ér.
+SHTP_MIN_TURNOVERS = 2
+
+
+def shorthanded_turnover_players(match: Match,
+                                 config: Optional[TacticsConfig] = None
+                                 ) -> dict:
+    """Emberhátrány-hibázók: ÖT EMBERREL ki veszíti el a labdát.
+
+    Az emberhátrány-hiba poszt (shorthanded_turnover_roles) a
+    POSZTOT nevezi meg — ez az EMBERT: ugyanazokat a
+    kiállítás-ablakokban, emberhátrányban elkövetett labdaeladásokat
+    játékosonként számolja.
+
+    Edzőileg ez az emberelőny-játékunk névre szóló célpontja: a hat
+    az öt ellen az ő fogadására kell menni, mert az elvett labdából
+    üres kapura indulhat a kontra. Saját csapatra: hátrányban a
+    labdát a legbiztosabb kézben kell tartani — ha nála rendre
+    elmegy, más legyen a labdatartó.
+
+    Visszatérés csapatonként (a HÁTRÁNYBAN lévő oldal):
+    {"turnovers", "players": [{"player_id", "jersey", "turnovers"}],
+    "top"} — a "top" az első játékos, ha legalább
+    SHTP_MIN_TURNOVERS hátrány-eladása van, különben None.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    windows = [(w["team_down"], w["start_frame"], w["end_frame"])
+               for w in detect_powerplay(match)]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    if windows:
+        for e in detect_events(match, config):
+            if e.type != EventType.TURNOVER or e.player_id is None:
+                continue
+            side = e.team.value
+            if not any(s == side and a <= e.t <= b
+                       for s, a, b in windows):
+                continue
+            tally[side][e.player_id] = (
+                tally[side].get(e.player_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "turnovers": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["turnovers"] >= SHTP_MIN_TURNOVERS
+               else None)
+        out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
+                     "players": rows, "top": top}
+    return out

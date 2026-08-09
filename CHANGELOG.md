@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát.** Az
+  emberhátrány-hiba poszt a posztot nevezi meg — az új réteg az
+  embert: ugyanazokat a kiállítás-ablakokban, emberhátrányban
+  elkövetett labdaeladásokat játékosonként számolja. Edzőileg ez az
+  emberelőny-játékunk névre szóló célpontja: a hat az öt ellen az ő
+  fogadására kell menni, mert az elvett labdából üres kapura indulhat
+  a kontra; saját csapatra a labdatartó kijelölése a téma. Két
+  eladástól emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag
+  (`shorthanded_turnover_players`), edzői összefoglaló, felderítés
+  (`shtp_turnovers_by_player` mező + edzői kulcs + 374.
+  meccsterv-szabály), edzés-fókusz (395. szabály), kliens-csempe.
+
 - **Emberelőny-hibázók: ki adja el a labdát a két perc alatt.** Az
   emberelőny-hiba poszt a posztot nevezi meg — az új réteg az
   embert: ugyanazokat a kiállítás-ablakokban, emberelőnyben

@@ -2421,3 +2421,25 @@ def test_powerplay_turnover_players_silent_after_one():
     rec = powerplay_turnover_players(
         _ppt_match([7], pad_s=60.0))["home"]
     assert rec["turnovers"] == 1 and rec["top"] is None, rec
+
+
+# ---- Emberhátrány-hibázók (öt emberrel ki veszíti el a labdát) --------------
+
+def test_shorthanded_turnover_players_names_the_loser():
+    """Ha hátrányban rendre ugyanaz veszíti el a labdát, a hat az öt
+    ellen rá kell menni."""
+    from handball.pipeline.rules import (SHTP_MIN_TURNOVERS,
+                                         shorthanded_turnover_players)
+
+    rec = shorthanded_turnover_players(_sht_match([7, 7, 7, 9]))["home"]
+    assert rec["turnovers"] == 4, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["turnovers"] >= SHTP_MIN_TURNOVERS, rec
+
+
+def test_shorthanded_turnover_players_silent_after_one():
+    """Egyetlen hátrány-eladás még nem minta."""
+    from handball.pipeline.rules import shorthanded_turnover_players
+
+    rec = shorthanded_turnover_players(_sht_match([7, 9]))["home"]
+    assert rec["top"] is None, rec

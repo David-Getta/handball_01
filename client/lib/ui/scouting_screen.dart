@@ -2168,6 +2168,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát (2+
+  // hátrány-eladás — a backenddel azonos küszöb:
+  // SHTP_MIN_TURNOVERS).
+  String? _shorthandedTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["shtp_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "hátrányban a(z) $top. veszíti el a legtöbb labdát ($topN "
+        "eladás) · a hat az öt ellen az ő fogadására lépjetek ki";
+  }
+
   // Emberelőny-hibázók: ki adja el a labdát a két perc alatt (2+
   // emberelőny-eladás — a backenddel azonos küszöb:
   // PPTP_MIN_TURNOVERS).
@@ -9863,6 +9884,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kulcs-ember", _keyPlayer(r)!],
       if (_powerplayTurnoverPlayer(r) != null)
         ["Emberelőny-hibázó", _powerplayTurnoverPlayer(r)!],
+      if (_shorthandedTurnoverPlayer(r) != null)
+        ["Emberhátrány-hibázó", _shorthandedTurnoverPlayer(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

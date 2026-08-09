@@ -1258,6 +1258,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "nyomni.")
     except Exception:
         pass
+    # Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát.
+    try:
+        from .rules import shorthanded_turnover_players
+        shtp = shorthanded_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = shtp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} hátrányában {_ki} veszítette el "
+                     f"a legtöbb labdát ({top['turnovers']} "
+                     "hátrány-eladás) — a hat az öt ellen rá kell "
+                     "menni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles
