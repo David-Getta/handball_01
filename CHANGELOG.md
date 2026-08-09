@@ -17,6 +17,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Kétperc-gyűjtők: ki ül ki náluk a legtöbbször.** A kiülő-poszt
+  a posztot nevezi meg — az új réteg az embert: a felismert
+  kiállításokat a kiülő játékos nevéhez összegzi. Edzőileg ez a
+  szabályok adta erőforrás: akinél már két kétperc van, egy lépésre
+  áll a kizárástól — rá kell vinni a játékot (betörés az ő sávjába,
+  elzárás rá), mert vagy fékezve véd, vagy elmegy a meccs hátralévő
+  részére. Saját csapatra: ha a kétperceink egy emberre gyűlnek, az
+  nem pech, hanem rendszer-hiba (hiányzó besegítés, későn kezdett
+  párharcok). Két kiállítástól emel ki nevet. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag
+  (`suspension_collectors`), edzői összefoglaló, felderítés
+  (`stc_susp_by_player` mező + edzői kulcs + 391. meccsterv-szabály),
+  edzés-fókusz (412. szabály), kliens-csempe.
+
 - **Kiszolgált befejezők: ki él a bejátszásokból.** A kiszolgált-
   poszt a posztot nevezi meg — az új réteg az embert: minden gólnál
   megnézi, volt-e gólpassz, és a befejező nevéhez írja. Edzőileg ez

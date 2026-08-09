@@ -857,6 +857,57 @@ def suspended_roles(match: Match,
     return out
 
 
+# Kétperc-gyűjtők: ennyi kiállítástól nevezünk meg embert (a
+# harmadik kétperc már kizárás — ezért éles a második).
+STC_MIN_SUSP = 2
+
+
+def suspension_collectors(match: Match,
+                          config: Optional[TacticsConfig] = None
+                          ) -> dict:
+    """Kétperc-gyűjtők: KI ül ki náluk a legtöbbször.
+
+    A kiülő-poszt (suspended_roles) a POSZTOT nevezi meg — ez az
+    EMBERT: a felismert kiállításokat a kiülő játékos nevéhez
+    összegzi.
+
+    Edzőileg ez a szabályok adta erőforrás. Ellenük: akinél már két
+    kétperc van, egy lépésre áll a kizárástól — rá kell vinni a
+    játékot (betörés az ő sávjába, elzárás rá), mert vagy fékezve
+    véd, vagy elmegy a meccs hátralévő részére. Saját csapatra: ha a
+    kétperceink egy emberre gyűlnek, az nem pech, hanem rendszer-
+    hiba — a mögötte lévő besegítés hiányzik, vagy a párharcait
+    későn kezdi.
+
+    Visszatérés csapatonként (a BÜNTETETT oldal): {"suspensions",
+    "players": [{"player_id", "jersey", "suspensions"}], "top"} — a
+    "top" az első játékos, ha legalább STC_MIN_SUSP kiállítása van,
+    különben None.
+    """
+    config = config or TacticsConfig()
+    susp = suspended_players(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": r["player_id"],
+                 "jersey": jersey.get(r["player_id"]),
+                 "suspensions": r["suspensions"]}
+                for r in sorted(susp[side],
+                                key=lambda r: -r["suspensions"])]
+        top = (rows[0]
+               if rows and rows[0]["suspensions"] >= STC_MIN_SUSP
+               else None)
+        out[side] = {"suspensions": sum(r["suspensions"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
 # Hátrány-támadás: ennyi emberhátrányban töltött másodperctől ítélünk,
 # és ennyi gól/perc eltérés választja el a "veszélyes" hátrányos
 # támadást a "megbénuló"-tól.

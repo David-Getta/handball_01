@@ -2606,6 +2606,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "passzt elvágni.")
     except Exception:
         pass
+    # Kétperc-gyűjtők: kinél áll már két kiállítás.
+    try:
+        from .rules import suspension_collectors
+        stc = suspension_collectors(match)
+        for side, name in (("home", home), ("away", away)):
+            top_stc = stc[side]["top"]
+            if top_stc is None:
+                continue
+            _ki5 = (f"a(z) {top_stc['jersey']}. számú"
+                    if top_stc.get("jersey") is not None
+                    else f"a(z) {top_stc['player_id']}. játékos")
+            body += (f" A(z) {name} kétperceit {_ki5} gyűjti "
+                     f"({top_stc['suspensions']} kiállítás) — rá kell "
+                     "vinni a játékot: a következő kétperce már "
+                     "kizárás.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

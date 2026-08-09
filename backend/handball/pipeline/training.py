@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 412) Kétperc-gyűjtők: az egy emberre gyűlő kiállítás
+    # rendszer-hiba, nem pech.
+    try:
+        from .rules import STC_MIN_SUSP, suspension_collectors
+        stc412 = suspension_collectors(match, config)
+        for side in ("home", "away"):
+            top412 = stc412[side].get("top")
+            if top412 is None:
+                continue
+            _ki412 = (f"a(z) {top412['jersey']}. számú"
+                      if top412.get("jersey") is not None
+                      else f"a(z) {top412['player_id']}. játékos")
+            add(side, "védekezés", "Fegyelem emberre szabva",
+                f"a kétperceinket {_ki412} gyűjti "
+                f"({top412['suspensions']} kiállítás; "
+                f"{STC_MIN_SUSP} kiállítástól már jelezzük) — a "
+                "harmadik már kizárás, és addig is fékezve véd",
+                "párharc-időzítés edzése neki: korán induló kar- és "
+                "testmunka (nem az utolsó pillanatban rántott "
+                "szabálytalanság), mögötte kijelölt besegítő, és "
+                "két kétperc után tudatos szerepcsere a fal "
+                "közepéről a szélre",
+                )
+    except Exception:
+        pass
+
     # 411) Kiszolgált befejezők: aki csak bejátszásból él, a
     # kiszolgálója kiesésekor terv nélkül marad.
     try:

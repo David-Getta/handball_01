@@ -1054,6 +1054,9 @@ class ScoutingReport:
     # góljuk BEFEJEZŐNKÉNT. Darabszám, meccsek közt összegződik.
     asp_assisted_by_player: dict = field(default_factory=dict)
     asp_goals_by_player: dict = field(default_factory=dict)
+    # Kétperc-gyűjtők: a kiállítások darabszáma KIÜLŐNKÉNT.
+    # Darabszám, meccsek közt pontosan összegződik.
+    stc_susp_by_player: dict = field(default_factory=dict)
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4298,6 +4301,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "hanem éheztetni: a felé futó passzt vágjátok el "
                 "(sávzárás, előrelépő védő), egyénileg nem teremt "
                 "helyzetet.")
+
+    # Kétperc-gyűjtők: kire kell rávinni a játékot.
+    if rep.stc_susp_by_player:
+        _stc_k, _stc_n = max(rep.stc_susp_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _stc_n >= 2:
+            keys.append(
+                f"A kétperceiteket a(z) {_stc_k}. gyűjti ({_stc_n} "
+                "kiállítás) — vigyétek rá a játékot: betörés az ő "
+                "sávjába, elzárás rá; a következő kétperce már "
+                "kizárás, addig pedig fékezve véd.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9743,6 +9757,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .rules import suspension_collectors as _stc
+        stcrec = _stc(match, config)[team.value]
+        rep.stc_susp_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["suspensions"]
+            for r in stcrec["players"]}
         from .roles import assisted_scorers as _asp
         asprec = _asp(match, config)[team.value]
         rep.asp_assisted_by_player = {
@@ -12495,6 +12515,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 391) Az ő kétperc-gyűjtőjük × a ti betöréseitek: a második
+    # kétperc után egy lépésre áll a kizárástól.
+    if opp.stc_susp_by_player and own.bty_entries >= 3:
+        _stc391_k, _stc391_n = max(opp.stc_susp_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _stc391_n >= 2:
+            plan.append(
+                f"A(z) {_stc391_k}. gyűjti a kétperceiket "
+                f"({_stc391_n} kiállítás), ti pedig tudtok betörni "
+                f"({own.bty_entries} betörés) — a betöréseket "
+                "az ő sávjába vezessétek: vagy fékezve véd, vagy "
+                "megkapja a kizárást érő harmadikat.")
 
     # 390) Az ő kiszolgált befejezőjük × a ti passzsáv-zárásotok:
     # az éheztetés olcsóbb, mint az emberfogás.
@@ -19255,6 +19288,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.asp_assisted_by_player for r in reports),
         asp_goals_by_player=_merge_count_dicts(
             r.asp_goals_by_player for r in reports),
+        stc_susp_by_player=_merge_count_dicts(
+            r.stc_susp_by_player for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

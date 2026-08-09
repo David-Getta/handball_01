@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **438 réteg**, modulonként csoportosítva; a
+Összesen **439 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (87)
@@ -382,7 +382,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `specialist_roles` | Specialista-poszt: MELYIK POSZTOT játsszák váltott sorban. |
 | `turnovers_by_role` | Poszt-hibák: MELYIK POSZTJUK veszíti el a labdát. |
 
-## rules (40)
+## rules (41)
 
 | Réteg | Mit mér |
 |---|---|
@@ -424,6 +424,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `susp_earners` | Ki harcolja ki a kiállításokat: a hátrány kezdete előtti |
 | `suspended_roles` | Kiülő-poszt: MELYIK POSZTJUK gyűjti a kétperceket. |
 | `suspension_chain_roles` | Kétperc-páros: KI HARCOLJA KI és KI FEJEZI BE a kétpercüket. |
+| `suspension_collectors` | Kétperc-gyűjtők: KI ül ki náluk a legtöbbször. |
 | `suspension_cost` | Kétperc ára: MENNYI GÓLBA KERÜL egy kiállításuk. |
 | `suspensions_by_score` | Fegyelem-állás: MIKOR jönnek a kiállítások — állás szerint. |
 

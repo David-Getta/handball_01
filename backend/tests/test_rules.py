@@ -302,6 +302,54 @@ def test_suspended_player_identified():
     assert out["away"] == []
 
 
+def test_suspension_collectors_names_the_repeat_offender():
+    """Két kiállítás ugyanattól az embertől → rá kell vinni a
+    játékot, mert a harmadik már kizárás."""
+    from handball.pipeline.rules import (STC_MIN_SUSP,
+                                         suspension_collectors)
+
+    def mk(t, home_tracks):
+        players = [_pl(tid, Team.HOME, 15.0 + (tid % 10), 4.0 + (tid % 6))
+                   for tid in home_tracks]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(6)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=20.0, y=10.0, confidence=1.0))
+
+    full = [100, 101, 102, 103, 104, 105]
+    down = [100, 101, 102, 103, 104]      # a 105-ös ül ki
+    frames = [mk(t, full) for t in range(750)]
+    frames += [mk(t, down) for t in range(750, 2250)]
+    frames += [mk(t, full) for t in range(2250, 3000)]
+    frames += [mk(t, down) for t in range(3000, 4500)]
+    frames += [mk(t, full) for t in range(4500, 5250)]
+    rec = suspension_collectors(Match(_meta(), frames))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 105, rec
+    assert rec["top"]["suspensions"] >= STC_MIN_SUSP, rec
+
+
+def test_suspension_collectors_silent_after_one():
+    """Egyetlen kiállításból nem nevezünk meg embert."""
+    from handball.pipeline.rules import suspension_collectors
+
+    def mk(t, home_tracks):
+        players = [_pl(tid, Team.HOME, 15.0 + (tid % 10), 4.0 + (tid % 6))
+                   for tid in home_tracks]
+        players += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+                    for k in range(6)]
+        return Frame(t=t, players=players,
+                     ball=Ball(x=20.0, y=10.0, confidence=1.0))
+
+    full = [100, 101, 102, 103, 104, 105]
+    down = [100, 101, 102, 103, 104]
+    frames = [mk(t, full) for t in range(750)]
+    frames += [mk(t, down) for t in range(750, 2250)]
+    frames += [mk(t, full) for t in range(2250, 3000)]
+    rec = suspension_collectors(Match(_meta(), frames))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_key_moments_includes_powerplay_and_seven():
     """A key_moments réteg időrendben hozza a kiállítást és a hetest."""
     from handball.pipeline.momentum import key_moments

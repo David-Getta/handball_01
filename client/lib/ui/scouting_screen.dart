@@ -2464,6 +2464,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "gólpasszos) · éheztetni kell, nem fogni";
   }
 
+  // Kétperc-gyűjtők: kinél áll már két kiállítás (a backenddel azonos
+  // küszöb: STC_MIN_SUSP).
+  String? _suspensionCollector(Map<String, dynamic> r) {
+    final su = (r["stc_susp_by_player"] as Map?)?.cast<String, dynamic>();
+    if (su == null || su.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    su.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a kétperceiket a(z) $top. gyűjti ($topN kiállítás) · "
+        "vigyétek rá a játékot, a következő már kizárás";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10228,6 +10247,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["7a6 eladás ára", _emptyNetTurnovers(r)!],
       if (_assistedScorer(r) != null)
         ["Kiszolgált befejező", _assistedScorer(r)!],
+      if (_suspensionCollector(r) != null)
+        ["Kétperc-gyűjtő", _suspensionCollector(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
