@@ -2419,3 +2419,23 @@ def test_clock_management_silent_without_real_change():
 
     rec = clock_management(_clk_match(10.0, 9.0))["home"]
     assert rec["diff_s"] is not None and rec["verdict"] is None, rec
+
+
+def test_response_turnover_players_names_the_panicking_player():
+    """Ha a kapott gól után rendre ugyanaz veszíti el a labdát, a
+    gólunk után az ő fogadására kell menni."""
+    from handball.pipeline.momentum import (RTOP_MIN_TURNOVERS,
+                                            response_turnover_players)
+
+    rec = response_turnover_players(_rto_match([7, 7, 7, 9]))["home"]
+    assert rec["turnovers"] >= 4, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["turnovers"] >= RTOP_MIN_TURNOVERS, rec
+
+
+def test_response_turnover_players_silent_after_one():
+    """Egyetlen válasz-eladás még nem minta."""
+    from handball.pipeline.momentum import response_turnover_players
+
+    rec = response_turnover_players(_rto_match([7]))["home"]
+    assert rec["top"] is None, rec

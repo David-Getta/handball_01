@@ -3253,3 +3253,66 @@ def clock_management(match: Match, config=None) -> dict:
                 "támadásból) — nem húzzák az időt, hanem sietnek: "
                 "elég zárt fallal kivárni, maguktól hoznak helyzetet")
     return out
+
+
+# Válaszhiba-emberek: ennyi kapott gól utáni eladástól emeljük ki a
+# játékost.
+RTOP_MIN_TURNOVERS = 2
+
+
+def response_turnover_players(match: Match, config=None) -> dict:
+    """Válaszhiba-emberek: KAPOTT GÓL UTÁN ki veszíti el a labdát.
+
+    A válaszhiba-poszt (response_turnover_roles) a POSZTOT nevezi meg
+    — ez az EMBERT: ugyanazokat a kapott gólt RTO_WINDOW_S-en belül
+    követő labdaeladásokat játékosonként számolja.
+
+    Edzőileg ez a saját gólunk utáni pressz névre szóló célpontja: a
+    gólunk után azonnal az ő fogadására kell menni, mert nála a
+    legolcsóbb a labdaszerzés — és az elvett labdából jöhet a
+    következő gólunk is. Saját csapatra: a bekapott gól utáni első
+    támadást ki kell venni a kapkodó kezéből.
+
+    Visszatérés csapatonként: {"turnovers", "players":
+    [{"player_id", "jersey", "turnovers"}], "top"} — a "top" az első
+    játékos, ha legalább RTOP_MIN_TURNOVERS válasz-eladása van,
+    különben None.
+    """
+    from .event_detection import EventType, detect_events, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = RTO_WINDOW_S * fps
+    goals = [(e.t, e.team.value) for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = e.team.value
+        kapott = any(t0 < e.t and e.t - t0 <= win and s0 != side
+                     for (t0, s0) in goals)
+        if not kapott:
+            continue
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "turnovers": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["turnovers"] >= RTOP_MIN_TURNOVERS
+               else None)
+        out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
+                     "players": rows, "top": top}
+    return out

@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 399) Válaszhiba-emberek: a bekapott gól utáni első támadást ki
+    # kell venni a kapkodó kezéből.
+    try:
+        from .momentum import (RTOP_MIN_TURNOVERS,
+                               response_turnover_players)
+        rtop399 = response_turnover_players(match, config)
+        for side in ("home", "away"):
+            top399 = rtop399[side].get("top")
+            if top399 is None:
+                continue
+            _ki399 = (f"a(z) {top399['jersey']}. számú"
+                      if top399.get("jersey") is not None
+                      else f"a(z) {top399['player_id']}. játékos")
+            add(side, "támadás", "Kapott gól utáni első labda",
+                f"kapott gól után {_ki399} veszítette el a legtöbb "
+                f"labdát ({top399['turnovers']} válasz-eladás; "
+                f"{RTOP_MIN_TURNOVERS} eladástól már jelezzük) — így "
+                "a bekapott gólból sorozat lesz",
+                "bekapott gól után kötelező forgatókönyv: lassú "
+                "felhozatal, két biztos passz, és a kapkodó NEM "
+                "kapja meg elsőre a labdát — edzésen kapott gól "
+                "utáni azonnali 4-4 labdaszerző-játék",
+                )
+    except Exception:
+        pass
+
     # 398) Időkérés-hibázók: a megbeszélés utáni feszültségben ne az
     # kapja a kulcspasszt, aki rendre elrontja.
     try:

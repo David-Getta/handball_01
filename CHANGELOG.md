@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Válaszhiba-emberek: kapott gól után ki veszíti el a labdát.** A
+  válaszhiba-poszt a posztot nevezi meg — az új réteg az embert:
+  ugyanazokat a kapott gólt egy percen belül követő labdaeladásokat
+  játékosonként számolja. Edzőileg ez a saját gólunk utáni pressz
+  névre szóló célpontja: a gólunk után azonnal az ő fogadására kell
+  menni, mert nála a legolcsóbb a labdaszerzés; saját csapatra a
+  bekapott gól utáni első támadás átcímzése a téma. Két eladástól
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`response_turnover_players`), edzői
+  összefoglaló, felderítés (`rtop_turnovers_by_player` mező + edzői
+  kulcs + 378. meccsterv-szabály), edzés-fókusz (399. szabály),
+  kliens-csempe.
+
 - **Időkérés-hibázók: a megbeszélt figura kinek a kezén hal el.** Az
   időkérés-hiba poszt a posztot nevezi meg — az új réteg az embert:
   ugyanazokat az időkérés utáni ablakban elkövetett labdaeladásokat

@@ -2344,6 +2344,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Válaszhiba-emberek: kapott gól után ki veszíti el a labdát (2+
+  // válasz-eladás — a backenddel azonos küszöb:
+  // RTOP_MIN_TURNOVERS).
+  String? _responseTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["rtop_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "kapott gól után a(z) $top. veszíti el a legtöbb labdát "
+        "($topN eladás) · a gólotok után azonnal rá menjetek";
+  }
+
   // Időkérés-hibázók: kinek a kezén hal el a megbeszélt figura (2+
   // időkérés utáni eladás — a backenddel azonos küszöb:
   // TOEP_MIN_TURNOVERS).
@@ -9937,6 +9958,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetesdobó ember", _sevenTakerPlayer(r)!],
       if (_timeoutTurnoverPlayer(r) != null)
         ["Időkérés-hibázó ember", _timeoutTurnoverPlayer(r)!],
+      if (_responseTurnoverPlayer(r) != null)
+        ["Válaszhiba-ember", _responseTurnoverPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

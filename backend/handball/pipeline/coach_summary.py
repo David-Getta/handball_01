@@ -1322,6 +1322,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "fogadásánál kell megnyomni.")
     except Exception:
         pass
+    # Válaszhiba-emberek: kapott gól után ki veszíti el a labdát.
+    try:
+        from .momentum import response_turnover_players
+        rtop = response_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = rtop[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} kapott gól után {_ki} kezén "
+                     f"veszíti el a labdát a legtöbbször "
+                     f"({top['turnovers']} válasz-eladás) — a gól "
+                     "után azonnal rá kell menni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles
