@@ -2556,6 +2556,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Emberelőny-hozam: megbüntetik-e a kiállítást (sávonként 4+
+  // kaputra tartó lövés, 15 százalékpontos eltérés — a backenddel
+  // azonos küszöbök: PPY_MIN_SHOTS, PPY_GAP_PP).
+  String? _powerplayYield(Map<String, dynamic> r) {
+    final ps = (r["ppy_pp_shots"] as num?)?.toInt() ?? 0;
+    final pg = (r["ppy_pp_goals"] as num?)?.toInt() ?? 0;
+    final es = (r["ppy_eq_shots"] as num?)?.toInt() ?? 0;
+    final eg = (r["ppy_eq_goals"] as num?)?.toInt() ?? 0;
+    if (ps < 4 || es < 4) return null;
+    final pp = 100.0 * pg / ps;
+    final eq = 100.0 * eg / es;
+    if (pp - eq >= 15.0) {
+      return "megbüntetik a kiállítást (${pp.toStringAsFixed(0)}% "
+          "emberelőnyben vs ${eq.toStringAsFixed(0)}%) · a kétperc "
+          "ellenük a legdrágább hiba";
+    }
+    if (eq - pp >= 15.0) {
+      return "nem büntetik a kiállítást (${pp.toStringAsFixed(0)}% "
+          "emberelőnyben vs ${eq.toStringAsFixed(0)}%) · a taktikai "
+          "megállítás vállalható";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10328,6 +10352,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Elzárás-hozam", _screenYield(r)!],
       if (_blockFade(r) != null)
         ["Blokk-fáradás", _blockFade(r)!],
+      if (_powerplayYield(r) != null)
+        ["Emberelőny-hozam", _powerplayYield(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

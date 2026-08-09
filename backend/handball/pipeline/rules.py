@@ -1217,6 +1217,73 @@ def seven_conceder_roles(match: Match,
     return out
 
 
+# Emberelőny-hozam: sávonként ennyi kaputra tartó lövés kell az
+# ítélethez, és ekkora (százalékpontos) különbség számít érdeminek.
+PPY_MIN_SHOTS = 4
+PPY_GAP_PP = 15.0
+
+
+def powerplay_yield(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Emberelőny-hozam: MEGBÜNTETIK-E a kiállítást.
+
+    Az emberelőny-hatékonyság (powerplay_efficiency) a nyers
+    számokat adja — ez az ÍTÉLETET: összeveti a kaputra tartó
+    lövéseik gólarányát emberelőnyben és egyenlő létszámnál.
+
+    Edzőileg ez rangsorolja a fegyelmet. Ha emberelőnyben érdemben
+    jobban fejeznek be, ellenük a kétperc a legdrágább hiba: a falnak
+    lábbal kell védekeznie, a taktikai szabálytalanság tilos, és a
+    kiállítás utáni percet külön kell megbeszélni. Ha emberelőnyben
+    sem jobbak (vagy rosszabbak), a két perc ellenük olcsó — a
+    szükséges taktikai megállítás vállalható. Saját csapatra: az
+    emberelőny-játékunk hozama mérhető, nem érzés kérdése.
+
+    Visszatérés csapatonként: {"pp_shots", "pp_goals", "eq_shots",
+    "eq_goals", "pp_pct", "eq_pct", "gap_pp", "verdict"} — a
+    pct/gap/verdict None, ha nem volt kiállítás, vagy valamelyik
+    sávban kevés (PPY_MIN_SHOTS alatti) a kaputra tartó lövés.
+    """
+    config = config or TacticsConfig()
+    empty = {"pp_shots": 0, "pp_goals": 0, "eq_shots": 0,
+             "eq_goals": 0, "pp_pct": None, "eq_pct": None,
+             "gap_pp": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+
+    eff = powerplay_efficiency(match, config)
+    if not eff:
+        return out
+
+    for side in ("home", "away"):
+        rec = out[side]
+        src = eff.get(side, {})
+        rec["pp_shots"] = src.get("pp_shots", 0)
+        rec["pp_goals"] = src.get("pp_goals", 0)
+        rec["eq_shots"] = src.get("eq_shots", 0)
+        rec["eq_goals"] = src.get("eq_goals", 0)
+        if (rec["pp_shots"] >= PPY_MIN_SHOTS
+                and rec["eq_shots"] >= PPY_MIN_SHOTS):
+            pp = 100.0 * rec["pp_goals"] / rec["pp_shots"]
+            eq = 100.0 * rec["eq_goals"] / rec["eq_shots"]
+            rec["pp_pct"] = round(pp, 1)
+            rec["eq_pct"] = round(eq, 1)
+            rec["gap_pp"] = round(pp - eq, 1)
+            if pp - eq >= PPY_GAP_PP:
+                rec["verdict"] = (
+                    f"megbüntetik a kiállítást ({pp:.0f}% "
+                    f"emberelőnyben, {eq:.0f}% egyenlő létszámnál) — "
+                    "ellenük a kétperc a legdrágább hiba: a fal "
+                    "lábbal védekezzen, taktikai szabálytalanság "
+                    "nincs")
+            elif eq - pp >= PPY_GAP_PP:
+                rec["verdict"] = (
+                    f"nem büntetik a kiállítást ({pp:.0f}% "
+                    f"emberelőnyben, {eq:.0f}% egyenlő létszámnál) — "
+                    "a két perc ellenük olcsó: a szükséges taktikai "
+                    "megállítás vállalható")
+    return out
+
+
 # Emberelőny-tempó: ennyi mért támadás kell emberelőnyben és egyenlő
 # létszámnál, és ekkora (másodperces) eltérés számít érdemi jelnek.
 PP_PACE_MIN_PP = 3

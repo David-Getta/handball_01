@@ -17,6 +17,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Emberelőny-hozam: megbüntetik-e a kiállítást.** Az
+  emberelőny-hatékonyság eddig csak a nyers számokat adta — az új
+  réteg az ítéletet: összeveti a kaputra tartó lövések gólarányát
+  emberelőnyben és egyenlő létszámnál. Edzőileg ez rangsorolja a
+  fegyelmet: ha emberelőnyben érdemben jobban fejeznek be, ellenük a
+  kétperc a legdrágább hiba (lábbal védekező fal, taktikai
+  szabálytalanság nélkül); ha nem, a két perc ellenük olcsó, a
+  szükséges taktikai megállítás vállalható. Saját csapatra az
+  emberelőny-figurák hozama mérhető, nem érzés kérdése. Sávonként
+  négy kaputra tartó lövéstől és 15 százalékpontos különbségtől ítél.
+  A rangsorban az "ár" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`powerplay_yield`), edzői összefoglaló, felderítés
+  (`ppy_*` mezők + edzői kulcs + 395. meccsterv-szabály),
+  edzés-fókusz (416. szabály), kliens-csempe.
+
 - **Blokk-fáradás: elfogy-e a blokk-munka a második félidőre.** A
   blokkolt lövések rétege a darabszámot adja — az új réteg a
   kitartást: félidőnként elosztja a blokkokat az ellenfél

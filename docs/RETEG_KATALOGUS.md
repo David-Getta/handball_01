@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **442 réteg**, modulonként csoportosítva; a
+Összesen **443 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (88)
@@ -385,7 +385,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `specialist_roles` | Specialista-poszt: MELYIK POSZTOT játsszák váltott sorban. |
 | `turnovers_by_role` | Poszt-hibák: MELYIK POSZTJUK veszíti el a labdát. |
 
-## rules (41)
+## rules (42)
 
 | Réteg | Mit mér |
 |---|---|
@@ -403,6 +403,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `powerplay_shooters` | Emberelőny-lövők: KI FEJEZ BE a két perc alatt. |
 | `powerplay_turnover_players` | Emberelőny-hibázók: KI ADJA EL a labdát a két perc alatt. |
 | `powerplay_turnover_roles` | Emberelőny-hiba poszt: KINEK A KEZÉN akad el az emberelőnyük. |
+| `powerplay_yield` | Emberelőny-hozam: MEGBÜNTETIK-E a kiállítást. |
 | `rules` | A szabály-értő réteg összegzése egy hívásban (az API-nak). |
 | `seven_conceder_roles` | Hetes-okozó poszt: MELYIK SÁVJUK szakad be hetessel. |
 | `seven_earner_roles` | Hetes-kiharcolás poszt szerint: MELYIK POSZTRÓL rántják le őket. |

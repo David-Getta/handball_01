@@ -4627,6 +4627,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import powerplay_yield
+            res["powerplay_yield"] = powerplay_yield(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5544,6 +5549,8 @@ def create_app():
                 _layer("screen_yield", lambda: screen_yield(match))
                 from ..pipeline.defense import block_fade
                 _layer("block_fade", lambda: block_fade(match))
+                from ..pipeline.rules import powerplay_yield
+                _layer("powerplay_yield", lambda: powerplay_yield(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 416) Emberelőny-hozam: a két perc akkor ér valamit, ha gól
+    # lesz belőle.
+    try:
+        from .rules import PPY_GAP_PP, powerplay_yield
+        ppy416 = powerplay_yield(match, config)
+        for side in ("home", "away"):
+            rec416 = ppy416[side]
+            if rec416["gap_pp"] is None:
+                continue
+            if rec416["gap_pp"] > -PPY_GAP_PP:
+                continue
+            add(side, "támadás", "Emberelőny-kihasználás",
+                f"emberelőnyben csak {rec416['pp_pct']:.0f}%-ban "
+                f"fejezünk be, egyenlő létszámnál "
+                f"{rec416['eq_pct']:.0f}%-ban — a kapott két percet "
+                "nem váltjuk gólra",
+                "emberelőny-figurák edzése kiosztott szerepekkel: "
+                "beálló-váltásos játék a fal két oldala között, "
+                "kijelölt befejező és második megoldás, valamint "
+                "idő-nyomásos gyakorlás (30 mp alatt gólt kell "
+                "szerezni)",
+                )
+    except Exception:
+        pass
+
     # 415) Blokk-fáradás: a blokk akarat- és kondíció-munka.
     try:
         from .defense import BLF_GAP_PP, block_fade

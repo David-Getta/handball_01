@@ -1064,6 +1064,12 @@ class ScoutingReport:
     # belőlük esett gólok. Darabszám, meccsek közt összegződik.
     # Blokk-fáradás: a blokkok és az ellenfél lövés-kísérletei
     # félidőnként. Darabszám, meccsek közt összegződik.
+    # Emberelőny-hozam: kaputra tartó lövések és gólok emberelőnyben,
+    # illetve egyenlő létszámnál. Darabszám, összegződik.
+    ppy_pp_shots: int = 0
+    ppy_pp_goals: int = 0
+    ppy_eq_shots: int = 0
+    ppy_eq_goals: int = 0
     blf_fh_blocks: int = 0
     blf_fh_shots: int = 0
     blf_sh_blocks: int = 0
@@ -4375,6 +4381,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"A hajrára nő a blokk-munkájuk ({_blf_f:.0f}% → "
                 f"{_blf_s:.0f}%) — a végén ne az átlövés legyen a "
                 "megoldás, hanem a bejátszás és a kiugratás.")
+
+    # Emberelőny-hozam: mennyibe kerül ellenük egy kétperc.
+    if rep.ppy_pp_shots >= 4 and rep.ppy_eq_shots >= 4:
+        _ppy_p = 100.0 * rep.ppy_pp_goals / rep.ppy_pp_shots
+        _ppy_e = 100.0 * rep.ppy_eq_goals / rep.ppy_eq_shots
+        if _ppy_p - _ppy_e >= 15.0:
+            keys.append(
+                f"Megbüntetik a kiállítást ({_ppy_p:.0f}% "
+                f"emberelőnyben, {_ppy_e:.0f}% egyenlő létszámnál) — "
+                "ellenük a kétperc a legdrágább hiba: a fal lábbal "
+                "védekezzen, és taktikai szabálytalanság nincs.")
+        elif _ppy_e - _ppy_p >= 15.0:
+            keys.append(
+                f"Nem büntetik a kiállítást ({_ppy_p:.0f}% "
+                f"emberelőnyben, {_ppy_e:.0f}% egyenlő létszámnál) — "
+                "a két perc ellenük olcsó: a szükséges taktikai "
+                "megállítás vállalható.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9820,6 +9843,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .rules import powerplay_yield as _ppy
+        ppyrec = _ppy(match, config)[team.value]
+        rep.ppy_pp_shots = ppyrec["pp_shots"]
+        rep.ppy_pp_goals = ppyrec["pp_goals"]
+        rep.ppy_eq_shots = ppyrec["eq_shots"]
+        rep.ppy_eq_goals = ppyrec["eq_goals"]
         from .defense import block_fade as _blf
         blfrec = _blf(match, config)[team.value]
         rep.blf_fh_blocks = blfrec["fh_blocks"]
@@ -12596,6 +12625,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 395) Az ő emberelőny-hozamuk × a ti fegyelmetek: a kétperc
+    # ára náluk mérhető.
+    if (opp.ppy_pp_shots >= 4 and opp.ppy_eq_shots >= 4
+            and own.agr_susp >= 2):
+        _ppy395_p = 100.0 * opp.ppy_pp_goals / opp.ppy_pp_shots
+        _ppy395_e = 100.0 * opp.ppy_eq_goals / opp.ppy_eq_shots
+        if _ppy395_p - _ppy395_e >= 15.0:
+            plan.append(
+                f"Emberelőnyben {_ppy395_p:.0f}%-ban fejeznek be "
+                f"(egyenlő létszámnál {_ppy395_e:.0f}%), ti pedig "
+                f"kaptok kétperceket ({own.agr_susp} kiállítás) — "
+                "ellenük a fegyelem az első számú taktikai kérdés: "
+                "lábbal védekező fal, taktikai szabálytalanság "
+                "nélkül.")
 
     # 394) Az ő blokk-fáradásuk × a ti átlövőitek: a hajrában a
     # távoli lövés ellenük szinte ingyen van.
@@ -19419,6 +19463,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stc_susp_by_player for r in reports),
         otp_outlets_by_player=_merge_count_dicts(
             r.otp_outlets_by_player for r in reports),
+        ppy_pp_shots=sum(r.ppy_pp_shots for r in reports),
+        ppy_pp_goals=sum(r.ppy_pp_goals for r in reports),
+        ppy_eq_shots=sum(r.ppy_eq_shots for r in reports),
+        ppy_eq_goals=sum(r.ppy_eq_goals for r in reports),
         blf_fh_blocks=sum(r.blf_fh_blocks for r in reports),
         blf_fh_shots=sum(r.blf_fh_shots for r in reports),
         blf_sh_blocks=sum(r.blf_sh_blocks for r in reports),

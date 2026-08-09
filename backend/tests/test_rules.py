@@ -147,6 +147,63 @@ def test_powerplay_efficiency_split():
     assert eff["away"]["sh_seconds"] >= 45.0
 
 
+def _ppy_match(pp=(4, 4), eq=(4, 0), pad=300):
+    """Emberelőny-sorozat: `pp` = (kaputra tartó lövés, gól) a vendég
+    kiállítása alatt, `eq` = ugyanaz egyenlő létszámnál."""
+    frames = []
+    t = 0
+    gk = PlayerPosition(track_id=99, team=Team.AWAY, x=39.0, y=10.0,
+                        source=PositionSource.MEASURED, confidence=1.0,
+                        role="kapus")
+
+    def _cast(away_n):
+        pl = [_pl(100 + k, Team.HOME, 15.0 + k, 4.0 + k)
+              for k in range(6)]
+        pl += [_pl(200 + k, Team.AWAY, 25.0 + k, 4.0 + k)
+               for k in range(away_n)]
+        pl.append(gk)
+        return pl
+
+    def _phase(away_n, shots, goals):
+        nonlocal t
+        for k in range(shots):
+            for _ in range(pad):
+                frames.append(Frame(t=t, players=_cast(away_n),
+                                    ball=Ball(x=20.0, y=10.0,
+                                              confidence=1.0)))
+                t += 1
+            end = 40.0 if k < goals else 38.8
+            for i in range(12):
+                frames.append(Frame(
+                    t=t, players=_cast(away_n),
+                    ball=Ball(x=min(33.6 + 0.7 * i, end), y=10.0,
+                              confidence=1.0)))
+                t += 1
+
+    _phase(5, pp[0], pp[1])
+    _phase(6, eq[0], eq[1])
+    return Match(_meta(), frames)
+
+
+def test_powerplay_yield_flags_punished_suspensions():
+    """Ha emberelőnyben minden lövésük bemegy, egyenlő létszámnál
+    egy sem, ellenük a kétperc a legdrágább hiba."""
+    from handball.pipeline.rules import PPY_GAP_PP, powerplay_yield
+
+    rec = powerplay_yield(_ppy_match())["home"]
+    assert rec["gap_pp"] is not None and rec["gap_pp"] >= PPY_GAP_PP, rec
+    assert rec["verdict"] and "legdrágább hiba" in rec["verdict"], rec
+
+
+def test_powerplay_yield_silent_without_suspension():
+    """Kiállítás nélkül nincs mit mérni."""
+    from handball.pipeline.rules import powerplay_yield
+
+    m = Match(_meta(), _roster_frames(0, 90, 6, 6))
+    rec = powerplay_yield(m)["home"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
 def test_powerplay_efficiency_empty_without_suspension():
     from handball.pipeline.rules import powerplay_efficiency
     m = Match(_meta(), _roster_frames(0, 90, 6, 6))

@@ -2667,6 +2667,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"félidőre — {rec_blf['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Emberelőny-hozam: megbüntetik-e a kiállítást.
+    try:
+        from .rules import powerplay_yield
+        ppy = powerplay_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ppy = ppy[side]
+            if rec_ppy["verdict"] is None:
+                continue
+            body += (f" A(z) {name} emberelőnyben "
+                     f"{rec_ppy['pp_pct']:.0f}%-ban fejez be, egyenlő "
+                     f"létszámnál {rec_ppy['eq_pct']:.0f}%-ban — "
+                     f"{rec_ppy['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles
