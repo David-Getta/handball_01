@@ -5,6 +5,18 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.26 óta)
 
+- **Új elemzés futó feldolgozás mellett: mostantól te döntesz.**
+  Eddig egy új videó indítása mindig félretette az éppen futót. Most
+  a program megkérdezi: *megvárja az előző elemzés végét*, vagy
+  *azonnal kezdje az újat*. A várakozásnál a futó feldolgozáshoz nem
+  nyúlunk, az új szépen sorba áll mögé; az azonnali kezdésnél marad a
+  régi viselkedés — a futó munka szelíden félrekerül, az addig
+  feldolgozott része elmentve marad, és később folytatható. A
+  párbeszéd a "Mégse" gombbal el is hagyható. A több videós köteg
+  (pl. két félidő) továbbra is mindig egymás után dolgozódik fel.
+  Felületek: `/matches/process` új `queue_behind` mezője, kliens
+  párbeszéd az indítás előtt.
+
 - **Visszafutás-lemaradók: ki marad elöl a kontrák alatt.** A
   visszafutás-poszt a posztot nevezi meg — az új réteg az embert: az
   ellenfél lerohanás-szakaszainak végén megnézi, a védekező csapat

@@ -236,6 +236,62 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
+  /// Megkérdezi, mi legyen a MÁR FUTÓ feldolgozással, ha közben új
+  /// elemzést indítunk. Visszatérés: true = megvárja az előzőt (sorba
+  /// áll mögé), false = azonnal kezdje az újat (az előzőt a szerver
+  /// félreteszi, az addigi része elmentve marad), null = mégse.
+  Future<bool?> _askQueueChoice(String runningVideo) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Row(children: [
+          Icon(Icons.hourglass_top, color: AppColors.gold, size: 20),
+          SizedBox(width: 8),
+          Text("Már fut egy elemzés"),
+        ]),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Épp fut: $runningVideo",
+                style: AppText.value.copyWith(fontSize: 13.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Megvárja ennek a végét, vagy azonnal kezdje az újat? "
+                "Azonnali kezdésnél a futó feldolgozás félrekerül — az "
+                "eddig feldolgozott része elmentve marad, később "
+                "folytatható.",
+                style: AppText.label.copyWith(fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text("Mégse"),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Most kezdje az újat"),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.onAccent),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Megvárom az előzőt"),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Elindítja a feldolgozást a megadott videó-úton, majd időzítővel lekérdezi
   /// a haladást (GET /jobs/{id}) és frissíti a kártyát.
   Future<void> _startProcessing() async {
@@ -246,6 +302,23 @@ class _UploadScreenState extends State<UploadScreen> {
       );
       return;
     }
+    // Ha épp fut egy másik feldolgozás, a felhasználó dönt: megvárja,
+    // vagy azonnal kezdje az újat (a régit a szerver félreteszi).
+    var queueBehind = false;
+    try {
+      final running = (await _api.fetchJobs())
+          .where((j) => j["status"] == "running")
+          .toList();
+      if (running.isNotEmpty && mounted) {
+        final choice = await _askQueueChoice(
+            (running.first["video"] as String?) ?? "korábbi videó");
+        if (choice == null) return; // mégse
+        queueBehind = choice;
+      }
+    } catch (_) {
+      // nem érjük el a sort — az eddigi viselkedéssel megyünk tovább
+    }
+    if (!mounted) return;
     setState(() {
       _status = "running";
       _stage = "A";
@@ -280,6 +353,8 @@ class _UploadScreenState extends State<UploadScreen> {
         calibs: _calib == null ? null : _calibMaps(_calib!),
         start: _calib?.startFrame ?? 0,
         jerseyOcr: _jerseyOcr,
+        // A felhasználó döntése: megvárja-e a már futó feldolgozást.
+        queueBehind: queueBehind,
       );
       _jobId = r["job_id"] as String;
       _matchId = r["match_id"] as String?;
@@ -315,6 +390,8 @@ class _UploadScreenState extends State<UploadScreen> {
               calibs: calibs,
               start: startFrame,
               jerseyOcr: _jerseyOcr,
+              // A köteg többi videója mindig SORBAN vár a sorára.
+              queueBehind: true,
             );
             queued++;
           } catch (e) {

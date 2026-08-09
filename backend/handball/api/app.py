@@ -48,6 +48,23 @@ from ..pipeline.event_detection import detect_events, event_counts
 from ..pipeline.play_simulation import DefenseModel, SetPlay, simulate_setplay, evaluate_setplay
 
 
+def preemptable_jobs(jobs, job_id: str, queue_behind: bool) -> list:
+    """Melyik FUTÓ feldolgozást tesszük félre az új elemzés miatt.
+
+    Ha a felhasználó a VÁRAKOZÁST választotta (queue_behind), a futó
+    munkához nem nyúlunk — az új elemzés a sorban megvárja, míg az
+    előző befejeződik. Különben az új elemzés azonnal indul, és a
+    futó (korábbi) munkát szelíden félretesszük: az addig feldolgozott
+    rész elmentődik, később folytatható.
+
+    Visszatérés: a félreteendő munkák listája (üres, ha nincs ilyen).
+    """
+    if queue_behind:
+        return []
+    return [j for j in jobs
+            if j.get("job_id") != job_id and j.get("status") == "running"]
+
+
 def create_app():
     """Létrehozza és visszaadja a FastAPI alkalmazást.
 
@@ -489,20 +506,28 @@ def create_app():
                 json.dumps(body, ensure_ascii=False), encoding="utf-8")
         except Exception:
             pass
+        # A kliens kérdezi meg a felhasználót, ha épp fut egy elemzés:
+        # "megvárja az előzőt" (queue_behind=true) vagy "kezdje most".
+        behind = bool(body.get("queue_behind", False))
         job = {"job_id": job_id, "match_id": match_id, "status": "queued",
-               "stage": "A", "progress": 0.0, "message": "sorban áll",
+               "stage": "A", "progress": 0.0,
+               "message": ("sorban áll — megvárja az előző feldolgozást"
+                           if behind else "sorban áll"),
                "error": None, "created": time.time(),
+               "queue_behind": behind,
                "video": Path(path).name}
         _jobs[job_id] = job
         _job_params[job_id] = body
-        # Új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi) feldolgozást
-        # szelíden félretesszük — az addig feldolgozott rész elmentődik
-        # (befejezetlen elemzésként a könyvtárba kerül, később folytatható),
-        # és a sor rögtön a most indított munkával megy tovább.
-        for other in _jobs.values():
-            if other["job_id"] != job_id and other["status"] == "running":
-                other["cancel"] = True
-                other["preempted"] = True
+        # Alapesetben az új elemzés AZONNAL indul: a jelenleg FUTÓ (korábbi)
+        # feldolgozást szelíden félretesszük — az addig feldolgozott rész
+        # elmentődik (befejezetlen elemzésként a könyvtárba kerül, később
+        # folytatható), és a sor rögtön a most indított munkával megy
+        # tovább. Ha viszont a felhasználó a várakozást választotta
+        # (queue_behind), a futó munkához NEM nyúlunk: az új elemzés
+        # megvárja, míg az előző befejeződik.
+        for other in preemptable_jobs(list(_jobs.values()), job_id, behind):
+            other["cancel"] = True
+            other["preempted"] = True
         _job_queue.put(job_id)
         _ensure_worker()
         return {"job_id": job_id, "match_id": match_id}

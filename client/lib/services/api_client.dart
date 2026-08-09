@@ -1076,6 +1076,10 @@ class ApiClient {
     String? homeTeam,
     String? awayTeam,
     bool jerseyOcr = false, // KÍSÉRLETI: mezszám-OCR a feldolgozás alatt
+    // Ha épp FUT egy másik feldolgozás: true = ez megvárja a végét,
+    // false (alap) = azonnal indul, a futót a szerver félreteszi (az
+    // addig feldolgozott része elmentve marad, később folytatható).
+    bool queueBehind = false,
   }) async {
     final body = <String, dynamic>{
       "path": path,
@@ -1092,6 +1096,7 @@ class ApiClient {
       if (homeTeam != null && homeTeam.isNotEmpty) "home_team": homeTeam,
       if (awayTeam != null && awayTeam.isNotEmpty) "away_team": awayTeam,
       if (jerseyOcr) "jersey_ocr": true,
+      if (queueBehind) "queue_behind": true,
     };
     final resp = await http.post(
       Uri.parse("$baseUrl/matches/process"),
