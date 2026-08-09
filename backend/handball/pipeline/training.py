@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 413) Felhozatal-emberek: az egy emberre épülő kihozatal egy
+    # emberrel megfogható.
+    try:
+        from .goalkeeper import OTP_MIN_OUTLETS, outlet_targets
+        otp413 = outlet_targets(match, config)
+        for side in ("home", "away"):
+            top413 = otp413[side].get("top")
+            if top413 is None:
+                continue
+            _ki413 = (f"a(z) {top413['jersey']}. számú"
+                      if top413.get("jersey") is not None
+                      else f"a(z) {top413['player_id']}. játékos")
+            add(side, "támadás", "Kihozatal több felkínálással",
+                f"a kapus-indításaink {_ki413} kezén mennek át "
+                f"({top413['outlets']} átvétel; {OTP_MIN_OUTLETS} "
+                "átvételtől már jelezzük) — az ellenfél egy "
+                "rálépéssel megfogja az egész kihozatalunkat",
+                "kihozatal-edzés több felkínálással: első, második és "
+                "harmadik ajánlkozó kijelölése, hosszú indítás a "
+                "szélsőre gyakorlása, és letámadás elleni kihozatal "
+                "4-4-ben, tiltott visszapassz-sávval",
+                )
+    except Exception:
+        pass
+
     # 412) Kétperc-gyűjtők: az egy emberre gyűlő kiállítás
     # rendszer-hiba, nem pech.
     try:

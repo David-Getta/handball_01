@@ -4612,6 +4612,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import outlet_targets
+            res["outlet_targets"] = outlet_targets(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5523,6 +5528,8 @@ def create_app():
                 from ..pipeline.rules import suspension_collectors
                 _layer("suspension_collectors",
                        lambda: suspension_collectors(match))
+                from ..pipeline.goalkeeper import outlet_targets
+                _layer("outlet_targets", lambda: outlet_targets(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

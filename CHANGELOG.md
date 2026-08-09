@@ -17,6 +17,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Felhozatal-emberek: kire hozzák fel a labdát a kaputól.** A
+  felhozatal-posztok a posztot nevezik meg — az új réteg az embert: a
+  kapus-indítások célpontjait névre bontva összegzi. Edzőileg ez a
+  letámadás címzettje: ha a felhozataluk egy emberen megy át, a
+  letámadásnál ŐT kell fogni (rálépés az átvételnél, a visszapassz
+  sávjának lezárása), mert nála akad meg az egész kihozatal. Saját
+  csapatra: ha a labda mindig ugyanahhoz megy, az ellenfél egy
+  emberrel megfogja a kihozatalunkat — kell második és harmadik
+  felkínálás is. Három átvételtől és az indítások felétől emel ki
+  nevet. A rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`outlet_targets`), edzői összefoglaló, felderítés
+  (`otp_outlets_by_player` mező + edzői kulcs + 392.
+  meccsterv-szabály), edzés-fókusz (413. szabály), kliens-csempe.
+
 - **Kétperc-gyűjtők: ki ül ki náluk a legtöbbször.** A kiülő-poszt
   a posztot nevezi meg — az új réteg az embert: a felismert
   kiállításokat a kiülő játékos nevéhez összegzi. Edzőileg ez a

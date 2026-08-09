@@ -2483,6 +2483,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vigyétek rá a játékot, a következő már kizárás";
   }
 
+  // Felhozatal-emberek: kire hozzák fel a labdát (3+ átvétel, az
+  // indítások fele — a backenddel azonos küszöbök: OTP_MIN_OUTLETS,
+  // OTP_SHARE_PCT).
+  String? _outletTargetPlayer(Map<String, dynamic> r) {
+    final ou = (r["otp_outlets_by_player"] as Map?)?.cast<String, dynamic>();
+    if (ou == null || ou.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    ou.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a felhozataluk a(z) $top. kezén megy át ($topN/$all "
+        "indítás-átvétel) · rá kell lépni az átvételnél";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10249,6 +10272,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kiszolgált befejező", _assistedScorer(r)!],
       if (_suspensionCollector(r) != null)
         ["Kétperc-gyűjtő", _suspensionCollector(r)!],
+      if (_outletTargetPlayer(r) != null)
+        ["Felhozatal-ember", _outletTargetPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

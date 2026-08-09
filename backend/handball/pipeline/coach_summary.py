@@ -2623,6 +2623,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "kizárás.")
     except Exception:
         pass
+    # Felhozatal-emberek: kire hozzák fel a labdát a kaputól.
+    try:
+        from .goalkeeper import outlet_targets
+        otp = outlet_targets(match)
+        for side, name in (("home", home), ("away", away)):
+            top_otp = otp[side]["top"]
+            if top_otp is None:
+                continue
+            _ki6 = (f"a(z) {top_otp['jersey']}. számú"
+                    if top_otp.get("jersey") is not None
+                    else f"a(z) {top_otp['player_id']}. játékos")
+            body += (f" A(z) {name} felhozatala {_ki6} kezén megy át "
+                     f"({top_otp['outlets']} indítás-átvétel) — a "
+                     "letámadásnál rá kell lépni az átvételnél.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

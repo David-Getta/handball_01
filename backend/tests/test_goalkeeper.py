@@ -1748,6 +1748,26 @@ def test_outlet_target_roles_needs_enough_outlets():
     assert rec["top"] is None
 
 
+def test_outlet_targets_names_the_receiver():
+    """Ha a kapus-indítások mindig ugyanahhoz az emberhez mennek, őt
+    kell fogni a letámadásnál."""
+    from handball.pipeline.goalkeeper import (OTP_MIN_OUTLETS,
+                                              outlet_targets)
+
+    rec = outlet_targets(_otr_match())["away"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 12, rec
+    assert rec["top"]["outlets"] >= OTP_MIN_OUTLETS, rec
+
+
+def test_outlet_targets_silent_with_few_outlets():
+    """Két mért indításból nem nevezünk meg embert."""
+    from handball.pipeline.goalkeeper import outlet_targets
+
+    rec = outlet_targets(_otr_match(n_outlets=2))["away"]
+    assert rec["top"] is None, rec
+
+
 def _ops_match(slow_when_leading=True, n=5, fps=25.0):
     """Vendég védés-indítás sorozatok: döntetlennél gyors (vagy lassú)
     kihozatal, majd egy vendég-gól utáni vezetésnél lassú (vagy

@@ -2141,6 +2141,61 @@ OTR_MIN_OUTLETS = 4
 OTR_SHARE = 50.0
 
 
+# Felhozatal-emberek: ennyi mért indítás-célpont kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy a felhozataluk egy
+# emberen megy át.
+OTP_MIN_OUTLETS = 3
+OTP_SHARE_PCT = 50.0
+
+
+def outlet_targets(match: Match, config=None) -> dict:
+    """Felhozatal-emberek: KIRE hozzák fel a labdát a kaputól.
+
+    A felhozatal-posztok (outlet_target_roles) a POSZTOT nevezik meg
+    — ez az EMBERT: a kapus-indítások célpontjait (outlet_speed
+    targets) névre bontva összegzi.
+
+    Edzőileg ez a letámadás címzettje: ha a felhozataluk egy emberen
+    megy át, a letámadásnál ŐT kell fogni (rálépés az átvételnél,
+    a visszapassz sávjának lezárása) — nála akad meg az egész
+    kihozatal. Saját csapatra: ha a labda mindig ugyanahhoz megy, az
+    ellenfél egy emberrel megfogja a kihozatalunkat; kell egy
+    második és harmadik felkínálás is.
+
+    Visszatérés csapatonként (az INDÍTÓ csapaté): {"outlets",
+    "players": [{"player_id", "jersey", "outlets"}], "top"} — a
+    "top" az első játékos, ha legalább OTP_MIN_OUTLETS célpont-
+    átvétele van, és ez az indításaik legalább OTP_SHARE_PCT-a,
+    különben None.
+    """
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    speed = outlet_speed(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": r["player_id"],
+                 "jersey": jersey.get(r["player_id"]),
+                 "outlets": r["n"]}
+                for r in sorted(speed[side]["targets"],
+                                key=lambda r: -r["n"])]
+        total = sum(r["outlets"] for r in rows)
+        top = None
+        if rows and rows[0]["outlets"] >= OTP_MIN_OUTLETS:
+            share = 100.0 * rows[0]["outlets"] / max(1, total)
+            if share >= OTP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"outlets": total, "players": rows, "top": top}
+    return out
+
+
 def outlet_target_roles(match: Match, config=None) -> dict:
     """Felhozatal-posztok: MELYIK POSZTRA hozzák fel a labdát.
 

@@ -1057,6 +1057,9 @@ class ScoutingReport:
     # Kétperc-gyűjtők: a kiállítások darabszáma KIÜLŐNKÉNT.
     # Darabszám, meccsek közt pontosan összegződik.
     stc_susp_by_player: dict = field(default_factory=dict)
+    # Felhozatal-emberek: a kapus-indítások átvételeinek darabszáma
+    # CÉLPONTONKÉNT. Darabszám, meccsek közt összegződik.
+    otp_outlets_by_player: dict = field(default_factory=dict)
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4312,6 +4315,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "kiállítás) — vigyétek rá a játékot: betörés az ő "
                 "sávjába, elzárás rá; a következő kétperce már "
                 "kizárás, addig pedig fékezve véd.")
+
+    # Felhozatal-emberek: kire lépjen rá a letámadásotok.
+    if rep.otp_outlets_by_player:
+        _otp_k, _otp_n = max(rep.otp_outlets_by_player.items(),
+                             key=lambda kv: kv[1])
+        _otp_all = sum(rep.otp_outlets_by_player.values())
+        if _otp_n >= 3 and _otp_n >= 0.5 * max(1, _otp_all):
+            keys.append(
+                f"A felhozatalotok a(z) {_otp_k}. kezén megy át "
+                f"({_otp_n}/{_otp_all} indítás-átvétel) — a "
+                "letámadásnál rá kell lépni az átvételnél, és a "
+                "visszapassz sávját lezárni: nála akad meg az egész "
+                "kihozatal.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9757,6 +9773,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .goalkeeper import outlet_targets as _otp
+        otprec = _otp(match, config)[team.value]
+        rep.otp_outlets_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["outlets"]
+            for r in otprec["players"]}
         from .rules import suspension_collectors as _stc
         stcrec = _stc(match, config)[team.value]
         rep.stc_susp_by_player = {
@@ -12515,6 +12537,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 392) Az ő felhozatal-emberük × a ti letámadásotok: egy
+    # emberrel megfogható a kihozataluk.
+    if opp.otp_outlets_by_player and own.trans_steals >= 3:
+        _otp392_k, _otp392_n = max(opp.otp_outlets_by_player.items(),
+                                   key=lambda kv: kv[1])
+        _otp392_all = sum(opp.otp_outlets_by_player.values())
+        if _otp392_n >= 3 and _otp392_n >= 0.5 * max(1, _otp392_all):
+            plan.append(
+                f"A felhozataluk a(z) {_otp392_k}. kezén megy át "
+                f"({_otp392_n}/{_otp392_all} indítás-átvétel), ti "
+                f"pedig tudtok letámadni ({own.trans_steals} "
+                "szerzés) — az ő átvételére kell rálépni, és a "
+                "visszapassz sávját lezárni: a kihozataluk egy "
+                "emberrel megfogható.")
 
     # 391) Az ő kétperc-gyűjtőjük × a ti betöréseitek: a második
     # kétperc után egy lépésre áll a kizárástól.
@@ -19290,6 +19327,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.asp_goals_by_player for r in reports),
         stc_susp_by_player=_merge_count_dicts(
             r.stc_susp_by_player for r in reports),
+        otp_outlets_by_player=_merge_count_dicts(
+            r.otp_outlets_by_player for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

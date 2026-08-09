@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **439 réteg**, modulonként csoportosítva; a
+Összesen **440 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (87)
@@ -224,7 +224,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_speed_fade` | Lövőerő-esés: a lövés-sebesség változása az 1. és a 2. félidő között — |
 | `shot_speeds` | Lövés-sebességek a labda-kinematikából. |
 
-## goalkeeper (38)
+## goalkeeper (39)
 
 | Réteg | Mit mér |
 |---|---|
@@ -260,6 +260,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `outlet_pace_by_score` | Indítás-állás: VEZETVE LASSÍTJÁK-E a kapus-indítást. |
 | `outlet_punishment` | Indítás-hiba ára: GÓLBA KERÜLNEK-E az elszórt indításaik. |
 | `outlet_target_roles` | Felhozatal-posztok: MELYIK POSZTRA hozzák fel a labdát. |
+| `outlet_targets` | Felhozatal-emberek: KIRE hozzák fel a labdát a kaputól. |
 | `outlets` | Kapus-indítás: védés után mennyi idő alatt ér a labda a felezőig |
 | `reading_keeper` | Olvasó kapus: ELŐRE OLVASSA-E a lövéseket a kapusuk. |
 | `rebound_punishment` | Kipattanó ára: a VÉDÉSÜK után kapott második-helyzet gól. |
