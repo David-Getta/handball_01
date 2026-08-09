@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Emberelőny-hibázók: ki adja el a labdát a két perc alatt.** Az
+  emberelőny-hiba poszt a posztot nevezi meg — az új réteg az
+  embert: ugyanazokat a kiállítás-ablakokban, emberelőnyben
+  elkövetett labdaeladásokat játékosonként számolja. Edzőileg ez a
+  hátrány-védekezés névre szóló célpontja: hátrányban rá kell nyomni
+  (kettőzés, passzsáv-zárás a fogadásánál), mert az ő elvett labdája
+  dupla büntetés. Két eladástól emel ki nevet. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`powerplay_turnover_players`), edzői összefoglaló, felderítés
+  (`pptp_turnovers_by_player` mező + edzői kulcs + 373.
+  meccsterv-szabály), edzés-fókusz (394. szabály), kliens-csempe.
+
 - **Kulcs-ember: hány réteg mutat ugyanarra a játékosra.** A
   Kulcs-poszt a posztot, a Kulcs-páros a kettőst nevezi meg — az új,
   harmadik szintézis az EMBERT: a néven nevező rétegek (tüzes kéz,

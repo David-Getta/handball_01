@@ -3873,6 +3873,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import powerplay_turnover_players
+            res["powerplay_turnover_players"] = \
+                powerplay_turnover_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5637,6 +5643,9 @@ def create_app():
                 from ..pipeline.rules import suspension_cost
                 _layer("suspension_cost",
                        lambda: suspension_cost(match))
+                from ..pipeline.rules import powerplay_turnover_players
+                _layer("powerplay_turnover_players",
+                       lambda: powerplay_turnover_players(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

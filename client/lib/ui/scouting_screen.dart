@@ -2168,6 +2168,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Emberelőny-hibázók: ki adja el a labdát a két perc alatt (2+
+  // emberelőny-eladás — a backenddel azonos küszöb:
+  // PPTP_MIN_TURNOVERS).
+  String? _powerplayTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["pptp_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "az emberelőnyükben a(z) $top. veszíti el a legtöbb "
+        "labdát ($topN eladás) · hátrányban rá menjen a kettőzés";
+  }
+
   // Kulcs-ember: hány EMBER-réteg ítélete mutat ugyanarra a
   // játékosra (4 egyező rétegtől — a backenddel azonos küszöb:
   // KPL_MIN_LAYERS).
@@ -9840,6 +9861,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kétperc ára", _suspensionCost(r)!],
       if (_keyPlayer(r) != null)
         ["Kulcs-ember", _keyPlayer(r)!],
+      if (_powerplayTurnoverPlayer(r) != null)
+        ["Emberelőny-hibázó", _powerplayTurnoverPlayer(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

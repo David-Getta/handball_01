@@ -2092,7 +2092,7 @@ def test_seven_miss_roles_needs_enough_misses():
 
 # ---- Emberelőny-hiba poszt ---------------------------------------------------
 
-def _ppt_match(losers, fps=25.0):
+def _ppt_match(losers, fps=25.0, pad_s=0.0):
     """A VENDÉG van emberhátrányban (5 fő); a `losers` elemei adják,
     kinél vész el a labda az emberelőnyben. A 7-es beálló (33, 10), a
     9-es szélső (35, 3) — mindkettő végig a pályán az ablak alatt."""
@@ -2121,6 +2121,10 @@ def _ppt_match(losers, fps=25.0):
         lx, ly = spos[loser]
         _hold(int(14.0 * fps), 5, (7, 9), (lx + 0.2, ly))
         _hold(int(1.0 * fps), 5, (7, 9), (25.0, 4.0))   # elvesztve
+    # A `pad_s` nyújtja az ablakot: kevés eladás mellett is legyen
+    # felismert kiállítás-szakasz (PP_MIN_S).
+    if pad_s:
+        _hold(int(pad_s * fps), 5, (7, 9), (33.2, 10.0))
     _hold(int(20.0 * fps), 6, (), (20.0, 9.0))     # vissza hatra
     return Match(_meta(fps), frames)
 
@@ -2394,3 +2398,26 @@ def test_suspension_cost_silent_with_few_windows():
     rec = suspension_cost(_sct_match([1, 1]))["away"]
     assert rec["windows"] == 2 and rec["verdict"] is None, rec
     assert rec["per_susp"] is None, rec
+
+
+# ---- Emberelőny-hibázók (ki adja el a labdát a két perc alatt) --------------
+
+def test_powerplay_turnover_players_names_the_loser():
+    """Ha az emberelőnyben rendre ugyanaz veszíti el a labdát,
+    hátrányban rá kell nyomni."""
+    from handball.pipeline.rules import (PPTP_MIN_TURNOVERS,
+                                         powerplay_turnover_players)
+
+    rec = powerplay_turnover_players(_ppt_match([7, 7, 7, 9]))["home"]
+    assert rec["turnovers"] == 4, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["turnovers"] >= PPTP_MIN_TURNOVERS, rec
+
+
+def test_powerplay_turnover_players_silent_after_one():
+    """Egyetlen emberelőny-eladás még nem minta."""
+    from handball.pipeline.rules import powerplay_turnover_players
+
+    rec = powerplay_turnover_players(
+        _ppt_match([7], pad_s=60.0))["home"]
+    assert rec["turnovers"] == 1 and rec["top"] is None, rec

@@ -1355,6 +1355,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 394) Emberelőny-hibázók: a két perc alatt elvesztett labda a
+    # legdrágább, mert onnan üres kapura indul az ellenfél.
+    try:
+        from .rules import (PPTP_MIN_TURNOVERS,
+                            powerplay_turnover_players)
+        pptp394 = powerplay_turnover_players(match, config)
+        for side in ("home", "away"):
+            top394 = pptp394[side].get("top")
+            if top394 is None:
+                continue
+            _ki394 = (f"a(z) {top394['jersey']}. számú"
+                      if top394.get("jersey") is not None
+                      else f"a(z) {top394['player_id']}. játékos")
+            add(side, "támadás", "Emberelőny biztos kézzel",
+                f"az emberelőnyünkben {_ki394} veszítette el a "
+                f"legtöbb labdát ({top394['turnovers']} "
+                f"emberelőny-eladás; {PPTP_MIN_TURNOVERS} eladástól "
+                "már jelezzük) — a két perc így nem előny, hanem "
+                "kockázat",
+                "6-5 figura kockázat nélkül: a hibázó ne az első "
+                "átvevő legyen, tiltott bejátszás-sávok, és két kör "
+                "biztos labdajáratás lövés előtt — edzésen "
+                "emberelőny-játék eladás-számlálóval",
+                )
+    except Exception:
+        pass
+
     # 393) Kulcs-ember: ha minden szál egy emberen fut keresztül, egy
     # jó ellenfél egy emberrel megfog minket.
     try:

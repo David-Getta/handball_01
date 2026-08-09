@@ -1241,6 +1241,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_sct['windows']} kétperc alatt).")
     except Exception:
         pass
+    # Emberelőny-hibázók: ki adja el a labdát a két perc alatt.
+    try:
+        from .rules import powerplay_turnover_players
+        pptp = powerplay_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = pptp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} emberelőnyében {_ki} veszítette "
+                     f"el a legtöbb labdát ({top['turnovers']} "
+                     "emberelőny-eladás) — hátrányban rá kell "
+                     "nyomni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

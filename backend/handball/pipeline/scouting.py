@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Emberelőny-hibázók: az emberelőnyben elkövetett labdaeladások
+    # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    pptp_turnovers_by_player: dict = field(default_factory=dict)
     # Kulcs-ember: játékosonként hány EMBER-réteg ítélete mutat rá.
     # Darabszám, meccsek közt összegződik (a kulcs-ember a több
     # meccsen át legtöbb réteget gyűjtő játékos).
@@ -4167,6 +4170,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Emberelőny-hibázók: kire menjen a hátrány-pressz.
+    if rep.pptp_turnovers_by_player:
+        _pptp_k, _pptp_n = max(rep.pptp_turnovers_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _pptp_n >= 2:
+            keys.append(
+                f"Az emberelőnyükben a(z) {_pptp_k}. veszíti el a "
+                f"legtöbb labdát ({_pptp_n} emberelőny-eladás) — "
+                "hátrányban rá menjen a kettőzés és a passzsáv-zárás: "
+                "az ő elvett labdájából kontrázni lehet.")
 
     # Kulcs-ember: kire szóljon a személyre szabott feladat.
     if rep.kpl_layers_by_player:
@@ -9448,6 +9462,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .rules import powerplay_turnover_players as _pptp
+        pptprec = _pptp(match, config)[team.value]
+        rep.pptp_turnovers_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["turnovers"]
+            for r in pptprec["players"]}
         from .priorities import key_player as _kpl
         kplrec = _kpl(match, config)[team.value]
         rep.kpl_layers_by_player = dict(kplrec["players"])
@@ -12120,6 +12140,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 373) Az ő emberelőny-hibázójuk × a ti kontrátok: a két perc
+    # alatt elvett labda üres kapura visz.
+    if opp.pptp_turnovers_by_player and own.fast_break_pct >= 10.0:
+        _pptp373_k, _pptp373_n = max(
+            opp.pptp_turnovers_by_player.items(), key=lambda kv: kv[1])
+        if _pptp373_n >= 2:
+            plan.append(
+                f"Az emberelőnyükben a(z) {_pptp373_k}. veszíti el a "
+                f"legtöbb labdát ({_pptp373_n} eladás), ti pedig "
+                f"kontráztok (a támadásaitok {own.fast_break_pct:.0f}"
+                "%-a lerohanás) — hátrányban ne csak tartsatok: az ő "
+                "fogadására menjen a kettőzés, és az elvett labdából "
+                "azonnal induljon a kontra.")
 
     # 372) Az ő kulcs-emberük × a ti védekezés-fegyelmetek: a
     # személyre szabott feladat a meccsterv első sora.
@@ -18612,6 +18646,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        pptp_turnovers_by_player=_merge_count_dicts(
+            r.pptp_turnovers_by_player for r in reports),
         kpl_layers_by_player=_merge_count_dicts(
             r.kpl_layers_by_player for r in reports),
         sct_windows=sum(r.sct_windows for r in reports),
