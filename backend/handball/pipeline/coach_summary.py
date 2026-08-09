@@ -1305,6 +1305,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "a kapus rá készülhet.")
     except Exception:
         pass
+    # Időkérés-hibázók: kinek a kezén hal el a megbeszélt figura.
+    try:
+        from .stoppages import timeout_turnover_players
+        toep = timeout_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = toep[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} időkérés utáni labdáját {_ki} "
+                     f"veszítette el a legtöbbször "
+                     f"({top['turnovers']} eladás) — a figurát az ő "
+                     "fogadásánál kell megnyomni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

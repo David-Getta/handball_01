@@ -2344,6 +2344,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Időkérés-hibázók: kinek a kezén hal el a megbeszélt figura (2+
+  // időkérés utáni eladás — a backenddel azonos küszöb:
+  // TOEP_MIN_TURNOVERS).
+  String? _timeoutTurnoverPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["toep_turnovers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "az időkérés utáni labdát a(z) $top. veszíti el a "
+        "legtöbbször ($topN eladás) · a figurát az ő fogadásánál "
+        "nyomjátok meg";
+  }
+
   // Hetesdobók: ki áll oda a hétméteresekhez (2+ hetes ugyanattól a
   // dobótól — a backenddel azonos küszöb: STP_MIN_SEVENS).
   String? _sevenTakerPlayer(Map<String, dynamic> r) {
@@ -9913,6 +9935,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Sprint-esés", _sprintFade(r)!],
       if (_sevenTakerPlayer(r) != null)
         ["Hetesdobó ember", _sevenTakerPlayer(r)!],
+      if (_timeoutTurnoverPlayer(r) != null)
+        ["Időkérés-hibázó ember", _timeoutTurnoverPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

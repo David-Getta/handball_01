@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Időkérés-hibázók: a megbeszélt figura kinek a kezén hal el.** Az
+  időkérés-hiba poszt a posztot nevezi meg — az új réteg az embert:
+  ugyanazokat az időkérés utáni ablakban elkövetett labdaeladásokat
+  játékosonként számolja. Edzőileg ez az időkérés utáni védekezés
+  névre szóló mondata: a táblára rajzolt figura ott a
+  legsérülékenyebb, ahol eddig is elhalt — az ő fogadására menjen a
+  kilépés és a kettőzés; saját csapatra a kulcspassz átcímzése a
+  téma. Két eladástól emel ki nevet. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag
+  (`timeout_turnover_players`), edzői összefoglaló, felderítés
+  (`toep_turnovers_by_player` mező + edzői kulcs + 377.
+  meccsterv-szabály), edzés-fókusz (398. szabály), kliens-csempe.
+
 - **Őr-teszt a Kulcs-ember névsorára.** A Kulcs-poszt lefedettségét
   eddig is őrizte teszt; mostantól az ember-oldalt is: minden
   pipeline-függvény, amely a `top` mezőjében EMBERT nevez meg

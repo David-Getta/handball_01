@@ -855,3 +855,23 @@ def test_timeout_turnover_roles_needs_enough_turnovers():
 
     rec = timeout_turnover_roles(_toe_match([1, 2]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def test_timeout_turnover_players_names_the_loser():
+    """Ha az időkérés utáni labdát rendre ugyanaz veszíti el, az ő
+    fogadására kell menni."""
+    from handball.pipeline.stoppages import (TOEP_MIN_TURNOVERS,
+                                             timeout_turnover_players)
+
+    rec = timeout_turnover_players(_toe_match([1, 1, 1, 2]))["home"]
+    assert rec["turnovers"] == 4, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 1, rec
+    assert rec["top"]["turnovers"] >= TOEP_MIN_TURNOVERS, rec
+
+
+def test_timeout_turnover_players_silent_after_one():
+    """Egyetlen időkérés utáni eladás még nem minta."""
+    from handball.pipeline.stoppages import timeout_turnover_players
+
+    rec = timeout_turnover_players(_toe_match([1, 2]))["home"]
+    assert rec["top"] is None, rec

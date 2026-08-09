@@ -3896,6 +3896,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stoppages import timeout_turnover_players
+            res["timeout_turnover_players"] = \
+                timeout_turnover_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5672,6 +5678,9 @@ def create_app():
                 from ..pipeline.rules import seven_taker_players
                 _layer("seven_taker_players",
                        lambda: seven_taker_players(match))
+                from ..pipeline.stoppages import timeout_turnover_players
+                _layer("timeout_turnover_players",
+                       lambda: timeout_turnover_players(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

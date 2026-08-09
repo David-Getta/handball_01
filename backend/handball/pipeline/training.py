@@ -1355,6 +1355,33 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 398) Időkérés-hibázók: a megbeszélés utáni feszültségben ne az
+    # kapja a kulcspasszt, aki rendre elrontja.
+    try:
+        from .stoppages import (TOEP_MIN_TURNOVERS,
+                                timeout_turnover_players)
+        toep398 = timeout_turnover_players(match, config)
+        for side in ("home", "away"):
+            top398 = toep398[side].get("top")
+            if top398 is None:
+                continue
+            _ki398 = (f"a(z) {top398['jersey']}. számú"
+                      if top398.get("jersey") is not None
+                      else f"a(z) {top398['player_id']}. játékos")
+            add(side, "támadás", "Időkérés utáni első labda",
+                f"az időkérés utáni labdát {_ki398} veszítette el a "
+                f"legtöbbször ({top398['turnovers']} eladás; "
+                f"{TOEP_MIN_TURNOVERS} eladástól már jelezzük) — a "
+                "táblára rajzolt figura pont ott törik meg, ahol "
+                "indul",
+                "időkérés-szimuláció edzésen: tábla, 30 másodperc "
+                "megbeszélés, majd élesben a figura — egyszerű, két "
+                "passzos kezdéssel, és a hibázó ne az első átvevő "
+                "legyen",
+                )
+    except Exception:
+        pass
+
     # 397) Hetesdobók: egyetlen hetesdobó kockázat.
     try:
         from .rules import STP_MIN_SEVENS, seven_taker_players

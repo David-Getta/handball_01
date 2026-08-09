@@ -808,3 +808,69 @@ def timeout_turnover_roles(match: Match,
                     "indításánál kell megnyomni, ott hal el "
                     "magától is")
     return out
+
+
+# Időkérés-hibázók: ennyi időkérés utáni eladástól emeljük ki a
+# játékost (az időkérés ritka esemény, ezért alacsony a küszöb).
+TOEP_MIN_TURNOVERS = 2
+
+
+def timeout_turnover_players(match: Match,
+                             config: Optional[TacticsConfig] = None
+                             ) -> dict:
+    """Időkérés-hibázók: A MEGBESZÉLT FIGURA kinek a kezén hal el.
+
+    Az időkérés-hiba poszt (timeout_turnover_roles) a POSZTOT nevezi
+    meg — ez az EMBERT: ugyanazokat az időkérés utáni ablakban
+    elkövetett labdaeladásokat játékosonként számolja.
+
+    Edzőileg ez az időkérés utáni védekezés névre szóló mondata: a
+    táblára rajzolt figura ott a legsérülékenyebb, ahol eddig is
+    elhalt — az ő fogadására menjen a kilépés és a kettőzés. Saját
+    csapatra: a kulcspasszt ne az kapja, aki a megbeszélés utáni
+    feszültségben rendre elrontja.
+
+    Visszatérés csapatonként: {"turnovers", "players":
+    [{"player_id", "jersey", "turnovers"}], "top"} — a "top" az első
+    játékos, ha legalább TOEP_MIN_TURNOVERS időkérés utáni eladása
+    van, különben None.
+    """
+    from .event_detection import EventType, detect_events
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = TOF_WINDOW_S * fps
+    stops = [(s["likely_team"], s["end_frame"])
+             for s in detect_stoppages(match, config)
+             if s.get("likely_team") is not None]
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    if stops:
+        for e in detect_events(match, config):
+            if e.type != EventType.TURNOVER or e.player_id is None:
+                continue
+            side = e.team.value
+            if not any(team == side and 0 <= e.t - end <= win
+                       for (team, end) in stops):
+                continue
+            tally[side][e.player_id] = (
+                tally[side].get(e.player_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "turnovers": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["turnovers"] >= TOEP_MIN_TURNOVERS
+               else None)
+        out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
+                     "players": rows, "top": top}
+    return out
