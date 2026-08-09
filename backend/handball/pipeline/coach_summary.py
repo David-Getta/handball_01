@@ -2695,6 +2695,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_svy['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Passzív-kockázat: mennyire futnak bele a passzív jelbe.
+    try:
+        from .rules import passive_risk
+        psr = passive_risk(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_psr = psr[side]
+            if rec_psr["verdict"] is None:
+                continue
+            body += (f" A(z) {name} felállt támadásainak "
+                     f"{rec_psr['share_pct']:.0f}%-a lövés nélkül "
+                     f"nyúlik el ({rec_psr['passive']}/"
+                     f"{rec_psr['positional']}) — ellenük a zárt, "
+                     "türelmes fal dolgozik.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

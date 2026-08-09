@@ -17,6 +17,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Passzív-kockázat: mennyire futnak bele a passzív jelbe.** A
+  passzív-kockázatú szakaszok eddig csak listaként léteztek — az új
+  réteg az arányt adja: a lövés nélkül elnyúló felállt támadásokat az
+  összes felállt támadáshoz viszonyítja. Edzőileg ez a türelem
+  jutalma: ha rendszeresen belefutnak a passzív jelbe, ellenük a
+  zárt, türelmes fal dolgozik — nem kell kilépni és kockáztatni, az
+  óra és a játékvezető a szövetségesünk. Saját csapatra: a lövés
+  nélkül elnyúló támadás nem stílus, hanem befejezés-hiány, a második
+  hullámnak befejezés-lehetőséggel kell érkeznie. Négy felállt
+  támadástól és 20%-os aránytól ítél. A rangsorban a "felkészülés"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`passive_risk`), edzői összefoglaló, felderítés (`psr_positional`
+  / `psr_passive` mezők + edzői kulcs + 397. meccsterv-szabály),
+  edzés-fókusz (418. szabály), kliens-csempe.
+
 - **Hetes-hozam: mennyit ér náluk egy megítélt hetes.** A
   hétméteres-mérleg eddig csak a nyers számokat adta — az új réteg az
   ítéletet: a felismert hetesek gólarányát méri, és megmondja, mit ér

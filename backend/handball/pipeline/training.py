@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 418) Passzív-kockázat: a lövés nélkül elnyúló támadás
+    # befejezés-hiány, nem stílus.
+    try:
+        from .rules import PSR_SHARE_PCT, passive_risk
+        psr418 = passive_risk(match, config)
+        for side in ("home", "away"):
+            rec418 = psr418[side]
+            if rec418["share_pct"] is None:
+                continue
+            if rec418["share_pct"] < PSR_SHARE_PCT:
+                continue
+            add(side, "támadás", "Befejezés a passzív jel előtt",
+                f"a felállt támadásaink {rec418['share_pct']:.0f}%-a "
+                f"lövés nélkül nyúlik el ({rec418['passive']}/"
+                f"{rec418['positional']}; {PSR_SHARE_PCT:.0f}% fölött "
+                "jelezzük) — ez nem türelem, hanem befejezés-hiány",
+                "időre játszó figurák: 20 másodperces támadás-limit "
+                "az edzésen, kijelölt második hullám befejezés-"
+                "lehetőséggel, és a passzív jel utáni utolsó passz "
+                "gyakorlása (kijelölt befejező, azonnali lövés)",
+                )
+    except Exception:
+        pass
+
     # 417) Hetes-hozam: a hetes a legolcsóbb gól — ha bemegy.
     try:
         from .rules import SVY_LOW_PCT, seven_yield

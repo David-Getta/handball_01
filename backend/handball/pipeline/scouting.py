@@ -1068,6 +1068,10 @@ class ScoutingReport:
     # illetve egyenlő létszámnál. Darabszám, összegződik.
     # Hetes-hozam: a mért hetesek és a belőlük esett gólok.
     # Darabszám, meccsek közt pontosan összegződik.
+    # Passzív-kockázat: a felállt és a lövés nélkül elnyúló
+    # támadások darabszáma. Darabszám, összegződik.
+    psr_positional: int = 0
+    psr_passive: int = 0
     svy_attempts: int = 0
     svy_goals: int = 0
     ppy_pp_shots: int = 0
@@ -4420,6 +4424,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "helyzetet megállító szabálytalanság ellenük "
                 "vállalható, a kapusotok pedig külön készüljön a "
                 "hetesükre.")
+
+    # Passzív-kockázat: a türelmes fal jutalma.
+    if rep.psr_positional >= 4:
+        _psr_s = 100.0 * rep.psr_passive / rep.psr_positional
+        if _psr_s >= 20.0:
+            keys.append(
+                f"A felállt támadásaik {_psr_s:.0f}%-a lövés nélkül "
+                f"nyúlik el ({rep.psr_passive}/{rep.psr_positional}) "
+                "— ellenük a zárt, türelmes fal dolgozik: nem kell "
+                "kilépni és kockáztatni, az óra és a passzív jel "
+                "nektek dolgozik.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9865,6 +9880,10 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .rules import passive_risk as _psr
+        psrrec = _psr(match, config)[team.value]
+        rep.psr_positional = psrrec["positional"]
+        rep.psr_passive = psrrec["passive"]
         from .rules import seven_yield as _svy
         svyrec = _svy(match, config)[team.value]
         rep.svy_attempts = svyrec["attempts"]
@@ -12651,6 +12670,18 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 397) Az ő passzív-kockázatuk × a ti falatok: a türelem
+    # fegyver, ha ők maguktól elakadnak.
+    if opp.psr_positional >= 4 and own.defense_main:
+        _psr397 = 100.0 * opp.psr_passive / opp.psr_positional
+        if _psr397 >= 20.0:
+            plan.append(
+                f"A felállt támadásaik {_psr397:.0f}%-a lövés nélkül "
+                f"nyúlik el ({opp.psr_passive}/{opp.psr_positional}), "
+                f"ti pedig {own.defense_main} falat játszotok — "
+                "tartsátok zártan és türelmesen: kilépés nélkül is "
+                "az óra és a passzív jel nektek dolgozik.")
 
     # 396) Az ő hetes-hozamuk × a ti kapusotok: a hetest érő
     # szabálytalanság ára náluk mérhető.
@@ -19509,6 +19540,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stc_susp_by_player for r in reports),
         otp_outlets_by_player=_merge_count_dicts(
             r.otp_outlets_by_player for r in reports),
+        psr_positional=sum(r.psr_positional for r in reports),
+        psr_passive=sum(r.psr_passive for r in reports),
         svy_attempts=sum(r.svy_attempts for r in reports),
         svy_goals=sum(r.svy_goals for r in reports),
         ppy_pp_shots=sum(r.ppy_pp_shots for r in reports),

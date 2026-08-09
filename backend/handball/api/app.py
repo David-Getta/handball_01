@@ -4637,6 +4637,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.rules import passive_risk
+            res["passive_risk"] = passive_risk(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5558,6 +5563,8 @@ def create_app():
                 _layer("powerplay_yield", lambda: powerplay_yield(match))
                 from ..pipeline.rules import seven_yield
                 _layer("seven_yield", lambda: seven_yield(match))
+                from ..pipeline.rules import passive_risk
+                _layer("passive_risk", lambda: passive_risk(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

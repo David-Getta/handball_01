@@ -105,6 +105,52 @@ def test_passive_play_risk_flags_long_shotless_attack():
     assert risks[0]["duration_s"] >= 35.0
 
 
+def _psr_match(n_attacks=6):
+    """`n_attacks` darab 40 mp-es, lövés nélküli felállt hazai támadás,
+    köztük vendég-birtoklással (elválasztó)."""
+    frames = []
+    t = 0
+    for _ in range(n_attacks):
+        for i in range(40 * 25):
+            x = 30.0 + 0.5 * (1 if (i // 25) % 2 == 0 else -1) \
+                * ((i % 25) / 25.0)
+            players = [_pl(1, Team.HOME, x, 10.0),
+                       _pl(2, Team.HOME, 28.0, 6.0),
+                       _pl(21, Team.AWAY, 37.0, 8.0),
+                       _pl(22, Team.AWAY, 37.0, 12.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(150):
+            players = [_pl(1, Team.HOME, 10.0, 10.0),
+                       _pl(21, Team.AWAY, 6.0, 10.0)]
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=6.2, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_passive_risk_flags_repeated_shotless_attacks():
+    """Ha a felállt támadásaik rendre lövés nélkül nyúlnak el, ellenük
+    a türelmes, zárt fal dolgozik."""
+    from handball.pipeline.rules import PSR_SHARE_PCT, passive_risk
+
+    rec = passive_risk(_psr_match())["home"]
+    assert rec["positional"] >= 4 and rec["passive"] >= 4, rec
+    assert rec["share_pct"] is not None
+    assert rec["share_pct"] >= PSR_SHARE_PCT, rec
+    assert rec["verdict"] and "türelmes fal" in rec["verdict"], rec
+
+
+def test_passive_risk_silent_with_few_attacks():
+    """Néhány felállt támadásból nincs ítélet."""
+    from handball.pipeline.rules import passive_risk
+
+    rec = passive_risk(_psr_match(n_attacks=2))["home"]
+    assert rec["share_pct"] is None and rec["verdict"] is None, rec
+
+
 def _pp_match_with_shots():
     """Hazai emberelőny (vendég 5 fő) alatt egy hazai gól; utána egyenlő
     létszámnál egy hazai védett lövés. A kapus-jel a védéshez kell."""

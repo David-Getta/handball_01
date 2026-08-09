@@ -446,6 +446,64 @@ def passive_play_risks(match: Match,
     return out
 
 
+# Passzív-kockázat: ennyi felállt támadás kell az ítélethez, és
+# ekkora részarány fölött mondjuk ki, hogy rendszeresen belefutnak a
+# passzív jelbe.
+PSR_MIN_ATTACKS = 4
+PSR_SHARE_PCT = 20.0
+
+
+def passive_risk(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Passzív-kockázat: MENNYIRE gyakran futnak bele a passzív jelbe.
+
+    A passzív-kockázatú szakaszok (passive_play_risks) a listát
+    adják — ez az ARÁNYT: a lövés nélkül elnyúló felállt támadásokat
+    az ÖSSZES felállt támadásukhoz viszonyítja.
+
+    Edzőileg ez a türelem jutalma: ha rendszeresen belefutnak a
+    passzív jelbe, ellenük a zárt, türelmes fal dolgozik — nem kell
+    kilépni és kockáztatni, a játékvezető és az óra a szövetségesünk.
+    Saját csapatra: a lövés nélkül elnyúló támadás nem stílus, hanem
+    befejezés-hiány — a második hullámnak befejezés-lehetőséggel
+    kell érkeznie.
+
+    Visszatérés csapatonként: {"positional", "passive", "share_pct",
+    "verdict"} — a share_pct/verdict None, ha kevés
+    (PSR_MIN_ATTACKS alatti) a felállt támadás.
+    """
+    from .attack_types import AttackType, classify_attacks
+
+    config = config or TacticsConfig()
+    out = {side: {"positional": 0, "passive": 0, "share_pct": None,
+                  "verdict": None}
+           for side in ("home", "away")}
+
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.POSITIONAL.value:
+            continue
+        side = a["team"]
+        if side in out:
+            out[side]["positional"] += 1
+    for a in passive_play_risks(match, config):
+        side = a["team"]
+        if side in out:
+            out[side]["passive"] += 1
+
+    for rec in out.values():
+        if rec["positional"] >= PSR_MIN_ATTACKS:
+            share = 100.0 * rec["passive"] / rec["positional"]
+            rec["share_pct"] = round(share, 1)
+            if share >= PSR_SHARE_PCT:
+                rec["verdict"] = (
+                    f"rendszeresen belefutnak a passzív jelbe "
+                    f"({rec['passive']}/{rec['positional']} felállt "
+                    f"támadás, {share:.0f}%) — ellenük a zárt, "
+                    "türelmes fal dolgozik: nem kell kilépni, az óra "
+                    "és a játékvezető nekünk dolgozik")
+    return out
+
+
 # A 7 m-es után ennyi másodpercen belüli lövést párosítjuk hozzá kimenetelként.
 SEVEN_OUTCOME_WINDOW_S = 6.0
 

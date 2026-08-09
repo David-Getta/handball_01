@@ -2601,6 +2601,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Passzív-kockázat: mennyire futnak bele a passzív jelbe (4+
+  // felállt támadás, 20%+ lövés nélkül — a backenddel azonos
+  // küszöbök: PSR_MIN_ATTACKS, PSR_SHARE_PCT).
+  String? _passiveRisk(Map<String, dynamic> r) {
+    final pos = (r["psr_positional"] as num?)?.toInt() ?? 0;
+    final pas = (r["psr_passive"] as num?)?.toInt() ?? 0;
+    if (pos < 4) return null;
+    final pct = 100.0 * pas / pos;
+    if (pct < 20.0) return null;
+    return "a felállt támadásaik ${pct.toStringAsFixed(0)}%-a lövés "
+        "nélkül nyúlik el ($pas/$pos) · zárt, türelmes fal kell";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10377,6 +10390,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberelőny-hozam", _powerplayYield(r)!],
       if (_sevenYield(r) != null)
         ["Hetes-hozam", _sevenYield(r)!],
+      if (_passiveRisk(r) != null)
+        ["Passzív-kockázat", _passiveRisk(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
