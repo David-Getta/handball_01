@@ -3,7 +3,42 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.26 óta)
+## Kiadatlan (a v0.1.27 óta)
+
+## v0.1.27 — kiadva (2026-08-09)
+
+> Kiadás-jegyzet: a v0.1.26 óta három vezérfonal futott.
+>
+> **(1) Új elemzés futó feldolgozás mellett: mostantól te döntesz.**
+> Eddig egy új videó indítása MINDIG félretette az éppen futót. Most
+> a program megkérdezi: megvárja az előző elemzés végét, vagy azonnal
+> kezdje az újat. Várakozásnál a futó feldolgozáshoz nem nyúlunk (az
+> új szépen sorba áll mögé); azonnali kezdésnél marad a régi
+> viselkedés — a futó munka szelíden félrekerül, az addig
+> feldolgozott része elmentve marad, és később folytatható. A
+> párbeszéd a "Mégse" gombbal el is hagyható, a több videós köteg
+> pedig továbbra is mindig egymás után dolgozódik fel.
+>
+> **(2) Tizenhárom új réteg — EMBER- és HOZAM-lencse.** Hét
+> réteg néven nevez: Fáradt-eladók, Visszafutás-lemaradók,
+> Fáradt-fal emberek, Indítás-vadász emberek, Kiszolgált befejezők,
+> Kétperc-gyűjtők, Felhozatal-emberek — mind bekerült a Kulcs-ember
+> szintézis bizonyíték-rétegei közé is. Mellettük hat mérés arról
+> szól, MENNYIT ÉR egy-egy játékelem: 7a6 eladás, Elzárás-hozam,
+> Blokk-fáradás, Emberelőny-hozam, Hetes-hozam és Passzív-kockázat —
+> ezek árazzák be a kétpercet, a hetest, az elzárást és a türelmet,
+> vagyis megmondják, hova érdemes a védekező munkát tenni.
+>
+> **(3) A mérési igazság változatlanul kötelező.** Minden réteg
+> kevés mintánál hallgat (nincs hallgatólagos nulla), a felderítés
+> csak darabszámot tárol (így meccsek közt pontosan összegződik), és
+> a felületek külön-külön try/except-tel futnak — egy réteg hibája
+> nem viszi el a többit. A kiadás előtt lefutott a lassú
+> sorrend-jelentés is: 445 rétegből 0 sorrend-függő.
+>
+> Számokban: 445 elemző réteg, 397 meccsterv-szabály, 418
+> edzés-szabály, 418 kliens-csempe, 1616 zöld teszt.
+
 
 - **Új elemzés futó feldolgozás mellett: mostantól te döntesz.**
   Eddig egy új videó indítása mindig félretette az éppen futót. Most
