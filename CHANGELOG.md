@@ -3,7 +3,58 @@
 A Sport Machine kiadásainak emberi nyelvű összefoglalója. A részletes
 történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
-## Kiadatlan (a v0.1.25 óta)
+## Kiadatlan (a v0.1.26 óta)
+
+## v0.1.26 — kiadva (2026-08-09)
+
+> Kiadás-jegyzet: a v0.1.25 óta rövid, de sűrű kör futott. Két
+> vezérfonala van: az EMBER-lencse kiteljesítése (a poszt-lencse
+> névre szóló párja), és egy terepről visszajött hiba kijavítása,
+> ami eddig egész feldolgozásokat vitt el.
+>
+> **(1) Az elakadt videó-szakaszon tényleg átjut a feldolgozás.** A
+> felhasználó jelezte: a feldolgozás 22 percig állt ugyanannál a
+> képkockánál, pedig az átugró-adagoló már benne volt a v0.1.25-ben.
+> Három külön ok volt, mindhárom javítva: (a) az átugrás csak a
+> konzolra írt, így a felület haladás-jelzője állni látszott — most
+> minden átugrás kimegy a felületre is; (b) minden újraindítás
+> egyetlen kockányit lépett a hibás pozíció után, ezért ugyanabban a
+> sérült szakaszban toporgott — most az ugrás-táv négyszereződik
+> (legfeljebb 750 kocka), és sikeres kocka után visszaáll; (c) a
+> folytató-olvasó a KÖZÖS modell-példányt hívta, miközben az elakadt
+> szál épp abban ragadt bent — most saját példánnyal dolgozik. Az
+> átugrás időkorlátja 60 → 30 másodperc.
+>
+> **(2) Kulcs-ember: a harmadik szintézis.** A Kulcs-poszt a
+> posztot, a Kulcs-páros a kettőst nevezi meg — az új réteg az
+> EMBERT: a néven nevező rétegek élén álló játékosokat számolja
+> össze, és ha négy különböző szempont ugyanoda mutat, kimondja a
+> kulcs-embert. A meccs-jelentésben önálló szakaszként, a
+> bizonyíték-rétegek felsorolásával jelenik meg. Őr-teszt vigyáz
+> arra, hogy új ember-réteg ne maradhasson ki a névsorból — élesben
+> rögtön talált is egy hiányt (Kilépő védő).
+>
+> **(3) Tíz új EMBER-réteg.** A poszt-lencse mintáinak névre szóló
+> párja: Hetesdobók, Hetes-kihagyók, Emberelőny- és
+> Emberhátrány-hibázók, Időkérés-hibázók, Válaszhiba-emberek,
+> Ziccer-előkészítők, Vég-birtokosok, Menekülők, Sávváltók,
+> Kipattanó-szedők. Mindegyik ugyanazt az utat járja be (motor →
+> /analyze és meccs-csomag → edzői összefoglaló → felderítés →
+> edzés-fókusz → kliens-csempe → teszt), és mindegyik bizonyítékként
+> beszámít a Kulcs-emberbe.
+>
+> **(4) Új mérések a csapat-oldalon.** Áttörés-hozam (bejutnak-e a
+> falba, és büntetnek-e onnan), Kétperc ára (mennyi gólba kerül egy
+> kiállításuk), Emberfogás-váltás (a szünet után emberfogásra
+> váltanak-e — a leggyakoribb meccs közbeni tervmódosítás).
+>
+> **(5) Mérési igazság.** A réteg-katalógus, a tény-lap és a
+> pályázati doksik számai generáltak, őr-teszttel; a sorrend-függés
+> jelentése a kiadás előtt újra lefutott: **430 rétegből 0
+> sorrend-függő**.
+>
+> A kiadás számai: **430 elemző réteg**, **1582 automata teszt**,
+> 382 meccsterv-szabály, 403 edzés-szabály, 403 kliens-csempe.
 
 - **Sávváltók: ki viszi a keresztmozgást.** A sávváltó-poszt a
   posztot nevezi meg — az új réteg az embert: ugyanazokat a
