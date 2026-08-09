@@ -1289,6 +1289,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_bty['entries']} betörésből).")
     except Exception:
         pass
+    # Hetesdobók: ki áll oda a hétméteresekhez.
+    try:
+        from .rules import seven_taker_players
+        stp = seven_taker_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = stp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} heteseit {_ki} dobja "
+                     f"({top['sevens']} hetes, {top['goals']} gól) — "
+                     "a kapus rá készülhet.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

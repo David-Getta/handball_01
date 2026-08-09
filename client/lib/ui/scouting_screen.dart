@@ -2344,6 +2344,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Hetesdobók: ki áll oda a hétméteresekhez (2+ hetes ugyanattól a
+  // dobótól — a backenddel azonos küszöb: STP_MIN_SEVENS).
+  String? _sevenTakerPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["stp_sevens_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a heteseiket a(z) $top. dobja ($topN hetes) · a kapusotok "
+        "rá készüljön: szokás-sarok, lépésritmus, csel";
+  }
+
   // Hetes-kihagyók: ki hibázza el a hetest (2+ gól nélküli hetes
   // ugyanattól a dobótól — a backenddel azonos küszöb:
   // SVMP_MIN_MISSES).
@@ -9891,6 +9911,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Óralopás", _clockManagement(r)!],
       if (_sprintFade(r) != null)
         ["Sprint-esés", _sprintFade(r)!],
+      if (_sevenTakerPlayer(r) != null)
+        ["Hetesdobó ember", _sevenTakerPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **423 réteg**, modulonként csoportosítva; a
+Összesen **424 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (84)
@@ -370,7 +370,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `specialist_roles` | Specialista-poszt: MELYIK POSZTOT játsszák váltott sorban. |
 | `turnovers_by_role` | Poszt-hibák: MELYIK POSZTJUK veszíti el a labdát. |
 
-## rules (39)
+## rules (40)
 
 | Réteg | Mit mér |
 |---|---|
@@ -398,6 +398,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `seven_miss_roles` | Hetes-kihagyó poszt: MELYIK POSZTJUK hibázza el a hetest. |
 | `seven_pair_roles` | Hetespáros-poszt: KI HARCOLJA KI és KI DOBJA a heteseiket. |
 | `seven_shot_directions` | Hetes-oldal: MERRE DOBJÁK a heteseiket. |
+| `seven_taker_players` | Hetesdobók: KI ÁLL ODA a hétméteresekhez. |
 | `seven_taker_roles` | Hetesdobó-poszt: MELYIK POSZTJUK áll oda a hétméteresekhez. |
 | `sevens_by_score` | Hetes-állás: MIKOR harcolják ki a heteseiket — állás szerint. |
 | `sevens_fade` | Hetes-fáradás: MIKOR ADJÁK a heteseket. |

@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Hetesdobók: a hetesek darabszáma DOBÓNKÉNT. Darabszám, meccsek
+    # közt összegződik.
+    stp_sevens_by_player: dict = field(default_factory=dict)
     # Áttörés-hozam: a mért betörések és a belőlük esett gólok
     # darabszáma. Darabszám, pontosan összegződik (arány = goals /
     # entries).
@@ -4178,6 +4181,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Hetesdobók: kire készüljön a kapus a hetesnél.
+    if rep.stp_sevens_by_player:
+        _stp_k, _stp_n = max(rep.stp_sevens_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _stp_n >= 2:
+            keys.append(
+                f"A heteseiket a(z) {_stp_k}. dobja ({_stp_n} hetes) "
+                "— a kapusotok RÁ készüljön: szokás-sarok, "
+                "lépésritmus, csel; a videó-elemzés is egy emberre "
+                "szűkíthető.")
 
     # Áttörés-hozam: mennyire drága, ha bejutnak.
     if rep.bty_entries >= 5:
@@ -9499,6 +9513,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .rules import seven_taker_players as _stp
+        stprec = _stp(match, config)[team.value]
+        rep.stp_sevens_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["sevens"]
+            for r in stprec["players"]}
         from .attack_types import breakthrough_yield as _bty
         btyrec = _bty(match, config)[team.value]
         rep.bty_entries = int(btyrec["entries"])
@@ -12187,6 +12207,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 376) Az ő hetesdobójuk × a ti kapusotok: névre szóló
+    # hetes-felkészülés.
+    if opp.stp_sevens_by_player and own.gk_on_target >= 5:
+        _stp376_k, _stp376_n = max(opp.stp_sevens_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _stp376_n >= 2:
+            plan.append(
+                f"A heteseiket a(z) {_stp376_k}. dobja ({_stp376_n} "
+                "hetes), a ti kapusotok pedig rendszeresen dolgozik "
+                f"({own.gk_on_target} kaputra érkezett lövés) — "
+                "nézzétek végig az ő hetes-felvételeit, és "
+                "beszéljétek meg a kapussal a szokás-sarkát: a hetes "
+                "az egyetlen helyzet, amit előre lehet gyakorolni.")
 
     # 375) Az ő áttörés-hozamuk × a ti fal-mélységetek: a betörést
     # a falon kívül kell megállítani.
@@ -18721,6 +18755,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        stp_sevens_by_player=_merge_count_dicts(
+            r.stp_sevens_by_player for r in reports),
         bty_entries=sum(r.bty_entries for r in reports),
         bty_goals=sum(r.bty_goals for r in reports),
         shtp_turnovers_by_player=_merge_count_dicts(

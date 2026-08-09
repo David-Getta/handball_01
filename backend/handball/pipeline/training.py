@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 397) Hetesdobók: egyetlen hetesdobó kockázat.
+    try:
+        from .rules import STP_MIN_SEVENS, seven_taker_players
+        stp397 = seven_taker_players(match, config)
+        for side in ("home", "away"):
+            top397 = stp397[side].get("top")
+            if top397 is None:
+                continue
+            _ki397 = (f"a(z) {top397['jersey']}. számú"
+                      if top397.get("jersey") is not None
+                      else f"a(z) {top397['player_id']}. játékos")
+            add(side, "befejezés", "Második hetesdobó",
+                f"a heteseinket {_ki397} dobja ({top397['sevens']} "
+                f"hetes, {top397['goals']} gól; "
+                f"{STP_MIN_SEVENS} hetestől már jelezzük) — egyetlen "
+                "dobó kockázat: kiállítás, sérülés vagy rossz nap "
+                "esetén nincs kire bízni",
+                "hetes-verseny hetente, fáradtan (a heti győztes "
+                "dobja a meccsen), és kijelölt második ember, aki "
+                "élesben is dobott már — a hetes az egyetlen "
+                "helyzet, amit teljesen be lehet gyakorolni",
+                )
+    except Exception:
+        pass
+
     # 396) Áttörés-hozam: a betörés akkor ér valamit, ha be is
     # fejezzük.
     try:

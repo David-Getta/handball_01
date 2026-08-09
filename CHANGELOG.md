@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Hetesdobók: ki áll oda a hétméteresekhez.** A hetesdobó-poszt a
+  posztot nevezi meg, a hetes-kihagyók azt, ki hibázza el — az új
+  réteg azt, ki áll oda egyáltalán: a felismert hétméteresek dobóit
+  számolja játékosonként (góllal és gól nélkül zárulókat együtt).
+  Edzőileg ez a kapus felkészítésének első lapja: ha a heteseket
+  ugyanaz dobja, a kapus RÁ készülhet (szokás-sarok, lépésritmus,
+  csel), és a videó-elemzés is egy emberre szűkül; saját csapatra az
+  egyetlen hetesdobó kockázat. Két hetestől emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`seven_taker_players`), edzői összefoglaló,
+  felderítés (`stp_sevens_by_player` mező + edzői kulcs + 376.
+  meccsterv-szabály), edzés-fókusz (397. szabály), kliens-csempe.
+
 - **Javítás — az elakadt szakaszon tényleg átjut a feldolgozás.** Az
   átugró-adagoló eddig három ponton is elakadhatott ugyanott: (1) az
   átugrás nem jelzett vissza a felületnek, így a haladás-jelző (és az

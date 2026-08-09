@@ -2443,3 +2443,26 @@ def test_shorthanded_turnover_players_silent_after_one():
 
     rec = shorthanded_turnover_players(_sht_match([7, 9]))["home"]
     assert rec["top"] is None, rec
+
+
+# ---- Hetesdobók (ki áll oda a hétméteresekhez) -------------------------------
+
+def test_seven_taker_players_names_the_taker():
+    """Három hetes ugyanattól a dobótól → rá készülhet a kapus."""
+    from handball.pipeline.rules import (STP_MIN_SEVENS,
+                                         seven_taker_players)
+
+    rec = seven_taker_players(_svm_match(3))["home"]
+    assert rec["sevens"] == 3, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 1, rec
+    assert rec["top"]["sevens"] >= STP_MIN_SEVENS, rec
+    # A _svm_match hetesei mind gól nélkül zárulnak.
+    assert rec["top"]["goals"] == 0, rec
+
+
+def test_seven_taker_players_silent_after_one():
+    """Egyetlen hetesből még nincs kiemelt dobó."""
+    from handball.pipeline.rules import seven_taker_players
+
+    rec = seven_taker_players(_svm_match(1))["home"]
+    assert rec["sevens"] == 1 and rec["top"] is None, rec

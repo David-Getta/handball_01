@@ -2888,3 +2888,60 @@ def shorthanded_turnover_players(match: Match,
         out[side] = {"turnovers": sum(r["turnovers"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Hetesdobók: ennyi hetestől emeljük ki a játékost (a hetes ritka
+# esemény, ezért alacsony a küszöb).
+STP_MIN_SEVENS = 2
+
+
+def seven_taker_players(match: Match,
+                        config: Optional[TacticsConfig] = None) -> dict:
+    """Hetesdobók: KI ÁLL ODA a hétméteresekhez.
+
+    A hetesdobó-poszt (seven_taker_roles) a POSZTOT nevezi meg, a
+    hetes-kihagyók azt, ki HIBÁZZA el — ez azt, ki áll oda
+    egyáltalán: a felismert hétméteresek dobóit számolja
+    játékosonként, a góllal és a gól nélkül zárulókat együtt.
+
+    Edzőileg ez a kapus felkészítésének első lapja: ha a hetesek nagy
+    részét ugyanaz dobja, a kapus RÁ készülhet (szokás-sarok,
+    lépésritmus, csel), és a videó-elemzés is egy emberre szűkül.
+    Saját csapatra: az egyetlen hetesdobó kockázat — kiállítás,
+    sérülés vagy rossz nap esetén kell egy második ember.
+
+    Visszatérés csapatonként: {"sevens" (dobóhoz kötött hetes),
+    "players": [{"player_id", "jersey", "sevens", "goals"}], "top"} —
+    a "top" az első játékos, ha legalább STP_MIN_SEVENS hetese van,
+    különben None.
+    """
+    config = config or TacticsConfig()
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sm in seven_meter_outcomes(match, config):
+        pid = sm.get("shooter_id")
+        if pid is None:
+            continue
+        rec = tally[sm["team"]].setdefault(pid, {"sevens": 0,
+                                                 "goals": 0})
+        rec["sevens"] += 1
+        if sm.get("outcome") == "gól":
+            rec["goals"] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "sevens": r["sevens"], "goals": r["goals"]}
+                for pid, r in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1]["sevens"])]
+        top = (rows[0] if rows and rows[0]["sevens"] >= STP_MIN_SEVENS
+               else None)
+        out[side] = {"sevens": sum(r["sevens"] for r in rows),
+                     "players": rows, "top": top}
+    return out
