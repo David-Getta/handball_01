@@ -1339,6 +1339,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "után azonnal rá kell menni.")
     except Exception:
         pass
+    # Ziccer-előkészítők: ki adja a passzt a nagy helyzethez.
+    try:
+        from .xg import big_chance_feeders
+        bcfp = big_chance_feeders(match)
+        for side, name in (("home", home), ("away", away)):
+            top = bcfp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} ziccereit {_ki} teremti a "
+                     f"legtöbbször ({top['chances']} előkészítés) — "
+                     "az ő bejátszó-sávját kell elvágni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

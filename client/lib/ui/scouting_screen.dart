@@ -2344,6 +2344,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Ziccer-előkészítők: ki adja a passzt a nagy helyzethez (2+
+  // előkészítés — a backenddel azonos küszöb: BCFP_MIN_FEEDS).
+  String? _bigChanceFeederPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["bcfp_chances_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    return "a ziccereiket a(z) $top. teremti a legtöbbször ($topN "
+        "előkészítés) · az ő bejátszó-sávját vágjátok el";
+  }
+
   // Válaszhiba-emberek: kapott gól után ki veszíti el a labdát (2+
   // válasz-eladás — a backenddel azonos küszöb:
   // RTOP_MIN_TURNOVERS).
@@ -9960,6 +9980,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Időkérés-hibázó ember", _timeoutTurnoverPlayer(r)!],
       if (_responseTurnoverPlayer(r) != null)
         ["Válaszhiba-ember", _responseTurnoverPlayer(r)!],
+      if (_bigChanceFeederPlayer(r) != null)
+        ["Ziccer-előkészítő ember", _bigChanceFeederPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

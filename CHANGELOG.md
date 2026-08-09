@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Ziccer-előkészítők: ki adja a passzt a nagy helyzethez.** A
+  ziccer-előkészítő poszt a posztot nevezi meg — az új réteg az
+  embert: a nagy helyzet-értékű lövésekhez megkeresi a lövő felé menő
+  utolsó passzt, és a helyzetet a passzoló játékoshoz írja.
+  Edzőileg ez a legdrágább passzsáv névre szólóan: az ő
+  bejátszó-sávját kell elvágni (testtel zárás, előrelépő védő) — a
+  helyzet így ki sem alakul; saját csapatra a fő előkészítő
+  tehermentesítése a téma. Két előkészítéstől emel ki nevet. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`big_chance_feeders`), edzői összefoglaló, felderítés
+  (`bcfp_chances_by_player` mező + edzői kulcs + 379.
+  meccsterv-szabály), edzés-fókusz (400. szabály), kliens-csempe.
+
 - **Válaszhiba-emberek: kapott gól után ki veszíti el a labdát.** A
   válaszhiba-poszt a posztot nevezi meg — az új réteg az embert:
   ugyanazokat a kapott gólt egy percen belül követő labdaeladásokat

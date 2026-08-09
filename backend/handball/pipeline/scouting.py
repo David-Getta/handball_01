@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Ziccer-előkészítők: a nagy helyzetekhez adott utolsó passzok
+    # darabszáma PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
+    bcfp_chances_by_player: dict = field(default_factory=dict)
     # Válaszhiba-emberek: a kapott gólt követő percben elkövetett
     # labdaeladások darabszáma JÁTÉKOSONKÉNT. Darabszám, összegződik.
     rtop_turnovers_by_player: dict = field(default_factory=dict)
@@ -4187,6 +4190,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Ziccer-előkészítők: kinek a bejátszó-sávját kell elvágni.
+    if rep.bcfp_chances_by_player:
+        _bcfp_k, _bcfp_n = max(rep.bcfp_chances_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _bcfp_n >= 2:
+            keys.append(
+                f"A ziccereiket a(z) {_bcfp_k}. teremti a legtöbbször "
+                f"({_bcfp_n} ziccer-előkészítés) — az ő "
+                "bejátszó-sávját vágjátok el (testtel zárás, "
+                "előrelépő védő): a helyzet így ki sem alakul.")
 
     # Válaszhiba-emberek: kire menjen a gólunk utáni pressz.
     if rep.rtop_turnovers_by_player:
@@ -9541,6 +9555,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .xg import big_chance_feeders as _bcfp
+        bcfprec = _bcfp(match, config)[team.value]
+        rep.bcfp_chances_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["chances"]
+            for r in bcfprec["players"]}
         from .momentum import response_turnover_players as _rtop
         rtoprec = _rtop(match, config)[team.value]
         rep.rtop_turnovers_by_player = {
@@ -12247,6 +12267,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 379) Az ő ziccer-előkészítőjük × a ti kilépő faltok: a
+    # bejátszó-sáv elvágásával a helyzet ki sem alakul.
+    if (opp.bcfp_chances_by_player and own.def_shots_against >= 4
+            and 0.0 < own.defensive_pressure_m <= 1.3):
+        _bcfp379_k, _bcfp379_n = max(
+            opp.bcfp_chances_by_player.items(), key=lambda kv: kv[1])
+        if _bcfp379_n >= 2:
+            plan.append(
+                f"A ziccereiket a(z) {_bcfp379_k}. teremti a "
+                f"legtöbbször ({_bcfp379_n} előkészítés), ti pedig "
+                f"szorosan védekeztek (átlag "
+                f"{own.defensive_pressure_m:.1f} m) — a kilépés az ő "
+                "bejátszó-sávjára menjen: a ziccer ki sem alakul, "
+                "nem a befejezést kell hárítani.")
 
     # 378) Az ő válaszhiba-emberük × a ti gólerősségetek: minden
     # gólotok után nyílik egy névre szóló ablak.
@@ -18822,6 +18857,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        bcfp_chances_by_player=_merge_count_dicts(
+            r.bcfp_chances_by_player for r in reports),
         rtop_turnovers_by_player=_merge_count_dicts(
             r.rtop_turnovers_by_player for r in reports),
         toep_turnovers_by_player=_merge_count_dicts(

@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 400) Ziccer-előkészítők: ha a helyzeteink egy ember kezéből
+    # indulnak, a kiesésével eltűnnek.
+    try:
+        from .xg import BCFP_MIN_FEEDS, big_chance_feeders
+        bcfp400 = big_chance_feeders(match, config)
+        for side in ("home", "away"):
+            top400 = bcfp400[side].get("top")
+            if top400 is None:
+                continue
+            _ki400 = (f"a(z) {top400['jersey']}. számú"
+                      if top400.get("jersey") is not None
+                      else f"a(z) {top400['player_id']}. játékos")
+            add(side, "támadás", "Ziccer-teremtés több kézből",
+                f"a ziccereinket {_ki400} teremti a legtöbbször "
+                f"({top400['chances']} előkészítés; "
+                f"{BCFP_MIN_FEEDS} előkészítéstől már jelezzük) — az "
+                "ő bejátszó-sávjának elvágásával a helyzeteink ki "
+                "sem alakulnak",
+                "bejátszás a szélről és a hátsó sorból is, elzárás "
+                "utáni kioldó passz gyakorlása, és a fő előkészítő "
+                "tehermentesítése — ne mindig ő legyen a labdás a "
+                "figurában",
+                )
+    except Exception:
+        pass
+
     # 399) Válaszhiba-emberek: a bekapott gól utáni első támadást ki
     # kell venni a kapkodó kezéből.
     try:

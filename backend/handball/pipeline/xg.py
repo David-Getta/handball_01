@@ -1486,3 +1486,78 @@ def big_chance_pair_roles(match: Match,
                     "hanem a köztük lévő passzsávot elvágni: zárt "
                     "sávnál a helyzet ki sem alakul")
     return out
+
+
+# Ziccer-előkészítők: ennyi ziccer-előkészítéstől emeljük ki a
+# játékost.
+BCFP_MIN_FEEDS = 2
+
+
+def big_chance_feeders(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Ziccer-előkészítők: KI ADJA a passzt a nagy helyzethez.
+
+    A ziccer-előkészítő poszt (big_chance_feeder_roles) a POSZTOT
+    nevezi meg — ez az EMBERT: a BIG_CHANCE_XG feletti lövésekhez
+    megkeresi a lövő felé menő utolsó passzt, és a helyzetet a
+    PASSZOLÓ játékoshoz írja.
+
+    Edzőileg ez a legdrágább passzsáv névre szólóan: az ő
+    bejátszó-sávját kell elvágni (testtel zárás, előrelépő védő) — a
+    helyzet így ki sem alakul, nem a befejezést kell hárítani. Saját
+    csapatra: ha a ziccer-teremtés egy emberen áll, a kiesésével a
+    helyzeteink is eltűnnek.
+
+    Visszatérés csapatonként: {"chances" (emberhez kötött
+    ziccer-előkészítés), "players": [{"player_id", "jersey",
+    "chances"}], "top"} — a "top" az első játékos, ha legalább
+    BCFP_MIN_FEEDS előkészítése van, különben None.
+    """
+    from .decisions import detect_passes
+    from .tactics import TacticsConfig as _TC
+
+    config = config or _TC()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = BCF_FEED_WINDOW_S * fps
+    passes = detect_passes(match, config)
+    xg = match_xg(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["xg"] < BIG_CHANCE_XG:
+            continue
+        side = sh["team"]
+        best = None
+        for p in passes:
+            if not (0 <= sh["t"] - p.t <= win):
+                continue
+            if p.team.value != side:
+                continue
+            if p.receiver_id != pid or p.passer_id == pid:
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        tally[side][best.passer_id] = (
+            tally[side].get(best.passer_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "chances": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["chances"] >= BCFP_MIN_FEEDS
+               else None)
+        out[side] = {"chances": sum(r["chances"] for r in rows),
+                     "players": rows, "top": top}
+    return out

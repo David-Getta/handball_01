@@ -3908,6 +3908,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.xg import big_chance_feeders
+            res["big_chance_feeders"] = big_chance_feeders(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5690,6 +5695,9 @@ def create_app():
                 from ..pipeline.momentum import response_turnover_players
                 _layer("response_turnover_players",
                        lambda: response_turnover_players(match))
+                from ..pipeline.xg import big_chance_feeders
+                _layer("big_chance_feeders",
+                       lambda: big_chance_feeders(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

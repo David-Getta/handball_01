@@ -1397,3 +1397,23 @@ def test_big_chance_pair_roles_silent_with_few_chances():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
     assert big_chance_pair_roles(
         _bcfeed_match([5, 9]))["away"]["chances"] == 0
+
+
+def test_big_chance_feeders_names_the_creator():
+    """Négy ziccerből hármat ugyanaz az ember teremt → az ő
+    bejátszó-sávját kell elvágni."""
+    from handball.pipeline.xg import (BCFP_MIN_FEEDS,
+                                      big_chance_feeders)
+
+    rec = big_chance_feeders(_bcfeed_match([5, 5, 5, 9]))["home"]
+    assert rec["chances"] >= 3, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 5, rec
+    assert rec["top"]["chances"] >= BCFP_MIN_FEEDS, rec
+
+
+def test_big_chance_feeders_silent_after_one():
+    """Egyetlen ziccer-előkészítés még nem minta."""
+    from handball.pipeline.xg import big_chance_feeders
+
+    rec = big_chance_feeders(_bcfeed_match([5]))["home"]
+    assert rec["top"] is None, rec
