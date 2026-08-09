@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 393) Kulcs-ember: ha minden szál egy emberen fut keresztül, egy
+    # jó ellenfél egy emberrel megfog minket.
+    try:
+        from .priorities import KPL_MIN_LAYERS, key_player
+        kpl393 = key_player(match, config)
+        for side in ("home", "away"):
+            rec393 = kpl393[side]
+            if rec393.get("verdict") is None:
+                continue
+            add(side, "támadás", "Tehermentesítés és második út",
+                f"a kulcs-emberünk a(z) {rec393['top']}. számú: "
+                f"{rec393['players'][rec393['top']]} ember-réteg "
+                f"ítélete mutat rá (a {rec393['layers']} "
+                f"megszólalóból; {KPL_MIN_LAYERS} egyező rétegtől "
+                "jelezzük) — ha minden szál rajta fut keresztül, egy "
+                "jó ellenfél egy emberrel megfogja a játékunkat",
+                "második út építése: ugyanaz a figura a másik "
+                "oldalról indítva, kijelölt második befejező a "
+                "hajrára és emberelőnyre, és tudatos "
+                "tehermentesítés (ne ő legyen a labdás minden "
+                "kezdésnél) — edzésen játék úgy, hogy ő nem kaphatja "
+                "meg a labdát az első két passzban",
+                )
+    except Exception:
+        pass
+
     # 392) Kétperc ára: a hátrány-védekezés forintosítva.
     try:
         from .rules import SCT_CHEAP, SCT_COSTLY, suspension_cost

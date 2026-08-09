@@ -5,6 +5,25 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Kulcs-ember: hány réteg mutat ugyanarra a játékosra.** A
+  Kulcs-poszt a posztot, a Kulcs-páros a kettőst nevezi meg — az új,
+  harmadik szintézis az EMBERT: a néven nevező rétegek (tüzes kéz,
+  aszály-törő, hajrá-birtokló, letámadó, áttörő, elzáró,
+  kipattanó-szedő, hetes-kihagyó, sprint-veszély, …) élén álló
+  játékosokat számolja össze csapatonként. A három lista
+  szándékosan külön áll: a "melyik poszt", a "melyik kettős" és a
+  "melyik EMBER" kérdés más-más választ ad. Edzőileg ez a személyre
+  szóló feladat lapja: ha négy különböző szempont ugyanazt az embert
+  dobja ki, az ő kezelése (emberfogás, kettőzés, a labdaútjának
+  elvágása) önmagában meccstervnyi; saját csapatra ugyanez
+  figyelmeztetés a tehermentesítésre. Négy egyező réteg alatt vagy
+  holtversenynél hallgat (None). A rangsorban az "ember" családba
+  tartozik. Felületek: /analyze + meccs-csomag (`key_player`), edzői
+  összefoglaló, felderítés (`kpl_layers_by_player` mező + edzői
+  kulcs + 372. meccsterv-szabály), edzés-fókusz (393. szabály),
+  HTML-riport (önálló Kulcs-ember szakasz a bizonyíték-rétegek
+  felsorolásával), kliens-csempe.
+
 - **Kétperc ára: mennyi gólba kerül egy kiállításuk.** Az
   emberelőny-hatékonyság azt méri, mit támadnak a két perc alatt, az
   emberelőny-védekezés azt, mit kapnak közben — az új réteg a

@@ -339,3 +339,73 @@ def test_kulcs_paros_osszegzi_a_paros_retegeket():
         # Minden megnevezett páros egy-egy páros-rétegtől jön.
         cimkek = {label for label, _m, _f in KP_PAIRS}
         assert all(n["layer"] in cimkek for n in o["named"]), o["named"]
+
+
+def test_kulcs_ember_szerkezete_es_nevsora():
+    """A kulcs-ember az EMBERT nevező rétegekből épül, és a névsora
+    nem fed át a poszt- és a páros-lencse listáival."""
+    from handball.pipeline.priorities import (KP_LAYERS, KP_PAIRS,
+                                              KPL_LAYERS, key_player)
+
+    nevek = {fn for _, _, fn in KPL_LAYERS}
+    assert not (nevek & {fn for _, _, fn in KP_LAYERS})
+    assert not (nevek & {fn for _, _, fn in KP_PAIRS})
+    assert len(KPL_LAYERS) >= 20
+
+    rec = key_player(_kp_match())
+    for side in ("home", "away"):
+        o = rec[side]
+        assert set(o) == {"layers", "players", "named", "top",
+                          "verdict"}
+        cimkek = {label for label, _m, _f in KPL_LAYERS}
+        assert all(n["layer"] in cimkek for n in o["named"]), o["named"]
+
+
+def _kpl_stub(monkeypatch, tops):
+    """`tops` = rétegenként a hazai oldal "top"-ja (vagy None). A
+    stub-modult a pipeline-csomagba tesszük, és a KPL_LAYERS erre
+    mutat — így a küszöb és a holtverseny szabálya önmagában
+    ellenőrizhető."""
+    import sys
+    import types
+
+    from handball.pipeline import priorities
+
+    mod = types.ModuleType("handball.pipeline.kpl_stub")
+    nevek = []
+    for i, top in enumerate(tops):
+        fn_name = f"stub_{i}"
+        setattr(mod, fn_name,
+                (lambda t: (lambda match, config=None: {
+                    "home": {"top": t}, "away": {"top": None}}))(top))
+        nevek.append((f"Stub {i}", "kpl_stub", fn_name))
+    monkeypatch.setitem(sys.modules, "handball.pipeline.kpl_stub", mod)
+    monkeypatch.setattr(priorities, "KPL_LAYERS", tuple(nevek))
+    return priorities
+
+
+def test_kulcs_ember_negy_egyezo_retegtol_szolal_meg(monkeypatch):
+    """Négy réteg ugyanarra az emberre → kulcs-ember; háromnál még
+    hallgat."""
+    egy = {"player_id": 7, "jersey": 7}
+    mas = {"player_id": 9, "jersey": 9}
+
+    prio = _kpl_stub(monkeypatch, [egy, egy, egy, egy, mas])
+    rec = prio.key_player(_kp_match())["home"]
+    assert rec["layers"] == 5 and rec["players"]["7"] == 4, rec
+    assert rec["top"] == "7", rec
+    assert rec["verdict"] and "kulcs-emberük" in rec["verdict"], rec
+
+    prio = _kpl_stub(monkeypatch, [egy, egy, egy, mas])
+    rec = prio.key_player(_kp_match())["home"]
+    assert rec["top"] is None and rec["verdict"] is None, rec
+
+
+def test_kulcs_ember_holtversenynel_hallgat(monkeypatch):
+    """Ha két ember ugyanannyi réteget kap, nincs kulcs-ember."""
+    egy = {"player_id": 7, "jersey": 7}
+    mas = {"player_id": 9, "jersey": 9}
+
+    prio = _kpl_stub(monkeypatch, [egy] * 4 + [mas] * 4)
+    rec = prio.key_player(_kp_match())["home"]
+    assert rec["top"] is None and rec["verdict"] is None, rec

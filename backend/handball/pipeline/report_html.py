@@ -1861,6 +1861,31 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
 
+    # Kulcs-ember: a meccsterv harmadik lapja — melyik EMBERT kell
+    # kezelni (a kulcs-páros szakasza után, a lencse-táblák elé).
+    key_player_html = ""
+    try:
+        from .priorities import key_player as _kpl_fn
+        kpl_rec = _kpl_fn(match)
+        kpl_lines = []
+        for side, name in (("home", home), ("away", away)):
+            rec_kpl = kpl_rec.get(side) or {}
+            v = rec_kpl.get("verdict")
+            if not v:
+                continue
+            evidence = [n["layer"] for n in rec_kpl.get("named", [])
+                        if n.get("player") == rec_kpl.get("top")]
+            tail = (' <span class="note">(rétegek: '
+                    + escape(", ".join(evidence)) + ")</span>"
+                    if evidence else "")
+            kpl_lines.append(f"<li><b>{escape(name)}</b>: "
+                             f"{escape(v)}{tail}</li>")
+        if kpl_lines:
+            key_player_html = ("<h2>Kulcs-ember</h2><ul>"
+                               + "".join(kpl_lines) + "</ul>")
+    except Exception:
+        pass
+
     # Befejező-lencse: a "kire fut ki a játékuk" ítéletek egy helyen —
     # kire lépj ki, időkérés után kit fogj, kontránál kit vegyél fel
     # először, hetesnél merre vetődj. A védő-oldali párja a Védő-lencse:
@@ -2094,6 +2119,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
         pass
     rules_html = (moments_html + setplays_html + key_post_html
                   + key_pair_html
+                  + key_player_html
                   + finishers_html + defense_lens_html + rules_html)
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.

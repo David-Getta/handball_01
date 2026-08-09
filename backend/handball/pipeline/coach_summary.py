@@ -1373,6 +1373,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "sávot kell szétvágni.")
     except Exception:
         pass
+    # Kulcs-ember: hány réteg mutat ugyanarra a játékosra.
+    try:
+        from .priorities import key_player
+        kpl = key_player(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_kpl = kpl[side]
+            if rec_kpl["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kulcs-embere a(z) "
+                     f"{rec_kpl['top']}. számú: "
+                     f"{rec_kpl['players'][rec_kpl['top']]} "
+                     "ember-réteg mutat rá — az ő kezelése "
+                     "önmagában meccstervnyi feladat.")
+    except Exception:
+        pass
     # Lepattanópáros-poszt: melyik lövésükre ki érkezik.
     try:
         from .attack_types import rebound_pair_roles

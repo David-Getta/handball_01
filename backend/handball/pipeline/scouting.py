@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Kulcs-ember: játékosonként hány EMBER-réteg ítélete mutat rá.
+    # Darabszám, meccsek közt összegződik (a kulcs-ember a több
+    # meccsen át legtöbb réteget gyűjtő játékos).
+    kpl_layers_by_player: dict = field(default_factory=dict)
     # Kétperc ára: a mért kiállítás-ablakok és a közben kapott gólok
     # darabszáma. Darabszám, pontosan összegződik (arány = conceded /
     # windows).
@@ -4163,6 +4167,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Kulcs-ember: kire szóljon a személyre szabott feladat.
+    if rep.kpl_layers_by_player:
+        _kpl_k, _kpl_n = max(rep.kpl_layers_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _kpl_n >= 4:
+            keys.append(
+                f"A kulcs-emberük a(z) {_kpl_k}. számú: {_kpl_n} "
+                "ember-réteg ítélete mutat rá — ő nem egy a hét "
+                "mezőnyjátékos közül: emberfogás, kettőzés vagy a "
+                "labdaútja elvágása önmagában meccstervnyi feladat.")
 
     # Kétperc ára: megéri-e a kiállítás kiharcolására játszani.
     if rep.sct_windows >= 3:
@@ -9433,6 +9448,9 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .priorities import key_player as _kpl
+        kplrec = _kpl(match, config)[team.value]
+        rep.kpl_layers_by_player = dict(kplrec["players"])
         from .rules import suspension_cost as _sct
         sctrec = _sct(match, config)[team.value]
         rep.sct_windows = int(sctrec["windows"])
@@ -12102,6 +12120,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 372) Az ő kulcs-emberük × a ti védekezés-fegyelmetek: a
+    # személyre szabott feladat a meccsterv első sora.
+    if opp.kpl_layers_by_player and own.def_shots_against >= 4:
+        _kpl372_k, _kpl372_n = max(opp.kpl_layers_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _kpl372_n >= 4:
+            plan.append(
+                f"A kulcs-emberük a(z) {_kpl372_k}. számú "
+                f"({_kpl372_n} ember-réteg mutat rá), ti pedig "
+                f"rendszeresen védekeztek ({own.def_shots_against} "
+                "kapott lövés) — jelöljetek ki rá felelőst: "
+                "emberfogás vagy azonnali kettőzés, és a labdaútját "
+                "vágjátok el, mert nála minden szál összefut.")
 
     # 371) Az ő drága kétpercük × a ti betörés-erősségetek: a
     # kiharcolás pontot ér.
@@ -18580,6 +18612,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        kpl_layers_by_player=_merge_count_dicts(
+            r.kpl_layers_by_player for r in reports),
         sct_windows=sum(r.sct_windows for r in reports),
         sct_conceded=sum(r.sct_conceded for r in reports),
         msh_fh_dist_m=max((r.msh_fh_dist_m for r in reports),

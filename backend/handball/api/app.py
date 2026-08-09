@@ -3714,6 +3714,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.priorities import key_player
+            res["key_player"] = key_player(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.roles import specialist_roles
             res["specialist_roles"] = specialist_roles(match)
         except Exception:
@@ -5546,6 +5551,8 @@ def create_app():
                        lambda: rebound_pair_roles(match))
                 from ..pipeline.priorities import key_pair
                 _layer("key_pair", lambda: key_pair(match))
+                from ..pipeline.priorities import key_player
+                _layer("key_player", lambda: key_player(match))
                 from ..pipeline.roles import specialist_roles
                 _layer("specialist_roles",
                        lambda: specialist_roles(match))

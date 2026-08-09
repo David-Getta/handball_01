@@ -2168,6 +2168,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Kulcs-ember: hány EMBER-réteg ítélete mutat ugyanarra a
+  // játékosra (4 egyező rétegtől — a backenddel azonos küszöb:
+  // KPL_MIN_LAYERS).
+  String? _keyPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["kpl_layers_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    return "a kulcs-emberük a(z) $top. számú: $topN ember-réteg "
+        "ítélete mutat rá · emberfogás, kettőzés vagy a labdaútja "
+        "elvágása önmagában meccstervnyi feladat";
+  }
+
   // Kétperc ára: mennyi gólba kerül egy kiállításuk (3+ ablak; 1,2
   // gól/kiállítás fölött drága, 0,5 alatt olcsó — a backenddel
   // azonos küszöbök: SCT_MIN_WINDOWS, SCT_COSTLY, SCT_CHEAP).
@@ -9816,6 +9838,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberfogás-váltás", _markingShift(r)!],
       if (_suspensionCost(r) != null)
         ["Kétperc ára", _suspensionCost(r)!],
+      if (_keyPlayer(r) != null)
+        ["Kulcs-ember", _keyPlayer(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)

@@ -72,6 +72,7 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("ember", "Hetes-kihagyó", "rules", "seven_miss_players"),
         ("ember", "Kipattanó-szedő", "defense",
          "defensive_rebound_players"),
+        ("ember", "Kulcs-ember", "priorities", "key_player"),
         # --- szünet: ami a félidőben megváltozik ---------------------
         ("szünet", "Szünet-váltás", "attack_types", "attack_mix_shift"),
         ("szünet", "Fal-váltás a szünetre", "tactics",
@@ -593,4 +594,115 @@ def key_post(match: Match, config=None) -> dict:
                 f"ítélete fut ki rá (a {o['layers']} megszólalóból) — "
                 "az ő kezelése nem részfeladat, hanem a meccsterv "
                 "első lapja")
+    return out
+
+
+# Kulcs-ember: az EMBERT (nem posztot) megnevező rétegek névsora, és
+# ennyi egyező réteg kell a kulcs-ember kimondásához. A poszt-lencse
+# küszöbénél magasabb, mert emberből több forrás van, és egy sztár
+# természetes módon több listán szerepel — a jelzés akkor érdekes, ha
+# NÉGY különböző szempont ugyanoda mutat.
+KPL_MIN_LAYERS = 4
+
+KPL_LAYERS: tuple = (
+    ("Tüzes kéz", "momentum", "hot_hands"),
+    ("Aszály-törő", "momentum", "drought_breakers"),
+    ("Hajrá-birtokló", "momentum", "clutch_ball_hogs"),
+    ("Eltűnő ember", "momentum", "fading_scorers"),
+    ("Felzárkózás-húzó", "momentum", "comeback_carriers"),
+    ("Hajrá-hibázó", "momentum", "clutch_turnover_players"),
+    ("Középkezdés-átvevő", "momentum", "restart_targets"),
+    ("Eltűnő védő", "defense", "fading_defenders"),
+    ("Letámadó", "defense", "high_steal_players"),
+    ("Átvert védő", "defense", "beaten_defenders"),
+    ("Kettőző védő", "defense", "doubling_defenders"),
+    ("Blokkolt lövő", "defense", "blocked_shooters"),
+    ("Fedezett lövő", "defense", "covered_shooters"),
+    ("Beállóőr", "defense", "pivot_guards"),
+    ("Kipattanó-szedő", "defense", "defensive_rebound_players"),
+    ("Támadás-indító", "attack_types", "attack_starters"),
+    ("Beálló-bejátszó", "attack_types", "pivot_feeders"),
+    ("Áttörő", "attack_types", "breakthrough_players"),
+    ("Elzáró", "attack_types", "screen_setters"),
+    ("Kockázatos passzoló", "attack_types", "risky_passers"),
+    ("Kiosztás-célpont", "attack_types", "kickout_targets"),
+    ("Pressz-érzékeny", "decisions", "pressure_sensitive_players"),
+    ("Emberelőny-lövő", "rules", "powerplay_shooters"),
+    ("Emberhátrány-lövő", "rules", "shorthanded_shooters"),
+    ("Hetes-kihagyó", "rules", "seven_miss_players"),
+    ("Hetes-okozó", "rules", "seven_meter_conceders"),
+    ("Sprint-veszély", "stats", "sprint_threats"),
+    ("Pazarló lövő", "xg", "wasteful_shooters"),
+)
+
+
+def key_player(match: Match, config=None) -> dict:
+    """Kulcs-ember: HÁNY RÉTEG mutat ugyanarra a JÁTÉKOSRA.
+
+    A Kulcs-poszt a posztot, a Kulcs-páros a kettőst nevezi meg — ez
+    az EMBERT: a néven nevező rétegek (tüzes kéz, aszály-törő,
+    hajrá-birtokló, letámadó, áttörő, elzáró, kipattanó-szedő,
+    hetes-kihagyó, …) élén álló játékosokat számolja össze
+    csapatonként. A három szintézis szándékosan külön áll: a "melyik
+    poszt", a "melyik kettős" és a "melyik EMBER" kérdés más-más
+    választ ad, és nem szabad hígítaniuk egymást.
+
+    Edzőileg ez a személyre szóló feladat lapja. Az ellenfélnél: ha
+    négy különböző szempont ugyanazt az embert dobja ki, ő nem egy a
+    hét mezőnyjátékos közül — az ő kezelése (emberfogás, kettőzés,
+    tudatos fárasztás, a labdaútjának elvágása) önmagában
+    meccstervnyi. Saját csapatnál ugyanez a figyelmeztetés: ha
+    minden rajta fut keresztül, egy jó ellenfél egy emberrel
+    megfogja a játékunkat — tehermentesítés és második út kell.
+
+    Visszatérés csapatonként: {"layers" (megszólaló ember-réteg),
+    "players": {játékos-kulcs: réteg-darab}, "named": [{"layer",
+    "player"}], "top", "verdict"} — a top/verdict None, ha nincs
+    KPL_MIN_LAYERS egyező réteg, vagy az élen holtverseny áll. A
+    játékos-kulcs a mezszám, ha ismert; különben a track-azonosító.
+    """
+    import importlib
+
+    from .primitive_cache import primitive_cache
+
+    out: dict = {side: {"layers": 0, "players": {}, "named": [],
+                        "top": None, "verdict": None}
+                 for side in ("home", "away")}
+    with primitive_cache(match):
+        for label, mod_name, fn_name in KPL_LAYERS:
+            try:
+                mod = importlib.import_module(f".{mod_name}", __package__)
+                rec_all = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side in ("home", "away"):
+                rec = rec_all.get(side) or {}
+                top = rec.get("top")
+                if not isinstance(top, dict):
+                    continue
+                pid = top.get("player_id")
+                if pid is None:
+                    continue
+                jersey = top.get("jersey")
+                kulcs = str(jersey if jersey is not None else pid)
+                o = out[side]
+                o["layers"] += 1
+                o["players"][kulcs] = o["players"].get(kulcs, 0) + 1
+                o["named"].append({"layer": label, "player": kulcs})
+    for o in out.values():
+        o["players"] = dict(sorted(o["players"].items(),
+                                   key=lambda kv: -kv[1]))
+        if not o["players"]:
+            continue
+        vals = list(o["players"].values())
+        top_n = vals[0]
+        tie = len(vals) > 1 and vals[1] == top_n
+        if top_n >= KPL_MIN_LAYERS and not tie:
+            kulcs = next(iter(o["players"]))
+            o["top"] = kulcs
+            o["verdict"] = (
+                f"a kulcs-emberük a(z) {kulcs}. számú: {top_n} réteg "
+                f"ítélete mutat rá (a {o['layers']} megszólalóból) — "
+                "ő nem egy a hét mezőnyjátékos közül, az ő kezelése "
+                "önmagában meccstervnyi feladat")
     return out
