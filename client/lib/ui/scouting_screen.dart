@@ -2386,6 +2386,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "($topN alkalom) · a lerohanást az ő oldalára vezessétek";
   }
 
+  // Fáradt-fal emberek: ki jár át rajtuk a második félidőre (2+
+  // második félidei gól, kétszeres ugrás — a backenddel azonos
+  // küszöbök: TCP_MIN_SH, TCP_FACTOR).
+  String? _tiredConcederPlayer(Map<String, dynamic> r) {
+    final sh = (r["tcp_sh_by_player"] as Map?)?.cast<String, dynamic>();
+    final fh = (r["tcp_fh_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    final first = ((fh?[top] as num?) ?? 0).toInt();
+    if (topN < 2 * (first < 1 ? 1 : first)) return null;
+    return "a falatokon a második félidőre a(z) $top. jár át "
+        "($first → $topN kapott gól) · friss védő és besegítés kell rá";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10142,6 +10165,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fáradt-eladó ember", _tiredTurnoverPlayer(r)!],
       if (_slowRetreatPlayer(r) != null)
         ["Visszafutás-lemaradó ember", _slowRetreatPlayer(r)!],
+      if (_tiredConcederPlayer(r) != null)
+        ["Fáradt-fal ember", _tiredConcederPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

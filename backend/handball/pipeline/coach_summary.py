@@ -2539,6 +2539,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "vezetni.")
     except Exception:
         pass
+    # Fáradt-fal emberek: ki jár át rajtuk a második félidőre.
+    try:
+        from .defense import tired_conceder_players
+        tcp = tired_conceder_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_tcp = tcp[side]["top"]
+            if top_tcp is None:
+                continue
+            _ki2 = (f"a(z) {top_tcp['jersey']}. számú"
+                    if top_tcp.get("jersey") is not None
+                    else f"a(z) {top_tcp['player_id']}. játékos")
+            body += (f" A(z) {name} falán a második félidőre {_ki2} "
+                     f"jár át ({top_tcp['fh']} → {top_tcp['sh']} "
+                     "kapott gól) — a hajrá figuráit rá kell "
+                     "építeni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

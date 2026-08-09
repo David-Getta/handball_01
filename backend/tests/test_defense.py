@@ -3436,6 +3436,25 @@ def test_tired_conceder_roles_silent_without_jump():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_tired_conceder_players_names_the_second_half_scorer():
+    """Ha a második félidőre ugyanaz a lövő jár át rajtuk, őt nevezzük
+    meg — rá kell építeni a hajrá figuráit."""
+    from handball.pipeline.defense import tired_conceder_players
+
+    rec = tired_conceder_players(_tcr_match([7, 9], [7, 7, 7]))["away"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["fh"] == 1 and rec["top"]["sh"] == 3, rec
+
+
+def test_tired_conceder_players_silent_without_jump():
+    """Egyenletes eloszlásnál nem nevezünk meg embert."""
+    from handball.pipeline.defense import tired_conceder_players
+
+    rec = tired_conceder_players(_tcr_match([7, 7], [7, 7]))["away"]
+    assert rec["top"] is None, rec
+
+
 # ---- Drága-eladó poszt (kinek a hibái kerülnek gólba) ----------------------
 
 

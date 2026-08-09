@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 408) Fáradt-fal emberek: a második félidőre megnyíló fal
+    # csere- és besegítés-kérdés.
+    try:
+        from .defense import TCP_MIN_SH, tired_conceder_players
+        tcp408 = tired_conceder_players(match, config)
+        for side in ("home", "away"):
+            top408 = tcp408[side].get("top")
+            if top408 is None:
+                continue
+            _ki408 = (f"a(z) {top408['jersey']}. számú"
+                      if top408.get("jersey") is not None
+                      else f"a(z) {top408['player_id']}. játékos")
+            add(side, "védekezés", "Fáradó fal emberre szabva",
+                f"a második félidőre {_ki408} jár át a falunkon "
+                f"({top408['fh']} → {top408['sh']} kapott gól; "
+                f"{TCP_MIN_SH} góltól már jelezzük) — nem a rendszer, "
+                "hanem a fáradás nyitja meg ellene a falat",
+                "névre szabott terv: a szünet után friss védő és "
+                "kijelölt besegítő rá, kettőzés-jel a lövő-vonalán, "
+                "és fáradt védekezés-edzés (sorozatterhelés után "
+                "1v1 és kilépés-visszalépés a saját sávban)",
+                )
+    except Exception:
+        pass
+
     # 407) Visszafutás-lemaradók: az első visszafutó kijelölés, nem
     # alkat kérdése.
     try:

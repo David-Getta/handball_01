@@ -4758,6 +4758,71 @@ def tired_conceder_roles(match, config=None) -> dict:
     return out
 
 
+# Fáradt-fal emberek: ennyi második félidei gól kell a névhez, és
+# ekkora szorzó az elsőhöz képest.
+TCP_MIN_SH = 2
+TCP_FACTOR = 2.0
+
+
+def tired_conceder_players(match, config=None) -> dict:
+    """Fáradt-fal emberek: KI jár át rajtuk a második félidőre.
+
+    A fáradt-fal poszt (tired_conceder_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a kapott gólokat félidőnként a LÖVŐ nevéhez írja,
+    és megkeresi, kinek a góljai ugranak meg ellenük a szünet után.
+
+    Edzőileg ez a szünet utáni támadás-terv névre szólóan: aki a
+    második félidőben rendre átjár rajtuk, arra kell építeni a hajrá
+    figuráit — a faluk vele szemben fárad el. Saját csapatra
+    fordítva: ha ellenünk mindig ugyanaz a név hozza a második
+    félidei gólokat, rá kell friss védőt és besegítést tervezni.
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"fh": {lövő-kulcs:
+    gól}, "sh": {...}, "top"} — a "top" az a lövő, akinek a második
+    félidei góljai elérik a TCP_MIN_SH-t, és legalább TCP_FACTOR-
+    szorosai az elsőnek; szünet-jel nélkül üres a kép.
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh": {}, "sh": {}, "top": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        atk = getattr(e.team, "value", e.team)
+        deff = "away" if atk == "home" else "home"
+        rec = tally[deff].setdefault(e.player_id, [0, 0])
+        rec[0 if e.t <= ht else 1] += 1
+
+    for side in ("home", "away"):
+        rows = sorted(tally[side].items(), key=lambda kv: -kv[1][1])
+        out[side]["fh"] = {str(jersey.get(pid, pid)): n[0]
+                           for pid, n in rows if n[0]}
+        out[side]["sh"] = {str(jersey.get(pid, pid)): n[1]
+                           for pid, n in rows if n[1]}
+        for pid, (fh, sh) in rows:
+            if sh >= TCP_MIN_SH and sh >= TCP_FACTOR * max(1, fh):
+                out[side]["top"] = {
+                    "player_id": pid, "jersey": jersey.get(pid),
+                    "fh": fh, "sh": sh}
+                break
+    return out
+
+
 # Drága-eladó poszt: ennyi poszthoz kötött, gólba forduló eladás kell
 # az ítélethez, és ekkora részarány fölött mondjuk ki, hogy a drága
 # hibáik egy posztnál történnek.

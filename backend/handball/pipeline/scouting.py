@@ -1039,6 +1039,10 @@ class ScoutingReport:
     # Visszafutás-lemaradók: az ellenfél kontráinál elöl maradás
     # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
     srp_lags_by_player: dict = field(default_factory=dict)
+    # Fáradt-fal emberek: az ELLENFÉL lövőinek góljai félidőnként,
+    # LÖVŐNKÉNT (a mi falunk ellen). Darabszám, összegződik.
+    tcp_sh_by_player: dict = field(default_factory=dict)
+    tcp_fh_by_player: dict = field(default_factory=dict)
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4235,6 +4239,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"legtöbbször ({_srp_n} alkalom) — a lerohanást az "
                 "ő oldalára vezessétek: ott marad üres a pálya, "
                 "mire a labda odaér.")
+
+    # Fáradt-fal emberek: kire kell friss védő a szünet után.
+    if rep.tcp_sh_by_player:
+        _tcp_k, _tcp_sh = max(rep.tcp_sh_by_player.items(),
+                              key=lambda kv: kv[1])
+        _tcp_fh = rep.tcp_fh_by_player.get(_tcp_k, 0)
+        if _tcp_sh >= 2 and _tcp_sh >= 2 * max(1, _tcp_fh):
+            keys.append(
+                f"A falatokon a második félidőre a(z) {_tcp_k}. jár "
+                f"át ({_tcp_fh} → {_tcp_sh} kapott gól) — a szünet "
+                "után rá friss védő és besegítés kell: fáradtan "
+                "vele szemben nyílik meg a fal.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9666,6 +9682,10 @@ def _scout_team_cached(match: Match, team: Team,
             str(r["jersey"] if r["jersey"] is not None
                 else r["player_id"]): r["lags"]
             for r in srprec["players"]}
+        from .defense import tired_conceder_players as _tcp
+        tcprec = _tcp(match, config)[team.value]
+        rep.tcp_sh_by_player = dict(tcprec["sh"])
+        rep.tcp_fh_by_player = dict(tcprec["fh"])
         from .attack_types import backward_passers as _bprp
         bprprec = _bprp(match, config)[team.value]
         rep.bprp_passes_by_player = {
@@ -12408,6 +12428,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 387) Az ő fáradó faluk × a ti hajrá-emberetek: a szünet utáni
+    # figurákat arra a lövőre kell építeni, aki átjár rajtuk.
+    if opp.tcp_sh_by_player and own.clutch_goals_for >= 2:
+        _tcp387_k, _tcp387_sh = max(opp.tcp_sh_by_player.items(),
+                                    key=lambda kv: kv[1])
+        _tcp387_fh = opp.tcp_fh_by_player.get(_tcp387_k, 0)
+        if _tcp387_sh >= 2 and _tcp387_sh >= 2 * max(1, _tcp387_fh):
+            plan.append(
+                f"A faluk a második félidőre a(z) {_tcp387_k}. ellen "
+                f"nyílik meg ({_tcp387_fh} → {_tcp387_sh} kapott "
+                f"gól), nektek pedig van hajrá-emberetek "
+                f"({own.clutch_goals_for} hajrá-gól) — a szünet utáni "
+                "figurákat erre a párosításra építsétek.")
 
     # 386) Az ő visszafutás-lemaradójuk × a ti gyors indításotok: a
     # lerohanást az üresen maradt oldalra kell vezetni.
@@ -19103,6 +19137,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.ftop_fh_by_player for r in reports),
         srp_lags_by_player=_merge_count_dicts(
             r.srp_lags_by_player for r in reports),
+        tcp_sh_by_player=_merge_count_dicts(
+            r.tcp_sh_by_player for r in reports),
+        tcp_fh_by_player=_merge_count_dicts(
+            r.tcp_fh_by_player for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

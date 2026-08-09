@@ -17,6 +17,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Fáradt-fal emberek: ki jár át rajtuk a második félidőre.** A
+  fáradt-fal poszt a posztot nevezi meg — az új réteg az embert: a
+  kapott gólokat félidőnként a LÖVŐ nevéhez írja, és megkeresi, kinek
+  a góljai ugranak meg a szünet után. Edzőileg ez a hajrá-figurák
+  terve névre szólóan: aki a második félidőben rendre átjár a falon,
+  arra kell építeni; saját csapatra fordítva rá kell friss védőt és
+  kijelölt besegítőt tervezni, mert nem a rendszer, hanem a fáradás
+  nyitja meg ellene a falat. Két második félidei góltól és kétszeres
+  ugrástól emel ki nevet; félidő-jel nélkül hallgat. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé
+  is bekerült. Felületek: /analyze + meccs-csomag
+  (`tired_conceder_players`), edzői összefoglaló, felderítés
+  (`tcp_sh_by_player` / `tcp_fh_by_player` mezők + edzői kulcs + 387.
+  meccsterv-szabály), edzés-fókusz (408. szabály), kliens-csempe.
+
 - **Visszafutás-lemaradók: ki marad elöl a kontrák alatt.** A
   visszafutás-poszt a posztot nevezi meg — az új réteg az embert: az
   ellenfél lerohanás-szakaszainak végén megnézi, a védekező csapat
