@@ -4557,6 +4557,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import slow_retreat_players
+            res["slow_retreat_players"] = slow_retreat_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5452,6 +5457,9 @@ def create_app():
                 from ..pipeline.defense import slow_retreat_roles
                 _layer("slow_retreat_roles",
                        lambda: slow_retreat_roles(match))
+                from ..pipeline.defense import slow_retreat_players
+                _layer("slow_retreat_players",
+                       lambda: slow_retreat_players(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

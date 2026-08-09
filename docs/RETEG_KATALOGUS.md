@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **433 réteg**, modulonként csoportosítva; a
+Összesen **434 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (87)
@@ -124,7 +124,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (78)
+## defense (79)
 
 | Réteg | Mit mér |
 |---|---|
@@ -188,6 +188,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `screen_defense` | Elzárás-védekezés: bírja-e a fal az ellenfél elzárásait. |
 | `screened_defender_roles` | Elzárt-poszt: MELYIK VÉDŐJÜK akad el az elzárásokban. |
 | `second_chance_allowed` | Lepattanó-fal: hány második rohamot enged a védekezés. |
+| `slow_retreat_players` | Visszafutás-lemaradók: KI marad elöl a kontráik alatt. |
 | `slow_retreat_roles` | Visszafutás-poszt: KI MARAD LE a visszarendeződésben. |
 | `steal_height` | Labdaszerzés-magasság (letámadás-jel): HOL szerez labdát a csapat. |
 | `steal_launch` | Szerzés utáni indítás: AZONNAL ELŐRE megy-e a szerzett labda. |

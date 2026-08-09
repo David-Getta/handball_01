@@ -2522,6 +2522,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "sávjába kell vezetni.")
     except Exception:
         pass
+    # Visszafutás-lemaradók: ki marad elöl a kontráik alatt.
+    try:
+        from .defense import slow_retreat_players
+        srp = slow_retreat_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top_srp = srp[side]["top"]
+            if top_srp is None:
+                continue
+            _ki = (f"a(z) {top_srp['jersey']}. számú"
+                   if top_srp.get("jersey") is not None
+                   else f"a(z) {top_srp['player_id']}. játékos")
+            body += (f" A(z) {name} ellen futott kontráknál {_ki} "
+                     f"marad elöl a legtöbbször ({top_srp['lags']} "
+                     "alkalom) — a lerohanást az ő oldalára kell "
+                     "vezetni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 407) Visszafutás-lemaradók: az első visszafutó kijelölés, nem
+    # alkat kérdése.
+    try:
+        from .defense import SRP_MIN_LAGS, slow_retreat_players
+        srp407 = slow_retreat_players(match, config)
+        for side in ("home", "away"):
+            top407 = srp407[side].get("top")
+            if top407 is None:
+                continue
+            _ki407 = (f"a(z) {top407['jersey']}. számú"
+                      if top407.get("jersey") is not None
+                      else f"a(z) {top407['player_id']}. játékos")
+            add(side, "védekezés", "Visszafutás-sorrend",
+                f"az ellenfél lerohanásainál {_ki407} marad elöl a "
+                f"legtöbbször ({top407['lags']} alkalom; "
+                f"{SRP_MIN_LAGS} lemaradástól már jelezzük) — az ő "
+                "oldalán egy emberrel kevesebben érünk vissza",
+                "visszafutás-sorrend edzése: a lövés pillanatában "
+                "kijelölt első visszafutó (nem mindig ugyanaz), "
+                "kontra-elleni 4-3 és 5-4 gyakorlatok "
+                "sorrend-kiosztással, és lövés utáni azonnali "
+                "irányváltás-futások",
+                )
+    except Exception:
+        pass
+
     # 406) Fáradt-eladók: a fáradtan kinyíló kéz terhelés-kérdés.
     try:
         from .decisions import FTOP_MIN_SH, tired_turnover_players

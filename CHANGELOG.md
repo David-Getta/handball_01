@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.26 óta)
 
+- **Visszafutás-lemaradók: ki marad elöl a kontrák alatt.** A
+  visszafutás-poszt a posztot nevezi meg — az új réteg az embert: az
+  ellenfél lerohanás-szakaszainak végén megnézi, a védekező csapat
+  melyik mezőnyjátékosa van legmesszebb a saját kapujától, és a
+  lemaradást a nevéhez írja. Edzőileg ez két dolgot ad: ellenük a
+  saját lerohanást tudatosan az ő oldalára kell vezetni (ott egy
+  emberrel kevesebben érnek vissza), saját csapatra pedig a
+  visszafutás-sorrend edzés-téma — a lövés pillanatában kijelölt
+  első visszafutó nem lehet mindig ugyanaz. Három lemaradástól emel
+  ki nevet, alatta hallgat. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`slow_retreat_players`), edzői
+  összefoglaló, felderítés (`srp_lags_by_player` mező + edzői kulcs
+  + 386. meccsterv-szabály), edzés-fókusz (407. szabály),
+  kliens-csempe.
+
 - **Fáradt-eladók: kinek a labdái vesznek el fáradtan.** A
   fáradt-eladó poszt a posztot nevezi meg — az új réteg az embert: a
   labdaeladásokat félidőnként a vesztes játékoshoz írja, és

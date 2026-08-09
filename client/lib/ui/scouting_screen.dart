@@ -2367,6 +2367,25 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "($first → $topN) · a szünet után őt tegyétek nyomás alá";
   }
 
+  // Visszafutás-lemaradók: ki marad elöl a kontráik alatt (3+
+  // lemaradás — a backenddel azonos küszöb: SRP_MIN_LAGS).
+  String? _slowRetreatPlayer(Map<String, dynamic> r) {
+    final lags = (r["srp_lags_by_player"] as Map?)?.cast<String, dynamic>();
+    if (lags == null || lags.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    lags.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "a kontráknál a(z) $top. marad elöl a legtöbbször "
+        "($topN alkalom) · a lerohanást az ő oldalára vezessétek";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10121,6 +10140,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hátrapasszoló ember", _backwardPasserPlayer(r)!],
       if (_tiredTurnoverPlayer(r) != null)
         ["Fáradt-eladó ember", _tiredTurnoverPlayer(r)!],
+      if (_slowRetreatPlayer(r) != null)
+        ["Visszafutás-lemaradó ember", _slowRetreatPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
@@ -10424,7 +10445,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                            "hosszú áll", "kapkodás", "óra"]),
     ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
                    "betörés", "kilép", "átvert", "lefogott", "őr",
-                   "kifutás", "visszaérés", "visszaállás", "press",
+                   "kifutás", "visszaérés", "visszaállás", "visszafutás",
+                   "press",
                    "engedett", "kapott", "keménység", "mélység",
                    "folyosó", "szorult", "elöl szerző", "zóna"]),
     ("Támadás és befejezés", ["támad", "lövés", "lövő", "gól", "passz",

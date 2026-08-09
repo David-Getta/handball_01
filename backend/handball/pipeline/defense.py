@@ -4082,6 +4082,77 @@ def slow_retreat_roles(match, config=None) -> dict:
     return out
 
 
+# Visszafutás-lemaradók: ennyi lemaradás kell ahhoz, hogy egy
+# játékost megnevezzünk.
+SRP_MIN_LAGS = 3
+
+
+def slow_retreat_players(match, config=None) -> dict:
+    """Visszafutás-lemaradók: KI marad elöl a kontráik alatt.
+
+    A visszafutás-poszt (slow_retreat_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: az ellenfél lerohanás-szakaszainak végén megnézi, a
+    védekező csapat melyik mezőnyjátékosa van legmesszebb a saját
+    kapujától, és a lemaradást a nevéhez írja.
+
+    Edzőileg: a poszt-kép edzés-téma, a név viszont azonnali
+    beavatkozás. Ellenük: a saját kontrát az ő oldalára kell
+    vezetni, mert ott marad üres a pálya. Saját csapatra: a lövés
+    pillanatában neki kell a kijelölt első visszafutónak lennie —
+    ha mindig ugyanaz a név jön ki, az nem alkat, hanem szabály
+    kérdése.
+
+    Visszatérés csapatonként (a VÉDEKEZŐ oldal): {"lags" (mért
+    lemaradás), "players": [{"player_id", "jersey", "lags"}],
+    "top"} — a lista lemaradás szerint csökkenő; a "top" az első
+    játékos, ha legalább SRP_MIN_LAGS lemaradása van, különben
+    None.
+    """
+    from ..models.tracking import Team
+    from .attack_types import AttackType, classify_attacks
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    frames_by_t = {f.t: f for f in match.frames}
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for a in classify_attacks(match, config):
+        if a["type"] != AttackType.FAST_BREAK.value:
+            continue
+        defending = "away" if a["team"] == "home" else "home"
+        fr = frames_by_t.get(a["end_frame"])
+        if fr is None:
+            continue
+        own_x = config.own_goal_x(Team(defending))
+        laggard = None
+        for p in fr.players:
+            if p.team.value != defending or p.role == "kapus":
+                continue
+            d = abs(p.x - own_x)
+            if laggard is None or d > laggard[1]:
+                laggard = (p, d)
+        if laggard is None:
+            continue
+        p = laggard[0]
+        if p.jersey_number is not None:
+            jersey.setdefault(p.track_id, p.jersey_number)
+        tally[defending][p.track_id] = (
+            tally[defending].get(p.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "lags": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0] if rows and rows[0]["lags"] >= SRP_MIN_LAGS
+               else None)
+        out[side] = {"lags": sum(r["lags"] for r in rows),
+                     "players": rows, "top": top}
+    return out
+
+
 # Átvert-poszt: ennyi poszthoz kötött átverés kell az ítélethez, és
 # ekkora részarány fölött mondjuk ki, hogy a párharc-vereségeik egy
 # poszton gyűlnek.

@@ -2942,6 +2942,26 @@ def test_slow_retreat_roles_silent_with_few_breaks():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_slow_retreat_players_names_the_lagging_man():
+    """Ha a kontráik alatt rendre ugyanaz az ember marad elöl, a
+    saját kontrát az ő oldalára kell vezetni."""
+    from handball.pipeline.defense import (SRP_MIN_LAGS,
+                                           slow_retreat_players)
+
+    rec = slow_retreat_players(_rtr_match([21] * 3 + [22]))["away"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 21, rec
+    assert rec["top"]["lags"] >= SRP_MIN_LAGS, rec
+
+
+def test_slow_retreat_players_silent_with_few_lags():
+    """Néhány lemaradásból nem nevezünk meg embert."""
+    from handball.pipeline.defense import slow_retreat_players
+
+    rec = slow_retreat_players(_rtr_match([21, 22]))["away"]
+    assert rec["top"] is None, rec
+
+
 def _btr_match(beaten, fps=25.0):
     """`beaten` = kapott gólonként a lövő mellett álló VENDÉG védő
     (21: beálló, 23: szélső). Első szakasz: vendég-birtoklás a -x kapu
