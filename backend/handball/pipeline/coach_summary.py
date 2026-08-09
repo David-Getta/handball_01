@@ -1275,6 +1275,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "menni.")
     except Exception:
         pass
+    # Áttörés-hozam: bejutnak-e a falba, és büntetnek-e onnan.
+    try:
+        from .attack_types import breakthrough_yield
+        bty = breakthrough_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_bty = bty[side]
+            if rec_bty["verdict"] is None:
+                continue
+            body += (f" A(z) {name} betöréseinek "
+                     f"{rec_bty['goal_pct']:.0f}%-a fut gólba "
+                     f"({rec_bty['goals']} gól "
+                     f"{rec_bty['entries']} betörésből).")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

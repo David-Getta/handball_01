@@ -301,6 +301,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
          "defensive_rebound_roles"),
         ("felkészülés", "Kétperc-páros", "rules",
          "suspension_chain_roles"),
+        ("felkészülés", "Áttörés-hozam", "attack_types",
+         "breakthrough_yield"),
     ]
 
 

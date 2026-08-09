@@ -4590,3 +4590,72 @@ def test_post_goal_rush_silent_without_real_change():
 
     rec = post_goal_rush(_rus_match(10.0, 9.0))["home"]
     assert rec["diff_s"] is not None and rec["verdict"] is None, rec
+
+
+# ---- Áttörés-hozam (bejutnak-e, és büntetnek-e onnan) ----------------------
+
+
+def _bty_match(n_entries, n_goals, fps=25.0):
+    """`n_entries` hazai betörés, ezekből az első `n_goals` góllal
+    zárul (a labda a +x kapuba repül)."""
+    frames = []
+    t = 0
+    for i in range(n_entries):
+        for _ in range(int(2.0 * fps)):     # felállás a 9 m-en kívül
+            frames.append(Frame(t=t, players=[
+                _pl(7, Team.HOME, 28.0, 10.0),
+                _pl(8, Team.HOME, 28.0, 5.0),
+                _pl(21, Team.AWAY, 37.0, 14.0)],
+                ball=Ball(x=28.0, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(int(1.5 * fps)):     # betörés a 33,5 m-ig
+            frames.append(Frame(t=t, players=[
+                _pl(7, Team.HOME, 33.5, 10.0),
+                _pl(8, Team.HOME, 28.0, 5.0),
+                _pl(21, Team.AWAY, 37.0, 14.0)],
+                ball=Ball(x=33.5, y=10.0, confidence=1.0)))
+            t += 1
+        if i < n_goals:                     # a betörésből gól lesz
+            for k in range(10):
+                frames.append(Frame(t=t, players=[
+                    _pl(7, Team.HOME, 33.5, 10.0),
+                    _pl(8, Team.HOME, 28.0, 5.0)],
+                    ball=Ball(x=min(34.5 + k, 40.4), y=10.0,
+                              confidence=1.0)))
+                t += 1
+        for k in range(int(2.0 * fps)):     # vendég-birtoklás: elválasztó
+            frames.append(Frame(
+                t=t, players=[_pl(21, Team.AWAY, 18.0 - 0.05 * k, 10.0)],
+                ball=Ball(x=18.0 - 0.05 * k, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(fps), frames)
+
+
+def test_breakthrough_yield_flags_the_punishing_penetration():
+    """Ha a betöréseik nagy része gólba fut, a falat előbb kell
+    zárni."""
+    from handball.pipeline.attack_types import (BTY_MIN_ENTRIES,
+                                                breakthrough_yield)
+
+    rec = breakthrough_yield(_bty_match(6, 4))["home"]
+    assert rec["entries"] >= BTY_MIN_ENTRIES, rec
+    assert rec["goal_pct"] and rec["goal_pct"] >= 40.0, rec
+    assert rec["verdict"] and "bejutnak ÉS büntetnek" in rec["verdict"]
+
+
+def test_breakthrough_yield_flags_the_blunt_penetration():
+    """Ha bejutnak, de nem büntetnek, a záró-fal és a kapus dolgozik."""
+    from handball.pipeline.attack_types import breakthrough_yield
+
+    rec = breakthrough_yield(_bty_match(7, 0))["home"]
+    assert rec["goal_pct"] == 0.0, rec
+    assert rec["verdict"] and "nem büntetnek" in rec["verdict"], rec
+
+
+def test_breakthrough_yield_silent_with_few_entries():
+    """Kevés betörésből nincs ítélet — a számok viszont látszanak."""
+    from handball.pipeline.attack_types import breakthrough_yield
+
+    rec = breakthrough_yield(_bty_match(3, 1))["home"]
+    assert rec["entries"] == 3 and rec["goal_pct"] is None, rec
+    assert rec["verdict"] is None, rec

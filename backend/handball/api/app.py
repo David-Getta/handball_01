@@ -708,10 +708,11 @@ def create_app():
                 base = (job.get("message") or "").split(" — FIGYELEM:")[0]
                 job["message"] = (
                     f"{base} — FIGYELEM: {mins} perce nincs előrelépés. A "
-                    "feldolgozás elakadhatott ennél a videó-résznél; az "
-                    "elakadt képkockát a rendszer hamarosan magától "
-                    "átugorja és folytatja. A Megszakítás menti az addig "
-                    "kész részt.")
+                    "feldolgozás elakadt ennél a videó-résznél; a rendszer "
+                    "átugorja a hibás szakaszt és folytatja — ez több "
+                    "lépésben, egyre nagyobb ugrásokkal történik, ezért "
+                    "akár pár percig is tarthat (az átugrásokat itt "
+                    "kiírjuk). A Megszakítás menti az addig kész részt.")
         return job
 
     @app.post("/jobs/{job_id}/cancel")
@@ -3885,6 +3886,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import breakthrough_yield
+            res["breakthrough_yield"] = breakthrough_yield(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5655,6 +5661,9 @@ def create_app():
                 from ..pipeline.rules import shorthanded_turnover_players
                 _layer("shorthanded_turnover_players",
                        lambda: shorthanded_turnover_players(match))
+                from ..pipeline.attack_types import breakthrough_yield
+                _layer("breakthrough_yield",
+                       lambda: breakthrough_yield(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

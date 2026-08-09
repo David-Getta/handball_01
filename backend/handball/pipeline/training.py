@@ -1355,6 +1355,43 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 396) Áttörés-hozam: a betörés akkor ér valamit, ha be is
+    # fejezzük.
+    try:
+        from .attack_types import (BTY_HIGH_PCT, BTY_LOW_PCT,
+                                   breakthrough_yield)
+        bty396 = breakthrough_yield(match, config)
+        for side in ("home", "away"):
+            rec396 = bty396[side]
+            if rec396.get("verdict") is None:
+                continue
+            if rec396["goal_pct"] >= BTY_HIGH_PCT:
+                add(side, "támadás", "Betörés: erősség",
+                    f"a betöréseink {rec396['goal_pct']:.0f}%-a gólba "
+                    f"fut ({rec396['goals']} gól "
+                    f"{rec396['entries']} betörésből; "
+                    f"{BTY_HIGH_PCT:.0f}% fölött már erősség) — erre "
+                    "építeni kell, mert a legolcsóbb gólforrásunk",
+                    "több betörés-lehetőség: elzárás utáni második "
+                    "betörés gyakorlása, a szélső befutása a "
+                    "hatosra, és a betörő embernek tudatos "
+                    "labdaszerzés utáni indítás",
+                    )
+            elif rec396["goal_pct"] <= BTY_LOW_PCT:
+                add(side, "befejezés", "Betörés befejezése",
+                    f"a betöréseink csak {rec396['goal_pct']:.0f}%-a "
+                    f"fut gólba ({rec396['goals']} gól "
+                    f"{rec396['entries']} betörésből; "
+                    f"{BTY_LOW_PCT:.0f}% alatt már gond) — bejutunk, "
+                    "de a helyzetet nem váltjuk be",
+                    "befejezés a hatoson belül: esésből, testkontakt "
+                    "mellett, kapussal szemben — sorozatgyakorlás "
+                    "fáradtan, és kényszerítő szabály (kapura kell "
+                    "lőni két érintésen belül)",
+                    )
+    except Exception:
+        pass
+
     # 395) Emberhátrány-hibázók: öt emberrel a labda a legbiztosabb
     # kézben maradjon.
     try:

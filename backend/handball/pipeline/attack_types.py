@@ -5927,3 +5927,71 @@ def post_goal_rush(match: Match,
                 "előre kell tolni a védekezést, az óra nekik "
                 "ketyeg")
     return out
+
+
+# Áttörés-hozam küszöbei: ennyi mért betörés kell az ítélethez, e
+# fölötti gól/betörés arány a "büntetnek is", ez alatti a "bejutnak,
+# de nem büntetnek".
+BTY_MIN_ENTRIES = 5
+BTY_HIGH_PCT = 40.0
+BTY_LOW_PCT = 15.0
+
+
+def breakthrough_yield(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Áttörés-hozam: BEJUTNAK-E a falba, és BÜNTETNEK-E onnan.
+
+    Az áttörő játékosok rétege azt mondja meg, KI viszi be a labdát,
+    az áttörő-poszt azt, melyik posztjuk — ez a hozamot: a betörések
+    hány százaléka végződik góllal, és hány betörés jut egy
+    támadásra. A két szám együtt más-más tervet ír elő.
+
+    Edzőileg: ha sokat jutnak be ÉS büntetnek is, a falat előbb kell
+    zárni — kilépés a lövő elé, a betörés vonalának testtel való
+    lezárása, mert a hatoson belül már késő. Ha bejutnak, de nem
+    büntetnek, a záró-fal és a kapus dolgozik: nem a rendszert kell
+    átszabni, hanem tartani a fegyelmet, és a kipattanóra küldeni
+    embert.
+
+    Visszatérés csapatonként (a TÁMADÓ oldal): {"entries" (mért
+    betörés), "goals" (belőlük gól), "goal_pct", "attacks",
+    "per_attack", "verdict"} — a goal_pct/verdict None
+    BTY_MIN_ENTRIES alatt.
+    """
+    config = config or TacticsConfig()
+    btp = breakthrough_players(match, config)
+    attacks: dict = {"home": 0, "away": 0}
+    for a in classify_attacks(match, config):
+        attacks[a["team"]] += 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rec_all = btp.get(side) or {}
+        rows = rec_all.get("players") or []
+        entries = int(rec_all.get("entries") or 0)
+        goals = sum(int(r.get("goals") or 0) for r in rows)
+        n_att = attacks[side]
+        rec = {"entries": entries, "goals": goals, "goal_pct": None,
+               "attacks": n_att,
+               "per_attack": (round(entries / n_att, 2)
+                              if n_att else None),
+               "verdict": None}
+        if entries >= BTY_MIN_ENTRIES:
+            pct = 100.0 * goals / entries
+            rec["goal_pct"] = round(pct, 1)
+            if pct >= BTY_HIGH_PCT:
+                rec["verdict"] = (
+                    f"a betöréseik {pct:.0f}%-a gólba fut "
+                    f"({goals} gól {entries} betörésből) — bejutnak "
+                    "ÉS büntetnek is: a falat előbb kell zárni, "
+                    "kilépéssel a lövő elé, mert a hatoson belül már "
+                    "késő")
+            elif pct <= BTY_LOW_PCT:
+                rec["verdict"] = (
+                    f"a betöréseik csak {pct:.0f}%-a gólba fut "
+                    f"({goals} gól {entries} betörésből) — bejutnak, "
+                    "de nem büntetnek: a záró-fal és a kapus "
+                    "dolgozik, nem a rendszert kell átszabni, hanem "
+                    "a kipattanóra küldeni embert")
+        out[side] = rec
+    return out

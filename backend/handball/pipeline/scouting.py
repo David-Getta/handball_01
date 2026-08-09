@@ -1032,6 +1032,11 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Áttörés-hozam: a mért betörések és a belőlük esett gólok
+    # darabszáma. Darabszám, pontosan összegződik (arány = goals /
+    # entries).
+    bty_entries: int = 0
+    bty_goals: int = 0
     # Emberhátrány-hibázók: a hátrányban elkövetett labdaeladások
     # darabszáma JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
     shtp_turnovers_by_player: dict = field(default_factory=dict)
@@ -4173,6 +4178,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Áttörés-hozam: mennyire drága, ha bejutnak.
+    if rep.bty_entries >= 5:
+        _bty_pct = 100.0 * rep.bty_goals / rep.bty_entries
+        if _bty_pct >= 40.0:
+            keys.append(
+                f"A betöréseik {_bty_pct:.0f}%-a gólba fut "
+                f"({rep.bty_goals} gól {rep.bty_entries} betörésből) "
+                "— bejutnak ÉS büntetnek is: a falat előbb kell "
+                "zárni, kilépéssel a lövő elé, mert a hatoson belül "
+                "már késő.")
+        elif _bty_pct <= 15.0:
+            keys.append(
+                f"A betöréseik csak {_bty_pct:.0f}%-a fut gólba "
+                f"({rep.bty_goals} gól {rep.bty_entries} betörésből) "
+                "— bejutnak, de nem büntetnek: a záró-fal és a kapus "
+                "dolgozik, elég a fegyelmet tartani és a "
+                "kipattanóra embert küldeni.")
 
     # Emberhátrány-hibázók: kire menjen az emberelőny-pressz.
     if rep.shtp_turnovers_by_player:
@@ -9476,6 +9499,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .attack_types import breakthrough_yield as _bty
+        btyrec = _bty(match, config)[team.value]
+        rep.bty_entries = int(btyrec["entries"])
+        rep.bty_goals = int(btyrec["goals"])
         from .rules import shorthanded_turnover_players as _shtp
         shtprec = _shtp(match, config)[team.value]
         rep.shtp_turnovers_by_player = {
@@ -12160,6 +12187,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 375) Az ő áttörés-hozamuk × a ti fal-mélységetek: a betörést
+    # a falon kívül kell megállítani.
+    if opp.bty_entries >= 5 and own.defensive_pressure_m > 0.0:
+        _bty375 = 100.0 * opp.bty_goals / opp.bty_entries
+        if _bty375 >= 40.0:
+            plan.append(
+                f"A betöréseik {_bty375:.0f}%-a gólba fut "
+                f"({opp.bty_goals} gól {opp.bty_entries} betörésből), "
+                f"ti pedig átlag {own.defensive_pressure_m:.1f} "
+                "méterre védekeztek a labdástól — a betörést a falon "
+                "KÍVÜL kell megállítani: időben kilépő védő és "
+                "testtel zárt vonal, mert a hatoson belül már nincs "
+                "megoldás.")
 
     # 374) Az ő emberhátrány-hibázójuk × a ti emberelőny-játékotok:
     # a hat az öt ellen névre szóló célpont van.
@@ -18680,6 +18721,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        bty_entries=sum(r.bty_entries for r in reports),
+        bty_goals=sum(r.bty_goals for r in reports),
         shtp_turnovers_by_player=_merge_count_dicts(
             r.shtp_turnovers_by_player for r in reports),
         pptp_turnovers_by_player=_merge_count_dicts(

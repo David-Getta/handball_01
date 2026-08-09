@@ -52,9 +52,15 @@ class StallSkippingFeed:
 
     _SENTINEL = object()
 
+    # Ennyiszeresére nő az ugrás-táv minden EREDMÉNYTELEN átugrás után
+    # (ha az új olvasó sem ad kockát, a hibás szakasz hosszabb egy
+    # kockánál), és ennyi kockánál nem ugrunk többet egyszerre.
+    _SKIP_GROWTH = 4
+    _SKIP_MAX_FRAMES = 750
+
     def __init__(self, producer, resume_factory=None, stride=1,
                  start_pos=0, first_timeout_s=180.0,
-                 skip_timeout_s=60.0, max_skips=20):
+                 skip_timeout_s=30.0, max_skips=20, on_skip=None):
         import queue
         import threading
         self._queue_mod = queue
@@ -67,7 +73,10 @@ class StallSkippingFeed:
         self._skip_timeout_s = skip_timeout_s
         self._max_skips = max_skips
         self._gen = 0
+        self._on_skip = on_skip
+        self._dry = 0        # egymást követő, kocka nélküli átugrások
         self.skips = 0
+        self.skipped_frames = 0
         self.stalled = False
         self._start(producer)
 
@@ -124,11 +133,24 @@ class StallSkippingFeed:
                     return
                 self.skips += 1
                 self._gen += 1
-                self._next_pos = bad + self._stride
-                print(f"FIGYELEM: a feldolgozás elakadt a(z) {bad}. "
-                      "képkockánál — a kockát átugorjuk, és a "
-                      "következőtől folytatjuk "
-                      f"({self.skips}/{self._max_skips} átugrás).")
+                # Ha az előző átugrás után sem jött kocka, a hibás
+                # szakasz hosszabb egynél: nagyobbat lépünk.
+                jump = min(self._SKIP_MAX_FRAMES,
+                           self._stride
+                           * (self._SKIP_GROWTH ** self._dry))
+                self._dry += 1
+                self._next_pos = bad + jump
+                self.skipped_frames += jump
+                msg = (f"elakadt a(z) {bad}. képkockánál — {jump} kocka "
+                       "átugorva, folytatás a(z) "
+                       f"{self._next_pos}. kockától "
+                       f"({self.skips}/{self._max_skips} átugrás)")
+                print(f"FIGYELEM: a feldolgozás {msg}.")
+                if self._on_skip is not None:
+                    try:
+                        self._on_skip(msg)
+                    except Exception:
+                        pass   # a visszajelzés hibája nem állíthat meg
                 try:
                     nxt = self._resume_factory(self._next_pos)
                 except Exception as e:
@@ -144,6 +166,7 @@ class StallSkippingFeed:
             if item is self._SENTINEL:
                 return
             timeout = self._skip_timeout_s
+            self._dry = 0            # jött kocka: az ugrás-táv visszaáll
             self._next_pos += self._stride
             yield item
 
@@ -321,7 +344,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                   court_poly=None, start=0, skip_dark=True, on_frame=None,
                   pan=False, jersey_voter=None, ocr_every=5,
                   ball_recover=True, stop_check=None,
-                  raw_out=None, colors_out=None):
+                  raw_out=None, colors_out=None, on_note=None):
     import os
     # Apple GPU (MPS): a ritka, nem-implementált műveletek essenek vissza CPU-ra
     # hiba helyett. A torch importja ELŐTT kell beállítani.
@@ -410,14 +433,28 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
     # elakadásnál marad. Az első kockára türelmesebb a korlát: abban a
     # dekóder és a modell bemelegedése is benne van.
     STALL_FIRST_S = 180.0
-    STALL_SKIP_S = 60.0
+    STALL_SKIP_S = 30.0
     STALL_MAX_SKIPS = 20
 
     def _resume_from(start_frame):
         """Folytató-olvasó az elakadt kocka UTÁNI pozíciótól: saját
-        VideoCapture + kockánkénti track() hívás (persist=True: a
-        követési id-k tovább élnek)."""
+        VideoCapture + kockánkénti track() hívás.
+
+        SAJÁT modell-példánnyal dolgozik: az elakadt szál a natív
+        hívásban ragadt bent, és ott feltehetően a KÖZÖS modellt
+        fogja — ha ugyanarra a példányra hívnánk párhuzamosan, az
+        összeomlást vagy újabb befagyást okozhatna. A friss példány
+        ára egy modellnyi memória; cserébe a folytatás független az
+        árván maradt száltól. A követési id-k emiatt újraindulnak, de
+        egy elakadás után a folytonosság úgyis megszakadt.
+        """
         def _iter():
+            try:
+                mdl = YOLO(resolved)
+            except Exception as e:
+                print("FIGYELEM: a folytató modell nem tölthető be "
+                      f"({e}) — a közös példánnyal próbáljuk.")
+                mdl = model
             cap = cv2.VideoCapture(video_path)
             try:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -428,7 +465,7 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                     if (pos - start_frame) % stride == 0:
                         ok2, img = cap.retrieve()
                         if ok2 and img is not None:
-                            rr = model.track(
+                            rr = mdl.track(
                                 img, persist=True,
                                 classes=person_ids + ball_ids,
                                 imgsz=1920, conf=0.05, device=device,
@@ -445,7 +482,13 @@ def _process_yolo(video_path, weights, stride, max_frames, imgsz, conf,
                              stride=stride,
                              first_timeout_s=STALL_FIRST_S,
                              skip_timeout_s=STALL_SKIP_S,
-                             max_skips=STALL_MAX_SKIPS)
+                             max_skips=STALL_MAX_SKIPS,
+                             # Az átugrás a FELÜLETRE is kimegy: enélkül a
+                             # haladás-jelző (és az elakadás-őrszem
+                             # szívverése) az átugrások alatt is állna, és
+                             # a felhasználó azt látná, hogy semmi nem
+                             # történik.
+                             on_skip=on_note)
 
     kept = 0
     skipped_dark = 0
@@ -912,6 +955,22 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
     _t0 = _time.time()
     _cp = {"last": _time.time()}
 
+    _last = {"kept": 0, "show": 0}
+
+    def on_note(msg):
+        """Közbeszóló üzenet a felületnek (pl. elakadt kocka átugorva).
+
+        Enélkül az átugrások alatt a haladás-jelző ÁLLNA — a
+        felhasználó azt látná, hogy semmi nem történik, holott a
+        rendszer épp a hibás videó-szakaszon lépked át. A hívás egyben
+        frissíti az elakadás-őrszem szívverését is.
+        """
+        kept = _last["kept"]
+        show = _last["show"] or (disp_total or 0)
+        frac = min(1.0, kept / max(1, show)) if show else 0.0
+        report("B", 0.05 + 0.70 * frac,
+               f"detektálás {kept}/{show} · {msg}")
+
     def on_frame(kept, total):
         # A kijelzéshez a becsült teljes darabszámot használjuk (a `total` a
         # belső plafon, ami teljes videónál csak egy óriási felső korlát).
@@ -924,6 +983,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         else:
             eta = ""
         frac = min(1.0, kept / max(1, show))
+        _last["kept"], _last["show"] = kept, show
         report("B", 0.05 + 0.70 * frac, f"detektálás {kept}/{show}{eta}")
         # IDŐSZAKOS CHECKPOINT: pár percenként lefut az utómunka az addig
         # feldolgozott kockákra, és a részeredmény ELMENTŐDIK — a motor
@@ -943,7 +1003,7 @@ def process(video_path, out_path, weights=None, stride=3, max_frames=400, imgsz=
         stalled = bool(_process_yolo(
             video_path, weights, stride, max_frames, imgsz, conf,
             court_poly, start=start, skip_dark=skip_dark,
-            on_frame=on_frame, pan=bool(calib_list),
+            on_frame=on_frame, on_note=on_note, pan=bool(calib_list),
             jersey_voter=jersey_voter, stop_check=stop_check,
             raw_out=raw, colors_out=all_colors))
     else:

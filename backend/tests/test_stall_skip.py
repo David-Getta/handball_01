@@ -68,3 +68,54 @@ def test_tul_sok_elakadas_utan_felad():
     assert list(feed.frames()) == ["a"]
     assert feed.skips == 2
     assert feed.stalled is True
+
+
+def test_ismetelt_elakadasnal_nagyobbat_ugrik():
+    """Ha a folytató-olvasó SEM ad kockát, a hibás szakasz hosszabb egy
+    kockánál — ilyenkor egyre nagyobbat kell ugrani, különben a
+    feldolgozás percekig ugyanabban a rossz szakaszban toporog."""
+    hivasok = []
+
+    def _folytato(start):
+        hivasok.append(start)
+        # A második és harmadik kísérlet is beragad (üres, blokkoló).
+        return _blokkolo()
+
+    feed = StallSkippingFeed(_blokkolo(1), resume_factory=_folytato,
+                             stride=2, first_timeout_s=0.4,
+                             skip_timeout_s=0.2, max_skips=3)
+    assert list(feed.frames()) == [1]
+    # 0. kocka jó → a 2. ragadt be. Az ugrás-táv: 2, majd 8, majd 32.
+    assert hivasok == [4, 12, 44], hivasok
+    assert feed.skips == 3 and feed.stalled is True
+
+
+def test_atugras_szol_a_felhasznalonak():
+    """Az átugrás visszajelzést ad (a felület enélkül állni látszik)."""
+    uzenetek = []
+    feed = StallSkippingFeed(_blokkolo(1), resume_factory=lambda s: iter(["x"]),
+                             stride=1, first_timeout_s=0.4,
+                             skip_timeout_s=0.2, max_skips=2,
+                             on_skip=uzenetek.append)
+    assert list(feed.frames()) == [1, "x"]
+    assert len(uzenetek) == 1, uzenetek
+    assert "átugorva" in uzenetek[0] and "folytatás" in uzenetek[0]
+
+
+def test_sikeres_kocka_utan_visszaall_az_ugras_tav():
+    """Ha az átugrás után JÖTT kocka, a következő elakadásnál megint a
+    legkisebb ugrással próbálkozunk — nem hagyunk ki feleslegesen."""
+    hivasok = []
+
+    def _folytato(start):
+        hivasok.append(start)
+        # Az első folytatás ad egy kockát, majd újra beragad.
+        return _blokkolo("x") if len(hivasok) == 1 else _blokkolo()
+
+    feed = StallSkippingFeed(_blokkolo(1), resume_factory=_folytato,
+                             stride=1, first_timeout_s=0.4,
+                             skip_timeout_s=0.2, max_skips=2)
+    assert list(feed.frames()) == [1, "x"]
+    # 0. jó → 1. ragad (ugrás 1) → a 2. pozíciótól jön "x" → a 3.
+    # ragad be, és ott ismét a legkisebb ugrás jön (1), nem a növelt.
+    assert hivasok == [2, 4], hivasok

@@ -2168,6 +2168,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "vágjátok el, a helyzet ki sem alakul";
   }
 
+  // Áttörés-hozam: a betöréseik hány százaléka fut gólba (5+
+  // betörés; 40% fölött büntetnek, 15% alatt nem — a backenddel
+  // azonos küszöbök: BTY_MIN_ENTRIES, BTY_HIGH_PCT, BTY_LOW_PCT).
+  String? _breakthroughYield(Map<String, dynamic> r) {
+    final entries = (r["bty_entries"] as num?)?.toInt() ?? 0;
+    final goals = (r["bty_goals"] as num?)?.toInt() ?? 0;
+    if (entries < 5) return null;
+    final pct = 100.0 * goals / entries;
+    if (pct >= 40.0) {
+      return "a betöréseik ${pct.round()}%-a gólba fut ($goals gól "
+          "$entries betörésből) · a falat előbb kell zárni, "
+          "kilépéssel a lövő elé";
+    }
+    if (pct <= 15.0) {
+      return "a betöréseik csak ${pct.round()}%-a fut gólba ($goals "
+          "gól $entries betörésből) · bejutnak, de nem büntetnek: "
+          "elég a fegyelmet tartani";
+    }
+    return null;
+  }
+
   // Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát (2+
   // hátrány-eladás — a backenddel azonos küszöb:
   // SHTP_MIN_TURNOVERS).
@@ -9886,6 +9907,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Emberelőny-hibázó", _powerplayTurnoverPlayer(r)!],
       if (_shorthandedTurnoverPlayer(r) != null)
         ["Emberhátrány-hibázó", _shorthandedTurnoverPlayer(r)!],
+      if (_breakthroughYield(r) != null)
+        ["Áttörés-hozam", _breakthroughYield(r)!],
       if (_lastHolderRole(r) != null)
         ["Vég-birtokos poszt", _lastHolderRole(r)!],
       if (_pressOutletRole(r) != null)
@@ -10180,7 +10203,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                               "indítás", "labdatartás", "forgatás",
                               "ziccer", "befejez", "célzás", "oldal",
                               "xg", "tempó", "birtoklás", "figur",
-                              "keresztjáték", "roham", "áttörő",
+                              "keresztjáték", "roham", "áttörő", "áttörés",
                               "kivárás", "bontó", "kiosztás",
                               "előkészít", "asszist", "elsütés",
                               "középkezdés", "labda", "elad", "hiba",

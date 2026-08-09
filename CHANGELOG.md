@@ -5,6 +5,36 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Javítás — az elakadt szakaszon tényleg átjut a feldolgozás.** Az
+  átugró-adagoló eddig három ponton is elakadhatott ugyanott: (1) az
+  átugrás nem jelzett vissza a felületnek, így a haladás-jelző (és az
+  elakadás-őrszem szívverése) állni látszott, a felhasználó pedig azt
+  látta, hogy húsz perce nem történik semmi; (2) minden újraindítás
+  ugyanabból a hibás szakaszból próbálkozott egyetlen kockányit
+  lépve, holott a sérült rész hosszabb — most, ha a folytatás sem ad
+  kockát, az ugrás-táv négyszereződik (legfeljebb 750 kockáig), és
+  sikeres kocka után visszaáll a legkisebbre; (3) a folytató-olvasó a
+  KÖZÖS modell-példányt hívta, miközben az elakadt szál épp abban
+  ragadt bent — mostantól saját példánnyal dolgozik. Az átugrás
+  időkorlátja 60-ról 30 másodpercre csökkent, így a hibás szakaszon
+  gyorsabban jutunk át. A felület üzenete is pontosabb: az átugrás
+  folyamatban van, több lépésben.
+
+- **Áttörés-hozam: bejutnak-e a falba, és büntetnek-e onnan.** Az
+  áttörő játékosok rétege azt mondja meg, ki viszi be a labdát, az
+  áttörő-poszt azt, melyik posztjuk — az új réteg a hozamot: a
+  betörések hány százaléka végződik góllal, és hány betörés jut egy
+  támadásra. A két szám más-más tervet ír elő: ha sokat jutnak be ÉS
+  büntetnek is, a falat előbb kell zárni (kilépés a lövő elé, a
+  betörés vonalának testtel zárása); ha bejutnak, de nem büntetnek, a
+  záró-fal és a kapus dolgozik — nem a rendszert kell átszabni,
+  hanem a kipattanóra embert küldeni. Öt betörés alatt hallgat
+  (None). Felületek: /analyze + meccs-csomag (`breakthrough_yield`),
+  edzői összefoglaló, felderítés (`bty_entries` / `bty_goals` mezők +
+  edzői kulcs mindkét irányra + 375. meccsterv-szabály), edzés-fókusz
+  (396. szabály, külön mondattal az erősségre és a befejezés-gondra),
+  kliens-csempe.
+
 - **Emberhátrány-hibázók: öt emberrel ki veszíti el a labdát.** Az
   emberhátrány-hiba poszt a posztot nevezi meg — az új réteg az
   embert: ugyanazokat a kiállítás-ablakokban, emberhátrányban
