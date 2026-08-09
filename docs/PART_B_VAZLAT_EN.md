@@ -30,13 +30,13 @@ extra hardware and fully on-premise processing.
 - **Explainable AI chain**: every verdict is tied to explicit,
   inspectable thresholds; with insufficient samples the system stays
   silent instead of guessing (AI Act / GDPR-friendly by design).
-- 428 analysis layers over a shared tracking data model; outputs
+- 429 analysis layers over a shared tracking data model; outputs
   phrased automatically in coach language.
 
 ### 1.3 Current status (TRL) and evidence
 
 - End-to-end prototype working on simulated and real footage (TRL 3–4).
-- Evidence infrastructure already in place: 1,578 automated tests,
+- Evidence infrastructure already in place: 1,580 automated tests,
   reproducible benchmark (`python -m scripts.benchmark`), built-in
   precision/recall validation against human annotation
   (`scripts/validate_match`), and a dated, versioned measurement

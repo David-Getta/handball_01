@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Menekülők: nyomás alatt kihez megy a labda.** A menekülő-poszt a
+  posztot nevezi meg — az új réteg az embert: a testközeli védő
+  mellett meghozott passzokat a fogadó játékoshoz írja. Edzőileg ez
+  teszi a presszt labdaszerzéssé névre szólóan: ha szorításban a
+  labda rendre ugyanahhoz megy, a kettőzés mögötti harmadik ember
+  előre tudja, hol kell lesben állnia — a menekülő passz így nem
+  kiút, hanem elfogott labda; saját csapatra a második kiút a téma.
+  Három nyomás alatti passztól emel ki nevet. A rangsorban az
+  "ember" családba tartozik, és a Kulcs-ember bizonyíték-rétegei
+  közé is bekerült. Felületek: /analyze + meccs-csomag
+  (`press_outlets`), edzői összefoglaló, felderítés
+  (`escp_passes_by_player` mező + edzői kulcs + 381.
+  meccsterv-szabály), edzés-fókusz (402. szabály), kliens-csempe.
+
 - **Vég-birtokosok: kinek a kezében hal el a támadásuk.** A
   vég-birtokos poszt a posztot nevezi meg — az új réteg az embert:
   minden lövés nélkül záruló támadás utolsó labdabirtokosát számolja

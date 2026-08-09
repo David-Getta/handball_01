@@ -1183,3 +1183,69 @@ def press_outlet_roles(match: Match,
                     "ember ott álljon lesben: a menekülő passz így "
                     "nem kiút, hanem elfogott labda")
     return out
+
+
+# Menekülők: ennyi nyomás alatti passztól emeljük ki a fogadót.
+ESCP_MIN_PASSES = 3
+
+
+def press_outlets(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Menekülők: NYOMÁS ALATT KIHEZ megy a labda.
+
+    A menekülő-poszt (press_outlet_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a testközeli védő mellett (PRESS_TIGHT_M-en belül)
+    meghozott passzokat a FOGADÓ játékoshoz írja.
+
+    Edzőileg ez teszi a presszt labdaszerzéssé névre szólóan: ha
+    szorításban a labda rendre ugyanahhoz az emberhez megy, a
+    kettőző mögötti harmadik előre tudja, hol kell lesben állnia — a
+    menekülő passz így nem kiút, hanem elfogott labda. Saját
+    csapatra: ha a kiút egy emberre szűkül, a pressz-elleni
+    kiadásunk kiszámítható.
+
+    Visszatérés csapatonként: {"passes" (emberhez kötött nyomás
+    alatti passz), "players": [{"player_id", "jersey", "passes"}],
+    "top"} — a "top" az első játékos, ha legalább ESCP_MIN_PASSES
+    ilyen passzt kapott, különben None.
+    """
+    import math
+
+    config = config or TacticsConfig()
+
+    def _tight(frame, pos, team) -> bool:
+        dists = [math.hypot(p.x - pos.x, p.y - pos.y)
+                 for p in frame.players
+                 if p.team != team and p.role != "kapus"]
+        return bool(dists) and min(dists) <= PRESS_TIGHT_M
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for pe in detect_passes(match, config):
+        if pe.decision_frame is None or pe.passer_pos is None:
+            continue
+        if not _tight(pe.decision_frame, pe.passer_pos, pe.team):
+            continue
+        side = pe.team.value
+        if pe.receiver_id is None:
+            continue
+        tally[side][pe.receiver_id] = (
+            tally[side].get(pe.receiver_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "passes": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["passes"] >= ESCP_MIN_PASSES
+               else None)
+        out[side] = {"passes": sum(r["passes"] for r in rows),
+                     "players": rows, "top": top}
+    return out

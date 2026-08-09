@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 402) Menekülők: ha a pressz-elleni kiút egy emberre szűkül,
+    # kiszámíthatók vagyunk.
+    try:
+        from .decisions import ESCP_MIN_PASSES, press_outlets
+        escp402 = press_outlets(match, config)
+        for side in ("home", "away"):
+            top402 = escp402[side].get("top")
+            if top402 is None:
+                continue
+            _ki402 = (f"a(z) {top402['jersey']}. számú"
+                      if top402.get("jersey") is not None
+                      else f"a(z) {top402['player_id']}. játékos")
+            add(side, "támadás", "Több kiút a pressz ellen",
+                f"szorításban a labda {_ki402} felé megy a "
+                f"leggyakrabban ({top402['passes']} nyomás alatti "
+                f"passz; {ESCP_MIN_PASSES} passztól már jelezzük) — "
+                "egy felkészült ellenfél ott áll lesben, és a "
+                "menekülő passzból lesz a kontrája",
+                "pressz-elleni kiadás két irányba: kijelölt közeli és "
+                "távoli kiút, a labdás felé mozgó társ (nem álló "
+                "cím), és kapushoz visszajátszás mint harmadik "
+                "opció — edzésen 3-2 elleni kiszabadulás jelre",
+                )
+    except Exception:
+        pass
+
     # 401) Vég-birtokosok: ha mindig ugyanaz marad a labdával, a
     # befejezés-felelősség tisztázatlan.
     try:

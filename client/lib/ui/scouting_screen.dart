@@ -2344,6 +2344,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Menekülők: nyomás alatt kihez megy a labda (3+ nyomás alatti
+  // passz — a backenddel azonos küszöb: ESCP_MIN_PASSES).
+  String? _pressOutletPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["escp_passes_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 3) return null;
+    return "szorításban a labda a(z) $top. felé megy a leggyakrabban "
+        "($topN nyomás alatti passz) · ott álljon lesben a harmadik "
+        "ember";
+  }
+
   // Vég-birtokosok: kinek a kezében hal el a támadásuk (3+ lövés
   // nélkül záruló támadás — a backenddel azonos küszöb:
   // LSTP_MIN_ATTACKS).
@@ -10006,6 +10027,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Ziccer-előkészítő ember", _bigChanceFeederPlayer(r)!],
       if (_lastHolderPlayer(r) != null)
         ["Vég-birtokos ember", _lastHolderPlayer(r)!],
+      if (_pressOutletPlayer(r) != null)
+        ["Menekülő ember", _pressOutletPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

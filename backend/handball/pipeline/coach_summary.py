@@ -1372,6 +1372,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "második felében rá kell tolni a nyomást.")
     except Exception:
         pass
+    # Menekülők: nyomás alatt kihez megy a labda.
+    try:
+        from .decisions import press_outlets
+        escp = press_outlets(match)
+        for side, name in (("home", home), ("away", away)):
+            top = escp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} szorításban {_ki} felé menekül a "
+                     f"leggyakrabban ({top['passes']} nyomás alatti "
+                     "passz) — ott érdemes lesben állni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

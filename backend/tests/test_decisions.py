@@ -865,3 +865,23 @@ def test_press_outlet_roles_silent_with_few_passes():
 
     rec = press_outlet_roles(_esc_match([7, 9]))["home"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def test_press_outlets_names_the_escape_target():
+    """Ha szorításban a labda rendre ugyanahhoz az emberhez megy, a
+    harmadik védő ott állhat lesben."""
+    from handball.pipeline.decisions import (ESCP_MIN_PASSES,
+                                             press_outlets)
+
+    rec = press_outlets(_esc_match([7, 9, 7, 9, 7, 7, 7]))["home"]
+    assert rec["passes"] >= 5, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["passes"] >= ESCP_MIN_PASSES, rec
+
+
+def test_press_outlets_silent_with_few_passes():
+    """Két nyomás alatti passzból még nincs kiemelt név."""
+    from handball.pipeline.decisions import press_outlets
+
+    rec = press_outlets(_esc_match([7, 9]))["home"]
+    assert rec["top"] is None, rec

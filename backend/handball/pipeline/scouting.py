@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Menekülők: a nyomás alatt meghozott passzok darabszáma a
+    # FOGADÓ szerint. Darabszám, meccsek közt összegződik.
+    escp_passes_by_player: dict = field(default_factory=dict)
     # Vég-birtokosok: a lövés nélkül záruló támadások darabszáma az
     # UTOLSÓ birtokos szerint. Darabszám, meccsek közt összegződik.
     lstp_attacks_by_player: dict = field(default_factory=dict)
@@ -4193,6 +4196,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Menekülők: hol álljon lesben a harmadik ember.
+    if rep.escp_passes_by_player:
+        _escp_k, _escp_n = max(rep.escp_passes_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _escp_n >= 3:
+            keys.append(
+                f"Szorításban a labda a(z) {_escp_k}. felé megy a "
+                f"leggyakrabban ({_escp_n} nyomás alatti passz) — a "
+                "kettőzés mögötti harmadik ember ott álljon lesben: "
+                "a menekülő passz így elfogott labda.")
 
     # Vég-birtokosok: kire toljuk a nyomást a támadás végén.
     if rep.lstp_attacks_by_player:
@@ -9569,6 +9583,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .decisions import press_outlets as _escp
+        escprec = _escp(match, config)[team.value]
+        rep.escp_passes_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["passes"]
+            for r in escprec["players"]}
         from .attack_types import last_holders as _lstp
         lstprec = _lstp(match, config)[team.value]
         rep.lstp_attacks_by_player = {
@@ -12287,6 +12307,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 381) Az ő menekülőjük × a ti kettőzésetek: a kiút előre
+    # ismert, ott kell lesben állni.
+    if (opp.escp_passes_by_player and own.dbl_holder_frames > 0
+            and own.dbl_doubled_frames >= 25):
+        _escp381_k, _escp381_n = max(
+            opp.escp_passes_by_player.items(), key=lambda kv: kv[1])
+        if _escp381_n >= 3:
+            plan.append(
+                f"Szorításban a labda a(z) {_escp381_k}. felé megy "
+                f"({_escp381_n} nyomás alatti passz), ti pedig "
+                "kettőztök is — a kettőzés mögötti harmadik ember az "
+                "ő sávjában álljon lesben: a menekülő passz így nem "
+                "kiút, hanem elfogott labda és kontra.")
 
     # 380) Az ő vég-birtokosuk × a ti labdaszerzésetek: ahol a
     # támadásuk elhal, ott a legolcsóbb elvenni a labdát.
@@ -18891,6 +18925,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        escp_passes_by_player=_merge_count_dicts(
+            r.escp_passes_by_player for r in reports),
         lstp_attacks_by_player=_merge_count_dicts(
             r.lstp_attacks_by_player for r in reports),
         bcfp_chances_by_player=_merge_count_dicts(
