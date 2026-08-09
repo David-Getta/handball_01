@@ -4622,6 +4622,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.defense import block_fade
+            res["block_fade"] = block_fade(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5537,6 +5542,8 @@ def create_app():
                 _layer("outlet_targets", lambda: outlet_targets(match))
                 from ..pipeline.attack_types import screen_yield
                 _layer("screen_yield", lambda: screen_yield(match))
+                from ..pipeline.defense import block_fade
+                _layer("block_fade", lambda: block_fade(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

@@ -459,6 +459,86 @@ def turnover_fade(match, config=None) -> dict:
     return out
 
 
+# Blokk-fáradás: félidőnként ennyi ellenfél lövés-kísérlet (blokk +
+# kaputra jutott lövés) kell az ítélethez, és ekkora (százalékpontos)
+# esés számít érdeminek.
+BLF_MIN_SHOTS = 5
+BLF_GAP_PP = 10.0
+
+
+def block_fade(match, config=None) -> dict:
+    """Blokk-fáradás: ELFOGY-E a blokk-munka a második félidőre.
+
+    A blokkolt lövések rétege a darabszámot adja — ez a KITARTÁST:
+    félidőnként elosztja a blokkjaikat az ellenfél lövés-
+    kísérleteivel (blokk + kaputra jutott lövés), így a mennyiség
+    nem torzít, ha az egyik félidőben többet lőttek rájuk.
+
+    Edzőileg a blokk tiszta akarat-munka: ha a második félidőre
+    érdemben visszaesik, a hajrában a távoli lövés ellenük szinte
+    ingyen van — az utolsó húsz percben tudatosan az átlövésre kell
+    építeni. Saját csapatra: a blokkoló emberek pihentetése és a
+    lábmunka-állóképesség az edzés-téma, mert a blokk elfogyása nem
+    taktika, hanem kondíció kérdése.
+
+    Visszatérés csapatonként (a BLOKKOLÓ oldal): {"fh_blocks",
+    "fh_shots", "sh_blocks", "sh_shots", "fh_pct", "sh_pct",
+    "gap_pp", "verdict"} — a pct a blokkok aránya a félidő
+    lövés-kísérleteihez (blokk + lövés) képest; a pct/gap/verdict
+    None, ha nincs félidő-jel, vagy valamelyik félidőben kevés
+    (BLF_MIN_SHOTS alatti) a lövés-kísérlet.
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    empty = {"fh_blocks": 0, "fh_shots": 0, "sh_blocks": 0,
+             "sh_shots": 0, "fh_pct": None, "sh_pct": None,
+             "gap_pp": None, "verdict": None}
+    out = {side: dict(empty) for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    blk = detect_blocks(match, config)
+    for side in ("home", "away"):
+        for ev in blk[side]["events"]:
+            key = "fh_blocks" if ev["t"] <= ht else "sh_blocks"
+            out[side][key] += 1
+
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        atk = getattr(e.team, "value", e.team)
+        deff = "away" if atk == "home" else "home"
+        key = "fh_shots" if e.t <= ht else "sh_shots"
+        out[deff][key] += 1
+
+    for rec in out.values():
+        fh_try = rec["fh_shots"] + rec["fh_blocks"]
+        sh_try = rec["sh_shots"] + rec["sh_blocks"]
+        if fh_try >= BLF_MIN_SHOTS and sh_try >= BLF_MIN_SHOTS:
+            fh = 100.0 * rec["fh_blocks"] / fh_try
+            sh = 100.0 * rec["sh_blocks"] / sh_try
+            rec["fh_pct"] = round(fh, 1)
+            rec["sh_pct"] = round(sh, 1)
+            rec["gap_pp"] = round(sh - fh, 1)
+            if fh - sh >= BLF_GAP_PP:
+                rec["verdict"] = (
+                    f"elfogy a blokk-munkájuk ({fh:.0f}% → {sh:.0f}% "
+                    "blokk-arány) — a hajrában az átlövés ellenük "
+                    "szinte ingyen van: az utolsó húsz percben "
+                    "tudatosan a távoli lövésre kell építeni")
+            elif sh - fh >= BLF_GAP_PP:
+                rec["verdict"] = (
+                    f"a hajrára nő a blokk-munkájuk ({fh:.0f}% → "
+                    f"{sh:.0f}% blokk-arány) — a végén nem az "
+                    "átlövés, hanem a bejátszás és a kiugratás a "
+                    "megoldás ellenük")
+    return out
+
+
 # Védekezés-fellazulás: félidőnként ennyi mért kocka kell, és ekkora
 # (méteres) lazulás számít fáradás-jelnek a 2. félidőre.
 PRESSURE_FADE_MIN_FRAMES = 100

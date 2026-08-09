@@ -2861,6 +2861,86 @@ def _rbk_match(blockers, fps=25.0):
     return Match(_meta(fps), frames)
 
 
+def _blf_match(fh_blocked=4, fh_clean=2, sh_blocked=0, sh_clean=6,
+               fps=25.0):
+    """Félidőnkénti blokk-kép: az első félidőben `fh_blocked` lefogott
+    és `fh_clean` szabad hazai lövés, szünet (üres pálya), majd a
+    másodikban `sh_blocked` / `sh_clean`. A blokkoló a vendég."""
+    from handball.models.tracking import Ball, Frame, Match
+
+    frames = []
+    t = 0
+
+    def _cast():
+        return [_pl(1, Team.HOME, 28.0, 10.0),
+                _pl(20, Team.AWAY, 32.5, 10.0),
+                _pl(21, Team.AWAY, 20.0, 5.0),
+                _pl(22, Team.AWAY, 20.0, 15.0),
+                _pl(2, Team.HOME, 25.0, 12.0)]
+
+    def _blocked():
+        nonlocal t
+        for x in (29.0, 30.2, 31.4, 32.4, 31.0, 29.5, 28.0):
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(15):
+            frames.append(Frame(t=t, players=_cast(),
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    def _clean():
+        nonlocal t
+        pl = [_pl(1, Team.HOME, 33.0, 10.0),
+              _pl(21, Team.AWAY, 20.0, 5.0),
+              _pl(22, Team.AWAY, 20.0, 15.0),
+              _pl(2, Team.HOME, 25.0, 12.0),
+              _pl(3, Team.HOME, 22.0, 8.0)]
+        for x in (34.0, 35.5, 37.0, 38.5, 40.0):
+            frames.append(Frame(t=t, players=pl,
+                                ball=Ball(x=x, y=10.0, confidence=1.0)))
+            t += 1
+        for _ in range(30):
+            frames.append(Frame(t=t, players=pl,
+                                ball=Ball(x=20.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+
+    for _ in range(fh_blocked):
+        _blocked()
+    for _ in range(fh_clean):
+        _clean()
+    for _ in range(int(90 * fps)):        # félidei szünet: üres pálya
+        frames.append(Frame(t=t, players=[], ball=None))
+        t += 1
+    for _ in range(sh_blocked):
+        _blocked()
+    for _ in range(sh_clean):
+        _clean()
+    return Match(_meta(fps), frames)
+
+
+def test_block_fade_detects_vanishing_block_work():
+    """Ha a második félidőre elfogy a blokk-munkájuk, a hajrában az
+    átlövés ellenük szinte ingyen van."""
+    from handball.pipeline.defense import BLF_GAP_PP, block_fade
+
+    rec = block_fade(_blf_match())["away"]
+    assert rec["fh_pct"] is not None and rec["sh_pct"] is not None, rec
+    assert rec["fh_pct"] - rec["sh_pct"] >= BLF_GAP_PP, rec
+    assert rec["verdict"] and "átlövés" in rec["verdict"], rec
+
+
+def test_block_fade_silent_without_enough_shots():
+    """Kevés lövés-kísérletnél nincs ítélet."""
+    from handball.pipeline.defense import block_fade
+
+    rec = block_fade(_blf_match(fh_blocked=1, fh_clean=1,
+                                sh_blocked=0, sh_clean=1))["away"]
+    assert rec["verdict"] is None and rec["gap_pp"] is None, rec
+
+
 def test_role_block_sources_finds_the_blocking_post():
     """Ha a blokkok nagy része ugyanattól a poszttól jön, az ő sávjába
     csak elmozgatás után szabad lőni."""

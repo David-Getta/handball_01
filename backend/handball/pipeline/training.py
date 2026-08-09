@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 415) Blokk-fáradás: a blokk akarat- és kondíció-munka.
+    try:
+        from .defense import BLF_GAP_PP, block_fade
+        blf415 = block_fade(match, config)
+        for side in ("home", "away"):
+            rec415 = blf415[side]
+            if rec415["gap_pp"] is None:
+                continue
+            if rec415["gap_pp"] > -BLF_GAP_PP:
+                continue
+            add(side, "erőnlét", "Blokk-kitartás",
+                f"a blokk-arányunk {rec415['fh_pct']:.0f}%-ról "
+                f"{rec415['sh_pct']:.0f}%-ra esik a második félidőre "
+                f"({BLF_GAP_PP:.0f} százalékpontos eséstől már "
+                "jelezzük) — a hajrában a távoli lövés ellenünk "
+                "szinte ingyen van",
+                "blokk-állóképesség: lábmunka-sorozatok magas "
+                "pulzuson (oldalazás, kilépés-visszalépés), "
+                "blokk-technika fáradtan (kar fent, testtel a "
+                "vonalban), és a blokkoló emberek tudatos "
+                "pihentetése a hajrá előtt",
+                )
+    except Exception:
+        pass
+
     # 414) Elzárás-hozam: mérhető, hogy fizet-e az elzárás-játékunk.
     try:
         from .attack_types import SCY_GAP_PP, screen_yield

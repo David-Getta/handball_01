@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **441 réteg**, modulonként csoportosítva; a
+Összesen **442 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (88)
@@ -125,7 +125,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `tired_turnover_players` | Fáradt-eladók: KINEK a labdái vesznek el fáradtan. |
 | `tired_turnover_roles` | Fáradt-eladó poszt: MELYIK POSZTJUK labdái vesznek el fáradtan. |
 
-## defense (80)
+## defense (81)
 
 | Réteg | Mit mér |
 |---|---|
@@ -134,6 +134,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `ball_winners` | Labdaszerzők: birtokos-váltásnál (csapatváltás) az ÚJ birtokos |
 | `beaten_defender_roles` | Átvert-poszt: MELYIK POSZTJUK mögött esnek a kapott gólok. |
 | `beaten_defenders` | Átvert védők: KI MÖGÖTT esnek a kapott gólok. |
+| `block_fade` | Blokk-fáradás: ELFOGY-E a blokk-munka a második félidőre. |
 | `block_recoveries` | Blokk-lepattanó: A BLOKK UTÁN ki szerzi meg a labdát. |
 | `blocked_by_role` | Falba lövő posztok: MELYIK POSZTJUK lő rendre a falba. |
 | `blocked_shooter_roles` | Blokkolt-poszt: MELYIK POSZTJUK lövéseit blokkolják. |

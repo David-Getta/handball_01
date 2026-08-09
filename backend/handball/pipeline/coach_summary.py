@@ -2653,6 +2653,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_scy['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Blokk-fáradás: elfogy-e a blokk-munka a második félidőre.
+    try:
+        from .defense import block_fade
+        blf = block_fade(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_blf = blf[side]
+            if rec_blf["verdict"] is None:
+                continue
+            body += (f" A(z) {name} blokk-aránya "
+                     f"{rec_blf['fh_pct']:.0f}%-ról "
+                     f"{rec_blf['sh_pct']:.0f}%-ra változik a második "
+                     f"félidőre — {rec_blf['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

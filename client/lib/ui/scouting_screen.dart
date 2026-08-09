@@ -2530,6 +2530,32 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Blokk-fáradás: elfogy-e a blokk-munkájuk a hajrára (félidőnként
+  // 5+ lövés-kísérlet, 10 százalékpontos eltérés — a backenddel
+  // azonos küszöbök: BLF_MIN_SHOTS, BLF_GAP_PP).
+  String? _blockFade(Map<String, dynamic> r) {
+    final fb = (r["blf_fh_blocks"] as num?)?.toInt() ?? 0;
+    final fs = (r["blf_fh_shots"] as num?)?.toInt() ?? 0;
+    final sb = (r["blf_sh_blocks"] as num?)?.toInt() ?? 0;
+    final ss = (r["blf_sh_shots"] as num?)?.toInt() ?? 0;
+    final ft = fb + fs;
+    final st = sb + ss;
+    if (ft < 5 || st < 5) return null;
+    final fp = 100.0 * fb / ft;
+    final sp = 100.0 * sb / st;
+    if (fp - sp >= 10.0) {
+      return "elfogy a blokk-munkájuk (${fp.toStringAsFixed(0)}% → "
+          "${sp.toStringAsFixed(0)}% blokk-arány) · a hajrát az "
+          "átlövésre építsétek";
+    }
+    if (sp - fp >= 10.0) {
+      return "a hajrára nő a blokk-munkájuk (${fp.toStringAsFixed(0)}% → "
+          "${sp.toStringAsFixed(0)}%) · a végén bejátszás és "
+          "kiugratás kell";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10300,6 +10326,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Felhozatal-ember", _outletTargetPlayer(r)!],
       if (_screenYield(r) != null)
         ["Elzárás-hozam", _screenYield(r)!],
+      if (_blockFade(r) != null)
+        ["Blokk-fáradás", _blockFade(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

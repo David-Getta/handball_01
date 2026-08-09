@@ -1062,6 +1062,12 @@ class ScoutingReport:
     otp_outlets_by_player: dict = field(default_factory=dict)
     # Elzárás-hozam: az elzárásos és a tiszta lövések darabszáma és a
     # belőlük esett gólok. Darabszám, meccsek közt összegződik.
+    # Blokk-fáradás: a blokkok és az ellenfél lövés-kísérletei
+    # félidőnként. Darabszám, meccsek közt összegződik.
+    blf_fh_blocks: int = 0
+    blf_fh_shots: int = 0
+    blf_sh_blocks: int = 0
+    blf_sh_shots: int = 0
     scy_screened_shots: int = 0
     scy_screened_goals: int = 0
     scy_clean_shots: int = 0
@@ -4351,6 +4357,24 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_scy_c:.0f}% tisztán) — hagyjátok őket elzárni, és "
                 "menjetek a lövő-vonalra: a váltásra fordított "
                 "energia máshol többet ér.")
+
+    # Blokk-fáradás: mire építsetek a hajrában.
+    _blf_fh = rep.blf_fh_blocks + rep.blf_fh_shots
+    _blf_sh = rep.blf_sh_blocks + rep.blf_sh_shots
+    if _blf_fh >= 5 and _blf_sh >= 5:
+        _blf_f = 100.0 * rep.blf_fh_blocks / _blf_fh
+        _blf_s = 100.0 * rep.blf_sh_blocks / _blf_sh
+        if _blf_f - _blf_s >= 10.0:
+            keys.append(
+                f"Elfogy a blokk-munkájuk ({_blf_f:.0f}% → "
+                f"{_blf_s:.0f}% blokk-arány) — az utolsó húsz percben "
+                "tudatosan az átlövésre építsetek: a hajrában a "
+                "távoli lövés ellenük szinte ingyen van.")
+        elif _blf_s - _blf_f >= 10.0:
+            keys.append(
+                f"A hajrára nő a blokk-munkájuk ({_blf_f:.0f}% → "
+                f"{_blf_s:.0f}%) — a végén ne az átlövés legyen a "
+                "megoldás, hanem a bejátszás és a kiugratás.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9796,6 +9820,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .defense import block_fade as _blf
+        blfrec = _blf(match, config)[team.value]
+        rep.blf_fh_blocks = blfrec["fh_blocks"]
+        rep.blf_fh_shots = blfrec["fh_shots"]
+        rep.blf_sh_blocks = blfrec["sh_blocks"]
+        rep.blf_sh_shots = blfrec["sh_shots"]
         from .attack_types import screen_yield as _scy
         scyrec = _scy(match, config)[team.value]
         rep.scy_screened_shots = scyrec["screened_shots"]
@@ -12566,6 +12596,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 394) Az ő blokk-fáradásuk × a ti átlövőitek: a hajrában a
+    # távoli lövés ellenük szinte ingyen van.
+    _blf394_fh = opp.blf_fh_blocks + opp.blf_fh_shots
+    _blf394_sh = opp.blf_sh_blocks + opp.blf_sh_shots
+    if _blf394_fh >= 5 and _blf394_sh >= 5 and own.sr_far_shots >= 5:
+        _blf394_f = 100.0 * opp.blf_fh_blocks / _blf394_fh
+        _blf394_s = 100.0 * opp.blf_sh_blocks / _blf394_sh
+        if _blf394_f - _blf394_s >= 10.0:
+            plan.append(
+                f"A blokk-munkájuk elfogy a hajrára ({_blf394_f:.0f}% "
+                f"→ {_blf394_s:.0f}% blokk-arány), nektek pedig van "
+                f"átlövésetek ({own.sr_far_shots} távoli lövés) — az "
+                "utolsó húsz percet tudatosan az átlövésre "
+                "építsétek: ott már nem lépnek a lövő-vonalba.")
 
     # 393) Az ő elzárás-hozamuk × a ti fal-kommunikációtok: a
     # váltás vagy a lövő-vonal — attól függ, mi fizet nekik.
@@ -19374,6 +19419,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stc_susp_by_player for r in reports),
         otp_outlets_by_player=_merge_count_dicts(
             r.otp_outlets_by_player for r in reports),
+        blf_fh_blocks=sum(r.blf_fh_blocks for r in reports),
+        blf_fh_shots=sum(r.blf_fh_shots for r in reports),
+        blf_sh_blocks=sum(r.blf_sh_blocks for r in reports),
+        blf_sh_shots=sum(r.blf_sh_shots for r in reports),
         scy_screened_shots=sum(r.scy_screened_shots for r in reports),
         scy_screened_goals=sum(r.scy_screened_goals for r in reports),
         scy_clean_shots=sum(r.scy_clean_shots for r in reports),

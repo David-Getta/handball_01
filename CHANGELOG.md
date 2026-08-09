@@ -17,6 +17,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   Felületek: `/matches/process` új `queue_behind` mezője, kliens
   párbeszéd az indítás előtt.
 
+- **Blokk-fáradás: elfogy-e a blokk-munka a második félidőre.** A
+  blokkolt lövések rétege a darabszámot adja — az új réteg a
+  kitartást: félidőnként elosztja a blokkokat az ellenfél
+  lövés-kísérleteivel (blokk + kaputra jutott lövés), így a mennyiség
+  nem torzít, ha az egyik félidőben többet lőttek rájuk. Edzőileg a
+  blokk tiszta akarat-munka: ha a második félidőre érdemben
+  visszaesik, az utolsó húsz percben tudatosan az átlövésre kell
+  építeni — ott már nem lépnek a lövő-vonalba; ha viszont a hajrára
+  nő, a végén a bejátszás és a kiugratás a megoldás. Saját csapatra a
+  blokkoló emberek pihentetése és a lábmunka-állóképesség az
+  edzés-téma. Félidőnként öt lövés-kísérlettől és 10 százalékpontos
+  eltéréstől ítél. A rangsorban a "fáradás" családba tartozik.
+  Felületek: /analyze + meccs-csomag (`block_fade`), edzői
+  összefoglaló, felderítés (`blf_*` mezők + edzői kulcs + 394.
+  meccsterv-szabály), edzés-fókusz (415. szabály), kliens-csempe.
+
 - **Elzárás-hozam: megéri-e nekik az elzárás.** Az elzárás-használat
   a gyakoriságot méri — az új réteg a hozamot: az őrzött lövéseket
   két sávra bontja (elzárásból lőtt vagy tisztán), és sávonként
