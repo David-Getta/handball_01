@@ -1355,6 +1355,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 403) Sávváltók: ha a keresztmozgás egy emberen áll, a fal egy
+    # döntéssel felkészül rá.
+    try:
+        from .attack_types import LSWP_MIN_SWITCHES, lane_switchers
+        lswp403 = lane_switchers(match, config)
+        for side in ("home", "away"):
+            top403 = lswp403[side].get("top")
+            if top403 is None:
+                continue
+            _ki403 = (f"a(z) {top403['jersey']}. számú"
+                      if top403.get("jersey") is not None
+                      else f"a(z) {top403['player_id']}. játékos")
+            add(side, "támadás", "Keresztmozgás több emberrel",
+                f"a keresztmozgásunkat {_ki403} viszi a legtöbbet "
+                f"({top403['switches']} sávváltás; "
+                f"{LSWP_MIN_SWITCHES} sávváltástól már jelezzük) — "
+                "egy felkészült fal egyetlen szabállyal (követés "
+                "vagy átadás) kifogja",
+                "keresztmozgás két emberrel: ellentétes irányú "
+                "futások egyszerre, elzárással kombinált sávváltás, "
+                "és üres sávba érkező második ember — edzésen "
+                "figura-változatok jelre, felváltva",
+                )
+    except Exception:
+        pass
+
     # 402) Menekülők: ha a pressz-elleni kiút egy emberre szűkül,
     # kiszámíthatók vagyunk.
     try:

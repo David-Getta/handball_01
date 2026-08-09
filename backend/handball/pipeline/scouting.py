@@ -1032,6 +1032,9 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Sávváltók: a megerősített sávváltások darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    lswp_switches_by_player: dict = field(default_factory=dict)
     # Menekülők: a nyomás alatt meghozott passzok darabszáma a
     # FOGADÓ szerint. Darabszám, meccsek közt összegződik.
     escp_passes_by_player: dict = field(default_factory=dict)
@@ -4196,6 +4199,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Sávváltók: kinek a védőjére kell külön szabály.
+    if rep.lswp_switches_by_player:
+        _lswp_k, _lswp_n = max(rep.lswp_switches_by_player.items(),
+                               key=lambda kv: kv[1])
+        if _lswp_n >= 4:
+            keys.append(
+                f"A keresztmozgásukat a(z) {_lswp_k}. viszi a "
+                f"legtöbbet ({_lswp_n} sávváltás) — az ő védőjéről "
+                "előre döntsétek el: KÖVETI a sávváltáson át, vagy "
+                "ÁTADJA a szomszédnak; a bizonytalan átadásból nyílik "
+                "a lyuk.")
 
     # Menekülők: hol álljon lesben a harmadik ember.
     if rep.escp_passes_by_player:
@@ -9583,6 +9598,12 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .attack_types import lane_switchers as _lswp
+        lswprec = _lswp(match, config)[team.value]
+        rep.lswp_switches_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["switches"]
+            for r in lswprec["players"]}
         from .decisions import press_outlets as _escp
         escprec = _escp(match, config)[team.value]
         rep.escp_passes_by_player = {
@@ -12307,6 +12328,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 382) Az ő sávváltójuk × a ti bejáratott falatok: a
+    # követés/átadás szabálya előre kiosztható.
+    if opp.lswp_switches_by_player and own.defense_main != "—":
+        _lswp382_k, _lswp382_n = max(
+            opp.lswp_switches_by_player.items(), key=lambda kv: kv[1])
+        if _lswp382_n >= 4:
+            plan.append(
+                f"A keresztmozgásukat a(z) {_lswp382_k}. viszi "
+                f"({_lswp382_n} sávváltás), ti pedig bejáratott falat "
+                f"játszotok ({own.defense_main}) — az ő sávváltására "
+                "adjatok külön szabályt (követés vagy átadás), és "
+                "gyakoroljátok be: a bizonytalan pillanatban nyílik "
+                "a lyuk.")
 
     # 381) Az ő menekülőjük × a ti kettőzésetek: a kiút előre
     # ismert, ott kell lesben állni.
@@ -18925,6 +18960,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        lswp_switches_by_player=_merge_count_dicts(
+            r.lswp_switches_by_player for r in reports),
         escp_passes_by_player=_merge_count_dicts(
             r.escp_passes_by_player for r in reports),
         lstp_attacks_by_player=_merge_count_dicts(

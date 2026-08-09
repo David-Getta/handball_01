@@ -1388,6 +1388,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "passz) — ott érdemes lesben állni.")
     except Exception:
         pass
+    # Sávváltók: ki viszi a keresztmozgást.
+    try:
+        from .attack_types import lane_switchers
+        lswp = lane_switchers(match)
+        for side, name in (("home", home), ("away", away)):
+            top = lswp[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} keresztmozgását {_ki} viszi a "
+                     f"legtöbbet ({top['switches']} sávváltás) — az "
+                     "ő védőjének követés/átadás szabálya kell.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

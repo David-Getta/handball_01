@@ -6071,3 +6071,85 @@ def last_holders(match: Match,
         out[side] = {"attacks": sum(r["attacks"] for r in rows),
                      "players": rows, "top": top}
     return out
+
+
+# Sávváltók: ennyi sávváltástól emeljük ki a játékost.
+LSWP_MIN_SWITCHES = 4
+
+
+def lane_switchers(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Sávváltók: KI VÁLT SÁVOT a támadásban.
+
+    A sávváltó-poszt (lane_switch_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: ugyanazokat a megerősített (LSW_HOLD_S-ig tartott)
+    sávváltásokat számolja játékosonként.
+
+    Edzőileg ez a keresztmozgás névre szóló kezelése: az ő védőjéről
+    előre el kell dönteni, hogy KÖVETI a sávváltáson át, vagy ÁTADJA
+    a szomszédnak — a bizonytalan átadásból nyílik a lyuk. Saját
+    csapatra: ha a keresztmozgás egy emberen áll, a fal egy
+    döntéssel felkészül rá.
+
+    Visszatérés csapatonként: {"switches" (emberhez kötött
+    sávváltás), "players": [{"player_id", "jersey", "switches"}],
+    "top"} — a "top" az első játékos, ha legalább LSWP_MIN_SWITCHES
+    sávváltása van, különben None.
+    """
+    from .calibration import COURT_WIDTH_M
+    from .decisions import ball_holder
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    hold = max(1, round(LSW_HOLD_S * fps))
+    third = COURT_WIDTH_M / 3.0
+
+    def _lane(y: float) -> int:
+        if y < third:
+            return 0
+        return 1 if y < 2 * third else 2
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    state: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    for f in match.frames:
+        holder = ball_holder(f, config)
+        if holder is None or holder.team is None:
+            continue
+        atk = holder.team
+        for p in f.players:
+            if p.team != atk or p.role == "kapus":
+                continue
+            lane = _lane(p.y)
+            st = state.get(p.track_id)
+            if st is None:
+                state[p.track_id] = [lane, lane, 0]
+                continue
+            confirmed, cand, n = st
+            if lane != cand:
+                st[1], st[2] = lane, 1
+                continue
+            st[2] = n + 1
+            if lane != confirmed and st[2] >= hold:
+                st[0] = lane
+                side = atk.value
+                tally[side][p.track_id] = (
+                    tally[side].get(p.track_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "switches": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        top = (rows[0]
+               if rows and rows[0]["switches"] >= LSWP_MIN_SWITCHES
+               else None)
+        out[side] = {"switches": sum(r["switches"] for r in rows),
+                     "players": rows, "top": top}
+    return out

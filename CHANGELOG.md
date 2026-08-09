@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.25 óta)
 
+- **Sávváltók: ki viszi a keresztmozgást.** A sávváltó-poszt a
+  posztot nevezi meg — az új réteg az embert: ugyanazokat a
+  megerősített (két másodpercig tartott) sávváltásokat számolja
+  játékosonként. Edzőileg ez a keresztmozgás névre szóló kezelése:
+  az ő védőjéről előre el kell dönteni, hogy követi a sávváltáson
+  át, vagy átadja a szomszédnak — a bizonytalan átadásból nyílik a
+  lyuk; saját csapatra a keresztmozgás szélesítése a téma. Négy
+  sávváltástól emel ki nevet. A rangsorban az "ember" családba
+  tartozik, és a Kulcs-ember bizonyíték-rétegei közé is bekerült.
+  Felületek: /analyze + meccs-csomag (`lane_switchers`), edzői
+  összefoglaló, felderítés (`lswp_switches_by_player` mező + edzői
+  kulcs + 382. meccsterv-szabály), edzés-fókusz (403. szabály),
+  kliens-csempe.
+
 - **Menekülők: nyomás alatt kihez megy a labda.** A menekülő-poszt a
   posztot nevezi meg — az új réteg az embert: a testközeli védő
   mellett meghozott passzokat a fogadó játékoshoz írja. Edzőileg ez

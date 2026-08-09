@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **429 réteg**, modulonként csoportosítva; a
+Összesen **430 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (85)
+## attack_types (86)
 
 | Réteg | Mit mér |
 |---|---|
@@ -50,6 +50,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `kickout_target_roles` | Kiosztás-poszt: MELYIK POSZTRA jár a betörés utáni labda. |
 | `kickout_targets` | Kiosztás-célpont: HOVÁ megy a labda, ha a betörés nem lövéssel zárul. |
 | `lane_switch_roles` | Sávváltó-poszt: MELYIK POSZTJUK vált sávot a támadásban. |
+| `lane_switchers` | Sávváltók: KI VÁLT SÁVOT a támadásban. |
 | `last_holder_roles` | Vég-birtokos poszt: KINÉL ÉR VÉGET a támadásuk lövés nélkül. |
 | `last_holders` | Vég-birtokosok: KINEK A KEZÉBEN hal el a támadásuk. |
 | `last_pass_roles` | Előkészítő-poszt: MELYIK POSZTJUK készíti elő a lövéseket. |

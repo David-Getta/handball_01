@@ -4679,3 +4679,23 @@ def test_last_holders_silent_with_few_attacks():
 
     rec = last_holders(_lst_match([7, 5]))["home"]
     assert rec["top"] is None, rec
+
+
+def test_lane_switchers_names_the_crosser():
+    """Ha a keresztmozgást rendre ugyanaz viszi, a védője
+    követés/átadás szabályát rá kell szabni."""
+    from handball.pipeline.attack_types import (LSWP_MIN_SWITCHES,
+                                                lane_switchers)
+
+    rec = lane_switchers(_lsw_match([7, 7, 7, 9]))["home"]
+    assert rec["switches"] >= LSWP_MIN_SWITCHES, rec
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["switches"] >= LSWP_MIN_SWITCHES, rec
+
+
+def test_lane_switchers_silent_with_few_switches():
+    """Néhány sávváltásból nincs kiemelt név."""
+    from handball.pipeline.attack_types import lane_switchers
+
+    rec = lane_switchers(_lsw_match([7]))["home"]
+    assert rec["top"] is None, rec

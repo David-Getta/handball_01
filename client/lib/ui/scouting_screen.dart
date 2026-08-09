@@ -2344,6 +2344,27 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Sávváltók: ki viszi a keresztmozgást (4+ sávváltás — a
+  // backenddel azonos küszöb: LSWP_MIN_SWITCHES).
+  String? _laneSwitcherPlayer(Map<String, dynamic> r) {
+    final byPlayer = (r["lswp_switches_by_player"] as Map?)
+        ?.cast<String, dynamic>();
+    if (byPlayer == null || byPlayer.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    byPlayer.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    return "a keresztmozgásukat a(z) $top. viszi a legtöbbet ($topN "
+        "sávváltás) · az ő védőjéről döntsétek el előre: követés "
+        "vagy átadás";
+  }
+
   // Menekülők: nyomás alatt kihez megy a labda (3+ nyomás alatti
   // passz — a backenddel azonos küszöb: ESCP_MIN_PASSES).
   String? _pressOutletPlayer(Map<String, dynamic> r) {
@@ -10029,6 +10050,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Vég-birtokos ember", _lastHolderPlayer(r)!],
       if (_pressOutletPlayer(r) != null)
         ["Menekülő ember", _pressOutletPlayer(r)!],
+      if (_laneSwitcherPlayer(r) != null)
+        ["Sávváltó ember", _laneSwitcherPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
