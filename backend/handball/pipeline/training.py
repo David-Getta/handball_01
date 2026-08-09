@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 406) Fáradt-eladók: a fáradtan kinyíló kéz terhelés-kérdés.
+    try:
+        from .decisions import FTOP_MIN_SH, tired_turnover_players
+        ftop406 = tired_turnover_players(match, config)
+        for side in ("home", "away"):
+            top406 = ftop406[side].get("top")
+            if top406 is None:
+                continue
+            _ki406 = (f"a(z) {top406['jersey']}. számú"
+                      if top406.get("jersey") is not None
+                      else f"a(z) {top406['player_id']}. játékos")
+            add(side, "erőnlét", "Fáradt labdabiztonság",
+                f"az eladásaink a második félidőre {_ki406} kezén "
+                f"ugranak meg ({top406['fh']} → {top406['sh']}; "
+                f"{FTOP_MIN_SH} eladástól már jelezzük) — fáradtan "
+                "nála nyílik ki a kéz, és ez a legolcsóbb labda az "
+                "ellenfélnek",
+                "terhelés-menedzsment: pihentetés a 40. perc előtt, "
+                "és fáradt labdabiztonság-edzés (sorozatterhelés "
+                "után pontos passzgyakorlat, szorításban) — a "
+                "második félidőre kijelölt labdatartó ne ő legyen",
+                )
+    except Exception:
+        pass
+
     # 405) Hátrapasszolók: a visszafordulás a bátorság hiánya vagy
     # a rossz felkínálás jele.
     try:

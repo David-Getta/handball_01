@@ -1312,3 +1312,71 @@ def ball_carriers(match: Match,
         out[side] = {"meters": round(sum(r["meters"] for r in rows), 1),
                      "players": rows, "top": top}
     return out
+
+
+# Fáradt-eladók: a második félidőben ennyi eladástól emeljük ki a
+# játékost, és ekkora ugrás számít fáradás-jelnek.
+FTOP_MIN_SH = 2
+FTOP_FACTOR = 2.0
+
+
+def tired_turnover_players(match: Match,
+                           config: Optional[TacticsConfig] = None
+                           ) -> dict:
+    """Fáradt-eladók: KINEK a labdái vesznek el fáradtan.
+
+    A fáradt-eladó poszt (tired_turnover_roles) a POSZTOT nevezi meg
+    — ez az EMBERT: a labdaeladásokat félidőnként a vesztes
+    játékoshoz írja, és megkeresi, kinek ugranak meg az eladásai a
+    második félidőre.
+
+    Edzőileg ez a második félidei pressz-terv névre szólóan: akinek
+    az eladásai fáradtan megugranak, azt a szünet után kell nyomás
+    alá tenni — a friss védő rajta olcsó labdákat szerez. Saját
+    csapatra: az ő terhelés-menedzsmentje (pihentetés, csere-ritmus)
+    és a fáradt labdabiztonság-edzés a téma.
+
+    Visszatérés csapatonként: {"fh": {játékos-kulcs: darab}, "sh":
+    {...}, "top"} — a "top" az a játékos, akinek a második félidei
+    eladásai elérik az FTOP_MIN_SH-t, és legalább FTOP_FACTOR-szorosai
+    az elsőnek; szünet-jel nélkül üres a kép.
+    """
+    from .event_detection import EventType, detect_events
+    from .halftime import detect_halftime
+
+    config = config or TacticsConfig()
+    out: dict = {side: {"fh": {}, "sh": {}, "top": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_events(match, config):
+        if e.type != EventType.TURNOVER or e.player_id is None:
+            continue
+        side = getattr(e.team, "value", e.team)
+        rec = tally[side].setdefault(e.player_id, [0, 0])
+        rec[0 if e.t <= ht else 1] += 1
+
+    for side in ("home", "away"):
+        rows = sorted(tally[side].items(), key=lambda kv: -kv[1][1])
+        out[side]["fh"] = {
+            str(jersey.get(pid, pid)): n[0]
+            for pid, n in rows if n[0]}
+        out[side]["sh"] = {
+            str(jersey.get(pid, pid)): n[1]
+            for pid, n in rows if n[1]}
+        for pid, (fh, sh) in rows:
+            if sh >= FTOP_MIN_SH and sh >= FTOP_FACTOR * max(1, fh):
+                out[side]["top"] = {
+                    "player_id": pid, "jersey": jersey.get(pid),
+                    "fh": fh, "sh": sh}
+                break
+    return out

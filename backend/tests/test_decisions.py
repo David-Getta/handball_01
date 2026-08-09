@@ -906,3 +906,25 @@ def test_ball_carriers_silent_with_little_carrying():
 
     rec = ball_carriers(_tnr_match([(7, 12.0), (9, 8.0)]))["home"]
     assert rec["top"] is None, rec
+
+
+def test_tired_turnover_players_names_the_fading_hand():
+    """Akinek az eladásai a második félidőre megugranak, azt a szünet
+    után kell nyomás alá tenni."""
+    from handball.pipeline.decisions import (FTOP_MIN_SH,
+                                             tired_turnover_players)
+
+    rec = tired_turnover_players(
+        _fto_match([7], [7, 7, 7]))["home"]
+    assert rec["top"] is not None and rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["sh"] >= FTOP_MIN_SH, rec
+    assert rec["top"]["sh"] > rec["top"]["fh"], rec
+
+
+def test_tired_turnover_players_silent_without_jump():
+    """Ha nincs ugrás a második félidőre, nincs kiemelt név."""
+    from handball.pipeline.decisions import tired_turnover_players
+
+    rec = tired_turnover_players(
+        _fto_match([7, 7, 7], [7]))["home"]
+    assert rec["top"] is None, rec

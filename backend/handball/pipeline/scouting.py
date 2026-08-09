@@ -1032,6 +1032,10 @@ class ScoutingReport:
     # Hetes-kihagyó poszt: a gól nélkül záruló hetesek darabszáma a
     # DOBÓ posztja szerint. Darabszám, pontosan összegződik.
     svm_misses_by_role: dict = field(default_factory=dict)
+    # Fáradt-eladók: a MÁSODIK félidei labdaeladások darabszáma
+    # JÁTÉKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    ftop_sh_by_player: dict = field(default_factory=dict)
+    ftop_fh_by_player: dict = field(default_factory=dict)
     # Hátrapasszolók: a hátrafelé menő passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     bprp_passes_by_player: dict = field(default_factory=dict)
@@ -4205,6 +4209,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"posztjuk teremti ({_bcf_n} ziccer-előkészítés) — "
                 "az ő bejátszó-sávját vágjátok el: a helyzet így ki "
                 "sem alakul, nem a befejezést kell hárítani.")
+
+    # Fáradt-eladók: kire menjen a szünet utáni pressz.
+    if rep.ftop_sh_by_player:
+        _ftop_k, _ftop_sh = max(rep.ftop_sh_by_player.items(),
+                                key=lambda kv: kv[1])
+        _ftop_fh = rep.ftop_fh_by_player.get(_ftop_k, 0)
+        if _ftop_sh >= 2 and _ftop_sh >= 2 * max(1, _ftop_fh):
+            keys.append(
+                f"A(z) {_ftop_k}. eladásai a második félidőre "
+                f"megugranak ({_ftop_fh} → {_ftop_sh}) — a szünet "
+                "után őt tegyétek nyomás alá: fáradtan nála a "
+                "legolcsóbb a labdaszerzés.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9626,6 +9642,10 @@ def _scout_team_cached(match: Match, team: Team,
         from .stoppages import timeout_turnover_roles as _toe
         toerec = _toe(match, config)[team.value]
         rep.toe_turnovers_by_role = dict(toerec["roles"])
+        from .decisions import tired_turnover_players as _ftop
+        ftoprec = _ftop(match, config)[team.value]
+        rep.ftop_sh_by_player = dict(ftoprec["sh"])
+        rep.ftop_fh_by_player = dict(ftoprec["fh"])
         from .attack_types import backward_passers as _bprp
         bprprec = _bprp(match, config)[team.value]
         rep.bprp_passes_by_player = {
@@ -12368,6 +12388,23 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 385) Az ő fáradt-eladójuk × a ti cserepadotok: friss védő
+    # fáradt labdakezelés ellen.
+    if (opp.ftop_sh_by_player
+            and own.sbs_lead_subs + own.sbs_rest_subs >= 3):
+        _ftop385_k, _ftop385_sh = max(opp.ftop_sh_by_player.items(),
+                                      key=lambda kv: kv[1])
+        _ftop385_fh = opp.ftop_fh_by_player.get(_ftop385_k, 0)
+        if _ftop385_sh >= 2 and _ftop385_sh >= 2 * max(1, _ftop385_fh):
+            plan.append(
+                f"A(z) {_ftop385_k}. eladásai a második félidőre "
+                f"megugranak ({_ftop385_fh} → {_ftop385_sh}), ti "
+                "pedig cseréltek "
+                f"({own.sbs_lead_subs + own.sbs_rest_subs} csere) — a "
+                "szünet után "
+                "friss védőt állítsatok rá: fáradtan nála a "
+                "legolcsóbb a labdaszerzés.")
 
     # 384) Az ő hátrapasszolójuk × a ti letámadásotok: a
     # visszafordított labda a pressz jutalma.
@@ -19027,6 +19064,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.rto_turnovers_by_role for r in reports),
         toe_turnovers_by_role=_merge_count_dicts(
             r.toe_turnovers_by_role for r in reports),
+        ftop_sh_by_player=_merge_count_dicts(
+            r.ftop_sh_by_player for r in reports),
+        ftop_fh_by_player=_merge_count_dicts(
+            r.ftop_fh_by_player for r in reports),
         bprp_passes_by_player=_merge_count_dicts(
             r.bprp_passes_by_player for r in reports),
         tnrp_meters_by_player=_merge_count_dicts(

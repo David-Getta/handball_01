@@ -3938,6 +3938,12 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.decisions import tired_turnover_players
+            res["tired_turnover_players"] = \
+                tired_turnover_players(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.stoppages import long_break_response
             res["long_break_response"] = long_break_response(match)
         except Exception:
@@ -5735,6 +5741,9 @@ def create_app():
                 from ..pipeline.attack_types import backward_passers
                 _layer("backward_passers",
                        lambda: backward_passers(match))
+                from ..pipeline.decisions import tired_turnover_players
+                _layer("tired_turnover_players",
+                       lambda: tired_turnover_players(match))
                 from ..pipeline.momentum import goal_droughts
                 _layer("droughts", lambda: goal_droughts(match))
                 from ..pipeline.momentum import halftime_score

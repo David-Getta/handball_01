@@ -1436,6 +1436,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "hátra-passz) — rá érdemes kimenni.")
     except Exception:
         pass
+    # Fáradt-eladók: kinek a labdái vesznek el a második félidőre.
+    try:
+        from .decisions import tired_turnover_players
+        ftop = tired_turnover_players(match)
+        for side, name in (("home", home), ("away", away)):
+            top = ftop[side]["top"]
+            if top is None:
+                continue
+            _ki = (f"a(z) {top['jersey']}. számú"
+                   if top.get("jersey") is not None
+                   else f"a(z) {top['player_id']}. játékos")
+            body += (f" A(z) {name} eladásai a második félidőre {_ki} "
+                     f"kezén ugranak meg ({top['fh']} → "
+                     f"{top['sh']}) — a szünet után őt kell nyomás "
+                     "alá tenni.")
+    except Exception:
+        pass
     # Vég-birtokos poszt: kinél ér véget a támadásuk lövés nélkül.
     try:
         from .attack_types import last_holder_roles

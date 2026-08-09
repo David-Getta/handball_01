@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.26 óta)
 
+- **Fáradt-eladók: kinek a labdái vesznek el fáradtan.** A
+  fáradt-eladó poszt a posztot nevezi meg — az új réteg az embert: a
+  labdaeladásokat félidőnként a vesztes játékoshoz írja, és
+  megkeresi, kinek ugranak meg az eladásai a második félidőre.
+  Edzőileg ez a második félidei pressz-terv névre szólóan: akinek az
+  eladásai fáradtan megugranak, azt a szünet után kell nyomás alá
+  tenni; saját csapatra a terhelés-menedzsment és a fáradt
+  labdabiztonság-edzés a téma. Két második félidei eladástól és
+  kétszeres ugrástól emel ki nevet; félidő-jel nélkül hallgat. A
+  rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`tired_turnover_players`), edzői összefoglaló,
+  felderítés (`ftop_sh_by_player` / `ftop_fh_by_player` mezők +
+  edzői kulcs + 385. meccsterv-szabály), edzés-fókusz (406.
+  szabály), kliens-csempe.
+
 - **Hátrapasszolók: kinél fordul vissza a játék.** A
   hátrapassz-poszt a posztot nevezi meg — az új réteg az embert: a
   kaputól távolabbi társhoz menő passzokat a passzoló játékoshoz

@@ -2344,6 +2344,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "testtel, a befejező ellen emberfogással";
   }
 
+  // Fáradt-eladók: kinek a labdái vesznek el a második félidőre (2+
+  // második félidei eladás, kétszeres ugrás — a backenddel azonos
+  // küszöbök: FTOP_MIN_SH, FTOP_FACTOR).
+  String? _tiredTurnoverPlayer(Map<String, dynamic> r) {
+    final sh = (r["ftop_sh_by_player"] as Map?)?.cast<String, dynamic>();
+    final fh = (r["ftop_fh_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    final first = ((fh?[top] as num?) ?? 0).toInt();
+    if (topN < 2 * (first < 1 ? 1 : first)) return null;
+    return "a(z) $top. eladásai a második félidőre megugranak "
+        "($first → $topN) · a szünet után őt tegyétek nyomás alá";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10096,6 +10119,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Térnyerő ember", _ballCarrierPlayer(r)!],
       if (_backwardPasserPlayer(r) != null)
         ["Hátrapasszoló ember", _backwardPasserPlayer(r)!],
+      if (_tiredTurnoverPlayer(r) != null)
+        ["Fáradt-eladó ember", _tiredTurnoverPlayer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
