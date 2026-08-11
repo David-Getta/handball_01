@@ -5,6 +5,14 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Ember-lencse a meccs-jelentésben.** A néven nevező rétegek eddig
+  csak az app csempéin és a Kulcs-ember indoklásában látszottak — most
+  a nyomtatható jelentés is hoz egy táblát belőlük: melyik réteg kit
+  nevez meg, csapatonként. Ez a meccsterv névsora: kit kell fogni, kit
+  éheztetni, kire kell rálépni az átvételnél, kinél éri meg megvárni a
+  fáradást. A lista a Kulcs-ember nyilvántartásából (KPL_LAYERS)
+  épül, tehát minden új ember-réteggel magától bővül.
+
 - **Hozam-lencse a meccs-jelentésben.** A nyomtatható meccs-jelentés
   eddig két lencse-táblát hozott (Befejező- és Védő-lencse, mindkettő
   poszt-profilokból). Most kapott egy harmadikat: a Hozam-lencse azt

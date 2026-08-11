@@ -2144,6 +2144,47 @@ def _match_report_html_cached(match, tactics: dict, events: list,
     except Exception:
         pass
 
+    # Ember-lencse: a NÉVEN NEVEZŐ rétegek egy táblában — kit kell
+    # fogni, éheztetni, pihentetni, kire kell rálépni. A listát a
+    # Kulcs-ember lencse nyilvántartása (KPL_LAYERS) adja, így új
+    # ember-réteg hozzáadásakor magától bővül.
+    player_lens_html = ""
+    try:
+        import importlib as _il
+
+        from .priorities import KPL_LAYERS
+
+        pl_rows = []
+        for label, mod_name, fn_name in KPL_LAYERS:
+            try:
+                mod = _il.import_module(f".{mod_name}", __package__)
+                res_pl = getattr(mod, fn_name)(match)
+            except Exception:
+                continue
+            for side, name in (("home", home), ("away", away)):
+                top_pl = (res_pl.get(side) or {}).get("top")
+                if not top_pl:
+                    continue
+                if isinstance(top_pl, dict):
+                    ki = top_pl.get("jersey") or top_pl.get("player_id")
+                else:
+                    ki = top_pl
+                pl_rows.append(f"<tr><td>{escape(name)}</td>"
+                               f"<td>{escape(label)}</td>"
+                               f"<td>{escape(str(ki))}.</td></tr>")
+        if pl_rows:
+            player_lens_html = (
+                "<h2>Ember-lencse (kit nevez meg a mérés)</h2>"
+                "<table><tr><th>Csapat</th><th>Réteg</th>"
+                "<th>Játékos</th></tr>" + "".join(pl_rows) + "</table>"
+                + '<p class="note">A meccsterv névsora: kit kell '
+                  'fogni, kit éheztetni, kire kell rálépni az '
+                  'átvételnél — és kinél éri meg megvárni a '
+                  'fáradást. Ugyanezekből a rétegekből épül a '
+                  'Kulcs-ember is.</p>')
+    except Exception:
+        pass
+
     # A meccs gerince: a kulcs-pillanatok időrendi listája — ugyanaz a
     # réteg, mint az app kártyája és a csomag kulcs_pillanatok.txt-je.
     moments_html = ""
@@ -2163,7 +2204,7 @@ def _match_report_html_cached(match, tactics: dict, events: list,
                   + key_pair_html
                   + key_player_html
                   + finishers_html + defense_lens_html
-                  + yield_lens_html + rules_html)
+                  + yield_lens_html + player_lens_html + rules_html)
 
     # Helyzetminőség (xG): várható gól vs tényleges + lövő-tábla.
     xg_html = ""

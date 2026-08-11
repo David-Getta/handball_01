@@ -1693,6 +1693,20 @@ def test_hozam_lencse_a_jelentesben():
     assert "Hozam-lencse" not in match_report_html(empty, {}, [], None)
 
 
+def test_ember_lencse_a_jelentesben():
+    """A néven nevező rétegek egy Ember-lencse táblába kerülnek — a
+    lista a Kulcs-ember nyilvántartásából (KPL_LAYERS) épül, tehát új
+    ember-réteggel magától bővül."""
+    from tests.test_priorities import _kp_match
+
+    html = match_report_html(_kp_match(), {}, [], None)
+    assert "Ember-lencse" in html
+    assert "<th>Játékos</th>" in html
+
+    empty = simulate_ground_truth(duration_s=5, fps=25.0, seed=1)
+    assert "Ember-lencse" not in match_report_html(empty, {}, [], None)
+
+
 def test_kulcs_poszt_indoklassal_a_jelentesben():
     """A kulcs-poszt szekció felsorolja, mely rétegek mutatnak rá —
     a magyarázható lánc a jelentésben is látszik."""
