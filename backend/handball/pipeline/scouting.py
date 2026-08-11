@@ -1082,6 +1082,12 @@ class ScoutingReport:
     # talált gyakorlatok darabszáma. Darabszám, összegződik.
     # Figura-kopás: az első előfordulású és az ismételt
     # figura-támadások, illetve a belőlük esett gólok. Darabszám.
+    # Futómunka-eloszlás: a mért mezőnyjátékosok száma, a teljes
+    # futott táv és a három legtöbbet futó táv (méterben, egészre
+    # kerekítve). Összeg, meccsek közt összegződik.
+    lbl_players: int = 0
+    lbl_distance_m: int = 0
+    lbl_top3_m: int = 0
     spd_first_attacks: int = 0
     spd_first_goals: int = 0
     spd_repeat_attacks: int = 0
@@ -4526,6 +4532,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_spd_r:.0f}% gólarány) — nem a felismerés a baj, "
                 "hanem a párharc: a figura befejezőjére emberfogás "
                 "vagy kettőzés kell.")
+
+    # Futómunka-eloszlás: kifogy-e a futómunkájuk a hajrára.
+    if rep.lbl_players >= 6 and rep.lbl_distance_m > 0:
+        _lbl_p = 100.0 * rep.lbl_top3_m / rep.lbl_distance_m
+        if _lbl_p >= 55.0:
+            keys.append(
+                f"A futómunkájuk {_lbl_p:.0f}%-át három ember adja "
+                f"({rep.lbl_players} mért mezőnyjátékosból) — ők a "
+                "hajrára elfogynak: az utolsó húsz percben rájuk "
+                "kell vinni a tempót, és a cserehullámuk után se "
+                "lassítsatok.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9971,6 +9988,11 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .stats import running_load_balance as _lbl
+        lblrec = _lbl(match, config)[team.value]
+        rep.lbl_players = lblrec["players"]
+        rep.lbl_distance_m = int(round(lblrec["distance_m"]))
+        rep.lbl_top3_m = int(round(lblrec["top3_m"]))
         from .setplays import setplay_decay as _spd
         spdrec = _spd(match, config)[team.value]
         rep.spd_first_attacks = spdrec["first_attacks"]
@@ -12788,6 +12810,19 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 402) Az ő koncentrált futómunkájuk × a ti tempótok: a három
+    # futó embert kell elfárasztani.
+    if (opp.lbl_players >= 6 and opp.lbl_distance_m > 0
+            and own.fast_break_pct >= 12.0):
+        _lbl402 = 100.0 * opp.lbl_top3_m / opp.lbl_distance_m
+        if _lbl402 >= 55.0:
+            plan.append(
+                f"A futómunkájuk {_lbl402:.0f}%-át három ember adja, "
+                f"ti pedig gyorsan indultok ({own.fast_break_pct:.0f}"
+                "%) — a tempót végig tartani kell: ők fogynak el "
+                "előbb, és a hajrában az ő oldalukra kell vezetni a "
+                "kontrát.")
 
     # 401) Az ő figura-kopásuk × a ti fal-fegyelmetek: a
     # felismerés vagy a párharc a kérdés.
@@ -19715,6 +19750,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.otp_outlets_by_player for r in reports),
         dtp_frames_by_player=_merge_count_dicts(
             r.dtp_frames_by_player for r in reports),
+        lbl_players=max((r.lbl_players for r in reports), default=0),
+        lbl_distance_m=sum(r.lbl_distance_m for r in reports),
+        lbl_top3_m=sum(r.lbl_top3_m for r in reports),
         spd_first_attacks=sum(r.spd_first_attacks for r in reports),
         spd_first_goals=sum(r.spd_first_goals for r in reports),
         spd_repeat_attacks=sum(r.spd_repeat_attacks for r in reports),

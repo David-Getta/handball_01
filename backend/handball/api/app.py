@@ -4667,6 +4667,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.stats import running_load_balance
+            res["running_load_balance"] = running_load_balance(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5601,6 +5606,9 @@ def create_app():
                 _layer("counter_plan", lambda: counter_plan(match))
                 from ..pipeline.setplays import setplay_decay
                 _layer("setplay_decay", lambda: setplay_decay(match))
+                from ..pipeline.stats import running_load_balance
+                _layer("running_load_balance",
+                       lambda: running_load_balance(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

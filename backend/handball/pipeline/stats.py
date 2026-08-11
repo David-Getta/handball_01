@@ -938,6 +938,75 @@ def distance_battle(match: Match, config=None) -> dict:
     return out
 
 
+# Futómunka-eloszlás: ennyi mért mezőnyjátékos kell az ítélethez, és
+# a három legtöbbet futó embernek ekkora hányad fölött van a
+# csapat-futás nagy része egy kis körön.
+LBL_MIN_PLAYERS = 6
+LBL_TOP3_PCT = 55.0
+
+
+def running_load_balance(match: Match, config=None) -> dict:
+    """Futómunka-eloszlás: HÁNY EMBERRE épül a futómunkájuk.
+
+    A futás-mérleg (distance_battle) a két csapatot veti össze — ez a
+    csapaton BELÜLI eloszlást: mekkora hányadát futja a
+    csapat-távnak a három legtöbbet futó mezőnyjátékos.
+
+    Edzőileg: ha a futómunka néhány emberre koncentrálódik, ők a
+    hajrára elfogynak — az utolsó húsz percben rájuk kell vinni a
+    tempót (kontra, gyors középkezdés az ő oldalukra), és a
+    cserehullámuk után nem szabad lassítani. Ha a futás egyenletesen
+    oszlik, a tempóval nem lehet szétszedni őket: ott a
+    lövés-választás és a fal minősége dönt. Saját csapatra: a
+    koncentrált futómunka csere- és terhelés-kérdés.
+
+    Visszatérés csapatonként: {"players", "distance_m", "top3_m",
+    "top3_pct", "verdict"} — a pct/verdict None, ha kevés
+    (LBL_MIN_PLAYERS alatti) a mért mezőnyjátékos.
+    """
+    keeper: set = set()
+    team_of: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            team_of.setdefault(p.track_id, p.team.value)
+            if p.role == "kapus":
+                keeper.add(p.track_id)
+
+    stats = compute_player_stats(match)
+    per_side: dict = {"home": [], "away": []}
+    for tid, st in stats.items():
+        side = team_of.get(tid)
+        if side is None or tid in keeper or st.distance_m <= 0:
+            continue
+        per_side[side].append(st.distance_m)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        vals = sorted(per_side[side], reverse=True)
+        total = sum(vals)
+        rec = {"players": len(vals), "distance_m": round(total, 1),
+               "top3_m": round(sum(vals[:3]), 1), "top3_pct": None,
+               "verdict": None}
+        if len(vals) >= LBL_MIN_PLAYERS and total > 0:
+            share = 100.0 * sum(vals[:3]) / total
+            rec["top3_pct"] = round(share, 1)
+            if share >= LBL_TOP3_PCT:
+                rec["verdict"] = (
+                    f"a futómunkájuk kevés emberre épül (a három "
+                    f"legtöbbet futó adja a táv {share:.0f}%-át, "
+                    f"{len(vals)} mért játékosból) — ők a hajrára "
+                    "elfogynak: az utolsó húsz percben rájuk kell "
+                    "vinni a tempót")
+            else:
+                rec["verdict"] = (
+                    f"a futómunkájuk egyenletesen oszlik (a három "
+                    f"legtöbbet futó a táv {share:.0f}%-a) — "
+                    "tempóval nem lehet szétszedni őket: a "
+                    "lövés-választás és a fal minősége dönt")
+        out[side] = rec
+    return out
+
+
 # Vasember-poszt: legalább ennyi perces felvételtől ítélünk; ekkora
 # jelenlét-arány számít "végigjátszásnak", és ennyi százalékponttal
 # kell a többi poszt fölé nőnie (különben az egész csapat cserétlen,

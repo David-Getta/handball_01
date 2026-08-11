@@ -691,3 +691,56 @@ def test_fatigue_roles_silent_when_steady():
 
     rec = fatigue_roles(_ftr_match(2.0, 2.0))["away"]
     assert rec["main_role"] is None and rec["verdict"] is None, rec
+
+
+def _lbl_match(steps, minutes=6.0, fps=5.0):
+    """`steps` = hazai mezőnyjátékosonként a kockánkénti lépés (méter)
+    — a futómunka eloszlása ebből áll össze. A vendég oldal fix."""
+    n = int(minutes * 60 * fps)
+    frames = []
+    xs = [10.0 + 1.5 * i for i in range(len(steps))]
+    dirs = [1.0] * len(steps)
+    for t in range(n):
+        players = []
+        for i, step in enumerate(steps):
+            xs[i] += step * dirs[i]
+            if not 5.0 <= xs[i] <= 18.0:
+                dirs[i] *= -1.0
+                xs[i] += 2 * step * dirs[i]
+            players.append(PlayerPosition(track_id=100 + i,
+                                          team=Team.HOME,
+                                          x=xs[i], y=6.0 + i))
+        players.append(PlayerPosition(track_id=200, team=Team.AWAY,
+                                      x=30.0, y=10.0))
+        frames.append(Frame(t=t, players=players))
+    return Match(
+        meta=MatchMeta(match_id="lbl", home_team="H", away_team="A",
+                       fps=fps),
+        frames=frames)
+
+
+def test_running_load_balance_flags_concentrated_work():
+    """Ha három ember futja a táv nagy részét, ők a hajrára
+    elfogynak."""
+    from handball.pipeline.stats import (LBL_TOP3_PCT,
+                                         running_load_balance)
+
+    rec = running_load_balance(
+        _lbl_match([0.5, 0.5, 0.5, 0.02, 0.02, 0.02, 0.02]))["home"]
+    assert rec["players"] >= 6, rec
+    assert rec["top3_pct"] is not None
+    assert rec["top3_pct"] >= LBL_TOP3_PCT, rec
+    assert rec["verdict"] and "hajrára" in rec["verdict"], rec
+
+
+def test_running_load_balance_even_team_and_few_players():
+    """Egyenletes futómunkánál más az ítélet; kevés mért játékosnál
+    nincs ítélet."""
+    from handball.pipeline.stats import running_load_balance
+
+    rec = running_load_balance(_lbl_match([0.3] * 7))["home"]
+    assert rec["top3_pct"] is not None and rec["top3_pct"] < 55.0, rec
+    assert rec["verdict"] and "egyenletesen" in rec["verdict"], rec
+
+    keves = running_load_balance(_lbl_match([0.3] * 4))["home"]
+    assert keves["top3_pct"] is None and keves["verdict"] is None, keves

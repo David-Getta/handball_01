@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Futómunka-eloszlás: hány emberre épül a futásuk.** A futás-mérleg
+  a két csapatot veti össze — az új réteg a csapaton BELÜLI
+  eloszlást: mekkora hányadát futja a csapat-távnak a három
+  legtöbbet futó mezőnyjátékos. Edzőileg: ha a futómunka néhány
+  emberre koncentrálódik, ők a hajrára elfogynak — az utolsó húsz
+  percben rájuk kell vinni a tempót (kontra, gyors középkezdés az ő
+  oldalukra), és a cserehullámuk után nem szabad lassítani; ha a
+  futás egyenletes, tempóval nem lehet szétszedni őket, ott a
+  lövés-választás és a fal minősége dönt. Saját csapatra a
+  terhelés-szétosztás (kontra-futások körbeadása, csere-ritmus) az
+  edzés-téma. Hat mért mezőnyjátékostól ítél, 55%-os top-3 aránytól
+  jelez. A rangsorban a "fáradás" családba tartozik. Felületek:
+  /analyze + meccs-csomag (`running_load_balance`), edzői
+  összefoglaló, felderítés (`lbl_*` mezők + edzői kulcs + 402.
+  meccsterv-szabály), edzés-fókusz (423. szabály), kliens-csempe.
+
 - **Figura-kopás: működik-e még a figura a második ismétlésre.** A
   figura-hatékonyság azt mondja meg, melyik figurájuk veszélyes — az
   új réteg azt, meddig: minden figura ELSŐ előfordulását

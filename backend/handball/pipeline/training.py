@@ -1355,6 +1355,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 423) Futómunka-eloszlás: a koncentrált futás csere- és
+    # terhelés-kérdés.
+    try:
+        from .stats import LBL_TOP3_PCT, running_load_balance
+        lbl423 = running_load_balance(match, config)
+        for side in ("home", "away"):
+            rec423 = lbl423[side]
+            if rec423["top3_pct"] is None:
+                continue
+            if rec423["top3_pct"] < LBL_TOP3_PCT:
+                continue
+            add(side, "erőnlét", "Futómunka szétosztása",
+                f"a futómunkánk {rec423['top3_pct']:.0f}%-át három "
+                f"ember adja ({rec423['players']} mért "
+                f"mezőnyjátékosból; {LBL_TOP3_PCT:.0f}% fölött "
+                "jelezzük) — ők a hajrára elfogynak",
+                "terhelés szétosztása: kontra-futások körbeadása "
+                "(nem mindig ugyanaz a második hullám), tudatos "
+                "csere-ritmus a legtöbbet futóknál, és "
+                "állóképesség-blokk a hajrá-terheléshez",
+                )
+    except Exception:
+        pass
+
     # 422) Figura-kopás: a figura akkor ér valamit, ha ismételve is
     # működik (variáció, nem újabb figura).
     try:

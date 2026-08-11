@@ -2709,6 +2709,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Futómunka-eloszlás: hány emberre épül a futásuk (6+ mért
+  // mezőnyjátékos, a top-3 55%+ — a backenddel azonos küszöbök:
+  // LBL_MIN_PLAYERS, LBL_TOP3_PCT).
+  String? _runningLoad(Map<String, dynamic> r) {
+    final n = (r["lbl_players"] as num?)?.toInt() ?? 0;
+    final total = (r["lbl_distance_m"] as num?)?.toInt() ?? 0;
+    final top3 = (r["lbl_top3_m"] as num?)?.toInt() ?? 0;
+    if (n < 6 || total <= 0) return null;
+    final pct = 100.0 * top3 / total;
+    if (pct < 55.0) return null;
+    return "a futómunkájuk ${pct.toStringAsFixed(0)}%-át három ember "
+        "adja ($n mért játékosból) · a hajrában rájuk kell vinni a tempót";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10497,6 +10511,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Ellenszer-lap", _counterPlan(r)!],
       if (_setplayDecay(r) != null)
         ["Figura-kopás", _setplayDecay(r)!],
+      if (_runningLoad(r) != null)
+        ["Futómunka-eloszlás", _runningLoad(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
@@ -10819,6 +10835,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     ("Emberek és cserék", ["csere", "váltó", "váltott", "rotáció",
                            "pad-", "sprint", "futás", "játékos",
                            "kezd", "ember", "páros", "időkérés",
+                           "futómunka",
                            "területi", "támogatás", "mérleg",
                            "felkészülés"]),
     // Terv-szintű összegzések: nem egy mérés, hanem a heti munka

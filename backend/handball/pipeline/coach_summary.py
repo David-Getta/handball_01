@@ -2784,6 +2784,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"— {rec_spd['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Futómunka-eloszlás: hány emberre épül a futásuk.
+    try:
+        from .stats import LBL_TOP3_PCT, running_load_balance
+        lbl = running_load_balance(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_lbl = lbl[side]
+            if rec_lbl["top3_pct"] is None:
+                continue
+            if rec_lbl["top3_pct"] < LBL_TOP3_PCT:
+                continue
+            body += (f" A(z) {name} futómunkájának "
+                     f"{rec_lbl['top3_pct']:.0f}%-át három ember adja "
+                     "— ők a hajrára elfogynak: az utolsó húsz "
+                     "percben rájuk kell vinni a tempót.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles
