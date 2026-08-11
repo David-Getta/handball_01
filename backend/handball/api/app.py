@@ -6492,7 +6492,9 @@ def create_app():
         from ..pipeline.scouting import matchup_plan
         own = _combined_report(own_body)
         opp = _combined_report(opp_body)
+        from ..pipeline.scouting import style_distance
         return {"plan": matchup_plan(own, opp),
+                "style": style_distance(own, opp),
                 "own_team": own.team_name, "opp_team": opp.team_name}
 
     @app.post("/scouting/export")

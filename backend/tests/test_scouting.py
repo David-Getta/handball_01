@@ -2470,3 +2470,69 @@ def test_minden_posztonkenti_mezo_eljut_edzoi_feluletre():
            + inspect.getsource(scouting.matchup_plan))
     arva = [f for f in fields if f not in src]
     assert not arva, f"edzői felület nélküli posztonkénti mezők: {arva}"
+
+
+def _sty_rep(**kw):
+    """Stílus-teszt felderítés: csak a stílus-tengelyek mezői."""
+    from handball.models.tracking import Team
+    from handball.pipeline.scouting import ScoutingReport
+
+    rep = ScoutingReport(team=Team.HOME, team_name="X")
+    alap = dict(shots=20, sr_close_shots=5, sr_mid_shots=5,
+                sr_far_shots=10, pace_minutes=30.0, pace_attacks=60,
+                fast_break_pct=20.0, scy_screened_shots=6,
+                scy_clean_shots=6, pivot_total_attacks=20,
+                pivot_attacks=10, agr_susp=3, svy_attempts=3,
+                matches=1)
+    alap.update(kw)
+    for k, v in alap.items():
+        setattr(rep, k, v)
+    return rep
+
+
+def test_style_distance_mirror_and_axes():
+    """Azonos profilú csapatoknál tükör-meccs, és minden közös
+    tengely bekerül a listába."""
+    from handball.pipeline.scouting import (STY_MIRROR_PCT,
+                                            style_distance)
+
+    rec = style_distance(_sty_rep(), _sty_rep())
+    assert rec["score_pct"] == 100.0, rec
+    assert rec["score_pct"] >= STY_MIRROR_PCT
+    assert len(rec["axes"]) >= 4, rec
+    assert rec["verdict"] and "tükör-meccs" in rec["verdict"], rec
+
+
+def test_style_distance_names_the_biggest_gap():
+    """Eltérő profilnál a legnagyobb szakadékot nevezi meg."""
+    from handball.pipeline.scouting import style_distance
+
+    lassu = _sty_rep(sr_close_shots=15, sr_mid_shots=4, sr_far_shots=1,
+                     pace_attacks=20, fast_break_pct=3.0,
+                     scy_screened_shots=1, scy_clean_shots=11,
+                     pivot_attacks=19, agr_susp=0, svy_attempts=0)
+    rec = style_distance(_sty_rep(), lassu)
+    assert rec["score_pct"] is not None and rec["score_pct"] < 100.0
+    assert rec["farthest"] in {a["axis"] for a in rec["axes"]}
+    assert rec["axes"][-1]["axis"] == rec["farthest"]
+    assert rec["verdict"], rec
+
+
+def test_style_distance_silent_with_few_axes():
+    """Kevés közös tengelynél nincs ítélet (nem találgatunk)."""
+    from handball.models.tracking import Team
+    from handball.pipeline.scouting import (ScoutingReport,
+                                            style_distance)
+
+    ures = ScoutingReport(team=Team.HOME, team_name="Y")
+    rec = style_distance(ures, ures)
+    assert rec["score_pct"] is None and rec["verdict"] is None, rec
+
+
+def test_matchup_plan_starts_with_match_character():
+    """A meccs jellege (tükör-/ellentétes stílus) a lap élére kerül."""
+    from handball.pipeline.scouting import matchup_plan
+
+    plan = matchup_plan(_sty_rep(), _sty_rep())
+    assert plan, plan
+    assert plan[0].startswith("Tükör-meccs"), plan[0]

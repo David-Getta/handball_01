@@ -12256,6 +12256,10 @@ def _merge_blockers(reports) -> list:
 # legtöbb pont ott áll vagy dől el), 3. támadás, 4. fegyelem és
 # létszám (kétperc, hetes), 5. hajrá és erőnlét, 6. egyéb.
 MPL_THEMES: tuple = (
+    # A lap élén a meccs JELLEGE áll (tükör- vagy ellentétes stílus):
+    # ez keretezi az összes többi mondatot.
+    ("jelleg", ("tükör-meccs", "ellentétes stílus", "stílus-egyezés",
+                "hasonló stílus")),
     ("kapus", ("kapus", "kapu ", "üres kapu", "hetes", "7 a 6",
                "7a6", "indítás")),
     ("védekezés", ("fal", "véd", "kettőz", "blokk", "emberfog",
@@ -12292,6 +12296,107 @@ def _mpl_order(plan: list) -> list:
     return [sor for _, sor in
             sorted(enumerate(plan),
                    key=lambda pair: (_mpl_theme(pair[1]), pair[0]))]
+
+
+# Stílus-távolság: ennyi közös tengely kell az ítélethez, és e
+# fölött/alatt mondjuk ki, hogy tükör- vagy ellentétes meccs lesz.
+STY_MIN_AXES = 4
+STY_MIRROR_PCT = 80.0
+STY_OPPOSITE_PCT = 50.0
+
+
+def _sty_axes(rep: "ScoutingReport") -> dict:
+    """A stílus mérhető tengelyei egy felderítésből, 0..1 skálán.
+
+    Csak olyan tengely kerül be, amelyhez van elég adat — így két
+    csapat összevetése mindig a KÖZÖS tengelyeken történik, és a
+    hiányzó mérés nem hamisít hasonlóságot.
+    """
+    ax: dict = {}
+    if rep.shots >= 5:
+        tav = rep.sr_close_shots + rep.sr_mid_shots + rep.sr_far_shots
+        if tav >= 5:
+            ax["lövés-távolság"] = rep.sr_far_shots / tav
+    if rep.pace_minutes >= 5.0:
+        # Támadás/perc: 3 fölött már nagyon pörgős, ez a skála teteje.
+        ax["tempó"] = min(1.0, (rep.pace_attacks / rep.pace_minutes)
+                          / 3.0)
+    if rep.fast_break_pct > 0:
+        ax["lerohanás"] = min(1.0, rep.fast_break_pct / 40.0)
+    scy = rep.scy_screened_shots + rep.scy_clean_shots
+    if scy >= 6:
+        ax["elzárás"] = rep.scy_screened_shots / scy
+    if rep.pivot_total_attacks >= 6:
+        ax["beállós játék"] = (rep.pivot_attacks
+                               / rep.pivot_total_attacks)
+    meccs = max(1, rep.matches)
+    if rep.agr_susp or rep.svy_attempts:
+        # Keménység: kiállítás + okozott hetes meccsenként; 6 fölött
+        # már nagyon kemény, ez a skála teteje.
+        ax["keménység"] = min(1.0, (rep.agr_susp + rep.svy_attempts)
+                              / meccs / 6.0)
+    return ax
+
+
+def style_distance(own: "ScoutingReport",
+                   opp: "ScoutingReport") -> dict:
+    """Stílus-távolság: MENNYIRE HASONLÍT a két csapat játéka.
+
+    A meccsterv-illesztés (matchup_plan) az erősség-gyengeség
+    kereszteket adja — ez a KÉPET: a két felderítés közös
+    stílus-tengelyeit (lövés-távolság, tempó, lerohanás, elzárás,
+    beállós játék, keménység) veti össze, és egy 0–100-as
+    hasonlóság-pontot ad.
+
+    Edzőileg: a tükör-meccsen (magas pontszám) a részletek döntenek
+    — ott a saját rutinok minősége és a fegyelem a különbség, nem a
+    terv. Az ellentétes stílusú meccs viszont arról szól, ki
+    kényszeríti rá a sajátját: a legnagyobb eltérésű tengelyt kell
+    a saját javunkra billenteni (ha ők lassítanak, mi pörgetünk — és
+    fordítva).
+
+    Visszatérés: {"score_pct", "axes": [{"axis", "own", "opp",
+    "diff"}], "closest", "farthest", "verdict"} — a score/verdict
+    None, ha kevés (STY_MIN_AXES alatti) a közös tengely.
+    """
+    a_own = _sty_axes(own)
+    a_opp = _sty_axes(opp)
+    kozos = [k for k in a_own if k in a_opp]
+    sorok = [{"axis": k, "own": round(a_own[k], 3),
+              "opp": round(a_opp[k], 3),
+              "diff": round(abs(a_own[k] - a_opp[k]), 3)}
+             for k in kozos]
+    sorok.sort(key=lambda r: r["diff"])
+    out = {"score_pct": None, "axes": sorok, "closest": None,
+           "farthest": None, "verdict": None}
+    if len(sorok) < STY_MIN_AXES:
+        return out
+
+    atlag = sum(r["diff"] for r in sorok) / len(sorok)
+    pont = 100.0 * (1.0 - atlag)
+    out["score_pct"] = round(pont, 1)
+    out["closest"] = sorok[0]["axis"]
+    out["farthest"] = sorok[-1]["axis"]
+    if pont >= STY_MIRROR_PCT:
+        out["verdict"] = (
+            f"tükör-meccs ({pont:.0f}% stílus-egyezés, "
+            f"{len(sorok)} tengelyen) — a terv nem hoz különbséget: "
+            "a rutinok minősége, a fegyelem és a kapus dönt; a "
+            f"legnagyobb eltérés a(z) {sorok[-1]['axis']}, azt "
+            "érdemes a magunk javára billenteni")
+    elif pont <= STY_OPPOSITE_PCT:
+        out["verdict"] = (
+            f"ellentétes stílus ({pont:.0f}% egyezés, "
+            f"{len(sorok)} tengelyen) — a meccs arról szól, ki "
+            f"kényszeríti rá a sajátját; a(z) {sorok[-1]['axis']} a "
+            "legnagyobb szakadék, ott kell átvenni az irányítást")
+    else:
+        out["verdict"] = (
+            f"részben hasonló stílus ({pont:.0f}% egyezés, "
+            f"{len(sorok)} tengelyen) — a(z) {sorok[-1]['axis']} az "
+            f"igazi különbség, a(z) {sorok[0]['axis']} pedig "
+            "semleges terep")
+    return out
 
 
 def matchup_plan(own: "ScoutingReport",
@@ -12903,6 +13008,16 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 405) A meccs jellege: tükör- vagy ellentétes stílus. Ez a lap
+    # kerete, ezért a téma-rendezés a lista élére teszi.
+    try:
+        _sty405 = style_distance(own, opp)
+        if _sty405.get("verdict"):
+            plan.append(_sty405["verdict"][0].upper()
+                        + _sty405["verdict"][1:] + ".")
+    except Exception:
+        pass
 
     # 404) Az ő hetes-forrásuk × a mi fegyelmünk: ott kell a kéz
     # nélküli védekezés.

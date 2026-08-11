@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Stílus-távolság: tükör-meccs vagy ellentétes stílus.** A
+  meccsterv-illesztés az erősség–gyengeség kereszteket adja — az új
+  mérés a KÉPET: a két felderítés közös stílus-tengelyeit
+  (lövés-távolság, tempó, lerohanás, elzárás, beállós játék,
+  keménység) veti össze, és 0–100-as hasonlóság-pontot ad. Edzőileg:
+  a tükör-meccsen a részletek döntenek (rutinok, fegyelem, kapus) —
+  ott a terv nem hoz különbséget; az ellentétes stílusú meccs viszont
+  arról szól, ki kényszeríti rá a sajátját, és a réteg megnevezi a
+  legnagyobb szakadékot, ahol ezt meg lehet tenni. Csak KÖZÖS
+  tengelyeken hasonlít (a hiányzó mérés nem hamisít egyezést), és
+  négy tengely alatt hallgat. Felületek: a meccsterv-lap élére került
+  405. szabályként (a téma-rendezés új "jelleg" témája keretezi a
+  lapot), és a `/scouting/matchup` válasz új `style` mezője.
+
 - **Hetes-forrás: milyen helyzetből jön a hetesük.** A
   hetes-kiharcolók az embert nevezik meg, a hetes-okozók a védőt — az
   új réteg a JÁTÉKHELYZETET: minden felismert hetest ahhoz a
