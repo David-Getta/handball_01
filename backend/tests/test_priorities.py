@@ -505,3 +505,43 @@ def test_ellenszer_lap_hallgat_teendo_nelkul(monkeypatch):
                             "home": {"top": []}, "away": {"top": []}})
     rec = priorities.counter_plan(_kp_match())["home"]
     assert rec["pairs"] == [] and rec["verdict"] is None, rec
+
+
+def test_rangsor_hatokoron_belul_egyszer_szamolodik(monkeypatch):
+    """A teendő-rangsor a primitive_cache hatókörön belül meccsenként
+    egyszer fut le — az ellenszer-lap így nem számoltatja újra."""
+    from handball.pipeline import priorities
+    from handball.pipeline.primitive_cache import primitive_cache
+
+    hivas = {"n": 0}
+    eredeti = priorities._registry
+
+    def szamlalt():
+        hivas["n"] += 1
+        return eredeti()
+
+    monkeypatch.setattr(priorities, "_registry", szamlalt)
+    m = _kp_match()
+    with primitive_cache(m):
+        elso = priorities.priority_findings(m)
+        masodik = priorities.priority_findings(m)
+    assert hivas["n"] == 1, hivas
+    assert elso == masodik
+    assert elso is not masodik          # védő-másolat, nem közös objektum
+
+
+def test_edzes_fokusz_hatokoron_belul_egyszer_szamolodik():
+    """Az edzés-fókusz is meccsenként egyszer épül fel a hatókörön
+    belül, és minden hívó SAJÁT másolatot kap."""
+    from handball.pipeline.primitive_cache import primitive_cache
+    from handball.pipeline.training import training_focus
+
+    m = _kp_match()
+    with primitive_cache(m):
+        elso = training_focus(m)
+        masodik = training_focus(m)
+        assert elso == masodik
+        assert elso is not masodik
+        if elso["home"]:
+            elso["home"][0]["title"] = "MÓDOSÍTVA"
+            assert training_focus(m)["home"][0]["title"] != "MÓDOSÍTVA"

@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models.tracking import Match, Team
+from .primitive_cache import memoize_primitive
 from .tactics import TacticsConfig
 
 MAX_ITEMS = 5
@@ -37,9 +38,19 @@ def training_focus(match: Match,
         return _training_focus_cached(match, config)
 
 
+def _tf_copy(val: dict) -> dict:
+    """Védő-másolat a gyorsítótárazott fókusz-listához."""
+    return {side: [dict(item) for item in items]
+            for side, items in val.items()}
+
+
+@memoize_primitive("training_focus", copy=_tf_copy)
 def _training_focus_cached(match: Match,
                            config: Optional[TacticsConfig] = None) -> dict:
-    """Az edzés-fókusz tényleges felépítése (lásd `training_focus`)."""
+    """Az edzés-fókusz tényleges felépítése (lásd `training_focus`).
+
+    A `primitive_cache` hatókörön belül meccsenként EGYSZER fut le —
+    az ellenszer-lap és az edzői összefoglaló is ezt olvassa."""
     config = config or TacticsConfig()
     out: dict = {"home": [], "away": []}
 

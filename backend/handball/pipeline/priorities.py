@@ -32,6 +32,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models.tracking import Match
+from .primitive_cache import memoize_primitive
 
 # Ennyi teendőt adunk vissza a rangsor tetejéről.
 PRF_TOP_N = 5
@@ -346,7 +347,16 @@ def _registry() -> list[tuple[str, str, str, str]]:
     ]
 
 
-def priority_findings(match: Match, config=None) -> dict:
+def _prf_copy(val: dict) -> dict:
+    """Védő-másolat a gyorsítótárazott rangsorhoz (a hívó módosíthatja)."""
+    return {side: {"top": [dict(it) for it in rec["top"]],
+                   "total": rec["total"],
+                   "families": dict(rec["families"])}
+            for side, rec in val.items()}
+
+
+@memoize_primitive("priority_findings", copy=_prf_copy)
+def _priority_findings_cached(match: Match, config=None) -> dict:
     """Teendő-rangsor: a megszólaló ítéletek fontossági sorrendben.
 
     Végigolvassa a rangsorba vont rétegeket, összegyűjti a nem-None
@@ -406,6 +416,16 @@ def priority_findings(match: Match, config=None) -> dict:
             "families": families,
         }
     return out
+
+
+def priority_findings(match: Match, config=None) -> dict:
+    """Teendő-rangsor (lásd `_priority_findings_cached`).
+
+    A számolás a `primitive_cache` hatókörön belül meccsenként EGYSZER
+    fut le: az ellenszer-lap és a meccs-csomag is ezt olvassa, így a
+    rangsor nem számolódik újra rétegenként.
+    """
+    return _priority_findings_cached(match, config)
 
 
 # Kulcs-poszt: ennyi rétegnek kell ugyanarra a posztra mutatnia, hogy

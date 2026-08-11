@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Gyorsabb csomag: a rangsor és az edzés-fókusz csak egyszer
+  számolódik.** Az ellenszer-lap bevezetésével a teendő-rangsor és az
+  edzés-fókusz kétszer futott le minden meccsnél (egyszer önálló
+  rétegként, egyszer a lap párosításához). Mostantól mindkettő a
+  `primitive_cache` hatókörön belül meccsenként EGYSZER számolódik, és
+  minden hívó saját védő-másolatot kap — az eredmény bitre azonos, az
+  ellenszer-lap ára viszont 2,7 mp-ről 0,7 mp-re esett (60 mp-es
+  szimulált meccsen). Két új őr-teszt rögzíti, hogy a rangsor
+  hatókörön belül egyszer fut, és hogy a másolat módosítása nem
+  szennyezi a gyorsítótárat.
+
 - **Futómunka-eloszlás: hány emberre épül a futásuk.** A futás-mérleg
   a két csapatot veti össze — az új réteg a csapaton BELÜLI
   eloszlást: mekkora hányadát futja a csapat-távnak a három
