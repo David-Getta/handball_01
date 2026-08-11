@@ -545,3 +545,19 @@ def test_edzes_fokusz_hatokoron_belul_egyszer_szamolodik():
         if elso["home"]:
             elso["home"][0]["title"] = "MÓDOSÍTVA"
             assert training_focus(m)["home"][0]["title"] != "MÓDOSÍTVA"
+
+
+def test_kulcs_ember_kuszob_a_lencse_meretevel_no(monkeypatch):
+    """A küszöb a padló és a lista tizede közül a nagyobbik: kis
+    lencsénél 4 egyezés elég, nagy lencsénél már nem."""
+    egy = {"player_id": 7, "jersey": 7}
+    mas = {"player_id": 9, "jersey": 9}
+
+    # Kis lencse (5 réteg): a padló (4) dönt.
+    prio = _kpl_stub(monkeypatch, [egy] * 4 + [mas])
+    assert prio.key_player(_kp_match())["home"]["top"] == "7"
+
+    # Nagy lencse (60 réteg): a tized (6) dönt, négy egyezés kevés
+    # (a többi réteg hallgat, tehát nincs más jelölt sem).
+    prio = _kpl_stub(monkeypatch, [egy] * 4 + [None] * 56)
+    assert prio.key_player(_kp_match())["home"]["top"] is None

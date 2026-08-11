@@ -677,8 +677,15 @@ def key_post(match: Match, config=None) -> dict:
 # ennyi egyező réteg kell a kulcs-ember kimondásához. A poszt-lencse
 # küszöbénél magasabb, mert emberből több forrás van, és egy sztár
 # természetes módon több listán szerepel — a jelzés akkor érdekes, ha
-# NÉGY különböző szempont ugyanoda mutat.
+# több különböző szempont ugyanoda mutat.
+#
+# A küszöb a lencse MÉRETÉVEL nő: ahogy új ember-rétegek jönnek, négy
+# egyezés egyre kevesebbet jelent (több lista → könnyebb véletlenül
+# négyszer az élre kerülni). Ezért a tényleges küszöb a padló és a
+# lista tizede közül a nagyobbik — a kis lencsénél marad a régi
+# viselkedés, a nagy lencsénél szigorodik.
 KPL_MIN_LAYERS = 4
+KPL_MIN_SHARE = 0.10
 
 KPL_LAYERS: tuple = (
     ("Tüzes kéz", "momentum", "hot_hands"),
@@ -759,7 +766,8 @@ def key_player(match: Match, config=None) -> dict:
     Visszatérés csapatonként: {"layers" (megszólaló ember-réteg),
     "players": {játékos-kulcs: réteg-darab}, "named": [{"layer",
     "player"}], "top", "verdict"} — a top/verdict None, ha nincs
-    KPL_MIN_LAYERS egyező réteg, vagy az élen holtverseny áll. A
+    a szükséges egyezés (max(KPL_MIN_LAYERS, a lista tizede)), vagy
+    az élen holtverseny áll. A
     játékos-kulcs a mezszám, ha ismert; különben a track-azonosító.
     """
     import importlib
@@ -798,7 +806,9 @@ def key_player(match: Match, config=None) -> dict:
         vals = list(o["players"].values())
         top_n = vals[0]
         tie = len(vals) > 1 and vals[1] == top_n
-        if top_n >= KPL_MIN_LAYERS and not tie:
+        kell = max(KPL_MIN_LAYERS,
+                   round(KPL_MIN_SHARE * len(KPL_LAYERS)))
+        if top_n >= kell and not tie:
             kulcs = next(iter(o["players"]))
             o["top"] = kulcs
             o["verdict"] = (

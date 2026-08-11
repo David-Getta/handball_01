@@ -5,6 +5,15 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Kulcs-ember: a küszöb a lencse méretével nő.** A Kulcs-ember
+  eddig négy egyező réteg fölött szólalt meg — de ahogy az
+  ember-rétegek száma nőtt (mára ötven fölött), négy egyezés egyre
+  kevesebbet jelentett: több lista mellett könnyebb véletlenül
+  négyszer az élre kerülni. Mostantól a tényleges küszöb a padló (4)
+  és a lista tizede közül a nagyobbik — kis lencsénél marad a régi
+  viselkedés, a mai nagy lencsénél szigorodik (jelenleg 5 egyezés
+  kell). Új őr-teszt rögzíti mindkét ágat.
+
 - **Passzív-birtoklók: kinél hal el a felállt támadásuk.** A
   passzív-poszt a posztot nevezi meg — az új réteg az embert: a
   lövés nélküli, hosszú felállt támadások labdás kockáit a birtokos
