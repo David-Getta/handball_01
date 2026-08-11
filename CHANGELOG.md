@@ -5,6 +5,17 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **A meccsterv téma szerint rendeződik.** A meccsterv-illesztés
+  szabályai történeti sorrendben álltak a lapon (a legújabb szabály
+  elöl), ami az edzőnek semmit nem jelent. Mostantól a mondatok téma
+  szerint csoportosulnak, kimondott sorrendben: kapus (innen jönnek a
+  legolcsóbb gólok) → védekezés → támadás → fegyelem és létszám →
+  hajrá és erőnlét → egyéb; a témán belül a szabályok eredeti
+  sorrendje marad (stabil rendezés, determinisztikus kimenet). Egyetlen
+  mondat sem vész el, csak a sorrend lett olvasható. A témákat
+  szótövek azonosítják (a magyar toldalék az utolsó magánhangzót is
+  átírja, ezért pl. "kontr" és nem "kontra").
+
 - **Kapus a kapott gól után: beesik-e, amíg friss a seb.** A
   kapus-sorozat a jó szériát méri, a kapus-hidegedés a tétlenséget —
   az új réteg a lélektant: minden rá kaputra érkező lövésnél

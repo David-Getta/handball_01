@@ -1824,6 +1824,32 @@ def test_match_key_players_seven_earner_role():
     assert role["player_id"] == 9
 
 
+def test_matchup_plan_theme_order():
+    """A meccsterv téma szerint rendeződik (kapus → védekezés →
+    támadás → fegyelem → hajrá → egyéb), a témán belül a szabályok
+    eredeti sorrendjében."""
+    from handball.pipeline.scouting import _mpl_order
+
+    nyers = [
+        "A hajrában rájuk kell vinni a tempót.",          # hajrá
+        "A falukat a bal oldalon kell megjáratni.",       # védekezés
+        "A kapusuk lassan ér haza a 7 a 6 után.",         # kapus
+        "Semleges mondat mindenféle kulcsszó nélkül.",    # egyéb
+        "A kétperceiket egy ember gyűjti.",               # fegyelem
+        "A kontrát az ő oldalukra kell vezetni.",         # támadás
+        "A falukat a jobb oldalon is meg lehet járatni.",  # védekezés
+    ]
+    rendezett = _mpl_order(nyers)
+    assert rendezett[0].startswith("A kapusuk")
+    assert rendezett[1].startswith("A falukat a bal")
+    assert rendezett[2].startswith("A falukat a jobb")   # stabil sorrend
+    assert rendezett[3].startswith("A kontrát")
+    assert rendezett[4].startswith("A kétperceiket")
+    assert rendezett[5].startswith("A hajrában")
+    assert rendezett[-1].startswith("Semleges")
+    assert sorted(rendezett) == sorted(nyers)            # nincs veszteség
+
+
 def test_matchup_plan_crosses_both_profiles():
     """A meccsterv-illesztés csak akkor ad mondatot, ha MINDKÉT oldal
     feltétele teljesül."""

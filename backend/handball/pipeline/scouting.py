@@ -12230,6 +12230,51 @@ def _merge_blockers(reports) -> list:
             for pid, n in sorted(tally.items(), key=lambda kv: -kv[1])]
 
 
+# A meccsterv TÉMA-sorrendje: a lista élén az álljon, amit a
+# felkészülésen először el kell mondani. Kimondott, vitatható edzői
+# sorrend (mint a teendő-rangsor családjainál) — nem tanult súly:
+# 1. kapus (a legolcsóbb gólok jönnek innen), 2. védekezés (a
+# legtöbb pont ott áll vagy dől el), 3. támadás, 4. fegyelem és
+# létszám (kétperc, hetes), 5. hajrá és erőnlét, 6. egyéb.
+MPL_THEMES: tuple = (
+    ("kapus", ("kapus", "kapu ", "üres kapu", "hetes", "7 a 6",
+               "7a6", "indítás")),
+    ("védekezés", ("fal", "véd", "kettőz", "blokk", "emberfog",
+                   "letámad", "pressz", "visszafut", "kilép",
+                   "elzár", "betör")),
+    # A kulcsok TÖVEK, nem teljes szavak: a magyar toldalék az utolsó
+    # magánhangzót is átírja ("kontra" → "kontrát"), ezért "kontr".
+    ("támadás", ("támad", "lövés", "lövő", "lőni", "kontr",
+                 "lerohan", "beálló", "szélső", "figur",
+                 "bejátsz", "középkezd", "átlöv")),
+    ("fegyelem", ("kétperc", "kiállítás", "fegyelem", "emberelőny",
+                  "emberhátrány", "szabálytalan")),
+    ("hajrá", ("hajrá", "utolsó húsz", "utolsó tíz", "fárad",
+               "futómunka", "csere", "időkérés", "félidő")),
+)
+
+
+def _mpl_theme(sor: str) -> int:
+    """A meccsterv-mondat téma-indexe (kisebb = előbbre kerül).
+
+    Az első illeszkedő téma dönt, a témán belül a szabályok eredeti
+    sorrendje marad (stabil rendezés) — így a kimenet
+    determinisztikus, és a mondatok nem keverednek össze.
+    """
+    kicsi = sor.lower()
+    for i, (_nev, kulcsok) in enumerate(MPL_THEMES):
+        if any(k in kicsi for k in kulcsok):
+            return i
+    return len(MPL_THEMES)
+
+
+def _mpl_order(plan: list) -> list:
+    """A meccsterv téma szerinti sorrendje (lásd MPL_THEMES)."""
+    return [sor for _, sor in
+            sorted(enumerate(plan),
+                   key=lambda pair: (_mpl_theme(pair[1]), pair[0]))]
+
+
 def matchup_plan(own: "ScoutingReport",
                  opp: "ScoutingReport") -> list[str]:
     """Meccsterv-illesztés: a SAJÁT és az ELLENFÉL profiljának
@@ -18957,7 +19002,9 @@ def matchup_plan(own: "ScoutingReport",
                 "időzítsd: ott dől be a labdabiztonságuk, és onnan jönnek "
                 "az olcsó gólok.")
 
-    return plan
+    # A szabályok sorszáma történeti (a legújabb szabály van elöl a
+    # függvényben) — az edzőnek viszont TÉMA szerint kell a lap.
+    return _mpl_order(plan)
 
 
 def _merge_attack_origins(reports) -> dict:
