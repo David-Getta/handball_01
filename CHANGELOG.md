@@ -17,7 +17,9 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
   tengelyeken hasonlít (a hiányzó mérés nem hamisít egyezést), és
   négy tengely alatt hallgat. Felületek: a meccsterv-lap élére került
   405. szabályként (a téma-rendezés új "jelleg" témája keretezi a
-  lapot), és a `/scouting/matchup` válasz új `style` mezője.
+  lapot), a `/scouting/matchup` válasz új `style` mezője, és a
+  kliens MECCSTERV kártyájának fejlécében a stílus-egyezés
+  százaléka.
 
 - **Hetes-forrás: milyen helyzetből jön a hetesük.** A
   hetes-kiharcolók az embert nevezik meg, a hetes-okozók a védőt — az

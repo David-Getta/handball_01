@@ -46,6 +46,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
   final ApiClient _api = ApiClient();
   late String _team = widget.team;
   List<String> _matchup = const [];
+  // A meccsterv stílus-távolsága (POST /scouting/matchup "style"):
+  // tükör-meccs vagy ellentétes stílus, 0–100-as ponttal.
+  Map<String, dynamic>? _matchupStyle;
   Map<String, dynamic>? _report;
   // Figura-egyezés a mentett könyvtárral (csak egy-meccses módban töltjük).
   Map<String, dynamic>? _playbookMatch;
@@ -118,6 +121,7 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
       // Meccsterv: a MI profilunk (ugyanezen meccsek másik oldala)
       // keresztezve az ellenfélével — enélkül is teljes a jelentés.
       List<String> matchup = const [];
+      Map<String, dynamic>? style;
       try {
         final oppItems = widget.items ??
             [
@@ -130,15 +134,19 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
               "team": (it["team"] == "home") ? "away" : "home",
             }
         ];
-        matchup = await _api.fetchMatchupPlan(ownItems, oppItems);
+        final mm = await _api.fetchMatchup(ownItems, oppItems);
+        matchup = ((mm["plan"] as List?) ?? const []).cast<String>();
+        style = (mm["style"] as Map?)?.cast<String, dynamic>();
       } catch (_) {
         matchup = const [];
+        style = null;
       }
       if (!mounted) return;
       setState(() {
         _report = r;
         _playbookMatch = pm;
         _matchup = matchup;
+        _matchupStyle = style;
         _loading = false;
       });
     } catch (e) {
@@ -450,9 +458,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("MECCSTERV (A KETTŐNK PÁROSÍTÁSA)",
-                style: AppText.sectionLabel
-                    .copyWith(color: AppColors.accent)),
+            Row(children: [
+              Text("MECCSTERV (A KETTŐNK PÁROSÍTÁSA)",
+                  style: AppText.sectionLabel
+                      .copyWith(color: AppColors.accent)),
+              if (_matchupStyle?["score_pct"] != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  "· stílus-egyezés "
+                  "${(_matchupStyle!["score_pct"] as num).round()}%",
+                  style: AppText.label.copyWith(
+                      fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+              ],
+            ]),
             const SizedBox(height: AppSpacing.sm),
             for (final p in (_allPlan
                 ? _matchup
