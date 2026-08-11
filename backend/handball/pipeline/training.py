@@ -1366,6 +1366,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 425) Hetes-forrás: a hetes ára helyzet-függő, és a fegyelem
+    # ott a legfontosabb, ahol a hetes születik.
+    try:
+        from .rules import SVS_SHARE_PCT, seven_sources
+        svs425 = seven_sources(match, config)
+        for side in ("home", "away"):
+            rec425 = svs425[side]
+            if rec425["verdict"] is None:
+                continue
+            add(side, "védekezés", "Kéz nélküli védekezés a forrásnál",
+                f"az ellenünk ítélt hetesek "
+                f"{rec425['share_pct']:.0f}%-a {rec425['main_type']} "
+                f"helyzetből születik ({rec425['sevens']} hetesből; "
+                f"{SVS_SHARE_PCT:.0f}% fölött jelezzük) — ott "
+                "fékezünk kézzel",
+                "helyzet-specifikus párharc-edzés: visszafutásban "
+                "test-test elleni kísérés kéz nélkül, a beugró elé "
+                "lépés testtel (nem karral), és a hetest érő "
+                "helyzetek videós felismerése a csapattal",
+                )
+    except Exception:
+        pass
+
     # 424) Kapus a kapott gól után: a újraindulás rutin-kérdés.
     try:
         from .goalkeeper import GKA_GAP_PP, gk_after_goal

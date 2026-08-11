@@ -2814,6 +2814,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      f"{rec_gka['verdict'].split(' — ')[-1]}.")
     except Exception:
         pass
+    # Hetes-forrás: milyen helyzetből jön a hetesük.
+    try:
+        from .rules import seven_sources
+        svs = seven_sources(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_svs = svs[side]
+            if rec_svs["verdict"] is None:
+                continue
+            body += (f" A(z) {name} heteseinek "
+                     f"{rec_svs['share_pct']:.0f}%-a "
+                     f"{rec_svs['main_type']} helyzetből jön "
+                     f"({rec_svs['sevens']} hetesből) — ott kézzel "
+                     "fékezni tilos.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

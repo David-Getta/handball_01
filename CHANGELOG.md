@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Hetes-forrás: milyen helyzetből jön a hetesük.** A
+  hetes-kiharcolók az embert nevezik meg, a hetes-okozók a védőt — az
+  új réteg a JÁTÉKHELYZETET: minden felismert hetest ahhoz a
+  támadás-szakaszhoz köt, amelyben esett, és a szakasz típusa szerint
+  csoportosít (lerohanás, felállt támadás, átmenet). Edzőileg ez a
+  szabálytalanság-fegyelem címzettje: ha a heteseik zöme
+  lerohanásból jön, a visszafutásnál tilos a kézzel fékezés (inkább
+  menjen be a gól, mint a hetes plusz kiállítás); ha felállt
+  támadásból, a fal lábmunkája a kérdés. Saját csapatra fordítva
+  ugyanez mutatja, honnan tudunk hetest kiharcolni. Három felismert
+  hetestől és 60%-os aránytól ítél. A rangsorban a "felkészülés"
+  családba tartozik. Felületek: /analyze + meccs-csomag
+  (`seven_sources`), edzői összefoglaló, felderítés
+  (`svs_sevens_by_type` mező + edzői kulcs + 404. meccsterv-szabály),
+  edzés-fókusz (425. szabály), kliens-csempe.
+
 - **A meccsterv téma szerint rendeződik.** A meccsterv-illesztés
   szabályai történeti sorrendben álltak a lapon (a legújabb szabály
   elöl), ami az edzőnek semmit nem jelent. Mostantól a mondatok téma

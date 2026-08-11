@@ -774,6 +774,77 @@ def powerplay_efficiency(match: Match,
 SEVEN_EARNER_LOOKBACK_S = 2.0
 
 
+# Hetes-forrás: ennyi felismert hetes kell az ítélethez, és ekkora
+# részarány fölött mondjuk ki, hogy a heteseik egy játékhelyzetből
+# jönnek.
+SVS_MIN_SEVENS = 3
+SVS_SHARE_PCT = 60.0
+
+
+def seven_sources(match: Match,
+                  config: Optional[TacticsConfig] = None) -> dict:
+    """Hetes-forrás: MILYEN HELYZETBŐL jön a hetesük.
+
+    A hetes-kiharcolók (seven_earners) az embert nevezik meg, a
+    hetes-okozók a védőt — ez a JÁTÉKHELYZETET: minden felismert
+    hetest ahhoz a támadás-szakaszhoz köt, amelyben esett, és a
+    szakasz típusa szerint csoportosít (lerohanás, felállt támadás,
+    átmenet).
+
+    Edzőileg ez a szabálytalanság-fegyelem címzettje. Ha a heteseik
+    zöme lerohanásból jön, a visszafutásnál tilos a kézzel fékezés —
+    inkább menjen be a gól, mint a hetes plusz kiállítás; ha felállt
+    támadásból, a fal lábmunkája a kérdés, és a beugró elé testtel
+    kell állni. Saját csapatra fordítva: ugyanez mutatja, honnan
+    tudunk hetest kiharcolni.
+
+    Visszatérés csapatonként (a DOBÓ oldal): {"sevens", "types":
+    {típus: darab}, "main_type", "share_pct", "verdict"} — az ítélet
+    None, ha nincs meg az SVS_MIN_SEVENS, vagy egyik típus sem éri
+    el az SVS_SHARE_PCT-t.
+    """
+    from .attack_types import classify_attacks
+
+    config = config or TacticsConfig()
+    attacks = classify_attacks(match, config)
+
+    out: dict = {side: {"sevens": 0, "types": {}, "main_type": None,
+                        "share_pct": None, "verdict": None}
+                 for side in ("home", "away")}
+    for sm in detect_seven_meters(match, config):
+        side = sm["team"]
+        if side not in out:
+            continue
+        tipus = None
+        for a in attacks:
+            if (a["team"] == side
+                    and a["start_frame"] <= sm["t"] <= a["end_frame"]):
+                tipus = a["type"]
+                break
+        if tipus is None:
+            continue
+        rec = out[side]
+        rec["types"][tipus] = rec["types"].get(tipus, 0) + 1
+        rec["sevens"] += 1
+
+    for rec in out.values():
+        rec["types"] = dict(sorted(rec["types"].items(),
+                                   key=lambda kv: -kv[1]))
+        if rec["sevens"] >= SVS_MIN_SEVENS:
+            tipus = max(rec["types"], key=lambda k: rec["types"][k])
+            share = 100.0 * rec["types"][tipus] / rec["sevens"]
+            rec["main_type"] = tipus
+            rec["share_pct"] = round(share, 1)
+            if share >= SVS_SHARE_PCT:
+                rec["verdict"] = (
+                    f"a heteseik {share:.0f}%-a {tipus} helyzetből "
+                    f"jön ({rec['sevens']} felismert hetesből) — a "
+                    "szabálytalanság-fegyelmet oda kell vinni: ott "
+                    "kézzel fékezni tilos, inkább menjen be a gól, "
+                    "mint a hetes")
+    return out
+
+
 def seven_meter_earners(match: Match,
                         config: Optional[TacticsConfig] = None) -> dict:
     """Ki harcolja ki a hétméterseket: a hetes-jel előtt a támadott

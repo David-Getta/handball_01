@@ -323,6 +323,26 @@ def _svy_match(goals=4, misses=0):
     return Match(_meta(), frames)
 
 
+def test_seven_sources_names_the_situation():
+    """Ha a heteseik ugyanabból a játékhelyzetből jönnek, oda kell
+    vinni a szabálytalanság-fegyelmet."""
+    from handball.pipeline.rules import SVS_MIN_SEVENS, seven_sources
+
+    rec = seven_sources(_svy_match())["home"]
+    assert rec["sevens"] >= SVS_MIN_SEVENS, rec
+    assert rec["main_type"] is not None, rec
+    assert rec["share_pct"] and rec["share_pct"] >= 60.0, rec
+    assert rec["verdict"] and "kézzel fékezni tilos" in rec["verdict"], rec
+
+
+def test_seven_sources_silent_with_few_sevens():
+    """Kevés hetesből nincs ítélet."""
+    from handball.pipeline.rules import seven_sources
+
+    rec = seven_sources(_svy_match(goals=2))["home"]
+    assert rec["main_type"] is None and rec["verdict"] is None, rec
+
+
 def test_seven_yield_flags_automatic_penalties():
     """Ha minden hetesük bemegy, a hetest érő szabálytalanság a
     legrosszabb üzlet."""

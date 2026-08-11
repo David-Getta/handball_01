@@ -2747,6 +2747,28 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
     return null;
   }
 
+  // Hetes-forrás: milyen helyzetből jön a hetesük (3+ hetes, 60%+
+  // egy helyzetből — a backenddel azonos küszöbök: SVS_MIN_SEVENS,
+  // SVS_SHARE_PCT).
+  String? _sevenSource(Map<String, dynamic> r) {
+    final t = (r["svs_sevens_by_type"] as Map?)?.cast<String, dynamic>();
+    if (t == null || t.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    t.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (all < 3 || topN < 0.6 * all) return null;
+    return "a heteseik ${(100.0 * topN / all).toStringAsFixed(0)}%-a "
+        "$top helyzetből jön ($topN/$all) · ott kézzel fékezni tilos";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10539,6 +10561,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Futómunka-eloszlás", _runningLoad(r)!],
       if (_keeperAfterGoal(r) != null)
         ["Kapus a kapott gól után", _keeperAfterGoal(r)!],
+      if (_sevenSource(r) != null)
+        ["Hetes-forrás", _sevenSource(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

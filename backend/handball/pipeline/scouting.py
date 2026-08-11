@@ -1087,6 +1087,9 @@ class ScoutingReport:
     # kerekítve). Összeg, meccsek közt összegződik.
     # Kapus a kapott gól után: a "friss seb" és a többi lövés
     # darabszáma, illetve a védések. Darabszám, összegződik.
+    # Hetes-forrás: a felismert hetesek darabszáma JÁTÉKHELYZET
+    # szerint. Darabszám, meccsek közt pontosan összegződik.
+    svs_sevens_by_type: dict = field(default_factory=dict)
     gka_fresh_shots: int = 0
     gka_fresh_saves: int = 0
     gka_rest_shots: int = 0
@@ -4566,6 +4569,19 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"védés a következő két lövésen, egyébként "
                 f"{_gka_r:.0f}%) — gól után ne kapkodjatok, a "
                 "következő támadást dolgozzátok ki.")
+
+    # Hetes-forrás: hova kell vinni a szabálytalanság-fegyelmet.
+    if rep.svs_sevens_by_type:
+        _svs_all = sum(rep.svs_sevens_by_type.values())
+        _svs_k, _svs_n = max(rep.svs_sevens_by_type.items(),
+                             key=lambda kv: kv[1])
+        if _svs_all >= 3 and _svs_n >= 0.6 * _svs_all:
+            keys.append(
+                f"A heteseik {100.0 * _svs_n / _svs_all:.0f}%-a "
+                f"{_svs_k} helyzetből jön ({_svs_n}/{_svs_all}) — a "
+                "szabálytalanság-fegyelmet oda vigyétek: ott kézzel "
+                "fékezni tilos, inkább menjen be a gól, mint a hetes "
+                "plusz kiállítás.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10011,6 +10027,9 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .rules import seven_sources as _svs
+        svsrec = _svs(match, config)[team.value]
+        rep.svs_sevens_by_type = dict(svsrec["types"])
         from .goalkeeper import gk_after_goal as _gka
         gkarec = _gka(match, config)[team.value]
         rep.gka_fresh_shots = gkarec["fresh_shots"]
@@ -12884,6 +12903,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 404) Az ő hetes-forrásuk × a mi fegyelmünk: ott kell a kéz
+    # nélküli védekezés.
+    if opp.svs_sevens_by_type and own.agr_susp >= 2:
+        _svs404_all = sum(opp.svs_sevens_by_type.values())
+        _svs404_k, _svs404_n = max(opp.svs_sevens_by_type.items(),
+                                   key=lambda kv: kv[1])
+        if _svs404_all >= 3 and _svs404_n >= 0.6 * _svs404_all:
+            plan.append(
+                f"A heteseik zöme {_svs404_k} helyzetből jön "
+                f"({_svs404_n}/{_svs404_all}), ti pedig kaptok "
+                f"kétperceket ({own.agr_susp} kiállítás) — pont ott "
+                "kell kéz nélkül védekezni: inkább menjen be a gól, "
+                "mint a hetes plusz kiállítás.")
 
     # 403) Az ő megingó kapusuk × a ti gyors középkezdésetek: a
     # gól utáni percben kell újra lőni.
@@ -19841,6 +19874,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.otp_outlets_by_player for r in reports),
         dtp_frames_by_player=_merge_count_dicts(
             r.dtp_frames_by_player for r in reports),
+        svs_sevens_by_type=_merge_count_dicts(
+            r.svs_sevens_by_type for r in reports),
         gka_fresh_shots=sum(r.gka_fresh_shots for r in reports),
         gka_fresh_saves=sum(r.gka_fresh_saves for r in reports),
         gka_rest_shots=sum(r.gka_rest_shots for r in reports),
