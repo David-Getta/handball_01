@@ -2287,6 +2287,70 @@ PVR_MIN_FRAMES = 250
 PVR_SHARE_PCT = 60.0
 
 
+# Passzív-birtoklók: ennyi passzív labdás kocka kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy a terméketlen idő egy
+# ember kezén telik.
+PVP_MIN_FRAMES = 200
+PVP_SHARE_PCT = 50.0
+
+
+def passive_holders(match: Match,
+                    config: Optional[TacticsConfig] = None) -> dict:
+    """Passzív-birtoklók: KINÉL hal el a felállt támadásuk.
+
+    A passzív-poszt (passive_holder_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: a lövés nélküli, hosszú felállt támadások labdás
+    kockáit a birtokos nevéhez írja.
+
+    Edzőileg ez a passzív jelzés terve névre szólóan: ha a
+    terméketlen támadás-idő rendre ugyanannak a kezén telik, a
+    passzív jelzés alatt ŐT kell nyomás alá tenni — nála jön a
+    kényszer-lövés vagy az eladás. Saját csapatra: neki kell kész
+    befejező megoldás, mielőtt a játékvezető keze felmegy.
+
+    Visszatérés csapatonként: {"frames", "players": [{"player_id",
+    "jersey", "frames"}], "top"} — a "top" az első játékos, ha
+    legalább PVP_MIN_FRAMES passzív labdás kockája van, és ez a
+    csapat passzív idejének legalább PVP_SHARE_PCT-a, különben None.
+    """
+    from .decisions import ball_holder
+
+    config = config or TacticsConfig()
+    segments = [(a["start_frame"], a["end_frame"], a["team"])
+                for a in passive_play_risks(match, config)]
+
+    jersey: dict = {}
+    tally: dict = {"home": {}, "away": {}}
+    if segments:
+        for f in match.frames:
+            side = next((s for (a, b, s) in segments
+                         if a <= f.t <= b), None)
+            if side is None:
+                continue
+            h = ball_holder(f, config)
+            if h is None or h.team is None \
+                    or h.team.value != side or h.role == "kapus":
+                continue
+            if h.jersey_number is not None:
+                jersey.setdefault(h.track_id, h.jersey_number)
+            tally[side][h.track_id] = tally[side].get(h.track_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "frames": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["frames"] for r in rows)
+        top = None
+        if rows and rows[0]["frames"] >= PVP_MIN_FRAMES:
+            share = 100.0 * rows[0]["frames"] / max(1, total)
+            if share >= PVP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"frames": total, "players": rows, "top": top}
+    return out
+
+
 def passive_holder_roles(match: Match,
                          config: Optional[TacticsConfig] = None
                          ) -> dict:

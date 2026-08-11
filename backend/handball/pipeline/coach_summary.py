@@ -2895,6 +2895,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "labdáiba bele lehet nyúlni.")
     except Exception:
         pass
+    # Passzív-birtoklók: kinél hal el a felállt támadásuk.
+    try:
+        from .rules import passive_holders
+        pvp = passive_holders(match)
+        for side, name in (("home", home), ("away", away)):
+            top_pvp = pvp[side]["top"]
+            if top_pvp is None:
+                continue
+            _ki11 = (f"a(z) {top_pvp['jersey']}. számú"
+                     if top_pvp.get("jersey") is not None
+                     else f"a(z) {top_pvp['player_id']}. játékos")
+            body += (f" A(z) {name} terméketlen támadás-ideje {_ki11} "
+                     "kezén telik — passzív jelzésnél őt kell nyomás "
+                     "alá tenni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

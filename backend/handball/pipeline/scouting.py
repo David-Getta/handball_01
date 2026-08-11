@@ -1100,6 +1100,9 @@ class ScoutingReport:
     # Lágy passzolók: a lágy (belenyúlható) passzok darabszáma
     # PASSZOLÓNKÉNT. Darabszám, meccsek közt összegződik.
     spp_soft_by_player: dict = field(default_factory=dict)
+    # Passzív-birtoklók: a lövés nélküli hosszú támadások labdás
+    # kockái BIRTOKOSONKÉNT. Darabszám, meccsek közt összegződik.
+    pvp_frames_by_player: dict = field(default_factory=dict)
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4648,6 +4651,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{_spp_k}. kezéből jön — az ő átadásaiba nyúljatok "
                 "bele: kilépés és passzsáv-támadás az ő sávjában "
                 "azonnal termel.")
+
+    # Passzív-birtoklók: kire menjen a nyomás a passzív jelzésnél.
+    if rep.pvp_frames_by_player:
+        _pvp_all = sum(rep.pvp_frames_by_player.values())
+        _pvp_k, _pvp_n = max(rep.pvp_frames_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _pvp_n >= 200 and _pvp_n >= 0.5 * max(1, _pvp_all):
+            keys.append(
+                f"A terméketlen (lövés nélküli) támadás-idejük "
+                f"{100.0 * _pvp_n / _pvp_all:.0f}%-a a(z) {_pvp_k}. "
+                "kezén telik — passzív jelzésnél rá menjen a nyomás: "
+                "nála jön a kényszer-lövés vagy az eladás.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10093,6 +10108,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .rules import passive_holders as _pvp
+        pvprec = _pvp(match, config)[team.value]
+        rep.pvp_frames_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["frames"]
+            for r in pvprec["players"]}
         from .decisions import soft_passers as _spp
         spprec = _spp(match, config)[team.value]
         rep.spp_soft_by_player = {
@@ -13095,6 +13116,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 410) Az ő passzív-birtoklójuk × a ti kettőzésetek: a passzív
+    # jelzés alatt rá kell menni.
+    if opp.pvp_frames_by_player and own.dbl_doubled_frames >= 50:
+        _pvp410_all = sum(opp.pvp_frames_by_player.values())
+        _pvp410_k, _pvp410_n = max(opp.pvp_frames_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _pvp410_n >= 200 and _pvp410_n >= 0.5 * max(1, _pvp410_all):
+            plan.append(
+                f"A terméketlen támadás-idejük zöme a(z) {_pvp410_k}. "
+                f"kezén telik ({_pvp410_n}/{_pvp410_all} labdás "
+                "kocka), ti pedig tudtok kettőzni — passzív jelzés "
+                "alatt rá időzítsétek a kettőzést: ott jön a "
+                "kényszer-eladás.")
 
     # 409) Az ő lágy passzolójuk × a ti letámadásotok: az ő
     # átadásait kell megcélozni.
@@ -20134,6 +20169,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.mcp_misses_by_player for r in reports),
         spp_soft_by_player=_merge_count_dicts(
             r.spp_soft_by_player for r in reports),
+        pvp_frames_by_player=_merge_count_dicts(
+            r.pvp_frames_by_player for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(

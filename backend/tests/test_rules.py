@@ -2022,6 +2022,25 @@ def test_passive_holder_roles_names_the_stalling_post():
     assert rec["verdict"] and "kényszer-eladás" in rec["verdict"], rec
 
 
+def test_passive_holders_names_the_stalling_man():
+    """Ha a terméketlen támadás-idő egy ember kezén telik, a passzív
+    jelzés alatt őt kell nyomás alá tenni."""
+    from handball.pipeline.rules import (PVP_MIN_FRAMES,
+                                         passive_holders)
+
+    rec = passive_holders(_pvr_match(800, 200))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["frames"] >= PVP_MIN_FRAMES, rec
+
+
+def test_passive_holders_silent_with_few_frames():
+    """Kevés passzív kockából nem nevezünk meg embert."""
+    from handball.pipeline.rules import passive_holders
+
+    rec = passive_holders(_pvr_match(60, 40))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_passive_holder_roles_silent_without_passive_attack():
     """Rövid (35 mp alatti) támadásból nincs passzív szakasz, se
     ítélet."""

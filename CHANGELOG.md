@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Passzív-birtoklók: kinél hal el a felállt támadásuk.** A
+  passzív-poszt a posztot nevezi meg — az új réteg az embert: a
+  lövés nélküli, hosszú felállt támadások labdás kockáit a birtokos
+  nevéhez írja. Edzőileg ez a passzív jelzés terve névre szólóan: a
+  jelzés alatt ŐT kell nyomás alá tenni (időzített kettőzés), mert
+  nála jön a kényszer-lövés vagy az eladás. Saját csapatra neki kell
+  kész befejező megoldás, mielőtt a játékvezető keze felmegy.
+  Kétszáz passzív labdás kockától és a passzív idő felétől emel ki
+  nevet. A rangsorban az "ember" családba tartozik, és a Kulcs-ember
+  bizonyíték-rétegei közé is bekerült. Felületek: /analyze +
+  meccs-csomag (`passive_holders`), edzői összefoglaló, felderítés
+  (`pvp_frames_by_player` mező + edzői kulcs + 410.
+  meccsterv-szabály), edzés-fókusz (430. szabály), kliens-csempe.
+
 - **Lágy passzolók: kinek a labdáiba lehet belenyúlni.** A
   lágypassz-poszt a posztot nevezi meg — az új réteg az embert: a
   lassú, ívelt passzokat a passzoló nevéhez írja. Edzőileg ez a

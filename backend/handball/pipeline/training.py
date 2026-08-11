@@ -1366,6 +1366,32 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 430) Passzív-birtoklók: a passzív jelzés előtti utolsó
+    # megoldás gyakorolható.
+    try:
+        from .rules import PVP_MIN_FRAMES, passive_holders
+        pvp430 = passive_holders(match, config)
+        for side in ("home", "away"):
+            top430 = pvp430[side].get("top")
+            if top430 is None:
+                continue
+            _ki430 = (f"a(z) {top430['jersey']}. számú"
+                      if top430.get("jersey") is not None
+                      else f"a(z) {top430['player_id']}. játékos")
+            add(side, "támadás", "Kész megoldás a passzív jelzésre",
+                f"a lövés nélküli, hosszú támadásaink labdás ideje "
+                f"{_ki430} kezén telik ({top430['frames']} kocka; "
+                f"{PVP_MIN_FRAMES} kockától már jelezzük) — nála áll "
+                "meg a játék, mielőtt a bíró keze felmegy",
+                "passzív-figura gyakorlása vele: kijelölt utolsó "
+                "megoldás (beálló-bejátszás vagy szélső-kiugratás) "
+                "a passzív jel után, döntés-idő korlátozása "
+                "(3 másodperc a labdával), és a leadás utáni "
+                "azonnali újra-ajánlkozás",
+                )
+    except Exception:
+        pass
+
     # 429) Lágy passzolók: az ívelt átadás a legolcsóbb labda az
     # ellenfélnek.
     try:

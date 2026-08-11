@@ -2875,6 +2875,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "az ő átadásaiba nyúljatok bele";
   }
 
+  // Passzív-birtoklók: kinél hal el a felállt támadásuk (200+ labdás
+  // kocka, a passzív idő fele — a backenddel azonos küszöbök:
+  // PVP_MIN_FRAMES, PVP_SHARE_PCT).
+  String? _passiveHolder(Map<String, dynamic> r) {
+    final pv = (r["pvp_frames_by_player"] as Map?)?.cast<String, dynamic>();
+    if (pv == null || pv.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    pv.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 200) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a terméketlen támadás-idejük "
+        "${(100.0 * topN / all).toStringAsFixed(0)}%-a a(z) $top. kezén "
+        "telik · passzív jelzésnél rá menjen a nyomás";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10677,6 +10701,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Fáradt lövő", _tiredShooter(r)!],
       if (_softPasser(r) != null)
         ["Lágy passzoló", _softPasser(r)!],
+      if (_passiveHolder(r) != null)
+        ["Passzív-birtokló", _passiveHolder(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
