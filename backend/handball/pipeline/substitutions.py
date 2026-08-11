@@ -129,6 +129,64 @@ def substitution_impact(match: Match,
     return {"events": events, "teams": teams}
 
 
+# Csere-hozam: ennyi mért csere kell az ítélethez, és ekkora
+# gólkülönbség számít érdeminek a csere utáni ablakban.
+SBY_MIN_ROTATIONS = 4
+SBY_GAP_GOALS = 2
+
+
+def substitution_yield(match: Match,
+                       config: Optional[TacticsConfig] = None) -> dict:
+    """Csere-hozam: NYERNEK VAGY VESZTENEK a cseréik után.
+
+    A csere-büntetés (gap_punishment) a lyukas cserét árazza — ez a
+    FRISS EMBEREK hatását: a cserék utáni IMPACT_S másodpercben
+    összeveti a dobott és a kapott gólokat.
+
+    Edzőileg ez a csere-pillanat menetrendje. Ha a cseréik után
+    rendre több gólt kapnak, mint dobnak, a csere-pillanat célzottan
+    támadható: gyors középkezdés, azonnali befejezés, mielőtt a friss
+    emberek a helyükre állnának. Ha a cseréik után ők jönnek fel, a
+    saját időkérés vagy a lassítás töri meg a lendületet — és saját
+    csapatra a csere-ütem (ki, mikor, kivel együtt) mérhető
+    kérdéssé válik.
+
+    Visszatérés csapatonként: {"rotations", "goals_for",
+    "goals_against", "diff", "verdict"} — a verdict None, ha kevés
+    (SBY_MIN_ROTATIONS alatti) a mért csere, vagy a különbség nem
+    éri el az SBY_GAP_GOALS-t.
+    """
+    config = config or TacticsConfig()
+    imp = substitution_impact(match, config)["teams"]
+
+    out: dict = {}
+    for side in ("home", "away"):
+        src = imp.get(side, {})
+        rec = {"rotations": src.get("rotations", 0),
+               "goals_for": src.get("goals_for_after", 0),
+               "goals_against": src.get("goals_against_after", 0),
+               "diff": 0, "verdict": None}
+        rec["diff"] = rec["goals_for"] - rec["goals_against"]
+        if rec["rotations"] >= SBY_MIN_ROTATIONS:
+            if rec["diff"] <= -SBY_GAP_GOALS:
+                rec["verdict"] = (
+                    f"a cseréik után vesztenek ({rec['goals_for']}-"
+                    f"{rec['goals_against']} a csere utáni percben, "
+                    f"{rec['rotations']} cseréből) — a csere-pillanat "
+                    "célzottan támadható: gyors középkezdés és "
+                    "azonnali befejezés, mielőtt a friss emberek a "
+                    "helyükre állnának")
+            elif rec["diff"] >= SBY_GAP_GOALS:
+                rec["verdict"] = (
+                    f"a cseréik után jönnek fel ({rec['goals_for']}-"
+                    f"{rec['goals_against']} a csere utáni percben, "
+                    f"{rec['rotations']} cseréből) — a friss emberek "
+                    "lendületét meg kell törni: saját időkérés vagy "
+                    "lassított felállás a cserehullámuk után")
+        out[side] = rec
+    return out
+
+
 # Késő csere: ekkora 2. félidei tempó-esés fölött már cserét várnánk.
 LATE_SUB_DROP_PCT = 20.0
 

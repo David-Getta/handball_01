@@ -1070,6 +1070,11 @@ class ScoutingReport:
     # Darabszám, meccsek közt pontosan összegződik.
     # Passzív-kockázat: a felállt és a lövés nélkül elnyúló
     # támadások darabszáma. Darabszám, összegződik.
+    # Csere-hozam: a cserék utáni ablak dobott és kapott góljai.
+    # Darabszám, meccsek közt pontosan összegződik.
+    sby_rotations: int = 0
+    sby_goals_for: int = 0
+    sby_goals_against: int = 0
     psr_positional: int = 0
     psr_passive: int = 0
     svy_attempts: int = 0
@@ -4435,6 +4440,25 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "— ellenük a zárt, türelmes fal dolgozik: nem kell "
                 "kilépni és kockáztatni, az óra és a passzív jel "
                 "nektek dolgozik.")
+
+    # Csere-hozam: támadható-e a csere-pillanatuk.
+    if rep.sby_rotations >= 4:
+        _sby_d = rep.sby_goals_for - rep.sby_goals_against
+        if _sby_d <= -2:
+            keys.append(
+                f"A cseréik után {rep.sby_goals_for}-"
+                f"{rep.sby_goals_against} a mérlegük "
+                f"({rep.sby_rotations} cseréből) — a csere-pillanat "
+                "célzottan támadható: gyors középkezdés és azonnali "
+                "befejezés, mielőtt a friss emberek a helyükre "
+                "állnának.")
+        elif _sby_d >= 2:
+            keys.append(
+                f"A cseréik után jönnek fel ({rep.sby_goals_for}-"
+                f"{rep.sby_goals_against}, {rep.sby_rotations} "
+                "cseréből) — a friss emberek lendületét kell "
+                "megtörni: saját időkérés vagy lassított felállás a "
+                "cserehullámuk után.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9880,6 +9904,11 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .substitutions import substitution_yield as _sby
+        sbyrec = _sby(match, config)[team.value]
+        rep.sby_rotations = sbyrec["rotations"]
+        rep.sby_goals_for = sbyrec["goals_for"]
+        rep.sby_goals_against = sbyrec["goals_against"]
         from .rules import passive_risk as _psr
         psrrec = _psr(match, config)[team.value]
         rep.psr_positional = psrrec["positional"]
@@ -12670,6 +12699,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 398) Az ő csere-hozamuk × a ti gyors középkezdésetek: a
+    # csere-pillanat célzottan támadható.
+    if opp.sby_rotations >= 4 and own.fast_break_pct >= 12.0:
+        _sby398 = opp.sby_goals_for - opp.sby_goals_against
+        if _sby398 <= -2:
+            plan.append(
+                f"A cseréik után {opp.sby_goals_for}-"
+                f"{opp.sby_goals_against} a mérlegük "
+                f"({opp.sby_rotations} cseréből), ti pedig gyorsan "
+                f"indultok ({own.fast_break_pct:.0f}%) — a "
+                "cserehullámuk pillanatát célozzátok: gyors "
+                "középkezdés és azonnali befejezés, mielőtt a friss "
+                "emberek beállnak.")
 
     # 397) Az ő passzív-kockázatuk × a ti falatok: a türelem
     # fegyver, ha ők maguktól elakadnak.
@@ -19540,6 +19583,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.stc_susp_by_player for r in reports),
         otp_outlets_by_player=_merge_count_dicts(
             r.otp_outlets_by_player for r in reports),
+        sby_rotations=sum(r.sby_rotations for r in reports),
+        sby_goals_for=sum(r.sby_goals_for for r in reports),
+        sby_goals_against=sum(r.sby_goals_against for r in reports),
         psr_positional=sum(r.psr_positional for r in reports),
         psr_passive=sum(r.psr_passive for r in reports),
         svy_attempts=sum(r.svy_attempts for r in reports),

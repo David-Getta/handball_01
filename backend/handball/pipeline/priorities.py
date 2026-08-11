@@ -54,6 +54,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("ár", "Kihagyás ára", "xg", "miss_punishment"),
         ("ár", "Kihagyás-büntetés", "momentum", "punished_misses"),
         ("ár", "Csere-lyuk ára", "substitutions", "gap_punishment"),
+        ("ár", "Csere-hozam", "substitutions",
+         "substitution_yield"),
         ("ár", "Kettőzés ára", "defense", "double_punishment"),
         ("ár", "Kilépés ára", "defense", "stepout_punishment"),
         ("ár", "Indítás-hiba ára", "goalkeeper", "outlet_punishment"),

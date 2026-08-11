@@ -34,8 +34,8 @@ to objective match analysis.
   With few samples the system stays silent rather than guessing.
 - **On-premise processing**: no video upload, no cloud dependency —
   critical for clubs working with minors.
-- **445 analysis layers** across attack, defence, goalkeeping, rules,
-  momentum and physical load; **1,616 automated tests** and a
+- **446 analysis layers** across attack, defence, goalkeeping, rules,
+  momentum and physical load; **1,618 automated tests** and a
   reproducible benchmark guard the quality of every release. (Live
   figures, generated from the codebase: `docs/SZAMOK.md`; per-layer
   catalogue: `docs/RETEG_KATALOGUS.md`.)

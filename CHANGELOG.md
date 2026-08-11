@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Csere-hozam: nyernek vagy vesztenek a cseréik után.** A
+  csere-büntetés a lyukas cserét árazza — az új réteg a friss emberek
+  hatását: a cserék utáni másfél percben összeveti a dobott és a
+  kapott gólokat. Edzőileg ez a csere-pillanat menetrendje: ha a
+  cseréik után rendre több gólt kapnak, mint dobnak, a csere-pillanat
+  célzottan támadható (gyors középkezdés, azonnali befejezés); ha a
+  cseréik után ők jönnek fel, saját időkérés vagy lassított felállás
+  töri meg a lendületet. Saját csapatra a csere-fegyelem edzés-téma:
+  csak saját birtoklásban cserélünk, a beérkező a helyére fut.
+  Négy mért cserétől és két gólos különbségtől ítél. A rangsorban az
+  "ár" családba tartozik. Felületek: /analyze + meccs-csomag
+  (`substitution_yield`), edzői összefoglaló, felderítés (`sby_*`
+  mezők + edzői kulcs + 398. meccsterv-szabály), edzés-fókusz (419.
+  szabály), kliens-csempe.
+
 ## v0.1.27 — kiadva (2026-08-09)
 
 > Kiadás-jegyzet: a v0.1.26 óta három vezérfonal futott.

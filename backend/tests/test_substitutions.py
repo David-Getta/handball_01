@@ -84,6 +84,65 @@ def test_impact_counts_goals_after():
     assert r["events"][0]["goals_for_after"] == 1
 
 
+def _sby_match(n=4, concede=True):
+    """`n` hazai csere; `concede` esetén minden csere után a vendég
+    gólt dob (a labda a hazai kapuba száguld)."""
+    frames = []
+    t = 0
+    for k in range(n):
+        out_id, in_id = 10 + 2 * k, 11 + 2 * k
+        for i in range(210):
+            players = [_pl(1, Team.HOME, 25.0, 10.0)]
+            if i <= 200:
+                frac = i / 200.0
+                players.append(_pl(out_id, Team.HOME,
+                                   28.0 + (20.0 - 28.0) * frac,
+                                   8.0 + (1.0 - 8.0) * frac))
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=22.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for i in range(120):
+            frac = min(1.0, i / 100.0)
+            players = [_pl(1, Team.HOME, 25.0, 10.0),
+                       _pl(in_id, Team.HOME,
+                           20.0 + (30.0 - 20.0) * frac,
+                           1.0 + (12.0 - 1.0) * frac)]
+            bx = 22.0
+            if concede and 20 <= i < 27:
+                bx = max(6.0 - (i - 20) * 1.2, 0.0)
+            frames.append(Frame(t=t, players=players,
+                                ball=Ball(x=bx, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        for _ in range(200):
+            frames.append(Frame(
+                t=t, players=[_pl(1, Team.HOME, 25.0, 10.0)],
+                ball=Ball(x=22.0, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(_meta(), frames)
+
+
+def test_substitution_yield_flags_losing_change_window():
+    """Ha a cseréik után rendre gólt kapnak, a csere-pillanat
+    célzottan támadható."""
+    from handball.pipeline.substitutions import (SBY_MIN_ROTATIONS,
+                                                 substitution_yield)
+
+    rec = substitution_yield(_sby_match())["home"]
+    assert rec["rotations"] >= SBY_MIN_ROTATIONS, rec
+    assert rec["diff"] < 0, rec
+    assert rec["verdict"] and "célzottan támadható" in rec["verdict"], rec
+
+
+def test_substitution_yield_silent_with_few_rotations():
+    """Néhány cseréből nincs ítélet."""
+    from handball.pipeline.substitutions import substitution_yield
+
+    rec = substitution_yield(_sby_match(n=2))["home"]
+    assert rec["verdict"] is None, rec
+
+
 def test_late_sub_flags_fading_player_left_on_court():
     """A 2. félidőben 20%+ tempót eső, le nem cserélt játékos késő-csere
     jelzést kap; az egyenletes tempójú nem."""

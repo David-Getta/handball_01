@@ -2710,6 +2710,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "türelmes fal dolgozik.")
     except Exception:
         pass
+    # Csere-hozam: nyernek vagy vesztenek a cseréik után.
+    try:
+        from .substitutions import substitution_yield
+        sby = substitution_yield(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_sby = sby[side]
+            if rec_sby["verdict"] is None:
+                continue
+            body += (f" A(z) {name} cseréi után "
+                     f"{rec_sby['goals_for']}-"
+                     f"{rec_sby['goals_against']} a mérleg "
+                     f"({rec_sby['rotations']} cseréből) — "
+                     f"{rec_sby['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

@@ -1355,6 +1355,29 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 419) Csere-hozam: a csere-pillanat is játékhelyzet.
+    try:
+        from .substitutions import SBY_GAP_GOALS, substitution_yield
+        sby419 = substitution_yield(match, config)
+        for side in ("home", "away"):
+            rec419 = sby419[side]
+            if rec419["verdict"] is None:
+                continue
+            if rec419["diff"] > -SBY_GAP_GOALS:
+                continue
+            add(side, "erőnlét", "Csere-pillanat védelme",
+                f"a cseréink utáni percben {rec419['goals_for']}-"
+                f"{rec419['goals_against']} a mérlegünk "
+                f"({rec419['rotations']} cseréből) — a csere-pillanat "
+                "nálunk nyitott játékhelyzet",
+                "csere-fegyelem edzése: csak SAJÁT birtoklásban vagy "
+                "holt játékban cserélünk, a beérkező azonnal a "
+                "helyére fut (nem a labdához), és páros csere helyett "
+                "egyesével, hogy ne nyíljon lyuk",
+                )
+    except Exception:
+        pass
+
     # 418) Passzív-kockázat: a lövés nélkül elnyúló támadás
     # befejezés-hiány, nem stílus.
     try:

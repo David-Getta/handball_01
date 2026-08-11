@@ -2614,6 +2614,26 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "nélkül nyúlik el ($pas/$pos) · zárt, türelmes fal kell";
   }
 
+  // Csere-hozam: nyernek vagy vesztenek a cseréik után (4+ csere, 2
+  // gólos különbség — a backenddel azonos küszöbök:
+  // SBY_MIN_ROTATIONS, SBY_GAP_GOALS).
+  String? _substitutionYield(Map<String, dynamic> r) {
+    final rot = (r["sby_rotations"] as num?)?.toInt() ?? 0;
+    final gf = (r["sby_goals_for"] as num?)?.toInt() ?? 0;
+    final ga = (r["sby_goals_against"] as num?)?.toInt() ?? 0;
+    if (rot < 4) return null;
+    final diff = gf - ga;
+    if (diff <= -2) {
+      return "a cseréik után $gf-$ga a mérlegük ($rot cseréből) · a "
+          "csere-pillanat célzottan támadható";
+    }
+    if (diff >= 2) {
+      return "a cseréik után jönnek fel ($gf-$ga, $rot cseréből) · "
+          "időkéréssel vagy lassítással törjétek meg";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10392,6 +10412,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Hetes-hozam", _sevenYield(r)!],
       if (_passiveRisk(r) != null)
         ["Passzív-kockázat", _passiveRisk(r)!],
+      if (_substitutionYield(r) != null)
+        ["Csere-hozam", _substitutionYield(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **445 réteg**, modulonként csoportosítva; a
+Összesen **446 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (88)
@@ -483,7 +483,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `timeout_turnover_players` | Időkérés-hibázók: A MEGBESZÉLT FIGURA kinek a kezén hal el. |
 | `timeout_turnover_roles` | Időkérés-hiba poszt: A MEGBESZÉLT FIGURA kinek a kezén hal el. |
 
-## substitutions (11)
+## substitutions (12)
 
 | Réteg | Mit mér |
 |---|---|
@@ -495,6 +495,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `substituted_roles` | Forgatott-poszt: MELYIK POSZTJUKAT cserélik. |
 | `substitution_blocks` | Csere-blokkok: egyesével cserélnek, vagy egységekben. |
 | `substitution_triggers` | Csere-kiváltók: KAPOTT GÓL UTÁN cserélnek-e. |
+| `substitution_yield` | Csere-hozam: NYERNEK VAGY VESZTENEK a cseréik után. |
 | `substitutions` | Cserék + a cserék utáni IMPACT_S másodperc mérlege csapatonként. |
 | `swap_pairs` | Váltópárok: KI KIT VÁLT a cseréknél. |
 | `swap_style` | Csere-stílus: POSZTOT TART vagy ÁTSZAB a padjuk. |
