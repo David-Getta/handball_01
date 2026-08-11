@@ -2829,6 +2829,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "fékezni tilos.")
     except Exception:
         pass
+    # Kontroll-idővonal: ki diktált ötpercenként.
+    try:
+        from .momentum import control_timeline
+        ctl = control_timeline(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_ctl = ctl[side]
+            if rec_ctl["verdict"] is None:
+                continue
+            if rec_ctl["won"] <= rec_ctl["lost"]:
+                continue
+            body += (f" A(z) {name} az ötperces szakaszok "
+                     f"{rec_ctl['won']}/"
+                     f"{len(rec_ctl['blocks'])} részét vitte "
+                     "birtoklásban — a leggyengébb szakaszuk a "
+                     f"{rec_ctl['worst']}. perctől indul.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

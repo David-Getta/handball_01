@@ -2788,6 +2788,24 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "$top helyzetből jön ($topN/$all) · ott kézzel fékezni tilos";
   }
 
+  // Kontroll-idővonal: ki diktál ötpercenként (3+ mért szakasz — a
+  // backenddel azonos küszöb: CTL_MIN_BLOCKS).
+  String? _controlTimeline(Map<String, dynamic> r) {
+    final blocks = (r["ctl_blocks"] as num?)?.toInt() ?? 0;
+    final won = (r["ctl_won"] as num?)?.toInt() ?? 0;
+    final lost = (r["ctl_lost"] as num?)?.toInt() ?? 0;
+    if (blocks < 3) return null;
+    if (won > lost) {
+      return "az ötperces szakaszok $won/$blocks részét ők viszik "
+          "birtoklásban · időkérés az ő sorozatuk ELÉ";
+    }
+    if (lost > won) {
+      return "az ötperces szakaszok $lost/$blocks részét elveszítik "
+          "birtoklásban · a tempó nálatok van";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10582,6 +10600,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kapus a kapott gól után", _keeperAfterGoal(r)!],
       if (_sevenSource(r) != null)
         ["Hetes-forrás", _sevenSource(r)!],
+      if (_controlTimeline(r) != null)
+        ["Kontroll-idővonal", _controlTimeline(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
@@ -10882,7 +10902,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                            "sorozat", "lendület", "elalvás", "gólcsend",
                            "csend-", "hidegedés", "bemelegedés",
                            "utolsó labda", "meccsek", "percek", "forró",
-                           "hosszú áll", "kapkodás", "óra"]),
+                           "hosszú áll", "kapkodás", "óra",
+                           "idővonal", "szakasz"]),
     ("Védekezés", ["véd", "fal", "kettőz", "emberfog", "blokk", "szerz",
                    "betörés", "kilép", "átvert", "lefogott", "őr",
                    "kifutás", "visszaérés", "visszaállás", "visszafutás",

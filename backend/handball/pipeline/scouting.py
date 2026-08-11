@@ -1090,6 +1090,11 @@ class ScoutingReport:
     # Hetes-forrás: a felismert hetesek darabszáma JÁTÉKHELYZET
     # szerint. Darabszám, meccsek közt pontosan összegződik.
     svs_sevens_by_type: dict = field(default_factory=dict)
+    # Kontroll-idővonal: hány ötperces szakaszt vittek, vesztettek,
+    # illetve mennyi volt kiegyenlített. Darabszám, összegződik.
+    ctl_won: int = 0
+    ctl_lost: int = 0
+    ctl_blocks: int = 0
     gka_fresh_shots: int = 0
     gka_fresh_saves: int = 0
     gka_rest_shots: int = 0
@@ -4582,6 +4587,21 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "szabálytalanság-fegyelmet oda vigyétek: ott kézzel "
                 "fékezni tilos, inkább menjen be a gól, mint a hetes "
                 "plusz kiállítás.")
+
+    # Kontroll-idővonal: birtoklásban ki diktál.
+    if rep.ctl_blocks >= 3:
+        if rep.ctl_won > rep.ctl_lost:
+            keys.append(
+                f"Az ötperces szakaszok {rep.ctl_won}/"
+                f"{rep.ctl_blocks} részét ők viszik birtoklásban — a "
+                "meccset a saját tempójukban játsszák; a ti "
+                "időkéréseteket az ő sorozataik ELÉ kell időzíteni.")
+        elif rep.ctl_lost > rep.ctl_won:
+            keys.append(
+                f"Az ötperces szakaszok {rep.ctl_lost}/"
+                f"{rep.ctl_blocks} részét elveszítik birtoklásban — "
+                "a tempó nálatok van: hosszú, türelmes támadásokkal "
+                "és korai indításokkal tovább lehet nyújtani ezt.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10027,6 +10047,11 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .momentum import control_timeline as _ctl
+        ctlrec = _ctl(match, config)[team.value]
+        rep.ctl_won = ctlrec["won"]
+        rep.ctl_lost = ctlrec["lost"]
+        rep.ctl_blocks = len(ctlrec["blocks"])
         from .rules import seven_sources as _svs
         svsrec = _svs(match, config)[team.value]
         rep.svs_sevens_by_type = dict(svsrec["types"])
@@ -13008,6 +13033,16 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 406) Az ő kontroll-képük × a ti időkéréseitek: az ő
+    # sorozataik ELÉ kell időzíteni a megszakítást.
+    if opp.ctl_blocks >= 3 and opp.ctl_won > opp.ctl_lost:
+        plan.append(
+            f"Az ötperces szakaszok {opp.ctl_won}/{opp.ctl_blocks} "
+            "részét ők viszik birtoklásban — az időkérést az ő "
+            "sorozatuk ELÉ időzítsétek, ne utána: a saját tempótok "
+            "visszavétele többet ér, mint a lendületük megtörése "
+            "két góllal később.")
 
     # 405) A meccs jellege: tükör- vagy ellentétes stílus. Ez a lap
     # kerete, ezért a téma-rendezés a lista élére teszi.
@@ -19991,6 +20026,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.dtp_frames_by_player for r in reports),
         svs_sevens_by_type=_merge_count_dicts(
             r.svs_sevens_by_type for r in reports),
+        ctl_won=sum(r.ctl_won for r in reports),
+        ctl_lost=sum(r.ctl_lost for r in reports),
+        ctl_blocks=sum(r.ctl_blocks for r in reports),
         gka_fresh_shots=sum(r.gka_fresh_shots for r in reports),
         gka_fresh_saves=sum(r.gka_fresh_saves for r in reports),
         gka_rest_shots=sum(r.gka_rest_shots for r in reports),

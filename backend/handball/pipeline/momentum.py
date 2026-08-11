@@ -1921,6 +1921,112 @@ QP_MIN_DURATION_MIN = 40.0
 QP_DIFF = 3
 
 
+# Kontroll-idővonal: ekkora (másodperces) blokkokra bontjuk a
+# meccset, ennyi mért blokk kell az ítélethez, és ekkora
+# birtoklás-arány fölött mondjuk azt, hogy a blokk egy csapaté.
+CTL_BLOCK_S = 300.0
+CTL_MIN_BLOCKS = 3
+CTL_OWN_PCT = 60.0
+
+
+def control_timeline(match: Match, config=None) -> dict:
+    """Kontroll-idővonal: KI DIKTÁLT ötpercenként.
+
+    A negyedóra-profil (quarter_profile) az EREDMÉNYT bontja
+    szakaszokra — ez a KONTROLLT: ötperces blokkonként megnézi, kié
+    volt a birtoklás nagyobb része, és mennyi helyzetet (xG)
+    teremtettek benne. Egy blokk akkor "övék", ha a birtoklásuk
+    eléri a CTL_OWN_PCT-t; egyébként kiegyenlített.
+
+    Edzőileg: a gólkülönbség hazudhat (két kapus-bravúr átírja) — a
+    kontroll-kép azt mutatja, hol kellett volna időkérés. Ha egy
+    csapat egymás utáni blokkokat visz, ott a másik oldalon a
+    felállás vagy a fal nem működik: oda kell tervezni a
+    cserehullámot és a rendezett támadást.
+
+    Visszatérés csapatonként: {"blocks": [{"from_s", "to_s",
+    "poss_pct", "xg_for", "xg_against", "owner"}], "won", "lost",
+    "even", "best", "worst", "verdict"} — az ítélet None, ha kevés
+    (CTL_MIN_BLOCKS alatti) a mért blokk.
+    """
+    from .tactics import TacticsConfig, possession_team
+    from .xg import match_xg
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    empty = {"blocks": [], "won": 0, "lost": 0, "even": 0,
+             "best": None, "worst": None, "verdict": None}
+    if not match.frames:
+        return {side: dict(empty) for side in ("home", "away")}
+
+    t0 = match.frames[0].t
+    span = round(CTL_BLOCK_S * fps)
+    poss: dict = {}
+    for f in match.frames:
+        idx = int((f.t - t0) // span)
+        rec = poss.setdefault(idx, {"home": 0, "away": 0})
+        team = possession_team(f, config)
+        if team is not None:
+            rec[team.value] += 1
+
+    xg: dict = {}
+    for sh in match_xg(match, config).get("shots", []):
+        idx = int((sh["t"] - t0) // span)
+        rec = xg.setdefault(idx, {"home": 0.0, "away": 0.0})
+        rec[sh["team"]] += float(sh.get("xg") or 0.0)
+
+    out: dict = {side: dict(empty) for side in ("home", "away")}
+    for side in ("home", "away"):
+        out[side]["blocks"] = []
+    for idx in sorted(poss):
+        rec = poss[idx]
+        total = rec["home"] + rec["away"]
+        if total <= 0:
+            continue
+        xrec = xg.get(idx, {"home": 0.0, "away": 0.0})
+        for side in ("home", "away"):
+            other = "away" if side == "home" else "home"
+            share = 100.0 * rec[side] / total
+            owner = ("övék" if share >= CTL_OWN_PCT
+                     else ("ellenfélé" if share <= 100.0 - CTL_OWN_PCT
+                           else "kiegyenlített"))
+            out[side]["blocks"].append({
+                "from_s": round(idx * CTL_BLOCK_S, 1),
+                "to_s": round((idx + 1) * CTL_BLOCK_S, 1),
+                "poss_pct": round(share, 1),
+                "xg_for": round(xrec[side], 2),
+                "xg_against": round(xrec[other], 2),
+                "owner": owner})
+
+    for side in ("home", "away"):
+        rec_s = out[side]
+        blocks = rec_s["blocks"]
+        rec_s["won"] = sum(1 for b in blocks if b["owner"] == "övék")
+        rec_s["lost"] = sum(1 for b in blocks
+                            if b["owner"] == "ellenfélé")
+        rec_s["even"] = len(blocks) - rec_s["won"] - rec_s["lost"]
+        if len(blocks) < CTL_MIN_BLOCKS:
+            continue
+        best = max(blocks, key=lambda b: b["poss_pct"])
+        worst = min(blocks, key=lambda b: b["poss_pct"])
+        rec_s["best"] = int(best["from_s"] // 60)
+        rec_s["worst"] = int(worst["from_s"] // 60)
+        if rec_s["won"] > rec_s["lost"]:
+            rec_s["verdict"] = (
+                f"ők diktálnak blokk-szinten ({rec_s['won']}/"
+                f"{len(blocks)} ötperces szakasz az övék) — a "
+                f"leggyengébb szakaszuk a {rec_s['worst']}. perctől "
+                "indul: oda kell időzíteni a tempót és a friss sort")
+        elif rec_s["lost"] > rec_s["won"]:
+            rec_s["verdict"] = (
+                f"nem ők diktálnak ({rec_s['lost']}/{len(blocks)} "
+                "ötperces szakaszt az ellenfél vitt) — a "
+                f"legerősebb szakaszuk a {rec_s['best']}. perctől "
+                "indul, arra kell készülni: időkérés és rendezett "
+                "támadás")
+    return out
+
+
 def quarter_profile(match: Match, config=None) -> dict:
     """Negyedóra-profil: MELYIK MECCS-SZAKASZ AZ ÖVÉK az óra szerint.
 

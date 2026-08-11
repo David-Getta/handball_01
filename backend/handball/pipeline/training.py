@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 426) Kontroll-idővonal: a birtoklás-vesztés szakaszos, tehát
+    # edzhető (felállás-fegyelem, támadás-hossz).
+    try:
+        from .momentum import CTL_MIN_BLOCKS, control_timeline
+        ctl426 = control_timeline(match, config)
+        for side in ("home", "away"):
+            rec426 = ctl426[side]
+            if rec426["verdict"] is None:
+                continue
+            if rec426["lost"] <= rec426["won"]:
+                continue
+            add(side, "támadás", "Kontroll visszavétele",
+                f"az ötperces szakaszok {rec426['lost']}/"
+                f"{len(rec426['blocks'])} részét elveszítettük "
+                f"birtoklásban ({CTL_MIN_BLOCKS} mért szakasztól "
+                "jelezzük) — a meccs a másik tempójában ment",
+                "kontroll-gyakorlás: hosszú, hibátlan támadás-"
+                "sorozatok (10 passz lövés előtt), időre játszott "
+                "birtoklás-játék 5-5-ben, és a labdaszerzés utáni "
+                "TUDATOS lassítás, ha a saját tempó kell",
+                )
+    except Exception:
+        pass
+
     # 425) Hetes-forrás: a hetes ára helyzet-függő, és a fegyelem
     # ott a legfontosabb, ahol a hetes születik.
     try:

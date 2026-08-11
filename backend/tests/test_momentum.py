@@ -2439,3 +2439,57 @@ def test_response_turnover_players_silent_after_one():
 
     rec = response_turnover_players(_rto_match([7]))["home"]
     assert rec["top"] is None, rec
+
+
+def _ctl_match(shares, fps=25.0, block_s=300.0):
+    """`shares` = ötperces blokkonként a HAZAI birtoklás aránya
+    (0..1). Minden blokkban a labda a megadott arányban van a hazai,
+    illetve a vendég játékosnál."""
+    from handball.models.tracking import (Ball, Frame, Match, MatchMeta,
+                                          PlayerPosition,
+                                          PositionSource, Team)
+
+    def _pl(tid, team, x, y):
+        return PlayerPosition(track_id=tid, team=team, x=x, y=y,
+                              source=PositionSource.MEASURED,
+                              confidence=1.0)
+
+    frames = []
+    t = 0
+    n = int(block_s * fps)
+    for share in shares:
+        hazai = int(n * share)
+        for i in range(n):
+            bx = 30.0 if i < hazai else 10.0
+            frames.append(Frame(
+                t=t,
+                players=[_pl(1, Team.HOME, 30.0, 10.0),
+                         _pl(21, Team.AWAY, 10.0, 10.0)],
+                ball=Ball(x=bx, y=10.0, confidence=1.0)))
+            t += 1
+    return Match(MatchMeta(match_id="ctl", home_team="H", away_team="A",
+                           fps=fps), frames)
+
+
+def test_control_timeline_marks_block_owners():
+    """Ötperces blokkonként megmondja, kié volt a birtoklás — és a
+    blokk-mérleg alapján, ki diktált."""
+    from handball.pipeline.momentum import (CTL_OWN_PCT,
+                                            control_timeline)
+
+    rec = control_timeline(_ctl_match([0.9, 0.9, 0.9, 0.2]))["home"]
+    assert len(rec["blocks"]) == 4, rec["blocks"]
+    assert rec["blocks"][0]["poss_pct"] >= CTL_OWN_PCT
+    assert rec["won"] == 3 and rec["lost"] == 1, rec
+    assert rec["verdict"] and "diktálnak" in rec["verdict"], rec
+    # A vendég oldalon ugyanez a kép, fordítva.
+    tukor = control_timeline(_ctl_match([0.9, 0.9, 0.9, 0.2]))["away"]
+    assert tukor["won"] == 1 and tukor["lost"] == 3, tukor
+
+
+def test_control_timeline_silent_with_few_blocks():
+    """Két blokkból nincs ítélet."""
+    from handball.pipeline.momentum import control_timeline
+
+    rec = control_timeline(_ctl_match([0.9, 0.9]))["home"]
+    assert rec["verdict"] is None and rec["best"] is None, rec

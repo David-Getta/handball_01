@@ -4682,6 +4682,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.momentum import control_timeline
+            res["control_timeline"] = control_timeline(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5623,6 +5628,9 @@ def create_app():
                 _layer("gk_after_goal", lambda: gk_after_goal(match))
                 from ..pipeline.rules import seven_sources
                 _layer("seven_sources", lambda: seven_sources(match))
+                from ..pipeline.momentum import control_timeline
+                _layer("control_timeline",
+                       lambda: control_timeline(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

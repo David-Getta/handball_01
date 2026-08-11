@@ -144,6 +144,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("állás", "Sprint-állás", "stats", "sprints_by_score"),
         ("állás", "Poszt-állás", "roles", "role_share_by_score"),
         ("állás", "Óralopás", "momentum", "clock_management"),
+        ("állás", "Kontroll-idővonal", "momentum",
+         "control_timeline"),
         # --- felkészülés: poszt-profil (állandó tulajdonság) ---------
         ("felkészülés", "Poszt-lövéstávolság", "roles",
          "role_shot_distance"),

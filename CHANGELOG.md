@@ -5,6 +5,20 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Kontroll-idővonal: ki diktált ötpercenként.** A negyedóra-profil
+  az EREDMÉNYT bontja szakaszokra — az új réteg a KONTROLLT:
+  ötperces blokkonként megnézi, kié volt a birtoklás nagyobb része, és
+  mennyi helyzetet (xG) teremtettek benne. Egy blokk akkor "övék", ha
+  a birtoklásuk eléri a 60%-ot. Edzőileg: a gólkülönbség hazudhat (két
+  kapus-bravúr átírja) — a kontroll-kép azt mutatja, hol kellett volna
+  időkérés; ha egy csapat egymás utáni blokkokat visz, a másik
+  oldalon a felállás vagy a fal nem működik. Három mért blokktól
+  ítél. A rangsorban az "állás" családba tartozik. Felületek:
+  /analyze + meccs-csomag (`control_timeline`), edzői összefoglaló,
+  felderítés (`ctl_won` / `ctl_lost` / `ctl_blocks` mezők + edzői
+  kulcs + 406. meccsterv-szabály), edzés-fókusz (426. szabály),
+  kliens-csempe.
+
 - **Stílus-távolság: tükör-meccs vagy ellentétes stílus.** A
   meccsterv-illesztés az erősség–gyengeség kereszteket adja — az új
   mérés a KÉPET: a két felderítés közös stílus-tengelyeit
