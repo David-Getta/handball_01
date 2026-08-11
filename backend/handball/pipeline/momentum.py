@@ -3019,6 +3019,78 @@ SSR_MIN_GOALS = 3
 SSR_SHARE_PCT = 60.0
 
 
+# Újrakezdő emberek: ennyi szünet utáni gól kell a névhez, és
+# ekkora részarány fölött mondjuk ki, hogy az újrakezdés egy emberre
+# épül.
+SSP_MIN_GOALS = 2
+SSP_SHARE_PCT = 50.0
+
+
+def second_start_scorers(match: Match, config=None) -> dict:
+    """Újrakezdő emberek: KI viszi a szünet utáni rajtot.
+
+    Az újrakezdő-poszt (second_start_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a második félidő első SSR_WINDOW_S másodpercének
+    góljait a lövő nevéhez írja.
+
+    Edzőileg ez a szünet utáni párosítás terve névre szólóan: sok
+    csapat a szünetben beszéli meg, kire építi az újrakezdést — ha
+    az rendre ugyanaz az ember, a második félidő elején ŐT kell a
+    legjobb védővel megfogni, és a szünet utáni elhúzásuk elmarad.
+    Saját csapatra: a második félidei nyitó-megoldás ne egy emberen
+    álljon.
+
+    Visszatérés csapatonként: {"goals", "players": [{"player_id",
+    "jersey", "goals"}], "top"} — a "top" az első játékos, ha
+    legalább SSP_MIN_GOALS szünet utáni gólja van, és ez a csapat
+    szünet utáni góljainak legalább SSP_SHARE_PCT-a; szünet-jel
+    nélkül üres a kép.
+    """
+    from .event_detection import EventType, detect_shots
+    from .halftime import detect_halftime
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    out: dict = {side: {"goals": 0, "players": [], "top": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+    cut = ht + SSR_WINDOW_S * fps
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        if not (ht < e.t <= cut):
+            continue
+        side = getattr(e.team, "value", e.team)
+        if side not in tally:
+            continue
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "goals": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["goals"] for r in rows)
+        top = None
+        if rows and rows[0]["goals"] >= SSP_MIN_GOALS:
+            share = 100.0 * rows[0]["goals"] / max(1, total)
+            if share >= SSP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"goals": total, "players": rows, "top": top}
+    return out
+
+
 def second_start_roles(match: Match, config=None) -> dict:
     """Újrakezdő-poszt: MELYIK POSZTJUK viszi a szünet utáni rajtot.
 

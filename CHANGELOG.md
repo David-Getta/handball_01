@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Újrakezdő emberek: ki viszi a szünet utáni rajtot.** Az
+  újrakezdő-poszt a posztot nevezi meg — az új réteg az embert: a
+  második félidő első tíz percének góljait a lövő nevéhez írja.
+  Edzőileg ez a szünet utáni párosítás terve névre szólóan: sok
+  csapat a szünetben beszéli meg, kire építi az újrakezdést — ha az
+  rendre ugyanaz az ember, a második félidő elején ŐT kell a legjobb
+  védővel megfogni. Saját csapatra: a második félidei nyitó-megoldás
+  ne egy emberen álljon. Két szünet utáni góltól és a gólok felétől
+  emel ki nevet; félidő-jel nélkül hallgat. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag
+  (`second_start_scorers`), edzői összefoglaló, felderítés
+  (`ssp_goals_by_player` mező + edzői kulcs + 414.
+  meccsterv-szabály), edzés-fókusz (434. szabály), kliens-csempe.
+
 - **Rajt-emberek: ki viszi a meccs elejét.** A rajt-poszt a posztot
   nevezi meg — az új réteg az embert: a meccs első tíz percének
   góljait a lövő nevéhez írja. Edzőileg ez a meccs eleji párosítás

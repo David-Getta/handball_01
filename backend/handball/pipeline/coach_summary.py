@@ -2960,6 +2960,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "megfogni.")
     except Exception:
         pass
+    # Újrakezdő emberek: ki viszi a szünet utáni rajtot.
+    try:
+        from .momentum import second_start_scorers
+        ssp = second_start_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_ssp = ssp[side]["top"]
+            if top_ssp is None:
+                continue
+            _ki15 = (f"a(z) {top_ssp['jersey']}. számú"
+                     if top_ssp.get("jersey") is not None
+                     else f"a(z) {top_ssp['player_id']}. játékos")
+            body += (f" A(z) {name} szünet utáni góljai {_ki15} "
+                     f"nevéhez kötődnek ({top_ssp['goals']} gól) — a "
+                     "második félidő elején rá kell a legjobb védő.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

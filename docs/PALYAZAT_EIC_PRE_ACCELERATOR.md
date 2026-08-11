@@ -76,7 +76,7 @@ A Pre-accelerator belépője a **validált TRL 4**, a projekt vége TRL 5–6.
 | TRL | Jelentés | SportMachine-bizonyíték ma |
 |---|---|---|
 | TRL 3 | kísérleti proof-of-concept | ✔ a teljes pipeline szimulált meccseken end-to-end működik |
-| **TRL 4** | **laborban validált technológia** | 🟡 erős alap: 1658 automata teszt (élő szám: `docs/SZAMOK.md`), reprodukálható benchmark (`python -m scripts.benchmark`), beépített validációs modul (precision/recall/F1 az eseményfelismerésre — `pipeline/validation.py`), minőség-önellenőrzés. **Hiányzik: kézzel annotált VALÓS meccsfelvételeken mért, dokumentált pontosság.** |
+| **TRL 4** | **laborban validált technológia** | 🟡 erős alap: 1660 automata teszt (élő szám: `docs/SZAMOK.md`), reprodukálható benchmark (`python -m scripts.benchmark`), beépített validációs modul (precision/recall/F1 az eseményfelismerésre — `pipeline/validation.py`), minőség-önellenőrzés. **Hiányzik: kézzel annotált VALÓS meccsfelvételeken mért, dokumentált pontosság.** |
 | TRL 5 | releváns környezetben validált | ⬜ a projekt tárgya: valós felvételek + pilot-klubok |
 | TRL 6 | releváns környezetben demonstrált | ⬜ a projekt tárgya: több klubos, szezonon átívelő pilot |
 
@@ -110,7 +110,7 @@ A Pre-accelerator belépője a **validált TRL 4**, a projekt vége TRL 5–6.
   lenyomatának felismerése követési adatból — a piacon egyedülálló;
 - **magyarázható MI-lánc**: minden ítélet mögött kimondott küszöb és
   visszakövethető szabály (AI Act / GDPR szempontból is érv);
-- **461 elemző réteg** és **1658 automata teszt** — mérhető, verziók
+- **462 elemző réteg** és **1660 automata teszt** — mérhető, verziók
   közt összevethető minőség ("kevés minta → nincs ítélet" elv). A
   számok a kódbázisból generáltak és őr-teszttel frissen tartottak:
   `docs/SZAMOK.md` (tény-lap) + `docs/RETEG_KATALOGUS.md`

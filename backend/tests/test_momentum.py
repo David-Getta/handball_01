@@ -2184,6 +2184,28 @@ def test_second_start_roles_silent_without_break():
     assert rec["main_role"] is None and rec["verdict"] is None, rec
 
 
+def test_second_start_scorers_names_the_restart_man():
+    """Ha a szünet utáni gólok egy embertől jönnek, a második félidő
+    elején őt kell megfogni."""
+    from handball.pipeline.momentum import (SSP_MIN_GOALS,
+                                            second_start_scorers)
+
+    rec = second_start_scorers(
+        _fdp_match([9, 9], [7, 7, 7, 9]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["goals"] >= SSP_MIN_GOALS, rec
+
+
+def test_second_start_scorers_silent_without_break():
+    """Felismert szünet nélkül nincs megnevezett ember."""
+    from handball.pipeline.momentum import second_start_scorers
+
+    rec = second_start_scorers(
+        _fdp_match([9, 9], [7, 7, 7], with_break=False))["home"]
+    assert rec["top"] is None, rec
+
+
 # ---- Előnyben-poszt (vezetésnél melyik posztjuk viszi a játékot) -----------
 
 

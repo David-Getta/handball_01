@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 434) Újrakezdő emberek: a szünet utáni nyitás ne egy emberen
+    # álljon.
+    try:
+        from .momentum import SSP_MIN_GOALS, second_start_scorers
+        ssp434 = second_start_scorers(match, config)
+        for side in ("home", "away"):
+            top434 = ssp434[side].get("top")
+            if top434 is None:
+                continue
+            _ki434 = (f"a(z) {top434['jersey']}. számú"
+                      if top434.get("jersey") is not None
+                      else f"a(z) {top434['player_id']}. játékos")
+            add(side, "támadás", "Szünet utáni nyitás szétosztva",
+                f"a szünet utáni góljaink {_ki434} nevéhez kötődnek "
+                f"({top434['goals']} gól; {SSP_MIN_GOALS} góltól már "
+                "jelezzük) — ha rá készülnek, az újrakezdésünk "
+                "elmarad",
+                "két kidolgozott újrakezdő megoldás (más oldal, más "
+                "befejező), a szünetben KIMONDOTT első két támadás, "
+                "és a második félidő eleji felállás próbája "
+                "edzésen",
+                )
+    except Exception:
+        pass
+
     # 433) Rajt-emberek: az egy emberre épülő rajt kockázat.
     try:
         from .momentum import OSP_MIN_GOALS, opening_scorers
