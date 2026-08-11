@@ -3,7 +3,7 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **451 réteg**, modulonként csoportosítva; a
+Összesen **452 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
 ## attack_types (88)
@@ -227,7 +227,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `shot_speed_fade` | Lövőerő-esés: a lövés-sebesség változása az 1. és a 2. félidő között — |
 | `shot_speeds` | Lövés-sebességek a labda-kinematikából. |
 
-## goalkeeper (40)
+## goalkeeper (41)
 
 | Réteg | Mit mér |
 |---|---|
@@ -235,6 +235,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `empty_net_context` | A 7 a 6 szakaszok játékhelyzete: állásból és időből mikor húzzák |
 | `empty_net_goals` | Üres kapura kapott gólok: a 7 a 6 (lehozott kapus) ára. |
 | `empty_net_turnovers` | 7a6 eladás: MENNYIBE KERÜL egy elvesztett labda üres kapunál. |
+| `gk_after_goal` | Kapus a kapott gól után: BEESIK-E, amíg friss a seb. |
 | `gk_assists` | Kapus-gólpassz: hány gól indul KÖZVETLENÜL a kapus kezéből. |
 | `gk_break_response` | Lerohanás-védés: hogy véd a kapus gyorsindítás ellen. |
 | `gk_change_effect` | Kapuscsere-hatás: segített-e a kapuscsere. |
@@ -348,7 +349,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `key_pair` | Kulcs-páros: HÁNY RÉTEG mutat ugyanarra a POSZTPÁRRA. |
 | `key_player` | Kulcs-ember: HÁNY RÉTEG mutat ugyanarra a JÁTÉKOSRA. |
 | `key_post` | Kulcs-poszt: HÁNY RÉTEG mutat ugyanarra a posztra. |
-| `priority_findings` | Teendő-rangsor: a megszólaló ítéletek fontossági sorrendben. |
+| `priority_findings` | Teendő-rangsor (lásd `_priority_findings_cached`). |
 
 ## quality (1)
 

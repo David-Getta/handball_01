@@ -2723,6 +2723,30 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "adja ($n mért játékosból) · a hajrában rájuk kell vinni a tempót";
   }
 
+  // Kapus a kapott gól után: beesik-e, amíg friss a seb (sávonként
+  // 4+ lövés, 15 százalékpontos eltérés — a backenddel azonos
+  // küszöbök: GKA_MIN_SHOTS, GKA_GAP_PP).
+  String? _keeperAfterGoal(Map<String, dynamic> r) {
+    final fs = (r["gka_fresh_shots"] as num?)?.toInt() ?? 0;
+    final fv = (r["gka_fresh_saves"] as num?)?.toInt() ?? 0;
+    final rs = (r["gka_rest_shots"] as num?)?.toInt() ?? 0;
+    final rv = (r["gka_rest_saves"] as num?)?.toInt() ?? 0;
+    if (fs < 4 || rs < 4) return null;
+    final fp = 100.0 * fv / fs;
+    final rp = 100.0 * rv / rs;
+    if (rp - fp >= 15.0) {
+      return "a kapusuk beesik a kapott gól után "
+          "(${fp.toStringAsFixed(0)}% vs ${rp.toStringAsFixed(0)}%) · "
+          "gól után azonnal ismételjétek a képet";
+    }
+    if (fp - rp >= 15.0) {
+      return "a kapusuk felébred a kapott góltól "
+          "(${fp.toStringAsFixed(0)}% vs ${rp.toStringAsFixed(0)}%) · "
+          "gól után kidolgozott támadás kell";
+    }
+    return null;
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10513,6 +10537,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Figura-kopás", _setplayDecay(r)!],
       if (_runningLoad(r) != null)
         ["Futómunka-eloszlás", _runningLoad(r)!],
+      if (_keeperAfterGoal(r) != null)
+        ["Kapus a kapott gól után", _keeperAfterGoal(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

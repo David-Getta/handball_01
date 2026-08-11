@@ -1085,6 +1085,12 @@ class ScoutingReport:
     # Futómunka-eloszlás: a mért mezőnyjátékosok száma, a teljes
     # futott táv és a három legtöbbet futó táv (méterben, egészre
     # kerekítve). Összeg, meccsek közt összegződik.
+    # Kapus a kapott gól után: a "friss seb" és a többi lövés
+    # darabszáma, illetve a védések. Darabszám, összegződik.
+    gka_fresh_shots: int = 0
+    gka_fresh_saves: int = 0
+    gka_rest_shots: int = 0
+    gka_rest_saves: int = 0
     lbl_players: int = 0
     lbl_distance_m: int = 0
     lbl_top3_m: int = 0
@@ -4543,6 +4549,23 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 "hajrára elfogynak: az utolsó húsz percben rájuk "
                 "kell vinni a tempót, és a cserehullámuk után se "
                 "lassítsatok.")
+
+    # Kapus a kapott gól után: mikor éri meg azonnal ismételni.
+    if rep.gka_fresh_shots >= 4 and rep.gka_rest_shots >= 4:
+        _gka_f = 100.0 * rep.gka_fresh_saves / rep.gka_fresh_shots
+        _gka_r = 100.0 * rep.gka_rest_saves / rep.gka_rest_shots
+        if _gka_r - _gka_f >= 15.0:
+            keys.append(
+                f"A kapusuk a kapott gól utáni két lövésen csak "
+                f"{_gka_f:.0f}%-ot véd (egyébként {_gka_r:.0f}%) — a "
+                "gól UTÁNI percben kell újra lőni: gyors "
+                "középkezdés, ugyanaz a kép, ugyanaz a sarok.")
+        elif _gka_f - _gka_r >= 15.0:
+            keys.append(
+                f"A kapusuk felébred a kapott góltól ({_gka_f:.0f}% "
+                f"védés a következő két lövésen, egyébként "
+                f"{_gka_r:.0f}%) — gól után ne kapkodjatok, a "
+                "következő támadást dolgozzátok ki.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9988,6 +10011,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .goalkeeper import gk_after_goal as _gka
+        gkarec = _gka(match, config)[team.value]
+        rep.gka_fresh_shots = gkarec["fresh_shots"]
+        rep.gka_fresh_saves = gkarec["fresh_saves"]
+        rep.gka_rest_shots = gkarec["rest_shots"]
+        rep.gka_rest_saves = gkarec["rest_saves"]
         from .stats import running_load_balance as _lbl
         lblrec = _lbl(match, config)[team.value]
         rep.lbl_players = lblrec["players"]
@@ -12810,6 +12839,21 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 403) Az ő megingó kapusuk × a ti gyors középkezdésetek: a
+    # gól utáni percben kell újra lőni.
+    if (opp.gka_fresh_shots >= 4 and opp.gka_rest_shots >= 4
+            and own.rs_fast >= 2):
+        _gka403_f = 100.0 * opp.gka_fresh_saves / opp.gka_fresh_shots
+        _gka403_r = 100.0 * opp.gka_rest_saves / opp.gka_rest_shots
+        if _gka403_r - _gka403_f >= 15.0:
+            plan.append(
+                f"A kapusuk a kapott gól utáni két lövésen csak "
+                f"{_gka403_f:.0f}%-ot véd (egyébként "
+                f"{_gka403_r:.0f}%), ti pedig tudtok gyorsan kezdeni "
+                f"({own.rs_fast} gyors középkezdés) — gól után "
+                "azonnal ismételjétek ugyanazt a képet, ugyanabba a "
+                "sarokba.")
 
     # 402) Az ő koncentrált futómunkájuk × a ti tempótok: a három
     # futó embert kell elfárasztani.
@@ -19750,6 +19794,10 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.otp_outlets_by_player for r in reports),
         dtp_frames_by_player=_merge_count_dicts(
             r.dtp_frames_by_player for r in reports),
+        gka_fresh_shots=sum(r.gka_fresh_shots for r in reports),
+        gka_fresh_saves=sum(r.gka_fresh_saves for r in reports),
+        gka_rest_shots=sum(r.gka_rest_shots for r in reports),
+        gka_rest_saves=sum(r.gka_rest_saves for r in reports),
         lbl_players=max((r.lbl_players for r in reports), default=0),
         lbl_distance_m=sum(r.lbl_distance_m for r in reports),
         lbl_top3_m=sum(r.lbl_top3_m for r in reports),

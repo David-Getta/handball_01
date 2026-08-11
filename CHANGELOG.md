@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Kapus a kapott gól után: beesik-e, amíg friss a seb.** A
+  kapus-sorozat a jó szériát méri, a kapus-hidegedés a tétlenséget —
+  az új réteg a lélektant: minden rá kaputra érkező lövésnél
+  megnézi, hányadik a legutóbb kapott gólja óta, és a következő két
+  lövést külön vödörbe teszi. Edzőileg: ha a kapusuk a kapott gól
+  után beesik, a gól UTÁNI percben kell újra lőni (gyors
+  középkezdés, ugyanaz a kép, ugyanaz a sarok); ha éppen felébred
+  tőle, a gól utáni kapkodás ajándék — a következő támadást ki kell
+  dolgozni. Saját kapusnál ez rutin-kérdés: rögzített újraindulás a
+  kapott gól után. Sávonként négy lövéstől és 15 százalékpontos
+  eltéréstől ítél. A rangsorban a "fáradás" családba tartozik.
+  Felületek: /analyze + meccs-csomag (`gk_after_goal`), edzői
+  összefoglaló, felderítés (`gka_*` mezők + edzői kulcs + 403.
+  meccsterv-szabály), edzés-fókusz (424. szabály), kliens-csempe.
+
 - **Ember-lencse a meccs-jelentésben.** A néven nevező rétegek eddig
   csak az app csempéin és a Kulcs-ember indoklásában látszottak — most
   a nyomtatható jelentés is hoz egy táblát belőlük: melyik réteg kit

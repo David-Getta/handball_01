@@ -129,6 +129,8 @@ def _registry() -> list[tuple[str, str, str, str]]:
         ("fáradás", "Fal-fáradás", "xg", "wall_fade"),
         ("fáradás", "Blokk-fáradás", "defense", "block_fade"),
         ("fáradás", "Kapus-forma", "goalkeeper", "gk_save_fade"),
+        ("fáradás", "Kapus a kapott gól után", "goalkeeper",
+         "gk_after_goal"),
         ("fáradás", "Fegyelem-esés", "rules", "discipline_fade"),
         ("fáradás", "Sprint-esés", "stats", "sprint_fade"),
         ("fáradás", "Futómunka-eloszlás", "stats",

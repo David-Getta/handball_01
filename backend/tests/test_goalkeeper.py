@@ -1659,6 +1659,46 @@ def _gcs_match(cold_saves, warm_saves, fps=25.0):
     return _match(frames, fps)
 
 
+def _gag_match(seq, fps=25.0):
+    """A vendég kapusra érkező lövések időrendben: True = védés,
+    False = gól. A lövések közt 8 mp szünet (külön események)."""
+    frames = []
+    t = 0
+    for save in seq:
+        for _ in range(int(8 * fps)):
+            frames.append(Frame(t=t, players=[
+                _svk_pl(1, Team.HOME, 20.0, 6.0)],
+                ball=Ball(x=20.0, y=6.0, confidence=1.0)))
+            t += 1
+        frames.extend(_shot_sequence(t, gk_track=9, save=save))
+        t = frames[-1].t + 1
+    return _match(frames, fps)
+
+
+def test_gk_after_goal_flags_the_shaken_keeper():
+    """Ha a kapott gól utáni két lövésen érdemben rosszabbul véd, a
+    gól utáni percben kell újra lőni."""
+    from handball.pipeline.goalkeeper import GKA_GAP_PP, gk_after_goal
+
+    seq = []
+    for _ in range(3):
+        seq += [False, False, False]      # gól, majd friss sebbel kettő
+        seq += [True, True, True, True]   # utána nyugodt védések
+    rec = gk_after_goal(_gag_match(seq))["away"]
+    assert rec["fresh_shots"] >= 4 and rec["rest_shots"] >= 4, rec
+    assert rec["gap_pp"] is not None
+    assert rec["rest_pct"] - rec["fresh_pct"] >= GKA_GAP_PP, rec
+    assert rec["verdict"] and "gyors középkezdés" in rec["verdict"], rec
+
+
+def test_gk_after_goal_silent_with_few_shots():
+    """Kevés lövésből nincs ítélet."""
+    from handball.pipeline.goalkeeper import gk_after_goal
+
+    rec = gk_after_goal(_gag_match([False, True, True]))["away"]
+    assert rec["gap_pp"] is None and rec["verdict"] is None, rec
+
+
 def test_gk_cold_streaks_flags_the_cold_prone_keeper():
     """Hidegen 0/4, melegen 4/4 védés → hidegen sebezhető."""
     from handball.pipeline.goalkeeper import gk_cold_streaks

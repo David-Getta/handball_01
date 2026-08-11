@@ -4672,6 +4672,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.goalkeeper import gk_after_goal
+            res["gk_after_goal"] = gk_after_goal(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5609,6 +5614,8 @@ def create_app():
                 from ..pipeline.stats import running_load_balance
                 _layer("running_load_balance",
                        lambda: running_load_balance(match))
+                from ..pipeline.goalkeeper import gk_after_goal
+                _layer("gk_after_goal", lambda: gk_after_goal(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

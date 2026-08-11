@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 424) Kapus a kapott gól után: a újraindulás rutin-kérdés.
+    try:
+        from .goalkeeper import GKA_GAP_PP, gk_after_goal
+        gka424 = gk_after_goal(match, config)
+        for side in ("home", "away"):
+            rec424 = gka424[side]
+            if rec424["gap_pp"] is None:
+                continue
+            if rec424["gap_pp"] > -GKA_GAP_PP:
+                continue
+            add(side, "kapus", "Újraindulás kapott gól után",
+                f"a kapusunk a kapott gól utáni két lövésen "
+                f"{rec424['fresh_pct']:.0f}%-ot véd, egyébként "
+                f"{rec424['rest_pct']:.0f}%-ot — a friss seb "
+                "ajándék-gólokat ér",
+                "rögzített újraindulás: kapott gól után azonos rutin "
+                "(törlés, kesztyű-ütés, első labda a kezébe), "
+                "gyors-ismétléses védés-gyakorlat (két lövés 10 mp-en "
+                "belül), és a mezőny kijelölt embere hozzálép egy "
+                "mondatra",
+                )
+    except Exception:
+        pass
+
     # 423) Futómunka-eloszlás: a koncentrált futás csere- és
     # terhelés-kérdés.
     try:

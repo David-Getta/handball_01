@@ -2800,6 +2800,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "percben rájuk kell vinni a tempót.")
     except Exception:
         pass
+    # Kapus a kapott gól után: beesik-e, amíg friss a seb.
+    try:
+        from .goalkeeper import gk_after_goal
+        gka = gk_after_goal(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_gka = gka[side]
+            if rec_gka["verdict"] is None:
+                continue
+            body += (f" A(z) {name} kapusa a kapott gól utáni két "
+                     f"lövésen {rec_gka['fresh_pct']:.0f}%-ot véd, "
+                     f"egyébként {rec_gka['rest_pct']:.0f}%-ot — "
+                     f"{rec_gka['verdict'].split(' — ')[-1]}.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

@@ -2084,6 +2084,93 @@ GCS_MIN_FACED = 4
 GCS_GAP_PP = 15.0
 
 
+# Kapus a kapott gól után: a bekapott gólt követő ennyi kaputra
+# tartó lövés számít "friss sebnek", sávonként ennyi lövés kell az
+# ítélethez, és ekkora (százalékpontos) eltérés számít érdeminek.
+GKA_NEXT = 2
+GKA_MIN_SHOTS = 4
+GKA_GAP_PP = 15.0
+
+
+def gk_after_goal(match: Match, config=None) -> dict:
+    """Kapus a kapott gól után: BEESIK-E, amíg friss a seb.
+
+    A kapus-sorozat (gk_save_streaks) a jó szériát méri, a
+    kapus-hidegedés (gk_cold_streaks) a tétlenséget — ez a
+    LÉLEKTANT: minden rá kaputra érkező lövésnél megnézi, hányadik a
+    legutóbb kapott gólja óta. Az első GKA_NEXT lövés a "friss seb"
+    vödörbe kerül, a többi a maradékba, és külön védés-arányt
+    számolunk.
+
+    Edzőileg: ha a kapusuk a kapott gól után beesik, a gól UTÁNI
+    percben kell újra lőni — gyors középkezdés, ugyanaz a kép,
+    ugyanaz a sarok, mielőtt összeszedi magát. Ha a kapott gól után
+    éppen hogy jobban véd (van, aki felébred tőle), ott a gól utáni
+    kapkodás ajándék: a következő támadást ki kell dolgozni. Saját
+    kapusnál ez rutin-kérdés: kapott gól után rögzített
+    újraindulás (törlés, kesztyű-ütés, első labda a kezébe).
+
+    Visszatérés csapatonként (a VÉDŐ oldal): {"fresh_shots",
+    "fresh_saves", "rest_shots", "rest_saves", "fresh_pct",
+    "rest_pct", "gap_pp", "verdict"} — a pct/gap/verdict None, ha
+    valamelyik sávban kevés (GKA_MIN_SHOTS alatti) a lövés.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    detect_goalkeepers(match)
+
+    out = {side: {"fresh_shots": 0, "fresh_saves": 0,
+                  "rest_shots": 0, "rest_saves": 0,
+                  "fresh_pct": None, "rest_pct": None,
+                  "gap_pp": None, "verdict": None}
+           for side in ("home", "away")}
+
+    since: dict = {"home": None, "away": None}
+    for e in sorted(detect_shots(match, config), key=lambda ev: ev.t):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        outcome = (e.detail or {}).get("outcome")
+        if outcome not in ("goal", "save"):
+            continue  # a mellé menő lövés nem a kapus munkája
+        atk = getattr(e.team, "value", e.team)
+        deff = "away" if atk == "home" else "home"
+        rec = out[deff]
+        n = since[deff]
+        kulcs = "fresh" if (n is not None and n < GKA_NEXT) else "rest"
+        rec[f"{kulcs}_shots"] += 1
+        if outcome == "save":
+            rec[f"{kulcs}_saves"] += 1
+        if outcome == "goal":
+            since[deff] = 0
+        elif n is not None:
+            since[deff] = n + 1
+
+    for rec in out.values():
+        if (rec["fresh_shots"] >= GKA_MIN_SHOTS
+                and rec["rest_shots"] >= GKA_MIN_SHOTS):
+            fp = 100.0 * rec["fresh_saves"] / rec["fresh_shots"]
+            rp = 100.0 * rec["rest_saves"] / rec["rest_shots"]
+            rec["fresh_pct"] = round(fp, 1)
+            rec["rest_pct"] = round(rp, 1)
+            rec["gap_pp"] = round(fp - rp, 1)
+            if rp - fp >= GKA_GAP_PP:
+                rec["verdict"] = (
+                    f"a kapusuk beesik a kapott gól után ({fp:.0f}% "
+                    f"védés a következő két lövésen, egyébként "
+                    f"{rp:.0f}%) — a gól UTÁNI percben kell újra "
+                    "lőni: gyors középkezdés, ugyanaz a kép, ugyanaz "
+                    "a sarok")
+            elif fp - rp >= GKA_GAP_PP:
+                rec["verdict"] = (
+                    f"a kapusuk felébred a kapott góltól ({fp:.0f}% "
+                    f"védés a következő két lövésen, egyébként "
+                    f"{rp:.0f}%) — gól után ne kapkodjatok: a "
+                    "következő támadást ki kell dolgozni")
+    return out
+
+
 def gk_cold_streaks(match: Match, config=None) -> dict:
     """Kapus-hidegedés: HIDEG KÉZZEL beesik-e a védése.
 
