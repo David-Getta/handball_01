@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 433) Rajt-emberek: az egy emberre épülő rajt kockázat.
+    try:
+        from .momentum import OSP_MIN_GOALS, opening_scorers
+        osp433 = opening_scorers(match, config)
+        for side in ("home", "away"):
+            top433 = osp433[side].get("top")
+            if top433 is None:
+                continue
+            _ki433 = (f"a(z) {top433['jersey']}. számú"
+                      if top433.get("jersey") is not None
+                      else f"a(z) {top433['player_id']}. játékos")
+            add(side, "támadás", "Második nyitó-megoldás",
+                f"a meccs eleji góljaink {_ki433} nevéhez kötődnek "
+                f"({top433['goals']} nyitó-gól; {OSP_MIN_GOALS} "
+                "góltól már jelezzük) — ha rá készülnek, a rajtunk "
+                "elmarad",
+                "nyitó-figurák másik befejezővel: két kidolgozott "
+                "kezdő megoldás (más oldal, más poszt), és a meccs "
+                "eleji felállás próbája edzésen — az első három "
+                "támadás legyen begyakorolt",
+                )
+    except Exception:
+        pass
+
     # 432) Válaszoló emberek: ha a válasz egy emberen áll, a
     # bekapott gól után kiszámíthatók vagyunk.
     try:

@@ -2130,6 +2130,26 @@ def test_opening_scorer_roles_names_the_starting_post():
     assert rec["verdict"] and "első tíz percben" in rec["verdict"], rec
 
 
+def test_opening_scorers_names_the_starter():
+    """Ha a meccs eleji gólok egy embertől jönnek, az első tíz
+    percben őt kell a legjobb védővel megfogni."""
+    from handball.pipeline.momentum import (OSP_MIN_GOALS,
+                                            opening_scorers)
+
+    rec = opening_scorers(_hhr_match([7, 9, 7, 7]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["goals"] >= OSP_MIN_GOALS, rec
+
+
+def test_opening_scorers_silent_with_one_goal():
+    """Egyetlen nyitó-gólból nem nevezünk meg embert."""
+    from handball.pipeline.momentum import opening_scorers
+
+    rec = opening_scorers(_hhr_match([7]))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_opening_scorer_roles_silent_with_few_goals():
     """Néhány meccs eleji gólból nincs ítélet."""
     from handball.pipeline.momentum import opening_scorer_roles

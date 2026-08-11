@@ -2881,6 +2881,71 @@ OSR_MIN_GOALS = 3
 OSR_SHARE_PCT = 60.0
 
 
+# Rajt-emberek: ennyi nyitó-gól kell a névhez, és ekkora részarány
+# fölött mondjuk ki, hogy a meccs elejét egy ember viszi.
+OSP_MIN_GOALS = 2
+OSP_SHARE_PCT = 50.0
+
+
+def opening_scorers(match: Match, config=None) -> dict:
+    """Rajt-emberek: KI viszi a meccs elejét.
+
+    A rajt-poszt (opening_scorer_roles) a POSZTOT nevezi meg — ez az
+    EMBERT: a meccs első OSR_WINDOW_S másodpercének góljait a lövő
+    nevéhez írja.
+
+    Edzőileg ez a meccs eleji párosítás terve névre szólóan: ha a
+    rajtjuk rendre ugyanattól az embertől indul, az első tíz percben
+    ŐT kell a legjobb védővel megfogni — a korai elhúzásuk motorja
+    nélkül a nyitás kiegyenlített marad. Saját csapatra: az egy
+    emberre épülő rajt kockázat, kell a második nyitó-megoldás.
+
+    Visszatérés csapatonként: {"goals", "players": [{"player_id",
+    "jersey", "goals"}], "top"} — a "top" az első játékos, ha
+    legalább OSP_MIN_GOALS nyitó-gólja van, és ez a csapat
+    nyitó-góljainak legalább OSP_SHARE_PCT-a, különben None.
+    """
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    t0 = match.frames[0].t if match.frames else 0
+    cut = t0 + OSR_WINDOW_S * fps
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type != EventType.GOAL or e.player_id is None:
+            continue
+        if e.t > cut:
+            continue
+        side = getattr(e.team, "value", e.team)
+        if side not in tally:
+            continue
+        tally[side][e.player_id] = tally[side].get(e.player_id, 0) + 1
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "goals": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["goals"] for r in rows)
+        top = None
+        if rows and rows[0]["goals"] >= OSP_MIN_GOALS:
+            share = 100.0 * rows[0]["goals"] / max(1, total)
+            if share >= OSP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"goals": total, "players": rows, "top": top}
+    return out
+
+
 def opening_scorer_roles(match: Match, config=None) -> dict:
     """Rajt-poszt: MELYIK POSZTJUK viszi a meccs elejét.
 

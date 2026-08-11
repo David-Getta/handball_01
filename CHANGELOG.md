@@ -5,6 +5,19 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Rajt-emberek: ki viszi a meccs elejét.** A rajt-poszt a posztot
+  nevezi meg — az új réteg az embert: a meccs első tíz percének
+  góljait a lövő nevéhez írja. Edzőileg ez a meccs eleji párosítás
+  terve névre szólóan: az első tíz percben ŐT kell a legjobb védővel
+  megfogni — a korai elhúzásuk motorja nélkül a nyitás kiegyenlített
+  marad. Saját csapatra: az egy emberre épülő rajt kockázat, kell a
+  második nyitó-megoldás. Két nyitó-góltól és a nyitó-gólok felétől
+  emel ki nevet. A rangsorban az "ember" családba tartozik, és a
+  Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`opening_scorers`), edzői összefoglaló,
+  felderítés (`osp_goals_by_player` mező + edzői kulcs + 413.
+  meccsterv-szabály), edzés-fókusz (433. szabály), kliens-csempe.
+
 - **Válaszoló emberek: kapott gól után ki válaszol.** A válasz-poszt
   a posztot nevezi meg — az új réteg az embert: a kapott gólt egy
   percen belül követő saját gólokat a lövő nevéhez írja. Edzőileg ez

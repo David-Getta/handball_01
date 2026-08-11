@@ -2945,6 +2945,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "kötődik · a saját gólotok után rá váltsatok";
   }
 
+  // Rajt-emberek: ki viszi a meccs elejét (2+ nyitó-gól, a
+  // nyitó-gólok fele — a backenddel azonos küszöbök:
+  // OSP_MIN_GOALS, OSP_SHARE_PCT).
+  String? _openingScorer(Map<String, dynamic> r) {
+    final os = (r["osp_goals_by_player"] as Map?)?.cast<String, dynamic>();
+    if (os == null || os.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    os.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a meccs eleji góljaik $topN/$all része a(z) $top. nevéhez "
+        "kötődik · az első tíz percben őt kell megfogni";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10753,6 +10776,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Előkészítő ember", _lastPasser(r)!],
       if (_responseScorer(r) != null)
         ["Válaszoló ember", _responseScorer(r)!],
+      if (_openingScorer(r) != null)
+        ["Rajt-ember", _openingScorer(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

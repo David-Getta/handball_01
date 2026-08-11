@@ -2943,6 +2943,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "saját gólunk után rá kell váltani.")
     except Exception:
         pass
+    # Rajt-emberek: ki viszi a meccs elejét.
+    try:
+        from .momentum import opening_scorers
+        osp = opening_scorers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_osp = osp[side]["top"]
+            if top_osp is None:
+                continue
+            _ki14 = (f"a(z) {top_osp['jersey']}. számú"
+                     if top_osp.get("jersey") is not None
+                     else f"a(z) {top_osp['player_id']}. játékos")
+            body += (f" A(z) {name} meccs eleji góljai {_ki14} "
+                     f"nevéhez kötődnek ({top_osp['goals']} "
+                     "nyitó-gól) — az első tíz percben őt kell "
+                     "megfogni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles
