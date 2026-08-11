@@ -1078,6 +1078,10 @@ class ScoutingReport:
     # Kapus-visszaérés: a mért 7 a 6 szakaszok, a visszaérésre
     # összesen mért idő tizedmásodpercben, és a közben kapott gólok.
     # Darabszám/összeg, meccsek közt pontosan összegződik.
+    # Ellenszer-lap: a rangsor élén álló teendők és a hozzájuk
+    # talált gyakorlatok darabszáma. Darabszám, összegződik.
+    cpl_total: int = 0
+    cpl_matched: int = 0
     krt_measured: int = 0
     krt_sum_ds: int = 0
     krt_conceded: int = 0
@@ -4491,6 +4495,14 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{rep.krt_conceded} gól ez alatt) — a labdaszerzés "
                 "után NE álljatok fel: az első nézés a még üres "
                 "kapu legyen.")
+
+    # Ellenszer-lap: van-e kész gyakorlat a teendőikre.
+    if rep.cpl_total >= 3 and rep.cpl_matched < rep.cpl_total:
+        keys.append(
+            f"A rangsor élén álló {rep.cpl_total} teendőből "
+            f"{rep.cpl_matched}-hez van kész gyakorlat az "
+            "edzés-fókuszban — a maradékra a vezetőedző saját "
+            "megoldása kell, ezt a heti tervben külön jelöljétek.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9936,6 +9948,10 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .priorities import counter_plan as _cpl
+        cplrec = _cpl(match, config)[team.value]
+        rep.cpl_total = cplrec["total"]
+        rep.cpl_matched = cplrec["matched"]
         from .goalkeeper import keeper_return as _krt
         krtrec = _krt(match, config)[team.value]
         rep.krt_measured = krtrec["measured"]
@@ -19654,6 +19670,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.otp_outlets_by_player for r in reports),
         dtp_frames_by_player=_merge_count_dicts(
             r.dtp_frames_by_player for r in reports),
+        cpl_total=sum(r.cpl_total for r in reports),
+        cpl_matched=sum(r.cpl_matched for r in reports),
         krt_measured=sum(r.krt_measured for r in reports),
         krt_sum_ds=sum(r.krt_sum_ds for r in reports),
         krt_conceded=sum(r.krt_conceded for r in reports),

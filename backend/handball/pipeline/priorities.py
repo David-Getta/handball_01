@@ -770,3 +770,106 @@ def key_player(match: Match, config=None) -> dict:
                 "ő nem egy a hét mezőnyjátékos közül, az ő kezelése "
                 "önmagában meccstervnyi feladat")
     return out
+
+
+
+# Ellenszer-lap: ennyi közös kulcsszó kell a teendő és a gyakorlat
+# párosításához, és a szavakat ennyi karakterre csonkolva hasonlítjuk
+# (a magyar toldalékok miatt).
+CPL_MIN_OVERLAP = 1
+CPL_STEM = 6
+
+
+def _cpl_words(text: str) -> set:
+    """Összehasonlítható szótövek: kisbetűs, CPL_STEM hosszú előtagok.
+
+    A magyar toldalékok miatt teljes szó-egyezésre nem lehet építeni
+    ("kettőzés" / "kettőzését" / "kettőzés-elleni"), ezért a szavakat
+    az első CPL_STEM karakterükre csonkoljuk.
+    """
+    out = set()
+    szo = ""
+    for ch in text.lower():
+        if ch.isalnum():
+            szo += ch
+        else:
+            if len(szo) >= CPL_STEM:
+                out.add(szo[:CPL_STEM])
+            szo = ""
+    if len(szo) >= CPL_STEM:
+        out.add(szo[:CPL_STEM])
+    return out
+
+
+def counter_plan(match: Match, config=None) -> dict:
+    """Ellenszer-lap: a teendő-rangsor mellé a HOZZÁ TARTOZÓ gyakorlat.
+
+    A teendő-rangsor (priority_findings) megmondja, MI a baj; az
+    edzés-fókusz (training_focus) azt, MIT lehet gyakorolni — de a
+    kettő eddig két külön lista volt, és az edzőnek fejben kellett
+    összekötnie. Ez a réteg elvégzi a párosítást: minden teendőhöz
+    megkeresi a legjobban illeszkedő edzés-tételt (közös szótövek a
+    címke/ítélet és a gyakorlat címe/indoklása között), és egy
+    gyakorlatot csak egyszer használ fel.
+
+    Edzőileg ez a hétfő reggeli lap: probléma → gyakorlat, sorrendben.
+    Ahol nincs párja egy teendőnek, az őszinte jelzés: arra a
+    problémára még nincs kész edzés-válaszunk, ott a vezetőedző
+    döntése kell.
+
+    Visszatérés csapatonként: {"pairs": [{"family", "label",
+    "verdict", "drill_title", "drill"}], "matched", "total",
+    "verdict"} — a drill_title/drill None, ha nincs illeszkedő
+    gyakorlat; a verdict None, ha egyetlen teendő sincs.
+    """
+    from .training import training_focus
+
+    findings = priority_findings(match, config)
+    focus = training_focus(match, config)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        top = (findings.get(side) or {}).get("top") or []
+        items = list(focus.get(side) or [])
+        pairs: list = []
+        used: set = set()
+        for f in top:
+            szavak = _cpl_words(f"{f.get('label', '')} "
+                                f"{f.get('verdict', '')}")
+            best, best_score = None, 0
+            for i, it in enumerate(items):
+                if i in used:
+                    continue
+                score = len(szavak & _cpl_words(
+                    f"{it.get('title', '')} {it.get('why', '')}"))
+                if score > best_score:
+                    best, best_score = i, score
+            row = {"family": f.get("family"), "label": f.get("label"),
+                   "verdict": f.get("verdict"), "drill_title": None,
+                   "drill": None}
+            if best is not None and best_score >= CPL_MIN_OVERLAP:
+                used.add(best)
+                row["drill_title"] = items[best].get("title")
+                row["drill"] = items[best].get("drill")
+            pairs.append(row)
+        matched = sum(1 for r in pairs if r["drill"] is not None)
+        rec = {"pairs": pairs, "matched": matched, "total": len(pairs),
+               "verdict": None}
+        if pairs:
+            if matched == len(pairs):
+                rec["verdict"] = (
+                    f"mind a(z) {len(pairs)} teendőhöz van kész "
+                    "gyakorlat — a hétfői edzés összeállítható a "
+                    "listából")
+            elif matched:
+                rec["verdict"] = (
+                    f"a(z) {len(pairs)} teendőből {matched}-hez van "
+                    f"kész gyakorlat; a maradék "
+                    f"{len(pairs) - matched} edzői döntést kíván")
+            else:
+                rec["verdict"] = (
+                    f"a(z) {len(pairs)} teendőhöz nincs illeszkedő "
+                    "gyakorlat a fókusz-listán — ezekre a vezetőedző "
+                    "saját megoldása kell")
+        out[side] = rec
+    return out

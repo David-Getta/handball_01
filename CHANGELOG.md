@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Ellenszer-lap: teendő → hozzá tartozó gyakorlat.** A
+  teendő-rangsor megmondja, MI a baj; az edzés-fókusz azt, MIT lehet
+  gyakorolni — de a kettő eddig két külön lista volt, és az edzőnek
+  fejben kellett összekötnie. Az új szintézis-réteg elvégzi a
+  párosítást: minden teendőhöz megkeresi a legjobban illeszkedő
+  edzés-tételt (közös szótövek a címke/ítélet és a gyakorlat
+  címe/indoklása között, magyar toldalékokra csonkolva), és egy
+  gyakorlatot csak egyszer használ fel. Ahol nincs párja egy
+  teendőnek, az őszinte jelzés: arra még nincs kész edzés-válasz, ott
+  a vezetőedző döntése kell. Edzés-szabályt szándékosan NEM kapott: a
+  réteg maga olvassa az edzés-fókuszt, egy oda írt szabály
+  körkörös lenne. Felületek: /analyze + meccs-csomag
+  (`counter_plan`), edzői összefoglaló, felderítés (`cpl_total` /
+  `cpl_matched` mezők + edzői kulcs), kliens-csempe.
+
 - **Kapus-visszaérés: milyen gyorsan ér haza a lehozott kapus.** Az
   üres kapura kapott gólok az árat mérik — az új réteg a
   mechanizmust: minden 7 a 6 szakasz vége után megméri, hány

@@ -451,3 +451,57 @@ def test_kulcs_ember_lefedi_az_ember_iteletes_retegeket():
                 missing.append(f"{mod.stem}.{fn}")
     assert not missing, ("hiányzik a KPL_LAYERS listából: "
                          + ", ".join(sorted(missing)))
+
+
+def test_ellenszer_lap_parositja_a_teendot_a_gyakorlattal(monkeypatch):
+    """Minden teendőhöz a legjobban illeszkedő gyakorlat kerül, egy
+    gyakorlatot csak egyszer használunk fel."""
+    from handball.pipeline import priorities
+
+    monkeypatch.setattr(priorities, "priority_findings",
+                        lambda match, config=None: {
+                            "home": {"top": [
+                                {"family": "ár", "label": "Kétperc ára",
+                                 "verdict": "a kiállításaik gólba kerülnek"},
+                                {"family": "ember",
+                                 "label": "Kettőzött ember",
+                                 "verdict": "a kettőzés a 7-esre jár rá"},
+                                {"family": "állás", "label": "Óralopás",
+                                 "verdict": "vezetve elhúzzák a támadást"},
+                            ]},
+                            "away": {"top": []}})
+    import handball.pipeline.training as training
+    monkeypatch.setattr(training, "training_focus",
+                        lambda match, config=None: {
+                            "home": [
+                                {"area": "támadás",
+                                 "title": "Kettőzés-elleni leadás",
+                                 "why": "a kettőzés nálunk elakad",
+                                 "drill": "leadás a lekapcsolódó társnak"},
+                                {"area": "védekezés",
+                                 "title": "Fegyelem emberre szabva",
+                                 "why": "a kiállításaink egy emberre "
+                                        "gyűlnek",
+                                 "drill": "párharc-időzítés"},
+                            ],
+                            "away": []})
+
+    rec = priorities.counter_plan(_kp_match())["home"]
+    assert rec["total"] == 3, rec
+    assert rec["matched"] == 2, rec
+    party = {r["label"]: r["drill_title"] for r in rec["pairs"]}
+    assert party["Kettőzött ember"] == "Kettőzés-elleni leadás", party
+    assert party["Kétperc ára"] == "Fegyelem emberre szabva", party
+    assert party["Óralopás"] is None, party
+    assert rec["verdict"] and "edzői döntést" in rec["verdict"], rec
+
+
+def test_ellenszer_lap_hallgat_teendo_nelkul(monkeypatch):
+    """Teendő nélkül nincs lap (nem találgatunk)."""
+    from handball.pipeline import priorities
+
+    monkeypatch.setattr(priorities, "priority_findings",
+                        lambda match, config=None: {
+                            "home": {"top": []}, "away": {"top": []}})
+    rec = priorities.counter_plan(_kp_match())["home"]
+    assert rec["pairs"] == [] and rec["verdict"] is None, rec

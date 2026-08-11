@@ -2756,6 +2756,20 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "után nem felállni kell, hanem azonnal dobni.")
     except Exception:
         pass
+    # Ellenszer-lap: hány teendőhöz van kész gyakorlat.
+    try:
+        from .priorities import counter_plan
+        cpl = counter_plan(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_cpl = cpl[side]
+            if rec_cpl["verdict"] is None:
+                continue
+            body += (f" A(z) {name} ellen {rec_cpl['total']} teendő "
+                     f"áll a rangsor élén, ebből {rec_cpl['matched']}"
+                     "-hez kész gyakorlat is tartozik az "
+                     "edzés-fókuszban.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

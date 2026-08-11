@@ -2672,6 +2672,20 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "azonnal az üres kapura";
   }
 
+  // Ellenszer-lap: a rangsor élén álló teendőkből hányhoz van kész
+  // gyakorlat az edzés-fókuszban (3+ teendőtől mutatjuk).
+  String? _counterPlan(Map<String, dynamic> r) {
+    final total = (r["cpl_total"] as num?)?.toInt() ?? 0;
+    final matched = (r["cpl_matched"] as num?)?.toInt() ?? 0;
+    if (total < 3) return null;
+    if (matched >= total) {
+      return "mind a(z) $total teendőhöz van kész gyakorlat · a heti "
+          "terv összeállítható a listából";
+    }
+    return "$total teendőből $matched-hez van kész gyakorlat · a "
+        "maradék edzői döntést kíván";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10456,6 +10470,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kettőzött ember", _doubledTarget(r)!],
       if (_keeperReturn(r) != null)
         ["Kapus-visszaérés", _keeperReturn(r)!],
+      if (_counterPlan(r) != null)
+        ["Ellenszer-lap", _counterPlan(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
@@ -10780,6 +10796,9 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
                            "kezd", "ember", "páros", "időkérés",
                            "területi", "támogatás", "mérleg",
                            "felkészülés"]),
+    // Terv-szintű összegzések: nem egy mérés, hanem a heti munka
+    // kerete (a lista VÉGÉN, hogy a konkrét mutatókat ne szívja el).
+    ("Terv és fókusz", ["ellenszer", "teendő", "fókusz", "heti"]),
   ];
 
   /// Mindig látható mutatók: ezekkel kezdi az edző, ezért nem kell
