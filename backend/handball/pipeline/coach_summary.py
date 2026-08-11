@@ -2741,6 +2741,21 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "a kilépő passzsávot is zárni kell.")
     except Exception:
         pass
+    # Kapus-visszaérés: milyen gyorsan ér haza a lehozott kapus.
+    try:
+        from .goalkeeper import KRT_SLOW_S, keeper_return
+        krt = keeper_return(match)
+        for side, name in (("home", home), ("away", away)):
+            rec_krt = krt[side]
+            if rec_krt["avg_s"] is None:
+                continue
+            if rec_krt["avg_s"] < KRT_SLOW_S:
+                continue
+            body += (f" A(z) {name} kapusa {rec_krt['avg_s']:.1f} mp "
+                     "alatt ér haza a 7 a 6 után — a labdaszerzés "
+                     "után nem felállni kell, hanem azonnal dobni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

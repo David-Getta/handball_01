@@ -1075,6 +1075,12 @@ class ScoutingReport:
     # Kettőzött emberek: a kettőzött labdás kockák darabszáma
     # BIRTOKOSONKÉNT. Darabszám, meccsek közt összegződik.
     dtp_frames_by_player: dict = field(default_factory=dict)
+    # Kapus-visszaérés: a mért 7 a 6 szakaszok, a visszaérésre
+    # összesen mért idő tizedmásodpercben, és a közben kapott gólok.
+    # Darabszám/összeg, meccsek közt pontosan összegződik.
+    krt_measured: int = 0
+    krt_sum_ds: int = 0
+    krt_conceded: int = 0
     sby_rotations: int = 0
     sby_goals_for: int = 0
     sby_goals_against: int = 0
@@ -4474,6 +4480,17 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"rá ({_dtp_n}/{_dtp_all} kettőzött kocka) — a minta "
                 "bevált recept, ti is oda küldjétek; a kettőzés "
                 "mögött kilépő passzsávot pedig zárjátok.")
+
+    # Kapus-visszaérés: mennyit ér a szerzés utáni azonnali dobás.
+    if rep.krt_measured >= 2:
+        _krt_avg = rep.krt_sum_ds / 10.0 / rep.krt_measured
+        if _krt_avg >= 4.0:
+            keys.append(
+                f"A kapusuk {_krt_avg:.1f} mp alatt ér haza a 7 a 6 "
+                f"után ({rep.krt_measured} mért szakasz, "
+                f"{rep.krt_conceded} gól ez alatt) — a labdaszerzés "
+                "után NE álljatok fel: az első nézés a még üres "
+                "kapu legyen.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -9919,6 +9936,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .goalkeeper import keeper_return as _krt
+        krtrec = _krt(match, config)[team.value]
+        rep.krt_measured = krtrec["measured"]
+        rep.krt_sum_ds = int(round(10.0 * (krtrec["avg_s"] or 0.0)
+                                   * krtrec["measured"]))
+        rep.krt_conceded = krtrec["conceded_returning"]
         from .defense import doubled_targets as _dtp
         dtprec = _dtp(match, config)[team.value]
         rep.dtp_frames_by_player = {
@@ -12720,6 +12743,17 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 400) Az ő lassan hazaérő kapusuk × a ti labdaszerzésetek: a
+    # szerzés utáni azonnali dobás ingyen gól.
+    if opp.krt_measured >= 2 and own.trans_steals >= 3:
+        _krt400 = opp.krt_sum_ds / 10.0 / opp.krt_measured
+        if _krt400 >= 4.0:
+            plan.append(
+                f"A kapusuk {_krt400:.1f} mp alatt ér haza a 7 a 6 "
+                f"után, ti pedig sokat szereztek ({own.trans_steals} "
+                "szerzés) — a szerzés utáni első nézés a még üres "
+                "kapu legyen: ez a leggyorsabb gól a meccsen.")
 
     # 399) Az ő kettőzött emberük × a ti kettőzésetek: a bevált
     # receptet érdemes követni.
@@ -19620,6 +19654,9 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.otp_outlets_by_player for r in reports),
         dtp_frames_by_player=_merge_count_dicts(
             r.dtp_frames_by_player for r in reports),
+        krt_measured=sum(r.krt_measured for r in reports),
+        krt_sum_ds=sum(r.krt_sum_ds for r in reports),
+        krt_conceded=sum(r.krt_conceded for r in reports),
         sby_rotations=sum(r.sby_rotations for r in reports),
         sby_goals_for=sum(r.sby_goals_for for r in reports),
         sby_goals_against=sum(r.sby_goals_against for r in reports),

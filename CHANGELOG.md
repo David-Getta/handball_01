@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Kapus-visszaérés: milyen gyorsan ér haza a lehozott kapus.** Az
+  üres kapura kapott gólok az árat mérik — az új réteg a
+  mechanizmust: minden 7 a 6 szakasz vége után megméri, hány
+  másodperc alatt ér vissza a kapus a kapuja körzetébe, és közben
+  hány gólt kapnak. Edzőileg ez a hajrá-terv egyik legolcsóbb pontja:
+  ha a kapusuk lassan ér vissza, a labdaszerzés után NEM felállni
+  kell, hanem azonnal dobni — a kapu még üres. Saját csapatra a
+  hazafutás edzhető (kijelölt útvonal, a hetedik mezőnyjátékos zárja
+  a lövő-vonalat), és a 7 a 6 csak akkor vállalható, ha ez megy. Két
+  mért szakasztól ítél, 4 másodperc fölött lassúnak minősít. A
+  rangsorban az "ár" családba tartozik. Felületek: /analyze +
+  meccs-csomag (`keeper_return`), edzői összefoglaló, felderítés
+  (`krt_measured` / `krt_sum_ds` / `krt_conceded` mezők + edzői kulcs
+  + 400. meccsterv-szabály), edzés-fókusz (421. szabály),
+  kliens-csempe.
+
 - **Kettőzött emberek: kire jár rá az ellenfelek kettőzése.** A
   kettőzött-poszt a posztot nevezi meg — az új réteg az embert: a
   kettőzött (két védővel szorongatott) labdás kockákat a birtokos

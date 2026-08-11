@@ -1355,6 +1355,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 421) Kapus-visszaérés: a 7 a 6 csak akkor vállalható, ha a
+    # hazafutás megy.
+    try:
+        from .goalkeeper import KRT_SLOW_S, keeper_return
+        krt421 = keeper_return(match, config)
+        for side in ("home", "away"):
+            rec421 = krt421[side]
+            if rec421["avg_s"] is None:
+                continue
+            if rec421["avg_s"] < KRT_SLOW_S:
+                continue
+            add(side, "erőnlét", "Kapus-hazafutás a 7 a 6 után",
+                f"a kapusunk {rec421['avg_s']:.1f} mp alatt ér haza a "
+                f"7 a 6 után ({rec421['measured']} mért szakasz; "
+                f"{KRT_SLOW_S:.0f} mp fölött jelezzük) — addig üres a "
+                "kapunk, és az ellenfél szerzése ingyen gól",
+                "hazafutás-rutin: kijelölt útvonal a kapusnak (a "
+                "rövid oldalon), a hetedik mezőnyjátékos zárja a "
+                "lövő-vonalat, amíg ő fut, és sprint-gyakorlás "
+                "kapusfelszerelésben — 7 a 6 csak akkor megy, ha ez "
+                "megy",
+                )
+    except Exception:
+        pass
+
     # 420) Kettőzött emberek: akit rendre kettőznek, annak
     # lekapcsolódó társ és begyakorolt leadás kell.
     try:

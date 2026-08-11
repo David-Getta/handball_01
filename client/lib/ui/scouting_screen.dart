@@ -2657,6 +2657,21 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "kettőzött kocka) · bevált recept, de zárd mögötte a passzsávot";
   }
 
+  // Kapus-visszaérés: milyen gyorsan ér haza a lehozott kapus (2+
+  // mért szakasz, 4 mp fölött lassú — a backenddel azonos küszöbök:
+  // KRT_MIN_WINDOWS, KRT_SLOW_S).
+  String? _keeperReturn(Map<String, dynamic> r) {
+    final n = (r["krt_measured"] as num?)?.toInt() ?? 0;
+    final ds = (r["krt_sum_ds"] as num?)?.toInt() ?? 0;
+    final conceded = (r["krt_conceded"] as num?)?.toInt() ?? 0;
+    if (n < 2) return null;
+    final avg = ds / 10.0 / n;
+    if (avg < 4.0) return null;
+    return "a kapusuk ${avg.toStringAsFixed(1)} mp alatt ér haza a 7 a 6 "
+        "után ($n szakasz, $conceded gól ez alatt) · szerzés után "
+        "azonnal az üres kapura";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10439,6 +10454,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Csere-hozam", _substitutionYield(r)!],
       if (_doubledTarget(r) != null)
         ["Kettőzött ember", _doubledTarget(r)!],
+      if (_keeperReturn(r) != null)
+        ["Kapus-visszaérés", _keeperReturn(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

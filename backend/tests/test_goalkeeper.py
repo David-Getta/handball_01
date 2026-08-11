@@ -374,6 +374,68 @@ def _ent_match(rep=2, punish=True):
     return _match(frames)
 
 
+def _krt_match(slow=True, reps=2):
+    """`reps` darab 7 a 6 szakasz; utána a hazai kapus lassan (6 mp)
+    vagy gyorsan (1 mp) ér vissza a saját kapujához."""
+    from handball.models.tracking import Ball
+
+    frames = []
+    t = 0
+    for _ in range(reps):
+        for _ in range(150):          # 6 mp 7 a 6, hazai birtoklással
+            pl = [PlayerPosition(track_id=1, team=Team.HOME, x=20.0,
+                                 y=10.0, role="kapus",
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0),
+                  PlayerPosition(track_id=2, team=Team.HOME, x=30.0,
+                                 y=10.0,
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0)]
+            frames.append(Frame(t=t, players=pl,
+                                ball=Ball(x=30.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+        n_back = 150 if slow else 25   # a kapus hazafutása
+        for i in range(n_back + 60):
+            frac = min(1.0, i / max(1, n_back))
+            gx = 20.0 + (1.5 - 20.0) * frac
+            pl = [PlayerPosition(track_id=1, team=Team.HOME, x=gx,
+                                 y=10.0, role="kapus",
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0),
+                  PlayerPosition(track_id=4, team=Team.AWAY, x=12.0,
+                                 y=10.0,
+                                 source=PositionSource.MEASURED,
+                                 confidence=1.0)]
+            frames.append(Frame(t=t, players=pl,
+                                ball=Ball(x=12.0, y=10.0,
+                                          confidence=1.0)))
+            t += 1
+    return _match(frames)
+
+
+def test_keeper_return_flags_slow_way_home():
+    """Lassan hazaérő kapusnál a szerzés után azonnal dobni kell."""
+    from handball.pipeline.goalkeeper import KRT_SLOW_S, keeper_return
+
+    rec = keeper_return(_krt_match(slow=True))["home"]
+    assert rec["measured"] >= 2, rec
+    assert rec["avg_s"] is not None and rec["avg_s"] >= KRT_SLOW_S, rec
+    assert rec["verdict"] and "üres kapu" in rec["verdict"], rec
+
+
+def test_keeper_return_fast_keeper_and_silence_without_windows():
+    """Gyors kapusnál más az ítélet; 7 a 6 nélkül nincs mit mérni."""
+    from handball.pipeline.goalkeeper import keeper_return
+
+    rec = keeper_return(_krt_match(slow=False))["home"]
+    assert rec["avg_s"] is not None and rec["avg_s"] < 4.0, rec
+    assert rec["verdict"] and "nem jár ingyen" in rec["verdict"], rec
+
+    solo = keeper_return(_krt_match(reps=1))["home"]
+    assert solo["avg_s"] is None and solo["verdict"] is None, solo
+
+
 def test_empty_net_turnovers_punished():
     """Ha a 7 a 6 alatt elvesztett labdákat góllal büntetik, a szerzés
     utáni első nézés az üres kapu kell legyen."""

@@ -728,6 +728,99 @@ def empty_net_turnovers(match: Match, config=None) -> dict:
     return out
 
 
+# Kapus-visszaérés: ennyi 7 a 6 szakasz kell az ítélethez, ennél
+# lassabb visszaérés számít lassúnak, és a kapuját ekkora
+# (méteres) körzetben tekintjük "hazaérkezettnek".
+KRT_MIN_WINDOWS = 2
+KRT_SLOW_S = 4.0
+KRT_GOAL_M = 6.0
+# Ennyi másodpercig keressük a visszaérést a szakasz vége után.
+KRT_LOOKAHEAD_S = 20.0
+
+
+def keeper_return(match: Match, config=None) -> dict:
+    """Kapus-visszaérés: MILYEN GYORSAN ér haza a lehozott kapus.
+
+    Az üres kapura kapott gólok (empty_net_goals) az árat mérik — ez
+    a MECHANIZMUST: minden 7 a 6 szakasz vége után megméri, hány
+    másodperc alatt ér vissza a kapus a saját kapuja KRT_GOAL_M-es
+    körzetébe, és közben hány gólt kapnak.
+
+    Edzőileg ez a hajrá-terv egyik legolcsóbb pontja. Ha a kapusuk
+    lassan ér vissza, a labdaszerzés után NEM felállni kell, hanem
+    azonnal dobni — a kapu még üres; a szerzés utáni első nézés a
+    túloldali kapu legyen. Saját csapatra: a kapus visszaérése
+    edzhető (kijelölt útvonal, a mezőnyjátékos zárja a lövő-vonalat,
+    amíg ő fut), és a 7 a 6-ot csak akkor szabad játszani, ha ez
+    megy.
+
+    Visszatérés csapatonként (a kapuját LEHOZÓ oldal): {"windows",
+    "measured", "avg_s", "conceded_returning", "verdict"} — az
+    avg_s/verdict None, ha kevés (KRT_MIN_WINDOWS alatti) a mért
+    szakasz.
+    """
+    from ..models.tracking import Team
+    from .event_detection import EventType, detect_shots
+    from .tactics import TacticsConfig
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    detect_goalkeepers(match)
+    windows = detect_empty_net(match, config)
+    look = round(KRT_LOOKAHEAD_S * fps)
+
+    goals = [(e.t, getattr(e.team, "value", e.team))
+             for e in detect_shots(match, config)
+             if e.type == EventType.GOAL]
+
+    out = {side: {"windows": 0, "measured": 0, "sum_s": 0.0,
+                  "avg_s": None, "conceded_returning": 0,
+                  "verdict": None}
+           for side in ("home", "away")}
+    for w in windows:
+        side = w["team"]
+        rec = out[side]
+        rec["windows"] += 1
+        own_x = config.own_goal_x(Team(side))
+        end = w["end_frame"]
+        back_t = None
+        for f in match.frames:
+            if f.t <= end or f.t > end + look:
+                continue
+            gk = next((p for p in f.players
+                       if p.team is not None and p.team.value == side
+                       and p.role == ROLE_GOALKEEPER), None)
+            if gk is not None and abs(gk.x - own_x) <= KRT_GOAL_M:
+                back_t = f.t
+                break
+        if back_t is None:
+            continue
+        rec["measured"] += 1
+        rec["sum_s"] += (back_t - end) / fps
+        rival = "away" if side == "home" else "home"
+        rec["conceded_returning"] += sum(
+            1 for (t, tm) in goals if tm == rival and end < t <= back_t)
+
+    for rec in out.values():
+        if rec["measured"] >= KRT_MIN_WINDOWS:
+            avg = rec["sum_s"] / rec["measured"]
+            rec["avg_s"] = round(avg, 1)
+            if avg >= KRT_SLOW_S:
+                rec["verdict"] = (
+                    f"lassan ér haza a kapusuk ({avg:.1f} mp a 7 a 6 "
+                    f"után, {rec['conceded_returning']} gól ez alatt) "
+                    "— a szerzés után NE álljatok fel: az első nézés "
+                    "a még üres kapu legyen")
+            else:
+                rec["verdict"] = (
+                    f"gyorsan hazaér a kapusuk ({avg:.1f} mp a 7 a 6 "
+                    "után) — az üres kapura dobás nem jár ingyen: "
+                    "csak tiszta helyzetből érdemes, egyébként "
+                    "rendezett támadás kell")
+        rec.pop("sum_s", None)
+    return out
+
+
 def empty_net_goals(match: Match, config=None) -> dict:
     """Üres kapura kapott gólok: a 7 a 6 (lehozott kapus) ára.
 
