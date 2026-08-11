@@ -5,6 +5,22 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Fáradt lövők: kinek megy szét a lövése a második félidőre.** A
+  fáradt-lövő poszt a posztot nevezi meg — az új réteg az embert: a
+  kaput elkerülő (mellé/blokkolt) lövéseket félidőnként a lövő
+  nevéhez írja, és megkeresi, kinek ugrik meg a pontatlansága a
+  szünet után. Edzőileg ez a második félidei fal-terv névre szólóan:
+  akinek fáradtan szétmegy a lövése, arra rá lehet engedni — a
+  kilépés nála fölösleges kockázat, elég a lövő-vonalba állni. Saját
+  csapatra fáradt célzás-blokk és a befejezés átosztása a hajrában.
+  Két második félidei pontatlan lövéstől és kétszeres ugrástól emel
+  ki nevet; félidő-jel nélkül hallgat. A rangsorban az "ember"
+  családba tartozik, és a Kulcs-ember bizonyíték-rétegei közé is
+  bekerült. Felületek: /analyze + meccs-csomag (`tired_shooters`),
+  edzői összefoglaló, felderítés (`fsp_sh_by_player` /
+  `fsp_fh_by_player` mezők + edzői kulcs + 408. meccsterv-szabály),
+  edzés-fókusz (428. szabály), kliens-csempe.
+
 - **Ziccerhagyó emberek: ki hagyja ki a ziccereket.** A
   ziccerhagyó-poszt a posztot nevezi meg — az új réteg az embert: a
   nagy helyzet-értékű (ziccer), gól nélkül záruló lövéseket a lövő

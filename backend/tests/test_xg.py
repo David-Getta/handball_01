@@ -1226,6 +1226,25 @@ def test_missed_chance_roles_names_the_wasting_post():
     assert rec["verdict"] and "kisebbik rossz" in rec["verdict"], rec
 
 
+def test_tired_shooters_names_the_fading_man():
+    """Ha a második félidőre egy embernél ugrik meg a pontatlanság,
+    őt nevezzük meg — rá lehet engedni a szünet után."""
+    from handball.pipeline.xg import FSP_MIN_SH, tired_shooters
+
+    rec = tired_shooters(_fsa_match([7, 9], [7, 7, 7]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 7, rec
+    assert rec["top"]["sh"] >= FSP_MIN_SH, rec
+
+
+def test_tired_shooters_silent_without_jump():
+    """Egyenletes pontatlanságnál nincs megnevezett lövő."""
+    from handball.pipeline.xg import tired_shooters
+
+    rec = tired_shooters(_fsa_match([7, 7], [7, 7]))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_missed_chance_players_names_the_waster():
     """Ha a kihagyott ziccerek egy emberhez kötődnek, őt nevezzük meg
     — nála a helyzetbe engedés a kisebbik rossz."""

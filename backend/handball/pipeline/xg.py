@@ -1301,6 +1301,73 @@ FSA_MIN_SH = 3
 FSA_FACTOR = 2.0
 
 
+# Fáradt lövők: ennyi második félidei pontatlan lövés kell a
+# névhez, és ekkora szorzó az elsőhöz képest.
+FSP_MIN_SH = 2
+FSP_FACTOR = 2.0
+
+
+def tired_shooters(match: Match,
+                   config: Optional[TacticsConfig] = None) -> dict:
+    """Fáradt lövők: KINEK megy szét a lövése a második félidőre.
+
+    A fáradt-lövő poszt (tired_shooter_roles) a POSZTOT nevezi meg —
+    ez az EMBERT: a kaput elkerülő (mellé/blokkolt) lövéseket
+    félidőnként a lövő nevéhez írja, és megkeresi, kinek ugrik meg a
+    pontatlansága a szünet után.
+
+    Edzőileg ez a második félidei fal-terv névre szólóan: akinek
+    fáradtan szétmegy a lövése, arra a szünet után rá lehet engedni
+    — a kilépés nála már fölösleges kockázat, elég a lövő-vonalba
+    állni. Saját csapatra: fáradt célzás-blokk és a befejezés
+    átosztása a hajrában.
+
+    Visszatérés csapatonként: {"fh": {kulcs: darab}, "sh": {...},
+    "top"} — a "top" az a lövő, akinek a második félidei pontatlan
+    lövései elérik az FSP_MIN_SH-t, és legalább FSP_FACTOR-szorosai
+    az elsőnek; szünet-jel nélkül üres a kép.
+    """
+    from .halftime import detect_halftime
+
+    out: dict = {side: {"fh": {}, "sh": {}, "top": None}
+                 for side in ("home", "away")}
+    ht = detect_halftime(match)
+    if ht is None:
+        return out
+
+    jersey: dict = {}
+    for f in match.frames:
+        for p in f.players:
+            if p.jersey_number is not None:
+                jersey.setdefault(p.track_id, p.jersey_number)
+
+    xg = match_xg(match, config)
+    tally: dict = {"home": {}, "away": {}}
+    for sh in xg["shots"]:
+        pid = sh.get("player_id")
+        if pid is None or sh["outcome"] in ("goal", "save"):
+            continue  # csak a kaput ELKERÜLŐ lövés a pontatlanság
+        side = sh["team"]
+        if side not in tally:
+            continue
+        rec = tally[side].setdefault(pid, [0, 0])
+        rec[0 if sh["t"] <= ht else 1] += 1
+
+    for side in ("home", "away"):
+        rows = sorted(tally[side].items(), key=lambda kv: -kv[1][1])
+        out[side]["fh"] = {str(jersey.get(pid, pid)): n[0]
+                           for pid, n in rows if n[0]}
+        out[side]["sh"] = {str(jersey.get(pid, pid)): n[1]
+                           for pid, n in rows if n[1]}
+        for pid, (fh, sh_n) in rows:
+            if sh_n >= FSP_MIN_SH and sh_n >= FSP_FACTOR * max(1, fh):
+                out[side]["top"] = {
+                    "player_id": pid, "jersey": jersey.get(pid),
+                    "fh": fh, "sh": sh_n}
+                break
+    return out
+
+
 def tired_shooter_roles(match: Match,
                         config: Optional[TacticsConfig] = None) -> dict:
     """Fáradt-lövő poszt: MELYIK POSZTJUK lövései mennek szét fáradtan.

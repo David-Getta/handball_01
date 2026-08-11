@@ -2862,6 +2862,23 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "a helyzetbe engedés a kisebbik rossz.")
     except Exception:
         pass
+    # Fáradt lövők: kinek megy szét a lövése a második félidőre.
+    try:
+        from .xg import tired_shooters
+        fsp = tired_shooters(match)
+        for side, name in (("home", home), ("away", away)):
+            top_fsp = fsp[side]["top"]
+            if top_fsp is None:
+                continue
+            _ki9 = (f"a(z) {top_fsp['jersey']}. számú"
+                    if top_fsp.get("jersey") is not None
+                    else f"a(z) {top_fsp['player_id']}. játékos")
+            body += (f" A(z) {name} pontatlan lövései a második "
+                     f"félidőre {_ki9} kezén ugranak meg "
+                     f"({top_fsp['fh']} → {top_fsp['sh']}) — rá a "
+                     "szünet után rá lehet engedni.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

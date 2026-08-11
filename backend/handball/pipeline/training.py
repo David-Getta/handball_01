@@ -1366,6 +1366,31 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 428) Fáradt lövők: a fáradtan szétmenő lövés célzás- és
+    # terhelés-kérdés.
+    try:
+        from .xg import FSP_MIN_SH, tired_shooters
+        fsp428 = tired_shooters(match, config)
+        for side in ("home", "away"):
+            top428 = fsp428[side].get("top")
+            if top428 is None:
+                continue
+            _ki428 = (f"a(z) {top428['jersey']}. számú"
+                      if top428.get("jersey") is not None
+                      else f"a(z) {top428['player_id']}. játékos")
+            add(side, "erőnlét", "Fáradt célzás",
+                f"a pontatlan lövéseink a második félidőre {_ki428} "
+                f"kezén ugranak meg ({top428['fh']} → "
+                f"{top428['sh']}; {FSP_MIN_SH} lövéstől már "
+                "jelezzük) — fáradtan nála megy szét a célzás",
+                "fáradt célzás-blokk neki: lövés-sorozat magas "
+                "pulzuson (kör-edzés után), csökkentett erővel "
+                "pontos célzás, és a hajrában a befejezés tudatos "
+                "átosztása frissebb társra",
+                )
+    except Exception:
+        pass
+
     # 427) Ziccerhagyó emberek: a kihagyott ziccer a legdrágább
     # hiba, és befejezés-gyakorlással javítható.
     try:

@@ -2829,6 +2829,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "kötődik · nála a helyzetbe engedés a kisebbik rossz";
   }
 
+  // Fáradt lövők: kinek megy szét a lövése a 2. félidőre (2+
+  // pontatlan lövés, kétszeres ugrás — a backenddel azonos küszöbök:
+  // FSP_MIN_SH, FSP_FACTOR).
+  String? _tiredShooter(Map<String, dynamic> r) {
+    final sh = (r["fsp_sh_by_player"] as Map?)?.cast<String, dynamic>();
+    final fh = (r["fsp_fh_by_player"] as Map?)?.cast<String, dynamic>();
+    if (sh == null || sh.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    sh.forEach((k, v) {
+      final n = (v as num).toInt();
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 2) return null;
+    final first = ((fh?[top] as num?) ?? 0).toInt();
+    if (topN < 2 * (first < 1 ? 1 : first)) return null;
+    return "a(z) $top. lövései a második félidőre mennek szét "
+        "($first → $topN pontatlan lövés) · rá nem kell kilépni";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10627,6 +10650,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Kontroll-idővonal", _controlTimeline(r)!],
       if (_missedChancePlayer(r) != null)
         ["Ziccerhagyó ember", _missedChancePlayer(r)!],
+      if (_tiredShooter(r) != null)
+        ["Fáradt lövő", _tiredShooter(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)
