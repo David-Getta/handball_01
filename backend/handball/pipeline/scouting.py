@@ -1103,6 +1103,9 @@ class ScoutingReport:
     # Passzív-birtoklók: a lövés nélküli hosszú támadások labdás
     # kockái BIRTOKOSONKÉNT. Darabszám, meccsek közt összegződik.
     pvp_frames_by_player: dict = field(default_factory=dict)
+    # Előkészítő emberek: a lövés-előkészítő utolsó passzok
+    # darabszáma PASSZOLÓNKÉNT. Darabszám, összegződik.
+    epp_passes_by_player: dict = field(default_factory=dict)
     fsp_sh_by_player: dict = field(default_factory=dict)
     fsp_fh_by_player: dict = field(default_factory=dict)
     ctl_won: int = 0
@@ -4663,6 +4666,18 @@ def _coach_keys(rep: ScoutingReport) -> tuple[list, list, list]:
                 f"{100.0 * _pvp_n / _pvp_all:.0f}%-a a(z) {_pvp_k}. "
                 "kezén telik — passzív jelzésnél rá menjen a nyomás: "
                 "nála jön a kényszer-lövés vagy az eladás.")
+
+    # Előkészítő emberek: kit kell elvágni a lövőktől.
+    if rep.epp_passes_by_player:
+        _epp_all = sum(rep.epp_passes_by_player.values())
+        _epp_k, _epp_n = max(rep.epp_passes_by_player.items(),
+                             key=lambda kv: kv[1])
+        if _epp_n >= 4 and _epp_n >= 0.5 * max(1, _epp_all):
+            keys.append(
+                f"A lövéseik {_epp_n}/{_epp_all} részét a(z) "
+                f"{_epp_k}. készíti elő — nem a lövőt kell fogni, "
+                "hanem őt: az ő átadás-vonalait vágjátok el, és a "
+                "lövőik előkészítetlenül maradnak.")
 
     # Hátrapasszolók: kire érdemes kimenni.
     if rep.bprp_passes_by_player:
@@ -10108,6 +10123,12 @@ def _scout_team_cached(match: Match, team: Team,
         entrec = _ent(match, config)[team.value]
         rep.ent_turnovers = entrec["turnovers"]
         rep.ent_punished = entrec["punished"]
+        from .attack_types import last_passers as _epp
+        epprec = _epp(match, config)[team.value]
+        rep.epp_passes_by_player = {
+            str(r["jersey"] if r["jersey"] is not None
+                else r["player_id"]): r["passes"]
+            for r in epprec["players"]}
         from .rules import passive_holders as _pvp
         pvprec = _pvp(match, config)[team.value]
         rep.pvp_frames_by_player = {
@@ -13116,6 +13137,20 @@ def matchup_plan(own: "ScoutingReport",
                 f"órát: a {max(0.0, _p55_avg - 5.0):.0f}. másodpercnél "
                 "jöjjön az időzített kettőzés a labdásra, pont a "
                 "lövés-előkészítésük pillanatában.")
+
+    # 411) Az ő előkészítőjük × a ti kilépésetek: a kiszolgálót
+    # kell elvágni, nem a lövőt fogni.
+    if opp.epp_passes_by_player and own.defense_main:
+        _epp411_all = sum(opp.epp_passes_by_player.values())
+        _epp411_k, _epp411_n = max(opp.epp_passes_by_player.items(),
+                                   key=lambda kv: kv[1])
+        if _epp411_n >= 4 and _epp411_n >= 0.5 * max(1, _epp411_all):
+            plan.append(
+                f"A lövéseik {_epp411_n}/{_epp411_all} részét a(z) "
+                f"{_epp411_k}. készíti elő, ti pedig "
+                f"{own.defense_main} falat játszotok — az ő "
+                "átadás-vonalait vágjátok el (kilépés, sávzárás): a "
+                "lövőik előkészítetlenül maradnak.")
 
     # 410) Az ő passzív-birtoklójuk × a ti kettőzésetek: a passzív
     # jelzés alatt rá kell menni.
@@ -20171,6 +20206,8 @@ def combine_reports(reports: list[ScoutingReport]) -> ScoutingReport:
             r.spp_soft_by_player for r in reports),
         pvp_frames_by_player=_merge_count_dicts(
             r.pvp_frames_by_player for r in reports),
+        epp_passes_by_player=_merge_count_dicts(
+            r.epp_passes_by_player for r in reports),
         fsp_sh_by_player=_merge_count_dicts(
             r.fsp_sh_by_player for r in reports),
         fsp_fh_by_player=_merge_count_dicts(

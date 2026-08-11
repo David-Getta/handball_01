@@ -2911,6 +2911,22 @@ def _style_section(match: Match, home: str, away: str) -> dict | None:
                      "alá tenni.")
     except Exception:
         pass
+    # Előkészítő emberek: ki készíti elő a lövéseiket.
+    try:
+        from .attack_types import last_passers
+        epp = last_passers(match)
+        for side, name in (("home", home), ("away", away)):
+            top_epp = epp[side]["top"]
+            if top_epp is None:
+                continue
+            _ki12 = (f"a(z) {top_epp['jersey']}. számú"
+                     if top_epp.get("jersey") is not None
+                     else f"a(z) {top_epp['player_id']}. játékos")
+            body += (f" A(z) {name} lövéseit {_ki12} készíti elő "
+                     f"({top_epp['passes']} előkészítés) — nem a "
+                     "lövőt kell fogni, hanem a kiszolgálót.")
+    except Exception:
+        pass
     # Kiülő-poszt: melyik posztjuk gyűjti a kétperceket.
     try:
         from .rules import suspended_roles

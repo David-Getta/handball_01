@@ -4162,6 +4162,26 @@ def test_last_pass_roles_names_the_preparing_post():
     assert rec["verdict"] and "előkészítetlenné" in rec["verdict"], rec
 
 
+def test_last_passers_names_the_feeder():
+    """Ha a lövés-előkészítés egy kézen fut, őt nevezzük meg — nem a
+    lövőt kell fogni, hanem a kiszolgálót."""
+    from handball.pipeline.attack_types import (EPP_MIN_PASSES,
+                                                last_passers)
+
+    rec = last_passers(_epr_match([5, 5, 5, 5, 9]))["home"]
+    assert rec["top"] is not None, rec
+    assert rec["top"]["player_id"] == 5, rec
+    assert rec["top"]["passes"] >= EPP_MIN_PASSES, rec
+
+
+def test_last_passers_silent_with_few_passes():
+    """Kevés előkészítésből nem nevezünk meg embert."""
+    from handball.pipeline.attack_types import last_passers
+
+    rec = last_passers(_epr_match([5, 9]))["home"]
+    assert rec["top"] is None, rec
+
+
 def test_last_pass_roles_silent_with_few_passes():
     """Néhány előkészített lövésből nincs ítélet."""
     from handball.pipeline.attack_types import last_pass_roles

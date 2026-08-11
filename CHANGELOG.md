@@ -5,6 +5,21 @@ történet a squash-merge-elt PR-okban él; itt a lényeg, témák szerint.
 
 ## Kiadatlan (a v0.1.27 óta)
 
+- **Előkészítő emberek: ki készíti elő a lövéseiket.** Az
+  előkészítő-poszt a posztot nevezi meg — az új réteg az embert:
+  minden felismert lövéshez megkeresi a lövő felé menő utolsó
+  passzt, és a lövést a PASSZOLÓ nevéhez írja (a gólpassz-listával
+  szemben itt minden lövés számít, nem csak a beérett gólok).
+  Edzőileg ez a passzsáv-zárás címzettje: nem a lövőt kell fogni,
+  hanem a kiszolgálót — az ő átadás-vonalainak elvágásával a lövőik
+  előkészítetlenül maradnak. Saját csapatra a második előkészítő
+  kinevelése az edzés-téma. Négy előkészítéstől és az előkészítések
+  felétől emel ki nevet. A rangsorban az "ember" családba tartozik, és
+  a Kulcs-ember bizonyíték-rétegei közé is bekerült. Felületek:
+  /analyze + meccs-csomag (`last_passers`), edzői összefoglaló,
+  felderítés (`epp_passes_by_player` mező + edzői kulcs + 411.
+  meccsterv-szabály), edzés-fókusz (431. szabály), kliens-csempe.
+
 - **Kulcs-ember: a küszöb a lencse méretével nő.** A Kulcs-ember
   eddig négy egyező réteg fölött szólalt meg — de ahogy az
   ember-rétegek száma nőtt (mára ötven fölött), négy egyezés egyre

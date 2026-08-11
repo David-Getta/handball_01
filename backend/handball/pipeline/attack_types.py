@@ -5282,6 +5282,87 @@ EPR_SHARE_PCT = 60.0
 EPR_WINDOW_S = 4.0
 
 
+# Előkészítő emberek: ennyi előkészítés kell a névhez, és ekkora
+# részarány fölött mondjuk ki, hogy a lövés-előkészítés egy kézen
+# fut.
+EPP_MIN_PASSES = 4
+EPP_SHARE_PCT = 50.0
+
+
+def last_passers(match: Match,
+                 config: Optional[TacticsConfig] = None) -> dict:
+    """Előkészítő emberek: KI készíti elő a lövéseiket.
+
+    Az előkészítő-poszt (last_pass_roles) a POSZTOT nevezi meg — ez
+    az EMBERT: minden felismert lövéshez megkeresi a lövő felé menő
+    utolsó passzt, és a lövést a PASSZOLÓ nevéhez írja. A
+    gólpassz-listával szemben itt minden lövés számít, nem csak a
+    beérett gólok.
+
+    Edzőileg ez a passzsáv-zárás címzettje: ha a lövéseik
+    előkészítése egy kézen fut, az ő sávjának lezárásával (kilépés,
+    átadás-vonal elvágása) a lövőik előkészítetlenül maradnak — nem
+    a lövőt kell fogni, hanem a kiszolgálót. Saját csapatra: a
+    szervezés ne egy emberen fusson, kell a második előkészítő.
+
+    Visszatérés csapatonként: {"passes", "players": [{"player_id",
+    "jersey", "passes"}], "top"} — a "top" az első játékos, ha
+    legalább EPP_MIN_PASSES előkészítése van, és ez a csapat
+    előkészítéseinek legalább EPP_SHARE_PCT-a, különben None.
+    """
+    from .decisions import detect_passes
+    from .event_detection import EventType, detect_shots
+
+    config = config or TacticsConfig()
+    fps = match.meta.fps if match.meta.fps > 0 else 25.0
+    win = EPR_WINDOW_S * fps
+    passes = detect_passes(match, config)
+
+    jersey: dict = {}
+    for f in match.frames:
+        for q in f.players:
+            if q.jersey_number is not None:
+                jersey.setdefault(q.track_id, q.jersey_number)
+
+    tally: dict = {"home": {}, "away": {}}
+    for e in detect_shots(match, config):
+        if e.type not in (EventType.SHOT, EventType.GOAL):
+            continue
+        if e.player_id is None:
+            continue
+        best = None
+        for p in passes:
+            if not (0 <= e.t - p.t <= win) or p.team != e.team:
+                continue
+            if (p.receiver_id != e.player_id
+                    or p.passer_id == e.player_id):
+                continue
+            if best is None or p.t > best.t:
+                best = p
+        if best is None:
+            continue
+        side = e.team.value
+        if side not in tally:
+            continue
+        tally[side][best.passer_id] = (
+            tally[side].get(best.passer_id, 0) + 1)
+
+    out: dict = {}
+    for side in ("home", "away"):
+        rows = [{"player_id": pid, "jersey": jersey.get(pid),
+                 "passes": n}
+                for pid, n in sorted(tally[side].items(),
+                                     key=lambda kv: -kv[1])]
+        total = sum(r["passes"] for r in rows)
+        top = None
+        if rows and rows[0]["passes"] >= EPP_MIN_PASSES:
+            share = 100.0 * rows[0]["passes"] / max(1, total)
+            if share >= EPP_SHARE_PCT:
+                top = rows[0]
+        out[side] = {"passes": total, "players": rows, "top": top}
+    return out
+
+
 def last_pass_roles(match: Match,
                     config: Optional[TacticsConfig] = None) -> dict:
     """Előkészítő-poszt: MELYIK POSZTJUK készíti elő a lövéseket.

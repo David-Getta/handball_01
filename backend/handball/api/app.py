@@ -4707,6 +4707,11 @@ def create_app():
         except Exception:
             pass
         try:
+            from ..pipeline.attack_types import last_passers
+            res["last_passers"] = last_passers(match)
+        except Exception:
+            pass
+        try:
             from ..pipeline.defense import turnover_players
             res["turnover_players"] = turnover_players(match)
         except Exception:
@@ -5660,6 +5665,8 @@ def create_app():
                 _layer("soft_passers", lambda: soft_passers(match))
                 from ..pipeline.rules import passive_holders
                 _layer("passive_holders", lambda: passive_holders(match))
+                from ..pipeline.attack_types import last_passers
+                _layer("last_passers", lambda: last_passers(match))
                 from ..pipeline.defense import turnover_players
                 _layer("turnover_players", lambda: turnover_players(match))
                 from ..pipeline.goalkeeper import gk_positioning

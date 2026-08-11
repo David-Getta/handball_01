@@ -3,10 +3,10 @@
 *Generált fájl — ne kézzel szerkeszd. Frissítés:*
 `cd backend && python -m scripts.layer_catalog`
 
-Összesen **458 réteg**, modulonként csoportosítva; a
+Összesen **459 réteg**, modulonként csoportosítva; a
 leírás a réteg-függvény docstringjének első sora.
 
-## attack_types (88)
+## attack_types (89)
 
 | Réteg | Mit mér |
 |---|---|
@@ -55,6 +55,7 @@ leírás a réteg-függvény docstringjének első sora.
 | `last_holder_roles` | Vég-birtokos poszt: KINÉL ÉR VÉGET a támadásuk lövés nélkül. |
 | `last_holders` | Vég-birtokosok: KINEK A KEZÉBEN hal el a támadásuk. |
 | `last_pass_roles` | Előkészítő-poszt: MELYIK POSZTJUK készíti elő a lövéseket. |
+| `last_passers` | Előkészítő emberek: KI készíti elő a lövéseiket. |
 | `long_attack_outcomes` | Kivárás-csapda: MI LESZ A HOSSZÚ TÁMADÁSAIKBÓL. |
 | `overload_finishing` | Fölény-befejezés: fölényben vagy felállt fal ellen szereznek gólt. |
 | `pace` | Meccs-tempó: hány támadás jut egy percre. |

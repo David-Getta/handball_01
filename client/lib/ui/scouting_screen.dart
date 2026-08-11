@@ -2899,6 +2899,29 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         "telik · passzív jelzésnél rá menjen a nyomás";
   }
 
+  // Előkészítő emberek: ki készíti elő a lövéseiket (4+ előkészítés,
+  // az előkészítések fele — a backenddel azonos küszöbök:
+  // EPP_MIN_PASSES, EPP_SHARE_PCT).
+  String? _lastPasser(Map<String, dynamic> r) {
+    final ep = (r["epp_passes_by_player"] as Map?)?.cast<String, dynamic>();
+    if (ep == null || ep.isEmpty) return null;
+    String? top;
+    var topN = 0;
+    var all = 0;
+    ep.forEach((k, v) {
+      final n = (v as num).toInt();
+      all += n;
+      if (top == null || n > topN) {
+        top = k;
+        topN = n;
+      }
+    });
+    if (top == null || topN < 4) return null;
+    if (topN < 0.5 * (all < 1 ? 1 : all)) return null;
+    return "a lövéseik $topN/$all részét a(z) $top. készíti elő · "
+        "nem a lövőt kell fogni, hanem a kiszolgálót";
+  }
+
   // Hátrapasszolók: kinél fordul vissza a játék (3+ hátra-passz — a
   // backenddel azonos küszöb: BPRP_MIN_PASSES).
   String? _backwardPasserPlayer(Map<String, dynamic> r) {
@@ -10703,6 +10726,8 @@ class _ScoutingScreenState extends State<ScoutingScreen> {
         ["Lágy passzoló", _softPasser(r)!],
       if (_passiveHolder(r) != null)
         ["Passzív-birtokló", _passiveHolder(r)!],
+      if (_lastPasser(r) != null)
+        ["Előkészítő ember", _lastPasser(r)!],
       if (_sevenMissPlayer(r) != null)
         ["Hetes-kihagyó ember", _sevenMissPlayer(r)!],
       if (_suspensionChain(r) != null)

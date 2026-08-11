@@ -1366,6 +1366,30 @@ def _training_focus_cached(match: Match,
     except Exception:
         pass
 
+    # 431) Előkészítő emberek: a szervezés ne egy kézen fusson.
+    try:
+        from .attack_types import EPP_MIN_PASSES, last_passers
+        epp431 = last_passers(match, config)
+        for side in ("home", "away"):
+            top431 = epp431[side].get("top")
+            if top431 is None:
+                continue
+            _ki431 = (f"a(z) {top431['jersey']}. számú"
+                      if top431.get("jersey") is not None
+                      else f"a(z) {top431['player_id']}. játékos")
+            add(side, "támadás", "Második előkészítő",
+                f"a lövéseink előkészítése {_ki431} kezén fut "
+                f"({top431['passes']} előkészítés; {EPP_MIN_PASSES} "
+                "előkészítéstől már jelezzük) — ha őt elvágják, a "
+                "lövőink előkészítetlenül maradnak",
+                "második előkészítő kinevelése: figurák MÁSIK "
+                "kiszolgálóval (a beálló és a szélső is adjon "
+                "utolsó passzt), és lezárt fő-előkészítővel játszott "
+                "gyakorlat — a lövés így is meg kell szülessen",
+                )
+    except Exception:
+        pass
+
     # 430) Passzív-birtoklók: a passzív jelzés előtti utolsó
     # megoldás gyakorolható.
     try:
